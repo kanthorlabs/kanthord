@@ -1,0 +1,6 @@
+# Local dev data volume (UDS socket + file-based DB + logs + auth + cache).
+# Mounted into the Podman dev container; never commit it.
+.data/
+
+# Node
+node_modules/
