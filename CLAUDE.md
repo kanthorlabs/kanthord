@@ -16,12 +16,13 @@ do not assume an app to build or run beyond the sandbox harness.
 
 `.agent/milestone/01-infrastructure/` holds the binding design decisions
 (`01-plan.md`, `01-plan-revise.md`) referenced everywhere as **D1–D9 / B / S / N**.
-Read these before designing anything; they override assumptions. Each milestone
-task lives in its own numbered file (e.g. `02-development-setup.md`).
+Read these before designing anything; they override assumptions. Implementation
+work is authored for the TDD loop under `.agent/plan/epics/` and
+`.agent/plan/stories/`.
 
-When **authoring** any milestone (writing task briefs), follow the shared rules
-in `.agent/authoring.md` — behavior-only ACs vs. decision-cited Constraints, the
-spike gate, and the task-brief template.
+When **authoring** any milestone, follow the shared rules in `.agent/authoring.md`
+— Epic/Story/Task structure, behavior-only ACs vs. decision-cited Constraints,
+the spike gate, and the TDD task template.
 
 ## Development commands
 

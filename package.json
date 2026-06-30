@@ -3,13 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
-    "test": "node --test",
+    "test": "node --test \"packages/**/*.test.ts\" \"apps/**/*.test.ts\"",
     "verify:handoff": "node scripts/verify-handoff.mjs"
   },
   "devDependencies": {
