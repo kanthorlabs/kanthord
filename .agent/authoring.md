@@ -1,87 +1,151 @@
 # Authoring Rules
 
-How to author any milestone in `.agent/milestone/<NN>-<name>/`. These rules are
-**shared across all milestones** — do not copy them into a milestone folder.
-Adapted from kanthorvault's "Epic / Story / Task Authoring" for a headless
-TypeScript daemon (no UI, file-based, gRPC).
+How to author milestone work for the TDD pipeline. These rules are shared across
+all milestones. Do not copy them into a milestone folder.
 
-## Unit of work: the task brief
+## Canonical Plan Layout
 
-Milestones are split into numbered task files (`01-...md`, `02-...md`). There is
-**no separate Epic/Story layer** — the numbered task file *is* the unit. Each
-task brief uses this template:
+All implementation work must use the Epic / Story / Task structure consumed by
+the TDD agents:
 
-```
-# NN <task name>
-Goal:             <one line>
-Decision anchors: <D/B/S/N IDs this implements, from 01-plan*.md>
-ACs:              <observable behavior + external contract values>
-Constraints:      <mandated mechanism, each citing a decision ID>
-Spike?:           <none | the unknown it de-risks>
-Verification:     <the executable check, e.g. `make verify` / a unit test>
-Dependencies:     <task numbers + any findings file required>
-Findings out:     <path — only if it discovers behavior a later task needs>
+```text
+.agent/plan/epics/<NNN>-<epic-slug>.md
+.agent/plan/stories/<NNN>-<epic-slug>/<NNN>-<story-slug>.md
+.agent/plan/feedback/<NNN>-<epic-slug>/...
 ```
 
-## ACs vs. Constraints (the key distinction)
+Milestone folders may keep design sources and decision records, but they must not
+be the executable implementation plan. The TDD loop reads `.agent/plan/epics/`
+and `.agent/plan/stories/`.
 
-**Acceptance Criteria describe observable behavior and external contract values —
-not internal mechanism.** Mandated mechanism goes in **Constraints**, citing the
+## Units Of Work
+
+- Epic: one reviewable outcome with a verification gate.
+- Story: one coherent behavior slice inside an Epic, with acceptance criteria.
+- Task: one RED -> GREEN -> REFACTOR loop inside a Story.
+
+Do not author standalone numbered task briefs as the implementation unit. A task
+is valid only inside a Story file under a `### Task <id>` heading.
+
+## Epic Template
+
+```md
+# <NNN> <Epic Name>
+
+## Outcome
+<one paragraph describing the shipped capability>
+
+## Decision Anchors
+- <D/B/S/N or plan section references>
+
+## Stories
+- `<story-file>` - <one-line behavior slice>
+
+## Verification Gate
+- <commands and observable checks that close the Epic>
+
+## Dependencies
+- <prior epics, milestone setup, or findings files>
+
+## Non-Goals
+- <explicitly deferred work>
+
+## Findings Out
+- <path or `none`>
+```
+
+## Story Template
+
+```md
+# Story <NNN> - <Story Name>
+
+Epic: `.agent/plan/epics/<NNN>-<epic-slug>.md`
+
+## Goal
+<one behavior slice>
+
+## Acceptance Criteria
+- <observable behavior and contract values>
+
+## Constraints
+- <mandated mechanism with decision citation>
+
+## Verification Gate
+- <story-level checks>
+
+### Task <id> - <task name>
+
+**Input:** <exact files or directories the role may touch>
+
+**Action - RED:** <test-engineer work, or `none - GREEN-only` with reason>
+
+**Action - GREEN:** <software-engineer behavior target, not implementation internals>
+
+**Action - REFACTOR:** <named cleanup, or `none`>
+
+**Verify:** <exact command or proof>
+```
+
+## ACs Vs Constraints
+
+Acceptance Criteria describe observable behavior and external contract values,
+not internal mechanism. Mandated mechanism goes in Constraints, citing the
 decision that mandates it.
 
-- AC (observable / external): "a client connects over the UDS and gets an echo";
-  "Core refuses to start when auth perms are looser than `0600`/`0700`"; "`canRun`
-  denies `rm -rf /`"; published port `7777`; the `version` field; job-state names
-  `queued → claimed → running → {done|failed|cancelled}`.
-- Constraint (mandated mechanism, cite the decision): "atomic write-temp-then-
-  rename + file lock (N1)"; "no SQL, file-based only (D1)"; "do not wrap pi
-  packages (D3)"; "proto owns the RPC wire contract, no Zod on RPC (S5)".
+- AC examples: a client connects over UDS and gets an echo; Core refuses to start
+  when auth perms are looser than `0600` / `0700`; `canRun` denies `rm -rf /`;
+  published port `7777`; a `version` field; job states `queued -> claimed ->
+  running -> {done|failed|cancelled}`.
+- Constraint examples: atomic write-temp-then-rename plus file lock (N1); no SQL,
+  file-based only (D1); do not wrap pi packages (D3); proto owns the RPC wire
+  contract, no Zod on RPC (S5).
 
-A value that the user/decision fixes (a port, a perm, a timeout, a retry count) is
-an AC — it is the engineer's target and the reviewer's check. Dropping it makes
-the brief useless.
+A value fixed by the user or a decision is an AC. Dropping concrete values makes
+the Story hard to test and review.
 
-## Rules
+## Task Rules
 
-1. **ACs are behavior, not implementation.** No variable names, no specific API
-   calls, no file paths-as-mechanism. The engineer picks the approach — unless a
-   ratified decision fixes it, in which case it is a Constraint citing the ID.
-2. **Carry the concrete contract values into the ACs** (ports, perms, formats,
-   state names, timeouts). These numbers are the acceptance criteria.
-3. **Verify library/API behavior before prescribing it — write a spike.** Don't
-   assume Node `fs`/UDS semantics or `pi-agent-core`/`pi-ai` (pinned `0.80.2`) API
-   shape; confirm it. (Proven: UDS does not cross the macOS host→VM boundary.)
-4. **Read the actual source before referencing it** — especially the external
-   pinned deps. Don't prescribe methods/signatures that may not exist.
-5. **Read the relevant decisions/findings before writing in an area, not
-   upfront.** The decisions in `01-plan.md` / `01-plan-revise.md` and recorded
-   findings are the gotcha source.
-6. **Analyze blast radius of seed/fixture changes.** For the file DB, full-scan
-   queries (N2) and version migrations (B8) mean a seed-format or ordering change
-   ripples to every reader and test. List dependents before changing a seed.
-7. **If the same assertion fails 2+ times for different root causes, the
-   assertion is wrong.** Stop fixing production code; question the AC/test premise.
-8. **No build task is DONE without a passing executable check.** "Test" means a
-   unit test **or** a harness (e.g. `make verify`) — some infra tasks have no
-   meaningful unit test, and the harness is then the check. A recorded **spike
-   result does NOT count** as the done-gate for production code; spikes de-risk,
-   the executable check closes the task.
+1. Every Task must have `Input`, `Action - RED`, `Action - GREEN`, `Action -
+   REFACTOR`, and `Verify` fields.
+2. RED describes the failing test behavior, not the production implementation.
+3. GREEN describes the behavior target and public seam the test needs.
+4. REFACTOR is named and limited. Use `none` when no cleanup is required.
+5. GREEN-only Tasks are allowed only when the Story explains where coverage is
+   owned. The test-engineer pass-through must forward them.
+6. Task `Input` is authoritative. If a task must edit config, docs, or generated
+   files, name them explicitly so lane checks can allow it.
+7. Do not edit locked Epic or Story files during implementation. Plan changes are
+   a separate authoring task.
 
-## Spike gate (Spike → Build → Verify)
+## Spike Gate
 
-Require a spike **only** when a task hits one of: unknown external API behavior;
-OS / container boundary behavior; an external pinned dep's real surface; or
-unclear filesystem / atomicity semantics. Otherwise skip straight to
-Build → Verify — no spike tax on routine tasks.
+Require a spike only when a task hits one of these:
 
-## Findings contract
+- unknown external API behavior;
+- OS or container boundary behavior;
+- a pinned dependency's real surface;
+- unclear filesystem or atomicity semantics.
 
-Write a findings file **before** authoring a dependent next task — **but only when
-the task discovered behavior the dependent task needs** (e.g. the Podman session's
-UDS / virtiofs result). No discovery → no findings file. A findings file links
-back to the D/B/S/N decisions it affects; it is not a parallel decision store.
+A spike de-risks the design. It does not close production work. The production
+Story still needs an executable verification gate.
 
-## Out of scope for authoring
+## Findings Contract
 
-Commit-message style and other repo-wide policies are not authoring rules; keep
-them out of milestone briefs.
+Write a findings file before authoring dependent work only when the task discovers
+behavior a later task needs. No discovery means no findings file.
+
+Findings files must link back to the decisions they affect. They are not a
+parallel decision store.
+
+## Review Requirements
+
+- Every Epic has a clear Verification Gate.
+- Every Story AC maps to a Task RED test, GREEN-only proof, or harness check.
+- Every hard mechanism cites a decision or plan section.
+- No build task is done without a passing executable check.
+- If the same assertion fails two or more times for different root causes, stop
+  and question the test or AC premise.
+
+## Out Of Scope
+
+Commit-message style and repo-wide git policy are not authoring rules.

@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
 **kanthord Core** is one long-running daemon written in **Node.js 24+ /
-TypeScript** (ES modules, `"type": "module"`, engines `node >= 22.19.0`). Tests
+TypeScript** (ES modules, `"type": "module"`, engines `node >= 24`). Tests
 run on the built-in **`node:test`** runner with `node:assert` — no Jest, no
 Vitest, no test framework dependency. Hard constraints every engineer MUST
 honor (from `.agent/milestone/01-infrastructure/`):
