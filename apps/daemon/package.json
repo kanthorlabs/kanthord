@@ -1,9 +1,0 @@
-{
-  "name": "@kanthord/daemon",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@kanthord/core": "0.0.0"
-  }
-}
