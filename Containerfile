@@ -1,16 +1,16 @@
 # Kanthor Core — local development sandbox image (Podman, rootless).
 #
-# Why this exists: D9 / HARD RULE — local dev runs Core inside Podman so the
+# Why this exists: HARD RULE — local dev runs Core inside Podman so the
 # agent's tools (shell/filesystem) can damage only the container, never the host.
 # The ONLY host path mounted at runtime is .data/ (UDS socket + file DB); the
 # source is COPYed into the image, NOT bind-mounted, so the sandbox holds.
 #
-# Base: Node 24 (matches the runtime target in 01-plan.md §3). slim = Debian,
-# best native/tooling compatibility; D2 means no .node modules so musl/alpine
-# would also work, but slim keeps parity with the VPS image later.
+# Base: Node 24 (the runtime target). slim = Debian, best native/tooling
+# compatibility; with no .node modules musl/alpine would also work, but slim
+# keeps parity with the VPS image later.
 FROM docker.io/library/node:24-slim
 
-# Data volume boundary (01-plan.md §5). Mounted from the host at runtime.
+# Data volume boundary. Mounted from the host at runtime.
 ENV DATA_DIR=/data \
     PORT=7777 \
     NODE_ENV=development

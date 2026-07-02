@@ -92,13 +92,13 @@ Acceptance Criteria describe observable behavior and external contract values,
 not internal mechanism. Mandated mechanism goes in Constraints, citing the
 decision that mandates it.
 
-- AC examples: a client connects over UDS and gets an echo; Core refuses to start
-  when auth perms are looser than `0600` / `0700`; `canRun` denies `rm -rf /`;
-  published port `7777`; a `version` field; job states `queued -> claimed ->
-  running -> {done|failed|cancelled}`.
-- Constraint examples: atomic write-temp-then-rename plus file lock (N1); no SQL,
-  file-based only (D1); do not wrap pi packages (D3); proto owns the RPC wire
-  contract, no Zod on RPC (S5).
+- AC examples (observable behavior / fixed contract values): a client request
+  gets the expected response; a published port number; a required field is
+  present on a record; a documented state transition runs end to end.
+- Constraint examples (mandated mechanism, each citing the decision that mandates
+  it): a specific write/locking scheme; a required dependency used directly and
+  not wrapped; the component that owns the wire contract. Always cite the
+  decision code.
 
 A value fixed by the user or a decision is an AC. Dropping concrete values makes
 the Story hard to test and review.
