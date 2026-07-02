@@ -904,6 +904,12 @@ the engine ships generic and simple, adjusted later.
 modify. The deliverables are (1) a working MVP and (2) a guideline for improvement,
 driven by interaction-type data.
 
+**Parking lot (future ideas, non-binding — not scoped yet):**
+- **Meeting input as an intake source.** Feed meeting content (transcript / notes /
+  recording) into the system so it can extract decisions and action items and turn them
+  into tickets/tasks — another intake lane alongside assigned tickets. Belongs with the
+  deferred intake/routing envelope (§11 Out; assumption #11); design it later.
+
 ---
 
 ## 12. Remaining Open Items
