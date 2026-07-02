@@ -63,7 +63,11 @@ the deterministic surface works end-to-end; passing it **is** the gate to Phase 
   `https`, `http2`, global `fetch`/Undici — **and** on access to credential-shaped env
   vars / provider-credential file paths (gap S1; phases.md "no LLM calls, no network,
   no external credentials anywhere"). Honestly "suite-level guard", not "runner-level"
-  (S2), since scripts/package.json are lane-locked.
+  (S2), since scripts/package.json are lane-locked. The guard carries **one explicit
+  exemption: loopback (`127.0.0.1`/`::1`) sockets**, required by the Epic 009 Connect
+  transport tests — so the enforced property is precisely "no external network";
+  any non-loopback address still blocks and fails (debate finding, Phase-1 outcome
+  comparison — the exemption is stated, not implicit).
 - **Kill/restart respawn-equivalence** (distinct from compaction respawn) and
   **fake-broker failure / timeout / regression** injection each have their own named
   scenario (debate finding — these are separately mandated and were under-named).

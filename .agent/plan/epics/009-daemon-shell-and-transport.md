@@ -59,10 +59,15 @@ how the registered method set is inspectable (so Story 002 can introspect it).
 - `npm run typecheck` exits 0; `npm test` green for all Story suites.
 - Booting the daemon on a feature dir wires the components and, after a simulated kill
   (discard in-memory runtime, keep markdown + ledger), a restart reproduces the
-  pending-task set, lease ownership, in-flight-op reconciliation state, **and the
+  pending-task set, lease ownership, in-flight-op reconciliation state, **the
   current workflow phase + injected STATE of resuming tasks** (the last two via the
-  Epic 006 respawn coordinator) — the full §7.7 recovery invariant the harness drives
-  (asserted against Epic 004/005/006 views).
+  Epic 006 respawn coordinator), **and any in-progress deploy-stage soak state**
+  (stage id, window start, sample history — so a kill mid-soak resumes the
+  observation window instead of silently restarting or dropping it; Epic 008
+  explicitly deferred soak durability here, and Epic 010's kill-at-any-step
+  scenario includes mid-soak — debate finding, Phase-1 outcome comparison) — the
+  full §7.7 recovery invariant the harness drives (asserted against Epic
+  004/005/006/008 views).
 - `/healthz` (a plain HTTP route on the Connect server) returns healthy; the server is
   bound to **loopback** (`127.0.0.1`/`::1`) and a test asserts it is **not** `0.0.0.0`
   (PRD §9 never-`0.0.0.0` principle).
