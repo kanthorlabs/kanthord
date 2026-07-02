@@ -35,9 +35,6 @@ Finding source requirements:
 
 ## Review Dimensions
 
-- File-DB integrity: `version` field, write-temp-then-rename on the same filesystem, file lock, and single-writer.
-- Constraint compliance: no SQL/SQLite, no native `.node`, no forbidden dependency, no pi-agent-core/pi-ai wrapper, no Zod on RPC messages, `canRun` chokepoint, file-based in-process infra.
-- Capability-layer ownership: platform behavior stays behind `host`/`client`; default throws `"unsupported"`.
 - Error handling and safety: no swallowed errors; use `pino`; surface or wrap errors with context.
 - API/seam design: the public seam fits the Story and test consumer.
 - Simplicity: smallest correct change; no speculative abstraction.

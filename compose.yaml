@@ -7,7 +7,7 @@
 # volume — no TCP needed inside the sandbox.
 #
 # Layout:
-#   - .data/  (host bind mount)  -> DB / logs / auth / cache, host-inspectable (D9)
+#   - .data/  (host bind mount)  -> DB / logs / auth / cache, host-inspectable
 #   - sock    (named volume)     -> UDS only, nested at /data/sockets so it stays
 #                                   OFF virtiofs (proven: works across containers)
 #

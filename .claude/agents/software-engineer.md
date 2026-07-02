@@ -8,24 +8,7 @@ tools: Read, Write, Edit, Bash, Grep, Glob
 **kanthord Core** is one long-running daemon written in **Node.js 24+ /
 TypeScript** (ES modules, `"type": "module"`, engines `node >= 24`). Tests
 run on the built-in **`node:test`** runner with `node:assert` — no Jest, no
-Vitest, no test framework dependency. Hard constraints every engineer MUST
-honor (from `.agent/milestone/01-infrastructure/`):
-
-- **File-based storage only — no SQL, no SQLite.** Every persisted file carries
-  a `version` field. Writes are single-writer + atomic (write-temp-then-rename)
-  + file lock (N1).
-- **No native `.node` modules** (D2) — keeps the SEA build and cross-arch
-  trivial. Need native code → fork and build it ourselves.
-- **`@earendil-works/pi-agent-core` + `pi-ai` (pinned 0.80.2) ARE the agent/AI
-  adapter** (D3). Do NOT wrap them in another abstraction.
-- **proto owns the RPC wire contract — do NOT re-validate RPC messages with
-  Zod** (S5). Zod is for config, tool input schemas, and agent outputs only.
-- **Security is one chokepoint:** every tool call passes `canRun(tool, args,
-  ctx)`, default-allow with a small denylist (D4/B3).
-- **All infra (logging, queue, pub/sub, locking, scheduler) is file-based,
-  in-process** — no Redis, no external brokers (D5).
-- Platform-specific behavior lives behind the **capability layer** (`host` vs
-  `client`); the default impl **throws "unsupported"** until built (§7).
+Vitest, no test framework dependency.
 
 ## HARD RULE — Role Boundary (violating this is a blocking error)
 
@@ -69,21 +52,6 @@ New files go where the Task's `**Input:**` says. The test targets are NOT your l
 
 Apply on every edit:
 
-- **File-based persistence only** — no SQL/SQLite/ORM. Each persisted record is
-  a file with a `version` field. Mutate via write-temp-then-rename + file lock;
-  one writer at a time (N1).
-- **No native `.node` modules** (D2) — pure JS/TS dependencies only.
-- **pi-agent-core / pi-ai (0.80.2) used directly** (D3) — never wrapped in a
-  home-grown abstraction layer.
-- **Zod only for config, tool-input schemas, and agent outputs** — never to
-  re-validate RPC messages; proto owns the wire (S5).
-- **One security chokepoint** — route every tool call through `canRun(tool,
-  args, ctx)`; default-allow + small denylist (D4/B3). Do not scatter ad-hoc
-  permission checks.
-- **File-based, in-process infra only** (D5) — no Redis, no external broker for
-  logging/queue/pub-sub/locking/scheduling.
-- **Capability layer** — platform-specific behavior lives behind a `host` vs
-  `client` capability; the default implementation throws `"unsupported"` (§7).
 - **ESM idioms** — `"type": "module"`; relative imports carry the `.ts`
   extension; use `import type` for type-only imports (`verbatimModuleSyntax`).
 - **Logging** — `pino`, never `console.log` in production paths. No silently
@@ -103,9 +71,6 @@ Read the relevant file **before** working in that area — not upfront.
 - `.agent/tdd/memory/ts-gotchas.md` — before any TypeScript/ESM edit: explicit
   `.ts` import extensions under type stripping, `verbatimModuleSyntax`
   `import type` rules, `node:` builtin imports, top-level await.
-- `.agent/tdd/memory/filedb-gotchas.md` — before touching the file-based store:
-  atomic write-temp-then-rename must be on the same filesystem; lock
-  acquire/release ordering; the mandatory `version` field; single-writer.
 
 These files are seeded as living checklists; engineers append pitfalls as they
 hit them (the test-engineer/software-engineer journals are separate, under

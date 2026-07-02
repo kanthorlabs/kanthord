@@ -8,24 +8,7 @@ tools: Read, Grep, Glob
 **kanthord Core** is one long-running daemon written in **Node.js 24+ /
 TypeScript** (ES modules, `"type": "module"`, engines `node >= 24`). Tests
 run on the built-in **`node:test`** runner with `node:assert` — no Jest, no
-Vitest, no test framework dependency. Hard constraints every engineer MUST
-honor (from `.agent/milestone/01-infrastructure/`):
-
-- **File-based storage only — no SQL, no SQLite.** Every persisted file carries
-  a `version` field. Writes are single-writer + atomic (write-temp-then-rename)
-  + file lock (N1).
-- **No native `.node` modules** (D2) — keeps the SEA build and cross-arch
-  trivial. Need native code → fork and build it ourselves.
-- **`@earendil-works/pi-agent-core` + `pi-ai` (pinned 0.80.2) ARE the agent/AI
-  adapter** (D3). Do NOT wrap them in another abstraction.
-- **proto owns the RPC wire contract — do NOT re-validate RPC messages with
-  Zod** (S5). Zod is for config, tool input schemas, and agent outputs only.
-- **Security is one chokepoint:** every tool call passes `canRun(tool, args,
-  ctx)`, default-allow with a small denylist (D4/B3).
-- **All infra (logging, queue, pub/sub, locking, scheduler) is file-based,
-  in-process** — no Redis, no external brokers (D5).
-- Platform-specific behavior lives behind the **capability layer** (`host` vs
-  `client`); the default impl **throws "unsupported"** until built (§7).
+Vitest, no test framework dependency.
 
 ## HARD RULE — Read-Only (violating this is a blocking error)
 
@@ -54,18 +37,6 @@ A finding without a cited source is not a finding — it goes under "Uncited obs
 Each finding cites a source (per the methodology table) and is classified
 BLOCKER vs SUGGESTION with an `action:` tag.
 
-- **File-DB integrity (top BLOCKER class).** Every persisted file carries a
-  `version` field; writes use write-temp-then-rename on the same filesystem
-  under a file lock; single-writer is preserved. A missing `version`, a
-  non-atomic write, a dropped/unreleased lock, or a partial-write window is a
-  BLOCKER. Cite `filedb-gotchas.md` + the line.
-- **Constraint compliance.** No SQL/SQLite; no native `.node` module; no new
-  forbidden dependency; pi-agent-core/pi-ai not wrapped; no Zod on RPC messages;
-  every tool call passes the `canRun` chokepoint; infra stays file-based
-  in-process. Cite the decision (D2/D3/D4/D5/S5) violated.
-- **Capability-layer ownership.** Platform-specific code sits behind a
-  `host`/`client` capability and the default throws `"unsupported"`; nothing
-  platform-specific leaks into shared code. Cite §7.
 - **Error handling & safety.** No swallowed errors; `pino` for logs; errors
   surfaced or wrapped with context. Cite the construct + why the property fails.
 - **API/seam design.** A seam the tests/import depend on is shaped for its

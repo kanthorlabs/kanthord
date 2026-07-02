@@ -69,7 +69,6 @@ Read in this order:
 Read the relevant gotcha before touching that area, not upfront.
 
 - `.agent/tdd/memory/ts-gotchas.md` before TypeScript/ESM edits.
-- `.agent/tdd/memory/filedb-gotchas.md` before file-based storage tests.
 
 ## What You May Not Do
 

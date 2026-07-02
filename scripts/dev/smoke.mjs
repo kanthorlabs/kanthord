@@ -1,11 +1,11 @@
 // Podman dev-sandbox smoke harness — runs INSIDE the container.
 //
-// This is NOT Core. It is a stand-in that exercises the four boundary risks
-// the milestone (.agent/.../02-development-setup.md) says we must verify early,
-// using only what real Core will do at the .data/ boundary:
+// This is NOT Core. It is a stand-in that exercises the four dev-sandbox
+// boundary risks we verify early, using only what real Core will do at the
+// .data/ boundary:
 //   1. UDS server in .data/sockets/        (transport over the VM mount)
-//   2. atomic temp-then-rename DB write     (N1 single-writer / crash safety)
-//   3. auth file 0600 / auth dir 0700       (B4 perms check)
+//   2. atomic temp-then-rename DB write     (single-writer / crash safety)
+//   3. auth file 0600 / auth dir 0700       (perms check)
 //   4. TCP server on 0.0.0.0:PORT           (HTTP/Connect fallback transport)
 //
 // When real Core (kanthord) exists, replace this entrypoint with it; the run

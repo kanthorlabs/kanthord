@@ -63,15 +63,6 @@ selects the active work.
 
 ## Implementation Checklist
 
-- File-based persistence only. No SQL, no SQLite, no ORM.
-- Every persisted record has a `version` field.
-- Mutate files with write-temp-then-rename plus a file lock, one writer at a time.
-- No native `.node` modules.
-- Use `@earendil-works/pi-agent-core` and `pi-ai` directly. Do not wrap them.
-- Never use Zod to re-validate RPC messages.
-- Route every tool call through `canRun(tool, args, ctx)`.
-- Keep infra file-based and in-process.
-- Put platform-specific behavior behind the capability layer.
 - Use ESM idioms: explicit `.ts` imports and `import type` for type-only imports.
 - Use `pino`, not `console.log`, in production paths.
 - Inject collaborators through constructor/factory parameters typed by a small consumer-owned interface.
@@ -82,7 +73,6 @@ selects the active work.
 Read the relevant gotcha before touching that area, not upfront.
 
 - `.agent/tdd/memory/ts-gotchas.md` before TypeScript/ESM edits.
-- `.agent/tdd/memory/filedb-gotchas.md` before touching file-based storage.
 
 ## Build Verification
 
