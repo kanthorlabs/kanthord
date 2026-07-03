@@ -1,0 +1,22 @@
+// kanthord daemon service — Epic 000 SU3 minimal read-only surface.
+// RULE (Epic 000): this schema may contain ONLY read methods. No sign-off,
+// approval, halt, write, mutate, enqueue, lease, or control RPC. Health is a
+// plain HTTP route on the same server, NOT an RPC (SU4).
+syntax = "proto3";
+
+package kanthord.v1;
+
+// Read-only daemon status.
+service DaemonService {
+  // Returns the daemon's current status. Read-only.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  // Daemon semantic version, e.g. "0.0.0".
+  string version = 1;
+  // Seconds since the daemon process started.
+  int64 uptime_seconds = 2;
+}
