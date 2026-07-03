@@ -71,6 +71,26 @@ the deterministic surface works end-to-end; passing it **is** the gate to Phase 
 - **Kill/restart respawn-equivalence** (distinct from compaction respawn) and
   **fake-broker failure / timeout / regression** injection each have their own named
   scenario (debate finding — these are separately mandated and were under-named).
+- **CI at gate time (review B1):** after this Epic's suites land, one final **green CI
+  run** of the full gate suite (on the Epic 000 SU5-wired pipeline, guards active) is
+  required, and its record in
+  `.agent/plan/feedback/010-harness-scenario-suite/ci-gate-run.md` must carry an
+  **evidence contract** (debate finding — a bare URL is ceremonial): the run
+  URL/artifact, the exact gate-candidate **commit SHA**, the commands run
+  (`npm test`, `npm run typecheck`), and visible proof the no-network/no-credential
+  guard was active. A record that is missing, stale, or for a different commit than
+  the gate candidate **fails the gate** — phases.md says the golden scenario runs
+  "in CI", so the criterion is checked here at gate time, not only when SU5 wires CI
+  at setup time (when the suite barely exists).
+- **Temp git repo — kit parity (review B2, option i):** the harness kit provisions a
+  **real initialized temp git repo** and trivially exercises it (one commit lands;
+  `rev-parse` resolves) — that is the whole Phase-1 claim, and it is honestly a
+  **parity placeholder**: it proves the kit can provision the fixture, not the
+  seam's behavior (debate finding — naming a seam is not proving it; the swap risk
+  stays with Epic 012). No Phase-1 mechanism consumes git semantics (the store is
+  plain FS; verbs are fakes); the fixture exists for PRD §7.7 kit parity and to name
+  the 2A brick-swap seam (Epic 012 real markdown store + git). Real repo/worktree
+  semantics are explicitly **not** modeled here.
 
 ## Dependencies
 
@@ -100,9 +120,12 @@ the deterministic surface works end-to-end; passing it **is** the gate to Phase 
   wording.
 - **S3 — CI execution of the gate is a maintainer prerequisite** (CI config is
   toolchain, lane-forbidden), tracked as **Epic 000 SU5**. Story-level proof is
-  `npm test` green + guarded; wiring that into CI is the SU5 gate step.
+  `npm test` green + guarded; wiring that into CI is the SU5 gate step — and the
+  **final green CI run after this Epic lands** is a gate criterion above (review B1;
+  SU5 wiring alone does not prove the finished suite runs green in CI).
 
 ## Findings Out
 
-- none. This Epic is the capstone; its green suite is the Phase-1→Phase-2 gate
-  artifact.
+- `.agent/plan/feedback/010-harness-scenario-suite/ci-gate-run.md` — the final green
+  CI run URL/artifact (review B1); with the green local suite it is the
+  Phase-1→Phase-2 gate artifact.

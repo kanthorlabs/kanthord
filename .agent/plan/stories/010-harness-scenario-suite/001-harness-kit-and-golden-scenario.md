@@ -34,6 +34,11 @@ end-to-end on it, with no network reachable during the run.
   (`*_TOKEN`/`*_KEY`/`*_SECRET`/`*_PASSWORD`) and provider-credential file paths — so
   a scenario that reaches for a credential trips the guard; the golden run completes
   without tripping it (phases.md §72 — "no external credentials anywhere in Phase 1").
+- **Temp git repo is real and trivially exercised (review B2, option i — kit
+  parity):** the kit's temp git repo is a real initialized repository — `git
+  rev-parse --git-dir` resolves inside it and one commit lands — and nothing more;
+  no Phase-1 mechanism consumes git semantics. This names the 2A brick-swap seam
+  (Epic 012 real markdown store + git) without pulling repo semantics forward.
 
 ## Constraints
 
@@ -46,6 +51,10 @@ end-to-end on it, with no network reachable during the run.
   finding — broad + first-installed, honestly named suite-level).
 - All time is the fake clock; all external effects are the fake broker (PRD §7.7 —
   injectable seams).
+- The temp git repo fixture commits under **controlled local config** — explicit
+  `user.name`/`user.email` and a fixed initial branch set by the fixture itself,
+  never inherited from the host/CI environment (debate finding — otherwise the
+  trivial-exercise assertion becomes a toolchain flake, not a kit check).
 
 ## Verification Gate
 
@@ -57,7 +66,9 @@ end-to-end on it, with no network reachable during the run.
 
 **Action - RED:** Write a test that `harness()` returns a fixture exposing the fake
 clock, fake broker, temp store, temp git repo (narrow role: a local temp repo fixture,
-no real remote/fff — Phase 2), and boot entrypoint; that the suite-level guard makes a
+no real remote/fff — Phase 2), and boot entrypoint; that the temp git repo is a real
+initialized repo trivially exercised — `git rev-parse --git-dir` resolves and one
+commit lands (review B2, kit parity only); that the suite-level guard makes a
 deliberate attempt on **each** covered network primitive (`net`/`tls`/`dns`/`dgram`/
 `http`/`https`/`http2`/`fetch`) throw; and that a deliberate read of a
 credential-shaped env var / provider-credential file path also throws (S1).
