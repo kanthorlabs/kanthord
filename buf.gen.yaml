@@ -1,0 +1,10 @@
+# buf v2 codegen — server-side stubs (Epic 000 SU3).
+# Output is COMMITTED and lane-forbidden to engineers; the maintainer
+# re-generates on schema change (npm run generate:proto).
+version: v2
+plugins:
+  - local: protoc-gen-es
+    out: src/generated
+    opt:
+      - target=js+dts
+      - import_extension=js
