@@ -2,6 +2,9 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
+/** File extensions treated as registry documents by `loadRegistryDir`. */
+const YAML_EXTENSIONS = [".yaml", ".yml"];
+
 /**
  * Thrown when a registry file cannot be parsed as valid YAML.
  * The message always includes the file path so callers can surface it.
@@ -85,8 +88,12 @@ export async function loadRegistryFile(
  * key — the identity comes from inside the document, matching the Story 004
  * T2 acceptance criterion.
  *
+ * Only files whose name ends in a `YAML_EXTENSIONS` entry are loaded; any
+ * other cohabitant (a README, a hidden file, a subdirectory) is skipped so a
+ * non-registry file does not poison the whole load.
+ *
  * Throws `RegistryParseError` (forwarded from `loadRegistryFile`) for any
- * file that cannot be read or is malformed YAML.
+ * YAML file that cannot be read or is malformed.
  */
 export async function loadRegistryDir(
   dir: string,
@@ -97,6 +104,10 @@ export async function loadRegistryDir(
   const result: Record<string, Record<string, unknown>> = {};
 
   for (const file of files) {
+    const lower = file.toLowerCase();
+    if (!YAML_EXTENSIONS.some((ext) => lower.endsWith(ext))) {
+      continue;
+    }
     const filePath = join(dir, file);
     const entry = await loadRegistryFile(filePath, requiredKeys);
     const key = String(entry[keyField]);

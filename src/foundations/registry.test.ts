@@ -43,6 +43,33 @@ describe("src/foundations/registry.ts", () => {
     });
   });
 
+  describe("loadRegistryDir — skips non-YAML cohabitants (S1 regression)", () => {
+    it("loads only .yaml/.yml files and ignores a README, hidden file, and subdirectory", async () => {
+      // Before the extension allowlist, readdir returned every entry and each
+      // non-YAML cohabitant was fed to loadRegistryFile — a README threw a
+      // RegistryParseError and a subdirectory threw EISDIR, poisoning the load.
+      const dir = join(TEMP_DIR, "mixed-dir");
+      await mkdir(dir, { recursive: true });
+
+      await writeFile(join(dir, "compile.yaml"), "verb: compile\ntier: 1\n", "utf8");
+      await writeFile(join(dir, "deploy.yml"), "verb: deploy\ntier: 2\n", "utf8");
+      // Non-YAML cohabitants that must NOT be parsed as registry files:
+      await writeFile(join(dir, "README.md"), "# not a registry file\n", "utf8");
+      await writeFile(join(dir, ".gitkeep"), "", "utf8");
+      await mkdir(join(dir, "nested"), { recursive: true });
+
+      const result = await loadRegistryDir(dir, "verb", []);
+
+      assert.deepStrictEqual(
+        Object.keys(result).sort(),
+        ["compile", "deploy"],
+        "only the .yaml/.yml entries should be loaded",
+      );
+      assert.strictEqual(result["compile"]?.["tier"], 1);
+      assert.strictEqual(result["deploy"]?.["tier"], 2);
+    });
+  });
+
   describe("loadRegistryFile — missing required key", () => {
     it("throws a RegistryValidationError naming the file and missing key when a required key is absent", async () => {
       const yamlContent = "verb: compile\ntimeout: 30000\n";
