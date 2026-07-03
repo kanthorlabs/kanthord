@@ -22,10 +22,13 @@ case "$path" in
   *generated*/*|*__generated__*) exit 1 ;;   # generated proto/codegen output
 esac
 
-# --- Shared writable surfaces (drafts + this role's own journal) ---
+# --- Shared writable surfaces (drafts + this role's own journal + shared gotcha checklists) ---
+# The shared gotcha files live directly under .agent/tdd/memory/ (e.g. ts-gotchas.md);
+# both engineer personas instruct appending pitfalls to them as they are hit.
 case "$path" in
   .agent/tdd/.${role}-response-*.md) exit 0 ;;
   .agent/tdd/memory/${role}/*)       exit 0 ;;
+  .agent/tdd/memory/*-gotchas.md)    exit 0 ;;
 esac
 
 # --- Is this a test file? ---
