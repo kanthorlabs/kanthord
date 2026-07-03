@@ -64,8 +64,11 @@ Stack (SU7 decision, validated by the bootstrap hello-world; a failed demo
 re-opens the choice via decision record): Vite + TypeScript + React,
 `@connectrpc/connect-web` over the maintainer-generated client, **Vitest** +
 Testing Library for unit/component tests, **Playwright** for the thin E2E
-suite. The two variants deliberately use different test runners; every lane
-rule and command below is variant-scoped.
+suite. UI composition uses **shadcn/ui** — vendored primitives on Tailwind v4
+semantic tokens — governed by the repo-root **`DESIGN.md`**, the design
+implementation contract for every web surface (design-system amendment
+2026-07-03 in the SU7 decision record). The two variants deliberately use
+different test runners; every lane rule and command below is variant-scoped.
 
 ### `{{> VARIANTS_AND_SCOPES}}`
 **Two variants: `core` and `web`.** The macOS/iOS Swift app and the CLI remain
@@ -92,8 +95,13 @@ role.
 **Web bootstrap gate (hard precondition, debate finding):** before the first
 web story dispatches, the maintainer bootstrap must have landed and passed:
 `web/` scaffold + toolchain deps + configs, the generated Connect-Web client,
-the E2E pre-flight script, the seeded `web-gotchas.md`, and one hello-world
-component + one hello-world E2E driven through the full four-role pipeline.
+the design foundation (Tailwind v4 + shadcn init, `web/src/styles/globals.css`
+tokens, the DESIGN.md §5 foundation component set — kept a separable item so a
+styling-toolchain failure is isolatable from the rest of the bootstrap; debate
+finding), the E2E pre-flight script, the seeded `web-gotchas.md`, and one
+hello-world component + one hello-world E2E driven through the full four-role
+pipeline — the hello-world component renders a vendored primitive styled by a
+semantic token, proving the design-system path end to end.
 The SU7 decision record links the passing run. Browser-consumability of the
 Epic 026 API (auth over TLS from the browser, same-origin serving or dev
 proxy — no CORS surprises) is part of what the hello-world must prove.
@@ -144,8 +152,11 @@ script**: `scripts/lane-check.sh <role> <scope> <path>` (exit 0 = in-lane).
   `*.config.*`, `scripts/**`, `web/package.json`, `web/tsconfig*.json`,
   `web/vite.config.*`, `web/playwright.config.*`, `web/vitest.config.*`;
   container/build files `Containerfile`, `compose.yaml`, `Makefile`; any
-  generated proto/client output (server or web). The reviewer-engineer edits
-  nothing at all.
+  generated proto/client output (server or web); the design contract
+  `DESIGN.md`, the token file `web/src/styles/globals.css`, and the vendored
+  shadcn primitives `web/src/components/ui/**` (changes route through
+  DESIGN.md §P2; HD-A decided 2026-07-03 — hard deny). The
+  reviewer-engineer edits nothing at all.
 
 The scope argument is `core`, `web`, or `all` (the serial alias running both);
 lane rules are variant-scoped as listed above.
@@ -205,8 +216,12 @@ Read the relevant file **before** working in that area — not upfront.
   top-level await.
 - `.agent/tdd/memory/web-gotchas.md` — before any `web/` edit: Vite resolution
   vs core's `.ts`-extension rule, Testing Library query discipline, Playwright
-  wait/locator pitfalls, Connect-Web client usage (seeded by the SU7
-  bootstrap).
+  wait/locator pitfalls, Connect-Web client usage, Tailwind v4-vs-v3 config
+  pitfalls (seeded by the SU7 bootstrap).
+- `DESIGN.md` (repo root) — before any `web/src` component or feature edit:
+  the design implementation contract (ownership tiers, token rules, state
+  patterns, locator placement); read the `DESIGN §n` sections the task's area
+  touches.
 
 This file is seeded as a living checklist; engineers append pitfalls as they
 hit them (the test-engineer/software-engineer journals are separate, under
@@ -224,7 +239,12 @@ Apply on every edit:
   that seam (no module-level singletons that tests cannot replace).
 - **Web idioms (web)** — all API access through the generated Connect-Web
   client (never hand-rolled fetch against the daemon); every interactive
-  element carries a locator-registry `data-testid`; no server logic in the SPA.
+  element carries a locator-registry `data-testid`; no server logic in the
+  SPA; style with semantic token classes only (no raw palette/hex —
+  DESIGN.md §3); compose from the design-system tiers — composites first,
+  vendored primitives second, no raw HTML element where a primitive exists
+  (DESIGN.md §2); domain states map to visuals only via the domain badge
+  composites (DESIGN.md §4).
 - **Surgical diffs** — smallest change that satisfies the failing assertion plus
   the named refactor; no speculative abstraction.
 
@@ -293,6 +313,10 @@ BLOCKER vs SUGGESTION with an `action:` tag.
 - **Web discipline (web stories only).** All API access goes through the
   generated client (no raw fetch to the daemon); every selection uses the
   locator registry; no server logic in the SPA. Each violation is a BLOCKER.
+- **Design conformance (web stories only).** The DESIGN.md §P3 checklist —
+  semantic tokens only, tier composition, §7 state patterns, §8 locator
+  placement, frozen `ui/**` and read-only-by-design surfaces. Each violation
+  is a BLOCKER citing `DESIGN §n`.
 
 There is no sketch phase, so no dimension is ever skipped.
 
