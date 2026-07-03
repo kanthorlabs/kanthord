@@ -15,3 +15,8 @@ Living checklist. Append a dated bullet when a new pitfall bites.
   `T | undefined`; narrow before use.
 - **No emit.** The build is type-check only (`tsc --noEmit`); there is no `dist/`
   yet. Run code with `node src/x.ts` directly.
+- **No TypeScript parameter properties.** Node 24 type stripping does NOT support
+  the `constructor(private readonly foo: string) {}` shorthand — it is a
+  TypeScript-only transformation (not a mere annotation), so the stripper rejects
+  it at runtime with `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`. Always use an explicit
+  field declaration + manual assignment in the constructor body instead.
