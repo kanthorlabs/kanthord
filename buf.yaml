@@ -1,0 +1,10 @@
+# buf v2 config — proto sources for kanthord (Epic 000 SU3).
+version: v2
+modules:
+  - path: proto
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
