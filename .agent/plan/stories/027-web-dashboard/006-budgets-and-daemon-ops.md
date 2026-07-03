@@ -1,0 +1,79 @@
+# Story 006 - Budgets & Daemon Ops
+
+Epic: `.agent/plan/epics/027-web-dashboard.md`
+
+## Goal
+
+The budgets surface (per-task ledger, circuit-breaker state, the recorded
+override flow with a required reason) and daemon ops (health, dead-man ping
+status, trigger `kanthord verify` + view its report).
+
+## Acceptance Criteria
+
+- The budgets view renders the per-task ledger and breaker state from the
+  fixture; a recorded override is visible with actor, amount, and reason
+  (phases.md 2B D6 — budgets surface; PRD §4 — override recorded).
+- The override flow demands a reason string before submit (client-side block
+  **and** the API's typed rejection rendered if bypassed); a rate-limited
+  rejection renders as its typed error (Epic 026 — scoped override contract).
+- Daemon ops renders health, last dead-man ping time + outcome (the Epic 029
+  field via Epic 026), and a verify trigger; triggering verify invokes the
+  `daemon.verify` method and renders the returned report (divergence list or
+  clean).
+- Empty/unknown states are explicit (e.g. no ping yet recorded renders "no
+  ping recorded", not a blank).
+
+## Constraints
+
+- Pure client of Epic 026; component tests hermetic against the fake
+  generated client (PROFILE web variant). The override's rate limit and
+  scoping are server-owned; the UI renders outcomes only.
+- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- UI composition, tokens, state rendering, and locator placement follow the
+  repo-root `DESIGN.md` (design implementation contract; design-system
+  amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
+  escalation — never a hand-rolled clone; a shared composite not named in a
+  Task Input needs an authoring update first (debate finding — no blanket
+  component-dir grants). The override confirm consumes the
+  `ConfirmActionDialog` composite Story 002 introduces.
+- No E2E in this story — covered live by the epic gate run (PROFILE).
+
+## Verification Gate
+
+- `npm run test:web` green for `web/src/budgets/**` and `web/src/daemon-ops/**`.
+
+### Task T1 - Budgets view + override flow
+
+**Input:** `web/src/budgets/Budgets.tsx`, `web/src/budgets/Budgets.test.tsx`,
+`web/src/locators.ts`, `web/src/components/status/BreakerStateBadge.tsx`,
+`web/src/components/status/BreakerStateBadge.test.tsx` (the DESIGN §4 domain
+badge this surface introduces)
+
+**Action - RED:** Component tests: ledger + breaker fixture renders; the
+override form blocks submit without a reason; a successful override invokes
+the method with reason and renders the recorded interaction; rate-limit
+rejection fixture renders the typed error.
+
+**Action - GREEN:** Implement the budgets view + override flow.
+
+**Action - REFACTOR:** none.
+
+**Verify:** `npm run test:web` green; `npm run typecheck:web` exits 0.
+
+### Task T2 - Daemon-ops view + verify trigger
+
+**Input:** `web/src/daemon-ops/DaemonOps.tsx`,
+`web/src/daemon-ops/DaemonOps.test.tsx`, `web/src/locators.ts`,
+`web/src/components/templates/OpsPage.tsx`,
+`web/src/components/templates/OpsPage.test.tsx` (the DESIGN §6 template this
+surface introduces)
+
+**Action - RED:** Component tests: health + last-ping fixture renders (and the
+no-ping-yet explicit state); the verify trigger invokes `daemon.verify` and
+renders the report fixture (both a clean and a divergence-list case).
+
+**Action - GREEN:** Implement the daemon-ops view.
+
+**Action - REFACTOR:** none.
+
+**Verify:** `npm run test:web` green; `npm run typecheck:web` exits 0.
