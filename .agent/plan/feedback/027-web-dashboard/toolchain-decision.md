@@ -19,8 +19,8 @@ notes.
   component tests co-located, E2E under `clients/web/e2e/**`).
 - **Stack:** Vite + TypeScript + React; `@connectrpc/connect-web` over a
   maintainer-generated, committed client; Vitest + Testing Library
-  (unit/component, hermetic against a fake of the generated client);
-  Playwright (thin, story-gated E2E). The stack choice is an authoring
+  (jsdom; unit/component, hermetic against a fake of the generated client);
+  Playwright (chromium-only, thin, story-gated E2E). The stack choice is an authoring
   proposal validated by the bootstrap demo — a failed demo re-opens it via a
   decision record here.
 - **Lanes:** TE gets web test paths; SE gets web production paths **including
