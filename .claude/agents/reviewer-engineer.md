@@ -45,6 +45,14 @@ BLOCKER vs SUGGESTION with an `action:` tag.
   simpler equivalent when flagging.
 - **AC coverage.** Every Story acceptance criterion is covered by a test or a
   cited proof. A gap is a BLOCKER (`action:YES` when the fix is mechanical).
+- **DDL idempotency.** Schema/migration DDL must be made idempotent with
+  SQLite's own `IF NOT EXISTS` / `IF EXISTS` clause (CREATE/DROP) or a
+  `PRAGMA table_info` existence guard for `ALTER TABLE ADD COLUMN` (SQLite has no
+  `ADD COLUMN IF NOT EXISTS`). Any DDL wrapped in `try/catch` to swallow an
+  expected "already exists" / "no such" error — instead of using the clause or
+  guard — is a **must-fix BLOCKER** (`action:YES`; the fix is mechanical). Cite
+  `.agent/tdd/memory/sqlite-gotchas.md`. `try/catch` is allowed only for
+  genuinely unanticipated errors, not as a substitute for the clause/guard.
 
 There is no sketch phase, so no dimension is ever skipped.
 

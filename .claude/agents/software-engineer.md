@@ -71,6 +71,11 @@ Read the relevant file **before** working in that area — not upfront.
 - `.agent/tdd/memory/ts-gotchas.md` — before any TypeScript/ESM edit: explicit
   `.ts` import extensions under type stripping, `verbatimModuleSyntax`
   `import type` rules, `node:` builtin imports, top-level await.
+- `.agent/tdd/memory/sqlite-gotchas.md` — before any schema/migration DDL: make
+  DDL idempotent with SQLite's `IF NOT EXISTS` / `IF EXISTS` clause (CREATE/DROP)
+  or a `PRAGMA table_info` guard for `ADD COLUMN` (SQLite has no
+  `ADD COLUMN IF NOT EXISTS`); never `try/catch` to swallow an expected
+  "already exists" error — reserve `try/catch` for unanticipated errors only.
 
 These files are seeded as living checklists; engineers append pitfalls as they
 hit them (the test-engineer/software-engineer journals are separate, under

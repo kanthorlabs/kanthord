@@ -39,6 +39,7 @@ Finding source requirements:
 - API/seam design: the public seam fits the Story and test consumer.
 - Simplicity: smallest correct change; no speculative abstraction.
 - AC coverage: every Story acceptance criterion is covered by a test or proof.
+- DDL idempotency: schema/migration DDL must be made idempotent with SQLite's own `IF NOT EXISTS`/`IF EXISTS` clause (CREATE/DROP) or a `PRAGMA table_info` existence guard for `ALTER TABLE ADD COLUMN` (SQLite has no `ADD COLUMN IF NOT EXISTS`). Any DDL wrapped in `try/catch` to swallow an expected "already exists"/"no such" error instead of the clause or guard is a must-fix BLOCKER (`action:YES`; the fix is mechanical); cite `.agent/tdd/memory/sqlite-gotchas.md`. `try/catch` is allowed only for genuinely unanticipated errors.
 
 Classify each finding as BLOCKER or SUGGESTION and tag it with `action:YES` or
 `action:NO`.
