@@ -31,7 +31,7 @@ Epic 017 contract). Carries the 2A approval-flow re-validation E2E.
 - Pure client of Epic 026 (the inbox methods superset the 2A Epic 017
   surface); component tests hermetic against the fake generated client
   (PROFILE web variant).
-- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- Selection only via `clients/web/src/locators.ts` (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
   amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
@@ -43,13 +43,13 @@ Epic 017 contract). Carries the 2A approval-flow re-validation E2E.
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/inbox/**`; `npm run e2e:web` green for
-  `web/e2e/inbox-approval-loop.spec.ts`.
+- `npm run test:web` green for `clients/web/src/inbox/**`; `npm run e2e:web` green for
+  `clients/web/e2e/inbox-approval-loop.spec.ts`.
 
 ### Task T1 - Inbox list + evidence rendering
 
-**Input:** `web/src/inbox/Inbox.tsx`, `web/src/inbox/Inbox.test.tsx`,
-`web/src/locators.ts`
+**Input:** `clients/web/src/inbox/Inbox.tsx`, `clients/web/src/inbox/Inbox.test.tsx`,
+`clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: a fixture with open items renders each with
 its evidence content; empty inbox renders the explicit empty state.
@@ -62,8 +62,8 @@ its evidence content; empty inbox renders the explicit empty state.
 
 ### Task T2 - Typed-category response flow
 
-**Input:** `web/src/inbox/Respond.tsx`, `web/src/inbox/Respond.test.tsx`,
-`web/src/locators.ts`
+**Input:** `clients/web/src/inbox/Respond.tsx`, `clients/web/src/inbox/Respond.test.tsx`,
+`clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: responding demands a category
 (accept/override per Epic 017); submit without one is blocked client-side;
@@ -79,7 +79,7 @@ leaves the open list.
 
 ### Task T3 - E2E: 2A approval-flow re-validation
 
-**Input:** `web/e2e/inbox-approval-loop.spec.ts`
+**Input:** `clients/web/e2e/inbox-approval-loop.spec.ts`
 
 **Action - RED:** Playwright spec: on the pre-flight daemon, an escalation
 raised by the golden fixture is listed, its evidence opened, a
@@ -91,5 +91,5 @@ daemon-backed view (the phases.md re-validation criterion).
 
 **Action - REFACTOR:** none.
 
-**Verify:** `npm run e2e:web` green for `web/e2e/inbox-approval-loop.spec.ts`
+**Verify:** `npm run e2e:web` green for `clients/web/e2e/inbox-approval-loop.spec.ts`
 (story-gated per PROFILE).

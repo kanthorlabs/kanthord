@@ -32,7 +32,7 @@ surface.
 - Pure client of the Epic 026 API via the maintainer-generated Connect-Web
   client; component tests run hermetic against a fake of that client
   (PROFILE web variant; SU7 decision b).
-- Selection only via the locator registry `web/src/locators.ts`; a missing
+- Selection only via the locator registry `clients/web/src/locators.ts`; a missing
   locator is added by the SE in GREEN (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
@@ -45,15 +45,15 @@ surface.
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/features/**`; `npm run e2e:web` green
-  for `web/e2e/features.spec.ts`.
+- `npm run test:web` green for `clients/web/src/features/**`; `npm run e2e:web` green
+  for `clients/web/e2e/features.spec.ts`.
 
 ### Task T1 - Features list + empty state
 
-**Input:** `web/src/features/FeatureList.tsx`,
-`web/src/features/FeatureList.test.tsx`, `web/src/locators.ts`,
-`web/src/components/status/FeatureStatusBadge.tsx`,
-`web/src/components/status/FeatureStatusBadge.test.tsx` (the DESIGN §4 domain
+**Input:** `clients/web/src/features/FeatureList.tsx`,
+`clients/web/src/features/FeatureList.test.tsx`, `clients/web/src/locators.ts`,
+`clients/web/src/components/status/FeatureStatusBadge.tsx`,
+`clients/web/src/components/status/FeatureStatusBadge.test.tsx` (the DESIGN §4 domain
 badge this surface introduces)
 
 **Action - RED:** Component test: a fake-client fixture with three features
@@ -69,12 +69,12 @@ seam; add the locators the test names.
 
 ### Task T2 - Drill-down views
 
-**Input:** `web/src/features/FeatureDetail.tsx`,
-`web/src/features/FeatureDetail.test.tsx`, `web/src/locators.ts`,
-`web/src/components/status/TaskStatusBadge.tsx`,
-`web/src/components/status/TaskStatusBadge.test.tsx`,
-`web/src/components/templates/DetailPage.tsx`,
-`web/src/components/templates/DetailPage.test.tsx` (the DESIGN §4 badge and
+**Input:** `clients/web/src/features/FeatureDetail.tsx`,
+`clients/web/src/features/FeatureDetail.test.tsx`, `clients/web/src/locators.ts`,
+`clients/web/src/components/status/TaskStatusBadge.tsx`,
+`clients/web/src/components/status/TaskStatusBadge.test.tsx`,
+`clients/web/src/components/templates/DetailPage.tsx`,
+`clients/web/src/components/templates/DetailPage.test.tsx` (the DESIGN §4 badge and
 §6 template this surface introduces)
 
 **Action - RED:** Component tests: the drill-down renders task statuses, DAG
@@ -91,7 +91,7 @@ for plan content.
 
 ### Task T3 - E2E: live render + auth baseline
 
-**Input:** `web/e2e/features.spec.ts`
+**Input:** `clients/web/e2e/features.spec.ts`
 
 **Action - RED:** Playwright spec against the pre-flight daemon: list +
 drill-down render golden-fixture data over the authenticated TLS path; an
@@ -103,5 +103,5 @@ inputs.
 
 **Action - REFACTOR:** none.
 
-**Verify:** `npm run e2e:web` green for `web/e2e/features.spec.ts` (story-gated
+**Verify:** `npm run e2e:web` green for `clients/web/e2e/features.spec.ts` (story-gated
 per PROFILE).

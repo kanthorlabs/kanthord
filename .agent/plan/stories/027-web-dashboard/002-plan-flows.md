@@ -27,7 +27,7 @@ re-planning diff approval — each with its error/conflict states rendered.
 
 - Pure client of Epic 026 via the generated Connect-Web client; component
   tests hermetic against a fake of it (PROFILE web variant).
-- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- Selection only via `clients/web/src/locators.ts` (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
   amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
@@ -39,12 +39,12 @@ re-planning diff approval — each with its error/conflict states rendered.
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/plan-flows/**`.
+- `npm run test:web` green for `clients/web/src/plan-flows/**`.
 
 ### Task T1 - Sign-off flow
 
-**Input:** `web/src/plan-flows/SignOff.tsx`,
-`web/src/plan-flows/SignOff.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/plan-flows/SignOff.tsx`,
+`clients/web/src/plan-flows/SignOff.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: valid-plan fixture ⇒ compile result +
 generation rendered; invalid-plan fixture ⇒ each diagnostic string rendered
@@ -58,9 +58,9 @@ verbatim; the fake client saw exactly the sign-off method.
 
 ### Task T2 - Halt flow
 
-**Input:** `web/src/plan-flows/Halt.tsx`, `web/src/plan-flows/Halt.test.tsx`,
-`web/src/locators.ts`, `web/src/components/ConfirmActionDialog.tsx`,
-`web/src/components/ConfirmActionDialog.test.tsx` (the DESIGN §7
+**Input:** `clients/web/src/plan-flows/Halt.tsx`, `clients/web/src/plan-flows/Halt.test.tsx`,
+`clients/web/src/locators.ts`, `clients/web/src/components/ConfirmActionDialog.tsx`,
+`clients/web/src/components/ConfirmActionDialog.test.tsx` (the DESIGN §7
 destructive-confirm composite this flow introduces; later stories consume it
 without re-declaring it)
 
@@ -76,8 +76,8 @@ rendered as such (type surfaced, not a generic failure).
 
 ### Task T3 - Re-planning diff approval
 
-**Input:** `web/src/plan-flows/ReplanApproval.tsx`,
-`web/src/plan-flows/ReplanApproval.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/plan-flows/ReplanApproval.tsx`,
+`clients/web/src/plan-flows/ReplanApproval.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: the diff + base generation render from the
 fixture; approve invokes the approval method and renders the re-opened gates;

@@ -25,7 +25,7 @@ bootstrap (scaffold + hello-world through the full pipeline) has passed.
 | `{{AGENT_DIR}}` | `.claude/agents/` |
 | `{{DEFAULT_TURN_CAP}}` | `128` |
 | `{{ATTEMPT_LIMIT}}` | `3` |
-| `{{LOCATOR_DEFN_LABEL}}` | `UI locators (web variant: the SE-owned locator registry web/src/locators.ts)` |
+| `{{LOCATOR_DEFN_LABEL}}` | `UI locators (web variant: the SE-owned locator registry clients/web/src/locators.ts)` |
 | `{{ENV_HANDOFF_LABEL}}` | `Pre-flight resource` |
 
 ## 2. Slots
@@ -37,7 +37,7 @@ core, web
 `core typecheck` (npm run typecheck) and `core unit` (npm test); `web typecheck` (npm run typecheck:web) and `web unit` (npm run test:web) — each exit 0. `web e2e` (npm run e2e:web) is story-gated: it runs only when a Story's Verify names it, and in the Epic 027 gate run — never as a default join gate (debate finding: full E2E on every join would make the shared pipeline too slow to use).
 
 ### `{{> JOIN_GATE_TARGETS}}`
-Both variants, cheap gates only: `core` (npm run typecheck, npm test) then `web` (npm run typecheck:web, npm run test:web). Variant path sets are disjoint at the source level (`src/` vs `web/`), so --join merges worktrees without a shared-file policy; the one shared input — the proto schema and its generated clients (server + web) — is maintainer-regenerated, lane-forbidden, and committed, so it can never appear in an engineer's diff (debate finding: the generated client is the non-disjoint edge, owned explicitly).
+Both variants, cheap gates only: `core` (npm run typecheck, npm test) then `web` (npm run typecheck:web, npm run test:web). Variant path sets are disjoint at the source level (`src/` vs `clients/web/`), so --join merges worktrees without a shared-file policy; the one shared input — the proto schema and its generated clients (server + web) — is maintainer-regenerated, lane-forbidden, and committed, so it can never appear in an engineer's diff (debate finding: the generated client is the non-disjoint edge, owned explicitly).
 
 ### `{{> TE_FRONTMATTER}}`
 description: "TDD test-engineer for kanthord (core + web) — writes the failing test (node:test for core, Vitest/Playwright for web) (RED), confirms GREEN, signals ready. Never touches production code."
@@ -59,7 +59,7 @@ Core tests run on the built-in **`node:test`** runner with `node:assert` — no
 test framework dependency in core.
 
 **kanthord Web** (`web`) is the control-plane dashboard SPA (Epic 027) under
-`web/` — a pure client of the Epic 026 Connect API with **no server logic**.
+`clients/web/` — a pure client of the Epic 026 Connect API with **no server logic**.
 Stack (SU7 decision, validated by the bootstrap hello-world; a failed demo
 re-opens the choice via decision record): Vite + TypeScript + React,
 `@connectrpc/connect-web` over the maintainer-generated client, **Vitest** +
@@ -78,15 +78,15 @@ the Web SPA joined this pipeline per the Epic 020 SU7 decision.
 
 - **`core`** — owns `src/`. Build target: the TypeScript program type-checked
   by `tsc` and exercised by `node --test`. No dependency on any other variant.
-- **`web`** — owns `web/` (source `web/src/**`, unit/component tests
-  `web/src/**/*.test.ts` and `*.test.tsx`, E2E `web/e2e/**`). Build target: the
+- **`web`** — owns `clients/web/` (source `clients/web/src/**`, unit/component tests
+  `clients/web/src/**/*.test.ts` and `*.test.tsx`, E2E `clients/web/e2e/**`). Build target: the
   Vite production bundle, type-checked by `tsc` and exercised by Vitest (+
   Playwright where a Story names it). Depends on core **only** through the
   maintainer-generated Connect-Web client (committed generated code; when the
   Epic 026 schema changes, the maintainer re-generates — the client is never an
   engineer edit).
 
-Source path sets are disjoint (`src/` vs `web/`); `--variant web` runs in an
+Source path sets are disjoint (`src/` vs `clients/web/`); `--variant web` runs in an
 isolated worktree; `--join` runs both variants' cheap gates (typecheck + unit)
 and needs no shared-file merge policy — the only shared inputs (proto schema,
 generated clients, root package config) are lane-forbidden to every engineer
@@ -94,8 +94,8 @@ role.
 
 **Web bootstrap gate (hard precondition, debate finding):** before the first
 web story dispatches, the maintainer bootstrap must have landed and passed:
-`web/` scaffold + toolchain deps + configs, the generated Connect-Web client,
-the design foundation (Tailwind v4 + shadcn init, `web/src/styles/globals.css`
+`clients/web/` scaffold + toolchain deps + configs, the generated Connect-Web client,
+the design foundation (Tailwind v4 + shadcn init, `clients/web/src/styles/globals.css`
 tokens, the DESIGN.md §5 foundation component set — kept a separable item so a
 styling-toolchain failure is isolatable from the rest of the bootstrap; debate
 finding), the E2E pre-flight script, the seeded `web-gotchas.md`, and one
@@ -120,12 +120,12 @@ proxy — no CORS surprises) is part of what the hello-world must prove.
   (e.g. `import { greet } from "./greeting.ts"`).
 
 #### web
-- **Production source:** `web/src/**/*.ts` / `*.tsx` (excluding test files),
+- **Production source:** `clients/web/src/**/*.ts` / `*.tsx` (excluding test files),
   bundled by Vite (imports follow the Vite/tsconfig resolution, not core's
   `.ts`-extension rule).
-- **Unit/component tests:** co-located as `web/src/**/*.test.ts(x)` on Vitest
+- **Unit/component tests:** co-located as `clients/web/src/**/*.test.ts(x)` on Vitest
   + Testing Library; select elements only via the locator registry.
-- **E2E tests:** `web/e2e/**/*.spec.ts` on Playwright against the pre-flight
+- **E2E tests:** `clients/web/e2e/**/*.spec.ts` on Playwright against the pre-flight
   daemon + served bundle; story-gated (a Story's Verify must name the e2e run).
 - **Generated client:** committed under the maintainer-declared generated dir;
   read-only for every role.
@@ -136,12 +136,12 @@ prefix table cannot separate the lanes — this project uses a **predicate
 script**: `scripts/lane-check.sh <role> <scope> <path>` (exit 0 = in-lane).
 
 - **test-engineer** lane: `src/**/*.test.ts`, `src/**/*.spec.ts` (core);
-  `web/src/**/*.test.ts`, `web/src/**/*.test.tsx`, `web/e2e/**` (web); plus its
+  `clients/web/src/**/*.test.ts`, `clients/web/src/**/*.test.tsx`, `clients/web/e2e/**` (web); plus its
   draft files under `.agent/tdd/` and its journal under
   `.agent/tdd/memory/test-engineer/`.
 - **software-engineer** lane: `src/**/*.ts` that is NOT a `*.test.ts` /
-  `*.spec.ts` (core); `web/src/**` that is NOT a test file (web) — this
-  **includes the locator registry `web/src/locators.ts`**: it is production
+  `*.spec.ts` (core); `clients/web/src/**` that is NOT a test file (web) — this
+  **includes the locator registry `clients/web/src/locators.ts`**: it is production
   code the SE owns; the TE consumes it and, when a test needs a missing
   locator, the Story's GREEN action adds it (debate finding — a TE-owned
   production-consumed module would break the lanes); plus its draft files and
@@ -149,12 +149,12 @@ script**: `scripts/lane-check.sh <role> <scope> <path>` (exit 0 = in-lane).
 - **Always forbidden to BOTH** (the lane script denies these for every role):
   the locked plan tree `.agent/plan/**`; the pipeline files `.claude/**`;
   toolchain/config `package.json`, `package-lock.json`, `tsconfig*.json`,
-  `*.config.*`, `scripts/**`, `web/package.json`, `web/tsconfig*.json`,
-  `web/vite.config.*`, `web/playwright.config.*`, `web/vitest.config.*`;
+  `*.config.*`, `scripts/**`, `clients/web/package.json`, `clients/web/tsconfig*.json`,
+  `clients/web/vite.config.*`, `clients/web/playwright.config.*`, `clients/web/vitest.config.*`;
   container/build files `Containerfile`, `compose.yaml`, `Makefile`; any
   generated proto/client output (server or web); the design contract
-  `DESIGN.md`, the token file `web/src/styles/globals.css`, and the vendored
-  shadcn primitives `web/src/components/ui/**` (changes route through
+  `DESIGN.md`, the token file `clients/web/src/styles/globals.css`, and the vendored
+  shadcn primitives `clients/web/src/components/ui/**` (changes route through
   DESIGN.md §P2; HD-A decided 2026-07-03 — hard deny). The
   reviewer-engineer edits nothing at all.
 
@@ -214,11 +214,11 @@ Read the relevant file **before** working in that area — not upfront.
   `src/`: explicit `.ts` import extensions under type stripping,
   `verbatimModuleSyntax` `import type` rules, `node:` builtin imports,
   top-level await.
-- `.agent/tdd/memory/web-gotchas.md` — before any `web/` edit: Vite resolution
+- `.agent/tdd/memory/web-gotchas.md` — before any `clients/web/` edit: Vite resolution
   vs core's `.ts`-extension rule, Testing Library query discipline, Playwright
   wait/locator pitfalls, Connect-Web client usage, Tailwind v4-vs-v3 config
   pitfalls (seeded by the SU7 bootstrap).
-- `DESIGN.md` (repo root) — before any `web/src` component or feature edit:
+- `DESIGN.md` (repo root) — before any `clients/web/src` component or feature edit:
   the design implementation contract (ownership tiers, token rules, state
   patterns, locator placement); read the `DESIGN §n` sections the task's area
   touches.
@@ -276,7 +276,7 @@ Apply on every edit:
   is a hand-written fake of the generated client interface, no daemon);
   Playwright for E2E (pre-flight daemon + served bundle, story-gated).
 - **File layout:** component tests co-located as `*.test.tsx`; E2E specs under
-  `web/e2e/` named for the story slice they cover.
+  `clients/web/e2e/` named for the story slice they cover.
 - **Selection:** components and E2E select **only** via the locator registry's
   `data-testid` constants; a raw CSS/text selector in a test is a review
   blocker.
@@ -285,7 +285,7 @@ Apply on every edit:
 
 ### `{{> UI_LOCATOR_CONTRACT}}`
 Core has no UI — core dispatches omit the locator section. For **web**: the
-locator registry is `web/src/locators.ts`, a production module of exported
+locator registry is `clients/web/src/locators.ts`, a production module of exported
 `data-testid` string constants **owned by the software-engineer lane** (debate
 finding — TE ownership of production-consumed code would break the lanes).
 Components attach ids only from the registry; tests (component + E2E) select

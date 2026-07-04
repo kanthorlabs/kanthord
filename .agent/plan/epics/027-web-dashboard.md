@@ -48,7 +48,7 @@ design.
 - PRD §3 Layer 3 — web client first; all clients connect to the daemon.
 - PRD §7.5 — re-planning diff approval is a human flow the UI must carry.
 - Epic 020 SU7 decision (b) + `.agent/tdd/PROFILE.md` web variant — pipeline,
-  lanes (`web/src/**` SE incl. `web/src/locators.ts`; tests TE; toolchain
+  lanes (`clients/web/src/**` SE incl. `clients/web/src/locators.ts`; tests TE; toolchain
   forbidden to both), stack (Vite + React + TS, Connect-Web generated client,
   Vitest + Testing Library, story-gated Playwright), gates (`web typecheck`,
   `web unit`, story-gated `web e2e`).

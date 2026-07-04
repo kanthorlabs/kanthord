@@ -33,15 +33,15 @@ Testing Library, Playwright):
 
 | Piece | Choice | Note |
 |---|---|---|
-| Component source | shadcn/ui CLI output, vendored under `web/src/components/ui/` | CLI is **maintainer-only** (it touches configs) |
+| Component source | shadcn/ui CLI output, vendored under `clients/web/src/components/ui/` | CLI is **maintainer-only** (it touches configs) |
 | Styling | Tailwind CSS **v4** (CSS-first `@theme`, no `tailwind.config.js`) | decided 2026-07-03 (HD-B); risk: agents may hallucinate v3-era config patterns — `web-gotchas.md` carries the v4-vs-v3 pitfalls (debate finding) |
 | Behavior primitives | Radix UI (inside the vendored components) | never re-implement a Radix behavior by hand |
-| Variants | `class-variance-authority` (cva), `cn()` from `web/src/lib/utils.ts` | the shadcn idiom; no ad-hoc classname concatenation |
+| Variants | `class-variance-authority` (cva), `cn()` from `clients/web/src/lib/utils.ts` | the shadcn idiom; no ad-hoc classname concatenation |
 | Icons | `lucide-react` | only icon source |
 | Toasts | `sonner` | the only toast mechanism |
 
-Versions are pinned at bootstrap in `web/package.json` (maintainer-owned,
-lane-forbidden). **The vendored source under `web/src/components/ui/` is the
+Versions are pinned at bootstrap in `clients/web/package.json` (maintainer-owned,
+lane-forbidden). **The vendored source under `clients/web/src/components/ui/` is the
 API reference** — agents read the actual props from the vendored file, never
 guess a shadcn API from memory.
 
@@ -49,19 +49,19 @@ guess a shadcn API from memory.
 
 | Path | What | Owner / edit rule |
 |---|---|---|
-| `web/src/components/ui/**` | Vendored shadcn primitives | **Maintainer-only (recommended default)**: lane-denied like generated code; every change routes through §P2. The two debate passes split here — #1: a permanent ban risks a maintainer bottleneck (favors a Task-Input gate); #2: a Task-Input escape hatch invites "just tweak the primitive" (favors the hard deny). The hard deny is adopted as the safer default — easy to relax later. Decided 2026-07-03 (HD-A: hard deny). |
-| `web/src/components/**` (excl. `ui/`) | App composites — the reusable design system (e.g. `AppShell`, `PageHeader`, `StatusBadge` family, `ConfirmActionDialog`, `DataStates`) | SE lane, TDD-covered. Composites are the executable examples: prefer extending one over writing prose rules |
-| `web/src/features/**` | Story surfaces | SE lane. Compose from tier-2 composites first, tier-1 primitives second; a raw HTML element where an equivalent primitive exists is a review blocker |
-| `web/src/design/**` | Shared visual vocabulary (`status.ts` tones, §4) | SE lane, unit-tested |
-| `web/src/styles/globals.css` | Token definitions (`@theme` + shadcn CSS variables) | Maintainer-owned (toolchain-adjacent); token additions via §P2 |
-| `web/src/locators.ts` | Locator registry | SE lane per PROFILE; naming per §8 |
+| `clients/web/src/components/ui/**` | Vendored shadcn primitives | **Maintainer-only (recommended default)**: lane-denied like generated code; every change routes through §P2. The two debate passes split here — #1: a permanent ban risks a maintainer bottleneck (favors a Task-Input gate); #2: a Task-Input escape hatch invites "just tweak the primitive" (favors the hard deny). The hard deny is adopted as the safer default — easy to relax later. Decided 2026-07-03 (HD-A: hard deny). |
+| `clients/web/src/components/**` (excl. `ui/`) | App composites — the reusable design system (e.g. `AppShell`, `PageHeader`, `StatusBadge` family, `ConfirmActionDialog`, `DataStates`) | SE lane, TDD-covered. Composites are the executable examples: prefer extending one over writing prose rules |
+| `clients/web/src/features/**` | Story surfaces | SE lane. Compose from tier-2 composites first, tier-1 primitives second; a raw HTML element where an equivalent primitive exists is a review blocker |
+| `clients/web/src/design/**` | Shared visual vocabulary (`status.ts` tones, §4) | SE lane, unit-tested |
+| `clients/web/src/styles/globals.css` | Token definitions (`@theme` + shadcn CSS variables) | Maintainer-owned (toolchain-adjacent); token additions via §P2 |
+| `clients/web/src/locators.ts` | Locator registry | SE lane per PROFILE; naming per §8 |
 
 ## §3 Tokens & styling rules
 
 The theme is the shadcn semantic CSS-variable set (`--background`,
 `--foreground`, `--card`, `--muted`, `--accent`, `--destructive`, `--border`,
 `--ring`, `--radius`, `--chart-1..5`, `--sidebar-*`), defined once in
-`web/src/styles/globals.css`.
+`clients/web/src/styles/globals.css`.
 
 - **MUST** style with semantic utility classes only: `bg-background`,
   `text-muted-foreground`, `border-border`, `bg-destructive`, …
@@ -79,7 +79,7 @@ The theme is the shadcn semantic CSS-variable set (`--background`,
 Two layers (debate finding — one global status file becomes a cross-domain
 dumping ground):
 
-1. `web/src/design/status.ts` — the **visual vocabulary** only: a `Tone`
+1. `clients/web/src/design/status.ts` — the **visual vocabulary** only: a `Tone`
    union (`neutral | info | success | warning | danger`) and its mapping to
    Badge/Alert variants and token classes. No domain knowledge.
 2. **Domain mappings live beside their composite**: `FeatureStatusBadge`,
@@ -170,7 +170,7 @@ breaker-open).
 
 ## §8 Locator placement & naming
 
-Extends the PROFILE locator contract (`web/src/locators.ts`, SE-owned,
+Extends the PROFILE locator contract (`clients/web/src/locators.ts`, SE-owned,
 registry-only selection). Naming: dot-path `area.surface.element[.action]` —
 e.g. `features.list.row`, `features.list.empty`, `inbox.item.respond`,
 `budgets.override.reason`, `ops.verify.trigger`.
@@ -226,7 +226,7 @@ element" is not precise enough with Radix portals):
 Each is a BLOCKER, cite `DESIGN §n`:
 
 - raw palette class / hex / inline color / arbitrary color value (§3);
-- edited `web/src/components/ui/**` file not named by the Task Input (§2);
+- edited `clients/web/src/components/ui/**` file not named by the Task Input (§2);
 - domain state mapped to color/variant inline in a feature file (§4);
 - surface not mounted in `AppShell` / bespoke page scaffolding (§6);
 - an AC-named state missing its §7 rendering pattern;

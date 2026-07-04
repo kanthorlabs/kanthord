@@ -15,8 +15,8 @@ notes.
 
 ## What was decided (now in PROFILE.md)
 
-- **Location:** the SPA lives in-repo under `web/` (source `web/src/**`,
-  component tests co-located, E2E under `web/e2e/**`).
+- **Location:** the SPA lives in-repo under `clients/web/` (source `clients/web/src/**`,
+  component tests co-located, E2E under `clients/web/e2e/**`).
 - **Stack:** Vite + TypeScript + React; `@connectrpc/connect-web` over a
   maintainer-generated, committed client; Vitest + Testing Library
   (unit/component, hermetic against a fake of the generated client);
@@ -24,7 +24,7 @@ notes.
   proposal validated by the bootstrap demo — a failed demo re-opens it via a
   decision record here.
 - **Lanes:** TE gets web test paths; SE gets web production paths **including
-  the locator registry `web/src/locators.ts`** (debate finding); all web
+  the locator registry `clients/web/src/locators.ts`** (debate finding); all web
   toolchain/config files and every generated client are forbidden to both.
 - **Gates:** `web typecheck` + `web unit` join the cheap gate set (`--join`
   runs them always); `web e2e` runs only when a Story's Verify names it and in
@@ -38,7 +38,7 @@ notes.
 
 Maintainer-executed, in order; the SU7 Verify passes only when item 6 is green:
 
-1. Scaffold `web/` (Vite + React + TS), add deps to the web package config,
+1. Scaffold `clients/web/` (Vite + React + TS), add deps to the web package config,
    commit configs.
 2. Generate + commit the Connect-Web client from the Epic 026 schema; declare
    the generated dir in the lane-check.
@@ -55,7 +55,7 @@ Maintainer-executed, in order; the SU7 Verify passes only when item 6 is green:
 
 ## Consequences for the plan
 
-- ~~Epic 027's second authoring pass (its six story slices with `web/`-lane Task
+- ~~Epic 027's second authoring pass (its six story slices with `clients/web/`-lane Task
   Inputs) starts only after item 6.~~ **Superseded — see Amendment 2026-07-03.**
 - Epic 020 SU7's Verify ("demonstrated executable") maps to item 6.
 - When the Epic 026 schema changes, the maintainer re-generates the web client
@@ -111,7 +111,7 @@ What changed:
   §P2 missing-primitive escalation, §P3 reviewer blockers).
 - **PROFILE.md web slots updated** — DESIGN.md named in the web context and
   gotcha reading list; token/tier/badge idioms added; `DESIGN.md`,
-  `web/src/styles/globals.css`, and `web/src/components/ui/**` added to the
+  `clients/web/src/styles/globals.css`, and `clients/web/src/components/ui/**` added to the
   forbidden-to-both lane list; a "Design conformance" review dimension added.
   render.py re-render is already bootstrap item 5 — no new step.
 - **Bootstrap item 1 extended** (design foundation, separable): Tailwind v4 +
@@ -125,7 +125,7 @@ What changed:
   bullet (cite once, no rule restating — debate finding); Task Inputs name
   the **specific** design-system composite files a task introduces (e.g.
   `FeatureStatusBadge`, `ConfirmActionDialog`, page templates) with their
-  test files — NOT blanket `web/src/components/**` grants (debate finding —
+  test files — NOT blanket `clients/web/src/components/**` grants (debate finding —
   the riskiest wiring option was broad shared-directory Inputs).
 - **Story 000 authored as DRAFT (pending HD)** —
   `000-app-shell-and-design-foundation.md`: slim shell + tone vocabulary +

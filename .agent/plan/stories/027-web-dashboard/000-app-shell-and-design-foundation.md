@@ -49,21 +49,21 @@ gates).
   amendment 2026-07-03). Composition uses only the bootstrap-vendored
   foundation set; a missing primitive/token is a DESIGN.md §P2 escalation.
 - Component tests hermetic (no daemon, no fake-client data needed beyond
-  placeholder children); selection only via `web/src/locators.ts` (PROFILE
+  placeholder children); selection only via `clients/web/src/locators.ts` (PROFILE
   UI locator contract).
 - No E2E — the SU7 bootstrap hello-world already proves the pipeline/browser
   path; Story 001 carries the first real-surface E2E.
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/components/**` and
-  `web/src/design/**`; `npm run typecheck:web` exits 0.
+- `npm run test:web` green for `clients/web/src/components/**` and
+  `clients/web/src/design/**`; `npm run typecheck:web` exits 0.
 
 ### Task T1 - Tone vocabulary + shared state components
 
-**Input:** `web/src/design/status.ts`, `web/src/design/status.test.ts`,
-`web/src/components/DataStates.tsx`,
-`web/src/components/DataStates.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/design/status.ts`, `clients/web/src/design/status.test.ts`,
+`clients/web/src/components/DataStates.tsx`,
+`clients/web/src/components/DataStates.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Unit tests: each of the five tones maps to its badge
 variant (exact values asserted). Component tests: the loading state renders
@@ -79,8 +79,8 @@ vendored primitives; add the locators the tests name.
 
 ### Task T2 - AppShell + nav
 
-**Input:** `web/src/components/AppShell.tsx`,
-`web/src/components/AppShell.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/components/AppShell.tsx`,
+`clients/web/src/components/AppShell.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: the shell renders the six nav areas (each
 with a registry locator), the header region, and a placeholder child in the
@@ -98,8 +98,8 @@ hand-rolled drawer).
 
 ### Task T3 - ListPage template
 
-**Input:** `web/src/components/templates/ListPage.tsx`,
-`web/src/components/templates/ListPage.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/components/templates/ListPage.tsx`,
+`clients/web/src/components/templates/ListPage.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: title/toolbar/content slots render their
 children; driving the loading/empty/error slot props renders the T1 state

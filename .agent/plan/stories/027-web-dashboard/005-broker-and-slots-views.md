@@ -24,7 +24,7 @@ slots (registered repos, strategy, held leases, active sessions).
 
 - Pure client of Epic 026; component tests hermetic against the fake
   generated client (PROFILE web variant).
-- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- Selection only via `clients/web/src/locators.ts` (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
   amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
@@ -36,12 +36,12 @@ slots (registered repos, strategy, held leases, active sessions).
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/broker/**` and `web/src/slots/**`.
+- `npm run test:web` green for `clients/web/src/broker/**` and `clients/web/src/slots/**`.
 
 ### Task T1 - Broker ops + verb registry views
 
-**Input:** `web/src/broker/BrokerViews.tsx`,
-`web/src/broker/BrokerViews.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/broker/BrokerViews.tsx`,
+`clients/web/src/broker/BrokerViews.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: the ops fixture renders the three groups +
 reconciliation status; the registry fixture renders verbs with tiers and
@@ -55,8 +55,8 @@ exposes no editable element; empty fixtures render explicit empty states.
 
 ### Task T2 - Repo-slots view
 
-**Input:** `web/src/slots/RepoSlots.tsx`, `web/src/slots/RepoSlots.test.tsx`,
-`web/src/locators.ts`
+**Input:** `clients/web/src/slots/RepoSlots.tsx`, `clients/web/src/slots/RepoSlots.test.tsx`,
+`clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: the slots fixture renders repos with
 strategy, held leases, and active sessions; empty fixture renders the

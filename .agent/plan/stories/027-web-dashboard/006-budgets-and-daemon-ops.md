@@ -28,7 +28,7 @@ status, trigger `kanthord verify` + view its report).
 - Pure client of Epic 026; component tests hermetic against the fake
   generated client (PROFILE web variant). The override's rate limit and
   scoping are server-owned; the UI renders outcomes only.
-- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- Selection only via `clients/web/src/locators.ts` (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
   amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
@@ -40,13 +40,13 @@ status, trigger `kanthord verify` + view its report).
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/budgets/**` and `web/src/daemon-ops/**`.
+- `npm run test:web` green for `clients/web/src/budgets/**` and `clients/web/src/daemon-ops/**`.
 
 ### Task T1 - Budgets view + override flow
 
-**Input:** `web/src/budgets/Budgets.tsx`, `web/src/budgets/Budgets.test.tsx`,
-`web/src/locators.ts`, `web/src/components/status/BreakerStateBadge.tsx`,
-`web/src/components/status/BreakerStateBadge.test.tsx` (the DESIGN §4 domain
+**Input:** `clients/web/src/budgets/Budgets.tsx`, `clients/web/src/budgets/Budgets.test.tsx`,
+`clients/web/src/locators.ts`, `clients/web/src/components/status/BreakerStateBadge.tsx`,
+`clients/web/src/components/status/BreakerStateBadge.test.tsx` (the DESIGN §4 domain
 badge this surface introduces)
 
 **Action - RED:** Component tests: ledger + breaker fixture renders; the
@@ -62,10 +62,10 @@ rejection fixture renders the typed error.
 
 ### Task T2 - Daemon-ops view + verify trigger
 
-**Input:** `web/src/daemon-ops/DaemonOps.tsx`,
-`web/src/daemon-ops/DaemonOps.test.tsx`, `web/src/locators.ts`,
-`web/src/components/templates/OpsPage.tsx`,
-`web/src/components/templates/OpsPage.test.tsx` (the DESIGN §6 template this
+**Input:** `clients/web/src/daemon-ops/DaemonOps.tsx`,
+`clients/web/src/daemon-ops/DaemonOps.test.tsx`, `clients/web/src/locators.ts`,
+`clients/web/src/components/templates/OpsPage.tsx`,
+`clients/web/src/components/templates/OpsPage.test.tsx` (the DESIGN §6 template this
 surface introduces)
 
 **Action - RED:** Component tests: health + last-ping fixture renders (and the
