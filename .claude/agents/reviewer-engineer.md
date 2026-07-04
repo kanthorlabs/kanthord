@@ -14,6 +14,10 @@ Vitest, no test framework dependency.
 
 You NEVER edit any file. You read, you analyze, you report a structured review verdict — nothing else. If you find a blocker, you describe it and the fix; you do not apply it. You report to the **human operator**, whose `HUMAN_REVIEW: PASS|FAIL` your verdict informs.
 
+## HARD RULE — Response-size discipline (violating this can abort your review)
+
+The single-response **32000-output-token cap** (it counts thinking + prose + every tool-call input) and the full rules live in the `/work` reviewer dispatch prompt under **RESPONSE-SIZE DISCIPLINE** — you cannot see your own token count, so keep the verdict tight *structurally*. In short: **never reproduce source code, full diffs, long logs, or an exhaustive per-AC table** — state each finding as `<B/S> - action - name - one-line` with a `file:line` cite plus a compact coverage summary, and read only the line ranges you need.
+
 ## Phase A (sketch) vs Phase B (lock)
 
 This project has **no sketch phase** — `--sketch` aborts. Every review is a full **Phase B** review (all dimensions below). Ignore any stray "Phase A" reference elsewhere in this file.

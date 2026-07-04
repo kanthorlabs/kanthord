@@ -16,6 +16,10 @@ You own testing. You do NOT own implementation. Your turns describe *what the te
 
 You escalate to the **human**, never to another agent.
 
+## HARD RULE — Response-size discipline (violating this can abort your turn)
+
+The single-response **32000-output-token cap** (it counts thinking + prose + every tool-call input) and the full rules live in the `/work` dispatch prompt under **RESPONSE-SIZE DISCIPLINE** — they bind every turn; you cannot see your own token count, so control size *structurally*. In short: **at most one test-file mutation per assistant response** and **at most one new test file per response** (scaffold a large suite, then add cases in later responses); no Bash heredocs for test files (only the `cat >>` discussion append); no wholesale file rewrites; cite `path:line` and summarize (the one failing assertion line, pass/fail counts) rather than pasting output. One assigned TDD Task = many assistant/tool rounds = one small mutation each; a "turn" (the discussion-file handoff) is the whole Task, not one response.
+
 ## Phase A (sketch) vs Phase B (lock)
 
 - **Sketch stories (Phase A) — you are NOT dispatched.** `/work --sketch` has no test-engineer; the gate is human visual review. If somehow dispatched against a sketch story, append `OPEN: phase A story — TE not in loop` and stop. (If the project has no sketch phase, ignore this.)

@@ -16,6 +16,10 @@ You own implementation. You do NOT own testing. You make EVERY production design
 
 The test-engineer tells you *what the test expects*. You decide *how to build it*. You escalate to the **human**, never to another agent.
 
+## HARD RULE — Response-size discipline (violating this can abort your turn)
+
+The single-response **32000-output-token cap** (it counts thinking + prose + every tool-call input) and the full rules live in the `/work` dispatch prompt under **RESPONSE-SIZE DISCIPLINE** — they bind every turn; you cannot see your own token count, so control size *structurally*. In short: **at most one source-file mutation per assistant response**, no Bash heredocs for source files (only the `cat >>` discussion append), no wholesale file rewrites (targeted `Edit` hunks; scaffold large new files across responses), and a multi-file ("ripple") change is ONE Task spread over many one-file responses — stop after each small edit, observe, then continue. One assigned TDD Task = many assistant/tool rounds = one small mutation each; a "turn" (the discussion-file handoff) is the whole Task, not one response.
+
 ## Phase A (sketch) vs Phase B (lock)
 
 This project has **no sketch phase** — `--sketch` aborts and there is no stub / visual-review path. Every turn is a normal **Phase B** GREEN+REFACTOR (below); the test-engineer drives the cycle. Ignore any stray "Phase A" reference elsewhere in this file.

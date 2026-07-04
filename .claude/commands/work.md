@@ -230,6 +230,15 @@ SINGLE-TURN CONTRACT (OVERRIDES everything below):
 - Do NOT spawn or dispatch any sub-agent.
 - Append "IMPLEMENTATION_READY_FOR_REVIEW:" ONLY when this turn IS it (test-engineer, every in-scope Task already green).
 
+RESPONSE-SIZE DISCIPLINE (OVERRIDES everything below — ignoring it can abort your turn and lose all its work):
+- The model caps a SINGLE assistant response at 32000 output tokens, counting your extended thinking + prose + EVERY tool-call input (a `Write` body, an `Edit` hunk, a `Bash` heredoc). You cannot see your own token count, so control size STRUCTURALLY, never by estimating.
+- Emit AT MOST ONE source/test-file mutation per assistant response: one `Write` or one `Edit`, then let the tool result return before the next. A few tiny edits to the SAME file may share a response; never batch edits across files, and never put a large write in a batched response.
+- Never write/edit a source or test file with a Bash heredoc (`cat > file`) — use `Write`/`Edit`. The only heredoc allowed is the small `cat >>` append to the discussion file.
+- Never rewrite an existing file wholesale — use targeted `Edit` hunks; reserve `Write` for new files, and scaffold a large new file across responses.
+- A multi-file ("ripple") change is still ONE Task but NOT one response: change the seam and one conformer, let feedback return, then the next. If your change would touch more than ~3 files or a file over ~10 KB, split it across responses (one file or small group per round).
+- test-engineer: create at most one NEW test file per response; scaffold a large suite first, then add cases in later responses.
+- Never paste file contents or full command/test output into thinking or the draft — cite `path:line` and summarize (the one failing assertion line, pass/fail counts). Keep the appended turn short (~40 lines).
+
 Follow your discussion-channel protocol exactly:
 1. Read the EPIC file and the discussion file for full context. The EPIC's `## Verification Gate` is binding. The discussion file's last turn (if any) tells you what was just done.
 2. Do the work your persona owns this turn:
@@ -260,7 +269,7 @@ Return one short sentence summarizing what you wrote.
 
 ### 5g. Verify the subagent wrote
 Re-read the tail (same pipeline as 5c) and also check for any new `^IMPLEMENTATION_READY_FOR_REVIEW:` line. Compare with `tail_before`:
-- If the tail is unchanged AND no new `IMPLEMENTATION_READY_FOR_REVIEW:` line appeared → abort with `"subagent <next> returned but discussion file unchanged"`. Leave the file as-is for human review.
+- If the tail is unchanged AND no new `IMPLEMENTATION_READY_FOR_REVIEW:` line appeared → the turn did not land. **Response-size abort recovery:** if the Agent call errored with an output-token-limit abort (the "32000 output token maximum" error) — or returned without appending — the subagent likely tried to do too much in one response. Re-dispatch the **same role** once with the same `TURN_ID`, prepending: *"Your previous attempt aborted by exceeding the single-response output-token cap. This turn, make only ONE small mutation (a single `Edit`/`Write`), rely on the RESPONSE-SIZE DISCIPLINE, and split the remaining work across later turns."* Count it toward the Task's attempt limit (5h). If it aborts a second time on the same Task, escalate to the human. Only if it is not a size abort → abort with `"subagent <next> returned but discussion file unchanged"` and leave the file for human review.
 
 ### 5g.1 Lane ownership check (git diff)
 
@@ -374,6 +383,8 @@ Changed files (review ONLY these — do not review unchanged files):
 <CHANGED_FILES>
 
 Follow your per-review workflow exactly. Read the gotcha files first, then the EPIC/Story files, then the changed source and test files. Cross-reference against all review dimensions and produce your structured verdict.
+
+RESPONSE-SIZE DISCIPLINE (ignoring it can abort your review and lose it): the model caps a SINGLE assistant response at 32000 output tokens, counting your extended thinking + prose + every tool-call input. You cannot see your own token count, so keep the verdict tight: never reproduce source code, full diffs, long logs, or an exhaustive per-AC table — state each finding as `<B/S> - action - name - one-line` with a `file:line` cite plus a compact coverage summary, and read only the line ranges you need.
 ```
 
 **Parse the reviewer's verdict** into two lists by each finding's `action:` tag: `YES` = apply, `NO` = informational.
