@@ -1,0 +1,33 @@
+{
+  "name": "kanthord",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "npm@11.18.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "generate:proto": "buf generate",
+    "verify:handoff": "node scripts/verify-handoff.mjs"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.71.0",
+    "@bufbuild/protoc-gen-es": "^2.12.1",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.12.1",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
+    "yaml": "^2.9.0"
+  }
+}

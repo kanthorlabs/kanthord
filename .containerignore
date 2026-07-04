@@ -1,0 +1,7 @@
+# Keep the image build context small and the sandbox clean.
+# The host data volume is bind-mounted at runtime, never baked into the image.
+.data/
+.git/
+node_modules/
+.agent/
+*.log
