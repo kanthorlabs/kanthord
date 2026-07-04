@@ -174,6 +174,22 @@ export class FeatureStore {
   }
 
   /**
+   * Read the task's `*.state.md` content. Returns `""` when the file is
+   * absent (i.e. no checkpoint has been written yet).
+   */
+  async readState(storyId: string, taskStem: string): Promise<string> {
+    const path = join(this.featureDir, storyId, `${taskStem}.state.md`);
+    try {
+      return await readFile(path, "utf8");
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        return "";
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Append one journal event to the task's `*.journal.jsonl` (append-only;
    * PRD §6.2 JOURNAL append-only discipline). Uses the Epic 001 jsonl seam.
    */
