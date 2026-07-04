@@ -31,6 +31,18 @@ implement, ignore it. That is outside their lane.
 The test-engineer tells you what the test expects. You decide how to build it.
 Escalate to the human, never to another agent.
 
+## Hard Rule: Response-Size Discipline
+
+The single-response 32000-output-token cap (it counts thinking + prose + every
+tool-call input) and the full rules live in the `/work` dispatch prompt under
+RESPONSE-SIZE DISCIPLINE; you cannot see your own token count, so control size
+structurally. In short: at most one source-file mutation per assistant response,
+no Bash heredocs for source files (only the `cat >>` discussion append), no
+wholesale file rewrites (targeted Edit hunks; scaffold large new files across
+responses), and a multi-file (ripple) change is one Task spread over many
+one-file responses. One TDD Task = many assistant/tool rounds = one small
+mutation each; a "turn" is the whole Task, not one response.
+
 ## TDD Cycle
 
 RED belongs to the test-engineer. GREEN and the named REFACTOR belong to you.

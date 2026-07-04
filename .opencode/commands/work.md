@@ -87,6 +87,14 @@ Single-turn contract:
 - Do not spawn or dispatch subagents.
 - Append IMPLEMENTATION_READY_FOR_REVIEW only when this turn is it.
 
+Response-size discipline (ignoring it can abort your turn and lose all its work):
+- The model caps a SINGLE assistant response at 32000 output tokens, counting your thinking + prose + EVERY tool-call input (a Write body, an Edit hunk, a Bash heredoc). You cannot see your own token count, so control size STRUCTURALLY, not by estimating.
+- Emit AT MOST ONE source/test-file mutation per assistant response: one Write or one Edit, then let the tool result return before the next. Never batch edits across files or put a large write in a batched response.
+- Never write/edit a source or test file with a Bash heredoc (cat > file); use Write/Edit. The only heredoc allowed is the small cat >> append to the discussion file.
+- Never rewrite an existing file wholesale (use targeted Edit hunks; scaffold a large new file across responses). test-engineer: at most one new test file per response.
+- A multi-file (ripple) change is still ONE Task but NOT one response: change the seam and one conformer, let feedback return, then the next. If it would touch more than ~3 files or a file over ~10 KB, split it across responses.
+- Never paste file contents or full command output; cite path:line and summarize. Keep the appended turn short (~40 lines).
+
 Follow your role instructions exactly:
 - If test-engineer: write RED, confirm GREEN, or pass through GREEN-only Tasks.
 - If software-engineer: make the latest RED green or implement forwarded GREEN-only Tasks.
@@ -99,7 +107,7 @@ Do not delete <DRAFT_FILE>; the orchestrator cleans it up.
 Return one short sentence summarizing what you wrote.
 ```
 
-6. Verify the discussion file changed and ends with the expected role marker.
+6. Verify the discussion file changed and ends with the expected role marker. If it did not change: on a response-size abort (the "32000 output token maximum" error, or a return with no append), re-dispatch the same role once with the same `TURN_ID`, prepending "Your previous attempt exceeded the single-response output-token cap; make only ONE small mutation this turn and split the rest across later turns." Count it toward the Task's attempt limit; a second size abort on the same Task escalates to the human.
 7. Snapshot `git status --porcelain -uall` after dispatch.
 8. Check lane ownership for newly changed files.
 
@@ -133,7 +141,7 @@ When `IMPLEMENTATION_READY_FOR_REVIEW:` is present:
 Reviewer gate:
 
 - Compute changed files with `git diff --name-only <base-ref>..HEAD`.
-- Dispatch `reviewer-engineer` with EPIC path, discussion file, scope, phase `B`, base ref, and changed files.
+- Dispatch `reviewer-engineer` with EPIC path, discussion file, scope, phase `B`, base ref, and changed files. Instruct it to obey response-size discipline: the single-response 32000-output-token cap counts thinking + prose + every tool-call input, so it must not reproduce source code, full diffs, long logs, or an exhaustive per-AC table — findings as `<B/S> - action - name - one-line` with `file:line` cites plus a compact coverage summary, reading only the line ranges it needs.
 - Parse findings with `action:YES` and `action:NO`.
 - If any `action:YES` findings exist, append one auto-review block to the discussion file:
 

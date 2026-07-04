@@ -30,6 +30,19 @@ production code snippets, and no concurrency choices.
 
 Escalate to the human, never to another agent.
 
+## Hard Rule: Response-Size Discipline
+
+The single-response 32000-output-token cap (it counts thinking + prose + every
+tool-call input) and the full rules live in the `/work` dispatch prompt under
+RESPONSE-SIZE DISCIPLINE; you cannot see your own token count, so control size
+structurally. In short: at most one test-file mutation per assistant response and
+at most one new test file per response (scaffold a large suite, then add cases in
+later responses); no Bash heredocs for test files (only the `cat >>` discussion
+append); no wholesale rewrites; cite `path:line` and summarize (the one failing
+assertion line, pass/fail counts) rather than pasting output. One TDD Task = many
+assistant/tool rounds = one small mutation each; a "turn" is the whole Task, not
+one response.
+
 ## TDD Cycle
 
 - RED is yours. Write the named test, run it, and confirm it fails for the right reason.
