@@ -40,8 +40,8 @@ control-plane view lives — the dashboard grows the views, no separate tool.
 
 ### Task T1 - Portfolio table + trends + guard
 
-**Input:** `web/src/portfolio/*.tsx`, `web/src/locators.ts` (GREEN adds
-missing locator constants), `web/src/portfolio/*.test.tsx`
+**Input:** `clients/web/src/portfolio/*.tsx`, `clients/web/src/locators.ts` (GREEN adds
+missing locator constants), `clients/web/src/portfolio/*.test.tsx`
 
 **Action - RED:** Write component tests: the table with derivable metrics and
 marked manual fields; one trend rendering from a series fixture; guard
@@ -55,8 +55,8 @@ warning present/absent per fixture; excluded count separated.
 
 ### Task T2 - Rubber-stamp view
 
-**Input:** `web/src/portfolio/rubber-stamp.tsx`, `web/src/locators.ts`
-(GREEN adds missing locator constants), `web/src/portfolio/rubber-stamp.test.tsx`
+**Input:** `clients/web/src/portfolio/rubber-stamp.tsx`, `clients/web/src/locators.ts`
+(GREEN adds missing locator constants), `clients/web/src/portfolio/rubber-stamp.test.tsx`
 
 **Action - RED:** Write component tests: the candidate list with knob/class/
 evidence per fixture; the explicit empty state.

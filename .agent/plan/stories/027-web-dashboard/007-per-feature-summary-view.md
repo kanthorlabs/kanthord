@@ -37,7 +37,7 @@ dashboard-exclusively, so this surface is gate-critical, not optional).
   against** — not an invented shape (debate finding — the 027/029 handoff
   must be pinned to the two contracts that already exist, or the earlier
   contradiction just moves).
-- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- Selection only via `clients/web/src/locators.ts` (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
   amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
@@ -49,13 +49,13 @@ dashboard-exclusively, so this surface is gate-critical, not optional).
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/metrics/**`; `npm run e2e:web` green
-  for `web/e2e/feature-summary.spec.ts`.
+- `npm run test:web` green for `clients/web/src/metrics/**`; `npm run e2e:web` green
+  for `clients/web/e2e/feature-summary.spec.ts`.
 
 ### Task T1 - Summary rendering
 
-**Input:** `web/src/metrics/FeatureSummary.tsx`,
-`web/src/metrics/FeatureSummary.test.tsx`, `web/src/locators.ts`
+**Input:** `clients/web/src/metrics/FeatureSummary.tsx`,
+`clients/web/src/metrics/FeatureSummary.test.tsx`, `clients/web/src/locators.ts`
 
 **Action - RED:** Component tests: the documented Epic 029 example-shape
 fixture renders headline "4 human interactions, $11", the included-type
@@ -72,7 +72,7 @@ seam.
 
 ### Task T2 - E2E: live summary from the drill-down
 
-**Input:** `web/e2e/feature-summary.spec.ts`
+**Input:** `clients/web/e2e/feature-summary.spec.ts`
 
 **Action - RED:** Playwright spec on the pre-flight daemon: navigate from the
 golden fixture feature's drill-down to its summary and assert the headline,
@@ -84,5 +84,5 @@ inputs).
 
 **Action - REFACTOR:** none.
 
-**Verify:** `npm run e2e:web` green for `web/e2e/feature-summary.spec.ts`
+**Verify:** `npm run e2e:web` green for `clients/web/e2e/feature-summary.spec.ts`
 (story-gated per PROFILE).

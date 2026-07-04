@@ -29,7 +29,7 @@ approval-required parking, driven from the UI).
 - Pure client of Epic 026; component tests hermetic against the fake
   generated client (PROFILE web variant). The rings are enforced server-side
   only — no client-side gating logic beyond rendering states.
-- Selection only via `web/src/locators.ts` (PROFILE UI locator contract).
+- Selection only via `clients/web/src/locators.ts` (PROFILE UI locator contract).
 - UI composition, tokens, state rendering, and locator placement follow the
   repo-root `DESIGN.md` (design implementation contract; design-system
   amendment 2026-07-03). A missing primitive/token is a DESIGN.md §P2
@@ -40,15 +40,15 @@ approval-required parking, driven from the UI).
 
 ## Verification Gate
 
-- `npm run test:web` green for `web/src/approvals/**`; `npm run e2e:web` green
-  for `web/e2e/enforcement-observed.spec.ts`.
+- `npm run test:web` green for `clients/web/src/approvals/**`; `npm run e2e:web` green
+  for `clients/web/e2e/enforcement-observed.spec.ts`.
 
 ### Task T1 - Approval buttons + expired state
 
-**Input:** `web/src/approvals/ApprovalActions.tsx`,
-`web/src/approvals/ApprovalActions.test.tsx`, `web/src/locators.ts`,
-`web/src/components/status/ApprovalStateBadge.tsx`,
-`web/src/components/status/ApprovalStateBadge.test.tsx` (the DESIGN §4 domain
+**Input:** `clients/web/src/approvals/ApprovalActions.tsx`,
+`clients/web/src/approvals/ApprovalActions.test.tsx`, `clients/web/src/locators.ts`,
+`clients/web/src/components/status/ApprovalStateBadge.tsx`,
+`clients/web/src/components/status/ApprovalStateBadge.test.tsx` (the DESIGN §4 domain
 badge — parked/expired states — this surface introduces)
 
 **Action - RED:** Component tests: a parked `github.merge` fixture renders
@@ -65,7 +65,7 @@ rendering.
 
 ### Task T2 - E2E: enforcement observed from the UI
 
-**Input:** `web/e2e/enforcement-observed.spec.ts`
+**Input:** `clients/web/e2e/enforcement-observed.spec.ts`
 
 **Action - RED:** Playwright spec on the pre-flight daemon: induce the golden
 fixture's ring-1-blocked action and assert it surfaces as a blocked
@@ -77,5 +77,5 @@ components (fixes under their inputs).
 
 **Action - REFACTOR:** none.
 
-**Verify:** `npm run e2e:web` green for `web/e2e/enforcement-observed.spec.ts`
+**Verify:** `npm run e2e:web` green for `clients/web/e2e/enforcement-observed.spec.ts`
 (story-gated per PROFILE).

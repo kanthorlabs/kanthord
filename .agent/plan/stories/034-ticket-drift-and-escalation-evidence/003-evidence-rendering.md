@@ -47,8 +47,8 @@ class-appropriate form — the human answers from the item, not from logs.
 
 ### Task T1 - Per-class evidence components
 
-**Input:** `web/src/inbox/evidence/*.tsx`, `web/src/locators.ts` (GREEN adds
-missing locator constants), `web/src/inbox/evidence/*.test.tsx`
+**Input:** `clients/web/src/inbox/evidence/*.tsx`, `clients/web/src/locators.ts` (GREEN adds
+missing locator constants), `clients/web/src/inbox/evidence/*.test.tsx`
 
 **Action - RED:** Write component tests: one fixture item per evidence class
 asserting its class-appropriate rendering via locator constants (and that no
