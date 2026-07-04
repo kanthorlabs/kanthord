@@ -6,7 +6,9 @@ import {
 import type { CompileOptions } from "../compiler/compile.ts";
 import { openStore } from "../foundations/sqlite-store.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
-import { PROJECTION_CONTRACT, projectionOf } from "./projection.ts";
+import { PROJECTION_CONTRACT, RUNTIME_ONLY_SET, projectionOf } from "./projection.ts";
+import { FeatureStore } from "./feature-store.ts";
+import { recoverFromLedger } from "../broker/ledger.ts";
 
 /**
  * Rebuilds the markdown-derived subset of the compiled-plan SQLite tables into
@@ -22,10 +24,17 @@ import { PROJECTION_CONTRACT, projectionOf } from "./projection.ts";
  *
  * The WAL PRAGMA is silently ignored by SQLite for in-memory databases; no WAL
  * file is created.
+ *
+ * @param ledgerSources  Optional list of `{ storyId, taskStem }` locators that
+ *   name task journals to scan for `op_ledger` reconstruction.  When provided,
+ *   the `op_ledger` table is created in the shadow store (idempotent DDL) and
+ *   every recovered entry is inserted via `INSERT OR REPLACE`.  Callers that
+ *   pass only 2 arguments are unaffected (no op_ledger table is created).
  */
 export async function rebuildFromMarkdown(
   featureDir: string,
   opts: CompileOptions,
+  ledgerSources?: Array<{ storyId: string; taskStem: string }>,
 ): Promise<Store> {
   // Compute the same deterministic hash the writer uses (compile: key stripped).
   const hash = await computeCompileHash(featureDir);
@@ -126,6 +135,35 @@ export async function rebuildFromMarkdown(
     new Date().toISOString(),
   );
 
+  // op_ledger reconstruction — only when callers pass ledgerSources (B1 / Epic 005 Story 006).
+  // Creates the op_ledger table idempotently and inserts each recovered entry so that
+  // diffProjection's "rebuild == projection" gate covers durable ledger state (PRD §6.1).
+  if (ledgerSources !== undefined && ledgerSources.length > 0) {
+    // Idempotent DDL — sqlite-gotchas.md: use IF NOT EXISTS, never try/catch.
+    shadow.run(
+      "CREATE TABLE IF NOT EXISTS op_ledger " +
+        "(op_id TEXT PRIMARY KEY, verb TEXT, idempotency_key TEXT, " +
+        "correlation TEXT, desired_effect_hash TEXT, status TEXT)",
+    );
+    const featureStore = new FeatureStore(featureDir);
+    for (const { storyId, taskStem } of ledgerSources) {
+      const entries = await recoverFromLedger(featureStore, storyId, taskStem);
+      for (const entry of entries) {
+        shadow.run(
+          "INSERT OR REPLACE INTO op_ledger " +
+            "(op_id, verb, idempotency_key, correlation, desired_effect_hash, status) " +
+            "VALUES (?, ?, ?, ?, ?, ?)",
+          entry.op_id,
+          entry.verb,
+          entry.idempotency_key,
+          entry.correlation,
+          entry.desired_effect_hash,
+          entry.status,
+        );
+      }
+    }
+  }
+
   return shadow;
 }
 
@@ -151,6 +189,23 @@ export type Divergence = {
 };
 
 /**
+ * Returns all rows from `table` if the table exists in `store`, or `[]` if
+ * the table is absent.  Uses `sqlite_master` as a declarative existence check
+ * so that a missing table is treated as 0 rows rather than throwing
+ * `ERR_SQLITE_ERROR: no such table` — necessary because `PROJECTION_CONTRACT`
+ * may reference tables (e.g. `op_ledger`) that only exist in broker-managed
+ * stores, not in plain compiled-plan stores.
+ */
+function getTableRows(store: Store, table: string): Record<string, unknown>[] {
+  const exists = store.get<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name=?",
+    table,
+  );
+  if ((exists?.n ?? 0) === 0) return [];
+  return store.all<Record<string, unknown>>(`SELECT * FROM ${table}`);
+}
+
+/**
  * Compares the projection of `live` against the projection of `shadow` for
  * every table in PROJECTION_CONTRACT.tableScope. Returns one `Divergence`
  * entry per differing field per matched row pair. Returns `[]` when equal.
@@ -160,11 +215,12 @@ export type Divergence = {
  * rows). Unmatched rows (exist in live but not shadow) are reported as
  * divergences with `shadow: undefined` for each projected field.
  *
+ * Tables absent from a store are treated as having 0 rows (no crash).
+ *
  * Never throws; assigns no severity (severity is Phase 3).
  */
 export function diffProjection(live: Store, shadow: Store): Divergence[] {
   const divergences: Divergence[] = [];
-  const runtimeOnlySet = new Set(PROJECTION_CONTRACT.runtimeOnly);
 
   for (const table of PROJECTION_CONTRACT.tableScope) {
     const tableEntry = PROJECTION_CONTRACT.tables[table];
@@ -174,15 +230,13 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
     // identity difference is a runtime-only field (e.g. plan_generation.generation
     // is 1 in live vs 0 in shadow) still resolve to the same map key and match.
     const projectedIdentityKeys = tableEntry.rowIdentityKey.filter(
-      (k) => !runtimeOnlySet.has(k),
+      (k) => !RUNTIME_ONLY_SET.has(k),
     );
 
-    const liveRows = live.all<Record<string, unknown>>(
-      `SELECT * FROM ${table}`,
-    );
-    const shadowRows = shadow.all<Record<string, unknown>>(
-      `SELECT * FROM ${table}`,
-    );
+    // Treat a missing table in either store as having 0 rows — avoids
+    // ERR_SQLITE_ERROR when op_ledger is absent from compiled-plan stores.
+    const liveRows = getTableRows(live, table);
+    const shadowRows = getTableRows(shadow, table);
 
     // Build a map from serialised projected row identity to the shadow row's
     // projected form. Using projected identity keys means runtime-only fields

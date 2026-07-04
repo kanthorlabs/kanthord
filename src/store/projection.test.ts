@@ -6,8 +6,8 @@ describe("src/store/projection", () => {
   // -------------------------------------------------------------------------
   // (a) PROJECTION_CONTRACT_VERSION fixed value
   // -------------------------------------------------------------------------
-  test("PROJECTION_CONTRACT_VERSION is '1'", () => {
-    assert.equal(PROJECTION_CONTRACT_VERSION, "1");
+  test("PROJECTION_CONTRACT_VERSION is '2'", () => {
+    assert.equal(PROJECTION_CONTRACT_VERSION, "2");
   });
 
   // -------------------------------------------------------------------------
@@ -49,12 +49,16 @@ describe("src/store/projection", () => {
   // -------------------------------------------------------------------------
   // (c) runtime-only set: leases, poll cursors, op_id → request_id
   // -------------------------------------------------------------------------
-  test("leases, poll cursors, and op_id are classified runtime-only", () => {
+  test("leases, poll cursors, and request_id are classified runtime-only; op_id is not (v2)", () => {
     const ro = PROJECTION_CONTRACT.runtimeOnly;
     assert.ok(Array.isArray(ro), "runtimeOnly is an array");
     assert.ok(ro.includes("lease_holder"), "lease_holder is in the runtime-only set");
     assert.ok(ro.includes("poll_cursor"), "poll_cursor is in the runtime-only set");
-    assert.ok(ro.includes("op_id"), "op_id is in the runtime-only set");
+    assert.ok(ro.includes("request_id"), "request_id is in the runtime-only set");
+    assert.ok(
+      !ro.includes("op_id"),
+      "op_id is NOT in the runtime-only set (it is now a markdown-derived ledger field in v2)",
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -83,10 +87,10 @@ describe("src/store/projection", () => {
   // -------------------------------------------------------------------------
   // (e) no op_ledger in v1 (future section only)
   // -------------------------------------------------------------------------
-  test("op_ledger is absent from the v1 contract (documented as future section)", () => {
+  test("op_ledger is present in the v2 contract (added by Epic 005 Story 006)", () => {
     assert.ok(
-      !("op_ledger" in PROJECTION_CONTRACT.tables),
-      "op_ledger must NOT appear in v1 contract tables",
+      "op_ledger" in PROJECTION_CONTRACT.tables,
+      "op_ledger must appear in v2 contract tables",
     );
   });
 

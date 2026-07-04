@@ -13,10 +13,10 @@
  *   the SQLite `node_status` value is therefore markdown-derived, never mutated
  *   in SQLite independently. If that invariant were violated, the contract would lie.
  *
- * Operation-ledger exclusion (v1):
- *   The op_ledger table is explicitly absent from this v1 contract. Epic 005
- *   adds ledger rows and bumps PROJECTION_CONTRACT_VERSION when it does so.
- *   A reserved-but-unvalidated ledger slot would create false confidence.
+ * Operation-ledger (v2):
+ *   Epic 005 Story 006 adds the op_ledger table to this contract.
+ *   All six §5 ledger-identity fields are markdown-derived; request_id is
+ *   runtime-only (ephemeral SQLite mapping, never synced to markdown).
  *
  * Comparison rules:
  *   - Rows are compared order-independently within each table.
@@ -53,13 +53,13 @@ export type TableEntry = {
 export type ProjectionContract = {
   /**
    * The tables covered by this projection contract.
-   * Does NOT include op_ledger (added in a future version).
+   * Includes op_ledger from v2 onward.
    */
   tableScope: string[];
 
   /**
    * Per-table entry: row identity key + per-column classification.
-   * op_ledger is absent in v1.
+   * op_ledger is present from v2 onward.
    */
   tables: Record<string, TableEntry>;
 
@@ -73,7 +73,7 @@ export type ProjectionContract = {
   /**
    * Runtime-only field names (cross-table list). These fields have no markdown
    * source and MUST be excluded from projection equality checks.
-   * Includes at minimum: lease_holder, poll_cursor, op_id.
+   * Includes at minimum: lease_holder, poll_cursor, request_id.
    */
   runtimeOnly: string[];
 };
@@ -83,10 +83,10 @@ export type ProjectionContract = {
 // ---------------------------------------------------------------------------
 
 /**
- * Bumped by Epic 005 when it adds the op_ledger section.
- * Current value: "1"
+ * Bumped to "2" by Epic 005 Story 006: adds the op_ledger section and promotes
+ * op_id from a cross-table runtime sentinel to a markdown-derived ledger field.
  */
-export const PROJECTION_CONTRACT_VERSION: string = "1";
+export const PROJECTION_CONTRACT_VERSION: string = "2";
 
 // ---------------------------------------------------------------------------
 // PROJECTION_CONTRACT
@@ -104,6 +104,7 @@ export const PROJECTION_CONTRACT: ProjectionContract = {
     "plan_artifact_consumer",
     "plan_deploy_stage",
     "plan_generation",
+    "op_ledger",
   ],
 
   // -------------------------------------------------------------------------
@@ -268,6 +269,30 @@ export const PROJECTION_CONTRACT: ProjectionContract = {
         at: { runtimeOnly: true },
       },
     },
+
+    op_ledger: {
+      rowIdentityKey: ["op_id"],
+      columns: {
+        op_id: {
+          derived: "generated UUID written into task markdown on first submit; stable across crash/restart",
+        },
+        verb: {
+          derived: "verb name from the verb registry YAML entry that created this operation",
+        },
+        idempotency_key: {
+          derived: "caller-supplied idempotency key on submit; preserved in task markdown for dedup and reconcile",
+        },
+        correlation: {
+          derived: "external correlation id from adapter submit result; written into task markdown for reconcile",
+        },
+        desired_effect_hash: {
+          derived: "SHA-256 of the desired-effect payload written into task markdown; used by reconcile to verify observed state",
+        },
+        status: {
+          derived: "op lifecycle status written into task markdown: pending | in_flight | done | failed | expired | needs_reconciliation",
+        },
+      },
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -284,13 +309,25 @@ export const PROJECTION_CONTRACT: ProjectionContract = {
   runtimeOnly: [
     "lease_holder", // which daemon instance holds the current lease on a node
     "poll_cursor", // position in the event stream; reset on restart
-    "op_id", // operation-ledger id → request_id mapping (Epic 005)
+    "request_id", // ephemeral broker request_id (op_id → request_id mapping); never synced to markdown
     "generation", // compile run counter (plan_node, plan_generation)
     "content_hash", // snapshot from sourceProvider; not in markdown
     "snapshot_at", // snapshot timestamp; not in markdown
     "at", // plan_generation compile timestamp
   ],
 };
+
+// ---------------------------------------------------------------------------
+// Module-level runtime-only set — constructed once, reused by projectionOf
+// ---------------------------------------------------------------------------
+
+/**
+ * Frozen set of cross-table runtime-only field names, constructed once at
+ * module load time (not per-call) so repeated calls to `projectionOf` and
+ * `diffProjection` do not allocate a new Set per row.  Behavior is identical
+ * to allocating inline; the source of truth remains `PROJECTION_CONTRACT.runtimeOnly`.
+ */
+export const RUNTIME_ONLY_SET: ReadonlySet<string> = new Set(PROJECTION_CONTRACT.runtimeOnly);
 
 // ---------------------------------------------------------------------------
 // projectionOf — strip runtime-only fields from a row
@@ -302,10 +339,9 @@ export const PROJECTION_CONTRACT: ProjectionContract = {
  * does not consult per-table column entries.
  */
 export function projectionOf(row: Record<string, unknown>): Record<string, unknown> {
-  const runtimeOnlySet = new Set(PROJECTION_CONTRACT.runtimeOnly);
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
-    if (!runtimeOnlySet.has(key)) {
+    if (!RUNTIME_ONLY_SET.has(key)) {
       result[key] = value;
     }
   }

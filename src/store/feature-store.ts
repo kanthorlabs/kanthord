@@ -186,4 +186,14 @@ export class FeatureStore {
     const log = new JsonlLog(path);
     await log.append(event);
   }
+
+  /**
+   * Read all journal events from the task's `*.journal.jsonl` in append order.
+   * Returns `[]` when the file does not exist yet.
+   */
+  async readJournal(storyId: string, taskStem: string): Promise<unknown[]> {
+    const path = join(this.featureDir, storyId, `${taskStem}.journal.jsonl`);
+    const log = new JsonlLog(path);
+    return log.readAll();
+  }
 }
