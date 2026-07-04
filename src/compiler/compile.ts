@@ -587,7 +587,7 @@ export async function buildCorePlan(
 // Compiled-plan migration — creates tables if not yet present
 // ---------------------------------------------------------------------------
 
-function applyCompiledPlanMigration(store: Store): void {
+export function applyCompiledPlanMigration(store: Store): void {
   store.run(
     `CREATE TABLE IF NOT EXISTS plan_node (
       id TEXT NOT NULL PRIMARY KEY,
@@ -660,7 +660,7 @@ function applyCompiledPlanMigration(store: Store): void {
 // task files.  Excluded: RUNBOOK.md, *.state.md, *.journal.jsonl.
 // ---------------------------------------------------------------------------
 
-async function computeCompileHash(featureDir: string): Promise<string> {
+export async function computeCompileHash(featureDir: string): Promise<string> {
   const h = createHash("sha256");
   const entries: Array<{ relPath: string; content: string }> = [];
 
