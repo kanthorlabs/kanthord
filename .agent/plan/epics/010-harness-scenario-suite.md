@@ -123,6 +123,26 @@ the deterministic surface works end-to-end; passing it **is** the gate to Phase 
   `npm test` green + guarded; wiring that into CI is the SU5 gate step — and the
   **final green CI run after this Epic lands** is a gate criterion above (review B1;
   SU5 wiring alone does not prove the finished suite runs green in CI).
+- **Boot rebuild path — `walkFeature`, not `rebuildFromMarkdown`** (carried over
+  from the **Epic 009 review**, finding S2). Epic 009's `src/daemon/boot.ts` counts
+  pending tasks with `walkFeature` (task-file count) instead of `rebuildFromMarkdown`
+  (the Epic 003 projection), because `rebuildFromMarkdown` requires a `RUNBOOK.md`
+  that the boot fixture does not provide. This is Phase-1-correct for Epic 009's
+  isolated boot test, but the golden scenario (Story `001`) and the
+  rebuild-from-markdown projection scenario (Story `003`) drive the crash entrypoint
+  against a **full** feature dir — so when the scheduler is wired here, revisit boot
+  to populate SQLite from the real markdown projection, not just a file count.
+- **Boot phase parsing — inline regex, not the Epic 006 coordinator** (carried over
+  from the **Epic 009 review**, finding B1; deferred here by decision). Epic 009's
+  `src/daemon/boot.ts` re-implements `parseCurrentPhase` inline with
+  `/^current_phase:\s*(.+)$/m` instead of invoking the Epic 006 respawn coordinator
+  (Story 009-001 AC4 said "not re-implemented here"), because the full coordinator
+  needs an active `AgentSession`+`SpawnCtx` absent at boot. Its regex also **diverges**
+  from `src/session/respawn.ts`'s `/current_phase:\s*(\S+)/` — the two disagree on
+  **multi-word phase names**. The kill/restart respawn-equivalence gate here asserts
+  **phase field-by-field**, so this is where the mismatch would surface: when wiring
+  respawn, unify the two parsers (export `parseCurrentPhase` from `respawn.ts` and
+  call it from boot) so boot and the coordinator cannot disagree.
 
 ## Findings Out
 
