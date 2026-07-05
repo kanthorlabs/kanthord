@@ -22,9 +22,10 @@ describe("src/harness/lint-projection", () => {
     "cycle: circular dependency in plan graph is rejected with cycle diagnostic",
     async () => {
       const result = await runCycleScenario();
-      assert.ok(
-        result.errorMessage.includes("Cycle detected in emitted graph:"),
-        `expected "Cycle detected in emitted graph:" in: ${result.errorMessage}`,
+      assert.strictEqual(
+        result.errorMessage,
+        "Compiled graph failed re-lint: Cycle detected in emitted graph: task-cycle-a, task-cycle-b, task-cycle-a",
+        "cycle diagnostic must match Epic 002 text exactly",
       );
     },
   );
@@ -33,12 +34,10 @@ describe("src/harness/lint-projection", () => {
     "forward handoff: back-major dependency rejected with forward-handoff diagnostic",
     async () => {
       const result = await runForwardHandoffScenario();
-      assert.ok(
-        result.errorMessage.includes("Forward handoff:") &&
-          result.errorMessage.includes("story group 01") &&
-          result.errorMessage.includes("story group 03") &&
-          result.errorMessage.includes("producer follows consumer"),
-        `expected "Forward handoff: story group 01 cannot depend on story group 03 (producer follows consumer)" in: ${result.errorMessage}`,
+      assert.strictEqual(
+        result.errorMessage,
+        "Forward handoff: story group 01 cannot depend on story group 03 (producer follows consumer)",
+        "forward-handoff diagnostic must match Epic 002 text exactly",
       );
     },
   );
@@ -47,10 +46,10 @@ describe("src/harness/lint-projection", () => {
     "overlapping lanes: parallel lanes with shared write-scope rejected with lane diagnostic",
     async () => {
       const result = await runOverlappingLanesScenario();
-      assert.ok(
-        result.errorMessage.includes("both write") &&
-          result.errorMessage.includes("cannot share a group"),
-        `expected overlapping-lanes diagnostic in: ${result.errorMessage}`,
+      assert.strictEqual(
+        result.errorMessage,
+        'lane "001.1" and lane "001.2" both write "lib/shared/" — they cannot share a group',
+        "overlapping-lanes diagnostic must match Epic 002 text exactly",
       );
     },
   );
@@ -59,9 +58,10 @@ describe("src/harness/lint-projection", () => {
     "missing ticket: task with no ticket ref rejected with ticket diagnostic",
     async () => {
       const result = await runMissingTicketScenario();
-      assert.ok(
-        result.errorMessage.includes("is missing a required ticket reference"),
-        `expected ticket diagnostic in: ${result.errorMessage}`,
+      assert.strictEqual(
+        result.errorMessage,
+        'Node "task-no-ticket" is missing a required ticket reference',
+        "missing-ticket diagnostic must match Epic 002 text exactly",
       );
     },
   );
@@ -70,9 +70,10 @@ describe("src/harness/lint-projection", () => {
     "missing body section: task with absent required section rejected with body-section diagnostic",
     async () => {
       const result = await runMissingBodySectionScenario();
-      assert.ok(
-        result.errorMessage.includes("is missing a non-empty ##"),
-        `expected body-section diagnostic in: ${result.errorMessage}`,
+      assert.strictEqual(
+        result.errorMessage,
+        'task "task-no-tests" is missing a non-empty ## Tests section',
+        "missing-body-section diagnostic must match Epic 002 text exactly",
       );
     },
   );

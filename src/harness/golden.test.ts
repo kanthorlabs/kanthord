@@ -28,6 +28,36 @@ test(
         "complete",
         "golden scenario must reach feature-complete on the fake clock with no real I/O",
       );
+      assert.equal(
+        result.brokerCompletionStatus,
+        "done",
+        "golden path must write a successful fake-broker completion row",
+      );
+      assert.equal(
+        result.brokerCompletionResultJson,
+        JSON.stringify({ ok: true }),
+        "successful fake-broker completion row must persist result_json",
+      );
+      assert.ok(
+        result.schedulerWakeupTaskIds.includes("task-alpha"),
+        "scheduler resume must wake the task parked on the successful broker op",
+      );
+      assert.deepEqual(
+        result.deployDispatches.map((d) => [d.taskId, d.outcome]),
+        [
+          ["feat-001-deploy-staging", "pass"],
+          ["feat-001-deploy-production", "pass"],
+        ],
+        "deploy stages must be dispatched and passed through pollOnce lifecycle",
+      );
+      assert.deepEqual(
+        result.deployEvents,
+        [
+          { event: "notify_human", stageId: "feat-001-deploy-staging" },
+          { event: "notify_human", stageId: "feat-001-deploy-production" },
+        ],
+        "passing deploy stages must emit scheduler lifecycle wakeup events",
+      );
     } finally {
       await h[Symbol.asyncDispose]();
     }
