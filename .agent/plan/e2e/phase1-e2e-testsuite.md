@@ -162,8 +162,15 @@ the same harness kit with one injected fault (Epic 010 Story 002 constraint).
      "consumed (hash X)" (Epic 006 Story 005 producer, not harness-local logic).
   4. **TDD gate pair** — entry `failing_test_exists` → exit `tests_pass`
      (Epic 006).
-  5. **Fake deploy chain with soak** — observers pass, soak window elapses on the
-     fake clock (Epic 008).
+  5. **Scheduler-driven deploy chain with soak** — after PR-open the scheduler
+     **continues past the terminal task into the deploy-stage DAG nodes**
+     (Epic 008.1): each stage is dispatched through the real `pollOnce` lifecycle
+     (enters the dispatchable set → leased → `pending`→`running` → executed),
+     gated by the compiler-emitted **terminal-task→deploy edge**; the Epic 008
+     executor runs the stage, observers pass and the soak window elapses on the
+     fake clock; a **passing** stage marks its exit gate so the next stage becomes
+     dispatchable, and the last stage's passed gate completes the chain. No
+     merge/deploy/rollback verb is ever called.
   6. Feature reaches **complete**.
 - **Pass:** the feature reaches `complete` deterministically, with the guard
   active (no network, no real wait); **and** at least one **successful async
@@ -177,9 +184,13 @@ the same harness kit with one injected fault (Epic 010 Story 002 constraint).
   [ ] no real timer/sleep is used (soak advances the fake clock); [ ] the handoff
   gate is evaluated by the Epic 006 producer, not by test-local code; [ ] a
   successful broker op's completion row + scheduler wakeup is asserted somewhere
-  (here or TC-05).
-- **Fail signal:** any step blocks, completion depends on wall-clock time, or
-  the broker `success` mode is never observably asserted.
+  (here or TC-05); [ ] each deploy stage is **dispatched by the scheduler**
+  (through `pollOnce`: dispatchable → lease → `pending`→`running`), not executed
+  by a bare `runChain`/`runStage` call, and a passing stage's exit gate is what
+  unblocks the next stage (Epic 008.1 B2).
+- **Fail signal:** any step blocks, completion depends on wall-clock time, the
+  broker `success` mode is never observably asserted, or a deploy stage runs
+  without being dispatched through the scheduler lifecycle.
 
 ### TC-02 — Lease expiry + heartbeat timeout
 - **Maps:** PRD §7.3, §7.7; Epic 004; Epic 010 Story 002.
@@ -206,6 +217,9 @@ the same harness kit with one injected fault (Epic 010 Story 002 constraint).
   - the **injected STATE** of resuming tasks,
   - and any **in-progress deploy-stage soak state** (stage id, window start,
     sample history) — a kill mid-soak resumes the window, not restarts it.
+    (Epic 008.1 made deploy stages scheduler-driven but tests only synchronous
+    `pollOnce` passes; **durable soak-state parking that survives respawn is
+    Epic 009's** to build on top of that — this scenario maps to Epic 009.)
 - **Human verify:** [ ] all five fields asserted equal pre- vs post-restart;
   [ ] the kill is injected at **each** of the representative checkpoints, not
   just one; [ ] live model context is **not** required to match (that is the

@@ -84,8 +84,9 @@ Core delivers C1 in stages so UI unblocks story-by-story, not all-at-once:
 ### Phase 1 — frame on fakes (100% Core)
 `001` foundations → `002` compiler → `003` markdown-store → `004` dag-scheduler
 → `005` broker-skeleton → `006` workflow+agent-session → `007` ring1-policy-seams
-→ `008` deploy-chain → `009` daemon-shell+transport → `010` harness-suite.
-**Done:** 001, 002. **Then the Phase-1 gate** (§5).
+→ `008` deploy-chain → `008.1` deploy-stage-scheduler-integration → `009`
+daemon-shell+transport → `010` harness-suite.
+**Done:** 001–008, 008.1 (next: 009). **Then the Phase-1 gate** (§5).
 
 ### Phase 2A — real vertical slice (100% Core)
 `011` milestone-setup → `012` real-markdown-store → `013` minimal-ring1 →
