@@ -40,7 +40,7 @@ export type ChainOutcome =
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-type StageResult =
+export type StageResult =
   | { result: "pass" }
   | { result: "halt_and_escalate"; evidence: ObserverEvidence };
 
@@ -89,6 +89,69 @@ async function runStage(
           value: outcome.value,
           clockInstant: clock.now(),
           stageId,
+        },
+      };
+    }
+  }
+
+  return { result: "pass" };
+}
+
+// ---------------------------------------------------------------------------
+// runDeployNode — per-node deploy primitive (exported; shared by pollOnce + runChain)
+//
+// Loads stage metadata for a single deploy-stage node, drives the handler
+// phase (runStage), then the soak phase if the plan declares a soak duration.
+// Returns StageResult — "pass" or "halt_and_escalate" with evidence.
+// ---------------------------------------------------------------------------
+
+export async function runDeployNode(
+  store: Store,
+  nodeId: string,
+  handlers: HandlerMap,
+  clock: Clock,
+): Promise<StageResult> {
+  const stageData = store.get<{ handlers: string; soak_duration: string | null }>(
+    "SELECT handlers, soak_duration FROM plan_deploy_stage WHERE node_id = ?",
+    nodeId,
+  );
+
+  if (stageData === undefined) {
+    throw new Error(
+      `runDeployNode: no plan_deploy_stage row found for nodeId "${nodeId}"`,
+    );
+  }
+
+  // Phase 1: handler gate.
+  const handlerResult = await runStage(nodeId, stageData.handlers, handlers, clock);
+  if (handlerResult.result === "halt_and_escalate") {
+    return handlerResult;
+  }
+
+  // Phase 2: soak gate (skipped when soak_duration is 0 or absent).
+  const soakDurationMs =
+    stageData.soak_duration !== null
+      ? parseSoakDurationMs(stageData.soak_duration)
+      : 0;
+
+  if (soakDurationMs > 0) {
+    const handlerDefs = JSON.parse(stageData.handlers) as Array<{ observer: string }>;
+    const stageNode: SoakStageNode = {
+      nodeId,
+      handlers: handlerDefs,
+      soakDurationMs,
+      pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
+    };
+    const soakResult = await soakStage(stageNode, handlers, clock);
+    if (soakResult.result === "on_fail") {
+      return {
+        result: "halt_and_escalate",
+        evidence: {
+          observer: soakResult.evidence.observer,
+          value: soakResult.evidence.value,
+          clockInstant: soakResult.evidence.clockInstant,
+          stageId: soakResult.evidence.stageId,
+          soakWindowHistory: soakResult.evidence.soakWindowHistory,
         },
       };
     }
@@ -162,55 +225,14 @@ export async function runChain(
     }
   }
 
-  // 5. Walk the chain: for each stage run handlers then soak before advancing.
+  // 5. Walk the chain: delegate each stage to the per-node primitive.
   let current: string | undefined = firstId;
   while (current !== undefined && stageIdSet.has(current)) {
     const stageId = current;
-    const stageData = store.get<{ handlers: string; soak_duration: string | null }>(
-      "SELECT handlers, soak_duration FROM plan_deploy_stage WHERE node_id = ?",
-      stageId,
-    );
-
-    if (stageData !== undefined) {
-      // Phase 1: run all declared handlers in order (handler gate).
-      const stageResult = await runStage(stageId, stageData.handlers, handlers, clock);
-      if (stageResult.result === "halt_and_escalate") {
-        return { result: "halt_and_escalate", evidence: stageResult.evidence };
-      }
-
-      // Phase 2: drive the soak window on the injected clock (soak gate).
-      // soakStage schedules repeated polls via clock.setTimer; the caller must
-      // advance the clock to drive the soak forward (observable re-poll contract).
-      const soakDurationMs =
-        stageData.soak_duration !== null
-          ? parseSoakDurationMs(stageData.soak_duration)
-          : 0;
-
-      if (soakDurationMs > 0) {
-        const handlerDefs = JSON.parse(stageData.handlers) as Array<{ observer: string }>;
-        const stageNode: SoakStageNode = {
-          nodeId: stageId,
-          handlers: handlerDefs,
-          soakDurationMs,
-          pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
-        };
-        const soakResult = await soakStage(stageNode, handlers, clock);
-        if (soakResult.result === "on_fail") {
-          return {
-            result: "halt_and_escalate",
-            evidence: {
-              observer: soakResult.evidence.observer,
-              value: soakResult.evidence.value,
-              clockInstant: soakResult.evidence.clockInstant,
-              stageId: soakResult.evidence.stageId,
-              soakWindowHistory: soakResult.evidence.soakWindowHistory,
-            },
-          };
-        }
-        // soakResult.result === "on_pass" → stage fully passes; advance chain
-      }
+    const stageResult = await runDeployNode(store, stageId, handlers, clock);
+    if (stageResult.result === "halt_and_escalate") {
+      return { result: "halt_and_escalate", evidence: stageResult.evidence };
     }
-
     current = nextMap.get(stageId);
   }
 

@@ -13,6 +13,7 @@ import {
   setTaskStatus,
 } from "./dispatch.ts";
 import type { TaskRow } from "./dispatch.ts";
+import { dispatchableForGeneration } from "./generation.ts";
 
 // ---------------------------------------------------------------------------
 // Golden fixture
@@ -129,6 +130,28 @@ Unit tests for gamma.
 `;
 
 const COMPILE_OPTS = { repoRegistry: ["backend"] };
+
+// 008.1 Story 001-T2 — EPIC with 2-stage deploy chain
+const EPIC_MD_WITH_DEPLOY = `---
+id: feat-001
+repo: backend
+deploy_chain:
+  - stage: staging
+    handlers:
+      - run: ./deploy.sh staging
+    success_criteria: smoke tests pass
+    soak_duration: 1h
+  - stage: production
+    handlers:
+      - run: ./deploy.sh prod
+    success_criteria: metrics normal
+    soak_duration: 24h
+---
+
+## Acceptance
+
+Feature is complete when all tasks pass.
+`;
 
 // ---------------------------------------------------------------------------
 // Suite: src/scheduler/dispatch
@@ -421,5 +444,188 @@ describe("src/scheduler/dispatch", () => {
         store.close();
       }
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  // 008.1 Story 001-T2 — deploy-stage nodes are dispatchable (uniform gate rule)
+  // ---------------------------------------------------------------------------
+
+  describe("008.1 Story 001-T2 — deploy-stage nodes are dispatchable (uniform gate rule)", () => {
+    let featDirDeploy = "";
+    let testDir = "";
+    let testDbPath = "";
+
+    before(async () => {
+      featDirDeploy = await mkdtemp(join(tmpdir(), "kanthord-008-t2-feat-"));
+      await writeFile(join(featDirDeploy, "epic.md"), EPIC_MD_WITH_DEPLOY);
+      await writeFile(join(featDirDeploy, "RUNBOOK.md"), "# Runbook\n");
+      const sA = join(featDirDeploy, "001-story-a");
+      await mkdir(sA);
+      await writeFile(join(sA, "INDEX.md"), "# Story A\n");
+      await writeFile(join(sA, "001-task-alpha.md"), TASK_ALPHA_MD);
+      const sB = join(featDirDeploy, "002.1-story-b");
+      await mkdir(sB);
+      await writeFile(join(sB, "INDEX.md"), "# Story B\n");
+      await writeFile(join(sB, "001-task-beta.md"), TASK_BETA_MD);
+      const sC = join(featDirDeploy, "002.2-story-c");
+      await mkdir(sC);
+      await writeFile(join(sC, "INDEX.md"), "# Story C\n");
+      await writeFile(join(sC, "001-task-gamma.md"), TASK_GAMMA_MD);
+    });
+
+    after(async () => {
+      if (featDirDeploy) await rm(featDirDeploy, { recursive: true, force: true });
+    });
+
+    beforeEach(async () => {
+      testDir = await mkdtemp(join(tmpdir(), "kanthord-008-t2-db-"));
+      testDbPath = join(testDir, "test.db");
+      const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
+      try {
+        await compile(featDirDeploy, store, COMPILE_OPTS);
+        loadTasks(store, "feat-001");
+      } finally {
+        store.close();
+      }
+    });
+
+    afterEach(async () => {
+      if (testDir) await rm(testDir, { recursive: true, force: true });
+      testDir = "";
+      testDbPath = "";
+    });
+
+    test(
+      "first deploy-stage not dispatchable before terminal task gates pass; becomes dispatchable after (a+b)",
+      () => {
+        const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
+        try {
+          // (a) no terminal task gates passed → deploy-staging not in dispatchable
+          const before = dispatchable(store, "feat-001").map((r: TaskRow) => r.id);
+          assert.ok(
+            !before.includes("feat-001-deploy-staging"),
+            "deploy-staging must not be dispatchable before terminal task gates pass",
+          );
+
+          // Pass all task gates (task-beta and task-gamma are terminal of last-major stories)
+          setTaskStatus(store, "task-alpha", "done");
+          markExitGatePassed(store, "task-alpha");
+          setTaskStatus(store, "task-beta", "done");
+          markExitGatePassed(store, "task-beta");
+          setTaskStatus(store, "task-gamma", "done");
+          markExitGatePassed(store, "task-gamma");
+
+          // (b) all terminal task gates passed → deploy-staging must now be dispatchable
+          const after = dispatchable(store, "feat-001").map((r: TaskRow) => r.id);
+          assert.ok(
+            after.includes("feat-001-deploy-staging"),
+            "feat-001-deploy-staging must be dispatchable after all terminal task gates pass",
+          );
+        } finally {
+          store.close();
+        }
+      },
+    );
+
+    test(
+      "second deploy-stage not dispatchable until first stage gate passes (c)",
+      () => {
+        const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
+        try {
+          // Pass all task gates
+          setTaskStatus(store, "task-alpha", "done");
+          markExitGatePassed(store, "task-alpha");
+          setTaskStatus(store, "task-beta", "done");
+          markExitGatePassed(store, "task-beta");
+          setTaskStatus(store, "task-gamma", "done");
+          markExitGatePassed(store, "task-gamma");
+
+          // First stage may become dispatchable; second must not (no first-stage gate yet)
+          const wave2 = dispatchable(store, "feat-001").map((r: TaskRow) => r.id);
+          assert.ok(
+            !wave2.includes("feat-001-deploy-production"),
+            "deploy-production must not be dispatchable before first stage gate passes",
+          );
+
+          // Pass first stage gate
+          setTaskStatus(store, "feat-001-deploy-staging", "done");
+          markExitGatePassed(store, "feat-001-deploy-staging");
+
+          // Second stage must now be dispatchable
+          const wave3 = dispatchable(store, "feat-001").map((r: TaskRow) => r.id);
+          assert.ok(
+            wave3.includes("feat-001-deploy-production"),
+            "feat-001-deploy-production must be dispatchable after first stage gate passes",
+          );
+        } finally {
+          store.close();
+        }
+      },
+    );
+
+    test(
+      "deploy-free plan: task dispatch is unchanged (regression) (d)",
+      async () => {
+        const dir = await mkdtemp(join(tmpdir(), "kanthord-008-t2-d-"));
+        try {
+          await writeFile(join(dir, "epic.md"), EPIC_MD);
+          await writeFile(join(dir, "RUNBOOK.md"), "# Runbook\n");
+          const sA = join(dir, "001-story-a");
+          await mkdir(sA);
+          await writeFile(join(sA, "INDEX.md"), "# Story A\n");
+          await writeFile(join(sA, "001-task-alpha.md"), TASK_ALPHA_MD);
+          const dbPath = join(dir, "test.db");
+          const store: Store = openStore(dbPath, { busyTimeout: 1000 });
+          try {
+            await compile(dir, store, COMPILE_OPTS);
+            loadTasks(store, "feat-001");
+            const ids = dispatchable(store, "feat-001").map((r: TaskRow) => r.id);
+            assert.deepEqual(ids, ["task-alpha"], "only root task dispatchable in deploy-free plan");
+            assert.ok(
+              ids.every((id) => !id.startsWith("feat-001-deploy")),
+              "no deploy-stage node must appear in a deploy-free plan",
+            );
+          } finally {
+            store.close();
+          }
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+    );
+
+    test(
+      "stale-generation plan: dispatchableForGeneration blocked with mismatched hash; live hash unblocks deploy-stage (e)",
+      async () => {
+        const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
+        try {
+          // Pass all task gates
+          setTaskStatus(store, "task-alpha", "done");
+          markExitGatePassed(store, "task-alpha");
+          setTaskStatus(store, "task-beta", "done");
+          markExitGatePassed(store, "task-beta");
+          setTaskStatus(store, "task-gamma", "done");
+          markExitGatePassed(store, "task-gamma");
+
+          // Stale hash → plan appears dirty → no dispatch at all
+          const stale = dispatchableForGeneration(store, "feat-001", "stale-hash-000");
+          assert.deepEqual(stale, [], "stale hash must block all dispatch (plan appears dirty)");
+
+          // Live hash from plan_generation table → plan is not dirty → deploy-staging dispatchable
+          const genRow = store.get<{ compile_hash: string }>(
+            "SELECT compile_hash FROM plan_generation WHERE feature_id = ? ORDER BY generation DESC LIMIT 1",
+            "feat-001",
+          );
+          assert.ok(genRow !== undefined, "plan_generation row must exist after compile");
+          const live = dispatchableForGeneration(store, "feat-001", genRow.compile_hash);
+          assert.ok(
+            live.some((r: TaskRow) => r.id === "feat-001-deploy-staging"),
+            "feat-001-deploy-staging must be dispatchable with live hash after terminal task gates pass",
+          );
+        } finally {
+          store.close();
+        }
+      },
+    );
   });
 });

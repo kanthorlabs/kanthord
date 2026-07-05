@@ -572,6 +572,30 @@ export async function buildCorePlan(
       edges.push({ from_node_id: sr.id, to_node_id: firstDeployId, kind: "grammar", semantics: null });
     }
   }
+
+  // Terminal task nodes of the last-major stories → first deploy-stage.
+  // Story-constraint (debate finding 2026-07-05): compiler emits these edges so
+  // deploy gating uses the identical task-predecessor rule; story→deploy edges
+  // are kept above as structural documentation (inert for scheduling).
+  if (firstDeployId !== undefined && Number.isFinite(maxStoryMajor)) {
+    const lastMajorTaskIds = new Set(
+      taskRefs.filter((t) => t.major === maxStoryMajor).map((t) => t.id),
+    );
+    const hasSuccessorInLastMajor = new Set<string>();
+    for (const t of taskRefs) {
+      if (t.major !== maxStoryMajor) continue;
+      for (const dep of t.depends_on) {
+        if (lastMajorTaskIds.has(dep.task)) {
+          hasSuccessorInLastMajor.add(dep.task);
+        }
+      }
+    }
+    for (const taskId of lastMajorTaskIds) {
+      if (!hasSuccessorInLastMajor.has(taskId)) {
+        edges.push({ from_node_id: taskId, to_node_id: firstDeployId, kind: "grammar", semantics: null });
+      }
+    }
+  }
   for (let i = 1; i < deployStageIds.length; i++) {
     const prevId = deployStageIds[i - 1];
     const currId = deployStageIds[i];

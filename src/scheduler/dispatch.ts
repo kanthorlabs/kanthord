@@ -34,20 +34,20 @@ function applySchedulerMigration(store: Store): void {
 }
 
 // ---------------------------------------------------------------------------
-// loadTasks — returns task-kind rows for a feature from the compiled plan
+// loadTasks — returns task/deploy-stage rows for a feature from the compiled plan
 //
-// Applies the scheduler migration (idempotent), initialises any new task
-// nodes into scheduler_task with status="pending" (INSERT OR IGNORE), then
-// returns one TaskRow per task-kind plan_node, with depends_on built from
-// the distinct task-kind predecessors in plan_edge.
+// Applies the scheduler migration (idempotent), initialises any new task or
+// deploy-stage nodes into scheduler_task with status="pending" (INSERT OR IGNORE),
+// then returns one TaskRow per task/deploy-stage plan_node, with depends_on built
+// from the distinct task/deploy-stage predecessors in plan_edge.
 // ---------------------------------------------------------------------------
 
 export function loadTasks(store: Store, featureId: string): TaskRow[] {
   applySchedulerMigration(store);
 
-  // All task-kind nodes for the feature
+  // All task-kind and deploy-stage-kind nodes for the feature
   const nodes = store.all<{ id: string; generation: number }>(
-    "SELECT id, generation FROM plan_node WHERE feature_id = ? AND kind = 'task'",
+    "SELECT id, generation FROM plan_node WHERE feature_id = ? AND kind IN ('task','deploy-stage')",
     featureId,
   );
 
@@ -62,11 +62,11 @@ export function loadTasks(store: Store, featureId: string): TaskRow[] {
 
   // Build TaskRow per node
   return nodes.map((node) => {
-    // Distinct task-kind predecessors (deduplicates grammar + handoff edges)
+    // Distinct task/deploy-stage predecessors (deduplicates grammar + handoff edges)
     const predecessors = store.all<{ from_node_id: string }>(
       `SELECT DISTINCT pe.from_node_id
        FROM plan_edge pe
-       JOIN plan_node pn_from ON pe.from_node_id = pn_from.id AND pn_from.kind = 'task'
+       JOIN plan_node pn_from ON pe.from_node_id = pn_from.id AND pn_from.kind IN ('task','deploy-stage')
        WHERE pe.to_node_id = ?`,
       node.id,
     );
@@ -87,15 +87,15 @@ export function loadTasks(store: Store, featureId: string): TaskRow[] {
 }
 
 // ---------------------------------------------------------------------------
-// dispatchable — returns pending tasks whose every task-kind predecessor has
-// a passed exit gate (i.e., all entries in depends_on[] have exit_gate_passed=1).
-// Root tasks (no task-kind predecessors) are always dispatchable.
+// dispatchable — returns pending nodes whose every task/deploy-stage predecessor
+// has a passed exit gate (i.e., all entries in depends_on[] have exit_gate_passed=1).
+// Root nodes (no task/deploy-stage predecessors) are always dispatchable.
 // ---------------------------------------------------------------------------
 
 export function dispatchable(store: Store, featureId: string): TaskRow[] {
   applySchedulerMigration(store);
 
-  // Pending tasks where no task-kind predecessor is blocking (gate not yet passed)
+  // Pending tasks where no task/deploy-stage predecessor is blocking (gate not yet passed)
   const ready = store.all<{ node_id: string; generation: number }>(
     `SELECT DISTINCT st.node_id, pn.generation
      FROM scheduler_task st
@@ -107,7 +107,7 @@ export function dispatchable(store: Store, featureId: string): TaskRow[] {
          SELECT 1
          FROM plan_edge pe
          JOIN plan_node pn_from
-           ON pe.from_node_id = pn_from.id AND pn_from.kind = 'task'
+           ON pe.from_node_id = pn_from.id AND pn_from.kind IN ('task','deploy-stage')
          LEFT JOIN scheduler_task st_dep
            ON st_dep.node_id = pe.from_node_id
          WHERE pe.to_node_id = st.node_id
@@ -121,7 +121,7 @@ export function dispatchable(store: Store, featureId: string): TaskRow[] {
     const predecessors = store.all<{ from_node_id: string }>(
       `SELECT DISTINCT pe.from_node_id
        FROM plan_edge pe
-       JOIN plan_node pn_from ON pe.from_node_id = pn_from.id AND pn_from.kind = 'task'
+       JOIN plan_node pn_from ON pe.from_node_id = pn_from.id AND pn_from.kind IN ('task','deploy-stage')
        WHERE pe.to_node_id = ?`,
       node.node_id,
     );

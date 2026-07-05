@@ -1414,4 +1414,70 @@ tests.
       },
     );
   });
+
+  // --------------------------------------------------------------------------
+  // 008.1 Story 001-T1 — compiler wires terminal task(s) of last-major story
+  // to the first deploy-stage node (additive; story→deploy edges kept).
+  // --------------------------------------------------------------------------
+
+  describe("008.1 T1 — buildCorePlan emits terminal-task→deploy edges", () => {
+    test(
+      "buildCorePlan emits edge from each terminal task of last-major story to first deploy-stage; story→deploy grammar edges kept",
+      async () => {
+        const dir = await mkdtemp(join(tmpdir(), "kanthord-008-t1-"));
+        try {
+          // Golden 3-story fixture: major=1 (story-a/task-alpha), major=2 (story-b/task-beta, story-c/task-gamma)
+          // Last-major stories: 002.1-story-b (task-beta) and 002.2-story-c (task-gamma)
+          // task-beta has no successor task → terminal; task-gamma has no successor task → terminal
+          await writeFile(join(dir, "epic.md"), EPIC_MD);
+          await writeFile(join(dir, "RUNBOOK.md"), "# Runbook\n");
+          const sA = join(dir, "001-story-a");
+          await mkdir(sA);
+          await writeFile(join(sA, "INDEX.md"), "# Story A\n");
+          await writeFile(join(sA, "001-task-alpha.md"), TASK_ALPHA_MD);
+          const sB = join(dir, "002.1-story-b");
+          await mkdir(sB);
+          await writeFile(join(sB, "INDEX.md"), "# Story B\n");
+          await writeFile(join(sB, "001-task-beta.md"), TASK_BETA_MD);
+          const sC = join(dir, "002.2-story-c");
+          await mkdir(sC);
+          await writeFile(join(sC, "INDEX.md"), "# Story C\n");
+          await writeFile(join(sC, "001-task-gamma.md"), TASK_GAMMA_MD);
+
+          const graph = await buildCorePlan(dir, COMPILE_OPTS);
+          const firstDeployId = "feat-001-deploy-staging";
+
+          // (a) Terminal task nodes → first deploy stage (NEW edges from T1)
+          assert.ok(
+            graph.edges.some(
+              (e) => e.from_node_id === "task-beta" && e.to_node_id === firstDeployId,
+            ),
+            "terminal task task-beta must have edge to first deploy-stage node",
+          );
+          assert.ok(
+            graph.edges.some(
+              (e) => e.from_node_id === "task-gamma" && e.to_node_id === firstDeployId,
+            ),
+            "terminal task task-gamma must have edge to first deploy-stage node",
+          );
+
+          // (b) Pre-existing story→deploy grammar edges still present (structural documentation, kept)
+          assert.ok(
+            graph.edges.some(
+              (e) => e.from_node_id === "002.1-story-b" && e.to_node_id === firstDeployId,
+            ),
+            "pre-existing story→deploy grammar edge for 002.1-story-b must still be present",
+          );
+          assert.ok(
+            graph.edges.some(
+              (e) => e.from_node_id === "002.2-story-c" && e.to_node_id === firstDeployId,
+            ),
+            "pre-existing story→deploy grammar edge for 002.2-story-c must still be present",
+          );
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  });
 });
