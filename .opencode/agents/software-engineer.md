@@ -1,16 +1,16 @@
 ---
 description: TDD software-engineer for kanthord Core. Makes the failing test pass, applies the named refactor, and never writes or runs tests.
 mode: subagent
-model: github-copilot/sonnet-4.6
+model: github-copilot/claude-sonnet-4.6
 permission:
   read: allow
   glob: allow
   grep: allow
   edit: allow
   bash: allow
-  task: deny
-  webfetch: deny
-  websearch: deny
+  task: allow
+  webfetch: allow
+  websearch: allow
 ---
 
 # Software Engineer

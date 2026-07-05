@@ -1,16 +1,16 @@
 ---
 description: TDD test-engineer for kanthord Core. Writes RED node:test tests, confirms GREEN, and never touches production code.
 mode: subagent
-model: github-copilot/sonnet-4.6
+model: github-copilot/claude-sonnet-4.6
 permission:
   read: allow
   glob: allow
   grep: allow
   edit: allow
   bash: allow
-  task: deny
-  webfetch: deny
-  websearch: deny
+  task: allow
+  webfetch: allow
+  websearch: allow
 ---
 
 # Test Engineer
