@@ -13,6 +13,7 @@ import { harness } from "./harness.ts";
 import {
   runLeaseExpiryScenario,
   runKillRestartScenario,
+  runLedgerReconciliationScenario,
   runCompactionRespawnScenario,
   runDirtyPlanScenario,
   runBrokerFailureScenario,
@@ -102,6 +103,66 @@ describe("src/harness/lifecycle", () => {
         assert.ok(
           soakState.sampleHistory.length >= 1,
           "mid-soak state includes sample history so the window resumes instead of restarting",
+        );
+      } finally {
+        await h[Symbol.asyncDispose]();
+      }
+    },
+  );
+
+  test(
+    "crash/restart + ledger reconciliation: TC-04 covers fake remote done, failed, resubmit, escalate",
+    async () => {
+      const h = await harness();
+      try {
+        const result = await runLedgerReconciliationScenario(h);
+
+        assert.strictEqual(
+          result.restartedReconciledOps,
+          4,
+          "restart must recover every in-flight fake broker op from the durable ledger",
+        );
+        assert.deepStrictEqual(
+          result.outcomes.map((o) => o.remoteOutcome),
+          ["done", "failed", "resubmit", "escalate"],
+          "TC-04 must exercise every fake-remote reconcile outcome in the lifecycle scenario",
+        );
+
+        for (const outcome of result.outcomes) {
+          assert.strictEqual(
+            outcome.recoveredStatus,
+            "needs_reconciliation",
+            `${outcome.remoteOutcome}: op identity must be recovered from ledger as needs_reconciliation`,
+          );
+          assert.strictEqual(
+            outcome.reconcileOutcome,
+            outcome.remoteOutcome,
+            `${outcome.remoteOutcome}: reconcile result must match the fake remote state`,
+          );
+        }
+
+        const completionByOutcome = Object.fromEntries(
+          result.outcomes.map((o) => [o.remoteOutcome, o.completionStatus]),
+        );
+        assert.deepStrictEqual(
+          completionByOutcome,
+          {
+            done: "done",
+            failed: "failed",
+            resubmit: null,
+            escalate: "escalation_needed",
+          },
+          "TC-04 must assert the lifecycle-visible completion effect for every reconcile branch",
+        );
+        assert.deepStrictEqual(
+          result.resubmitPayload,
+          { action: "fake-remote-reconcile", service: "backend" },
+          "resubmit uses the original operation payload, not ledger metadata",
+        );
+        assert.deepStrictEqual(
+          result.resubmitRequestIds,
+          ["req-resubmit-1"],
+          "resubmit branch mints exactly one fake remote request",
         );
       } finally {
         await h[Symbol.asyncDispose]();

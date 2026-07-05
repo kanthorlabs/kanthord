@@ -23,6 +23,8 @@ import { loadTasks, setTaskStatus } from "../scheduler/dispatch.ts";
 import { compile } from "../compiler/compile.ts";
 import { submit, getInFlightOp } from "../broker/submit.ts";
 import { startPolling } from "../broker/poller.ts";
+import { writeLedgerEntry, recoverFromLedger } from "../broker/ledger.ts";
+import { reconcileOp } from "../broker/reconcile.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -354,6 +356,201 @@ export async function runKillRestartScenario(
     await capture("mid-soak");
 
     return results;
+  } finally {
+    await rm(featureDir, { recursive: true, force: true });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Crash/restart + ledger reconciliation scenario
+// ---------------------------------------------------------------------------
+
+type FakeRemoteReconcileOutcome = "done" | "failed" | "resubmit" | "escalate";
+
+export type LedgerReconciliationOutcome = {
+  remoteOutcome: FakeRemoteReconcileOutcome;
+  recoveredStatus: string;
+  reconcileOutcome: FakeRemoteReconcileOutcome;
+  completionStatus: string | null;
+};
+
+const RECONCILE_EPIC_MD = `---
+id: feat-reconcile
+repo: backend
+ticket_system: jira
+ticket: JIRA-R-004
+---
+
+## Acceptance
+
+Ledger reconciliation covers fake remote outcomes.
+`;
+
+const RECONCILE_TASK_MD = `---
+id: task-reconcile
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-R-401
+---
+
+## Prerequisites
+
+Setup.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Reconcile output.
+
+## Tests
+
+Unit tests.
+`;
+
+function makeReconciliationEntry(): VerbRegistryEntry {
+  return {
+    verb: "fake-remote-reconcile",
+    tier: "auto",
+    timeout: 60_000,
+    idempotency: { window_ms: 60_000 },
+    retry: { max: 3, backoff: "linear" },
+    poll_interval: 1_000,
+    terminal_states: ["done", "failed"],
+    rate_limit: { requests_per_minute: 60 },
+    observed_state_can_regress: false,
+  };
+}
+
+/**
+ * Scenario: crash with in-flight fake broker ops, restart from markdown ledger,
+ * then reconcile each durable op identity against fake remote states that return
+ * done, failed, resubmit, and escalate.
+ */
+export async function runLedgerReconciliationScenario(
+  h: HarnessFixture,
+): Promise<{
+  restartedReconciledOps: number;
+  outcomes: LedgerReconciliationOutcome[];
+  resubmitPayload: unknown;
+  resubmitRequestIds: string[];
+}> {
+  const featureDir = await mkdtemp(join(tmpdir(), "kreconcile-"));
+  try {
+    const storyId = "001-story-a";
+    const taskStem = "001-task-reconcile";
+    const storyDir = join(featureDir, storyId);
+    await mkdir(storyDir, { recursive: true });
+
+    await writeFile(join(featureDir, "epic.md"), RECONCILE_EPIC_MD, "utf8");
+    await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await writeFile(join(storyDir, "INDEX.md"), "# Story A\n", "utf8");
+    await writeFile(join(storyDir, `${taskStem}.md`), RECONCILE_TASK_MD, "utf8");
+
+    const featureStore = new FeatureStore(featureDir);
+    const fakeRemoteOutcomes: FakeRemoteReconcileOutcome[] = [
+      "done",
+      "failed",
+      "resubmit",
+      "escalate",
+    ];
+
+    for (const remoteOutcome of fakeRemoteOutcomes) {
+      await writeLedgerEntry(featureStore, storyId, taskStem, {
+        op_id: `op-${remoteOutcome}`,
+        verb: "fake-remote-reconcile",
+        idempotency_key: `ik-${remoteOutcome}`,
+        correlation: `corr-${remoteOutcome}`,
+        desired_effect_hash: `hash-${remoteOutcome}`,
+        status: "in_flight",
+      });
+    }
+
+    let restartedReconciledOps = 0;
+    const lifecycle = bootDaemon({
+      featureDir,
+      clock: h.clock,
+      store: h.store,
+      logger: {
+        info(record: Record<string, unknown>): void {
+          if (record["event"] === "recovery-summary") {
+            restartedReconciledOps =
+              typeof record["reconciledOps"] === "number" ? record["reconciledOps"] : 0;
+          }
+        },
+      },
+      compileOpts: { repoRegistry: ["backend"] },
+    });
+    await lifecycle.restart();
+
+    const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
+    const remoteByCorrelation = new Map<string, FakeRemoteReconcileOutcome>();
+    for (const remoteOutcome of fakeRemoteOutcomes) {
+      remoteByCorrelation.set(`corr-${remoteOutcome}`, remoteOutcome);
+    }
+
+    const resubmitRequestIds: string[] = [];
+    let resubmitPayload: unknown;
+    const adapter: AsyncVerbAdapter = {
+      submit: async (input: unknown) => {
+        resubmitPayload = input;
+        const requestId = `req-resubmit-${resubmitRequestIds.length + 1}`;
+        resubmitRequestIds.push(requestId);
+        return requestId;
+      },
+      poll_status: async (_requestId: unknown) => ({ status: "pending" }),
+      reconcile: async (ledger: unknown) => {
+        const { correlation, desired_effect_hash } = ledger as {
+          correlation: string;
+          desired_effect_hash: string;
+        };
+        const remoteOutcome = remoteByCorrelation.get(correlation);
+        if (remoteOutcome === undefined) throw new Error(`unknown fake remote correlation ${correlation}`);
+        if (remoteOutcome === "done") {
+          return { outcome: "done", observed_hash: desired_effect_hash };
+        }
+        return { outcome: remoteOutcome };
+      },
+    };
+
+    const entry = makeReconciliationEntry();
+    const originalPayload = { action: "fake-remote-reconcile", service: "backend" };
+    const outcomes: LedgerReconciliationOutcome[] = [];
+
+    for (const remoteOutcome of fakeRemoteOutcomes) {
+      const ledgerEntry = recovered.find((r) => r.op_id === `op-${remoteOutcome}`);
+      if (ledgerEntry === undefined) {
+        throw new Error(`missing recovered ledger entry for ${remoteOutcome}`);
+      }
+      const reconcileOutcome = await reconcileOp(
+        ledgerEntry,
+        entry,
+        adapter,
+        h.store,
+        h.clock,
+        originalPayload,
+      );
+      const completionRow = h.store.get<{ status: string }>(
+        "SELECT status FROM broker_completion WHERE op_id = ?",
+        ledgerEntry.op_id,
+      );
+      outcomes.push({
+        remoteOutcome,
+        recoveredStatus: ledgerEntry.status,
+        reconcileOutcome,
+        completionStatus: completionRow?.status ?? null,
+      });
+    }
+
+    return {
+      restartedReconciledOps,
+      outcomes,
+      resubmitPayload,
+      resubmitRequestIds,
+    };
   } finally {
     await rm(featureDir, { recursive: true, force: true });
   }
