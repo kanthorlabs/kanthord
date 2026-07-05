@@ -1,13 +1,13 @@
 # Epic 010 CI Gate Run
 
-Status: **pending refreshed CI run for this gate-candidate commit**.
+Status: **verified**.
 
 ## Evidence Contract
 
 Required for G4 in `.agent/plan/e2e/phase1-e2e-testsuite.md`:
 
-- CI run URL/artifact: pending after this change is committed and pushed.
-- Gate-candidate commit SHA: pending after this change is committed.
+- CI run URL/artifact: https://github.com/kanthorlabs/kanthord/actions/runs/28733380663/job/85203068942
+- Gate-candidate commit SHA: `e0a340bb224444ee0ac093b6ec12f5d6ee53242c`
 - Workflow file: `.github/workflows/ci.yaml`.
 - Workflow name: `ci`.
 - Commands run: `npm run typecheck`, `npm test`.
@@ -44,11 +44,16 @@ Required for G4 in `.agent/plan/e2e/phase1-e2e-testsuite.md`:
 
 ## Final Gate Entry
 
-Fill this section after the new commit's CI run is green:
-
-- CI run URL/artifact:
-- Gate-candidate commit SHA:
-- Verified by:
-- Verification date:
-- Commands observed:
-- Guard-active proof observed:
+- CI run URL/artifact: https://github.com/kanthorlabs/kanthord/actions/runs/28733380663/job/85203068942
+- Gate-candidate commit SHA: `e0a340bb224444ee0ac093b6ec12f5d6ee53242c`
+- Verified by: OpenCode
+- Verification date: 2026-07-05
+- Commands observed: `npm run typecheck`, credential-surface check, `npm test`.
+- Guard-active proof observed: the job step is named
+  `test suite (Epic 010 guard preloaded by npm test)`, and its log shows
+  `src/harness/harness.test.ts` guard self-tests passing for blocked non-loopback
+  network primitives and credential reads, including `no-network guard: network
+  primitives blocked (non-loopback)`, `no-network guard: credential access blocked`,
+  `reading a credential-shaped env var (*_TOKEN) throws`, and `reading a
+  provider-credential file path throws`.
+- Suite result observed: `313` tests, `151` suites, `313` pass, `0` fail, `0` todo.
