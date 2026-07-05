@@ -142,9 +142,12 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
+.DS_Store
 # Local dev data volume (UDS socket + file-based DB + logs + auth + cache).
 # Mounted into the Podman dev container; never commit it.
 .data/
 
 # AI
 **/worktrees/
+# probe transcript (may contain redacted-but-sensitive output)
+scripts/dev/probes/su2-su5-transcript.txt

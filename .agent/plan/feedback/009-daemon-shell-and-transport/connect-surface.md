@@ -59,3 +59,51 @@ read-only-ness against.
 `@connectrpc/connect-node`) + `createClient(DaemonService, transport)` →
 `await client.getStatus({})` returned the handler values. Note the transport
 **requires an explicit `httpVersion`** on Node.
+
+---
+
+## 2A control surface (Epic 011 SU6)
+
+Date: 2026-07-05. `DaemonService` extended and stubs regenerated
+(`npm run generate:proto`, buf lint clean). Verified: import ok; descriptor local
+names are **exactly** `{getStatus, listInboxItems, respondToEscalation,
+respondToApproval}`, all `methodKind === "unary"`, `typeName ===
+"kanthord.v1.DaemonService"`.
+
+### Rule supersession (explicit, not a silent edit — debate finding)
+
+Epic 000 SU3 froze the service as **read-only** (proto header + the introspection
+gate below). **SU6 supersedes that rule for Phase 2A only**, adding the named inbox
+control surface — nothing broader; the full control-plane API is Phase 2B (Epic
+026). The proto header was updated to state this. These methods are an **interface
+hypothesis**: Epic 017 owns their behavior and may force a re-gen (decision record)
+if the shapes are wrong.
+
+### Method classification (reads vs controls — debate finding)
+
+The read-only gate is no longer "assert one method"; it is "**assert the descriptor
+is exactly this allowlist, by local name + method kind + read/control class**":
+
+- **Phase-1 read:** `GetStatus`.
+- **Phase-2A read:** `ListInboxItems` — one durable inbox; each `InboxItem` is tagged
+  by `kind` (`escalation` | `approval`), per Epic 017's unified-inbox model (chosen
+  over two split list methods — debate finding).
+- **Phase-2A control (mutations):** `RespondToEscalation`, `RespondToApproval`.
+
+Epic 026 will depend on descriptor-level method-by-method checks (kind + class), not
+just names — the gate asserts kinds now so that dependency is already satisfied.
+
+### Message shapes are minimal by intent (debate finding)
+
+SU6 is codegen plumbing; Epic 017 owns behavior. So the messages deliberately
+**omit pagination, RPC-level idempotency keys, and behavior-rich fields**:
+
+- No pagination — this is a local loopback operator surface for the 2A proof (no
+  auth, no web client). Add only if Epic 017 needs it.
+- No RPC-level idempotency key — exactly-once for a recorded decision comes through
+  the **Epic 005 op idempotency** mechanism keyed on the deterministic inbox
+  `item_id`, not a separate client retry token (Epic 017 authoring). Adding one here
+  would be redundant or conflicting.
+- `InboxItem` = `{ id, kind, feature_id, summary }`; respond requests carry the
+  `id` + the minimal decision (`response` for escalation; `approve` + `reason` for
+  approval); respond responses carry a resulting `status`. Epic 017 refines fields.

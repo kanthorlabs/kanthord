@@ -11,8 +11,10 @@ enforced through the existing capability-lease mechanism.
 ## Acceptance Criteria
 
 - A per-repo yaml (`repo`, `strategy: worktree`, `max_concurrent_tasks`,
-  `workflows_allowed`) loads into a typed slot; unknown strategy or missing repo
-  is a typed error naming the file (PRD §3.3 config shape).
+  `workflows_allowed`, `identity`) loads into a typed slot; unknown strategy,
+  missing repo, or an `identity` not present in the keyring (Epic 014 Story 000) is
+  a typed error naming the file (PRD §3.3 config shape; multi-account keyring —
+  Ulrich 2026-07-05).
 - Registering a path that is not a git repository fails at registration with a
   typed error — unsupported, not silently accepted (PRD assumption #5).
 - Dispatching a task on a slot creates a git worktree on a task-named branch

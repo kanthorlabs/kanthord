@@ -44,14 +44,37 @@ describe("src/daemon/status-server", () => {
   });
 
   describe("T2 — Read-only status method over SQLite", () => {
-    test("descriptor has only allowed read method names (no control/mutate methods)", () => {
-      const methodNames = Object.keys(DaemonService.method);
+    // Epic 011 SU6 superseded the Epic 000 read-only rule FOR PHASE 2A ONLY: the
+    // gate is now "descriptor is exactly this allowlist" (Phase-1 read + the named
+    // 2A inbox surface), asserted by local name + method kind + read/control class.
+    test("descriptor lists exactly the Phase-1 read + 2A control allowlist", () => {
+      const methodNames = Object.keys(DaemonService.method).sort();
+      // Phase-1 read: getStatus. 2A read: listInboxItems. 2A control: the responds.
+      const allowlist = [
+        "getStatus",
+        "listInboxItems",
+        "respondToApproval",
+        "respondToEscalation",
+      ].sort();
       assert.deepEqual(
         methodNames,
-        ["getStatus"],
-        `descriptor must list exactly ["getStatus"]; got ${JSON.stringify(methodNames)}`
+        allowlist,
+        `descriptor must list exactly ${JSON.stringify(allowlist)}; got ${JSON.stringify(methodNames)}`
       );
-      const forbidden = ["signOff", "approve", "halt", "write", "mutate", "control", "enqueue"];
+      // All methods are unary (Epic 026 depends on kind-level checks, not just names).
+      for (const [local, m] of Object.entries(DaemonService.method)) {
+        assert.equal(m.methodKind, "unary", `method ${local} must be unary`);
+      }
+      // Nothing broader than 2A: no full control-plane / 2B verbs (Epic 026), no
+      // Phase-1-forbidden control RPCs.
+      const forbidden = [
+        "signOff",
+        "halt",
+        "mergePr",
+        "createIssue",
+        "enqueue",
+        "lease",
+      ];
       for (const name of forbidden) {
         assert.ok(
           !methodNames.includes(name),

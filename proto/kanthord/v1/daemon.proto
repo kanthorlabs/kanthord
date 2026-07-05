@@ -1,15 +1,31 @@
-// kanthord daemon service — Epic 000 SU3 minimal read-only surface.
-// RULE (Epic 000): this schema may contain ONLY read methods. No sign-off,
-// approval, halt, write, mutate, enqueue, lease, or control RPC. Health is a
-// plain HTTP route on the same server, NOT an RPC (SU4).
+// kanthord daemon service.
+//
+// Phase-1 (Epic 000 SU3): read-only surface — GetStatus only.
+// Phase-2A (Epic 011 SU6): SUPERSEDES the Epic 000 read-only rule FOR PHASE 2A ONLY,
+//   adding the named 2A inbox control surface — ListInboxItems (read),
+//   RespondToEscalation + RespondToApproval (mutations). Nothing broader: the full
+//   control-plane API is Phase 2B (Epic 026). These methods are an INTERFACE
+//   HYPOTHESIS — Epic 017 owns their behavior and may force a re-gen (decision
+//   record) if the shapes are wrong. Health stays a plain HTTP route, NOT an RPC.
 syntax = "proto3";
 
 package kanthord.v1;
 
-// Read-only daemon status.
 service DaemonService {
+  // --- Phase-1 read ---
   // Returns the daemon's current status. Read-only.
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+
+  // --- Phase-2A read ---
+  // Lists pending inbox items (escalations and approvals) as one durable inbox,
+  // each tagged by kind (Epic 017 unified-inbox model). Read-only.
+  rpc ListInboxItems(ListInboxItemsRequest) returns (ListInboxItemsResponse);
+
+  // --- Phase-2A control (mutations) ---
+  // Records a human response to an escalation inbox item.
+  rpc RespondToEscalation(RespondToEscalationRequest) returns (RespondToEscalationResponse);
+  // Records a human approve/reject decision on an approval inbox item.
+  rpc RespondToApproval(RespondToApprovalRequest) returns (RespondToApprovalResponse);
 }
 
 message GetStatusRequest {}
@@ -39,4 +55,52 @@ message GetStatusResponse {
   int64 uptime_seconds = 2;
   // Current feature/task status derived from scheduler SQLite rows.
   repeated FeatureStatus features = 3;
+}
+
+// --- Phase-2A inbox surface (minimal; Epic 017 refines the field shapes) ---
+
+// One pending inbox item. Fields are intentionally minimal for the 2A operator
+// surface; Epic 017 owns behavior-rich fields (payloads, timestamps, attribution).
+message InboxItem {
+  // Stable inbox item id (correlation for the respond calls).
+  string id = 1;
+  // Item kind: "escalation" or "approval".
+  string kind = 2;
+  // Feature this item belongs to.
+  string feature_id = 3;
+  // Human-readable summary of what needs a decision.
+  string summary = 4;
+}
+
+message ListInboxItemsRequest {}
+
+message ListInboxItemsResponse {
+  // Pending items (escalations and approvals), each tagged by kind.
+  repeated InboxItem items = 1;
+}
+
+message RespondToEscalationRequest {
+  // Target escalation inbox item id.
+  string id = 1;
+  // The human's response text/decision for the escalation.
+  string response = 2;
+}
+
+message RespondToEscalationResponse {
+  // Resulting item status after the response is recorded.
+  string status = 1;
+}
+
+message RespondToApprovalRequest {
+  // Target approval inbox item id.
+  string id = 1;
+  // Whether the approval is granted.
+  bool approve = 2;
+  // Reason for the decision.
+  string reason = 3;
+}
+
+message RespondToApprovalResponse {
+  // Resulting item status after the decision is recorded.
+  string status = 1;
 }
