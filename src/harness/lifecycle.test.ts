@@ -10,7 +10,6 @@ import "./no-network-guard.ts";
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { harness } from "./harness.ts";
-import { LeaseManager } from "../scheduler/leases.ts";
 import {
   runLeaseExpiryScenario,
   runKillRestartScenario,
@@ -40,51 +39,69 @@ describe("src/harness/lifecycle", () => {
   );
 
   test(
-    "kill and restart: pending tasks, phase, and in-flight op recovered field-by-field",
+    "kill and restart: TC-03 checkpoints recover all runbook fields field-by-field",
     async () => {
       const h = await harness();
       try {
-        // Acquire a lease BEFORE the simulated kill — verifying ownership survives restart (AC2).
-        const lm = new LeaseManager(h.store, h.clock);
-        const acquired = lm.acquire("task-x", [
-          { kind: "resource", key: "lifecycle-test" },
-        ]);
-        assert.ok(acquired, "lease must be acquired before kill");
-
-        const result = await runKillRestartScenario(h);
-        assert.strictEqual(
-          result.pendingTaskCount,
-          1,
-          "one pending task recovered from markdown on restart",
-        );
-        assert.strictEqual(
-          result.currentPhase,
-          "planning",
-          "current phase read from STATE file field-by-field",
-        );
-        assert.strictEqual(
-          result.reconciledOps,
-          1,
-          "in-flight ledger op surfaces as needs_reconciliation after restart",
+        const results = await runKillRestartScenario(h);
+        assert.deepStrictEqual(
+          results.map((r) => r.checkpoint),
+          ["post-compile", "mid-dispatch", "mid-gate-pair", "mid-soak"],
+          "TC-03 must inject restart at every representative checkpoint",
         );
 
-        // Lease ownership field-by-field: scheduler_lease row must survive restart (AC2 + gate).
-        const leaseRows = h.store.all<{ holder: string; capability_key: string }>(
-          "SELECT holder, capability_key FROM scheduler_lease WHERE holder = ?",
-          "task-x",
+        for (const result of results) {
+          assert.deepStrictEqual(
+            result.post.pendingTaskIds,
+            result.pre.pendingTaskIds,
+            `${result.checkpoint}: pending-task set recovered field-by-field`,
+          );
+          assert.deepStrictEqual(
+            result.post.leaseOwnership,
+            result.pre.leaseOwnership,
+            `${result.checkpoint}: lease ownership recovered field-by-field`,
+          );
+          assert.strictEqual(
+            result.post.currentPhase,
+            result.pre.currentPhase,
+            `${result.checkpoint}: current workflow phase recovered field-by-field`,
+          );
+          assert.strictEqual(
+            result.post.injectedState,
+            result.pre.injectedState,
+            `${result.checkpoint}: injected STATE recovered field-by-field`,
+          );
+          assert.deepStrictEqual(
+            result.post.soakState,
+            result.pre.soakState,
+            `${result.checkpoint}: in-progress soak state recovered field-by-field`,
+          );
+          assert.ok(
+            result.reconciledOps >= 1,
+            `${result.checkpoint}: in-flight ledger op surfaces as needs_reconciliation after restart`,
+          );
+        }
+
+        const midDispatch = results.find((r) => r.checkpoint === "mid-dispatch");
+        assert.ok(midDispatch !== undefined, "mid-dispatch checkpoint must exist");
+        assert.deepStrictEqual(
+          midDispatch.pre.leaseOwnership,
+          [{ holder: "task-alpha", capabilityKey: "resource:dispatch-slot" }],
+          "mid-dispatch checkpoint must include concrete lease ownership",
         );
+
+        const midSoak = results.find((r) => r.checkpoint === "mid-soak");
+        assert.ok(midSoak?.pre.soakState !== null, "mid-soak checkpoint must include soak state");
+        const soakState = midSoak?.pre.soakState;
+        assert.ok(soakState !== undefined && soakState !== null, "mid-soak soak state must be defined");
         assert.strictEqual(
-          leaseRows.length,
-          1,
-          "scheduler_lease row must survive restart field-by-field (lease ownership)",
+          soakState.stageId,
+          "feat-restart-deploy-staging",
+          "mid-soak state includes stage id",
         );
-        const row = leaseRows[0];
-        assert.ok(row !== undefined, "lease row must be defined after restart");
-        assert.strictEqual(row.holder, "task-x", "lease holder preserved after restart");
-        assert.strictEqual(
-          row.capability_key,
-          "resource:lifecycle-test",
-          "lease capability_key preserved after restart",
+        assert.ok(
+          soakState.sampleHistory.length >= 1,
+          "mid-soak state includes sample history so the window resumes instead of restarting",
         );
       } finally {
         await h[Symbol.asyncDispose]();

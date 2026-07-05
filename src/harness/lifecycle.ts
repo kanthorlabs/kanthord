@@ -19,7 +19,7 @@ import {
   getPinnedGeneration,
   dispatchableForGeneration,
 } from "../scheduler/generation.ts";
-import { loadTasks } from "../scheduler/dispatch.ts";
+import { loadTasks, setTaskStatus } from "../scheduler/dispatch.ts";
 import { compile } from "../compiler/compile.ts";
 import { submit, getInFlightOp } from "../broker/submit.ts";
 import { startPolling } from "../broker/poller.ts";
@@ -66,23 +66,235 @@ export function runLeaseExpiryScenario(
 // Kill/restart scenario
 // ---------------------------------------------------------------------------
 
+type SoakSample = {
+  clockInstant: number;
+  results: Array<{ observer: string; healthy: boolean; value: string }>;
+};
+
+export type RestartCheckpointName =
+  | "post-compile"
+  | "mid-dispatch"
+  | "mid-gate-pair"
+  | "mid-soak";
+
+export type RestartSnapshot = {
+  pendingTaskIds: string[];
+  leaseOwnership: Array<{ holder: string; capabilityKey: string }>;
+  currentPhase: string;
+  injectedState: string;
+  soakState: {
+    stageId: string;
+    windowStart: number;
+    sampleHistory: SoakSample[];
+  } | null;
+};
+
+export type RestartCheckpointResult = {
+  checkpoint: RestartCheckpointName;
+  pre: RestartSnapshot;
+  post: RestartSnapshot;
+  reconciledOps: number;
+};
+
+const RESTART_EPIC_MD = `---
+id: feat-restart
+repo: backend
+ticket_system: jira
+ticket: JIRA-R-001
+deploy_chain:
+  - stage: staging
+    handlers:
+      - observer: smoke-check
+    success_criteria: "smoke-check:healthy"
+    soak_duration: "2m"
+---
+
+## Acceptance
+
+Restart coverage remains equivalent.
+`;
+
+const RESTART_TASK_ALPHA_MD = `---
+id: task-alpha
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-R-101
+---
+
+## Prerequisites
+
+Setup.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Alpha output.
+
+## Tests
+
+Unit tests.
+`;
+
+const RESTART_TASK_BETA_MD = `---
+id: task-beta
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-R-102
+---
+
+## Prerequisites
+
+Setup.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Beta output.
+
+## Tests
+
+Unit tests.
+`;
+
+function applyHarnessSoakStateMigration(h: HarnessFixture): void {
+  h.store.run(
+    `CREATE TABLE IF NOT EXISTS harness_soak_state (
+      stage_id TEXT NOT NULL PRIMARY KEY,
+      window_start INTEGER NOT NULL,
+      sample_history TEXT NOT NULL
+    )`,
+  );
+}
+
+function writeHarnessSoakState(
+  h: HarnessFixture,
+  stageId: string,
+  windowStart: number,
+  sampleHistory: SoakSample[],
+): void {
+  applyHarnessSoakStateMigration(h);
+  h.store.run(
+    `INSERT OR REPLACE INTO harness_soak_state
+       (stage_id, window_start, sample_history)
+     VALUES (?, ?, ?)`,
+    stageId,
+    windowStart,
+    JSON.stringify(sampleHistory),
+  );
+}
+
+function readHarnessSoakState(
+  h: HarnessFixture,
+): RestartSnapshot["soakState"] {
+  applyHarnessSoakStateMigration(h);
+  const row = h.store.get<{
+    stage_id: string;
+    window_start: number;
+    sample_history: string;
+  }>(
+    "SELECT stage_id, window_start, sample_history FROM harness_soak_state ORDER BY stage_id LIMIT 1",
+  );
+  if (row === undefined) return null;
+  return {
+    stageId: row.stage_id,
+    windowStart: row.window_start,
+    sampleHistory: JSON.parse(row.sample_history) as SoakSample[],
+  };
+}
+
+async function readRestartSnapshot(
+  h: HarnessFixture,
+  featureStore: FeatureStore,
+  storyId: string,
+  taskStem: string,
+): Promise<RestartSnapshot> {
+  const pendingTaskIds = h.store.all<{ node_id: string }>(
+    "SELECT node_id FROM scheduler_task WHERE status = 'pending' ORDER BY node_id",
+  ).map((r) => r.node_id);
+
+  const leaseOwnership = h.store.all<{ holder: string; capability_key: string }>(
+    "SELECT holder, capability_key FROM scheduler_lease ORDER BY holder, capability_key",
+  ).map((r) => ({ holder: r.holder, capabilityKey: r.capability_key }));
+
+  const injectedState = await featureStore.readState(storyId, taskStem);
+  const phaseMatch = /^current_phase:\s*(.+)$/m.exec(injectedState);
+  const currentPhase = phaseMatch?.[1]?.trim() ?? "";
+
+  return {
+    pendingTaskIds,
+    leaseOwnership,
+    currentPhase,
+    injectedState,
+    soakState: readHarnessSoakState(h),
+  };
+}
+
+async function restartAndSnapshot(opts: {
+  h: HarnessFixture;
+  featureDir: string;
+  featureStore: FeatureStore;
+  storyId: string;
+  taskStem: string;
+}): Promise<{ post: RestartSnapshot; reconciledOps: number }> {
+  let summary: Record<string, unknown> | undefined;
+  const lifecycle = bootDaemon({
+    featureDir: opts.featureDir,
+    clock: opts.h.clock,
+    store: opts.h.store,
+    logger: {
+      info(record: Record<string, unknown>): void {
+        if (record["event"] === "recovery-summary") {
+          summary = record;
+        }
+      },
+    },
+    compileOpts: { repoRegistry: ["backend"] },
+  });
+
+  await lifecycle.restart();
+  const post = await readRestartSnapshot(
+    opts.h,
+    opts.featureStore,
+    opts.storyId,
+    opts.taskStem,
+  );
+  const reconciledOps =
+    typeof summary?.["reconciledOps"] === "number" ? summary["reconciledOps"] : 0;
+  return { post, reconciledOps };
+}
+
 /**
- * Scenario: daemon has one in-flight ledger op and a STATE file when killed;
- * on restart, boot recovers pending-task count, current phase (from STATE),
- * and ledger op (as needs_reconciliation) — field-by-field.
+ * Scenario: inject simulated kill/restart at the TC-03 representative
+ * checkpoints. Each checkpoint snapshots all runbook-required restart fields
+ * immediately before the kill and after restart from durable markdown/ledger +
+ * persisted scheduler/soak views.
  */
 export async function runKillRestartScenario(
   h: HarnessFixture,
-): Promise<{ pendingTaskCount: number; currentPhase: string; reconciledOps: number }> {
+): Promise<RestartCheckpointResult[]> {
   const featureDir = await mkdtemp(join(tmpdir(), "klifecycle-"));
   try {
     const storyId = "001-story-a";
-    const taskStem = "001-task-x";
+    const taskStem = "001-task-alpha";
     const storyDir = join(featureDir, storyId);
     await mkdir(storyDir, { recursive: true });
 
-    // Task file — walkFeature classifies any *.md (non-special name) as "task".
-    await writeFile(join(storyDir, `${taskStem}.md`), "# task\n", "utf8");
+    await writeFile(join(featureDir, "epic.md"), RESTART_EPIC_MD, "utf8");
+    await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await writeFile(join(storyDir, "INDEX.md"), "# Story A\n", "utf8");
+    await writeFile(join(storyDir, `${taskStem}.md`), RESTART_TASK_ALPHA_MD, "utf8");
+    await writeFile(join(storyDir, "002-task-beta.md"), RESTART_TASK_BETA_MD, "utf8");
+
+    await compile(featureDir, h.store, { repoRegistry: ["backend"] });
+    loadTasks(h.store, "feat-restart");
 
     // Write in-flight ledger entry; recoverFromLedger remaps it → needs_reconciliation.
     const featureStore = new FeatureStore(featureDir);
@@ -95,37 +307,53 @@ export async function runKillRestartScenario(
       status: "in_flight",
     });
 
-    // STATE file with current_phase — boot reads this when reconciledOps >= 1.
-    await featureStore.writeState(storyId, taskStem, "current_phase: planning\n");
+    const lm = new LeaseManager(h.store, h.clock);
+    const results: RestartCheckpointResult[] = [];
 
-    // Capturing logger — records the recovery-summary event fields.
-    let summary: Record<string, unknown> | undefined;
-    const logger = {
-      info(record: Record<string, unknown>): void {
-        if (record["event"] === "recovery-summary") {
-          summary = record;
-        }
+    async function capture(checkpoint: RestartCheckpointName): Promise<void> {
+      const pre = await readRestartSnapshot(h, featureStore, storyId, taskStem);
+      const { post, reconciledOps } = await restartAndSnapshot({
+        h,
+        featureDir,
+        featureStore,
+        storyId,
+        taskStem,
+      });
+      results.push({ checkpoint, pre, post, reconciledOps });
+    }
+
+    await featureStore.writeState(storyId, taskStem, "current_phase: compiled\n");
+    await capture("post-compile");
+
+    lm.acquire("task-alpha", [{ kind: "resource" as const, key: "dispatch-slot" }]);
+    setTaskStatus(h.store, "task-alpha", "running");
+    await featureStore.writeState(storyId, taskStem, "current_phase: dispatching\n");
+    await capture("mid-dispatch");
+
+    await featureStore.writeState(
+      storyId,
+      taskStem,
+      "current_phase: gate_pair\n\n## Injected\n\ngate pair in progress\n",
+    );
+    await capture("mid-gate-pair");
+
+    const stageId = "feat-restart-deploy-staging";
+    const windowStart = h.clock.now();
+    writeHarnessSoakState(h, stageId, windowStart, [
+      {
+        clockInstant: windowStart + 60_000,
+        results: [{ observer: "smoke-check", healthy: true, value: "ok" }],
       },
-    };
+    ]);
+    setTaskStatus(h.store, stageId, "running");
+    await featureStore.writeState(
+      storyId,
+      taskStem,
+      "current_phase: soak\n\n## Injected\n\nsoak window in progress\n",
+    );
+    await capture("mid-soak");
 
-    const lifecycle = bootDaemon({
-      featureDir,
-      clock: h.clock,
-      store: h.store,
-      logger,
-      compileOpts: { repoRegistry: ["backend"] },
-    });
-    await lifecycle.restart();
-
-    // Extract fields from the captured recovery-summary log record.
-    const rawPending = summary?.["pendingTaskCount"];
-    const pendingTaskCount = typeof rawPending === "number" ? rawPending : 0;
-    const rawPhase = summary?.["currentPhase"];
-    const currentPhase = typeof rawPhase === "string" ? rawPhase : "";
-    const rawOps = summary?.["reconciledOps"];
-    const reconciledOps = typeof rawOps === "number" ? rawOps : 0;
-
-    return { pendingTaskCount, currentPhase, reconciledOps };
+    return results;
   } finally {
     await rm(featureDir, { recursive: true, force: true });
   }
