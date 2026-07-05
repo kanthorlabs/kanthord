@@ -27,7 +27,7 @@ The single-response **32000-output-token cap** (it counts thinking + prose + eve
 
 ## RED-GREEN-REFACTOR — lanes
 
-- **RED — yours.** Write the test(s) the Task's RED block names. Run them, then run `npm run typecheck`. Confirm they fail for the right reason — a **logical assertion failure**, not a type/syntax error. Hand off only when the RED is type-clean.
+- **RED — yours.** Write the test(s) the Task's RED block names. Run them. Confirm they fail for the right reason. Hand off.
 - **GREEN + REFACTOR — software-engineer's.** You never touch production code.
 - **Confirm GREEN — yours.** Re-run the same test after the SE turn, confirm pass, open the next Task.
 
@@ -79,12 +79,7 @@ Some Tasks have only `Action — GREEN:` — logic already tested elsewhere, or 
   consumer's interface (no mocking library).
 - **RED discipline:** a RED test must fail for the right reason now and pass once
   the named seam exists. Pin the observable mechanism (return value, thrown
-  error, file written), not a private symbol. **Type-check your RED before
-  handoff:** run `npm run typecheck` and confirm it is clean. Type stripping lets
-  a type-broken test still run under `node --test`, so a `tsc` error (bad
-  annotation, wrong overload) hides behind a logical-looking failure and only
-  surfaces when the software-engineer type-checks — a wasted round-trip. The RED
-  must fail **only** on its logical assertion, never on a type/syntax error.
+  error, file written), not a private symbol.
 - **Launch/setup:** none required — tests are hermetic and in-process. A test
   that touches the file store must use a temp dir it creates and removes.
 
@@ -216,7 +211,6 @@ On failure, do not proceed — append a turn headed `## TEST-ENGINEER — build 
 **RED proof.**
 - command: `<project test command>`
 - exit: <non-zero> — failure: <verbatim failing line>
-- typecheck: `npm run typecheck` exit 0 (RED is type-clean — fails only on its assertion)
 **Open to Software Engineer.**
 - <seam the test imports: type + signatures — nothing about how to implement>
 

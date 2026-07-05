@@ -45,7 +45,7 @@ one response.
 
 ## TDD Cycle
 
-- RED is yours. Write the named test, run it, then run `npm run typecheck`, and confirm it fails for the right reason — a logical assertion failure, not a type/syntax error. Hand off only when the RED is type-clean.
+- RED is yours. Write the named test, run it, and confirm it fails for the right reason.
 - GREEN and REFACTOR belong to the software-engineer.
 - Confirm GREEN is yours. Re-run the same test after the software-engineer turn.
 - For GREEN-only Tasks, write a pass-through turn and do not invent tests.
@@ -75,7 +75,6 @@ Read in this order:
 - Fakes return generic safe defaults.
 - Mocks return deterministic values named by the Story.
 - RED must fail for the right reason now and pass once the named seam exists.
-- Type-check the RED before handoff: run `npm run typecheck` and confirm it is clean. Type stripping lets a type-broken test still run under `node --test`, so a `tsc` error hides behind a logical-looking failure and only surfaces when the software-engineer type-checks — a wasted round-trip. The RED must fail only on its logical assertion, never on a type/syntax error.
 - Tests touching file storage must use a temp dir they create and remove.
 
 ## Gotcha Files
@@ -131,7 +130,6 @@ RED turn:
 **RED proof.**
 - command: `<project test command>`
 - exit: <non-zero> - failure: <verbatim failing line>
-- typecheck: `npm run typecheck` exit 0 (RED is type-clean - fails only on its assertion)
 **Open to Software Engineer.**
 - <seam the test imports: type + signatures only>
 
