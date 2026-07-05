@@ -164,6 +164,38 @@ function findCycle(nodeIds: string[], edges: Edge[]): string[] | null {
 }
 
 /**
+ * Assert no forward handoffs in the given edge set.
+ *
+ * A forward handoff is a `kind: "handoff"` edge where the producer (from)
+ * node has a higher major than the consumer (to) node — meaning work would
+ * flow backward in the story-group timeline.
+ *
+ * Exported so compile.ts can call this check independently (after crossCheck,
+ * before the emitted-graph cycle relint) so that the planner-vocabulary
+ * diagnostic fires before the cycle error.  coreLint also delegates to this
+ * as check (d) — byte-identical behaviour.
+ */
+export function assertNoForwardHandoffs(nodes: LintNode[], handoffEdges: Edge[]): void {
+  const nodeMap = new Map<string, LintNode>();
+  for (const node of nodes) {
+    nodeMap.set(node.id, node);
+  }
+  for (const edge of handoffEdges) {
+    if (edge.kind !== "handoff") continue;
+    const fromNode = nodeMap.get(edge.from);
+    const toNode = nodeMap.get(edge.to);
+    if (fromNode === undefined || toNode === undefined) continue;
+    if (fromNode.major > toNode.major) {
+      const producerMajor = String(fromNode.major).padStart(2, "0");
+      const consumerMajor = String(toNode.major).padStart(2, "0");
+      throw new CoreLintError(
+        `Forward handoff: story group ${consumerMajor} cannot depend on story group ${producerMajor} (producer follows consumer)`,
+      );
+    }
+  }
+}
+
+/**
  * Run core lint rules over a compiled node + edge set:
  *
  * (a) Acyclic — the directed edge graph must contain no cycle; throws naming
@@ -172,9 +204,8 @@ function findCycle(nodeIds: string[], edges: Edge[]): string[] | null {
  *     throws naming the node id and the unregistered repo.
  * (c) Ticket refs — every node must have a non-empty `ticket`; throws naming
  *     the node id.
- * (d) No forward handoffs — a `kind: "handoff"` edge where major(from) >
- *     major(to) is invalid; throws with zero-padded major numbers in planner
- *     vocabulary.
+ * (d) No forward handoffs — delegates to assertNoForwardHandoffs; a
+ *     `kind: "handoff"` edge where major(from) > major(to) is invalid.
  */
 export function coreLint(
   nodes: LintNode[],
@@ -215,17 +246,5 @@ export function coreLint(
   }
 
   // (d) No forward handoffs.
-  for (const edge of edges) {
-    if (edge.kind !== "handoff") continue;
-    const fromNode = nodeMap.get(edge.from);
-    const toNode = nodeMap.get(edge.to);
-    if (fromNode === undefined || toNode === undefined) continue;
-    if (fromNode.major > toNode.major) {
-      const producerMajor = String(fromNode.major).padStart(2, "0");
-      const consumerMajor = String(toNode.major).padStart(2, "0");
-      throw new CoreLintError(
-        `Forward handoff: story group ${consumerMajor} cannot depend on story group ${producerMajor} (producer follows consumer)`,
-      );
-    }
-  }
+  assertNoForwardHandoffs(nodes, edges);
 }

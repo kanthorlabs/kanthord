@@ -1342,7 +1342,7 @@ tests.
     );
 
     test(
-      "forward handoff: producer major > consumer major → compile throws naming task ids",
+      "forward handoff: producer major > consumer major → compile throws planner-vocabulary diagnostic",
       async () => {
         const dir = await makeInvalidFixture([
           {
@@ -1354,7 +1354,10 @@ tests.
             files: [{ name: "001-task-fh-late.md", content: TASK_FH_LATE_MD }],
           },
         ]);
-        await expectCompileThrows(dir, "task-fh-early", "task-fh-late");
+        await expectCompileThrows(
+          dir,
+          "Forward handoff: story group 01 cannot depend on story group 03 (producer follows consumer)",
+        );
       },
     );
 

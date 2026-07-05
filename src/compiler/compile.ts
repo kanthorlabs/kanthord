@@ -5,7 +5,7 @@ import type { Store } from "../foundations/sqlite-store.ts";
 import { parsePlanFile, sections, serializeFrontmatter } from "../foundations/plan-file.ts";
 import { walkFeature, parseNodeName } from "./grammar.ts";
 import { crossCheck } from "./crosscheck.ts";
-import { coreLint, buildGrammarEdges } from "./edges.ts";
+import { coreLint, buildGrammarEdges, assertNoForwardHandoffs } from "./edges.ts";
 import { shapeLint } from "./shape-lint.ts";
 
 // ---------------------------------------------------------------------------
@@ -497,6 +497,20 @@ export async function buildCorePlan(
     semantics: null as null,
   }));
   coreLint(lintNodes, taskGrammarEdgesForLint, opts.repoRegistry);
+
+  // Forward-handoff check: fires after crossCheck (dep-resolution errors win)
+  // and before the emitted-graph cycle relint in compile(), so the
+  // planner-vocabulary diagnostic surfaces instead of "Cycle detected in
+  // emitted graph:".  Legal handoffs (producer.major <= consumer.major) pass.
+  const handoffEdgesForLint = taskRefs.flatMap((tr) =>
+    tr.depends_on.map((dep) => ({
+      from: dep.task,
+      to: tr.id,
+      kind: "handoff" as const,
+      semantics: dep.semantics,
+    })),
+  );
+  assertNoForwardHandoffs(lintNodes, handoffEdgesForLint);
 
   const consumedArtifactIds = taskRefs.flatMap((t) => t.depends_on.map((d) => d.output));
   const treeEdges = taskRefs.flatMap((t) =>
