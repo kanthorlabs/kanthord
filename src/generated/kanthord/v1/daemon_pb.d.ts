@@ -28,6 +28,70 @@ export declare type GetStatusRequest = Message<"kanthord.v1.GetStatusRequest"> &
 export declare const GetStatusRequestSchema: GenMessage<GetStatusRequest>;
 
 /**
+ * @generated from message kanthord.v1.TaskStatus
+ */
+export declare type TaskStatus = Message<"kanthord.v1.TaskStatus"> & {
+  /**
+   * Scheduler task/deploy-stage node id.
+   *
+   * @generated from field: string task_id = 1;
+   */
+  taskId: string;
+
+  /**
+   * Current scheduler status for the node.
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * Whether the node's exit gate has passed.
+   *
+   * @generated from field: bool exit_gate_passed = 3;
+   */
+  exitGatePassed: boolean;
+};
+
+/**
+ * Describes the message kanthord.v1.TaskStatus.
+ * Use `create(TaskStatusSchema)` to create a new message.
+ */
+export declare const TaskStatusSchema: GenMessage<TaskStatus>;
+
+/**
+ * @generated from message kanthord.v1.FeatureStatus
+ */
+export declare type FeatureStatus = Message<"kanthord.v1.FeatureStatus"> & {
+  /**
+   * Feature id shared by scheduler rows.
+   *
+   * @generated from field: string feature_id = 1;
+   */
+  featureId: string;
+
+  /**
+   * Aggregate feature status derived from the feature's task statuses.
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * Current task/deploy-stage statuses for this feature.
+   *
+   * @generated from field: repeated kanthord.v1.TaskStatus tasks = 3;
+   */
+  tasks: TaskStatus[];
+};
+
+/**
+ * Describes the message kanthord.v1.FeatureStatus.
+ * Use `create(FeatureStatusSchema)` to create a new message.
+ */
+export declare const FeatureStatusSchema: GenMessage<FeatureStatus>;
+
+/**
  * @generated from message kanthord.v1.GetStatusResponse
  */
 export declare type GetStatusResponse = Message<"kanthord.v1.GetStatusResponse"> & {
@@ -44,6 +108,13 @@ export declare type GetStatusResponse = Message<"kanthord.v1.GetStatusResponse">
    * @generated from field: int64 uptime_seconds = 2;
    */
   uptimeSeconds: bigint;
+
+  /**
+   * Current feature/task status derived from scheduler SQLite rows.
+   *
+   * @generated from field: repeated kanthord.v1.FeatureStatus features = 3;
+   */
+  features: FeatureStatus[];
 };
 
 /**

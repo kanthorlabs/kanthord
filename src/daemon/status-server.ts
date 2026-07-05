@@ -14,6 +14,13 @@ import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { DaemonService } from "../generated/kanthord/v1/daemon_pb.js";
 import type { Store } from "../foundations/sqlite-store.ts";
 
+type SchedulerStatusRow = {
+  node_id: string;
+  feature_id: string;
+  status: string;
+  exit_gate_passed: number;
+};
+
 // ---------------------------------------------------------------------------
 // Public interface
 // ---------------------------------------------------------------------------
@@ -47,16 +54,12 @@ export function createStatusServer(opts: {
         routes(router) {
           router.service(DaemonService, {
             getStatus() {
-              // Query the store for task statuses — proves the response is
-              // SQLite-derived (write-counting seam must see zero writes here).
-              opts.store.all<{ node_id: string; status: string }>(
-                "SELECT node_id, status FROM scheduler_task"
-              );
+              const features = readFeatureStatuses(opts.store);
               const uptimeSeconds =
                 startedAt > 0
                   ? BigInt(Math.floor((Date.now() - startedAt) / 1000))
                   : BigInt(0);
-              return { version, uptimeSeconds };
+              return { version, uptimeSeconds, features };
             },
           });
         },
@@ -97,4 +100,49 @@ export function createStatusServer(opts: {
       });
     },
   };
+}
+
+function readFeatureStatuses(store: Store): Array<{
+  featureId: string;
+  status: string;
+  tasks: Array<{ taskId: string; status: string; exitGatePassed: boolean }>;
+}> {
+  const schedulerColumns = store.all<{ name: string }>(
+    "PRAGMA table_info(scheduler_task)",
+  );
+  if (schedulerColumns.length === 0) return [];
+
+  const rows = store.all<SchedulerStatusRow>(
+    `SELECT node_id, feature_id, status, exit_gate_passed
+     FROM scheduler_task
+     ORDER BY feature_id, node_id`,
+  );
+
+  const byFeature = new Map<string, SchedulerStatusRow[]>();
+  for (const row of rows) {
+    const featureRows = byFeature.get(row.feature_id) ?? [];
+    featureRows.push(row);
+    byFeature.set(row.feature_id, featureRows);
+  }
+
+  return [...byFeature.entries()].map(([featureId, featureRows]) => ({
+    featureId,
+    status: deriveFeatureStatus(featureRows),
+    tasks: featureRows.map((row) => ({
+      taskId: row.node_id,
+      status: row.status,
+      exitGatePassed: row.exit_gate_passed === 1,
+    })),
+  }));
+}
+
+function deriveFeatureStatus(rows: SchedulerStatusRow[]): string {
+  if (rows.length === 0) return "unknown";
+  if (rows.every((row) => row.status === "done" || row.status === "complete")) {
+    return "complete";
+  }
+  if (rows.some((row) => row.status === "failed")) return "failed";
+  if (rows.some((row) => row.status === "running")) return "running";
+  if (rows.some((row) => row.status !== "pending")) return "in_progress";
+  return "pending";
 }

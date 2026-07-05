@@ -13,7 +13,7 @@ import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2
  * Describes the file kanthord/v1/daemon.proto.
  */
 export const file_kanthord_v1_daemon = /*@__PURE__*/
-  fileDesc("ChhrYW50aG9yZC92MS9kYWVtb24ucHJvdG8SC2thbnRob3JkLnYxIhIKEEdldFN0YXR1c1JlcXVlc3QiPAoRR2V0U3RhdHVzUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRIWCg51cHRpbWVfc2Vjb25kcxgCIAEoAzJbCg1EYWVtb25TZXJ2aWNlEkoKCUdldFN0YXR1cxIdLmthbnRob3JkLnYxLkdldFN0YXR1c1JlcXVlc3QaHi5rYW50aG9yZC52MS5HZXRTdGF0dXNSZXNwb25zZWIGcHJvdG8z");
+  fileDesc("ChhrYW50aG9yZC92MS9kYWVtb24ucHJvdG8SC2thbnRob3JkLnYxIhIKEEdldFN0YXR1c1JlcXVlc3QiRwoKVGFza1N0YXR1cxIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIIlsKDUZlYXR1cmVTdGF0dXMSEgoKZmVhdHVyZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSJgoFdGFza3MYAyADKAsyFy5rYW50aG9yZC52MS5UYXNrU3RhdHVzImoKEUdldFN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSLAoIZmVhdHVyZXMYAyADKAsyGi5rYW50aG9yZC52MS5GZWF0dXJlU3RhdHVzMlsKDURhZW1vblNlcnZpY2USSgoJR2V0U3RhdHVzEh0ua2FudGhvcmQudjEuR2V0U3RhdHVzUmVxdWVzdBoeLmthbnRob3JkLnYxLkdldFN0YXR1c1Jlc3BvbnNlYgZwcm90bzM");
 
 /**
  * Describes the message kanthord.v1.GetStatusRequest.
@@ -23,11 +23,25 @@ export const GetStatusRequestSchema = /*@__PURE__*/
   messageDesc(file_kanthord_v1_daemon, 0);
 
 /**
+ * Describes the message kanthord.v1.TaskStatus.
+ * Use `create(TaskStatusSchema)` to create a new message.
+ */
+export const TaskStatusSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 1);
+
+/**
+ * Describes the message kanthord.v1.FeatureStatus.
+ * Use `create(FeatureStatusSchema)` to create a new message.
+ */
+export const FeatureStatusSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 2);
+
+/**
  * Describes the message kanthord.v1.GetStatusResponse.
  * Use `create(GetStatusResponseSchema)` to create a new message.
  */
 export const GetStatusResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 1);
+  messageDesc(file_kanthord_v1_daemon, 3);
 
 /**
  * Read-only daemon status.

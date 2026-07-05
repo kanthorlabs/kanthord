@@ -83,12 +83,36 @@ describe("src/daemon/status-server", () => {
       }
     });
 
-    test("getStatus reads feature/task status from SQLite (non-zero reads)", async () => {
+    test("getStatus returns feature/task status rows from SQLite", async () => {
       let readCount = 0;
       const readingStore: Store = {
         get: () => undefined,
         run: () => {},
-        all: () => { readCount++; return []; },
+        all: <T,>(sql: string): T[] => {
+          readCount++;
+          if (sql.startsWith("PRAGMA table_info(scheduler_task)")) {
+            return [
+              { name: "node_id" },
+              { name: "feature_id" },
+              { name: "status" },
+              { name: "exit_gate_passed" },
+            ] as T[];
+          }
+          return [
+            {
+              node_id: "task-alpha",
+              feature_id: "feat-001",
+              status: "running",
+              exit_gate_passed: 0,
+            },
+            {
+              node_id: "task-beta",
+              feature_id: "feat-001",
+              status: "pending",
+              exit_gate_passed: 1,
+            },
+          ] as T[];
+        },
         close: () => {},
       };
       const srv = createStatusServer({ store: readingStore });
@@ -99,10 +123,32 @@ describe("src/daemon/status-server", () => {
           httpVersion: "1.1",
         });
         const client = createClient(DaemonService, transport);
-        await client.getStatus({});
+        const status = await client.getStatus({});
         assert.ok(
           readCount > 0,
           `getStatus must read from the store; readCount=${readCount} (no reads = status is not SQLite-derived)`
+        );
+        assert.deepEqual(
+          status.features.map((feature) => ({
+            featureId: feature.featureId,
+            status: feature.status,
+            tasks: feature.tasks.map((task) => ({
+              taskId: task.taskId,
+              status: task.status,
+              exitGatePassed: task.exitGatePassed,
+            })),
+          })),
+          [
+            {
+              featureId: "feat-001",
+              status: "running",
+              tasks: [
+                { taskId: "task-alpha", status: "running", exitGatePassed: false },
+                { taskId: "task-beta", status: "pending", exitGatePassed: true },
+              ],
+            },
+          ],
+          "getStatus must return the current feature/task status from scheduler_task",
         );
       } finally {
         await srv.stop();

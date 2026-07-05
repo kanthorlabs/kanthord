@@ -14,9 +14,29 @@ service DaemonService {
 
 message GetStatusRequest {}
 
+message TaskStatus {
+  // Scheduler task/deploy-stage node id.
+  string task_id = 1;
+  // Current scheduler status for the node.
+  string status = 2;
+  // Whether the node's exit gate has passed.
+  bool exit_gate_passed = 3;
+}
+
+message FeatureStatus {
+  // Feature id shared by scheduler rows.
+  string feature_id = 1;
+  // Aggregate feature status derived from the feature's task statuses.
+  string status = 2;
+  // Current task/deploy-stage statuses for this feature.
+  repeated TaskStatus tasks = 3;
+}
+
 message GetStatusResponse {
   // Daemon semantic version, e.g. "0.0.0".
   string version = 1;
   // Seconds since the daemon process started.
   int64 uptime_seconds = 2;
+  // Current feature/task status derived from scheduler SQLite rows.
+  repeated FeatureStatus features = 3;
 }
