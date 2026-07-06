@@ -8,7 +8,12 @@
  * public surface — enforcement is model-independent by construction.
  */
 
-import type { ToolCall } from "../session/agent-session.ts";
+/** Minimal structural type that satisfies ring-1 write-scope checking.
+ *  Intentionally inlined here — ring-1 must not import from session/. */
+interface ToolCall {
+  name: string;
+  args: unknown;
+}
 
 // ---------------------------------------------------------------------------
 // Public types
