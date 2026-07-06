@@ -141,7 +141,9 @@ When `IMPLEMENTATION_READY_FOR_REVIEW:` is present:
 Reviewer gate:
 
 - Compute changed files with `git diff --name-only <base-ref>..HEAD`.
-- Dispatch `reviewer-engineer` with EPIC path, discussion file, scope, phase `B`, base ref, and changed files. Instruct it to obey response-size discipline: the single-response 32000-output-token cap counts thinking + prose + every tool-call input, so it must not reproduce source code, full diffs, long logs, or an exhaustive per-AC table — findings as `<B/S> - action - name - one-line` with `file:line` cites plus a compact coverage summary, reading only the line ranges it needs.
+- Mint a reviewer draft path `.agent/tdd/.reviewer-response-<epic-slug>-<UTC-timestamp>.md` here in the orchestrator so it can be deleted later by exact name.
+- Dispatch `reviewer-engineer` with EPIC path, discussion file, scope, phase `B`, base ref, changed files, and the minted draft file path (tell it to draft its verdict into that exact file; the orchestrator deletes it after the turn). Instruct it to obey response-size discipline: the single-response 32000-output-token cap counts thinking + prose + every tool-call input, so it must not reproduce source code, full diffs, long logs, or an exhaustive per-AC table — findings as `<B/S> - action - name - one-line` with `file:line` cites plus a compact coverage summary, reading only the line ranges it needs.
+- After the reviewer turn lands, delete its draft file by that exact name (`rm -f` it) so reviewer drafts do not pile up under `.agent/tdd/`.
 - Parse findings with `action:YES` and `action:NO`.
 - If any `action:YES` findings exist, append one auto-review block to the discussion file:
 

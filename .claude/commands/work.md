@@ -366,9 +366,10 @@ Extract the base ref and compute the changed files:
 ```bash
 BASE_REF=$(grep '^base-ref:' '<discussion-file>' | head -1 | sed 's/^base-ref:[[:space:]]*//')
 CHANGED_FILES=$(git -C '<root>' diff --name-only "$BASE_REF"..HEAD)
+REVIEWER_DRAFT=<root>/.agent/tdd/.reviewer-response-<epic-slug>-$(date -u +%Y%m%d-%H%M%S).md   # minted here by /work so it can be deleted by exact name after the turn
 ```
 
-Dispatch one `reviewer-engineer` agent (substituting `<root>`, `<EPIC_FILE>`, `<DISCUSSION_FILE>`, `<SCOPE>`, `<BASE_REF>`, `<CHANGED_FILES>`, and the phase):
+Dispatch one `reviewer-engineer` agent (substituting `<root>`, `<EPIC_FILE>`, `<DISCUSSION_FILE>`, `<SCOPE>`, `<BASE_REF>`, `<CHANGED_FILES>`, `<REVIEWER_DRAFT>`, and the phase):
 
 ```
 Review the implementation for EPIC <EPIC_FILE>.
@@ -376,6 +377,7 @@ Review the implementation for EPIC <EPIC_FILE>.
 Working root: <root>
 EPIC file: <EPIC_FILE>
 Discussion file: <DISCUSSION_FILE>
+Draft file: <REVIEWER_DRAFT>     # draft your verdict into THIS exact file; /work deletes it by name after your turn
 Scope: <SCOPE>
 Phase: <"A (sketch) — apply the narrowed Phase A review scope from the review dimensions" when SKETCH=true, else "B (lock) — all dimensions">
 Base ref: <BASE_REF>
@@ -386,6 +388,8 @@ Follow your per-review workflow exactly. Read the gotcha files first, then the E
 
 RESPONSE-SIZE DISCIPLINE (ignoring it can abort your review and lose it): the model caps a SINGLE assistant response at 32000 output tokens, counting your extended thinking + prose + every tool-call input. You cannot see your own token count, so keep the verdict tight: never reproduce source code, full diffs, long logs, or an exhaustive per-AC table — state each finding as `<B/S> - action - name - one-line` with a `file:line` cite plus a compact coverage summary, and read only the line ranges you need.
 ```
+
+**Clean up the reviewer draft.** The reviewer, like the engineers, leaves its draft temp behind for the orchestrator to remove. Delete it by its exact minted name — `rm -f '<REVIEWER_DRAFT>'` — so reviewer drafts do not accumulate under `.agent/tdd/` across review cycles.
 
 **Parse the reviewer's verdict** into two lists by each finding's `action:` tag: `YES` = apply, `NO` = informational.
 
