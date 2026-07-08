@@ -76,7 +76,13 @@ export type SourceProvider = {
   getSnapshot(nodeId: string): Promise<{ content_hash: string; snapshot_at: string }>;
 };
 
-export type CompileOptions = { repoRegistry: string[]; sourceProvider?: SourceProvider };
+export type CompileOptions = {
+  /** List of valid repo names for lint; when absent, the repo check is skipped. */
+  repoRegistry?: string[];
+  /** When true, include draft-lane nodes in the compiled graph. Defaults to false. */
+  includeDraftLanes?: boolean;
+  sourceProvider?: SourceProvider;
+};
 
 // ---------------------------------------------------------------------------
 // Gate vocabulary for tdd@1

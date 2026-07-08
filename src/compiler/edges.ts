@@ -210,7 +210,7 @@ export function assertNoForwardHandoffs(nodes: LintNode[], handoffEdges: Edge[])
 export function coreLint(
   nodes: LintNode[],
   edges: Edge[],
-  repoRegistry: string[],
+  repoRegistry: string[] | undefined,
 ): void {
   // (a) Cycle detection.
   const cycle = findCycle(nodes.map((n) => n.id), edges);
@@ -226,13 +226,15 @@ export function coreLint(
     nodeMap.set(node.id, node);
   }
 
-  // (b) Registered repos.
-  const repoSet = new Set(repoRegistry);
-  for (const node of nodes) {
-    if (!repoSet.has(node.repo)) {
-      throw new CoreLintError(
-        `Node "${node.id}" references unregistered repo "${node.repo}"`,
-      );
+  // (b) Registered repos — skipped when repoRegistry is absent (treat all repos as valid).
+  if (repoRegistry !== undefined) {
+    const repoSet = new Set(repoRegistry);
+    for (const node of nodes) {
+      if (!repoSet.has(node.repo)) {
+        throw new CoreLintError(
+          `Node "${node.id}" references unregistered repo "${node.repo}"`,
+        );
+      }
     }
   }
 

@@ -6,7 +6,7 @@ import {
 import type { CompileOptions } from "../compiler/compile.ts";
 import { openStore } from "../foundations/sqlite-store.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
-import { PROJECTION_CONTRACT, RUNTIME_ONLY_SET, projectionOf } from "./projection.ts";
+import { PROJECTION_CONTRACT, RUNTIME_ONLY_SET } from "./projection.ts";
 import { FeatureStore } from "./feature-store.ts";
 import { recoverFromLedger } from "../broker/ledger.ts";
 
@@ -219,12 +219,42 @@ function getTableRows(store: Store, table: string): Record<string, unknown>[] {
  *
  * Never throws; assigns no severity (severity is Phase 3).
  */
+/**
+ * Returns a copy of `row` restricted to columns that are declared in
+ * `contractCols` and are not runtime-only. This is the contract-aware
+ * projection used by `diffProjection`: it strips both runtime-only fields
+ * (via `RUNTIME_ONLY_SET`) AND any columns not declared in the per-table
+ * contract, so that an extra live DB column never leaks into the diff output.
+ */
+function contractProjectionOf(
+  row: Record<string, unknown>,
+  contractCols: ReadonlySet<string>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (!RUNTIME_ONLY_SET.has(key) && contractCols.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
 export function diffProjection(live: Store, shadow: Store): Divergence[] {
   const divergences: Divergence[] = [];
 
   for (const table of PROJECTION_CONTRACT.tableScope) {
     const tableEntry = PROJECTION_CONTRACT.tables[table];
     if (tableEntry === undefined) continue;
+
+    // Compute the set of contract-declared derived (non-runtimeOnly) columns
+    // for this table. Only these columns participate in the diff; any extra
+    // live DB column not in the contract is excluded from the output.
+    const contractDerivedCols = new Set<string>();
+    for (const [col, classification] of Object.entries(tableEntry.columns)) {
+      if (!("runtimeOnly" in classification) && !RUNTIME_ONLY_SET.has(col)) {
+        contractDerivedCols.add(col);
+      }
+    }
 
     // Strip runtime-only fields from the identity key so that rows whose only
     // identity difference is a runtime-only field (e.g. plan_generation.generation
@@ -239,14 +269,14 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
     const shadowRows = getTableRows(shadow, table);
 
     // Build a map from serialised projected row identity to the shadow row's
-    // projected form. Using projected identity keys means runtime-only fields
-    // (e.g. generation=0 sentinel in shadow vs generation=1 in live) do not
-    // prevent rows from matching.
+    // contract-projected form. Using projected identity keys means runtime-only
+    // fields (e.g. generation=0 sentinel in shadow vs generation=1 in live) do
+    // not prevent rows from matching.
     const shadowMap = new Map<string, Record<string, unknown>>();
     for (const row of shadowRows) {
       shadowMap.set(
         serializeRowIdentity(row, projectedIdentityKeys),
-        projectionOf(row),
+        contractProjectionOf(row, contractDerivedCols),
       );
     }
 
@@ -258,7 +288,7 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
       const identityKey = serializeRowIdentity(liveRow, projectedIdentityKeys);
       matchedShadowKeys.add(identityKey);
       const rowIdentity = extractRowIdentity(liveRow, projectedIdentityKeys);
-      const liveProjected = projectionOf(liveRow);
+      const liveProjected = contractProjectionOf(liveRow, contractDerivedCols);
       const shadowProjected = shadowMap.get(identityKey);
 
       if (shadowProjected === undefined) {
@@ -289,7 +319,7 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
       const key = serializeRowIdentity(shadowRow, projectedIdentityKeys);
       if (matchedShadowKeys.has(key)) continue;
       const rowIdentity = extractRowIdentity(shadowRow, projectedIdentityKeys);
-      const shadowProjected = projectionOf(shadowRow);
+      const shadowProjected = contractProjectionOf(shadowRow, contractDerivedCols);
       for (const [field, shadowVal] of Object.entries(shadowProjected)) {
         divergences.push({ table, rowIdentity, field, live: undefined, shadow: shadowVal });
       }
