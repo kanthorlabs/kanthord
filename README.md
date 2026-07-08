@@ -24,3 +24,9 @@
 - **Asset Preview.** Once Internet Exposure is available, publish markdown or HTML
   artifacts directly instead of plaintext — faster review turnaround, better UI/visual
   feedback for designs and documentation.
+
+- **Context Engineer.** We should have a table mapping for feature we build,
+  then AI can quickly understand the context of the project and provide better suggestions.
+  Then we need to adapt Long-Term, Short-Term memory techniques because
+  we need temporary context memory (Short-Term memory) while we build the feature,
+  then later turn it into Long-Term memory for future reference. 
