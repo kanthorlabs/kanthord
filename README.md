@@ -16,3 +16,11 @@
   a modification can be proposed, reviewed (debate), and merged into the active
   plan, and the running cycle picks it up as new RED work with a clear audit
   trail of what changed and why.
+
+- **Internet Exposure.** Allow developers to visualize the app running on localhost
+  from the internet. Options: tunnel solution (Cloudflare Tunnel, ngrok, etc.) or
+  direct Cloudflare infrastructure to push a site for quick review.
+
+- **Asset Preview.** Once Internet Exposure is available, publish markdown or HTML
+  artifacts directly instead of plaintext — faster review turnaround, better UI/visual
+  feedback for designs and documentation.
