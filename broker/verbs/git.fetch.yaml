@@ -1,0 +1,15 @@
+verb: git.fetch
+tier: auto
+timeout: 30000
+idempotency:
+  window_ms: 0
+retry:
+  max: 3
+  backoff: exponential
+poll_interval: 5000
+terminal_states:
+  - done
+  - failed
+rate_limit:
+  requests_per_minute: 0
+observed_state_can_regress: false
