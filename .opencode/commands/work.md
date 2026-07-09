@@ -132,11 +132,19 @@ file path.
 
 ## Review Phase
 
+**One reviewer round only.** Dispatch the `reviewer-engineer` **exactly once** per
+cycle. After that single round — including after auto-routing `action:YES`
+findings back through the TDD loop and fixing them — do **not** dispatch the
+reviewer again. Hand the result to the human. Run another reviewer round only
+when the human explicitly asks for one.
+
 When `IMPLEMENTATION_READY_FOR_REVIEW:` is present:
 
 1. If latest `HUMAN_REVIEW:` is `PASS`, report closed.
 2. If latest `HUMAN_REVIEW:` is `FAIL`, collect following `BLOCKER:` lines and return to the dispatch loop.
-3. If no human verdict exists, run the reviewer gate once for this review cycle.
+3. If no human verdict exists, check whether the reviewer already ran this review cycle. It runs **at most once** between human verdicts:
+   - If an `AUTO_REVIEW:` line exists after the latest `HUMAN_REVIEW:` line (or, when there is no human verdict yet, anywhere in the file), the reviewer already ran and its `action:YES` findings were routed and fixed. Do **not** re-dispatch it. Read back the recorded `INFO:` (`action:NO`) findings, present them to the human, and pause for human review.
+   - Otherwise, run the reviewer gate once for this review cycle.
 
 Reviewer gate:
 

@@ -349,6 +349,12 @@ grep -E '^HUMAN_REVIEW: (PASS|FAIL)' '<discussion-file>' | tail -1
 
 ### 6b. Reviewer-engineer review gate + auto-routing of `action:YES` findings
 
+**One reviewer round only.** Dispatch the `reviewer-engineer` **exactly once** per
+cycle. After that single round — including after auto-routing `action:YES`
+findings back through the TDD loop and fixing them — do **not** dispatch the
+reviewer again (the `AUTO_DONE` guard below enforces this). Hand the result to
+the human. Run another reviewer round only when the human explicitly asks for one.
+
 The reviewer-engineer IS the code review. Every finding it returns is tagged `action:YES` (must be applied) or `action:NO` (no-op / informational). The orchestrator auto-routes the `action:YES` findings straight back through the TDD loop — **once** per review cycle — and surfaces only the `action:NO` findings to the human.
 
 **First, has the auto-fix pass already run this review cycle?** It fires at most once between human verdicts:
