@@ -143,7 +143,7 @@ When `IMPLEMENTATION_READY_FOR_REVIEW:` is present:
 1. If latest `HUMAN_REVIEW:` is `PASS`, report closed.
 2. If latest `HUMAN_REVIEW:` is `FAIL`, collect following `BLOCKER:` lines and return to the dispatch loop.
 3. If no human verdict exists, check whether the reviewer already ran this review cycle. It runs **at most once** between human verdicts:
-   - If an `AUTO_REVIEW:` line exists after the latest `HUMAN_REVIEW:` line (or, when there is no human verdict yet, anywhere in the file), the reviewer already ran and its `action:YES` findings were routed and fixed. Do **not** re-dispatch it. Read back the recorded `INFO:` (`action:NO`) findings, present them to the human, and pause for human review.
+   - If an `AUTO_REVIEW:` line exists after the latest `HUMAN_REVIEW:` line (or, when there is no human verdict yet, anywhere in the file), the reviewer already ran and its `action:YES` findings were routed and fixed. Do **not** re-dispatch it. Read back the recorded `INFO:` (`action:NO`) findings and report them to the human (see "Report remaining findings"), then pause for human review.
    - Otherwise, run the reviewer gate once for this review cycle.
 
 Reviewer gate:
@@ -162,7 +162,20 @@ INFO: <action:NO finding 1>
 ```
 
 - Then reset the turn count and return to the dispatch loop.
-- If no `action:YES` findings exist, show the reviewer verdict and pause for human review.
+- If no `action:YES` findings exist, report the reviewer verdict (see "Report remaining findings") and pause for human review.
+
+### Report remaining findings
+
+After the single reviewer round, always report to the human the findings that
+were **not** auto-applied — the `action:NO` blockers and suggestions. Auto-routed
+`action:YES` findings are already fixed; these are what still needs a human
+decision. List them, one per bullet, in this exact format (never a table, prose,
+or a count-only summary):
+
+`<B1/S1> - action:NO - <name> - <description>`
+
+(`B` = blocker, `S` = suggestion, numbered; every line here is `action:NO` since
+`action:YES` findings were auto-applied.) If there are none, say so explicitly.
 
 Tell the human to append one of these to the discussion file and re-run `/work`:
 
