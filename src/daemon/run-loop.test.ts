@@ -17,8 +17,11 @@ import { createStatusServer } from "./status-server.ts";
 import { runDaemon } from "./run-loop.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import { compile } from "../compiler/compile.ts";
-import { loadTasks } from "../scheduler/dispatch.ts";
+import { loadTasks, setTaskStatus } from "../scheduler/dispatch.ts";
 import { resumeEscalationItem, haltEscalationItem } from "../rpc/inbox-respond.ts";
+import type { GateResult, GateResultSink } from "../workflow/workflow.ts";
+import { latestEvidence } from "../scheduler/attempt-evidence.ts";
+import { readAttempts, grantOne, rearmLedger } from "../scheduler/attempt-ledger.ts";
 
 // ---------------------------------------------------------------------------
 // Helper — issue a GET /healthz and resolve with the status code
@@ -2304,6 +2307,1262 @@ test("GAP4 — budget spend survives daemon restart; partially-spent task is hal
     );
   } finally {
     await handle2.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Epic 019.3 Story 001 T2 — exit-gate evaluation after clean session completion
+// ---------------------------------------------------------------------------
+
+// Two-story feature: task-t2-alpha (root, produces alpha-out) →
+// task-t2-beta (depends on alpha-out).  Used to assert downstream dispatchability.
+const T2_EPIC_MD = `---
+id: feat-019-3-t2
+repo: backend
+ticket_system: jira
+ticket: JIRA-T2G
+---
+
+## Acceptance
+
+Feature complete when task-t2-alpha passes.
+`;
+
+const T2_TASK_ALPHA_MD = `---
+id: task-t2-alpha
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-T2GA
+outputs:
+  - alpha-out
+artifacts_out:
+  - id: alpha-out
+    kind: api
+    path: api/alpha.yaml
+write_scope:
+  - src/foo/
+---
+
+## Prerequisites
+
+setup
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+- alpha-out
+
+## Tests
+
+tests
+`;
+
+// Variant of T2_TASK_ALPHA_MD with max_attempts: 2 for Story 003 T3 exhaustion test.
+// After Story 004 T3, the ceiling comes from task.max_attempts (task row), not deps.maxAttempts.
+const T2_TASK_ALPHA_MAX2_MD = `---
+id: task-t2-alpha
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-T2GA
+max_attempts: 2
+outputs:
+  - alpha-out
+artifacts_out:
+  - id: alpha-out
+    kind: api
+    path: api/alpha.yaml
+write_scope:
+  - src/foo/
+---
+
+## Prerequisites
+
+setup
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+- alpha-out
+
+## Tests
+
+tests
+`;
+
+const T2_TASK_BETA_MD = `---
+id: task-t2-beta
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-T2GB
+depends_on:
+  - task: task-t2-alpha
+    output: alpha-out
+    semantics: frozen
+write_scope:
+  - src/bar/
+---
+
+## Prerequisites
+
+setup
+
+## Inputs
+
+alpha-out from task-t2-alpha.
+
+## Outputs
+
+beta-out
+
+## Tests
+
+tests
+`;
+
+/** Captures gateCheck calls; returns the scripted GateResult. */
+class MockWorkflow019_3T2 {
+  readonly gateCheckCalls: Array<{ phase: string }> = [];
+  private readonly result: GateResult;
+  constructor(result: GateResult) { this.result = result; }
+  readonly version = "tdd@1";
+  readonly phases = ["gate"] as const;
+  currentPhase(): string { return "gate"; }
+  async gateCheck(phase: string): Promise<GateResult> {
+    this.gateCheckCalls.push({ phase });
+    return this.result;
+  }
+  async checkpoint(): Promise<void> {}
+  on(
+    _event: "phase_started" | "phase_changed" | "gate_checked" | "checkpoint_written",
+    _listener: (...args: unknown[]) => void,
+  ): this { return this; }
+}
+
+/** Captures all gate-result sink record() calls. */
+class MockGateResultSink019_3T2 implements GateResultSink {
+  readonly calls: Array<{ phase: string; result: GateResult }> = [];
+  record(phase: string, result: GateResult): void {
+    this.calls.push({ phase, result });
+  }
+}
+
+test("Story 001 T2 (Epic 019.3) — clean session: gateCheck called once, pass marks exit gate, downstream dispatchable on next tick", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-t2-clean-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  // Two-story feature so downstream dispatchability can be asserted
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+  await mkdir(join(featureDir, "002-beta"), { recursive: true });
+  await writeFile(join(featureDir, "002-beta", "INDEX.md"), "# Story Beta\n", "utf8");
+  await writeFile(join(featureDir, "002-beta", "task-t2-beta.md"), T2_TASK_BETA_MD, "utf8");
+
+  let spawnCount = 0;
+  // Session double: no stopReason → clean completion
+  const piSurface = {
+    spawnAgent(
+      _opts: unknown,
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const workflow = new MockWorkflow019_3T2({ outcome: "pass" });
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    // Tick 1: dispatch task-t2-alpha (only root task; task-t2-beta blocked by dependency)
+    await handle.tick();
+
+    assert.equal(spawnCount, 1, "exactly one session spawned for the root task on tick 1");
+
+    // AC (Epic 019.3 Story 001 T2): gateCheck called exactly once after clean session completes
+    assert.equal(
+      workflow.gateCheckCalls.length,
+      1,
+      "gateCheck must be called exactly once after a clean session completes",
+    );
+
+    // AC: gate-result sink received the GateResult with outcome 'pass'
+    assert.equal(sink.calls.length, 1, "gate-result sink must receive exactly one record call");
+    assert.equal(
+      sink.calls[0]?.result.outcome,
+      "pass",
+      "gate-result sink must record outcome 'pass'",
+    );
+
+    // AC: exit gate is marked passed for task-t2-alpha
+    const alphaRow = store.get<{ exit_gate_passed: number }>(
+      "SELECT exit_gate_passed FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(
+      alphaRow?.exit_gate_passed,
+      1,
+      "exit gate must be marked passed (exit_gate_passed=1) after a 'pass' gate result",
+    );
+
+    // Tick 2: task-t2-beta now dispatchable (alpha exit gate passed)
+    await handle.tick();
+    assert.equal(
+      spawnCount,
+      2,
+      "task-t2-beta must be dispatched on the next tick after task-t2-alpha exit gate passes",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// Companion tests — first-run pass (vacuous now because no gate-checking exists).
+// They become regression tests once the primary clean-session path is implemented:
+// if the SE accidentally gate-checks aborted/errored sessions, these will fail RED.
+// Sensitivity proven by the primary test above (gateCheckCalls.length === 1 fails RED now).
+
+test("Story 001 T2 (Epic 019.3) — aborted session: NOT gate-checked, no gate-result record", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-t2-abort-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  // Session double: stopReason = "aborted" → lifecycle/crash path (not gate-checked)
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        contextTokens: 0,
+        stopReason: "aborted" as const,
+      };
+    },
+  };
+
+  const workflow = new MockWorkflow019_3T2({ outcome: "pass" });
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+    await handle.tick();
+
+    assert.equal(
+      workflow.gateCheckCalls.length,
+      0,
+      "gateCheck must NOT be called for an aborted session — routes to lifecycle path",
+    );
+    assert.equal(
+      sink.calls.length,
+      0,
+      "gate-result sink must receive no record for an aborted session",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 001 T2 (Epic 019.3) — errored session: NOT gate-checked, no gate-result record", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-t2-error-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  // Session double: stopReason = "error" → lifecycle/crash path (not gate-checked)
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        contextTokens: 0,
+        stopReason: "error" as const,
+      };
+    },
+  };
+
+  const workflow = new MockWorkflow019_3T2({ outcome: "pass" });
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+    await handle.tick();
+
+    assert.equal(
+      workflow.gateCheckCalls.length,
+      0,
+      "gateCheck must NOT be called for an errored session — routes to lifecycle path",
+    );
+    assert.equal(
+      sink.calls.length,
+      0,
+      "gate-result sink must receive no record for an errored session",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 001 T3 — needs_human parks the task with an escalation inbox item
+// ---------------------------------------------------------------------------
+
+test("Story 001 T3 (Epic 019.3) — needs_human: task parked, escalation inbox item names task, no re-dispatch on further ticks", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-t3-nh-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(
+      _opts: unknown,
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Script needs_human outcome — no summary required (outcome is the signal)
+  const workflow = new MockWorkflow019_3T2({ outcome: "needs_human" });
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    // Tick 1: dispatch task-t2-alpha → clean session → needs_human gate result
+    await handle.tick();
+
+    assert.equal(spawnCount, 1, "exactly one session spawned on tick 1");
+
+    // AC (Epic 019.3 Story 001 T3): task must be parked after needs_human
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(
+      taskRow?.status,
+      "parked",
+      "task must be parked after a needs_human gate result",
+    );
+
+    // AC: an escalation inbox item must exist naming the task
+    const inboxItems = store.all<{ kind: string; status: string; evidence: string }>(
+      "SELECT kind, status, evidence FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+    );
+    assert.equal(
+      inboxItems.length,
+      1,
+      "exactly one open escalation inbox item must exist after needs_human",
+    );
+    const evidence = JSON.parse(inboxItems[0]?.evidence ?? "{}") as Record<string, unknown>;
+    assert.equal(
+      evidence["task_id"],
+      "task-t2-alpha",
+      "escalation inbox item evidence must name the task id",
+    );
+
+    // AC: gate-result sink recorded the needs_human outcome
+    assert.equal(sink.calls.length, 1, "gate-result sink must receive one record call");
+    assert.equal(
+      sink.calls[0]?.result.outcome,
+      "needs_human",
+      "gate-result sink must record outcome 'needs_human'",
+    );
+
+    // AC: two further ticks do NOT re-dispatch the parked task
+    await handle.tick();
+    await handle.tick();
+    assert.equal(
+      spawnCount,
+      1,
+      "parked task must NOT be re-dispatched on subsequent ticks",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 001 T4 — fail returns the task to a dispatchable state
+// ---------------------------------------------------------------------------
+
+test("Story 001 T4 (Epic 019.3) — fail: task returns to dispatchable state, next tick re-dispatches it", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-t4-fail-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  // Session double: no stopReason → clean completion
+  const piSurface = {
+    spawnAgent(
+      _opts: unknown,
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Script fail outcome
+  const workflow = new MockWorkflow019_3T2({ outcome: "fail", summary: "tests red" });
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    // Tick 1: dispatch task-t2-alpha → clean session → fail gate result
+    await handle.tick();
+
+    assert.equal(spawnCount, 1, "exactly one session spawned on tick 1");
+
+    // AC (Epic 019.3 Story 001 T4): task must NOT be complete or parked
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.notEqual(
+      taskRow?.status,
+      "complete",
+      "task must NOT be complete after a fail gate result",
+    );
+    assert.notEqual(
+      taskRow?.status,
+      "parked",
+      "task must NOT be parked after a fail gate result",
+    );
+
+    // AC: gate-result sink recorded the fail outcome
+    assert.equal(sink.calls.length, 1, "gate-result sink must receive one record call");
+    assert.equal(
+      sink.calls[0]?.result.outcome,
+      "fail",
+      "gate-result sink must record outcome 'fail'",
+    );
+
+    // AC: the next tick re-dispatches the task (a second session spawn)
+    await handle.tick();
+    assert.equal(
+      spawnCount,
+      2,
+      "task must be re-dispatched on the next tick after a fail gate result",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 002 T3 — run-loop wires record + inject
+// ---------------------------------------------------------------------------
+
+const EVIDENCE_SUMMARY_T3_SENTINEL = "SENTINEL-T3-GATE-FAIL-unique-evidence-summary-krl-019-3";
+
+/** Sequence workflow: returns results[0] on first call, results[1] on second, "pass" thereafter. */
+class MockWorkflow019_3T3 {
+  private callCount = 0;
+  private readonly results: GateResult[];
+  constructor(results: GateResult[]) { this.results = results; }
+  readonly version = "tdd@1";
+  readonly phases = ["gate"] as const;
+  currentPhase(): string { return "gate"; }
+  async gateCheck(_phase: string): Promise<GateResult> {
+    const result = this.results[this.callCount] ?? { outcome: "pass" as const };
+    this.callCount++;
+    return result;
+  }
+  async checkpoint(): Promise<void> {}
+  on(_event: unknown, _listener: unknown): this { return this; }
+}
+
+test("Story 002 T3 (Epic 019.3) — fail-then-pass: evidence recorded after fail, second brief contains evidence, pass marks exit gate", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-002-t3-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  const capturedPrompts: string[] = [];
+  const piSurface = {
+    spawnAgent(
+      opts: { systemPrompt: string },
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      capturedPrompts.push(opts.systemPrompt);
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // fail on attempt 1 (with evidence summary), pass on attempt 2
+  const workflow = new MockWorkflow019_3T3([
+    { outcome: "fail", summary: EVIDENCE_SUMMARY_T3_SENTINEL },
+    { outcome: "pass" },
+  ]);
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    // Tick 1: dispatch → clean session → fail gate result → evidence recorded
+    await handle.tick();
+    assert.equal(spawnCount, 1, "exactly one session spawned on tick 1");
+
+    // AC: evidence row must be durably recorded after the fail
+    const evidence = latestEvidence(store, "task-t2-alpha");
+    assert.ok(
+      evidence,
+      "evidence row must exist after a fail gate result (run-loop must call recordEvidence)",
+    );
+    assert.equal(
+      evidence.summary,
+      EVIDENCE_SUMMARY_T3_SENTINEL,
+      "evidence summary must match the GateResult.summary from the workflow",
+    );
+
+    // Tick 2: task is pending → re-dispatched; second brief must carry the evidence
+    await handle.tick();
+    assert.equal(spawnCount, 2, "task must be re-dispatched on tick 2 after fail");
+
+    const secondPrompt = capturedPrompts[1] ?? "";
+    assert.ok(
+      secondPrompt.includes(EVIDENCE_SUMMARY_T3_SENTINEL),
+      "second spawn brief must contain the failure evidence summary (evidence inject not wired)",
+    );
+
+    // AC: pass on tick 2 marks exit gate
+    const taskRow = store.get<{ exit_gate_passed: number }>(
+      "SELECT exit_gate_passed FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(
+      taskRow?.exit_gate_passed,
+      1,
+      "exit gate must be marked passed after the pass gate result on tick 2",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// S4 (HUMAN_REVIEW blocker) — budget-parked-after-fail: evidence survives;
+// budget precedence over retry asserted end-to-end
+// ---------------------------------------------------------------------------
+
+test("S4 (Epic 019.3) — budget-parked-after-fail: evidence survives budget park; budget outranks retry on tick 2", async () => {
+  // ceiling=15, conservativeCost=10:
+  //   tick 1 pre-spawn reserve: current=0,  projected=10 ≤ 15 → proceed (spawn)
+  //   tick 2 pre-spawn reserve: current=10, projected=20 > 15 → budget park (no second spawn)
+  // Evidence recorded on tick 1 must survive the budget park on tick 2.
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-s4-budgetpark-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(
+      _opts: unknown,
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Script only a fail on attempt 1; gateCheck is never called on tick 2 (budget gate fires before spawn)
+  const workflow = new MockWorkflow019_3T3([{ outcome: "fail", summary: EVIDENCE_SUMMARY_T3_SENTINEL }]);
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    gateResultSink: sink,
+    taskBudget: { ceiling: 15, conservativeCost: 10 },
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    // Tick 1: dispatch → session → fail gate → evidence recorded; spend=10 consumed
+    await handle.tick();
+    assert.equal(spawnCount, 1, "S4: exactly one session spawned on tick 1");
+
+    const evidenceAfterTick1 = latestEvidence(store, "task-t2-alpha");
+    assert.ok(evidenceAfterTick1, "S4: evidence row must exist after tick 1 fail");
+    assert.equal(
+      evidenceAfterTick1.summary,
+      EVIDENCE_SUMMARY_T3_SENTINEL,
+      "S4: evidence must carry the sentinel summary after tick 1 fail",
+    );
+
+    // Tick 2: budget gate fires before spawn (spend=10+cost=10=20 > ceiling=15) → no spawn, task parked
+    await handle.tick();
+    assert.equal(spawnCount, 1, "S4: budget outranks retry — spawnAgent must NOT be called on tick 2");
+
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(taskRow?.status, "parked", "S4: task must be parked by budget gate on tick 2");
+
+    // AC: evidence survives the budget park (recorded before verdict, not erased by park)
+    const evidenceAfterTick2 = latestEvidence(store, "task-t2-alpha");
+    assert.ok(evidenceAfterTick2, "S4: evidence row must still exist after budget park");
+    assert.equal(
+      evidenceAfterTick2.summary,
+      EVIDENCE_SUMMARY_T3_SENTINEL,
+      "S4: evidence summary must survive the budget park (evidence not lost on tick 2)",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 003 T3 — run-loop applies the verdict end-to-end
+// ---------------------------------------------------------------------------
+
+const S003T3_FAIL_SENTINEL = "SENTINEL-S003T3-FAIL-krl-019-3-attempt-ledger";
+
+test("Story 003 T3 (Epic 019.3) — fail-fail-pass (maxAttempts=3): task completes with attempt ledger reading 3", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-003-t3-ffp-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Scripted: fail, fail, pass (3 dispatches total)
+  const workflow = new MockWorkflow019_3T3([
+    { outcome: "fail", summary: S003T3_FAIL_SENTINEL },
+    { outcome: "fail", summary: "second-fail" },
+    { outcome: "pass" },
+  ]);
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow, gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    await handle.tick(); // attempt 1: fail
+    await handle.tick(); // attempt 2: fail
+    await handle.tick(); // attempt 3: pass
+
+    assert.equal(spawnCount, 3, "exactly 3 sessions must be spawned for fail-fail-pass");
+
+    // PRIMARY AC: attempt ledger must read 3 (increments per dispatch)
+    assert.equal(
+      readAttempts(store, "task-t2-alpha"),
+      3,
+      "attempt ledger must read 3 dispatched attempts at completion (currently 0 — RED)",
+    );
+
+    // Gate must be marked passed
+    const taskRow = store.get<{ exit_gate_passed: number }>(
+      "SELECT exit_gate_passed FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(taskRow?.exit_gate_passed, 1, "exit gate must be marked passed after the third (pass) dispatch");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 003 T3 (Epic 019.3) — always-fail (maxAttempts=2): parks with attempts-exhausted inbox item after 2 dispatches, no third spawn", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-003-t3-exhaust-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  // Use the max_attempts:2 fixture — after Story 004 T3, ceiling comes from task.max_attempts (task row).
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MAX2_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Always-fail workflow
+  const workflow = new MockWorkflow019_3T2({ outcome: "fail" });
+  const sink = new MockGateResultSink019_3T2();
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow, gateResultSink: sink,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    await handle.tick(); // attempt 1: fail (under max → pending)
+    await handle.tick(); // attempt 2: fail (at max → attempts-exhausted → parked)
+    await handle.tick(); // attempt 3: should NOT spawn (task is parked)
+
+    // PRIMARY AC: exactly 2 spawns, no third
+    assert.equal(spawnCount, 2, "task must NOT be re-dispatched after attempts are exhausted (currently 3 — RED)");
+
+    // Task must be parked
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(taskRow?.status, "parked", "task must be parked after attempts are exhausted");
+
+    // An 'attempts-exhausted' inbox item must exist naming the task
+    const items = store.all<{ kind: string; status: string; evidence: string }>(
+      "SELECT kind, status, evidence FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+    );
+    assert.equal(items.length, 1, "exactly one open escalation inbox item must exist");
+    const ev = JSON.parse(items[0]?.evidence ?? "{}") as Record<string, unknown>;
+    assert.equal(ev["task_id"], "task-t2-alpha", "inbox item evidence must name the task id");
+    assert.equal(ev["reason"], "attempts-exhausted", "inbox item reason must be 'attempts-exhausted'");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 003 T3 (Epic 019.3) — aborted session (respawn path): attempt ledger not incremented", async () => {
+  // This is a characterization/regression test: aborted sessions skip gate-check,
+  // so incrementAttempt (inside postSessionDecision) is never called for them.
+  // Sensitivity proven by the fail-fail-pass test above: a clean dispatch DOES increment.
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-003-t3-abort-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  // Session always aborts (stopReason: "aborted")
+  const piSurface = {
+    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number; stopReason: "aborted" } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0, stopReason: "aborted" };
+    },
+  };
+
+  const workflow = new MockWorkflow019_3T2({ outcome: "pass" }); // irrelevant — never reached
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    maxAttempts: 3,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    await handle.tick(); // aborted session — gate-check skipped
+
+    assert.equal(spawnCount, 1, "one session spawned");
+    // Ledger must NOT have incremented (aborted is not a completed dispatch)
+    assert.equal(readAttempts(store, "task-t2-alpha"), 0, "attempt ledger must not increment for an aborted session");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 003 T3 (Epic 019.3) — retry-once: fail after grant-one parks immediately, grant is consumed", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-003-t3-retry1-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MAX2_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const workflow = new MockWorkflow019_3T2({ outcome: "fail" }); // always fail
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    await handle.tick(); // attempt 1: fail → count=1 < max=2 → pending
+    await handle.tick(); // attempt 2: fail → count=2 = max=2 → attempts-exhausted → parked
+
+    // Simulate operator "retry-once": grant one extra attempt and re-enable
+    grantOne(store, "task-t2-alpha");
+    setTaskStatus(store, "task-t2-alpha", "pending");
+
+    await handle.tick(); // granted attempt (tick 3): fail → grant consumed → re-parks immediately
+    assert.equal(spawnCount, 3, "exactly 3 sessions spawned (2 regular + 1 granted)");
+
+    // Grant must have been consumed
+    const { readGrantOne } = await import("../scheduler/attempt-ledger.ts");
+    assert.equal(
+      readGrantOne(store, "task-t2-alpha"),
+      false,
+      "grant-one flag must be cleared after the granted attempt",
+    );
+
+    // AC: re-parks immediately — one more tick, task stays parked, no new dispatch
+    await handle.tick(); // tick 4: nothing dispatched (task is parked)
+    const retrParkedRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(
+      retrParkedRow?.status,
+      "parked",
+      "task must be parked after the granted attempt fails (re-parks immediately)",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 004 T3 — resolved value drives the loop
+// ---------------------------------------------------------------------------
+
+const S019_3_S004T3_EPIC_MD = `---
+id: feat-019-3-s004t3
+repo: backend
+ticket_system: jira
+ticket: JIRA-019-3-S004T3E
+---
+
+## Acceptance
+
+Feature complete when task-max1 passes.
+`;
+
+const S019_3_S004T3_TASK_MAX1_MD = `---
+id: task-max1
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-019-3-S004T3T
+max_attempts: 1
+outputs:
+  - max1-out
+artifacts_out:
+  - id: max1-out
+    kind: api
+    path: api/max1.yaml
+write_scope:
+  - src/max1/
+---
+
+## Prerequisites
+
+setup
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+- max1-out
+
+## Tests
+
+tests
+`;
+
+test("Story 004 T3 (Epic 019.3) — max_attempts:1 from task row: always-fail parks after exactly 1 attempt (no deps.maxAttempts)", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-s004t3-max1-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S019_3_S004T3_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-t3"), { recursive: true });
+  await writeFile(join(featureDir, "001-t3", "INDEX.md"), "# Story T3\n", "utf8");
+  await writeFile(join(featureDir, "001-t3", "task-max1.md"), S019_3_S004T3_TASK_MAX1_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(
+      _opts: unknown,
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Always-fail workflow — no deps.maxAttempts so loop MUST read from task row
+  const workflow = new MockWorkflow019_3T2({ outcome: "fail" });
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    // maxAttempts deliberately omitted — tick must use task.max_attempts from task row
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-s004t3");
+
+    // Tick 1: dispatch task-max1 → clean session → fail gate result
+    await handle.tick();
+
+    assert.equal(spawnCount, 1, "exactly 1 session spawned");
+
+    // PRIMARY AC: task must be parked after exactly 1 attempt (max_attempts:1 in frontmatter)
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-max1",
+    );
+    assert.equal(
+      taskRow?.status,
+      "parked",
+      "task with max_attempts:1 must park after exactly 1 attempt (task row drives the ceiling)",
+    );
+
+    // AC: an attempts-exhausted escalation inbox item must exist naming the task
+    const inboxItems = store.all<{ kind: string; status: string; evidence: string }>(
+      "SELECT kind, status, evidence FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+    );
+    assert.equal(
+      inboxItems.length,
+      1,
+      "exactly one open attempts-exhausted escalation item must exist",
+    );
+    const ev = JSON.parse(inboxItems[0]?.evidence ?? "{}") as Record<string, unknown>;
+    assert.equal(ev["task_id"], "task-max1", "escalation item must name task-max1");
+
+    // AC: no additional spawn after park
+    await handle.tick();
+    assert.equal(spawnCount, 1, "no additional session spawned after task is parked");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 004 T3 (Epic 019.3) — no max_attempts frontmatter: system default (3) allows 3 attempts before exhaustion", async () => {
+  // Characterization test — passes from the start; sensitivity proven by sibling test above.
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-s004t3-def3-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(
+      _opts: unknown,
+    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  // Always-fail; no deps.maxAttempts — system default 3 applies via task row
+  const workflow = new MockWorkflow019_3T2({ outcome: "fail" });
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+    // maxAttempts deliberately omitted
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    await handle.tick(); // attempt 1: fail → pending
+    await handle.tick(); // attempt 2: fail → pending
+
+    const afterTick2 = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(
+      afterTick2?.status,
+      "pending",
+      "task must still be pending after 2 fails (default max_attempts=3)",
+    );
+
+    await handle.tick(); // attempt 3: fail → attempts-exhausted → parked
+
+    assert.equal(spawnCount, 3, "exactly 3 sessions spawned before exhaustion");
+
+    const afterTick3 = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.equal(
+      afterTick3?.status,
+      "parked",
+      "task must be parked after 3 attempts (default max_attempts=3)",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 003 T3 (Epic 019.3) — re-arm: attempt counter resets to 0, subsequent fail is not exhausted", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-003-t3-rearm-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), T2_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MAX2_MD, "utf8");
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const workflow = new MockWorkflow019_3T2({ outcome: "fail" }); // always fail
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface,
+    statusServerFactory: createStatusServer,
+    workflow,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-019-3-t2");
+
+    await handle.tick(); // attempt 1: fail → count=1 < max=2 → pending
+    await handle.tick(); // attempt 2: fail → count=2 = max=2 → attempts-exhausted → parked
+
+    // Simulate operator "re-arm": reset counter and re-enable
+    rearmLedger(store, "task-t2-alpha");
+    setTaskStatus(store, "task-t2-alpha", "pending");
+
+    await handle.tick(); // first attempt after re-arm: fail, dispatch_count becomes 1 (under max=2)
+
+    assert.equal(spawnCount, 3, "3 sessions spawned total");
+
+    // After re-arm + one fail, ledger reads 1 (first attempt after reset)
+    assert.equal(
+      readAttempts(store, "task-t2-alpha"),
+      1,
+      "attempt count must be 1 after re-arm + one dispatch (currently 0 — RED)",
+    );
+
+    // Task must NOT be exhausted (should be pending for the next retry)
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-t2-alpha",
+    );
+    assert.notEqual(taskRow?.status, "parked", "task must NOT be parked after first fail following a re-arm (count=1 < max=2)");
+  } finally {
+    await handle.stop();
     store.close();
     await rm(featureDir, { recursive: true, force: true });
   }

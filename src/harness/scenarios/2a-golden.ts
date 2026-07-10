@@ -23,7 +23,7 @@ import {
 } from "../../scheduler/dispatch.ts";
 import { initSchema } from "../../store/schema.ts";
 import { TddWorkflow } from "../../workflow/tdd-workflow.ts";
-import type { GateOutcome, GateResultSink } from "../../workflow/workflow.ts";
+import type { GateResult, GateResultSink } from "../../workflow/workflow.ts";
 import {
   publishArtifact,
   consumeArtifact,
@@ -190,7 +190,7 @@ const BROKER_SUCCESS_ENTRY: VerbRegistryEntry = {
 // ---------------------------------------------------------------------------
 
 class NoopSink implements GateResultSink {
-  record(_phase: string, _outcome: GateOutcome): void {
+  record(_phase: string, _result: GateResult | string): void {
     // golden scenario does not persist gate results
   }
 }

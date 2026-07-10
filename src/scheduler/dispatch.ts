@@ -10,7 +10,10 @@ export type TaskRow = {
   depends_on: string[];
   status: string;
   generation: number;
+  max_attempts: number;
 };
+
+export const MAX_ATTEMPTS_DEFAULT = 3;
 
 // ---------------------------------------------------------------------------
 // Scheduler-owned migration (idempotent DDL)
@@ -31,6 +34,12 @@ export function initSchedulerSchema(store: Store): void {
   if (!cols.some((c) => c.name === "blocked_on")) {
     store.run("ALTER TABLE scheduler_task ADD COLUMN blocked_on TEXT");
   }
+  // Upgrade path: add max_attempts for goal-loop termination (Epic 019.3 Story 004).
+  if (!cols.some((c) => c.name === "max_attempts")) {
+    store.run(
+      `ALTER TABLE scheduler_task ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT ${MAX_ATTEMPTS_DEFAULT}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -44,17 +53,19 @@ export function initSchedulerSchema(store: Store): void {
 
 export function loadTasks(store: Store, featureId: string): TaskRow[] {
   // All task-kind and deploy-stage-kind nodes for the feature
-  const nodes = store.all<{ id: string; generation: number }>(
-    "SELECT id, generation FROM plan_node WHERE feature_id = ? AND kind IN ('task','deploy-stage')",
+  const nodes = store.all<{ id: string; generation: number; max_attempts: number | null }>(
+    "SELECT id, generation, max_attempts FROM plan_node WHERE feature_id = ? AND kind IN ('task','deploy-stage')",
     featureId,
   );
 
   // Initialise scheduler rows for new tasks (idempotent)
   for (const node of nodes) {
+    const resolvedMax = node.max_attempts ?? MAX_ATTEMPTS_DEFAULT;
     store.run(
-      "INSERT OR IGNORE INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, 'pending')",
+      "INSERT OR IGNORE INTO scheduler_task (node_id, feature_id, status, max_attempts) VALUES (?, ?, 'pending', ?)",
       node.id,
       featureId,
+      resolvedMax,
     );
   }
 
@@ -69,8 +80,8 @@ export function loadTasks(store: Store, featureId: string): TaskRow[] {
       node.id,
     );
 
-    const statusRow = store.get<{ status: string }>(
-      "SELECT status FROM scheduler_task WHERE node_id = ?",
+    const statusRow = store.get<{ status: string; max_attempts: number }>(
+      "SELECT status, max_attempts FROM scheduler_task WHERE node_id = ?",
       node.id,
     );
 
@@ -80,6 +91,7 @@ export function loadTasks(store: Store, featureId: string): TaskRow[] {
       depends_on: predecessors.map((p) => p.from_node_id),
       status: statusRow?.status ?? "pending",
       generation: node.generation,
+      max_attempts: statusRow?.max_attempts ?? MAX_ATTEMPTS_DEFAULT,
     };
   });
 }
@@ -121,12 +133,17 @@ export function dispatchable(store: Store, featureId: string): TaskRow[] {
        WHERE pe.to_node_id = ?`,
       node.node_id,
     );
+    const maxRow = store.get<{ max_attempts: number }>(
+      "SELECT max_attempts FROM scheduler_task WHERE node_id = ?",
+      node.node_id,
+    );
     return {
       id: node.node_id,
       feature_id: featureId,
       depends_on: predecessors.map((p) => p.from_node_id),
       status: "pending",
       generation: node.generation,
+      max_attempts: maxRow?.max_attempts ?? MAX_ATTEMPTS_DEFAULT,
     };
   });
 }

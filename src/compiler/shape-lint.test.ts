@@ -317,5 +317,69 @@ describe("src/compiler/shape-lint", () => {
       );
     });
   });
+
+  describe("shapeLint — max_attempts validation", () => {
+    function taskWithMaxAttempts(id: string, maxAttempts: unknown) {
+      return {
+        id,
+        workflow: "tdd@1",
+        sections: fullSections(),
+        max_attempts: maxAttempts,
+      } as unknown as import("./shape-lint.ts").ShapeTaskNode;
+    }
+
+    function minimalTree(task: import("./shape-lint.ts").ShapeTaskNode) {
+      return {
+        epic: { id: "001-my-epic", sections: { Acceptance: "non-empty" } },
+        stories: [{ id: "001-story-a", tasks: [task] }],
+      };
+    }
+
+    test("Story 004 T2 (Epic 019.3) — max_attempts: 0 → error naming the task id and the field", () => {
+      const result = shapeLint(minimalTree(taskWithMaxAttempts("task-invalid-zero", 0)));
+      const errors = result.diagnostics.filter((d) => d.kind === "error");
+      const match = errors.find(
+        (e) => e.message.includes("task-invalid-zero") && e.message.includes("max_attempts"),
+      );
+      assert.ok(
+        match !== undefined,
+        `expected error naming "task-invalid-zero" and "max_attempts", got: ${JSON.stringify(errors)}`,
+      );
+    });
+
+    test("Story 004 T2 (Epic 019.3) — max_attempts: -1 → error naming the task id and the field", () => {
+      const result = shapeLint(minimalTree(taskWithMaxAttempts("task-invalid-neg", -1)));
+      const errors = result.diagnostics.filter((d) => d.kind === "error");
+      const match = errors.find(
+        (e) => e.message.includes("task-invalid-neg") && e.message.includes("max_attempts"),
+      );
+      assert.ok(
+        match !== undefined,
+        `expected error naming "task-invalid-neg" and "max_attempts", got: ${JSON.stringify(errors)}`,
+      );
+    });
+
+    test("Story 004 T2 (Epic 019.3) — max_attempts: 'two' (non-integer string) → error naming the task id and the field", () => {
+      const result = shapeLint(minimalTree(taskWithMaxAttempts("task-invalid-str", "two")));
+      const errors = result.diagnostics.filter((d) => d.kind === "error");
+      const match = errors.find(
+        (e) => e.message.includes("task-invalid-str") && e.message.includes("max_attempts"),
+      );
+      assert.ok(
+        match !== undefined,
+        `expected error naming "task-invalid-str" and "max_attempts", got: ${JSON.stringify(errors)}`,
+      );
+    });
+
+    test("Story 004 T2 (Epic 019.3) — valid max_attempts: 5 → no diagnostic for max_attempts", () => {
+      const result = shapeLint(minimalTree(taskWithMaxAttempts("task-valid-five", 5)));
+      const match = result.diagnostics.find((d) => d.message.includes("max_attempts"));
+      assert.strictEqual(
+        match,
+        undefined,
+        `expected no max_attempts diagnostic for valid value 5, got: ${JSON.stringify(result.diagnostics)}`,
+      );
+    });
+  });
 });
 

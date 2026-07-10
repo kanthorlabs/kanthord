@@ -23,6 +23,7 @@ export type PlanNodeRow = {
   lane: number | null;
   slug: string | null;
   generation: number;
+  max_attempts?: number | null;
 };
 
 export type PlanEdgeRow = {
@@ -240,6 +241,7 @@ type TaskFm = {
   write_scope?: string[];
   artifacts_out?: Array<{ id: string; kind: string; path: string }>;
   depends_on?: Array<{ task: string; output: string; semantics: string }>;
+  max_attempts?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -393,6 +395,7 @@ export async function buildCorePlan(
           lane: storyLane,
           slug: taskFm.id,
           generation,
+          max_attempts: taskFm.max_attempts ?? null,
         });
         taskRefs.push({ id: taskId, major: storyMajor, depends_on: dependsOn });
 
@@ -645,7 +648,8 @@ export function applyCompiledPlanMigration(store: Store): void {
       slug TEXT,
       generation INTEGER NOT NULL,
       content_hash TEXT,
-      snapshot_at TEXT
+      snapshot_at TEXT,
+      max_attempts INTEGER
     )`,
   );
   store.run(
@@ -866,7 +870,7 @@ export async function compile(
   for (const node of graph.nodes) {
     const snap = snapshots.get(node.id);
     store.run(
-      "INSERT INTO plan_node (id, kind, feature_id, repo, ticket_system, ticket_ref, major, lane, slug, generation, content_hash, snapshot_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO plan_node (id, kind, feature_id, repo, ticket_system, ticket_ref, major, lane, slug, generation, content_hash, snapshot_at, max_attempts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       node.id,
       node.kind,
       node.feature_id,
@@ -879,6 +883,7 @@ export async function compile(
       nextGen,
       snap?.content_hash ?? null,
       snap?.snapshot_at ?? null,
+      node.max_attempts ?? null,
     );
   }
 

@@ -24,6 +24,7 @@ import {
   type PiTeardownOpts,
   type PiRespawnOpts,
 } from "./pi-session.ts";
+import type { AttemptEvidence } from "../scheduler/attempt-evidence.ts";
 
 // ---------------------------------------------------------------------------
 // Fake pi surface
@@ -1096,6 +1097,142 @@ describe("src/agent/pi-session", () => {
           !prompt.includes("BASH_GUIDANCE_SENTINEL_MUSTNOTAPPEAR"),
           "GAP5: system prompt must NOT include guidance for excluded tool bash",
         );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Story 002 T2 (Epic 019.3) — evidence element in the spawn brief
+  // ---------------------------------------------------------------------------
+
+  describe("Story 002 T2 (Epic 019.3) — evidence element in the spawn brief", () => {
+    test("Story 002 T2 (Epic 019.3) — spawn with evidence: sixth element contains summary, appears after agentsMd", async () => {
+      const { dir, store, agentsMdPath } = await setupDir({
+        taskBody: "TASK_BODY_T2",
+        epicBody: "EPIC_BODY_T2",
+        runbook: "RUNBOOK_T2",
+        state: "STATE_T2",
+        agentsMdContent: "AGENTS_MD_T2",
+      });
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+
+        const evidence: AttemptEvidence = {
+          taskId: "t1",
+          attempt: 2,
+          phase: "tdd@1",
+          summary: "EVIDENCE_SUMMARY_T2_SENTINEL: 3 tests failed",
+        };
+
+        const opts: PiSpawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: [],
+          spawnEnv: {},
+          evidence,
+        };
+
+        await spawnPiSession(opts);
+        const prompt = surface.lastSystemPrompt;
+
+        const agentsIdx = prompt.indexOf("AGENTS_MD_T2");
+        const evidenceIdx = prompt.indexOf("EVIDENCE_SUMMARY_T2_SENTINEL");
+        assert.ok(agentsIdx !== -1, "agentsMd must be in the prompt");
+        assert.ok(evidenceIdx !== -1, "evidence summary must be present in the prompt (sixth element)");
+        assert.ok(agentsIdx < evidenceIdx, "evidence must appear after agentsMd in documented order");
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("Story 002 T2 (Epic 019.3) — spawn with no evidence: brief unchanged, no evidence block", async () => {
+      // Characterisation: passes on first run since no evidence block exists yet.
+      // Regression guard: ensures no spurious evidence section is ever emitted
+      // when evidence is absent. Sensitivity proven by the sibling test above.
+      const { dir, store, agentsMdPath } = await setupDir({
+        taskBody: "TASK_BODY_T2B",
+        epicBody: "EPIC_BODY_T2B",
+        runbook: "RUNBOOK_T2B",
+        state: "STATE_T2B",
+        agentsMdContent: "AGENTS_MD_T2B",
+      });
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+
+        const opts: PiSpawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: [],
+          spawnEnv: {},
+        };
+        await spawnPiSession(opts);
+        const prompt = surface.lastSystemPrompt;
+
+        assert.ok(prompt.includes("TASK_BODY_T2B"), "taskBody must be present");
+        assert.ok(prompt.includes("EPIC_BODY_T2B"), "epicBody must be present");
+        assert.ok(prompt.includes("RUNBOOK_T2B"), "runbook must be present");
+        assert.ok(prompt.includes("STATE_T2B"), "state must be present");
+        assert.ok(prompt.includes("AGENTS_MD_T2B"), "agentsMd must be present");
+        assert.ok(
+          !prompt.includes("EVIDENCE_SUMMARY_T2_SENTINEL"),
+          "no evidence block when no evidence passed",
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("Story 002 T2 (Epic 019.3) — respawn re-injects same evidence unchanged, after agentsMd", async () => {
+      const { dir, store, agentsMdPath } = await setupDir({
+        state: "RESPAWN_STATE_T2",
+        agentsMdContent: "AGENTS_MD_RESPAWN_T2",
+      });
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+
+        const evidence: AttemptEvidence = {
+          taskId: "t1",
+          attempt: 3,
+          phase: "tdd@1",
+          summary: "EVIDENCE_RESPAWN_T2_SENTINEL: build failed",
+        };
+
+        const opts: PiRespawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: [],
+          spawnEnv: {},
+          evidence,
+        };
+
+        await respawnPiSession(opts);
+        const prompt = surface.lastSystemPrompt;
+
+        assert.ok(
+          prompt.includes("EVIDENCE_RESPAWN_T2_SENTINEL"),
+          "respawn must re-inject the same evidence (evidence summary not found)",
+        );
+        const agentsIdx = prompt.indexOf("AGENTS_MD_RESPAWN_T2");
+        const evidenceIdx = prompt.indexOf("EVIDENCE_RESPAWN_T2_SENTINEL");
+        assert.ok(agentsIdx !== -1, "agentsMd must be in the respawn prompt");
+        assert.ok(agentsIdx < evidenceIdx, "evidence must appear after agentsMd on respawn");
       } finally {
         await rm(dir, { recursive: true });
       }

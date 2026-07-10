@@ -132,6 +132,59 @@ Unit tests for gamma.
 
 const COMPILE_OPTS = { repoRegistry: ["backend"] };
 
+// Story 004 T1 (Epic 019.3) — task with explicit max_attempts: 5
+const TASK_WITH_MAX_ATTEMPTS_MD = `---
+id: task-with-max
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-200
+max_attempts: 5
+---
+
+## Prerequisites
+
+echo "setup max env"
+
+## Inputs
+
+Nothing required.
+
+## Outputs
+
+max-output
+
+## Tests
+
+Unit tests for max.
+`;
+
+// Story 004 T1 (Epic 019.3) — task without max_attempts (uses system default)
+const TASK_NO_MAX_ATTEMPTS_MD = `---
+id: task-no-max
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-201
+---
+
+## Prerequisites
+
+echo "setup nomax env"
+
+## Inputs
+
+Nothing required.
+
+## Outputs
+
+nomax-output
+
+## Tests
+
+Unit tests for nomax.
+`;
+
 // 008.1 Story 001-T2 — EPIC with 2-stage deploy chain
 const EPIC_MD_WITH_DEPLOY = `---
 id: feat-001
@@ -628,6 +681,114 @@ describe("src/scheduler/dispatch", () => {
           assert.ok(
             live.some((r: TaskRow) => r.id === "feat-001-deploy-staging"),
             "feat-001-deploy-staging must be dispatchable with live hash after terminal task gates pass",
+          );
+        } finally {
+          store.close();
+        }
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Story 004 T1 (Epic 019.3) — max_attempts resolution: recorded on task row
+  // ---------------------------------------------------------------------------
+
+  describe("Story 004 T1 (Epic 019.3) — max_attempts resolution: recorded on scheduler task row at load", () => {
+    let featureDir404 = "";
+    let dbPath404 = "";
+
+    before(async () => {
+      featureDir404 = await mkdtemp(join(tmpdir(), "kanthord-dispatch-019-3-t1-"));
+      dbPath404 = join(featureDir404, "test.db");
+
+      // Feature with two tasks: one has max_attempts: 5, one has none
+      const epicMd = `---
+id: feat-max-test
+repo: backend
+---
+
+## Acceptance
+
+Feature is complete when tasks pass.
+`;
+      await writeFile(join(featureDir404, "epic.md"), epicMd);
+      await writeFile(join(featureDir404, "RUNBOOK.md"), "# Runbook\n");
+
+      const story1 = join(featureDir404, "001-story-max");
+      await mkdir(story1);
+      await writeFile(join(story1, "INDEX.md"), "# Story Max\n");
+      await writeFile(join(story1, "001-task-with-max.md"), TASK_WITH_MAX_ATTEMPTS_MD);
+
+      const story2 = join(featureDir404, "002-story-nomax");
+      await mkdir(story2);
+      await writeFile(join(story2, "INDEX.md"), "# Story NoMax\n");
+      await writeFile(join(story2, "001-task-no-max.md"), TASK_NO_MAX_ATTEMPTS_MD);
+    });
+
+    after(async () => {
+      if (featureDir404)
+        await rm(featureDir404, { recursive: true, force: true });
+    });
+
+    test(
+      "Story 004 T1 (Epic 019.3) — task with max_attempts: 5 in frontmatter records 5 on the scheduler row",
+      async () => {
+        const store = openStore(dbPath404, { busyTimeout: 1000 });
+        try {
+          await compile(featureDir404, store, COMPILE_OPTS);
+          initSchedulerSchema(store);
+          const tasks = loadTasks(store, "feat-max-test");
+          const withMax = tasks.find((t) => t.id === "task-with-max");
+          assert.ok(withMax !== undefined, "task-with-max row must exist");
+          assert.equal(
+            (withMax as unknown as { max_attempts: number }).max_attempts,
+            5,
+            "max_attempts must be recorded as 5 from task frontmatter",
+          );
+        } finally {
+          store.close();
+        }
+      },
+    );
+
+    test(
+      "Story 004 T1 (Epic 019.3) — task with no max_attempts frontmatter resolves to system default 3",
+      async () => {
+        const store = openStore(dbPath404, { busyTimeout: 1000 });
+        try {
+          await compile(featureDir404, store, COMPILE_OPTS);
+          initSchedulerSchema(store);
+          const tasks = loadTasks(store, "feat-max-test");
+          const noMax = tasks.find((t) => t.id === "task-no-max");
+          assert.ok(noMax !== undefined, "task-no-max row must exist");
+          assert.equal(
+            (noMax as unknown as { max_attempts: number }).max_attempts,
+            3,
+            "max_attempts must default to 3 when no frontmatter value is set",
+          );
+        } finally {
+          store.close();
+        }
+      },
+    );
+
+    test(
+      "Story 004 T1 (Epic 019.3) — recorded max_attempts survives a reload (idempotent: explicit 5 not overwritten by default)",
+      async () => {
+        const store = openStore(dbPath404, { busyTimeout: 1000 });
+        try {
+          await compile(featureDir404, store, COMPILE_OPTS);
+          initSchedulerSchema(store);
+          // First load
+          loadTasks(store, "feat-max-test");
+          // Second load (simulates daemon restart reading existing rows)
+          const tasks2 = loadTasks(store, "feat-max-test");
+          const withMax2 = tasks2.find((t) => t.id === "task-with-max");
+          assert.ok(withMax2 !== undefined, "task-with-max must be present on reload");
+          assert.equal(
+            (withMax2 as unknown as { max_attempts: number }).max_attempts,
+            5,
+            "max_attempts must still be 5 after a second loadTasks call (not reset to default)",
           );
         } finally {
           store.close();

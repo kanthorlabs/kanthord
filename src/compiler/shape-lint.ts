@@ -4,6 +4,7 @@ export type ShapeTaskNode = {
   sections: Record<string, string>;
   write_scope?: string[];
   artifacts_out?: Array<{ id: string; kind: string }>;
+  max_attempts?: number;
 };
 
 export type ShapeStoryNode = {
@@ -162,6 +163,21 @@ export function shapeLint(tree: ShapeNodeTree): ShapeLintResult {
           kind: "error",
           message: `task "${task.id}" has workflow "${task.workflow}" — only tdd@1 is permitted`,
         });
+      }
+
+      // max_attempts validation
+      const ma = task.max_attempts;
+      if (ma !== undefined) {
+        const invalid =
+          typeof (ma as unknown) !== "number" ||
+          !Number.isInteger(ma) ||
+          (ma as number) < 1;
+        if (invalid) {
+          diagnostics.push({
+            kind: "error",
+            message: `task "${task.id}" has invalid max_attempts value — must be a positive integer`,
+          });
+        }
       }
     }
   }

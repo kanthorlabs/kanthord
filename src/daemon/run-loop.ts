@@ -21,7 +21,9 @@ import { makeRing1HookAdapter } from "../ring1/hook-binding.ts";
 import { makeBudgetBreaker } from "../ring1/budget.ts";
 import { spawnPiSession } from "../agent/pi-session.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST, PI_EXEC_TOOLS } from "../agent/pi-tools.ts";
-import { loadTasks, dispatchable, setTaskStatus } from "../scheduler/dispatch.ts";
+import { loadTasks, dispatchable, setTaskStatus, markExitGatePassed } from "../scheduler/dispatch.ts";
+import { latestEvidence } from "../scheduler/attempt-evidence.ts";
+import { postSessionDecision } from "../scheduler/termination.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Clock } from "../foundations/clock.ts";
 import type { Logger } from "./boot.ts";
@@ -30,6 +32,7 @@ import type { HoldPoint } from "../broker/hold-point.ts";
 import { createEscalationItem } from "../inbox/inbox.ts";
 import { makeOutboundScanGuard } from "../ring1/outbound-scan-guard.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
+import type { Workflow, GateResultSink } from "../workflow/workflow.ts";
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -42,6 +45,12 @@ export interface PiSurface {
     waitForIdle(): Promise<void>;
     reset(): void;
     contextTokens: number;
+    /**
+     * Session-end classification (Epic 019.3 Story 001 T2).
+     * Absent (undefined) means clean completion; "aborted" or "error" routes
+     * the session to the lifecycle/crash path without gate evaluation.
+     */
+    stopReason?: "aborted" | "error";
   };
 }
 
@@ -88,6 +97,18 @@ export interface RunDaemonDeps {
    *   - `undefined` (omit) → guard disabled; payloads pass through (no scan).
    */
   patternRegistry?: PatternRegistry | null;
+  /**
+   * Exit-gate workflow (Epic 019.3 Story 001 T2).
+   * When set, `tick()` calls `workflow.gateCheck(phase)` after each cleanly
+   * completed session (stopReason absent) and routes the GateResult.
+   */
+  workflow?: Workflow;
+  /**
+   * Durable sink for gate results (Epic 019.3 Story 001 T2).
+   * When set, `tick()` calls `gateResultSink.record(phase, result)` after
+   * each gate evaluation so the result is durably recorded.
+   */
+  gateResultSink?: GateResultSink;
 }
 
 /** Parameters for delivering a session's commits through the broker. */
@@ -377,6 +398,9 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
           // Spawn the pi session with the ring-1 hook attached as beforeToolCall.
           // allowedToolNames comes from PI_DEFAULT_ALLOWED_MANIFEST (6 tools,
           // bash excluded) so the live session gets the correct tool surface.
+          // Evidence (Epic 019.3 Story 002 T3): inject latest failure evidence
+          // into the brief so the re-spawned session can see the prior gate summary.
+          const evidence = latestEvidence(store, task.id);
           const sessionHandle = await spawnPiSession({
             store: featureStore,
             storyId,
@@ -386,9 +410,55 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             piSurface: deps.piSurface,
             allowedToolNames: [...PI_DEFAULT_ALLOWED_MANIFEST],
             spawnEnv: {},
+            evidence,
           });
 
           await sessionHandle.waitForIdle();
+
+          // Session-end classification (Epic 019.3 Story 001 T2).
+          // Only a cleanly completed session (stopReason absent) is gate-checked.
+          // An aborted or errored session routes to the lifecycle/crash path.
+          if (
+            sessionHandle.stopReason !== "aborted" &&
+            sessionHandle.stopReason !== "error" &&
+            deps.workflow !== undefined
+          ) {
+            const phase = deps.workflow.currentPhase();
+            const gateResult = await deps.workflow.gateCheck(phase);
+            await deps.gateResultSink?.record(phase, gateResult);
+            const verdict = postSessionDecision(store, {
+              taskId: task.id,
+              phase,
+              gateResult,
+              maxAttempts: task.max_attempts,
+            });
+            if (verdict.kind === "complete") {
+              markExitGatePassed(store, task.id);
+            } else if (verdict.kind === "needs-human") {
+              createEscalationItem({
+                source_id: `${task.id}:needs-human`,
+                task_id: task.id,
+                reason: "needs_human",
+                payload_summary: gateResult.summary ?? `task ${task.id} gate returned needs_human`,
+                store,
+                clock,
+              });
+              setTaskStatus(store, task.id, "parked");
+            } else if (verdict.kind === "retry-intent") {
+              // Return the task to a dispatchable state; the next tick re-dispatches it.
+              setTaskStatus(store, task.id, "pending");
+            } else if (verdict.kind === "attempts-exhausted") {
+              createEscalationItem({
+                source_id: `${task.id}:attempts-exhausted`,
+                task_id: task.id,
+                reason: "attempts-exhausted",
+                payload_summary: `task ${task.id} attempts exhausted after ${verdict.attemptCount} attempts`,
+                store,
+                clock,
+              });
+              setTaskStatus(store, task.id, "parked");
+            }
+          }
         }
       }
 

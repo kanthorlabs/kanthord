@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { GateOutcome, GateResultSink, Workflow } from "./workflow.ts";
+import type { GateOutcome, GateResult, GateResultSink, Workflow } from "./workflow.ts";
 import type { FeatureStore } from "../store/feature-store.ts";
 
 const TDD_PHASES: readonly string[] = ["failing_test_exists", "tests_pass"];
@@ -14,13 +14,13 @@ export class TddWorkflow extends EventEmitter implements Workflow {
   readonly version: string = "tdd@1";
   readonly phases: readonly string[] = TDD_PHASES;
 
-  private readonly script: Partial<Record<string, GateOutcome>>;
+  private readonly script: Partial<Record<string, GateOutcome | GateResult>>;
   private readonly sink: GateResultSink;
   private readonly ctx: CheckpointCtx | undefined;
   private phaseIndex: number = 0;
 
   constructor(
-    script: Partial<Record<string, GateOutcome>>,
+    script: Partial<Record<string, GateOutcome | GateResult>>,
     sink: GateResultSink,
     ctx?: CheckpointCtx,
   ) {
@@ -36,14 +36,17 @@ export class TddWorkflow extends EventEmitter implements Workflow {
     return phase;
   }
 
-  async gateCheck(phase: string): Promise<GateOutcome> {
-    const outcome: GateOutcome = this.script[phase] ?? "fail";
+  async gateCheck(phase: string): Promise<GateResult> {
+    const raw = this.script[phase] ?? "fail";
+    // Coerce bare GateOutcome string to structured GateResult
+    const result: GateResult =
+      typeof raw === "string" ? { outcome: raw } : raw;
     // Record to sink first — if it throws, no events emitted, currentPhase() NOT advanced
-    await this.sink.record(phase, outcome);
-    // Emit gate_checked after successful sink write
-    this.emit("gate_checked", { phase, outcome });
+    await this.sink.record(phase, result);
+    // Emit gate_checked after successful sink write (payload keeps bare outcome for backwards compat)
+    this.emit("gate_checked", { phase, outcome: result.outcome });
     // Advance only on pass and only while a next phase exists
-    if (outcome === "pass") {
+    if (result.outcome === "pass") {
       const nextIndex = this.phaseIndex + 1;
       if (nextIndex < this.phases.length) {
         this.phaseIndex = nextIndex;
@@ -54,7 +57,7 @@ export class TddWorkflow extends EventEmitter implements Workflow {
         }
       }
     }
-    return outcome;
+    return result;
   }
 
   async checkpoint(): Promise<void> {

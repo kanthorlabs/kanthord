@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { GateOutcome, GateResultSink, Workflow } from "./workflow.ts";
+import type { GateOutcome, GateResult, GateResultSink, Workflow } from "./workflow.ts";
 import { TddWorkflow } from "./tdd-workflow.ts";
 import { FeatureStore } from "../store/feature-store.ts";
 
@@ -11,11 +11,11 @@ import { FeatureStore } from "../store/feature-store.ts";
 // Helpers — hand-rolled fakes/mocks (no mocking library)
 // ---------------------------------------------------------------------------
 
-/** Mock sink: captures every recorded outcome in insertion order. */
+/** Mock sink: captures every recorded result in insertion order. */
 class MockSink implements GateResultSink {
-  readonly recorded: Array<{ phase: string; outcome: GateOutcome }> = [];
-  record(phase: string, outcome: GateOutcome): void {
-    this.recorded.push({ phase, outcome });
+  readonly recorded: Array<{ phase: string; result: GateResult }> = [];
+  record(phase: string, result: GateResult): void {
+    this.recorded.push({ phase, result });
   }
 }
 
@@ -25,11 +25,11 @@ class MockSink implements GateResultSink {
  * mid-write crash to test partial-gateCheck durability.
  */
 class ControllableSink implements GateResultSink {
-  readonly recorded: Array<{ phase: string; outcome: GateOutcome }> = [];
+  readonly recorded: Array<{ phase: string; result: GateResult }> = [];
   throwNext = false;
-  record(phase: string, outcome: GateOutcome): void {
+  record(phase: string, result: GateResult): void {
     if (this.throwNext) throw new Error("sink write failed");
-    this.recorded.push({ phase, outcome });
+    this.recorded.push({ phase, result });
   }
 }
 
@@ -39,11 +39,11 @@ class ControllableSink implements GateResultSink {
  * accidentally pass because of microtask ordering.
  */
 class AsyncMockSink {
-  readonly recorded: Array<{ phase: string; outcome: GateOutcome }> = [];
-  record(phase: string, outcome: GateOutcome): Promise<void> {
+  readonly recorded: Array<{ phase: string; result: GateResult }> = [];
+  record(phase: string, result: GateResult): Promise<void> {
     return new Promise<void>(resolve => {
       setTimeout(() => {
-        this.recorded.push({ phase, outcome });
+        this.recorded.push({ phase, result });
         resolve();
       }, 0);
     });
@@ -92,19 +92,19 @@ describe("src/workflow/tdd-workflow", () => {
     test("gateCheck returns pass for the entry gate when scripted pass", async () => {
       const wf = new TddWorkflow({ failing_test_exists: "pass" }, new MockSink());
       const outcome = await wf.gateCheck("failing_test_exists");
-      assert.equal(outcome, "pass");
+      assert.equal(outcome.outcome, "pass");
     });
 
     test("gateCheck returns fail for the exit gate when scripted fail", async () => {
       const wf = new TddWorkflow({ tests_pass: "fail" }, new MockSink());
       const outcome = await wf.gateCheck("tests_pass");
-      assert.equal(outcome, "fail");
+      assert.equal(outcome.outcome, "fail");
     });
 
     test("gateCheck returns needs_human for the needs-human scripted case", async () => {
       const wf = new TddWorkflow({ failing_test_exists: "needs_human" }, new MockSink());
       const outcome = await wf.gateCheck("failing_test_exists");
-      assert.equal(outcome, "needs_human");
+      assert.equal(outcome.outcome, "needs_human");
     });
   });
 
@@ -133,8 +133,8 @@ describe("src/workflow/tdd-workflow", () => {
       const r1 = sink.recorded[1];
       assert.ok(r0 !== undefined, "first record must exist");
       assert.ok(r1 !== undefined, "second record must exist");
-      assert.deepEqual(r0, { phase: "failing_test_exists", outcome: "pass" });
-      assert.deepEqual(r1, { phase: "tests_pass", outcome: "fail" });
+      assert.deepEqual(r0, { phase: "failing_test_exists", result: { outcome: "pass" } });
+      assert.deepEqual(r1, { phase: "tests_pass", result: { outcome: "fail" } });
     });
 
     test("needs_human outcome is also recorded to the sink", async () => {
@@ -146,7 +146,7 @@ describe("src/workflow/tdd-workflow", () => {
       assert.equal(sink.recorded.length, 1);
       const r = sink.recorded[0];
       assert.ok(r !== undefined);
-      assert.deepEqual(r, { phase: "failing_test_exists", outcome: "needs_human" });
+      assert.deepEqual(r, { phase: "failing_test_exists", result: { outcome: "needs_human" } });
     });
   });
 
@@ -425,6 +425,62 @@ describe("src/workflow/tdd-workflow", () => {
         1,
         "sink must have the record after gateCheck resolves — fails if gateCheck does not await record()",
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // T1 (019.3): GateResult contract — gateCheck returns { outcome, summary? }
+  // -------------------------------------------------------------------------
+
+  describe("TddWorkflow — gateCheck returns GateResult (Story 001 T1, Epic 019.3)", () => {
+    test("gateCheck with pass outcome returns a GateResult object, not a bare string", async () => {
+      const wf = new TddWorkflow({ failing_test_exists: "pass" }, new MockSink());
+      const result = await wf.gateCheck("failing_test_exists");
+      assert.equal(
+        typeof result,
+        "object",
+        "gateCheck must return a GateResult object; a bare string means the seam is not yet extended",
+      );
+      assert.equal(result.outcome, "pass");
+      assert.equal(result.summary, undefined, "pass result must carry no summary");
+    });
+
+    test("gateCheck scripted with GateResult fail+summary — result carries the summary", async () => {
+      const failResult: GateResult = { outcome: "fail", summary: "3 tests failed: foo, bar, baz" };
+      const wf = new TddWorkflow({ tests_pass: failResult }, new MockSink());
+      const result = await wf.gateCheck("tests_pass");
+      assert.deepEqual(result, { outcome: "fail", summary: "3 tests failed: foo, bar, baz" });
+    });
+
+    test("gateCheck scripted with bare pass GateOutcome string — result has no summary", async () => {
+      const wf = new TddWorkflow({ failing_test_exists: "pass" }, new MockSink());
+      const result = await wf.gateCheck("failing_test_exists");
+      assert.equal(result.outcome, "pass");
+      assert.equal(result.summary, undefined);
+    });
+
+    test("sink.record receives GateResult including summary when present", async () => {
+      const sink = new MockSink();
+      const failResult: GateResult = { outcome: "fail", summary: "error details" };
+      const wf = new TddWorkflow({ tests_pass: failResult }, sink);
+      await wf.gateCheck("tests_pass");
+      assert.equal(sink.recorded.length, 1);
+      const r = sink.recorded[0];
+      assert.ok(r !== undefined);
+      assert.equal(r.phase, "tests_pass");
+      assert.deepEqual(r.result, { outcome: "fail", summary: "error details" });
+    });
+
+    test("sink.record receives GateResult with no summary for pass outcome", async () => {
+      const sink = new MockSink();
+      const wf = new TddWorkflow({ failing_test_exists: "pass" }, sink);
+      await wf.gateCheck("failing_test_exists");
+      assert.equal(sink.recorded.length, 1);
+      const r = sink.recorded[0];
+      assert.ok(r !== undefined);
+      assert.equal(r.phase, "failing_test_exists");
+      assert.equal(r.result.outcome, "pass");
+      assert.equal(r.result.summary, undefined);
     });
   });
 });

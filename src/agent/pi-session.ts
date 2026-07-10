@@ -8,6 +8,7 @@
 
 import { readFile } from "node:fs/promises";
 import type { FeatureStore } from "../store/feature-store.ts";
+import type { AttemptEvidence } from "../scheduler/attempt-evidence.ts";
 
 // ---------------------------------------------------------------------------
 // Public error types
@@ -31,6 +32,12 @@ export interface PiSessionHandle {
   waitForIdle(): Promise<void>;
   reset(): void;
   contextTokens: number;
+  /**
+   * Session-end classification (Epic 019.3 Story 001 T2).
+   * Absent (undefined) = clean completion; "aborted" | "error" = routes to
+   * lifecycle/crash path without gate evaluation.
+   */
+  stopReason?: "aborted" | "error";
 }
 
 export interface FakePiSurface {
@@ -65,6 +72,11 @@ export interface PiSpawnOpts {
   /** Per-tool usage guidance keyed by tool name. Only entries whose key is in
    * allowedToolNames are included in the assembled prompt (6th block). */
   toolGuidance?: Record<string, string>;
+  /**
+   * Failure evidence from the most recent gate evaluation (Epic 019.3 Story 002).
+   * When present and non-null, injected after AGENTS.md as the next prompt block.
+   */
+  evidence?: AttemptEvidence | null;
 }
 
 export interface PiTeardownOpts {
@@ -94,6 +106,11 @@ export interface PiRespawnOpts {
   /** Per-tool usage guidance keyed by tool name. Only entries whose key is in
    * allowedToolNames are included in the assembled prompt (6th block). */
   toolGuidance?: Record<string, string>;
+  /**
+   * Failure evidence from the most recent gate evaluation (Epic 019.3 Story 002).
+   * When present and non-null, injected after AGENTS.md as the next prompt block.
+   */
+  evidence?: AttemptEvidence | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,6 +143,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     scriptedTokenUsage,
     worktreePath,
     toolGuidance,
+    evidence,
   } = opts;
 
   // --- (b) structural ring-1 invariant ---
@@ -188,6 +206,11 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     }
   }
   const promptParts = [taskBody, epicBody, runbook, state, agentsMd];
+  if (evidence !== undefined && evidence !== null) {
+    promptParts.push(
+      `## Prior Attempt Evidence (attempt ${evidence.attempt}, phase ${evidence.phase})\n\n${evidence.summary}`,
+    );
+  }
   if (guidanceParts.length > 0) {
     promptParts.push(guidanceParts.join("\n"));
   }
@@ -282,6 +305,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     scriptedTokenUsage,
     worktreePath,
     toolGuidance,
+    evidence,
   } = opts;
 
   // --- structural ring-1 invariant ---
@@ -339,6 +363,11 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     }
   }
   const promptParts = [taskBody, epicBody, runbook, state, agentsMd];
+  if (evidence !== undefined && evidence !== null) {
+    promptParts.push(
+      `## Prior Attempt Evidence (attempt ${evidence.attempt}, phase ${evidence.phase})\n\n${evidence.summary}`,
+    );
+  }
   if (guidanceParts.length > 0) {
     promptParts.push(guidanceParts.join("\n"));
   }
