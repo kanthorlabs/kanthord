@@ -58,8 +58,18 @@ Apply on every edit:
 
 - **ESM idioms** — `"type": "module"`; relative imports carry the `.ts`
   extension; use `import type` for type-only imports (`verbatimModuleSyntax`).
+- **Type-only imports** — under `verbatimModuleSyntax`, use `import type { … }`
+  when a symbol is used only as a type annotation and value `import { … }` only
+  when it is instantiated or called; never mix the two in one statement.
+- **Indexed-access guards** — under `noUncheckedIndexedAccess` every array or
+  `Record` index yields `T | undefined`; narrow with `=== undefined` (or
+  `?.[…] ?? fallback`) before any method call, and prefer `for…of entries()`
+  over indexed loops.
 - **Logging** — `pino`, never `console.log` in production paths. No silently
   swallowed errors.
+- **Narrow catch** — never a bare `catch {}` on IO/subprocess/DB calls; match the
+  one expected sentinel (`ENOENT`, "no commits yet") and re-throw everything else
+  so real errors (`EISDIR`, `SQLITE_BUSY`) propagate.
 - **DI seam style** — inject collaborators through constructor/factory
   parameters typed by a small interface the consumer defines, so tests fake at
   that seam (no module-level singletons that tests cannot replace).
@@ -80,6 +90,10 @@ Read the relevant file **before** working in that area — not upfront.
   or a `PRAGMA table_info` guard for `ADD COLUMN` (SQLite has no
   `ADD COLUMN IF NOT EXISTS`); never `try/catch` to swallow an expected
   "already exists" error — reserve `try/catch` for unanticipated errors only.
+  A migration guard protects only the migration itself: every function that runs
+  a SELECT/UPDATE on a table created by a separate migration must also guard
+  (call the schema-init helper or repeat the `PRAGMA table_info` check) before
+  querying, or it throws "no such table" on an uninitialised store.
 
 These files are seeded as living checklists; engineers append pitfalls as they
 hit them (the test-engineer/software-engineer journals are separate, under

@@ -76,6 +76,8 @@ Read in this order:
 - Mocks return deterministic values named by the Story.
 - RED must fail for the right reason now and pass once the named seam exists.
 - Tests touching file storage must use a temp dir they create and remove.
+- Tests feeding markdown through `compile()`/`buildCorePlan()` must supply all mandatory parts (`## Prerequisites`/`## Inputs`/`## Outputs`/`## Tests`, a `ticket` per task, `RUNBOOK.md` per feature, `INDEX.md` per story), or they fail for the wrong reason.
+- Error-path asserts must pin the specific observable property (error `Code`, message substring, table name), never just the error constructor — an unimplemented seam still throws `ConnectError`, so a constructor-only assert passes vacuously.
 
 ## Gotcha Files
 

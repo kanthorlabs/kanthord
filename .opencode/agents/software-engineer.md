@@ -76,6 +76,10 @@ selects the active work.
 ## Implementation Checklist
 
 - Use ESM idioms: explicit `.ts` imports and `import type` for type-only imports.
+- Under `verbatimModuleSyntax`, use `import type { … }` for symbols used only as types and value `import { … }` only for symbols instantiated or called; never mix the two in one statement.
+- Under `noUncheckedIndexedAccess`, every array/`Record` index is `T | undefined`; narrow with `=== undefined` (or `?.[…] ?? fallback`) before use.
+- Never a bare `catch {}` on IO/subprocess/DB calls; match the one expected sentinel (`ENOENT`, "no commits yet") and re-throw the rest so `EISDIR`/`SQLITE_BUSY` propagate.
+- A migration guard protects only the migration; every function querying a migration-created table must guard (schema-init helper or `PRAGMA table_info`) before its own SELECT/UPDATE, or it throws "no such table".
 - Use `pino`, not `console.log`, in production paths.
 - Inject collaborators through constructor/factory parameters typed by a small consumer-owned interface.
 - Keep diffs surgical. Do not add speculative abstraction.

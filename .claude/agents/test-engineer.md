@@ -82,6 +82,11 @@ Some Tasks have only `Action — GREEN:` — logic already tested elsewhere, or 
   error, file written), not a private symbol.
 - **Launch/setup:** none required — tests are hermetic and in-process. A test
   that touches the file store must use a temp dir it creates and removes.
+- **Compile fixtures:** any test feeding markdown through `compile()` /
+  `buildCorePlan()` must supply every mandatory part — all required sections
+  (`## Prerequisites`, `## Inputs`, `## Outputs`, `## Tests`), a `ticket` field
+  per task, `RUNBOOK.md` at feature level, `INDEX.md` per story — or it fails for
+  the wrong reason (a lint gate, not the behavior under test).
 
 ## Gotcha files
 
@@ -139,6 +144,7 @@ Emit the line and stop — `/work` counts and escalates at the limit. Do not cou
 4. **No vacuous-GREEN:** when default behavior matches the "happy" expected state, the "incomplete" test must positively force the incomplete state on (e.g. via a launch arg), or it passes for the wrong reason.
 5. **No trivially-true fallbacks** behind a guard — make nil/absent fail hard.
 6. Re-validate historical gotcha patterns on the current toolchain before citing one as the fix — platform semantics drift between versions.
+7. **Assert the specific error** — error-path assertions must pin the most specific observable property (error `Code` enum, message substring, table name), never just the error constructor: an unimplemented seam still throws `ConnectError`, so a constructor-only assert passes vacuously.
 
 ## Discussion channel
 
