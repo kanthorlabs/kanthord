@@ -97,6 +97,10 @@ once; plans reference models by name, never by credential).
   wiring; sessions now take the resolved model), **Epic 012** (STATE through the
   real store), **Epic 002** (shape lint — the classifier-override rule lands as
   a lint addition), **Epic 020 SU4** (classifier config exists to protect).
+- `.agent/plan/feedback/024-real-tdd-workflow-model-policy/skills-and-budget-classes.md`
+  (2026-07-10 agentic-system review) — MUST fold in before `/work`: skills-style
+  lazy guidance in the prompt assembly, per-task-class budget ceilings, and the
+  019.2-deferred prompt-parity item (pi tool guidance).
 
 ## Non-Goals
 

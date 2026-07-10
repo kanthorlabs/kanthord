@@ -147,6 +147,9 @@ decision-recorded scope change.
 
 - **Epic 030 passed** (the Phase-2→3 gate; phases.md — Phase 3 work is blocked
   until the multi-repo proof holds).
+- `.agent/plan/feedback/031-phase3-milestone-setup/tool-classification-contract.md`
+  (2026-07-10 agentic-system review) — read at Phase-3 scoping: custom tools
+  stay fail-closed-blocked until a ring-1 classification contract exists.
 
 ## Non-Goals
 

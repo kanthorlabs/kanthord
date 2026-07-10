@@ -102,6 +102,10 @@ privileged path, and ring-1 deterministic policy cannot be switched off from it
   inbox methods this API supersets; interaction capture for the override),
   **Epic 013** (ledger), **Epic 018** (verify trigger), **Epic 029** (dead-man
   status field — read side lands here, the ping itself is 029).
+- `.agent/plan/feedback/026-control-plane-api/session-events-and-signal-coverage.md`
+  (2026-07-10 agentic-system review) — MUST fold in before `/work`: one
+  outbound read-only session event stream (decide), and a proposed
+  classification type for every escalation signal (SIGNAL_MAP completeness).
 
 ## Non-Goals
 

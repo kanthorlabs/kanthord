@@ -82,6 +82,10 @@ log-diving to answer.
   **Epic 026** (read surface), **Epic 027** (dashboard shell + web pipeline
   bootstrap — the web story rides the SU7-validated toolchain), **Epic 013**
   (ledger excerpts), **Epic 028** (observation evidence shape).
+- `.agent/plan/feedback/034-ticket-drift-and-escalation-evidence/ticket-tracker-adapter-seam.md`
+  (2026-07-10 agentic-system review) — MUST fold in before `/work`: ticket
+  snapshot/drift behind a tracker adapter seam (Jira-first, CLI-first
+  pattern), not Jira-hardcoded.
 
 ## Non-Goals
 

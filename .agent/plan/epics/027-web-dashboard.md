@@ -133,6 +133,10 @@ run; per-story it runs only where a Story's Verify names it).
   (Tailwind + shadcn init, tokens, the DESIGN.md §5 foundation set).
 - **Epic 026** (the full API + auth — the dashboard's only backend; the
   maintainer-generated Connect-Web client is the sole coupling point).
+- `.agent/plan/feedback/027-web-dashboard/honest-classification-and-diff-policy.md`
+  (2026-07-10 agentic-system review) — MUST fold in before `/work`:
+  classification confirm/override as a first-class UI step on every respond
+  action; diff-escalation policy read from config, not a literal.
 - **Epic 029 Story 002** is a **dependency of Story 007** (review B4 — the
   summary surface is gate-critical: phases.md D9 puts it in the web client and
   Epic 030 LP3 is dashboard-exclusive). The earlier "optional/degraded render"

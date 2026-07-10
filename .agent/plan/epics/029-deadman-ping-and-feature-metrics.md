@@ -91,6 +91,11 @@ readable over the control-plane API.
 - **Epic 022 Story 004** (`slack.dm`), **Epic 001** (clock), **Epic 017**
   (interaction events), **Epic 013** (ledger), **Epic 026** (read surface +
   daemon-ops field), **Epic 009** (restart path for schedule durability).
+- `.agent/plan/feedback/029-deadman-ping-and-feature-metrics/notifier-seam.md`
+  (2026-07-10 agentic-system review) — MUST fold in before `/work`: ping
+  delivery behind one notifier interface, plus the maintainer ordering
+  decision (ping story before daily operation / before 027, or interim
+  manual `getStatus` recorded as a decision).
 
 ## Non-Goals
 
