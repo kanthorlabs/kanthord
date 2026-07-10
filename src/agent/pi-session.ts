@@ -62,6 +62,9 @@ export interface PiSpawnOpts {
   scriptedTokenUsage?: number[];
   priorContext?: string;
   worktreePath?: string;
+  /** Per-tool usage guidance keyed by tool name. Only entries whose key is in
+   * allowedToolNames are included in the assembled prompt (6th block). */
+  toolGuidance?: Record<string, string>;
 }
 
 export interface PiTeardownOpts {
@@ -88,6 +91,9 @@ export interface PiRespawnOpts {
   budgetLedger?: BudgetLedger;
   scriptedTokenUsage?: number[];
   worktreePath?: string;
+  /** Per-tool usage guidance keyed by tool name. Only entries whose key is in
+   * allowedToolNames are included in the assembled prompt (6th block). */
+  toolGuidance?: Record<string, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +125,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     budgetLedger,
     scriptedTokenUsage,
     worktreePath,
+    toolGuidance,
   } = opts;
 
   // --- (b) structural ring-1 invariant ---
@@ -168,7 +175,23 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
   }
 
   // --- assemble system prompt in documented order ---
-  const systemPrompt = [taskBody, epicBody, runbook, state, agentsMd].join("\n\n");
+  // Intentional divergence: only AGENTS.md is loaded here (no CLAUDE.md, no walk-up).
+  // kanthord embeds pi-agent-core directly; pi-coding-agent's buildSystemPrompt is
+  // bypassed, so per-tool guidance must be injected explicitly as the 6th block.
+  const guidanceParts: string[] = [];
+  if (toolGuidance !== undefined) {
+    for (const toolName of allowedToolNames) {
+      const snippet = toolGuidance[toolName];
+      if (snippet !== undefined) {
+        guidanceParts.push(snippet);
+      }
+    }
+  }
+  const promptParts = [taskBody, epicBody, runbook, state, agentsMd];
+  if (guidanceParts.length > 0) {
+    promptParts.push(guidanceParts.join("\n"));
+  }
+  const systemPrompt = promptParts.join("\n\n");
 
   // --- build sanitized spawn env ---
   const env: Record<string, string> = {};
@@ -258,6 +281,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     budgetLedger,
     scriptedTokenUsage,
     worktreePath,
+    toolGuidance,
   } = opts;
 
   // --- structural ring-1 invariant ---
@@ -305,7 +329,20 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
   }
 
   // --- assemble system prompt in documented order (no priorContext) ---
-  const systemPrompt = [taskBody, epicBody, runbook, state, agentsMd].join("\n\n");
+  const guidanceParts: string[] = [];
+  if (toolGuidance !== undefined) {
+    for (const toolName of allowedToolNames) {
+      const snippet = toolGuidance[toolName];
+      if (snippet !== undefined) {
+        guidanceParts.push(snippet);
+      }
+    }
+  }
+  const promptParts = [taskBody, epicBody, runbook, state, agentsMd];
+  if (guidanceParts.length > 0) {
+    promptParts.push(guidanceParts.join("\n"));
+  }
+  const systemPrompt = promptParts.join("\n\n");
 
   // --- build sanitized spawn env ---
   const env: Record<string, string> = {};

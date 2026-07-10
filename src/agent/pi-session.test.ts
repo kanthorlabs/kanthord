@@ -822,6 +822,58 @@ describe("src/agent/pi-session", () => {
         await rm(dir, { recursive: true });
       }
     });
+
+    // -------------------------------------------------------------------------
+    // RS1 — respawnPiSession must weave toolGuidance into the assembled system
+    // prompt (mirrors GAP5 for spawnPiSession). PiRespawnOpts currently lacks
+    // the toolGuidance field and respawnPiSession silently drops guidance on
+    // crash/budget-halt respawn.
+    // -------------------------------------------------------------------------
+
+    test("RS1 — respawnPiSession assembled system prompt includes per-tool guidance block for allowed manifest", async () => {
+      const { dir, store, agentsMdPath } = await setupDir({ state: "respawn-state" });
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+        const allowedTools = ["read", "grep", "find", "ls", "edit", "write"];
+        const toolGuidanceMap: Record<string, string> = {
+          read: "RESPAWN_TOOL_GUIDANCE_READ_SENTINEL",
+          grep: "RESPAWN_TOOL_GUIDANCE_GREP_SENTINEL",
+          find: "RESPAWN_TOOL_GUIDANCE_FIND_SENTINEL",
+          ls: "RESPAWN_TOOL_GUIDANCE_LS_SENTINEL",
+          edit: "RESPAWN_TOOL_GUIDANCE_EDIT_SENTINEL",
+          write: "RESPAWN_TOOL_GUIDANCE_WRITE_SENTINEL",
+          bash: "RESPAWN_BASH_GUIDANCE_SENTINEL_MUSTNOTAPPEAR",
+        };
+        // Cast required: toolGuidance field does not exist on PiRespawnOpts yet —
+        // the SE must add it and wire it into the prompt assembly as part of RS1.
+        const opts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: allowedTools,
+          spawnEnv: {},
+          toolGuidance: toolGuidanceMap,
+        } as unknown as PiRespawnOpts;
+        await respawnPiSession(opts);
+        const prompt = surface.lastSystemPrompt;
+        for (const toolName of allowedTools) {
+          assert.ok(
+            prompt.includes(toolGuidanceMap[toolName]!),
+            `RS1: respawn system prompt must include guidance for allowed tool "${toolName}" — guidance block missing`,
+          );
+        }
+        assert.ok(
+          !prompt.includes("RESPAWN_BASH_GUIDANCE_SENTINEL_MUSTNOTAPPEAR"),
+          "RS1: respawn system prompt must NOT include guidance for excluded tool bash",
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -989,6 +1041,60 @@ describe("src/agent/pi-session", () => {
           surface.lastTools.slice().sort(),
           ["edit", "read", "write"],
           "manifest without exec tool must pass through unchanged",
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // GAP5 — tool-guidance block in assembled system prompt
+  // spawnPiSession must weave per-tool guidance snippets into the system prompt
+  // for every tool in allowedToolNames, and must NOT include guidance for tools
+  // that are NOT in allowedToolNames (e.g. bash).
+  // ---------------------------------------------------------------------------
+
+  describe("GAP5: tool-guidance block in assembled system prompt", () => {
+    test("GAP5 — assembled system prompt includes per-tool guidance for each allowed tool; excludes guidance for bash", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+        const allowedTools = ["read", "grep", "find", "ls", "edit", "write"];
+        const toolGuidanceMap: Record<string, string> = {
+          read: "TOOL_GUIDANCE_READ_SENTINEL: use read to view file contents",
+          grep: "TOOL_GUIDANCE_GREP_SENTINEL: use grep to search patterns",
+          find: "TOOL_GUIDANCE_FIND_SENTINEL: use find to locate files",
+          ls: "TOOL_GUIDANCE_LS_SENTINEL: use ls to list directory contents",
+          edit: "TOOL_GUIDANCE_EDIT_SENTINEL: use edit to modify existing files",
+          write: "TOOL_GUIDANCE_WRITE_SENTINEL: use write to create new files",
+          bash: "BASH_GUIDANCE_SENTINEL_MUSTNOTAPPEAR",
+        };
+        // Cast required: toolGuidance field does not exist on PiSpawnOpts yet —
+        // the SE must add it as part of the GAP5 implementation.
+        const opts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: allowedTools,
+          spawnEnv: {},
+          toolGuidance: toolGuidanceMap,
+        } as unknown as PiSpawnOpts;
+        await spawnPiSession(opts);
+        const prompt = surface.lastSystemPrompt;
+        for (const toolName of allowedTools) {
+          assert.ok(
+            prompt.includes(toolGuidanceMap[toolName]!),
+            `GAP5: system prompt must include guidance for allowed tool "${toolName}" — guidance block missing`,
+          );
+        }
+        assert.ok(
+          !prompt.includes("BASH_GUIDANCE_SENTINEL_MUSTNOTAPPEAR"),
+          "GAP5: system prompt must NOT include guidance for excluded tool bash",
         );
       } finally {
         await rm(dir, { recursive: true });
