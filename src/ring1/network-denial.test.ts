@@ -461,6 +461,116 @@ pureClassified: []
   // file tools with no arbitrary escape hatch.
   // -------------------------------------------------------------------------
 
+  // -------------------------------------------------------------------------
+  // T2-019.1 — pi real tool names aligned to DEFAULT_TRUSTED_EFFECTFUL
+  // -------------------------------------------------------------------------
+
+  test("T2-019.1: pi file-mutating tools (edit, write) load as pure:false via default trusted effectful set", async () => {
+    // RED: 'edit' and 'write' are not in DEFAULT_TRUSTED_EFFECTFUL today, so
+    // loadNetworkDenialRegistry throws NetworkDenialError instead of succeeding.
+    tmpDir = await mkdtemp(join(tmpdir(), "nd-test-"));
+    try {
+      const registryYaml = `
+allowlist:
+  - name: edit
+    pure: false
+  - name: write
+    pure: false
+pureClassified: []
+`;
+      const regPath = join(tmpDir, "network-denial-pi-mut.yaml");
+      await writeFile(regPath, registryYaml, "utf8");
+
+      // Must succeed without an explicit TrustedEffectfulConfig — 'edit' and 'write'
+      // must be present in DEFAULT_TRUSTED_EFFECTFUL after GREEN.
+      const registry = await loadNetworkDenialRegistry(regPath);
+      assert.equal(registry.allowlist.length, 2, "both pi file-mutating tools load");
+      assert.ok(
+        registry.allowlist.some((e) => e.name === "edit"),
+        "edit is in the loaded registry",
+      );
+      assert.ok(
+        registry.allowlist.some((e) => e.name === "write"),
+        "write is in the loaded registry",
+      );
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("T2-019.1: pi read-only tools (read, grep, find, ls) load as pure:true without error (characterisation — already-shipped path)", async () => {
+    // pure:true entries are not subject to the trusted-effectful gate; this test
+    // pins the contract that pi's real read-only names are not blocked.
+    tmpDir = await mkdtemp(join(tmpdir(), "nd-test-"));
+    try {
+      const registryYaml = `
+allowlist:
+  - name: read
+    pure: true
+  - name: grep
+    pure: true
+  - name: find
+    pure: true
+  - name: ls
+    pure: true
+pureClassified: []
+`;
+      const regPath = join(tmpDir, "network-denial-pi-ro.yaml");
+      await writeFile(regPath, registryYaml, "utf8");
+
+      const registry = await loadNetworkDenialRegistry(regPath);
+      assert.equal(registry.allowlist.length, 4, "all four pi read-only tools load");
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("T2-019.1: filterToolManifest with six real pi tools plus bash yields allowed=six dropped=[bash]", async () => {
+    // RED: loading a registry with edit/write pure:false fails today (see above),
+    // so this test currently throws before reaching filterToolManifest.
+    tmpDir = await mkdtemp(join(tmpdir(), "nd-test-"));
+    try {
+      const registryYaml = `
+allowlist:
+  - name: read
+    pure: true
+  - name: grep
+    pure: true
+  - name: find
+    pure: true
+  - name: ls
+    pure: true
+  - name: edit
+    pure: false
+  - name: write
+    pure: false
+pureClassified: []
+`;
+      const regPath = join(tmpDir, "network-denial-pi-filter.yaml");
+      await writeFile(regPath, registryYaml, "utf8");
+
+      const registry = await loadNetworkDenialRegistry(regPath);
+      const candidates: ToolDescriptor[] = [
+        "read", "grep", "find", "ls", "edit", "write", "bash",
+      ].map((name) => ({ name }));
+
+      const result: ManifestFilterResult = filterToolManifest(candidates, registry);
+
+      assert.deepEqual(
+        result.allowed.map((t) => t.name).sort(),
+        ["edit", "find", "grep", "ls", "read", "write"].sort(),
+        "six real pi tools are allowed",
+      );
+      assert.deepEqual(
+        result.dropped.map((t) => t.name),
+        ["bash"],
+        "bash is the only dropped tool",
+      );
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   test("effectful-fail-closed: pure:false entry fails to load even when trustedEffectful is omitted", async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "nd-test-"));
     try {

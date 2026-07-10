@@ -14,6 +14,7 @@
 
 import { readFile } from "node:fs/promises";
 import { parse as parseYaml } from "yaml";
+import { PI_FILE_MUTATING_TOOLS } from "../agent/pi-tools.ts";
 
 // ---------------------------------------------------------------------------
 // Permanent blocked sets (network-capable + exec/shell-class)
@@ -98,6 +99,7 @@ export interface TrustedEffectfulConfig {
  */
 export const DEFAULT_TRUSTED_EFFECTFUL: TrustedEffectfulConfig = {
   names: new Set([
+    ...PI_FILE_MUTATING_TOOLS,
     "write_file",
     "create_file",
     "edit_file",

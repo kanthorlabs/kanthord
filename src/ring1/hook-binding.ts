@@ -19,6 +19,7 @@ import type {
   PathPolicyEscalation,
 } from "./role-path-policy.ts";
 import type { EscalationEvent } from "./write-scope.ts";
+import { classifyPiTool } from "../agent/pi-tools.ts";
 
 // ---------------------------------------------------------------------------
 // SU3 hook shape types
@@ -85,6 +86,12 @@ const READ_PREFIXES = [
 ] as const;
 
 function classifyOperation(toolName: string): "read" | "write" {
+  // Consult the canonical pi taxonomy first; if the tool is a known pi built-in,
+  // use its classification directly.  bash and unknown names return undefined and
+  // fall through to the prefix heuristic below.
+  const piClass = classifyPiTool(toolName);
+  if (piClass !== undefined) return piClass;
+
   const lower = toolName.toLowerCase();
   for (const prefix of READ_PREFIXES) {
     if (lower.startsWith(prefix)) {

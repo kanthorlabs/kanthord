@@ -210,15 +210,21 @@ describe("src/agent/pi-session", () => {
     });
 
     // -------------------------------------------------------------------------
-    // (a) manifest — the tool list passed to pi lacks prohibited tool names
+    // (a) manifest — spawn passes allowedToolNames unfiltered (BLOCKER-019.1
+    // new contract); bash is absent from PI_DEFAULT_ALLOWED_MANIFEST because
+    // that manifest was constructed without bash — not because spawn filters it.
     // -------------------------------------------------------------------------
 
-    test("spawned tool list lacks prohibited network/exec tool names", async () => {
+    test("session spawned from PI_DEFAULT_ALLOWED_MANIFEST exposes exactly the six non-exec tools — bash absent by construction not by filter", async () => {
       const { dir, store, agentsMdPath } = await setupDir();
       try {
         const surface = makeFakePiSurface();
         const fakeChain = async () => undefined;
 
+        // PI_DEFAULT_ALLOWED_MANIFEST = the six non-exec pi tools (values
+        // hardcoded to avoid an extra import; the constant is asserted in
+        // src/agent/pi-tools.test.ts).
+        const sixNonExecTools = ["read", "grep", "find", "ls", "edit", "write"];
         const opts: PiSpawnOpts = {
           store,
           storyId: "s1",
@@ -226,19 +232,22 @@ describe("src/agent/pi-session", () => {
           agentsMdPath,
           ring1Chain: fakeChain,
           piSurface: surface,
-          // Attempt to pass network/exec tool names alongside allowed ones
-          allowedToolNames: ["read_file", "fetch", "bash", "write_file"],
+          allowedToolNames: sixNonExecTools,
           spawnEnv: {},
         };
 
         await spawnPiSession(opts);
 
-        // "fetch" and "bash" must be absent from the passed tool list
-        assert.ok(!surface.lastTools.includes("fetch"), "fetch must be absent from tool manifest");
-        assert.ok(!surface.lastTools.includes("bash"), "bash must be absent from tool manifest");
-        // Safe tools pass through
-        assert.ok(surface.lastTools.includes("read_file"), "read_file must be present");
-        assert.ok(surface.lastTools.includes("write_file"), "write_file must be present");
+        // All six tools must pass through unchanged (no filter step at spawn)
+        assert.deepStrictEqual(
+          new Set(surface.lastTools),
+          new Set(sixNonExecTools),
+          "spawned tools must equal the six non-exec tools exactly (unfiltered pass-through)",
+        );
+        assert.ok(
+          !surface.lastTools.includes("bash"),
+          "bash must be absent — PI_DEFAULT_ALLOWED_MANIFEST excludes it by construction, not by spawn filter",
+        );
       } finally {
         await rm(dir, { recursive: true });
       }
@@ -875,6 +884,111 @@ describe("src/agent/pi-session", () => {
           surface.lastWorktreePath,
           undefined,
           "spawnAgent must receive undefined worktreePath when omitted",
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // BLOCKER-019.1: unfiltered pass-through contract
+  // spawnPiSession / respawnPiSession must NOT filter allowedToolNames — they
+  // pass the caller-supplied list straight through to the spawned session's
+  // `tools` field.  The bash deny is expressed at the beforeToolCall ring-1
+  // seam (PI_EXEC_TOOLS), not at spawn time.  PI_DEFAULT_ALLOWED_MANIFEST
+  // already excludes bash so sessions built from it remain bash-free without
+  // any filter step.
+  //
+  // RED: these two tests currently fail because the existing code still
+  // filters out bash via PI_BLOCKED_TOOL_NAMES.  They pass once the filter
+  // step is removed from spawnPiSession and respawnPiSession.
+  // ---------------------------------------------------------------------------
+
+  describe("BLOCKER-019.1: spawnPiSession / respawnPiSession pass allowedToolNames unfiltered", () => {
+    // The six non-exec pi tools per the taxonomy (hardcoded to avoid extra import)
+    const SIX_REAL_TOOLS = ["read", "grep", "find", "ls", "edit", "write"];
+
+    test("BLOCKER-019.1: spawnPiSession passes allowedToolNames unfiltered — bash present when supplied", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+        const opts: PiSpawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: [...SIX_REAL_TOOLS, "bash"],
+          spawnEnv: {},
+        };
+        await spawnPiSession(opts);
+        assert.ok(
+          surface.lastTools.includes("bash"),
+          "bash must be present in spawned tools when supplied (no filter step)",
+        );
+        assert.deepStrictEqual(
+          new Set(surface.lastTools),
+          new Set([...SIX_REAL_TOOLS, "bash"]),
+          "spawned tools must equal the full unfiltered allowedToolNames",
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("BLOCKER-019.1: respawnPiSession passes allowedToolNames unfiltered — bash present when supplied", async () => {
+      const { dir, store, agentsMdPath } = await setupDir({ state: "respawn-state" });
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+        const opts: PiRespawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: [...SIX_REAL_TOOLS, "bash"],
+          spawnEnv: {},
+        };
+        await respawnPiSession(opts);
+        assert.ok(
+          surface.lastTools.includes("bash"),
+          "bash must be present in respawned tools when supplied (no filter step)",
+        );
+        assert.deepStrictEqual(
+          new Set(surface.lastTools),
+          new Set([...SIX_REAL_TOOLS, "bash"]),
+          "respawned tools must equal the full unfiltered allowedToolNames",
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("T1-019.1-003: spawnPiSession passes manifest without exec tool unchanged", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+        const opts: PiSpawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: ["read", "edit", "write"],
+          spawnEnv: {},
+        };
+        await spawnPiSession(opts);
+        assert.deepStrictEqual(
+          surface.lastTools.slice().sort(),
+          ["edit", "read", "write"],
+          "manifest without exec tool must pass through unchanged",
         );
       } finally {
         await rm(dir, { recursive: true });

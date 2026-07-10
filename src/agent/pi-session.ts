@@ -10,32 +10,6 @@ import { readFile } from "node:fs/promises";
 import type { FeatureStore } from "../store/feature-store.ts";
 
 // ---------------------------------------------------------------------------
-// Permanent network/exec blocked set (mirrors network-denial.ts subset)
-// ---------------------------------------------------------------------------
-
-const BLOCKED_TOOL_NAMES = new Set([
-  "fetch",
-  "http_get",
-  "http_post",
-  "http_request",
-  "curl",
-  "wget",
-  "request",
-  "axios_get",
-  "axios_post",
-  "bash",
-  "sh",
-  "exec",
-  "exec_command",
-  "shell_run",
-  "shell",
-  "run_command",
-  "execute",
-  "spawn",
-  "subprocess",
-]);
-
-// ---------------------------------------------------------------------------
 // Public error types
 // ---------------------------------------------------------------------------
 
@@ -196,11 +170,6 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
   // --- assemble system prompt in documented order ---
   const systemPrompt = [taskBody, epicBody, runbook, state, agentsMd].join("\n\n");
 
-  // --- filter tool manifest: remove permanently blocked names ---
-  const filteredTools = allowedToolNames.filter(
-    (name) => !BLOCKED_TOOL_NAMES.has(name),
-  );
-
   // --- build sanitized spawn env ---
   const env: Record<string, string> = {};
   if (safeEnvAllowlist !== undefined) {
@@ -215,7 +184,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
   // --- spawn the session via the pi surface ---
   const handle = piSurface.spawnAgent({
     systemPrompt,
-    tools: filteredTools,
+    tools: allowedToolNames,
     beforeToolCall: ring1Chain,
     env,
     worktreePath,
@@ -338,11 +307,6 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
   // --- assemble system prompt in documented order (no priorContext) ---
   const systemPrompt = [taskBody, epicBody, runbook, state, agentsMd].join("\n\n");
 
-  // --- filter tool manifest ---
-  const filteredTools = allowedToolNames.filter(
-    (name) => !BLOCKED_TOOL_NAMES.has(name),
-  );
-
   // --- build sanitized spawn env ---
   const env: Record<string, string> = {};
   if (safeEnvAllowlist !== undefined) {
@@ -357,7 +321,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
   // --- spawn the new session ---
   const handle = piSurface.spawnAgent({
     systemPrompt,
-    tools: filteredTools,
+    tools: allowedToolNames,
     beforeToolCall: ring1Chain,
     env,
     worktreePath,

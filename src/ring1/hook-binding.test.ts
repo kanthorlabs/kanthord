@@ -11,6 +11,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { makeRing1HookAdapter } from "./hook-binding.ts";
+import { PI_EXEC_TOOLS } from "../agent/pi-tools.ts";
 import type {
   BeforeToolCallContext,
   BeforeToolCallResult,
@@ -988,5 +989,145 @@ describe("B1-secondary-symlink-bypass: hook forwards destination_canonical_path 
     // resolution is provided — documents expected behaviour when no symlink info.
     assert.equal(result, undefined, "without destination_canonical_path the apparent destination (inside allowlist) passes");
     assert.equal(escalations.length, 0, "no escalation when apparent destination is allowed");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T2-019.1 — pi read-only tool classification (Epic 019.1 Story 001 Task T2)
+// pi's real read-only tools (`read`, `ls`, `grep`, `find`) carry no underscore
+// prefix, fall through the existing heuristic to "write", and are wrongly
+// blocked on any out-of-scope path.  After Task T2, classifyOperation consults
+// the pi taxonomy first: those four classify as "read" and pass through on a
+// read-allowed path; `edit`/`write` still classify as "write" and still block;
+// the `read_file` prefix-heuristic fallback is preserved (regression guard).
+// ---------------------------------------------------------------------------
+
+describe("T2-019.1: pi tool taxonomy consulted before prefix heuristic", () => {
+  // Registry: broad read coverage, narrower write coverage.
+  // Out-of-scope path /workspace/docs/readme.md is read-allowed (read.allow covers
+  // /workspace/**) but NOT write-allowed (write.allow only covers /workspace/src/**).
+  const registry: RolePathRegistry = {
+    roles: {
+      coding: {
+        read: { allow: ["/workspace/**"], deny: [] },
+        write: { allow: ["/workspace/src/**"], deny: [] },
+      },
+    },
+  };
+  const writeScope = ["/workspace/src/**"];
+  const outOfScopePath = "/workspace/docs/readme.md";
+
+  test("pi read-only tools (read, ls, grep, find) pass through on out-of-scope read-allowed path", async () => {
+    for (const toolName of ["read", "ls", "grep", "find"]) {
+      const escalations: EscalationEvent[] = [];
+      const opts: Ring1HookAdapterOpts = {
+        registry,
+        role: "coding",
+        writeScope,
+        onEscalate: (e) => escalations.push(e),
+        unknownEffectfulToolNames: new Set<string>(),
+      };
+      const hook = makeRing1HookAdapter(opts);
+      const ctx = fakeContext(toolName, { path: outOfScopePath });
+      const result = await hook(ctx);
+      assert.equal(
+        result,
+        undefined,
+        `${toolName}: read-only tool on read-allowed path must pass through (classified read, not write)`,
+      );
+      assert.equal(
+        escalations.length,
+        0,
+        `${toolName}: no escalation for read-only tool on read-allowed path`,
+      );
+    }
+  });
+
+  test("edit and write still block on the same out-of-scope path with re-planning tag", async () => {
+    for (const toolName of ["edit", "write"]) {
+      const escalations: EscalationEvent[] = [];
+      const opts: Ring1HookAdapterOpts = {
+        registry,
+        role: "coding",
+        writeScope,
+        onEscalate: (e) => escalations.push(e),
+        unknownEffectfulToolNames: new Set<string>(),
+      };
+      const hook = makeRing1HookAdapter(opts);
+      const ctx = fakeContext(toolName, { path: outOfScopePath, content: "x" });
+      const result = await hook(ctx);
+      assert.ok(
+        result !== undefined && result.block === true,
+        `${toolName} on out-of-scope path must still block (write-class tool)`,
+      );
+      assert.equal(escalations.length, 1, `${toolName}: exactly one escalation emitted`);
+      const esc = escalations[0];
+      assert.ok(esc !== undefined, "escalation exists");
+      assert.equal(esc!.tag, "re-planning-signal", `${toolName}: escalation carries re-planning tag`);
+    }
+  });
+
+  test("read_file regression: prefix-heuristic fallback classifies as read when not in pi taxonomy", async () => {
+    const escalations: EscalationEvent[] = [];
+    const opts: Ring1HookAdapterOpts = {
+      registry,
+      role: "coding",
+      writeScope,
+      onEscalate: (e) => escalations.push(e),
+      unknownEffectfulToolNames: new Set<string>(),
+    };
+    const hook = makeRing1HookAdapter(opts);
+    const ctx = fakeContext("read_file", { path: outOfScopePath });
+    const result = await hook(ctx);
+    assert.equal(
+      result,
+      undefined,
+      "read_file (not a pi tool name, uses heuristic) on read-allowed path must pass through",
+    );
+    assert.equal(escalations.length, 0, "no escalation for read_file on read-allowed path");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BLOCKER-019.1 — bash deny expressed at beforeToolCall hook seam
+// PI_EXEC_TOOLS = new Set(["bash"]) is the single exec deny source.
+// When unknownEffectfulToolNames is sourced from PI_EXEC_TOOLS, a pathless
+// bash call must be blocked fail-closed; a pathless pure pi tool (read) not
+// in PI_EXEC_TOOLS must pass through.
+// ---------------------------------------------------------------------------
+
+describe("BLOCKER-019.1: exec deny via PI_EXEC_TOOLS at beforeToolCall seam", () => {
+  const registry = makeRegistry(["/workspace/src/**"], []);
+
+  test("BLOCKER-019.1: pathless bash call returns { block: true } when unknownEffectfulToolNames is sourced from PI_EXEC_TOOLS", async () => {
+    const escalations: EscalationEvent[] = [];
+    const opts: Ring1HookAdapterOpts = {
+      registry,
+      role: "coding",
+      writeScope: ["/workspace/src/**"],
+      onEscalate: (e) => escalations.push(e),
+      unknownEffectfulToolNames: new Set(PI_EXEC_TOOLS),
+    };
+    const hook = makeRing1HookAdapter(opts);
+    const ctx = fakeContext("bash", {});
+    const result = await hook(ctx);
+    assert.ok(result !== undefined && result.block === true, "pathless bash call must be blocked via PI_EXEC_TOOLS");
+    assert.equal(escalations.length, 1, "one escalation emitted for blocked bash call");
+  });
+
+  test("BLOCKER-019.1: pathless pure pi tool (read) not in PI_EXEC_TOOLS passes through (returns undefined)", async () => {
+    const escalations: EscalationEvent[] = [];
+    const opts: Ring1HookAdapterOpts = {
+      registry,
+      role: "coding",
+      writeScope: ["/workspace/src/**"],
+      onEscalate: (e) => escalations.push(e),
+      unknownEffectfulToolNames: new Set(PI_EXEC_TOOLS),
+    };
+    const hook = makeRing1HookAdapter(opts);
+    const ctx = fakeContext("read", {});
+    const result = await hook(ctx);
+    assert.equal(result, undefined, "pathless read tool (not in PI_EXEC_TOOLS) must pass through");
+    assert.equal(escalations.length, 0, "no escalation for pure pi tool not in exec set");
   });
 });
