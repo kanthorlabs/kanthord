@@ -68,3 +68,5 @@ this repo.
   Then we need to adapt Long-Term, Short-Term memory techniques because
   we need temporary context memory (Short-Term memory) while we build the feature,
   then later turn it into Long-Term memory for future reference.
+
+- PR comments and review: provide both way to write review on a PR and also resolve comments on a PR
