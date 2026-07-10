@@ -17,7 +17,7 @@ brainstormed from scratch; nothing here is binding yet.
 ## Development commands
 
 Local dev runs Core **inside Podman** (host safety). Full action reference:
-`docs/development.md`; `make help` lists targets. Common:
+`docs/md/development.md`; `make help` lists targets. Common:
 
 ```sh
 make machine-up     # start the Podman VM (once per boot)

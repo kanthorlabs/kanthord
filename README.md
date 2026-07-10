@@ -26,16 +26,13 @@ Three ideas carry most of the design:
 | # | Document | What it gives you |
 |---|---|---|
 | 1 | This README | The pitch and the map |
-| 2 | [`docs/glossary.md`](docs/glossary.md) | The project's invented vocabulary — read before anything else |
+| 2 | [`docs/md/glossary.md`](docs/md/glossary.md) | The project's invented vocabulary — read before anything else |
 | 3 | [`.agent/plan/architecture.md`](.agent/plan/architecture.md) | Components, containers, C4 diagrams, operator routines |
 | 4 | [`.agent/plan/phases.md`](.agent/plan/phases.md) | How the MVP is built: Frame → Bricks → Polish |
 | 5 | [`.agent/plan/prd.md`](.agent/plan/prd.md) | The full PRD: every decision, trade-off, and assumption |
 | 6 | [`.agent/plan/epics/`](.agent/plan/epics/) | Implementation-level epics (000–042) |
 
-Reviewing the project? Start with [`docs/review-guide.md`](docs/review-guide.md)
-— it says what is binding vs. non-binding and where feedback is most useful.
-
-Developing? [`docs/development.md`](docs/development.md) covers the Podman dev
+Developing? [`docs/md/development.md`](docs/md/development.md) covers the Podman dev
 sandbox; [`AGENTS.md`](AGENTS.md) covers the TDD agent pipeline that builds
 this repo.
 

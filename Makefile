@@ -1,5 +1,5 @@
 # Kanthor Core — Podman local dev sandbox.
-# `make help` lists targets. See docs/development.md for usage.
+# `make help` lists targets. See docs/md/development.md for usage.
 
 IMAGE    := kanthord-dev
 CONTAINER:= kanthord-dev
