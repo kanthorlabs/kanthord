@@ -7,6 +7,7 @@ import { openStore } from "../foundations/sqlite-store.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import { compile } from "../compiler/compile.ts";
 import { loadTasks, setTaskStatus, markExitGatePassed } from "./dispatch.ts";
+import { initSchema } from "../store/schema.ts";
 import { pinGeneration, getPinnedGeneration, isPlanDirty, dispatchableForGeneration } from "./generation.ts";
 
 // ---------------------------------------------------------------------------
@@ -158,6 +159,7 @@ describe("src/scheduler/generation", () => {
       const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
       try {
         await compile(featDir, store, COMPILE_OPTS);
+        initSchema(store);
         loadTasks(store, "feat-001"); // seed scheduler_task rows
       } finally {
         store.close();
@@ -268,6 +270,7 @@ describe("src/scheduler/generation", () => {
       const store: Store = openStore(testDbPath2, { busyTimeout: 1000 });
       try {
         await compile(featDir2, store, COMPILE_OPTS);
+        initSchema(store);
         loadTasks(store, "feat-001");
       } finally {
         store.close();
@@ -407,16 +410,14 @@ describe("src/scheduler/generation", () => {
   });
 
   // --------------------------------------------------------------------------
-  // S2 regression — applyGenerationMigration must NOT throw when the
-  // scheduler_task table does not yet exist.
-  //
-  // PRAGMA table_info(scheduler_task) returns [] when the table is absent.
-  // Without the early-return guard, the code treats [] as "column absent" and
-  // runs ALTER TABLE on a non-existent table, throwing
-  // "no such table: scheduler_task".
+  // No-self-migration contract — getPinnedGeneration must NOT perform its own
+  // DDL. After schema-bootstrap-consolidation, initSchema() is the sole DDL
+  // path. Callers (e.g. harness/lifecycle.ts) always call initSchema before
+  // any scheduler read, so a fresh-but-initialised store with no pinned row
+  // must return null cleanly.
   // --------------------------------------------------------------------------
 
-  describe("S2 regression — migration is safe when scheduler_task is absent", () => {
+  describe("no-self-migration — getPinnedGeneration reads without DDL", () => {
     let s2Dir = "";
 
     afterEach(async () => {
@@ -424,16 +425,22 @@ describe("src/scheduler/generation", () => {
       s2Dir = "";
     });
 
-    test("applyGenerationMigration does not throw when scheduler_task table is absent", async () => {
+    test("getPinnedGeneration returns null when schema is initialised but no row exists", async () => {
       s2Dir = await mkdtemp(join(tmpdir(), "kanthord-gen-s2-"));
       const freshStore: Store = openStore(join(s2Dir, "s2.db"), { busyTimeout: 1000 });
       try {
-        // The scheduler_task table has NOT been created — only the foundation
-        // migrations ran (openStore does not create scheduler_task).
-        // getPinnedGeneration triggers applyGenerationMigration; must not throw.
+        // initSchema is the sole DDL path — callers always invoke it before
+        // any scheduler read. With the schema present but no pinned row,
+        // getPinnedGeneration must return null without throwing.
+        initSchema(freshStore);
         assert.doesNotThrow(
           () => getPinnedGeneration(freshStore, "nonexistent-task"),
-          "applyGenerationMigration must not throw when scheduler_task is absent",
+          "getPinnedGeneration must not throw when schema is initialised but no row exists",
+        );
+        assert.equal(
+          getPinnedGeneration(freshStore, "nonexistent-task"),
+          null,
+          "getPinnedGeneration must return null when no generation row is pinned",
         );
       } finally {
         freshStore.close();

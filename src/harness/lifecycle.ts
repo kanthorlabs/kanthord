@@ -20,6 +20,7 @@ import {
   dispatchableForGeneration,
 } from "../scheduler/generation.ts";
 import { loadTasks, setTaskStatus } from "../scheduler/dispatch.ts";
+import { initSchema } from "../store/schema.ts";
 import { compile } from "../compiler/compile.ts";
 import { submit, getInFlightOp } from "../broker/submit.ts";
 import { startPolling } from "../broker/poller.ts";
@@ -296,6 +297,7 @@ export async function runKillRestartScenario(
     await writeFile(join(storyDir, "002-task-beta.md"), RESTART_TASK_BETA_MD, "utf8");
 
     await compile(featureDir, h.store, { repoRegistry: ["backend"] });
+    initSchema(h.store);
     loadTasks(h.store, "feat-restart");
 
     // Write in-flight ledger entry; recoverFromLedger remaps it → needs_reconciliation.
@@ -510,9 +512,9 @@ export async function runLedgerReconciliationScenario(
         const remoteOutcome = remoteByCorrelation.get(correlation);
         if (remoteOutcome === undefined) throw new Error(`unknown fake remote correlation ${correlation}`);
         if (remoteOutcome === "done") {
-          return { outcome: "done", observed_hash: desired_effect_hash };
+          return { status: "done", observed_hash: desired_effect_hash };
         }
-        return { outcome: remoteOutcome };
+        return { status: remoteOutcome };
       },
     };
 
@@ -704,6 +706,7 @@ export async function runDirtyPlanScenario(
 
     // G=1 compile + scheduler init
     await compile(featureDir, h.store, { repoRegistry: ["backend"] });
+    initSchema(h.store);
     loadTasks(h.store, "feat-dirty");
 
     // Pin task-simple under G=1 (simulates a running task with a stamp)

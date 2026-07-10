@@ -8,6 +8,7 @@ import type { Store } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { compile } from "../compiler/compile.ts";
 import { loadTasks, markExitGatePassed, setTaskStatus } from "./dispatch.ts";
+import { initSchema } from "../store/schema.ts";
 import { LeaseManager } from "./leases.ts";
 import type { Capability } from "./leases.ts";
 import { park } from "./blocked-on.ts";
@@ -163,6 +164,7 @@ describe("src/scheduler/poll", () => {
       clock = new FakeClock(0);
       lm = new LeaseManager(store, clock);
       await compile(featDir, store, COMPILE_OPTS);
+      initSchema(store);
       loadTasks(store, "feat-001");
 
       const genRow = store.get<{ compile_hash: string }>(
@@ -353,6 +355,7 @@ describe("src/scheduler/poll", () => {
       clock2 = new FakeClock(0);
       lm2 = new LeaseManager(store2, clock2);
       await compile(featDir2, store2, COMPILE_OPTS);
+      initSchema(store2);
       loadTasks(store2, "feat-001");
 
       const genRow = store2.get<{ compile_hash: string }>(

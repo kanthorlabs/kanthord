@@ -11,6 +11,7 @@ import {
   dispatchable,
   markExitGatePassed,
   setTaskStatus,
+  initSchedulerSchema,
 } from "./dispatch.ts";
 import type { TaskRow } from "./dispatch.ts";
 import { dispatchableForGeneration } from "./generation.ts";
@@ -193,6 +194,7 @@ describe("src/scheduler/dispatch", () => {
       const store = openStore(dbPath, { busyTimeout: 1000 });
       try {
         await compile(featureDir, store, COMPILE_OPTS);
+        initSchedulerSchema(store);
         const tasks = loadTasks(store, "feat-001");
 
         const taskIds = tasks.map((t: TaskRow) => t.id).sort();
@@ -210,6 +212,7 @@ describe("src/scheduler/dispatch", () => {
       const store = openStore(dbPath, { busyTimeout: 1000 });
       try {
         await compile(featureDir, store, COMPILE_OPTS);
+        initSchedulerSchema(store);
         const tasks = loadTasks(store, "feat-001");
 
         for (const task of tasks) {
@@ -242,6 +245,7 @@ describe("src/scheduler/dispatch", () => {
       const store = openStore(dbPath, { busyTimeout: 1000 });
       try {
         await compile(featureDir, store, COMPILE_OPTS);
+        initSchedulerSchema(store);
         const tasks = loadTasks(store, "feat-001");
 
         const byId = new Map(tasks.map((t: TaskRow) => [t.id, t]));
@@ -322,6 +326,7 @@ describe("src/scheduler/dispatch", () => {
       const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
       try {
         await compile(featDir, store, COMPILE_OPTS);
+        initSchedulerSchema(store);
         loadTasks(store, "feat-001"); // seed scheduler_task rows
       } finally {
         store.close();
@@ -483,6 +488,7 @@ describe("src/scheduler/dispatch", () => {
       const store: Store = openStore(testDbPath, { busyTimeout: 1000 });
       try {
         await compile(featDirDeploy, store, COMPILE_OPTS);
+        initSchedulerSchema(store);
         loadTasks(store, "feat-001");
       } finally {
         store.close();
@@ -578,6 +584,7 @@ describe("src/scheduler/dispatch", () => {
           const store: Store = openStore(dbPath, { busyTimeout: 1000 });
           try {
             await compile(dir, store, COMPILE_OPTS);
+            initSchedulerSchema(store);
             loadTasks(store, "feat-001");
             const ids = dispatchable(store, "feat-001").map((r: TaskRow) => r.id);
             assert.deepEqual(ids, ["task-alpha"], "only root task dispatchable in deploy-free plan");

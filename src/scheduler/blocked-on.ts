@@ -12,32 +12,6 @@ export type ResumeContext = {
 };
 
 // ---------------------------------------------------------------------------
-// Scheduler-owned migration (idempotent DDL)
-//
-// Creates the broker_completion table and the blocked_on_capability table used
-// to persist a parked task's capability list so resume() can re-acquire them.
-// ---------------------------------------------------------------------------
-
-function applyBlockedOnMigration(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS broker_completion (
-      op_id       TEXT NOT NULL PRIMARY KEY,
-      status      TEXT NOT NULL,
-      result_json TEXT,
-      error_json  TEXT,
-      at          INTEGER NOT NULL DEFAULT 0
-    )`,
-  );
-  store.run(
-    `CREATE TABLE IF NOT EXISTS blocked_on_capability (
-      task_id   TEXT NOT NULL,
-      cap_kind  TEXT NOT NULL,
-      cap_value TEXT NOT NULL
-    )`,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // park — records that a task is waiting on an async op.
 //
 // Persists the task's current capabilities (so resume can re-acquire them),
@@ -52,8 +26,6 @@ export function park(
   capabilities: Capability[],
   lm: LeaseManager,
 ): void {
-  applyBlockedOnMigration(store);
-
   // Persist capabilities for re-acquisition on resume (idempotent: delete first).
   store.run("DELETE FROM blocked_on_capability WHERE task_id = ?", taskId);
   for (const cap of capabilities) {
@@ -90,16 +62,17 @@ export function writeCompletion(
   status: "done" | "failed",
   resultJson: string | null,
   errorJson: string | null,
+  at: number,
 ): void {
-  applyBlockedOnMigration(store);
   store.run(
     `INSERT OR REPLACE INTO broker_completion
        (op_id, status, result_json, error_json, at)
-     VALUES (?, ?, ?, ?, 0)`,
+     VALUES (?, ?, ?, ?, ?)`,
     opId,
     status,
     resultJson,
     errorJson,
+    at,
   );
 }
 
@@ -121,8 +94,6 @@ export function resume(
   featureId: string,
   lm: LeaseManager,
 ): ResumeContext[] {
-  applyBlockedOnMigration(store);
-
   // Tasks parked on a now-completed op.
   const parked = store.all<{
     node_id: string;

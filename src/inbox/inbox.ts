@@ -19,19 +19,6 @@ export interface InboxItem {
   evidence: Record<string, unknown>;
 }
 
-/** Ensure the inbox_items table exists (CREATE IF NOT EXISTS — idempotent). */
-function ensureInboxTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS inbox_items (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      status TEXT NOT NULL,
-      created_at INTEGER NOT NULL,
-      evidence TEXT NOT NULL
-    )`,
-  );
-}
-
 /**
  * Derive a short deterministic id from a prefix and a source string.
  * Uses SHA-256 so the id is stable across restarts (no randomness).
@@ -79,8 +66,6 @@ export interface CreateEscalationItemOpts {
  */
 export function createEscalationItem(opts: CreateEscalationItemOpts): InboxItem {
   const { source_id, task_id, reason, payload_summary, store, clock } = opts;
-  ensureInboxTable(store);
-
   const id = deterministicId("esc", source_id);
   const item: InboxItem = {
     id,
@@ -109,8 +94,6 @@ export function createBrokerEscalationItem(
   opts: CreateBrokerEscalationItemOpts,
 ): InboxItem {
   const { op_id, store, clock } = opts;
-  ensureInboxTable(store);
-
   const id = deterministicId("besc", op_id);
   const item: InboxItem = {
     id,
@@ -143,8 +126,6 @@ export interface CreateApprovalItemOpts {
  */
 export function createApprovalItem(opts: CreateApprovalItemOpts): InboxItem {
   const { op_id, verb, tier, desired_effect, store, clock } = opts;
-  ensureInboxTable(store);
-
   const id = deterministicId("apv", op_id);
   const item: InboxItem = {
     id,

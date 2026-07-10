@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { createPendingOp } from "../broker/expiry.ts";
+import { initSchema } from "../store/schema.ts";
 import type { VerbRegistryEntry } from "../broker/registry.ts";
 import {
   createEscalationItem,
@@ -42,6 +43,7 @@ describe("src/inbox/inbox.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "inbox-t1a-"));
     try {
       const store = openStore(join(dir, "inbox.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const item = createEscalationItem({
@@ -89,6 +91,7 @@ describe("src/inbox/inbox.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "inbox-t1b-"));
     try {
       const store = openStore(join(dir, "inbox.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(2000);
         const opId = "op-broker-timeout-456";
@@ -123,6 +126,7 @@ describe("src/inbox/inbox.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "inbox-t1c-"));
     try {
       const store = openStore(join(dir, "inbox.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(3000);
         // Create a pending op (Epic 005 state model — approval_required parks the op)
@@ -178,6 +182,7 @@ describe("src/inbox/inbox.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "inbox-t1d-"));
     try {
       const store = openStore(join(dir, "inbox.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const opts = {
@@ -213,6 +218,7 @@ describe("src/rpc/inbox-list.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "inbox-t2a-"));
     try {
       const store = openStore(join(dir, "t2a.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const openItem = createEscalationItem({
@@ -271,6 +277,7 @@ describe("src/rpc/inbox-list.ts", () => {
       // Pre-restart: create two items, mark one resolved, then close store
       {
         const store = openStore(dbPath, { busyTimeout: 1000 });
+        initSchema(store);
         try {
           const clock = new FakeClock(2000);
           const openItem = createEscalationItem({
@@ -329,6 +336,7 @@ describe("src/rpc/inbox-list.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "inbox-t2c-"));
     try {
       const store = openStore(join(dir, "t2c.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(3000);
         const created = createEscalationItem({

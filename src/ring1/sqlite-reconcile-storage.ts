@@ -37,15 +37,8 @@ export interface AtomicReconcileStorage extends ReconcileStorage {
 export function makeSqliteReconcileStorage(dbPath: string): AtomicReconcileStorage {
   const db = new DatabaseSync(dbPath);
 
-  // Create the table if it does not exist (migration).
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS budget_ledger (
-      task_id TEXT PRIMARY KEY,
-      ledger  TEXT NOT NULL
-    )
-  `);
-
   // Prepared statements (synchronous — DatabaseSync is fully sync).
+  // Schema is assumed to exist (created by initRing1Schema via initSchema at boot).
   const stmtSelect = db.prepare(
     "SELECT ledger FROM budget_ledger WHERE task_id = ?",
   );

@@ -120,6 +120,82 @@ PR:write and **no Administration** (this repo's token is the proven template).
 name; merge-rejection status + **redacted** body; cleanup confirmation; timestamp +
 actor. Do not store raw logs that may contain `Authorization` headers.
 
+## Interface corrections (2A) — decision records
+
+Corrections to Phase-1/2A seams discovered while building the Epic 019 Story 001
+hermetic harness suites (and confirmed by maintainer review), recorded per the Epic
+019 rule (what changed, why it was forced, epics/stories affected, harness update
+that keeps the suite green). Both landed with `npm test` green (697 tests) and
+`npm run typecheck` clean.
+
+### IC-1 — Broker reconcile contract aligned to the adapters' `{ status }` shape
+
+- **What changed:** `reconcileOp` (`src/broker/reconcile.ts`) now consumes the verb
+  adapters' `{ status }` reconcile result instead of `{ outcome }`; the
+  desired-effect hash-match invariant is enforced only when the adapter supplies
+  `observed_hash` (verbs without a content hash, e.g. `github.create_pr`, accept
+  `status:"done"` as terminal). The `github.create_pr` adapter
+  (`src/broker/verbs/github-create-pr.ts`) now reads its head-branch identity from
+  the durable `correlation` the broker passes to `reconcile`.
+- **Why the run forced it:** the Epic 019 kill-mid-`create_pr` scenario (the
+  hermetic mirror of LP4) exposed that `reconcileOp` and every real verb adapter
+  spoke different reconcile contracts (`outcome` vs `status`). The durable
+  crash-recovery path could not drive any real adapter — it would hit the
+  exhaustive-switch default and throw `Unknown reconcile outcome: undefined`. The
+  original scenario had masked this by calling `adapter.reconcile()` directly and
+  casting, so the durable `broker_completion` row was never written.
+- **Epics/stories affected:** Epic 005 (broker ledger/reconcile), Epic 014
+  (`github.create_pr` adapter), Epic 019 Story 001.
+- **Harness update:** `2a-kill-mid-create-pr` now routes reconcile through
+  `reconcileOp` and asserts the durable `broker_completion` row reaches terminal
+  `"done"` by `op_id`; `reconcile.test.ts` doubles aligned to `{ status }` (no
+  assertion weakened; hash-mismatch branch keeps `observed_hash`).
+
+### IC-2 — Scheduler schema migration is bootstrap-once, not per-method
+
+- **What changed:** the scheduler schema migration is now a single exported
+  `initSchedulerSchema` (`src/scheduler/dispatch.ts`) called **once** at daemon boot
+  (`src/daemon/boot.ts`, in `doStart()`), and once in each harness/scenario setup;
+  the four lazy per-method migration calls (in `loadTasks`, `dispatchable`,
+  `markExitGatePassed`, `setTaskStatus`) were removed — the methods now assume the
+  schema exists.
+- **Why the run forced it:** maintainer review of the out-of-scope-write scenario
+  found it abusing `setTaskStatus` purely as a DDL side-effect to create the
+  `scheduler_task` table, which surfaced that the scheduler self-migrated inside
+  every method. Schema bootstrap belongs once at program start, not on every call.
+- **Epics/stories affected:** Epic 004 (scheduler/DAG), Epic 009 (daemon boot),
+  Epic 019 Story 001.
+- **Harness update:** harness entrypoints (`golden.ts`, `lifecycle.ts`,
+  `2a-golden.ts`), the out-of-scope-write scenario, and every scheduler test suite
+  now call `initSchedulerSchema` once in setup; new `src/scheduler/migration.test.ts`
+  proves idempotency and that scheduler methods throw `no such table` on an
+  uninitialised store (no self-migration).
+
+### IC-3 — Unified schema bootstrap (no per-method lazy migration)
+
+- **What changed:** every remaining self-migrating table moved to a single
+  `initSchema(store)` aggregator (`src/store/schema.ts`) composing one schema-init
+  per subsystem (`broker/`, `inbox/`, `rpc/`, `scheduler/`, `ring1/` `schema.ts`),
+  called **once** at `daemon/boot.ts` `doStart()` and in every harness/scenario/test
+  setup that opens a fresh Store. All lazy per-method DDL wrappers
+  (`ensure*Table` / `apply*Migration`) and their in-method calls were removed;
+  methods now assume the schema exists. Left untouched (legitimately one-shot,
+  not per-method): compile's `applyCompiledPlanMigration`, rebuild's op_ledger,
+  `foundations/sqlite-store.ts` internal init, harness `harness_soak_state`.
+- **Why the run forced it:** the scheduler-migration-once fix (IC-2) exposed the
+  same anti-pattern across broker/inbox/rpc/scheduler/ring1. Critically,
+  `broker_completion` was `CREATE`-d in **three** places with **divergent DDL**
+  (`blocked-on.ts` used `at INTEGER NOT NULL DEFAULT 0` / `op_id TEXT NOT NULL
+  PRIMARY KEY` vs `reconcile.ts`/`poller.ts`), so the live schema was
+  **order-dependent** — a latent bug. Consolidation gives it one canonical owner
+  (`broker/schema.ts`).
+- **Epics/stories affected:** Epics 004/005/006 (scheduler + broker + inbox),
+  Epic 009 (daemon boot), Epic 015 (ring-1 budget ledger), Epic 019 Story 001.
+- **Harness update:** ~20 test suites now call `initSchema` once in setup;
+  `src/store/schema.test.ts` proves the aggregator creates all tables idempotently
+  and that representative methods throw `no such table` on an uninitialised store.
+  Whole suite green at 703 tests.
+
 ## LP1–LP5 results
 
 _To be filled during the live proof (see Epic 019 authoring for each LP's Action /

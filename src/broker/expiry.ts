@@ -13,18 +13,6 @@ interface PendingRow {
   status: string;
 }
 
-function ensurePendingTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS broker_pending (
-      op_id TEXT PRIMARY KEY,
-      verb TEXT NOT NULL,
-      idempotency_key TEXT NOT NULL,
-      pending_at INTEGER NOT NULL,
-      status TEXT NOT NULL
-    )`,
-  );
-}
-
 /**
  * Create a pending op record. The op exists (idempotency reserved) but has
  * NOT been submitted to the remote yet. Expiry applies while in this state:
@@ -40,8 +28,6 @@ export function createPendingOp(
   store: Store,
   clock: Clock,
 ): string {
-  ensurePendingTable(store);
-
   // S4: dedup on (verb, idempotency_key) — return existing op_id if present.
   const existing = store.get<{ op_id: string }>(
     "SELECT op_id FROM broker_pending WHERE verb = ? AND idempotency_key = ?",
@@ -82,8 +68,6 @@ export async function releasePendingOp(
   store: Store,
   clock: Clock,
 ): Promise<"in_flight" | "expired"> {
-  ensurePendingTable(store);
-
   const row = store.get<PendingRow>(
     `SELECT op_id, verb, idempotency_key, pending_at, status
      FROM broker_pending WHERE op_id = ?`,

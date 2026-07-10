@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { createPendingOp } from "../broker/expiry.ts";
+import { initSchema } from "../store/schema.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import { createApprovalItem, createEscalationItem } from "./inbox.ts";
 import {
@@ -75,6 +76,7 @@ describe("src/inbox/respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t1a-"));
     try {
       const store = openStore(join(dir, "respond.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const { adapter, submitCalls } = makeFakeAdapter(["req-t1a"]);
@@ -142,6 +144,7 @@ describe("src/inbox/respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t1b-"));
     try {
       const store = openStore(join(dir, "respond.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const { adapter, submitCalls } = makeFakeAdapter(["req-t1b"]);
@@ -217,6 +220,7 @@ describe("src/inbox/respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t1c-"));
     try {
       const store = openStore(join(dir, "respond.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const { adapter, submitCalls } = makeFakeAdapter(["req-t1c"]);
@@ -289,6 +293,7 @@ describe("src/inbox/respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t1d-"));
     try {
       const store = openStore(join(dir, "respond.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const { adapter, submitCalls } = makeFakeAdapter(["req-t1d"]);
@@ -366,6 +371,7 @@ describe("src/inbox/respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t1e-"));
     try {
       const store = openStore(join(dir, "respond.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const { adapter } = makeFakeAdapter(["req-t1e"]);
@@ -434,6 +440,7 @@ describe("src/inbox/respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t1f-"));
     try {
       const store = openStore(join(dir, "respond.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(1000);
         const { adapter } = makeFakeAdapter([]);
@@ -511,6 +518,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t2a-"));
     try {
       const store = openStore(join(dir, "t2a.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(5000);
         const taskId = "task-t2a";
@@ -574,6 +582,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t2b-"));
     try {
       const store = openStore(join(dir, "t2b.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(6000);
         const taskId = "task-t2b";
@@ -634,6 +643,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t2c-"));
     try {
       const store = openStore(join(dir, "t2c.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(7000);
         const taskId = "task-t2c";
@@ -704,6 +714,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-t2d-"));
     try {
       const store = openStore(join(dir, "t2d.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(8000);
 
@@ -756,6 +767,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-b2-"));
     try {
       const store = openStore(join(dir, "b2.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(9000);
         const opId = createPendingOp(FAKE_ENTRY, "idem-b2", store, clock);
@@ -809,6 +821,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-b1a-"));
     try {
       const store = openStore(join(dir, "b1a.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         // Use Date.now() so pending_at is in the real epoch — the server's real
         // clock must not see the op as expired (FakeClock(10000) would set
@@ -873,6 +886,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-b1b-"));
     try {
       const store = openStore(join(dir, "b1b.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(11000);
         const opId = createPendingOp(FAKE_ENTRY, "idem-b1b", store, clock);
@@ -920,6 +934,7 @@ describe("src/rpc/inbox-respond.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "respond-b1c-"));
     try {
       const store = openStore(join(dir, "b1c.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(12000);
 

@@ -16,6 +16,7 @@ import type { Logger } from "./boot.ts";
 import { FeatureStore } from "../store/feature-store.ts";
 import { writeLedgerEntry } from "../broker/ledger.ts";
 import { LeaseManager } from "../scheduler/leases.ts";
+import { initSchema } from "../store/schema.ts";
 
 // ---------------------------------------------------------------------------
 // Mock logger — captures structured records for assertion
@@ -89,6 +90,7 @@ describe("src/daemon/boot", () => {
   describe("T1 — Boot wires components + rebuilds from markdown/ledger", () => {
     test("bootDaemon returns lifecycle with start, stop, restart", () => {
       const store = openStore(":memory:", { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1_000_000);
       const logger = new MockLogger();
       const lifecycle = bootDaemon({
@@ -106,6 +108,7 @@ describe("src/daemon/boot", () => {
 
     test("start() with empty SQLite logs boot record and recovery-summary with pendingTaskCount >= 1 (markdown rebuild proven)", async () => {
       const store = openStore(":memory:", { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1_000_000);
       const logger = new MockLogger();
       const lifecycle = bootDaemon({
@@ -162,6 +165,7 @@ describe("src/daemon/boot", () => {
         status: "in_flight",
       });
       const store = openStore(":memory:", { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1_000_000);
       const logger = new MockLogger();
       const lifecycle = bootDaemon({
@@ -204,6 +208,7 @@ describe("src/daemon/boot", () => {
 
     test("restart() - stale crashed-holder lease is reclaimable per Epic 004 TTL semantics", async () => {
       const store = openStore(":memory:", { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1_000_000);
       const logger = new MockLogger();
       const lifecycle = bootDaemon({
@@ -252,6 +257,7 @@ describe("src/daemon/boot", () => {
       );
 
       const store = openStore(":memory:", { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1_000_000);
       const logger = new MockLogger();
       const lifecycle = bootDaemon({

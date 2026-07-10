@@ -55,19 +55,6 @@ function fetchAndValidate(store: Store, itemId: string, expectedKind: string): I
   return item;
 }
 
-/** Ensure the approval_decisions table exists (idempotent DDL — sqlite-gotchas). */
-function ensureDecisionsTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS approval_decisions (
-      item_id TEXT PRIMARY KEY,
-      op_id TEXT NOT NULL,
-      actor TEXT NOT NULL,
-      action TEXT NOT NULL,
-      decided_at INTEGER NOT NULL
-    )`,
-  );
-}
-
 /** Mark an inbox item as resolved. */
 function resolveItem(store: Store, itemId: string): void {
   store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", itemId);
@@ -114,7 +101,6 @@ export async function approveItem(opts: ApproveItemOpts): Promise<void> {
   const { item_id, actor, op_id, entry, adapter, payload, store, clock } = opts;
 
   fetchAndValidate(store, item_id, "approval");
-  ensureDecisionsTable(store);
 
   // Crash-safe durable decision FIRST — recovery can complete dispatch.
   store.run(
@@ -166,7 +152,6 @@ export async function denyItem(opts: DenyItemOpts): Promise<void> {
   const { item_id, actor, op_id, store, clock } = opts;
 
   fetchAndValidate(store, item_id, "approval");
-  ensureDecisionsTable(store);
 
   // Crash-safe durable decision FIRST — mirrors approveItem ordering so the
   // audit record survives a crash between journal write and resolve.

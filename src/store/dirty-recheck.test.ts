@@ -34,6 +34,7 @@ import type { Store } from "../foundations/sqlite-store.ts";
 import { compile, computeCompileHash } from "../compiler/compile.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { loadTasks } from "../scheduler/dispatch.ts";
+import { initSchema } from "./schema.ts";
 import { LeaseManager } from "../scheduler/leases.ts";
 import { pollOnce } from "../scheduler/poll.ts";
 import { recheckDirty, pollWithRecheck } from "./dirty-recheck.ts";
@@ -236,6 +237,7 @@ describe("src/store/dirty-recheck — Story 012-003 Task T2", () => {
     const dbPath = join(featureDir, "test.db");
     store = openStore(dbPath, { busyTimeout: 1000 });
     await compile(featureDir, store, COMPILE_OPTS);
+    initSchema(store);
     loadTasks(store, "feat-recheck");
 
     clock = new FakeClock(0);
@@ -320,6 +322,7 @@ describe("src/store/dirty-recheck — B6 pollWithRecheck call site", () => {
     const dbPath = join(featureDir, "test.db");
     store = openStore(dbPath, { busyTimeout: 1000 });
     await compile(featureDir, store, COMPILE_OPTS);
+    initSchema(store);
     loadTasks(store, "feat-recheck");
 
     clock = new FakeClock(0);

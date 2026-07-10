@@ -28,6 +28,7 @@ import { execSync } from "node:child_process";
 import { openStore } from "../../foundations/sqlite-store.ts";
 import { FakeClock } from "../../foundations/clock.ts";
 import { registerVerb } from "../registry.ts";
+import { initSchema } from "../../store/schema.ts";
 import { submit } from "../submit.ts";
 import { startPolling } from "../poller.ts";
 import { makePushAdapter } from "./git-push.ts";
@@ -112,6 +113,7 @@ describe("src/broker/verbs/git-push.ts", () => {
       ).trim();
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const pushEntry = makePushEntry();
       const pushAdapter = makePushAdapter({ gitBin: "git", verifySetup: alwaysPass });
@@ -189,6 +191,7 @@ describe("src/broker/verbs/git-push.ts", () => {
       ).trim();
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const pushEntry = makePushEntry();
       const pushAdapter = makePushAdapter({ gitBin: "git", verifySetup: alwaysPass });
@@ -264,6 +267,7 @@ describe("src/broker/verbs/git-push.ts", () => {
       execSync(`git -C "${workDir}" commit -m "divergent on nff"`, { stdio: "pipe" });
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const pushEntry = makePushEntry();
       const pushAdapter = makePushAdapter({ gitBin: "git", verifySetup: alwaysPass });
@@ -557,6 +561,7 @@ describe("src/broker/verbs/git-push.ts", () => {
       execSync(`git -C "${workDir}" commit -m "secret file"`, { stdio: "pipe" });
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const pushEntry = makePushEntry();
 
@@ -665,6 +670,7 @@ describe("src/broker/verbs/git-push.ts", () => {
       assert.equal(diffOut.trim(), "", "origin diff must be empty — origin is up-to-date");
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const pushEntry = makePushEntry();
 

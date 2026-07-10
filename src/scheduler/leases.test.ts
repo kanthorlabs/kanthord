@@ -8,6 +8,7 @@ import type { Store } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { LeaseManager } from "./leases.ts";
 import type { Capability } from "./leases.ts";
+import { initSchema } from "../store/schema.ts";
 
 // ---------------------------------------------------------------------------
 // Suite: src/scheduler/leases
@@ -25,6 +26,7 @@ describe("src/scheduler/leases", () => {
     testDir = await mkdtemp(join(tmpdir(), "kanthord-leases-"));
     const dbPath = join(testDir, "test.db");
     store = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(store);
     clock = new FakeClock(0);
     mgr = new LeaseManager(store, clock);
   });

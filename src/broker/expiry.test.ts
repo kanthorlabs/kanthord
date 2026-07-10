@@ -7,6 +7,7 @@ import { openStore } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
 import { createPendingOp, releasePendingOp } from "./expiry.ts";
+import { initSchema } from "../store/schema.ts";
 
 // Suite: src/broker/expiry.ts
 // Story 005 — Per-Verb Pending Expiry, Task T1:
@@ -22,6 +23,7 @@ describe("src/broker/expiry.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-expiry-t1a-"));
     try {
       const store = openStore(join(dir, "expiry.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         // VerbRegistryEntry with pending_expiry_ms declares the per-verb window.
@@ -83,6 +85,7 @@ describe("src/broker/expiry.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-expiry-t1b-"));
     try {
       const store = openStore(join(dir, "expiry.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = {
@@ -138,6 +141,7 @@ describe("src/broker/expiry.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-expiry-t1c-"));
     try {
       const store = openStore(join(dir, "expiry.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
 
@@ -222,6 +226,7 @@ describe("src/broker/expiry.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-expiry-s4-"));
     try {
       const store = openStore(join(dir, "expiry.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = {

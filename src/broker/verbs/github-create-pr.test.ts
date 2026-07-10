@@ -20,6 +20,7 @@ import { tmpdir } from "node:os";
 import { openStore } from "../../foundations/sqlite-store.ts";
 import { FakeClock } from "../../foundations/clock.ts";
 import { registerVerb } from "../registry.ts";
+import { initSchema } from "../../store/schema.ts";
 import { submit } from "../submit.ts";
 import { startPolling } from "../poller.ts";
 import { makeCreatePrAdapter } from "./github-create-pr.ts";
@@ -153,6 +154,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       };
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const entry = makeCreatePrEntry();
       const adapter = makeCreatePrAdapter({
@@ -235,6 +237,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       };
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const entry = makeCreatePrEntry();
       const adapter = makeCreatePrAdapter({
@@ -306,6 +309,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       };
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const entry = makeCreatePrEntry();
       const adapter = makeCreatePrAdapter({
@@ -402,6 +406,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       void originalGetPr; // suppress unused warning
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       // observed_state_can_regress: true so the poller holds first terminal and verifies
       const entry = makeCreatePrEntry();
@@ -493,6 +498,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       };
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       // rate_limit: 60 req/min → deferMs = ceil(60000/60) = 1000
       const entry = {
@@ -600,6 +606,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       };
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       // Short timeout so we don't need many ticks
       const entry = {
@@ -779,6 +786,7 @@ describe("src/broker/verbs/github-create-pr.ts", () => {
       };
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
       const entry = { ...makeCreatePrEntry(), observed_state_can_regress: false };
       const adapter = makeCreatePrAdapter({

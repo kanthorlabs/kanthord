@@ -16,7 +16,7 @@ export type TaskRow = {
 // Scheduler-owned migration (idempotent DDL)
 // ---------------------------------------------------------------------------
 
-function applySchedulerMigration(store: Store): void {
+export function initSchedulerSchema(store: Store): void {
   store.run(
     `CREATE TABLE IF NOT EXISTS scheduler_task (
       node_id          TEXT NOT NULL PRIMARY KEY,
@@ -43,8 +43,6 @@ function applySchedulerMigration(store: Store): void {
 // ---------------------------------------------------------------------------
 
 export function loadTasks(store: Store, featureId: string): TaskRow[] {
-  applySchedulerMigration(store);
-
   // All task-kind and deploy-stage-kind nodes for the feature
   const nodes = store.all<{ id: string; generation: number }>(
     "SELECT id, generation FROM plan_node WHERE feature_id = ? AND kind IN ('task','deploy-stage')",
@@ -93,8 +91,6 @@ export function loadTasks(store: Store, featureId: string): TaskRow[] {
 // ---------------------------------------------------------------------------
 
 export function dispatchable(store: Store, featureId: string): TaskRow[] {
-  applySchedulerMigration(store);
-
   // Pending tasks where no task/deploy-stage predecessor is blocking (gate not yet passed)
   const ready = store.all<{ node_id: string; generation: number }>(
     `SELECT DISTINCT st.node_id, pn.generation
@@ -141,7 +137,6 @@ export function dispatchable(store: Store, featureId: string): TaskRow[] {
 // ---------------------------------------------------------------------------
 
 export function markExitGatePassed(store: Store, nodeId: string): void {
-  applySchedulerMigration(store);
   store.run(
     "UPDATE scheduler_task SET exit_gate_passed = 1 WHERE node_id = ?",
     nodeId,
@@ -157,7 +152,6 @@ export function setTaskStatus(
   nodeId: string,
   status: string,
 ): void {
-  applySchedulerMigration(store);
   store.run(
     "UPDATE scheduler_task SET status = ? WHERE node_id = ?",
     status,

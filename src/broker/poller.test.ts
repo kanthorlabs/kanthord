@@ -8,6 +8,7 @@ import { FakeClock } from "../foundations/clock.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
 import type { InFlightOp } from "./submit.ts";
 import { startPolling } from "./poller.ts";
+import { initSchema } from "../store/schema.ts";
 
 /** Row shape of broker_completion as read back from SQLite. */
 interface CompletionRow {
@@ -50,6 +51,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t1a-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = makeEntry();
@@ -100,6 +102,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t1b-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = makeEntry();
@@ -140,6 +143,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t1c-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = makeEntry();
@@ -183,6 +187,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t2a-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         // timeout=15000ms, poll_interval=5000ms: after 3 non-terminal polls the
@@ -247,6 +252,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t2b-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         // poll_interval=1000ms, backoff="exponential": first retry at 2000ms
@@ -322,6 +328,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t2c-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         // rate_limit: 10/min → 6000ms per-request deferral; poll_interval=1000ms
@@ -391,6 +398,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t2d1-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = makeEntry({ observed_state_can_regress: false });
@@ -431,6 +439,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t2d2-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         const entry = makeEntry({ observed_state_can_regress: true, timeout: 300000 });
@@ -488,6 +497,7 @@ describe("src/broker/poller.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-poller-t1d-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const clock = new FakeClock(0);
         // Verb with custom terminal_states — "done" and "failed" are NOT terminal here

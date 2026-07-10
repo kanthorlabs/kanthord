@@ -15,6 +15,7 @@ import {
   dispatchable,
 } from "./dispatch.ts";
 import type { TaskRow } from "./dispatch.ts";
+import { initSchema } from "../store/schema.ts";
 import { LeaseManager } from "./leases.ts";
 import { pollOnce } from "./poll.ts";
 import type { HandlerMap } from "../deploy/chain.ts";
@@ -131,6 +132,7 @@ describe("src/scheduler/deploy-dispatch", () => {
       clock = new FakeClock(0);
       lm = new LeaseManager(store, clock);
       await compile(featDir, store, COMPILE_OPTS);
+      initSchema(store);
       loadTasks(store, "feat-001");
       const genRow = store.get<{ compile_hash: string }>(
         "SELECT compile_hash FROM plan_generation WHERE feature_id = 'feat-001' ORDER BY generation DESC LIMIT 1",
@@ -290,6 +292,7 @@ describe("src/scheduler/deploy-dispatch", () => {
         clock = new FakeClock(0);
         lm = new LeaseManager(store, clock);
         await compile(featDir, store, COMPILE_OPTS);
+        initSchema(store);
         loadTasks(store, "feat-001");
         const genRow = store.get<{ compile_hash: string }>(
           "SELECT compile_hash FROM plan_generation WHERE feature_id = 'feat-001' ORDER BY generation DESC LIMIT 1",
@@ -400,6 +403,7 @@ describe("src/scheduler/deploy-dispatch", () => {
         clock = new FakeClock(0);
         lm = new LeaseManager(store, clock);
         await compile(featDir, store, COMPILE_OPTS);
+        initSchema(store);
         loadTasks(store, "feat-001");
         const genRow = store.get<{ compile_hash: string }>(
           "SELECT compile_hash FROM plan_generation WHERE feature_id = 'feat-001' ORDER BY generation DESC LIMIT 1",
@@ -534,6 +538,7 @@ describe("src/scheduler/deploy-dispatch", () => {
       clock = new FakeClock(0);
       lm = new LeaseManager(store, clock);
       await compile(featDir, store, COMPILE_OPTS);
+      initSchema(store);
       loadTasks(store, "feat-001");
       const genRow = store.get<{ compile_hash: string }>(
         "SELECT compile_hash FROM plan_generation WHERE feature_id = 'feat-001' ORDER BY generation DESC LIMIT 1",

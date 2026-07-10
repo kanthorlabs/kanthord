@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
+import type { HoldPoint } from "./hold-point.ts";
 
 /** A broker operation that has been submitted to the remote adapter. */
 export interface InFlightOp {
@@ -16,18 +17,6 @@ interface InFlightRow {
   verb: string;
   request_id: string;
   status: string;
-}
-
-function ensureTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS broker_in_flight (
-      op_id TEXT PRIMARY KEY,
-      verb TEXT NOT NULL,
-      request_id TEXT NOT NULL,
-      idempotency_key TEXT NOT NULL,
-      status TEXT NOT NULL
-    )`,
-  );
 }
 
 /**
@@ -46,6 +35,7 @@ export async function submit(
   payload: unknown,
   idempotencyKey: string,
   store: Store,
+  options?: { holdPoint?: HoldPoint },
 ): Promise<string> {
   // Guard: key is required when the verb declares a non-zero idempotency window.
   if (entry.idempotency.window_ms > 0 && idempotencyKey === "") {
@@ -53,8 +43,6 @@ export async function submit(
       `idempotency key is required for verb "${entry.verb}" (window_ms=${entry.idempotency.window_ms})`,
     );
   }
-
-  ensureTable(store);
 
   // Dedup: return the existing op_id if this (verb, idempotencyKey) is already in flight.
   const existing = store.get<{ op_id: string }>(
@@ -64,6 +52,24 @@ export async function submit(
   );
   if (existing !== undefined) {
     return existing.op_id;
+  }
+
+  // Hold-point gate: if a pre-submit hold is configured for this verb, record
+  // the op as "held" and do NOT invoke the adapter.
+  const holdPoint = options?.holdPoint;
+  if (holdPoint?.shouldHold(entry.verb, "pre-submit")) {
+    const opId = randomUUID();
+    store.run(
+      `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      opId,
+      entry.verb,
+      "",
+      idempotencyKey,
+      "held",
+    );
+    holdPoint.hold(opId);
+    return opId;
   }
 
   const opId = randomUUID();
@@ -87,7 +93,6 @@ export function getInFlightOp(
   opId: string,
   store: Store,
 ): InFlightOp | undefined {
-  ensureTable(store);
   const row = store.get<InFlightRow>(
     `SELECT op_id, verb, request_id, status FROM broker_in_flight WHERE op_id = ?`,
     opId,

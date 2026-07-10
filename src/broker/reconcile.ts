@@ -6,20 +6,10 @@ import type { Clock } from "../foundations/clock.ts";
 
 /** Internal shape of the value returned by an adapter's `reconcile` call. */
 interface ReconcileResult {
-  outcome: "done" | "failed" | "resubmit" | "escalate";
+  /** Adapters' native contract — the single source of terminal status. */
+  status?: "done" | "failed" | "resubmit" | "escalate";
+  /** Present only when the adapter can hash-verify the desired effect (e.g. git verbs). */
   observed_hash?: string;
-}
-
-function ensureCompletionTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS broker_completion (
-      op_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL,
-      result_json TEXT,
-      error_json TEXT,
-      at INTEGER NOT NULL
-    )`,
-  );
 }
 
 function writeCompletionRow(
@@ -42,9 +32,10 @@ function writeCompletionRow(
  * adapter's `reconcile` path with the op's durable identity from the ledger.
  *
  * Dispatch logic (PRD §5, crash-reconciliation state machine):
- * - `done` + hash matches desired  → write `done` completion row, return `"done"`.
- * - `done` + hash mismatch         → desired effect unverifiable; write `failed`
- *                                    completion row, return `"failed"`.
+ * - `done` + `observed_hash` present + matches desired → write `done` completion row, return `"done"`.
+ * - `done` + `observed_hash` present + mismatch → desired effect unverifiable; write
+ *                                    `failed` completion row, return `"failed"`.
+ * - `done` + no `observed_hash` (e.g. github.create_pr has no content hash) → write `done`.
  * - `failed`                       → write `failed` completion row, return `"failed"`.
  * - `resubmit`                     → idempotent resubmit via `submit` passing the
  *                                    original `payload` (dedup on the original
@@ -65,25 +56,33 @@ export async function reconcileOp(
   clock: Clock,
   payload?: unknown,
 ): Promise<"done" | "failed" | "resubmit" | "escalate"> {
-  ensureCompletionTable(store);
-
   const raw = await adapter.reconcile({
     correlation: ledgerEntry.correlation,
     desired_effect_hash: ledgerEntry.desired_effect_hash,
   });
   const result = raw as ReconcileResult;
 
-  switch (result.outcome) {
+  const terminalStatus = result.status;
+  if (terminalStatus === undefined) {
+    throw new Error("Adapter reconcile returned no status");
+  }
+
+  switch (terminalStatus) {
     case "done": {
-      if (result.observed_hash === ledgerEntry.desired_effect_hash) {
-        writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now());
-        return "done";
+      if (result.observed_hash !== undefined) {
+        // Hash invariant: only enforced when the adapter supplies an observed_hash.
+        if (result.observed_hash === ledgerEntry.desired_effect_hash) {
+          writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now());
+          return "done";
+        }
+        // Hash mismatch: desired effect unverifiable — treat as failed.
+        // S1: write a broker_completion row so the op is terminally recorded.
+        writeCompletionRow(store, ledgerEntry.op_id, "failed", clock.now());
+        return "failed";
       }
-      // Hash mismatch: the claimed done state cannot be verified against the
-      // desired-effect hash — treat as failed (desired effect unverifiable).
-      // S1: write a broker_completion row so the op is terminally recorded.
-      writeCompletionRow(store, ledgerEntry.op_id, "failed", clock.now());
-      return "failed";
+      // No observed_hash (e.g. github.create_pr has no content hash): accept done.
+      writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now());
+      return "done";
     }
     case "failed": {
       writeCompletionRow(store, ledgerEntry.op_id, "failed", clock.now());
@@ -101,8 +100,8 @@ export async function reconcileOp(
       return "escalate";
     }
     default: {
-      const _exhaustive: never = result.outcome;
-      throw new Error(`Unknown reconcile outcome: ${String(_exhaustive)}`);
+      const _exhaustive: never = terminalStatus;
+      throw new Error(`Unknown reconcile status: ${String(_exhaustive)}`);
     }
   }
 }

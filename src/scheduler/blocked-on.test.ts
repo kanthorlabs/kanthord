@@ -8,6 +8,7 @@ import type { Store } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { compile } from "../compiler/compile.ts";
 import { loadTasks, dispatchable } from "./dispatch.ts";
+import { initSchema } from "../store/schema.ts";
 import { LeaseManager } from "./leases.ts";
 import type { Capability } from "./leases.ts";
 import { park, writeCompletion, resume } from "./blocked-on.ts";
@@ -95,6 +96,7 @@ describe("src/scheduler/blocked-on", () => {
     clock = new FakeClock(0);
     lm = new LeaseManager(store, clock);
     await compile(featDir, store, COMPILE_OPTS);
+    initSchema(store); // create all subsystem tables before first scheduler call
     loadTasks(store, "feat-001"); // seed scheduler_task rows
   });
 
@@ -177,7 +179,7 @@ describe("src/scheduler/blocked-on", () => {
     store = freshStore;
 
     // Write the completion row via the fresh store (different in-memory objects).
-    writeCompletion(freshStore, "op-1", "done", '{"reconstructed":true}', null);
+    writeCompletion(freshStore, "op-1", "done", '{"reconstructed":true}', null, 1000);
 
     // resume() must work purely from DB state — blocked_on row + completion row.
     const contexts = resume(freshStore, "feat-001", freshLm);
@@ -222,7 +224,7 @@ describe("src/scheduler/blocked-on", () => {
     );
 
     // Write completion row (fake broker — real broker is Epic 005)
-    writeCompletion(store, "op-1", "done", '{"value":42}', null);
+    writeCompletion(store, "op-1", "done", '{"value":42}', null, 1000);
 
     // resume() reacquires leases, clears blocked_on, returns contexts with result
     const contexts = resume(store, "feat-001", lm);
@@ -270,7 +272,7 @@ describe("src/scheduler/blocked-on", () => {
     );
 
     // Write the completion row — the op is done, but the lease is still held.
-    writeCompletion(store, "op-2", "done", null, null);
+    writeCompletion(store, "op-2", "done", null, null, 1000);
 
     // Call resume — lm.acquire("task-alpha", [scope]) returns false because
     // competitor still holds ios/**.  The task must remain parked.
@@ -311,5 +313,16 @@ describe("src/scheduler/blocked-on", () => {
       !dispatchSet.includes("task-alpha"),
       "parked task must NOT appear in dispatchable set when reacquire fails",
     );
+  });
+
+  test("writeCompletion persists the supplied at timestamp into broker_completion.at", () => {
+    const AT = 9_876_543;
+    writeCompletion(store, "op-ts", "done", null, null, AT);
+    const row = store.get<{ at: number }>(
+      "SELECT at FROM broker_completion WHERE op_id = ?",
+      "op-ts",
+    );
+    assert.ok(row !== undefined, "broker_completion row must exist for op-ts");
+    assert.equal(row.at, AT, "broker_completion.at must equal the supplied timestamp");
   });
 });

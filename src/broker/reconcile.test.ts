@@ -9,6 +9,7 @@ import { FeatureStore } from "../store/feature-store.ts";
 import { writeLedgerEntry, recoverFromLedger } from "./ledger.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
 import { reconcileOp } from "./reconcile.ts";
+import { initSchema } from "../store/schema.ts";
 
 // Suite: src/broker/reconcile.ts
 // Story 004 — Durable Operation Ledger & Crash Reconciliation, Task T2:
@@ -60,6 +61,7 @@ describe("src/broker/reconcile.ts", () => {
 
       // Simulate crash: use a fresh SQLite store (no in-flight/completion rows).
       const store = openStore(join(dir, "broker-T2a.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -75,7 +77,7 @@ describe("src/broker/reconcile.ts", () => {
         submit: async () => "req-ignored",
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: observed hash matches desired → done
-        reconcile: async () => ({ outcome: "done", observed_hash: DESIRED_HASH }),
+        reconcile: async () => ({ status: "done", observed_hash: DESIRED_HASH }),
       };
 
       const outcome = await reconcileOp(ledgerEntry, makeEntry(), adapter, store, clock);
@@ -115,6 +117,7 @@ describe("src/broker/reconcile.ts", () => {
       });
 
       const store = openStore(join(dir, "broker-T2b.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -126,7 +129,7 @@ describe("src/broker/reconcile.ts", () => {
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: claims done but observed hash does NOT match desired
         reconcile: async () => ({
-          outcome: "done",
+          status: "done",
           observed_hash: "sha256-WRONG-HASH-mismatch",
         }),
       };
@@ -165,6 +168,7 @@ describe("src/broker/reconcile.ts", () => {
       });
 
       const store = openStore(join(dir, "broker-T2c.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -175,7 +179,7 @@ describe("src/broker/reconcile.ts", () => {
         submit: async () => "req-ignored",
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: verb is unrecoverably failed
-        reconcile: async () => ({ outcome: "failed" }),
+        reconcile: async () => ({ status: "failed" }),
       };
 
       const outcome = await reconcileOp(ledgerEntry, makeEntry(), adapter, store, clock);
@@ -216,6 +220,7 @@ describe("src/broker/reconcile.ts", () => {
       });
 
       const store = openStore(join(dir, "broker-T2d.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -230,7 +235,7 @@ describe("src/broker/reconcile.ts", () => {
         },
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: state is indeterminate, resubmit required
-        reconcile: async () => ({ outcome: "resubmit" }),
+        reconcile: async () => ({ status: "resubmit" }),
       };
 
       // First reconcile call — should call adapter.submit once
@@ -293,6 +298,7 @@ describe("src/broker/reconcile.ts", () => {
       });
 
       const store = openStore(join(dir, "broker-T2e.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -303,7 +309,7 @@ describe("src/broker/reconcile.ts", () => {
         submit: async () => "req-ignored",
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: remote state is ambiguous or unresolvable — escalate
-        reconcile: async () => ({ outcome: "escalate" }),
+        reconcile: async () => ({ status: "escalate" }),
       };
 
       const outcome = await reconcileOp(ledgerEntry, makeEntry(), adapter, store, clock);
@@ -348,6 +354,7 @@ describe("src/broker/reconcile.ts", () => {
       });
 
       const store = openStore(join(dir, "broker-s1.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -359,7 +366,7 @@ describe("src/broker/reconcile.ts", () => {
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: claims done but observed hash does NOT match desired
         reconcile: async () => ({
-          outcome: "done",
+          status: "done",
           observed_hash: "sha256-WRONG-HASH-s1",
         }),
       };
@@ -410,6 +417,7 @@ describe("src/broker/reconcile.ts", () => {
       });
 
       const store = openStore(join(dir, "broker-s2.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(1000);
 
       const recovered = await recoverFromLedger(featureStore, storyId, taskStem);
@@ -426,7 +434,7 @@ describe("src/broker/reconcile.ts", () => {
         },
         poll_status: async () => ({ status: "pending" }),
         // Fake remote: state is indeterminate, must resubmit
-        reconcile: async () => ({ outcome: "resubmit" }),
+        reconcile: async () => ({ status: "resubmit" }),
       };
 
       // S2: reconcileOp must accept a payload parameter (6th arg) so the

@@ -46,22 +46,6 @@ function capabilityKey(cap: Capability): string {
 }
 
 // ---------------------------------------------------------------------------
-// Scheduler-owned migration (idempotent DDL)
-// ---------------------------------------------------------------------------
-
-function applyLeaseMigration(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS scheduler_lease (
-      capability_key TEXT NOT NULL PRIMARY KEY,
-      holder         TEXT NOT NULL,
-      acquired_at    INTEGER NOT NULL,
-      expires_at     INTEGER NOT NULL,
-      heartbeat_at   INTEGER NOT NULL
-    )`,
-  );
-}
-
-// ---------------------------------------------------------------------------
 // LeaseManager
 //
 // Serializes task dispatch on shared capabilities (write-scope paths and
@@ -77,7 +61,6 @@ export class LeaseManager {
   constructor(store: Store, clock: Clock) {
     this.store = store;
     this.clock = clock;
-    applyLeaseMigration(this.store);
   }
 
   /**

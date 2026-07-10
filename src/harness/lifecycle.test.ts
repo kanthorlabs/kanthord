@@ -20,12 +20,14 @@ import {
   runBrokerTimeoutScenario,
   runBrokerRegressionScenario,
 } from "./lifecycle.ts";
+import { initSchema } from "../store/schema.ts";
 
 describe("src/harness/lifecycle", () => {
   test(
     "lease expires: heartbeat lapses, waiter dispatches on reclaimed capability",
     async () => {
       const h = await harness();
+      initSchema(h.store);
       try {
         const result = runLeaseExpiryScenario(h);
         assert.strictEqual(
@@ -43,6 +45,7 @@ describe("src/harness/lifecycle", () => {
     "kill and restart: TC-03 checkpoints recover all runbook fields field-by-field",
     async () => {
       const h = await harness();
+      initSchema(h.store);
       try {
         const results = await runKillRestartScenario(h);
         assert.deepStrictEqual(
@@ -114,6 +117,7 @@ describe("src/harness/lifecycle", () => {
     "crash/restart + ledger reconciliation: TC-04 covers fake remote done, failed, resubmit, escalate",
     async () => {
       const h = await harness();
+      initSchema(h.store);
       try {
         const result = await runLedgerReconciliationScenario(h);
 
@@ -174,6 +178,7 @@ describe("src/harness/lifecycle", () => {
     "compaction respawn: threshold triggers checkpoint + respawn, four fields match field-by-field",
     async () => {
       const h = await harness();
+      initSchema(h.store);
       try {
         const result = await runCompactionRespawnScenario(h);
         assert.ok(
@@ -205,6 +210,7 @@ describe("src/harness/lifecycle", () => {
     "dirty-plan recompile: plan edit halts dispatch, running G keeps stamp, G+1 allows dispatch",
     async () => {
       const h = await harness();
+      initSchema(h.store);
       try {
         const result = await runDirtyPlanScenario(h);
         assert.deepStrictEqual(
@@ -236,6 +242,7 @@ test(
   "broker failure: failed op writes failed completion to broker_completion",
   async () => {
     const h = await harness();
+    initSchema(h.store);
     try {
       const result = await runBrokerFailureScenario(h);
       assert.strictEqual(
@@ -253,6 +260,7 @@ test(
   "broker timeout: timed-out op emits escalation_needed, no terminal status written",
   async () => {
     const h = await harness();
+    initSchema(h.store);
     try {
       const result = await runBrokerTimeoutScenario(h);
       assert.strictEqual(
@@ -275,6 +283,7 @@ test(
   "broker regression: regressing op is not left final-done",
   async () => {
     const h = await harness();
+    initSchema(h.store);
     try {
       const result = await runBrokerRegressionScenario(h);
       assert.strictEqual(

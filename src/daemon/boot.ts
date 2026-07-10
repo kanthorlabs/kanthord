@@ -16,6 +16,7 @@
 import { walkFeature } from "../compiler/grammar.ts";
 import { recoverFromLedger } from "../broker/ledger.ts";
 import { FeatureStore } from "../store/feature-store.ts";
+import { initSchema } from "../store/schema.ts";
 import type { CompileOptions } from "../compiler/compile.ts";
 import type { Clock } from "../foundations/clock.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
@@ -62,6 +63,11 @@ export function bootDaemon(opts: {
   const { featureDir, logger } = opts;
 
   async function doStart(): Promise<void> {
+    // -----------------------------------------------------------------------
+    // Schema init — ensure all subsystem tables exist before any call.
+    // -----------------------------------------------------------------------
+    initSchema(opts.store);
+
     // -----------------------------------------------------------------------
     // Step 1 — Count pending tasks from markdown (proves rebuild-from-markdown,
     // not stale SQLite).  Uses walkFeature which reads only directory/file

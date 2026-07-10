@@ -7,6 +7,8 @@ import { makeSqliteReconcileStorage } from "./sqlite-reconcile-storage.ts";
 import type { AtomicReconcileStorage } from "./sqlite-reconcile-storage.ts";
 import { makeBudgetReconciler } from "./budget-reconcile.ts";
 import type { ReconcileEscalationEvent } from "./budget-reconcile.ts";
+import { openStore } from "../foundations/sqlite-store.ts";
+import { initSchema } from "../store/schema.ts";
 
 // ---------------------------------------------------------------------------
 // T1 — SqliteReconcileStorage satisfies ReconcileStorage contract
@@ -18,7 +20,11 @@ describe("src/ring1/sqlite-reconcile-storage.ts — T1 storage contract", () => 
 
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "sqlite-reconcile-t1-"));
-    storage = makeSqliteReconcileStorage(join(tmpDir, "budget.db"));
+    const dbPath = join(tmpDir, "budget.db");
+    const bootstrapStore = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(bootstrapStore);
+    bootstrapStore.close();
+    storage = makeSqliteReconcileStorage(dbPath);
   });
 
   after(async () => {
@@ -84,7 +90,11 @@ describe("src/ring1/sqlite-reconcile-storage.ts — T2 concurrent reserve atomic
 
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "sqlite-reconcile-t2-"));
-    storage = makeSqliteReconcileStorage(join(tmpDir, "budget-atomic.db"));
+    const dbPath = join(tmpDir, "budget-atomic.db");
+    const bootstrapStore = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(bootstrapStore);
+    bootstrapStore.close();
+    storage = makeSqliteReconcileStorage(dbPath);
   });
 
   after(async () => {
@@ -186,7 +196,11 @@ describe("src/ring1/sqlite-reconcile-storage.ts — T3 concurrent reconcile atom
 
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "sqlite-reconcile-t3-"));
-    storage = makeSqliteReconcileStorage(join(tmpDir, "budget-t3.db"));
+    const dbPath = join(tmpDir, "budget-t3.db");
+    const bootstrapStore = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(bootstrapStore);
+    bootstrapStore.close();
+    storage = makeSqliteReconcileStorage(dbPath);
   });
 
   after(async () => {

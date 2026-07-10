@@ -48,6 +48,11 @@ export class GitStore {
     this.writerLock = new WriterLock(storeRoot, { readOnly: this.readOnly });
   }
 
+  /** Absolute path of the git working tree root (the store root directory). */
+  get dir(): string {
+    return this.storeRoot;
+  }
+
   /**
    * Open the store: initialise a git repo if none exists, or reuse the
    * existing repo.  Sets up the managed `.gitignore` (lock + temp patterns).

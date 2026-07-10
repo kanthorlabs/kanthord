@@ -207,8 +207,17 @@ export function makeCreatePrAdapter(opts: CreatePrAdapterOpts): AsyncVerbAdapter
   };
 
   const reconcile = async (ledger: unknown): Promise<unknown> => {
-    const l = ledger as { head_branch?: string; pr_number?: number };
-    const headBranch = l.head_branch ?? "";
+    // reconcileOp passes { correlation, desired_effect_hash }; parse head_branch
+    // and optional pr_number out of the JSON-encoded durable correlation string.
+    // Fallback: accept legacy { head_branch, pr_number } shape for direct calls.
+    const l = ledger as { correlation?: string; head_branch?: string; pr_number?: number };
+    let headBranch: string;
+    if (l.correlation !== undefined) {
+      const parsed = JSON.parse(l.correlation) as { head_branch?: string; pr_number?: number };
+      headBranch = parsed.head_branch ?? "";
+    } else {
+      headBranch = l.head_branch ?? "";
+    }
 
     // Query real state via listByHead (no create call).
     const listPath = `/repos/${repo}/pulls?head=${encodeURIComponent(

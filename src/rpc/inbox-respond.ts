@@ -10,18 +10,6 @@
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Clock } from "../foundations/clock.ts";
 
-function ensureEscalationResponsesTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS escalation_responses (
-      item_id      TEXT NOT NULL PRIMARY KEY,
-      task_id      TEXT NOT NULL,
-      actor        TEXT NOT NULL,
-      action       TEXT NOT NULL,
-      responded_at INTEGER NOT NULL
-    )`,
-  );
-}
-
 function resolveInboxItem(store: Store, itemId: string): void {
   store.run(
     "UPDATE inbox_items SET status = 'resolved' WHERE id = ?",
@@ -62,8 +50,6 @@ export function resumeEscalationItem(opts: {
   clock: Clock;
 }): void {
   const { item_id, task_id, actor, store, clock } = opts;
-  ensureEscalationResponsesTable(store);
-
   journalEscalationResponse(store, item_id, task_id, actor, "resume", clock.now());
 
   store.run(
@@ -86,8 +72,6 @@ export function haltEscalationItem(opts: {
   clock: Clock;
 }): void {
   const { item_id, task_id, actor, store, clock } = opts;
-  ensureEscalationResponsesTable(store);
-
   journalEscalationResponse(store, item_id, task_id, actor, "halt", clock.now());
 
   store.run(

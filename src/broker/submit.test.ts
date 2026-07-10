@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
 import { submit, getInFlightOp } from "./submit.ts";
+import { initSchema } from "../store/schema.ts";
 
 // Story-named request_id the Mock adapter returns (PROFILE.md: Mock = Story-named value)
 const MOCK_REQUEST_ID = "req-stub-T1-001";
@@ -48,6 +49,7 @@ describe("src/broker/submit.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-submit-t1-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const entry = makeEntry();
         const { adapter, calls } = makeMockAdapter();
@@ -98,6 +100,7 @@ describe("src/broker/submit.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-submit-t2a-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         const entry = makeEntry();
         const { adapter, calls } = makeMockAdapter();
@@ -141,6 +144,7 @@ describe("src/broker/submit.ts", () => {
     const dir = await mkdtemp(join(tmpdir(), "broker-submit-t2b-"));
     try {
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       try {
         // makeEntry() returns idempotency.window_ms = 3600000 > 0 → key required
         const entry = makeEntry();

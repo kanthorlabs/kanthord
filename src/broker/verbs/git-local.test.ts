@@ -31,6 +31,7 @@ import { execSync } from "node:child_process";
 import { openStore } from "../../foundations/sqlite-store.ts";
 import { FakeClock } from "../../foundations/clock.ts";
 import { loadVerbRegistry, registerVerb } from "../registry.ts";
+import { initSchema } from "../../store/schema.ts";
 import { submit, getInFlightOp } from "../submit.ts";
 import { startPolling } from "../poller.ts";
 import {
@@ -213,6 +214,7 @@ describe("src/broker/verbs/git-local.ts", () => {
       const bareDir = initBareRepo(dir);
       const workDir = initWorkRepo(dir, bareDir);
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
 
       const branchEntry = makeBranchEntry();
@@ -321,6 +323,7 @@ describe("src/broker/verbs/git-local.ts", () => {
       const bareDir = initBareRepo(dir);
       const workDir = initWorkRepo(dir, bareDir);
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
 
       const commitEntry = makeCommitEntry();
@@ -389,6 +392,7 @@ describe("src/broker/verbs/git-local.ts", () => {
       execSync(`git -C "${workDir1}" push origin HEAD`, { stdio: "pipe" });
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
 
       const cloneEntry = {
@@ -469,6 +473,7 @@ describe("src/broker/verbs/git-local.ts", () => {
       execSync(`git -C "${pusherDir}" push origin HEAD`, { stdio: "pipe" });
 
       const store = openStore(join(dir, "broker.db"), { busyTimeout: 1000 });
+      initSchema(store);
       const clock = new FakeClock(0);
 
       const fetchEntry = {

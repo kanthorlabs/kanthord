@@ -10,18 +10,6 @@ interface PollResult {
   error?: unknown;
 }
 
-function ensureCompletionTable(store: Store): void {
-  store.run(
-    `CREATE TABLE IF NOT EXISTS broker_completion (
-      op_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL,
-      result_json TEXT,
-      error_json TEXT,
-      at INTEGER NOT NULL
-    )`,
-  );
-}
-
 function writeCompletion(
   store: Store,
   opId: string,
@@ -78,7 +66,6 @@ export function startPolling(
   store: Store,
   clock: Clock,
 ): void {
-  ensureCompletionTable(store);
   const startMs = clock.now();
   let retryCount = 0;
   let pendingTerminalResult: PollResult | null = null;

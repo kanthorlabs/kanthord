@@ -17,6 +17,7 @@ import {
   setTaskStatus,
   loadTasks,
 } from "../scheduler/dispatch.ts";
+import { initSchema } from "../store/schema.ts";
 import { TddWorkflow } from "../workflow/tdd-workflow.ts";
 import type { GateOutcome, GateResultSink } from "../workflow/workflow.ts";
 import {
@@ -334,8 +335,9 @@ export async function runGoldenScenario(
     await compile(featureDir, fixture.store, COMPILE_OPTS);
 
     // -----------------------------------------------------------------------
-    // 3. Initialise scheduler rows (INSERT OR IGNORE for every task/deploy node)
+    // 3. Initialise all subsystem schemas, then scheduler rows (INSERT OR IGNORE).
     // -----------------------------------------------------------------------
+    initSchema(fixture.store);
     loadTasks(fixture.store, "feat-001");
 
     const liveHash = liveCompileHash(fixture, "feat-001");
