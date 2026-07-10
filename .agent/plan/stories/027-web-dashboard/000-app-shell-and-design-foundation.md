@@ -12,6 +12,13 @@ Epic: `.agent/plan/epics/027-web-dashboard.md`
 > The DetailPage and OpsPage templates land with the stories that first use
 > them (001 T2, 006 T2).
 
+> **PENDING FOLD-IN (2026-07-10) — check before dispatch:**
+> `.agent/plan/feedback/027-web-dashboard/daily-usage-operator-loop.md`
+> Inputs 5 (route foundation + auth-redirect preservation) and 6 (Inbox nav
+> badge + collapsed-shell indicator; needs the DESIGN §P4 amendment first)
+> must be folded into this story's ACs at authoring time — not improvised
+> mid-task.
+
 ## Goal
 
 The product UI foundation every later story mounts into: the `AppShell` with

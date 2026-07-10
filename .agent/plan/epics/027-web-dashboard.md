@@ -137,6 +137,15 @@ run; per-story it runs only where a Story's Verify names it).
   (2026-07-10 agentic-system review) — MUST fold in before `/work`:
   classification confirm/override as a first-class UI step on every respond
   action; diff-escalation policy read from config, not a literal.
+- `.agent/plan/feedback/027-web-dashboard/daily-usage-operator-loop.md`
+  (2026-07-10 operator-routines UI review, debate-hardened) — MUST fold in
+  before `/work`: nine inputs on the daily inbox loop (low-friction
+  classification confirm, scannable inbox, readable diff evidence,
+  next-item flow, deep links, Inbox nav badge, dead-man processed count,
+  data-freshness pattern, drift surface ownership). Inputs 1–5 → Story 003,
+  5–6 → Story 000, 7 → Story 006; Inputs 6+8 additionally require a
+  DESIGN.md §P4 pass before Story 000 dispatches; Input 9 is cross-epic
+  with 034.
 - **Epic 029 Story 002** is a **dependency of Story 007** (review B4 — the
   summary surface is gate-critical: phases.md D9 puts it in the web client and
   Epic 030 LP3 is dashboard-exclusive). The earlier "optional/degraded render"

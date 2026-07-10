@@ -2,6 +2,13 @@
 
 Epic: `.agent/plan/epics/027-web-dashboard.md`
 
+> **PENDING FOLD-IN (2026-07-10) — check before dispatch:**
+> `.agent/plan/feedback/027-web-dashboard/daily-usage-operator-loop.md`
+> Input 7 (dead-man health card renders "N tasks processed today" beside
+> the last ping; depends on the Epic 026/029 API exposing the count) must
+> be folded into this story's ACs at authoring time — not improvised
+> mid-task.
+
 ## Goal
 
 The budgets surface (per-task ledger, circuit-breaker state, the recorded

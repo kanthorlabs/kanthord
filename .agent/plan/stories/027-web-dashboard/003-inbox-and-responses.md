@@ -2,6 +2,14 @@
 
 Epic: `.agent/plan/epics/027-web-dashboard.md`
 
+> **PENDING FOLD-IN (2026-07-10) — check before dispatch:**
+> `.agent/plan/feedback/027-web-dashboard/honest-classification-and-diff-policy.md`
+> and `.agent/plan/feedback/027-web-dashboard/daily-usage-operator-loop.md`
+> Inputs 1–5 (low-friction classification confirm, scannable inbox with
+> type badges + distinct unclassified-artifact-change, diff-pane evidence
+> rendering, "Next open item" flow, stable item deep links) must be folded
+> into this story's ACs at authoring time — not improvised mid-task.
+
 ## Goal
 
 The escalation/approval inbox: items listed with their evidence rendered, and
