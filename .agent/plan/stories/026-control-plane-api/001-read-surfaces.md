@@ -27,8 +27,15 @@ budgets, and daemon ops — with plan files and registries strictly read-only.
   the Epic 018 engine (a read-only engine run) and stores + returns its report —
   the report record is the method's **single declared write**, excluded from
   the zero-write read list (debate finding).
+- `audit.taskTimeline` returns a task's ordered timeline (Epic 019.5's
+  `queryTaskTimeline`) — events with `observed_failure_signal` and, on model-call
+  events, `account_id` + `model`; plus the outbound read-only **session-event
+  stream** (subscription) from Epic 019.5. **Thin wiring only — the logic is 019.5;
+  026 exposes it** (do not re-implement the timeline, per-call record, or SIGNAL_MAP
+  here). Reads perform zero writes.
 - A phases.md-surface checklist test enumerates each required surface and
-  asserts a descriptor method covers it (the gate's method-by-method check).
+  asserts a descriptor method covers it (the gate's method-by-method check) —
+  **including the 019.5 audit-timeline + session-event surface.**
 
 ## Constraints
 

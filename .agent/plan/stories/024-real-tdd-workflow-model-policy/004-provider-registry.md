@@ -2,6 +2,23 @@
 
 Epic: `.agent/plan/epics/024-real-tdd-workflow-model-policy.md`
 
+> **Reference — the runtime account engine is Epic 019.4; switching is Epic 043.**
+> The concrete **multi-account provider engine** — the `ProviderAccount` registry +
+> account-keyed credential store with CRUD, the observable device-code login
+> operation, the `buildProviderSession({ accountId, modelId })` resolver returning
+> `{ model, streamFn }`, the **durable per-task account binding**, and the
+> OpenAI-compatible account kind — is built in
+> `.agent/plan/epics/019.4-ai-provider-integration.md` (core logic, exercised via the
+> CLI). This story is the **policy layer on top of it**: the yaml registry names
+> **provider-account candidates** per repo/slot/task and the 5-level precedence chain
+> selects among them; a resolved name yields an **account id** the 019.4 engine resolves
+> and durably binds. Do not re-author the runtime engine here — reference it. Note the
+> vocabulary shift: 019.4 separates **provider kind** from **provider account** (multiple
+> accounts of one kind), so this registry references **account ids**, not bare provider
+> ids. The **switch** of a running task between accounts (triggers, tier guards,
+> notification) is **Epic 043**, which updates 019.4's durable binding — not 019.4 and
+> not this registry.
+
 ## Goal
 
 Providers register once in daemon yaml (endpoint + credential reference); plans

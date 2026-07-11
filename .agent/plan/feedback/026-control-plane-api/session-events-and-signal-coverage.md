@@ -30,3 +30,17 @@ signal (complete the map; making it data-driven can wait).
 
 AC shape: each signal kind emitted anywhere in the daemon has a mapped
 `proposed_type`; an unmapped signal is a test failure, not a silent None.
+
+## Built by Epic 019.5 (2026-07-11)
+
+Both inputs are the **runtime/logic** half of `.agent/plan/epics/019.5-task-audit-timeline.md`:
+- **Input 1** (outbound read-only session-event stream from pi's `agent.subscribe`) →
+  Story 019.5-001 (session-event exposure through `PiSessionHandle`, spike-gated on the
+  real pi surface).
+- **Input 2** (complete `SIGNAL_MAP`) → Story 019.5-004 T3.
+- The durable task timeline, per-model-call/account record, typed provider-error taxonomy,
+  and the core `queryTaskTimeline` function are also 019.5.
+
+Epic 026 keeps only the **wiring**: expose `ListTaskTimeline` + the outbound session-event
+stream over the control-plane API (Epic 027 renders the timeline). No logic in 026/027 —
+019.5 owns it (019.4 precedent).
