@@ -18,6 +18,8 @@ import { loadRepoSlot } from "../slots/repo-slot.ts";
 import { runDaemon } from "../daemon/run-loop.ts";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 import { buildRealDeps } from "./run-deps.ts";
+import { resolveDaemonProviderSession } from "./daemon-provider-session.ts";
+import { resolveDataRoot, ensureDataRoot } from "../foundations/data-root.ts";
 
 // ---------------------------------------------------------------------------
 // Usage
@@ -26,13 +28,15 @@ import { buildRealDeps } from "./run-deps.ts";
 const USAGE = `kanthord run — start the kanthord daemon
 
 Usage:
-  node src/cli/run.ts --slot <path> [--port <n>] [--hold-point] [--help]
+  node src/cli/run.ts --slot <path> [--account <label>] [--model <id>] [--port <n>] [--hold-point] [--help]
 
 Options:
-  --slot <path>   Path to the slot YAML file (required)
-  --port <n>      Status HTTP server port (default: OS-assigned on 127.0.0.1)
-  --hold-point    Enable broker pre-submit hold-point (LP4 cutpoint)
-  --help          Show this usage and exit 0`.trim();
+  --slot <path>      Path to the slot YAML file (required)
+  --account <label>  Provider account label (default: sole logged-in account)
+  --model <id>       Model id to use (default: account defaultModel)
+  --port <n>         Status HTTP server port (default: OS-assigned on 127.0.0.1)
+  --hold-point       Enable broker pre-submit hold-point (LP4 cutpoint)
+  --help             Show this usage and exit 0`.trim();
 
 // ---------------------------------------------------------------------------
 // Main
@@ -42,6 +46,8 @@ async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
       slot: { type: "string" },
+      account: { type: "string" },
+      model: { type: "string" },
       port: { type: "string" },
       "hold-point": { type: "boolean" },
       help: { type: "boolean" },
@@ -69,11 +75,29 @@ async function main(): Promise<void> {
   const store = openStore(dbPath, { busyTimeout: 5000 });
   const holdPointEnabled = values["hold-point"] === true;
 
+  // Resolve the provider account→session at boot; fail closed before daemon starts.
+  const dataRoot = await ensureDataRoot(resolveDataRoot());
+  let providerModel: Awaited<ReturnType<typeof resolveDaemonProviderSession>>["model"] | undefined;
+  let providerStreamFn: Awaited<ReturnType<typeof resolveDaemonProviderSession>>["streamFn"] | undefined;
+  try {
+    const session = await resolveDaemonProviderSession({
+      dataRoot,
+      accountLabel: values.account,
+      modelId: values.model,
+    });
+    providerModel = session.model;
+    providerStreamFn = session.streamFn;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Error: ${msg}\n`);
+    process.exit(1);
+  }
+
   // buildRealDeps assembles the live-path deps (piSurface via makeAgentOpts,
   // clock, logger, statusServerFactory, tickIntervalMs, patternRegistry,
   // toolGuidance).  Cast to RunDaemonDeps before spread to prevent excess-property
   // checking on toolGuidance (which runDaemon doesn't declare but harmlessly ignores).
-  const deps = buildRealDeps({ store, featureDir });
+  const deps = buildRealDeps({ store, featureDir, providerModel, providerStreamFn });
   await runDaemon({ ...(deps as RunDaemonDeps), holdPointEnabled });
 
   // runDaemon installs SIGTERM/SIGINT → handle.stop() internally (T2).

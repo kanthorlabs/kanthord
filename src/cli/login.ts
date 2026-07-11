@@ -13,8 +13,7 @@
  */
 
 import { pathToFileURL } from "node:url";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { resolveDataRoot, ensureDataRoot } from "../foundations/data-root.ts";
 import type { OAuthCredential, OAuthLoginCallbacks } from "@earendil-works/pi-ai";
 import type { ProviderKind, ProviderAccountRegistry } from "../agent/provider-account-registry.ts";
 import type { ProviderCredentialStore } from "../agent/provider-credential-store.ts";
@@ -185,8 +184,7 @@ export async function runMain(
   // Lazy import avoids circular-module issues when login.ts is imported as a
   // library; the import only runs when runMain() is called.
   const { buildLoginDeps } = await import("./login-deps.ts");
-  const dataRoot =
-    process.env["KANTHORD_DATA"] ?? join(homedir(), ".kanthord");
+  const dataRoot = await ensureDataRoot(resolveDataRoot());
 
   const buildDepsFn = opts?.buildDeps ?? buildLoginDeps;
   const deps = buildDepsFn({ dataRoot });

@@ -145,3 +145,11 @@ that budget in the `reasoning` field and returns empty `content` (`finish_reason
 → the smoke reports "marker not found (response_bytes=0)" despite a 200 response. Pick a
 non-reasoning model for the smoke, or (improvement) raise the smoke's maxTokens and/or let
 it accept reasoning output as proof of a live call.
+
+## Run: 2026-07-11T16:57:05.699Z
+
+| Kind | Account | Model | Status | Marker OK | Cost | Duration | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| openai-codex | codex | gpt-5.5 | PASS | YES | $0.001025 | 5145ms |  |
+| openai-compatible | — | — | SKIP | — | — | — | no openai-compatible account registered |
+| github-copilot | — | — | SKIP | — | — | — | no github-copilot account registered |

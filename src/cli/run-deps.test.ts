@@ -19,7 +19,8 @@ import assert from "node:assert/strict";
 import { buildRealDeps } from "./run-deps.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST } from "../agent/pi-tools.ts";
 import { openStore } from "../foundations/sqlite-store.ts";
-import type { AgentOptions } from "@earendil-works/pi-agent-core";
+import type { AgentOptions, StreamFn } from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 
 // ---------------------------------------------------------------------------
@@ -201,6 +202,131 @@ test("RB5 — buildRealDeps returns patternRegistry (not undefined; null = fail-
     "patternRegistry must be null (fail-closed) or a PatternRegistry — undefined disables scanning silently",
   );
 });
+
+// ---------------------------------------------------------------------------
+// T2-a — spawnAgent without model/streamFn uses providerModel+providerStreamFn
+// ---------------------------------------------------------------------------
+
+test(
+  "T2-a — spawnAgent without model/streamFn uses providerModel+providerStreamFn from buildRealDeps opts",
+  () => {
+    let capturedOpts: unknown;
+
+    const agentFactory = (opts: unknown): {
+      abort(): void;
+      waitForIdle(): Promise<void>;
+      reset(): void;
+      state: { messages: unknown[] };
+    } => {
+      capturedOpts = opts;
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        state: { messages: [] },
+      };
+    };
+
+    const providerModel = { provider: "openai-codex", id: "gpt-5.5-t2" } as unknown as Model<any>;
+    const providerStreamFn = (async (): Promise<undefined> => undefined) as unknown as StreamFn;
+
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+    const deps = buildRealDeps({
+      store,
+      featureDir: "/tmp/run-deps-t2a",
+      agentFactory,
+      providerModel,
+      providerStreamFn,
+    });
+
+    deps.piSurface.spawnAgent({
+      tools: [...PI_DEFAULT_ALLOWED_MANIFEST],
+      beforeToolCall: async (): Promise<undefined> => undefined,
+      systemPrompt: "test",
+      env: {},
+      // deliberately no model or streamFn
+    });
+
+    assert.ok(capturedOpts !== undefined, "agentFactory must be invoked");
+    const opts = capturedOpts as AgentOptions;
+    const initialState = (opts.initialState as Record<string, unknown> | undefined) ?? {};
+
+    assert.deepStrictEqual(
+      initialState["model"],
+      providerModel,
+      "T2-a: spawnAgent without model/streamFn must use providerModel from buildRealDeps opts",
+    );
+    assert.strictEqual(
+      opts.streamFn,
+      providerStreamFn,
+      "T2-a: spawnAgent without model/streamFn must use providerStreamFn from buildRealDeps opts",
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// T2-b — spawnAgent with its own model/streamFn ignores provider defaults
+// ---------------------------------------------------------------------------
+
+test(
+  "T2-b — spawnAgent with its own model/streamFn ignores providerModel+providerStreamFn",
+  () => {
+    let capturedOpts: unknown;
+
+    const agentFactory = (opts: unknown): {
+      abort(): void;
+      waitForIdle(): Promise<void>;
+      reset(): void;
+      state: { messages: unknown[] };
+    } => {
+      capturedOpts = opts;
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        state: { messages: [] },
+      };
+    };
+
+    const providerModel = { provider: "openai-codex", id: "gpt-5.5-t2-default" } as unknown as Model<any>;
+    const providerStreamFn = (async (): Promise<undefined> => undefined) as unknown as StreamFn;
+    const callerModel = { provider: "caller-prov", id: "caller-model-t2" };
+    const callerStreamFn = async (): Promise<undefined> => undefined;
+
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+    const deps = buildRealDeps({
+      store,
+      featureDir: "/tmp/run-deps-t2b",
+      agentFactory,
+      providerModel,
+      providerStreamFn,
+    });
+
+    deps.piSurface.spawnAgent({
+      tools: [...PI_DEFAULT_ALLOWED_MANIFEST],
+      beforeToolCall: async (): Promise<undefined> => undefined,
+      systemPrompt: "test",
+      env: {},
+      model: callerModel,
+      streamFn: callerStreamFn,
+    });
+
+    assert.ok(capturedOpts !== undefined, "agentFactory must be invoked");
+    const opts = capturedOpts as AgentOptions;
+    const initialState = (opts.initialState as Record<string, unknown> | undefined) ?? {};
+
+    assert.deepStrictEqual(
+      initialState["model"],
+      callerModel,
+      "T2-b: spawnAgent with caller model must use caller's model, not providerModel",
+    );
+    assert.strictEqual(
+      opts.streamFn,
+      callerStreamFn,
+      "T2-b: spawnAgent with caller streamFn must use caller's streamFn, not providerStreamFn",
+    );
+  },
+);
 
 // ---------------------------------------------------------------------------
 // RB4 — toolGuidance populated with PI_DEFAULT_ALLOWED_MANIFEST entries

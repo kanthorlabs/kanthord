@@ -69,6 +69,17 @@ export interface BuildRealDepsOpts {
    * `new Agent(agentOpts)` is used in the live path.
    */
   agentFactory?: (opts: AgentOptions) => AgentHandle;
+  /**
+   * Default model for spawned agents — resolved at boot time by
+   * resolveDaemonProviderSession (Epic 019.6 T2).
+   * Used as the spawn model when the caller does not supply one.
+   */
+  providerModel?: AgentAdapterOpts["model"];
+  /**
+   * Default stream function for spawned agents — resolved at boot time.
+   * Used as the spawn streamFn when the caller does not supply one.
+   */
+  providerStreamFn?: AgentAdapterOpts["streamFn"];
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +95,7 @@ export interface BuildRealDepsOpts {
 export function buildRealDeps(
   opts: BuildRealDepsOpts,
 ): RunDaemonDeps & { toolGuidance: Record<string, string> } {
-  const { store, featureDir, agentFactory } = opts;
+  const { store, featureDir, agentFactory, providerModel, providerStreamFn } = opts;
 
   const clock: Clock = {
     now(): number {
@@ -126,8 +137,8 @@ export function buildRealDeps(
         beforeToolCall:
           spawnOpts.beforeToolCall ??
           (async () => undefined as ReturnType<AgentAdapterOpts["beforeToolCall"]> extends Promise<infer R> ? R : never),
-        model: spawnOpts.model,
-        streamFn: spawnOpts.streamFn,
+        model: spawnOpts.model ?? providerModel,
+        streamFn: spawnOpts.streamFn ?? providerStreamFn,
       });
 
       if (agentFactory !== undefined) {
