@@ -102,10 +102,18 @@ privileged path, and ring-1 deterministic policy cannot be switched off from it
   inbox methods this API supersets; interaction capture for the override),
   **Epic 013** (ledger), **Epic 018** (verify trigger), **Epic 029** (dead-man
   status field — read side lands here, the ping itself is 029).
+- **Epic 019.5** (`task-audit-timeline`) — **owns the logic** behind this API's
+  audit/observability read surface: the outbound read-only session-event stream
+  (pi `agent.subscribe` exposure), the durable task timeline + `queryTaskTimeline`,
+  the per-model-call/account record, and the completed `SIGNAL_MAP`. **026 exposes,
+  does not build** these — add `ListTaskTimeline` (and the session-event
+  stream/subscription) over the API as thin wiring on 019.5's core functions
+  (019.4 precedent: logic in 019.x, 026 wires only). Hard order: 019.5 lands first.
 - `.agent/plan/feedback/026-control-plane-api/session-events-and-signal-coverage.md`
-  (2026-07-10 agentic-system review) — MUST fold in before `/work`: one
-  outbound read-only session event stream (decide), and a proposed
-  classification type for every escalation signal (SIGNAL_MAP completeness).
+  (2026-07-10 agentic-system review) — **READ before `/work`.** Both its inputs are
+  now built by Epic 019.5 (see the "Built by Epic 019.5" note at the bottom of that
+  file); 026 only wires them onto the API surface. Do not re-author the session-event
+  stream or `SIGNAL_MAP` here.
 
 ## Non-Goals
 
