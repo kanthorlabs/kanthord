@@ -153,6 +153,41 @@ describe("src/metrics/interaction-capture.ts", () => {
     assert.equal(SIGNAL_MAP["budget-breach"], "correction");
   });
 
+  describe("Story 004 T3 (Epic 019.5) — SIGNAL_MAP covers every architecture signal", () => {
+    const VALID_CATEGORIES = new Set<string>([
+      "approval",
+      "clarification",
+      "correction",
+      "rework",
+      "takeover",
+      "external",
+    ]);
+    const ARCHITECTURE_SIGNALS = [
+      "approval-tier-verb",
+      "budget-breach",
+      "scope-violation",
+      "secret-scan",
+      "verb-timeout",
+      "verb-reconcile",
+      "ring-2-verdict",
+      "deploy-observer-fail",
+    ];
+
+    test("T3: every architecture §6.2.3 signal has a proposed type in SIGNAL_MAP (no known signal unmapped)", () => {
+      for (const signal of ARCHITECTURE_SIGNALS) {
+        const proposed: string | undefined = SIGNAL_MAP[signal];
+        assert.ok(
+          proposed !== undefined,
+          `SIGNAL_MAP missing entry for signal '${signal}'`,
+        );
+        assert.ok(
+          VALID_CATEGORIES.has(proposed),
+          `SIGNAL_MAP['${signal}'] value '${proposed}' is not a valid InteractionCategory`,
+        );
+      }
+    });
+  });
+
   describe("T2 — exclusion tag and per-feature query", () => {
     test("unclassified-artifact-change tag emits excluded_from_automation_metric=true", async () => {
       const dir = await mkdtemp(join(tmpdir(), "ic-t2a-"));

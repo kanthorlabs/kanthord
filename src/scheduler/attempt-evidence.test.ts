@@ -17,6 +17,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
+import { initSchema } from "../store/schema.ts";
+import { readTimelineEvents, type TimelineEvent } from "../metrics/task-timeline.ts";
 import {
   EVIDENCE_SUMMARY_CAP,
   recordEvidence,
@@ -33,6 +35,7 @@ test("Story 002 T1 (Epic 019.3) — recorded evidence survives a simulated daemo
   try {
     // First handle — record
     const store1 = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(store1);
     recordEvidence(store1, {
       taskId: "task-alpha",
       attempt: 1,
@@ -61,6 +64,7 @@ test("Story 002 T1 (Epic 019.3) — over-cap summary is truncated to EVIDENCE_SU
   const dbPath = join(dir, "test.db");
   try {
     const store = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(store);
     const longSummary = "x".repeat(EVIDENCE_SUMMARY_CAP + 500);
     recordEvidence(store, {
       taskId: "task-beta",
@@ -87,6 +91,7 @@ test("Story 002 T1 (Epic 019.3) — recording attempt 2 leaves attempt 1 still r
   const dbPath = join(dir, "test.db");
   try {
     const store = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(store);
     recordEvidence(store, {
       taskId: "task-gamma",
       attempt: 1,
@@ -122,6 +127,7 @@ test("Story 002 T1 (Epic 019.3) — latestEvidence returns the highest-attempt r
   const dbPath = join(dir, "test.db");
   try {
     const store = openStore(dbPath, { busyTimeout: 1000 });
+    initSchema(store);
     recordEvidence(store, {
       taskId: "task-delta",
       attempt: 1,
@@ -153,6 +159,89 @@ test("Story 002 T1 (Epic 019.3) — latestEvidence returns null when no evidence
     const ev = latestEvidence(store, "task-no-evidence");
     store.close();
     assert.equal(ev, null, "must return null when no evidence exists");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// BLOCKER S4 regression (Epic 019.5) — recordEvidence must write a real
+// wall-clock epoch-ms timestamp into task_timeline_event.ts, NOT the attempt
+// integer. Every other writer uses Date.now(); mixing logical counters (1, 2, 3)
+// with wall-clock milliseconds in the same column is semantically incorrect and
+// breaks timeline ordering in production.
+// ---------------------------------------------------------------------------
+
+test("BLOCKER S4: recordEvidence emits attempt_evidence timeline event with ts >= Date.now() (wall-clock epoch-ms, not the attempt integer)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-atev-s4-"));
+  const dbPath = join(dir, "s4.db");
+  try {
+    const store = openStore(dbPath, { busyTimeout: 1000 });
+    // initSchema required: after the S4 fix, recordEvidence will no longer
+    // call initTaskTimelineSchema internally (per bootstrap-only DDL rule).
+    initSchema(store);
+
+    const before = Date.now();
+    recordEvidence(store, {
+      taskId: "task-s4-wallclock",
+      attempt: 1,
+      phase: "tdd",
+      summary: "gate failed on attempt 1",
+    });
+    const after = Date.now();
+
+    const events = readTimelineEvents(store, "task-s4-wallclock");
+    const evidEvent = events.find((e: TimelineEvent) => e.kind === "attempt_evidence");
+
+    assert.ok(
+      evidEvent !== undefined,
+      "recordEvidence must emit a task_timeline_event row with kind='attempt_evidence'",
+    );
+
+    // Fail now: ts === 1 (attempt integer); must be a real epoch-ms value
+    assert.ok(
+      evidEvent.ts >= before,
+      `attempt_evidence ts (${evidEvent.ts}) must be >= Date.now() captured before the call (${before}); got ts=attempt=${evidEvent.ts} which is a logical counter, not wall-clock`,
+    );
+    assert.ok(
+      evidEvent.ts <= after,
+      `attempt_evidence ts (${evidEvent.ts}) must be <= Date.now() captured after the call (${after})`,
+    );
+
+    store.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// BLOCKER D1 regression (Epic 019.5 human review) — recordEvidence must write
+// the timeline event UNCONDITIONALLY; on an uninitialised store it must THROW
+// "no such table" exactly as appendTimelineEvent does.
+// Currently FAILS: the sqlite_master guard silently skips the write (no throw).
+// ---------------------------------------------------------------------------
+
+test("BLOCKER D1: recordEvidence throws 'no such table' when task_timeline_event is not bootstrapped", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-atev-d1-"));
+  const dbPath = join(dir, "d1.db");
+  try {
+    // Open a store WITHOUT calling initSchema (or initTaskTimelineSchema).
+    // ensureSchema inside recordEvidence creates attempt_evidence, but
+    // task_timeline_event is absent. Once the sqlite_master guard is removed,
+    // appendTimelineEvent will throw "no such table: task_timeline_event".
+    const store = openStore(dbPath, { busyTimeout: 1000 });
+    assert.throws(
+      () =>
+        recordEvidence(store, {
+          taskId: "task-d1-noinit",
+          attempt: 1,
+          phase: "tdd",
+          summary: "gate failed",
+        }),
+      /no such table/,
+      "recordEvidence must throw when task_timeline_event is not bootstrapped — no silent-skip guard",
+    );
+    store.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

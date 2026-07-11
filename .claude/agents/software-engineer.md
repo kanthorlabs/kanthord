@@ -90,10 +90,14 @@ Read the relevant file **before** working in that area — not upfront.
   or a `PRAGMA table_info` guard for `ADD COLUMN` (SQLite has no
   `ADD COLUMN IF NOT EXISTS`); never `try/catch` to swallow an expected
   "already exists" error — reserve `try/catch` for unanticipated errors only.
-  A migration guard protects only the migration itself: every function that runs
-  a SELECT/UPDATE on a table created by a separate migration must also guard
-  (call the schema-init helper or repeat the `PRAGMA table_info` check) before
-  querying, or it throws "no such table" on an uninitialised store.
+  **DDL/migrations run once, at bootstrap only.** All schema init goes through
+  the central `initSchema` (`src/store/schema.ts`), called at daemon start and in
+  test-harness setup. When you add a table, register its `initXxxSchema` there —
+  **never** call schema-init from inside a data-access (read/write) method. A
+  data-access function assumes its table already exists; on an uninitialised
+  store it must throw "no such table", not lazily self-migrate. Tests set the
+  store up by calling `initSchema` (or the specific `initXxxSchema`) in their
+  setup, never by relying on a per-method init.
 
 These files are seeded as living checklists; engineers append pitfalls as they
 hit them (the test-engineer/software-engineer journals are separate, under

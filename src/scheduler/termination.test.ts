@@ -18,6 +18,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
+import { initSchema } from "../store/schema.ts";
 import { readAttempts, grantOne, readGrantOne } from "./attempt-ledger.ts";
 import { latestEvidence } from "./attempt-evidence.ts";
 import {
@@ -44,6 +45,7 @@ async function withStore(
 test("Story 003 T2 (Epic 019.3) — pass outcome → complete verdict, ledger incremented", async () => {
   await withStore(async (file) => {
     const store = openStore(file, { busyTimeout: 1000 });
+    initSchema(store);
     try {
       const result: GateResult = { outcome: "pass" };
       const verdict = postSessionDecision(store, {
@@ -67,6 +69,7 @@ test("Story 003 T2 (Epic 019.3) — pass outcome → complete verdict, ledger in
 test("Story 003 T2 (Epic 019.3) — needs_human outcome → needs-human verdict, ledger incremented", async () => {
   await withStore(async (file) => {
     const store = openStore(file, { busyTimeout: 1000 });
+    initSchema(store);
     try {
       const result: GateResult = { outcome: "needs_human", summary: "needs review" };
       const verdict = postSessionDecision(store, {
@@ -86,6 +89,7 @@ test("Story 003 T2 (Epic 019.3) — needs_human outcome → needs-human verdict,
 test("Story 003 T2 (Epic 019.3) — fail under max → retry-intent verdict, evidence recorded, ledger incremented", async () => {
   await withStore(async (file) => {
     const store = openStore(file, { busyTimeout: 1000 });
+    initSchema(store);
     try {
       const result: GateResult = { outcome: "fail", summary: "2 tests red" };
       const verdict = postSessionDecision(store, {
@@ -108,6 +112,7 @@ test("Story 003 T2 (Epic 019.3) — fail under max → retry-intent verdict, evi
 test("Story 003 T2 (Epic 019.3) — fail at max, no grant-one → attempts-exhausted verdict", async () => {
   await withStore(async (file) => {
     const store = openStore(file, { busyTimeout: 1000 });
+    initSchema(store);
     try {
       const result: GateResult = { outcome: "fail", summary: "still failing" };
       // Simulate 2 prior dispatches so this is the 3rd (= max)
@@ -134,6 +139,7 @@ test("Story 003 T2 (Epic 019.3) — fail at max, no grant-one → attempts-exhau
 test("Story 003 T2 (Epic 019.3) — fail at max, grant-one active → retry-intent verdict, grant-one cleared", async () => {
   await withStore(async (file) => {
     const store = openStore(file, { busyTimeout: 1000 });
+    initSchema(store);
     try {
       const result: GateResult = { outcome: "fail", summary: "still failing" };
       // Hit max: 3 dispatches
@@ -165,6 +171,7 @@ test("Story 003 T2 (Epic 019.3) — fail at max, grant-one active → retry-inte
 test("Story 003 T2 (Epic 019.3) — recording precedes verdict: evidence row exists immediately after decision call", async () => {
   await withStore(async (file) => {
     const store = openStore(file, { busyTimeout: 1000 });
+    initSchema(store);
     try {
       const result: GateResult = { outcome: "fail", summary: "SENTINEL_RECORD_ORDER" };
       const verdict = postSessionDecision(store, {

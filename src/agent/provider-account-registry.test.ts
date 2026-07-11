@@ -56,15 +56,32 @@ describe("provider-account-registry — T3 CRUD", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
+  // ULID pattern for provider account ids: acc_<26-char Crockford base32>
+  const ACC_ULID_RE = /^acc_[0-9A-HJKMNP-TV-Z]{26}$/;
+
   test("add returns an account with a fresh id and the given providerKind + label", async () => {
     const reg = createProviderAccountRegistry({
       dataRoot: tmpDir,
       store: makeFakeStore(),
     });
     const account = await reg.add({ providerKind: "openai-codex", label: "work" });
-    assert.ok(account.id, "id must be non-empty");
+    assert.match(account.id, ACC_ULID_RE, "account id must match acc_<ULID> pattern");
     assert.equal(account.providerKind, "openai-codex");
     assert.equal(account.label, "work");
+  });
+
+  test("minted account ids match acc_ ULID pattern and two sequential ids sort ascending", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-reg-ulid-"));
+    try {
+      const reg = createProviderAccountRegistry({ dataRoot: dir, store: makeFakeStore() });
+      const a = await reg.add({ providerKind: "openai-codex", label: "first" });
+      const b = await reg.add({ providerKind: "openai-codex", label: "second" });
+      assert.match(a.id, ACC_ULID_RE, "first account id must match acc_<ULID>");
+      assert.match(b.id, ACC_ULID_RE, "second account id must match acc_<ULID>");
+      assert.ok(a.id < b.id, "first minted id must sort before second (monotonic ULID)");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   test("list returns all registered accounts", async () => {

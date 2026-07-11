@@ -23,6 +23,7 @@ import {
   type FakePiSurface,
   type PiTeardownOpts,
   type PiRespawnOpts,
+  type SessionEvent,
 } from "./pi-session.ts";
 import type { AttemptEvidence } from "../scheduler/attempt-evidence.ts";
 
@@ -1248,6 +1249,139 @@ describe("src/agent/pi-session", () => {
   //         and the piSurface.spawnAgent({...}) call threading them end-to-end.
   // -------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Story 001 T1 (Epic 019.5) — session-event stream on PiSessionHandle
+  //
+  // Design: spawnPiSession must forward an `eventSink` from PiSpawnOpts to
+  // piSurface.spawnAgent so the real pi adapter can wire agent.subscribe to it.
+  // The fake surface captures the forwarded sink; the test emits scripted events
+  // through it and asserts ordered delivery + correlation anchor.
+  // ---------------------------------------------------------------------------
+
+  describe("Story 001 T1 (Epic 019.5) — session-event stream on PiSessionHandle", () => {
+
+    test("T1: spawnPiSession forwards eventSink to spawnAgent; scripted events arrive in order with correlation anchor", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        const received: SessionEvent[] = [];
+
+        // Fake surface captures the injected eventSink from spawnAgent opts.
+        // RED: spawnPiSession does not yet forward PiSpawnOpts.eventSink to
+        // spawnAgent — capturedSink stays undefined and the assertion below fails.
+        let capturedSink: ((e: SessionEvent) => void) | undefined;
+        const scriptedSurface: FakePiSurface = {
+          spawnAgent(opts): PiSessionHandle {
+            capturedSink = (opts as Record<string, unknown>)["eventSink"] as
+              | ((e: SessionEvent) => void)
+              | undefined;
+            return {
+              abort() {},
+              waitForIdle(): Promise<void> { return Promise.resolve(); },
+              reset() {},
+              contextTokens: 0,
+            };
+          },
+        };
+
+        const opts: PiSpawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: async () => undefined,
+          piSurface: scriptedSurface,
+          allowedToolNames: [],
+          spawnEnv: {},
+          taskId: "task-t1-audit",
+          eventSink: (e: SessionEvent) => { received.push(e); },
+        };
+
+        await spawnPiSession(opts);
+
+        // Production must have forwarded eventSink to spawnAgent
+        assert.ok(capturedSink !== undefined, "spawnAgent must receive the eventSink from PiSpawnOpts");
+
+        // Simulate pi session emitting scripted events through the injected sink
+        capturedSink!({ kind: "tool_call", task_id: "task-t1-audit", attempt: 1, session_id: "sess-1" });
+        capturedSink!({ kind: "model_call", task_id: "task-t1-audit", attempt: 1, session_id: "sess-1" });
+        capturedSink!({ kind: "error",      task_id: "task-t1-audit", attempt: 1, session_id: "sess-1" });
+
+        // Must arrive in documented order
+        assert.strictEqual(received.length, 3, "sink must receive all 3 scripted events");
+        assert.strictEqual(received[0]!.kind, "tool_call", "first event must be tool_call");
+        assert.strictEqual(received[1]!.kind, "model_call", "second event must be model_call");
+        assert.strictEqual(received[2]!.kind, "error",      "third event must be error");
+
+        // Each event must carry the correlation anchor
+        for (const ev of received) {
+          assert.strictEqual(ev.task_id, "task-t1-audit", `event ${ev.kind} must carry task_id`);
+          assert.strictEqual(ev.attempt, 1, `event ${ev.kind} must carry attempt`);
+          assert.ok(
+            typeof ev.session_id === "string" && ev.session_id.length > 0,
+            `event ${ev.kind} must carry non-empty session_id`,
+          );
+        }
+
+        // Read-only: event objects must not expose session mutation methods
+        for (const ev of received) {
+          assert.ok(!("abort" in ev), `event ${ev.kind} must not expose abort (read-only)`);
+          assert.ok(!("reset" in ev), `event ${ev.kind} must not expose reset (read-only)`);
+        }
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("T1: waitForIdle resolves while session events are streaming", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        const received: SessionEvent[] = [];
+        let capturedSink: ((e: SessionEvent) => void) | undefined;
+        const streamingSurface: FakePiSurface = {
+          spawnAgent(opts): PiSessionHandle {
+            capturedSink = (opts as Record<string, unknown>)["eventSink"] as
+              | ((e: SessionEvent) => void)
+              | undefined;
+            return {
+              abort() {},
+              waitForIdle(): Promise<void> { return Promise.resolve(); },
+              reset() {},
+              contextTokens: 0,
+            };
+          },
+        };
+
+        const handle = await spawnPiSession({
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: async () => undefined,
+          piSurface: streamingSurface,
+          allowedToolNames: [],
+          spawnEnv: {},
+          taskId: "task-t1-idle",
+          eventSink: (e: SessionEvent) => { received.push(e); },
+        });
+
+        assert.ok(capturedSink !== undefined, "spawnAgent must receive the eventSink");
+
+        // Emit an event while the handle is still "active"
+        capturedSink!({ kind: "tool_call", task_id: "task-t1-idle", attempt: 1, session_id: "sess-idle" });
+
+        // waitForIdle must resolve regardless of event streaming (non-blocking)
+        await assert.doesNotReject(
+          () => handle.waitForIdle(),
+          "waitForIdle must resolve even while events are streaming",
+        );
+
+        assert.ok(received.length >= 1, "at least one event must have been delivered");
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
   describe("S3 — provider session wiring (Epic 019.4)", () => {
     test("spawnPiSession forwards model and streamFn to piSurface.spawnAgent", async () => {
       const { dir, store, agentsMdPath } = await setupDir();
@@ -1330,6 +1464,91 @@ describe("src/agent/pi-session", () => {
 
         assert.strictEqual(capturedModel, fakeModel, "spawnAgent must receive the model from PiRespawnOpts");
         assert.strictEqual(capturedStreamFn, fakeStreamFn, "spawnAgent must receive the streamFn from PiRespawnOpts");
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // BLOCKER S5 regression (Epic 019.5) — respawnPiSession must forward eventSink
+  //
+  // Story 001 T1 wired eventSink for spawnPiSession; respawnPiSession was
+  // intentionally deferred. This regression test mirrors the spawnPiSession
+  // T1 eventSink test and fails because PiRespawnOpts has no eventSink field
+  // and respawnPiSession does not forward it to piSurface.spawnAgent.
+  //
+  // After the fix: add eventSink?: (e: SessionEvent) => void to PiRespawnOpts
+  // and forward it in respawnPiSession, mirroring spawnPiSession.
+  // ---------------------------------------------------------------------------
+
+  describe("BLOCKER S5 (Epic 019.5) — respawnPiSession must forward eventSink", () => {
+    test("S5: respawnPiSession forwards eventSink to spawnAgent; scripted events arrive in order carrying {task_id, attempt, session_id}", async () => {
+      const { dir, store, agentsMdPath } = await setupDir({ state: "respawn-s5-state" });
+      try {
+        const received: SessionEvent[] = [];
+
+        // Fake surface captures the injected eventSink from spawnAgent opts.
+        // RED: PiRespawnOpts has no eventSink field; respawnPiSession does not
+        // forward it → capturedSink stays undefined → assertion fails.
+        let capturedSink: ((e: SessionEvent) => void) | undefined;
+        const scriptedSurface: FakePiSurface = {
+          spawnAgent(opts): PiSessionHandle {
+            capturedSink = (opts as Record<string, unknown>)["eventSink"] as
+              | ((e: SessionEvent) => void)
+              | undefined;
+            return {
+              abort() {},
+              waitForIdle(): Promise<void> { return Promise.resolve(); },
+              reset() {},
+              contextTokens: 0,
+            };
+          },
+        };
+
+        // Cast required: eventSink does not yet exist on PiRespawnOpts.
+        // After the fix, the cast can be removed (eventSink will be a typed field).
+        const rawOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: async () => undefined,
+          piSurface: scriptedSurface,
+          allowedToolNames: [] as string[],
+          spawnEnv: {} as Record<string, string>,
+          taskId: "task-s5-respawn",
+          attempt: 2,
+          eventSink: (e: SessionEvent) => { received.push(e); },
+        };
+        await respawnPiSession(rawOpts as unknown as PiRespawnOpts);
+
+        // Must have forwarded the sink to spawnAgent
+        assert.ok(
+          capturedSink !== undefined,
+          "S5: spawnAgent must receive the eventSink forwarded from PiRespawnOpts — currently fails because PiRespawnOpts has no eventSink field",
+        );
+
+        // Simulate pi session emitting scripted events through the injected sink
+        capturedSink!({ kind: "tool_call",  task_id: "task-s5-respawn", attempt: 2, session_id: "sess-s5-1" });
+        capturedSink!({ kind: "model_call", task_id: "task-s5-respawn", attempt: 2, session_id: "sess-s5-1" });
+        capturedSink!({ kind: "error",      task_id: "task-s5-respawn", attempt: 2, session_id: "sess-s5-1" });
+
+        // Events must arrive in order
+        assert.strictEqual(received.length, 3, "S5: sink must receive all 3 scripted events");
+        assert.strictEqual(received[0]!.kind, "tool_call",  "S5: first event must be tool_call");
+        assert.strictEqual(received[1]!.kind, "model_call", "S5: second event must be model_call");
+        assert.strictEqual(received[2]!.kind, "error",      "S5: third event must be error");
+
+        // Each event must carry the correlation anchor
+        for (const ev of received) {
+          assert.strictEqual(ev.task_id,    "task-s5-respawn", `S5: event ${ev.kind} must carry task_id`);
+          assert.strictEqual(ev.attempt,    2,                 `S5: event ${ev.kind} must carry attempt=2`);
+          assert.ok(
+            typeof ev.session_id === "string" && ev.session_id.length > 0,
+            `S5: event ${ev.kind} must carry non-empty session_id`,
+          );
+        }
       } finally {
         await rm(dir, { recursive: true });
       }

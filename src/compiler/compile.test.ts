@@ -942,14 +942,14 @@ describe("src/compiler/compile", () => {
           async getSnapshot(nodeId: string) {
             return {
               content_hash: `fake-hash-${nodeId}`,
-              snapshot_at: "2026-07-03T00:00:00.000Z",
+              snapshot_at: 1_700_000_000_000,
             };
           },
         };
         const store = openStore(join(dir, "clone.db"), { busyTimeout: 1000 });
         try {
           await compile(dir, store, { ...COMPILE_OPTS, sourceProvider: fakeProvider });
-          const node = store.get<{ content_hash: string; snapshot_at: string }>(
+          const node = store.get<{ content_hash: string; snapshot_at: number }>(
             "SELECT content_hash, snapshot_at FROM plan_node WHERE id = ?",
             "task-alpha",
           );
@@ -960,9 +960,14 @@ describe("src/compiler/compile", () => {
             "content_hash comes from fake SourceProvider",
           );
           assert.equal(
+            typeof node.snapshot_at,
+            "number",
+            "snapshot_at round-trips as a JS number (epoch ms), not a string",
+          );
+          assert.equal(
             node.snapshot_at,
-            "2026-07-03T00:00:00.000Z",
-            "snapshot_at comes from fake SourceProvider",
+            1_700_000_000_000,
+            "snapshot_at holds the epoch-ms value returned by getSnapshot",
           );
         } finally {
           store.close();

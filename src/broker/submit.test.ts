@@ -62,9 +62,8 @@ describe("src/broker/submit.ts", () => {
           store,
         );
 
-        // op_id must be a non-empty string
-        assert.equal(typeof opId, "string", "op_id must be a string");
-        assert.ok(opId.length > 0, "op_id must be non-empty");
+        // op_id must be a prefixed ULID: op_<26-char Crockford base32>
+        assert.match(opId, /^op_[0-9A-HJKMNP-TV-Z]{26}$/, "op_id must match ^op_<26-char Crockford base32>$");
 
         // fake adapter's submit was invoked exactly once
         assert.equal(

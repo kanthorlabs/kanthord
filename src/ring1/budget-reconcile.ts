@@ -14,7 +14,7 @@
  * - Idempotent: duplicate final report for same reservationId adjusts once.
  */
 
-import { randomUUID } from "node:crypto";
+import { newId, ID_PREFIX } from "../foundations/id.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -175,7 +175,7 @@ export function makeBudgetReconciler(
           return current ?? saveLedger([]);
         }
 
-        const reservationId = randomUUID();
+        const reservationId = newId(ID_PREFIX.reservation);
         const newEntry: ReservationEntry = {
           kind: "reservation",
           reservationId,

@@ -1,4 +1,6 @@
 import type { JsonlLog } from "../foundations/jsonl.ts";
+import type { Store } from "../foundations/sqlite-store.ts";
+import { initTaskTimelineSchema, appendTimelineEvent } from "./task-timeline.ts";
 
 export type InteractionCategory =
   | "approval"
@@ -20,6 +22,12 @@ const VOCABULARY: ReadonlySet<string> = new Set<InteractionCategory>([
 export const SIGNAL_MAP: Record<string, InteractionCategory> = {
   "approval-tier-verb": "approval",
   "budget-breach": "correction",
+  "scope-violation": "correction",
+  "secret-scan": "correction",
+  "verb-timeout": "rework",
+  "verb-reconcile": "correction",
+  "ring-2-verdict": "approval",
+  "deploy-observer-fail": "external",
 };
 
 export class MissingCategoryError extends Error {
@@ -48,6 +56,9 @@ export interface RecordInteractionOpts {
   no_ledger: boolean;
   log: JsonlLog;
   tags?: string[];
+  store?: Store;
+  correlation_id?: string;
+  attempt?: number;
 }
 
 export async function recordInteraction(opts: RecordInteractionOpts): Promise<void> {
@@ -63,6 +74,9 @@ export async function recordInteraction(opts: RecordInteractionOpts): Promise<vo
     no_ledger,
     log,
     tags,
+    store,
+    correlation_id,
+    attempt,
   } = opts;
 
   if (confirmed_category === "") {
@@ -97,6 +111,18 @@ export async function recordInteraction(opts: RecordInteractionOpts): Promise<vo
       ? { excluded_from_automation_metric }
       : {}),
   });
+
+  if (store !== undefined && correlation_id !== undefined) {
+    initTaskTimelineSchema(store);
+    appendTimelineEvent(store, {
+      task_id,
+      attempt: attempt ?? 1,
+      correlation_id,
+      kind: "interaction",
+      ts: timestamp,
+      summary: signal,
+    });
+  }
 }
 
 export async function queryInteractionsByFeature(

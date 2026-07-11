@@ -30,3 +30,10 @@ rules below are SQLite's, which differ from Postgres in one important place.
 
   SQLite `ALTER TABLE` likewise has no `IF EXISTS` for `DROP COLUMN` / `RENAME` —
   guard those with the same `PRAGMA table_info` check.
+- **DDL runs once, at bootstrap only (2026-07-11).** All schema init goes through
+  the central `initSchema` (`src/store/schema.ts`), called at daemon start and in
+  test-harness setup. Register a new table's `initXxxSchema` there; do NOT call
+  schema-init from inside a data-access read/write method — that per-method
+  self-migration is the anti-pattern. A data-access function assumes its table
+  exists and, on an uninitialised store, must throw "no such table" rather than
+  lazily create it. Tests init the store via `initSchema` in setup.

@@ -13,6 +13,24 @@ import type { FeatureStore } from "../store/feature-store.ts";
 import type { AttemptEvidence } from "../scheduler/attempt-evidence.ts";
 
 // ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
+/**
+ * A read-only session event emitted by the pi adapter and forwarded to the
+ * daemon-side sink. Carries the correlation anchor (task_id, attempt,
+ * session_id) so downstream stories can thread the timeline.
+ * Additional fields depend on the event kind.
+ */
+export interface SessionEvent {
+  kind: "tool_call" | "message" | "model_call" | "error";
+  task_id: string;
+  attempt: number;
+  session_id: string;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
 // Public error types
 // ---------------------------------------------------------------------------
 
@@ -51,6 +69,8 @@ export interface FakePiSurface {
     worktreePath?: string;
     model?: Model<any>;
     streamFn?: StreamFn;
+    /** Outbound, read-only event sink forwarded from PiSpawnOpts (Epic 019.5). */
+    eventSink?: (e: SessionEvent) => void;
   }): PiSessionHandle;
 }
 
@@ -85,6 +105,12 @@ export interface PiSpawnOpts {
   model?: Model<any>;
   /** Provider stream function for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
   streamFn?: StreamFn;
+  /**
+   * Outbound, read-only event sink (Epic 019.5). When present, forwarded to
+   * piSurface.spawnAgent so the real pi adapter can wire agent.subscribe to it.
+   * Consumers receive events; they cannot inject or mutate the session through this sink.
+   */
+  eventSink?: (e: SessionEvent) => void;
 }
 
 export interface PiTeardownOpts {
@@ -123,6 +149,12 @@ export interface PiRespawnOpts {
   model?: Model<any>;
   /** Provider stream function for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
   streamFn?: StreamFn;
+  /**
+   * Outbound, read-only event sink (Epic 019.5). When present, forwarded to
+   * piSurface.spawnAgent so the real pi adapter can wire agent.subscribe to it.
+   * Mirrors PiSpawnOpts.eventSink — respawned sessions emit events through the same sink.
+   */
+  eventSink?: (e: SessionEvent) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +190,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     evidence,
     model,
     streamFn,
+    eventSink,
   } = opts;
 
   // --- (b) structural ring-1 invariant ---
@@ -250,6 +283,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     worktreePath,
     model,
     streamFn,
+    eventSink,
   });
 
   // --- (e) charge budget ledger for scripted token usage ---
@@ -324,6 +358,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     evidence,
     model,
     streamFn,
+    eventSink,
   } = opts;
 
   // --- structural ring-1 invariant ---
@@ -411,6 +446,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     worktreePath,
     model,
     streamFn,
+    eventSink,
   });
 
   // --- charge budget ledger for scripted token usage ---

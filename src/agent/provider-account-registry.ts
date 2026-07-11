@@ -16,7 +16,7 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { newId, ID_PREFIX } from "../foundations/id.ts";
 import type { ProviderCredentialStore } from "./provider-credential-store.ts";
 
 // ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ export type ProviderKind =
  * are supported (e.g. ten openai-codex subscriptions).
  */
 export interface ProviderAccount {
-  /** Stable opaque account id (e.g. acct_<uuid>). */
+  /** Stable opaque account id (e.g. acc_<26-char ULID>). */
   id: string;
   /** Provider kind — never used as a compound key with the label. */
   providerKind: ProviderKind;
@@ -108,7 +108,7 @@ class FileProviderAccountRegistry implements ProviderAccountRegistry {
     label: string;
     defaultModel?: string | undefined;
   }): Promise<ProviderAccount> {
-    const id = `acct_${randomUUID()}`;
+    const id = newId(ID_PREFIX.account);
     const account: ProviderAccount = {
       id,
       providerKind: input.providerKind,

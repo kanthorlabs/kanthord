@@ -79,7 +79,7 @@ selects the active work.
 - Under `verbatimModuleSyntax`, use `import type { … }` for symbols used only as types and value `import { … }` only for symbols instantiated or called; never mix the two in one statement.
 - Under `noUncheckedIndexedAccess`, every array/`Record` index is `T | undefined`; narrow with `=== undefined` (or `?.[…] ?? fallback`) before use.
 - Never a bare `catch {}` on IO/subprocess/DB calls; match the one expected sentinel (`ENOENT`, "no commits yet") and re-throw the rest so `EISDIR`/`SQLITE_BUSY` propagate.
-- A migration guard protects only the migration; every function querying a migration-created table must guard (schema-init helper or `PRAGMA table_info`) before its own SELECT/UPDATE, or it throws "no such table".
+- DDL/migrations run ONCE at bootstrap via the central `initSchema` (`src/store/schema.ts`) — called at daemon start and in test-harness setup. Register a new table's `initXxxSchema` there; NEVER call schema-init from inside a data-access read/write method. A data-access function assumes its table exists and lets an uninitialised store throw "no such table" — it must not self-migrate. Tests init the store via `initSchema` in setup, not via a per-method init.
 - Use `pino`, not `console.log`, in production paths.
 - Inject collaborators through constructor/factory parameters typed by a small consumer-owned interface.
 - Keep diffs surgical. Do not add speculative abstraction.

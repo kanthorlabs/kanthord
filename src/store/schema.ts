@@ -15,6 +15,8 @@ import { initInboxSchema } from "../inbox/schema.ts";
 import { initRpcSchema } from "../rpc/schema.ts";
 import { initSchedulerSubsystemSchema } from "../scheduler/schema.ts";
 import { initRing1Schema } from "../ring1/schema.ts";
+import { initTaskTimelineSchema } from "../metrics/task-timeline.ts";
+import { initModelCallLogSchema } from "../metrics/model-call-log.ts";
 
 export function initSchema(store: Store): void {
   initBrokerSchema(store);
@@ -22,4 +24,6 @@ export function initSchema(store: Store): void {
   initRpcSchema(store);
   initSchedulerSubsystemSchema(store);
   initRing1Schema(store);
+  initTaskTimelineSchema(store);
+  initModelCallLogSchema(store);
 }

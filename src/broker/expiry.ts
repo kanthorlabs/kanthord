@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId, ID_PREFIX } from "../foundations/id.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Clock } from "../foundations/clock.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
@@ -38,7 +38,7 @@ export function createPendingOp(
     return existing.op_id;
   }
 
-  const opId = randomUUID();
+  const opId = newId(ID_PREFIX.op);
   store.run(
     `INSERT INTO broker_pending (op_id, verb, idempotency_key, pending_at, status)
      VALUES (?, ?, ?, ?, ?)`,

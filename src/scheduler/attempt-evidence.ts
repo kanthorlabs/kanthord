@@ -12,6 +12,7 @@
  */
 
 import type { Store } from "../foundations/sqlite-store.ts";
+import { appendTimelineEvent } from "../metrics/task-timeline.ts";
 
 /**
  * Maximum characters stored in a failure summary.
@@ -72,6 +73,17 @@ export function recordEvidence(
     ev.phase,
     bounded,
   );
+  // Thread correlation_id into the task timeline (Epic 019.5 Story 002 T2).
+  // Bootstrap (initSchema) guarantees task_timeline_event exists; on an
+  // uninitialised store this will throw "no such table" — correct by contract.
+  appendTimelineEvent(store, {
+    task_id: ev.taskId,
+    attempt: ev.attempt,
+    correlation_id: `${ev.taskId}:${ev.attempt}`,
+    kind: "attempt_evidence",
+    ts: Date.now(),
+    summary: bounded,
+  });
 }
 
 /**

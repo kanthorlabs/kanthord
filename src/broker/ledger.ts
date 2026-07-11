@@ -1,4 +1,6 @@
 import type { FeatureStore } from "../store/feature-store.ts";
+import type { Store } from "../foundations/sqlite-store.ts";
+import { initTaskTimelineSchema, appendTimelineEvent } from "../metrics/task-timeline.ts";
 
 /**
  * Durable operation-identity ledger entry (PRD §5, §6.1).
@@ -47,6 +49,7 @@ export async function writeLedgerEntry(
   storyId: string,
   taskStem: string,
   entry: LedgerEntry,
+  timelineOpts?: { timelineStore: Store; task_id: string; attempt: number },
 ): Promise<string> {
   const existing = await readRawLedgerEntries(store, storyId, taskStem);
   const dup = existing.find(
@@ -57,6 +60,17 @@ export async function writeLedgerEntry(
     return dup.op_id;
   }
   await store.appendJournal(storyId, taskStem, entry);
+  if (timelineOpts !== undefined) {
+    const { timelineStore, task_id, attempt } = timelineOpts;
+    initTaskTimelineSchema(timelineStore);
+    appendTimelineEvent(timelineStore, {
+      task_id,
+      attempt,
+      correlation_id: entry.correlation,
+      kind: "broker_op",
+      ts: Date.now(),
+    });
+  }
   return entry.op_id;
 }
 

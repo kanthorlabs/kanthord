@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId, ID_PREFIX } from "../foundations/id.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "./registry.ts";
 import type { HoldPoint } from "./hold-point.ts";
@@ -58,7 +58,7 @@ export async function submit(
   // the op as "held" and do NOT invoke the adapter.
   const holdPoint = options?.holdPoint;
   if (holdPoint?.shouldHold(entry.verb, "pre-submit")) {
-    const opId = randomUUID();
+    const opId = newId(ID_PREFIX.op);
     store.run(
       `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, status)
        VALUES (?, ?, ?, ?, ?)`,
@@ -72,7 +72,7 @@ export async function submit(
     return opId;
   }
 
-  const opId = randomUUID();
+  const opId = newId(ID_PREFIX.op);
   const requestId = (await adapter.submit(payload)) as string;
   store.run(
     `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, status)

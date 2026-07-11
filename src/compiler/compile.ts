@@ -74,7 +74,7 @@ export type RelintDiagnostic = { kind: "error"; message: string };
 export type RelintResult = { diagnostics: RelintDiagnostic[] };
 
 export type SourceProvider = {
-  getSnapshot(nodeId: string): Promise<{ content_hash: string; snapshot_at: string }>;
+  getSnapshot(nodeId: string): Promise<{ content_hash: string; snapshot_at: number }>;
 };
 
 export type CompileOptions = {
@@ -648,7 +648,7 @@ export function applyCompiledPlanMigration(store: Store): void {
       slug TEXT,
       generation INTEGER NOT NULL,
       content_hash TEXT,
-      snapshot_at TEXT,
+      snapshot_at INTEGER,
       max_attempts INTEGER
     )`,
   );
@@ -855,7 +855,7 @@ export async function compile(
   }
 
   // 8. Fetch content snapshots per node (optional sourceProvider)
-  const snapshots = new Map<string, { content_hash: string; snapshot_at: string }>();
+  const snapshots = new Map<string, { content_hash: string; snapshot_at: number }>();
   if (opts.sourceProvider !== undefined) {
     const provider = opts.sourceProvider;
     await Promise.all(

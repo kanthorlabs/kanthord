@@ -53,7 +53,7 @@ describe("src/ring1/budget-reconcile.ts — T1 reconcile entries", () => {
     const reserveResult = await reconciler.reserve("task-t1a", 10);
     assert.equal(reserveResult.status, "proceed", "first reservation must proceed");
     const reservationId = reserveResult.reservationId;
-    assert.ok(typeof reservationId === "string", "reservationId must be a string");
+    assert.match(reservationId, /^rsv_[0-9A-HJKMNP-TV-Z]{26}$/, "reservationId must match ^rsv_<26-char Crockford base32>$");
 
     // Final actual cost = 4 (lower than conservative reservation 10)
     const reconcileResult = await reconciler.reconcile("task-t1a", {
