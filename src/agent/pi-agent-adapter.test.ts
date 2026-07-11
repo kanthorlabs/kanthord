@@ -1,5 +1,5 @@
 /**
- * pi Agent adapter unit tests — B1 review fix
+ * pi Agent adapter unit tests — B1 review fix + Story 003 T2
  *
  * Asserts that makeAgentOpts maps allowed pi tool names → AgentTool[] and that
  * beforeToolCall is bound from opts.  The module under test
@@ -7,6 +7,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
 import { makeAgentOpts } from "./pi-agent-adapter.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST, PI_EXEC_TOOLS } from "./pi-tools.ts";
 
@@ -118,6 +119,44 @@ test(
       leaked,
       false,
       "API key canary value must NOT appear in any stdout output from makeAgentOpts",
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// T2 (Story 003) — model + streamFn threading; no getApiKey when streamFn present
+// ---------------------------------------------------------------------------
+
+test(
+  "T2 (Story 003) — makeAgentOpts threads streamFn into AgentOptions and omits getApiKey",
+  () => {
+    const fakeModel = { id: "gpt-4.1", name: "gpt-4.1", provider: "acct_test-001" } as unknown;
+    // Minimal StreamFn-shaped function; cast satisfies the type without importing
+    // all pi-ai event-stream types.
+    const fakeStreamFn: StreamFn = (() => {
+      throw new Error("not called in test");
+    }) as unknown as StreamFn;
+    const dummyHook = async (): Promise<undefined> => undefined;
+
+    // streamFn is not on AgentAdapterOpts yet — cast via unknown so the runtime
+    // receives the field; makeAgentOpts currently ignores it, so result.streamFn
+    // is undefined and the assertion fails for the right reason (RED).
+    const result = makeAgentOpts({
+      tools: [],
+      beforeToolCall: dummyHook,
+      model: fakeModel,
+      streamFn: fakeStreamFn,
+    } as unknown as Parameters<typeof makeAgentOpts>[0]);
+
+    assert.strictEqual(
+      result.streamFn,
+      fakeStreamFn,
+      "T2: streamFn must be forwarded into AgentOptions.streamFn — not yet threaded (RED)",
+    );
+    assert.strictEqual(
+      result.getApiKey,
+      undefined,
+      "T2: getApiKey must be absent when streamFn is provided (no api-key branch)",
     );
   },
 );

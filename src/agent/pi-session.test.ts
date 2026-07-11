@@ -1238,4 +1238,101 @@ describe("src/agent/pi-session", () => {
       }
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Suite: S3 — provider session wiring (Epic 019.4 review blocker)
+  // Asserts that spawnPiSession/respawnPiSession carry model + streamFn
+  // through to piSurface.spawnAgent when those opts are provided.
+  // Drives: PiSpawnOpts.model?, PiSpawnOpts.streamFn?, PiRespawnOpts.model?,
+  //         PiRespawnOpts.streamFn?, FakePiSurface.spawnAgent opts model?/streamFn?,
+  //         and the piSurface.spawnAgent({...}) call threading them end-to-end.
+  // -------------------------------------------------------------------------
+
+  describe("S3 — provider session wiring (Epic 019.4)", () => {
+    test("spawnPiSession forwards model and streamFn to piSurface.spawnAgent", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        let capturedModel: unknown = undefined;
+        let capturedStreamFn: unknown = undefined;
+
+        const capturingSurface: FakePiSurface = {
+          spawnAgent(opts): PiSessionHandle {
+            capturedModel = (opts as Record<string, unknown>)["model"];
+            capturedStreamFn = (opts as Record<string, unknown>)["streamFn"];
+            return {
+              abort() {},
+              waitForIdle() { return Promise.resolve(); },
+              reset() {},
+              contextTokens: 0,
+            };
+          },
+        };
+
+        const fakeStreamFn = async () => undefined;
+        const fakeModel = { provider: "acct_s3_spawn", id: "gpt-s3-spawn" };
+
+        const rawOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: async () => undefined,
+          piSurface: capturingSurface,
+          allowedToolNames: [] as string[],
+          spawnEnv: {} as Record<string, string>,
+          model: fakeModel,
+          streamFn: fakeStreamFn,
+        };
+        await spawnPiSession(rawOpts as unknown as PiSpawnOpts);
+
+        assert.strictEqual(capturedModel, fakeModel, "spawnAgent must receive the model from PiSpawnOpts");
+        assert.strictEqual(capturedStreamFn, fakeStreamFn, "spawnAgent must receive the streamFn from PiSpawnOpts");
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("respawnPiSession forwards model and streamFn to piSurface.spawnAgent", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      try {
+        let capturedModel: unknown = undefined;
+        let capturedStreamFn: unknown = undefined;
+
+        const capturingSurface: FakePiSurface = {
+          spawnAgent(opts): PiSessionHandle {
+            capturedModel = (opts as Record<string, unknown>)["model"];
+            capturedStreamFn = (opts as Record<string, unknown>)["streamFn"];
+            return {
+              abort() {},
+              waitForIdle() { return Promise.resolve(); },
+              reset() {},
+              contextTokens: 0,
+            };
+          },
+        };
+
+        const fakeStreamFn = async () => undefined;
+        const fakeModel = { provider: "acct_s3_respawn", id: "gpt-s3-respawn" };
+
+        const rawOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: async () => undefined,
+          piSurface: capturingSurface,
+          allowedToolNames: [] as string[],
+          spawnEnv: {} as Record<string, string>,
+          model: fakeModel,
+          streamFn: fakeStreamFn,
+        };
+        await respawnPiSession(rawOpts as unknown as PiRespawnOpts);
+
+        assert.strictEqual(capturedModel, fakeModel, "spawnAgent must receive the model from PiRespawnOpts");
+        assert.strictEqual(capturedStreamFn, fakeStreamFn, "spawnAgent must receive the streamFn from PiRespawnOpts");
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
 });

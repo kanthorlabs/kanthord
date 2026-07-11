@@ -42,8 +42,9 @@ case "$role" in
     [ "$is_test" -eq 1 ] && exit 0 || exit 1 ;;
   software-engineer)
     case "$path" in
-      src/*.ts) [ "$is_test" -eq 1 ] && exit 1 || exit 0 ;;
-      *)        exit 1 ;;
+      src/*.ts)      [ "$is_test" -eq 1 ] && exit 1 || exit 0 ;;
+      test/live/*.ts) exit 0 ;;   # maintainer live-smoke scripts (excluded from npm test); e.g. test/live/pi-session-smoke.ts, provider-smoke.ts
+      *)             exit 1 ;;
     esac ;;
   reviewer-engineer)
     exit 1 ;;   # reviewer is read-only — edits nothing

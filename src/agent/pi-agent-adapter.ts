@@ -10,7 +10,7 @@
  *   - `beforeToolCall`: the ring-1 hook passed through unchanged.
  */
 
-import type { AgentOptions, AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentOptions, AgentTool, StreamFn } from "@earendil-works/pi-agent-core";
 import type {
   BeforeToolCallContext,
   BeforeToolCallResult,
@@ -41,8 +41,15 @@ export interface AgentAdapterOpts {
   /**
    * Provider API key resolver — env-sourced, never logged.
    * Compatible with AgentOptions.getApiKey signature.
+   * Ignored when streamFn is present (streamFn takes precedence).
    */
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined;
+  /**
+   * Stream function from a resolved provider session (Epic 019.4).
+   * When present, threads into AgentOptions.streamFn and suppresses getApiKey
+   * so no api-key branch is active.
+   */
+  streamFn?: StreamFn;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +102,11 @@ export function makeAgentOpts(opts: AgentAdapterOpts): AgentOptions {
     // constraint without importing AgentState directly.
     (result.initialState as Record<string, unknown>)["model"] = opts.model;
   }
-  if (opts.getApiKey !== undefined) {
+  if (opts.streamFn !== undefined) {
+    result.streamFn = opts.streamFn;
+    // When streamFn is provided, suppress getApiKey — the provider session
+    // owns authentication via the stream function.
+  } else if (opts.getApiKey !== undefined) {
     result.getApiKey = opts.getApiKey;
   }
   return result;

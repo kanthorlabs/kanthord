@@ -7,6 +7,8 @@
  */
 
 import { readFile } from "node:fs/promises";
+import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai";
 import type { FeatureStore } from "../store/feature-store.ts";
 import type { AttemptEvidence } from "../scheduler/attempt-evidence.ts";
 
@@ -47,6 +49,8 @@ export interface FakePiSurface {
     beforeToolCall: unknown;
     env: Record<string, string>;
     worktreePath?: string;
+    model?: Model<any>;
+    streamFn?: StreamFn;
   }): PiSessionHandle;
 }
 
@@ -77,6 +81,10 @@ export interface PiSpawnOpts {
    * When present and non-null, injected after AGENTS.md as the next prompt block.
    */
   evidence?: AttemptEvidence | null;
+  /** Provider model for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
+  model?: Model<any>;
+  /** Provider stream function for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
+  streamFn?: StreamFn;
 }
 
 export interface PiTeardownOpts {
@@ -111,6 +119,10 @@ export interface PiRespawnOpts {
    * When present and non-null, injected after AGENTS.md as the next prompt block.
    */
   evidence?: AttemptEvidence | null;
+  /** Provider model for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
+  model?: Model<any>;
+  /** Provider stream function for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
+  streamFn?: StreamFn;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +156,8 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     worktreePath,
     toolGuidance,
     evidence,
+    model,
+    streamFn,
   } = opts;
 
   // --- (b) structural ring-1 invariant ---
@@ -234,6 +248,8 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     beforeToolCall: ring1Chain,
     env,
     worktreePath,
+    model,
+    streamFn,
   });
 
   // --- (e) charge budget ledger for scripted token usage ---
@@ -306,6 +322,8 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     worktreePath,
     toolGuidance,
     evidence,
+    model,
+    streamFn,
   } = opts;
 
   // --- structural ring-1 invariant ---
@@ -391,6 +409,8 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     beforeToolCall: ring1Chain,
     env,
     worktreePath,
+    model,
+    streamFn,
   });
 
   // --- charge budget ledger for scripted token usage ---

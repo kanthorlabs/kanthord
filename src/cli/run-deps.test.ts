@@ -98,6 +98,71 @@ test(
 );
 
 // ---------------------------------------------------------------------------
+// RB1b — S3 run-deps wiring: spawnAgent threads model+streamFn to agentFactory
+// ---------------------------------------------------------------------------
+
+test(
+  "RB1b — S3 run-deps: spawnAgent threads model+streamFn through makeAgentOpts and omits getApiKey",
+  () => {
+    let capturedOpts: unknown;
+
+    const agentFactory = (opts: unknown): {
+      abort(): void;
+      waitForIdle(): Promise<void>;
+      reset(): void;
+      state: { messages: unknown[] };
+    } => {
+      capturedOpts = opts;
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        state: { messages: [] },
+      };
+    };
+
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+    const deps = buildRealDeps({
+      store,
+      featureDir: "/tmp/run-deps-rb1b",
+      agentFactory,
+    });
+
+    const fakeModel = { provider: "acct_s3_run_deps", id: "gpt-s3-run-deps" };
+    const fakeStreamFn = async (): Promise<undefined> => undefined;
+
+    deps.piSurface.spawnAgent({
+      tools: [...PI_DEFAULT_ALLOWED_MANIFEST],
+      beforeToolCall: async (): Promise<undefined> => undefined,
+      systemPrompt: "test",
+      env: {},
+      model: fakeModel,
+      streamFn: fakeStreamFn,
+    });
+
+    assert.ok(capturedOpts !== undefined, "agentFactory must be invoked");
+    const opts = capturedOpts as AgentOptions;
+
+    assert.strictEqual(
+      opts.streamFn,
+      fakeStreamFn,
+      "RB1b: run-deps spawnAgent must forward streamFn to agentFactory via makeAgentOpts",
+    );
+    assert.strictEqual(
+      opts.getApiKey,
+      undefined,
+      "RB1b: getApiKey must be absent from AgentOptions when streamFn is provided",
+    );
+    const initialState = (opts.initialState as Record<string, unknown> | undefined) ?? {};
+    assert.deepStrictEqual(
+      initialState["model"],
+      fakeModel,
+      "RB1b: model must be threaded into initialState.model via makeAgentOpts",
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
 // RB2 — tickIntervalMs is a positive number
 // ---------------------------------------------------------------------------
 

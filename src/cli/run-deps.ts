@@ -111,10 +111,12 @@ export function buildRealDeps(
       contextTokens: number;
     } {
       // rawOpts is typed as unknown at the PiSurface seam; extract the
-      // fields makeAgentOpts needs (tools + beforeToolCall).
+      // fields makeAgentOpts needs (tools + beforeToolCall + model + streamFn).
       const spawnOpts = rawOpts as {
         tools?: string[];
         beforeToolCall?: AgentAdapterOpts["beforeToolCall"];
+        model?: AgentAdapterOpts["model"];
+        streamFn?: AgentAdapterOpts["streamFn"];
       };
 
       const agentOpts = makeAgentOpts({
@@ -124,6 +126,8 @@ export function buildRealDeps(
         beforeToolCall:
           spawnOpts.beforeToolCall ??
           (async () => undefined as ReturnType<AgentAdapterOpts["beforeToolCall"]> extends Promise<infer R> ? R : never),
+        model: spawnOpts.model,
+        streamFn: spawnOpts.streamFn,
       });
 
       if (agentFactory !== undefined) {
