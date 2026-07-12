@@ -547,6 +547,41 @@ describe("src/agent/pi-session", () => {
         await rm(dir, { recursive: true });
       }
     });
+
+    // -------------------------------------------------------------------------
+    // 019.13 S001 T2 — brief names the worktree working directory
+    // -------------------------------------------------------------------------
+
+    test("019.13 S001 T2 — systemPrompt contains working-directory block naming the worktree path when worktreePath is given", async () => {
+      const { dir, store, agentsMdPath } = await setupDir();
+      const mockWorktreePath = join(dir, "worktrees", "019.13-task-branch");
+      try {
+        const surface = makeFakePiSurface();
+        const fakeChain = async () => undefined;
+
+        const opts: PiSpawnOpts = {
+          store,
+          storyId: "s1",
+          taskStem: "t1",
+          agentsMdPath,
+          ring1Chain: fakeChain,
+          piSurface: surface,
+          allowedToolNames: ["read", "write"],
+          spawnEnv: {},
+          worktreePath: mockWorktreePath,
+        };
+
+        await spawnPiSession(opts);
+
+        const prompt = surface.lastSystemPrompt;
+        assert.ok(
+          prompt.includes(mockWorktreePath),
+          `systemPrompt must name the absolute worktree path "${mockWorktreePath}" in a working-directory block`,
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
   });
 
   // -------------------------------------------------------------------------

@@ -418,7 +418,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
           // but PiSpawnOpts.ring1Chain is typed as (ctx: unknown) => ...; the
           // cast is safe because pi always calls beforeToolCall with a
           // BeforeToolCallContext-shaped object at runtime.
-          const featureDirAllowGlob = featureDir + "/**";
+          const featureDirAllowGlob = (sessionWorktreePath ?? featureDir) + "/**";
           const ring1Chain = makeRing1HookAdapter({
             registry: {
               roles: {
@@ -430,7 +430,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             },
             role: "agent",
             writeScope,
-            worktree: featureDir,
+            worktree: sessionWorktreePath ?? featureDir,
             onEscalate: (e) => {
               createEscalationItem({
                 source_id: `${task.id}:${String(e["path"] ?? e["toolName"] ?? e.tag)}`,

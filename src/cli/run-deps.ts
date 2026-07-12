@@ -18,7 +18,7 @@
  */
 
 import { Agent, estimateContextTokens } from "@earendil-works/pi-agent-core";
-import type { AgentOptions } from "@earendil-works/pi-agent-core";
+import type { AgentOptions, PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
 import { makeAgentOpts } from "../agent/pi-agent-adapter.ts";
 import type { AgentAdapterOpts } from "../agent/pi-agent-adapter.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST } from "../agent/pi-tools.ts";
@@ -35,6 +35,7 @@ import { makeCreatePrAdapter } from "../broker/verbs/github-create-pr.ts";
 import { makeOutboundScanGuard } from "../ring1/outbound-scan-guard.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
+import { appendModelCallRecord } from "../metrics/model-call-log.ts";
 
 // ---------------------------------------------------------------------------
 // Default tool guidance (GAP5)
@@ -100,6 +101,11 @@ export interface BuildRealDepsOpts {
    * Overrides the fail-closed null default when explicitly provided.
    */
   patternRegistry?: PatternRegistry | null;
+  /**
+   * Account ID for model-call log rows (Epic 019.13 S002).
+   * Resolved at boot time from the active provider account.
+   */
+  accountId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,15 +137,15 @@ function makeMinimalEntry(verb: string): VerbRegistryEntry {
  * ready to be threaded into spawnPiSession by tick().
  */
 export function buildRealDeps(
+  opts: BuildRealDepsOpts,
+): RunDaemonDeps & { toolGuidance: Record<string, string> };
+export function buildRealDeps(
   opts: BuildRealDepsOpts & { identity: string; identityFile: string },
 ): Promise<RunDaemonDeps & { identityToken: string; toolGuidance: Record<string, string>; verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> }>;
 export function buildRealDeps(
   opts: BuildRealDepsOpts,
-): RunDaemonDeps & { toolGuidance: Record<string, string> };
-export function buildRealDeps(
-  opts: BuildRealDepsOpts,
 ): (RunDaemonDeps & { toolGuidance: Record<string, string> }) | Promise<RunDaemonDeps & { identityToken: string; toolGuidance: Record<string, string>; verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> }> {
-  const { store, featureDir, agentFactory, providerModel, providerStreamFn, identity, identityFile, repo, patternRegistry } = opts;
+  const { store, featureDir, agentFactory, providerModel, providerStreamFn, identity, identityFile, repo, patternRegistry, accountId } = opts;
 
   const clock: Clock = {
     now(): number {
@@ -173,6 +179,7 @@ export function buildRealDeps(
         model?: AgentAdapterOpts["model"];
         streamFn?: AgentAdapterOpts["streamFn"];
         systemPrompt?: string;
+        task_id?: string;
       };
 
       const agentOpts = makeAgentOpts({
@@ -185,6 +192,34 @@ export function buildRealDeps(
         model: spawnOpts.model ?? providerModel,
         streamFn: spawnOpts.streamFn ?? providerStreamFn,
       });
+
+      // Install a best-effort model-call logging hook (Epic 019.13 S002).
+      // Captures token usage from each AssistantMessage and appends a row to
+      // model_call_log. Any store error is swallowed so it never throws into
+      // the agent loop.
+      const hookTaskId = spawnOpts.task_id ?? "";
+      const hookAccountId = accountId ?? "";
+      agentOpts.prepareNextTurnWithContext = async (ctx: PrepareNextTurnContext): Promise<undefined> => {
+        try {
+          const msg = ctx.message;
+          appendModelCallRecord(store, {
+            task_id: hookTaskId,
+            account_id: hookAccountId,
+            model: msg.model,
+            tokens_in: msg.usage.input,
+            tokens_out: msg.usage.output,
+            cost: msg.usage.cost.total,
+            stop_reason: msg.stopReason,
+            attempt: 0,
+            session_id: "",
+            latency_ms: 0,
+            correlation_id: "",
+          });
+        } catch {
+          // best-effort observability — never propagate into the agent loop
+        }
+        return undefined;
+      };
 
       const systemPrompt = spawnOpts.systemPrompt;
 

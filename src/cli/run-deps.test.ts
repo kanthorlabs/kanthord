@@ -563,6 +563,109 @@ test(
 );
 
 // ---------------------------------------------------------------------------
+// 019.13 S002 T1 — spawnAgent installs a hook that appends model_call_log rows
+// ---------------------------------------------------------------------------
+
+import { initSchema } from "../store/schema.ts";
+import { queryModelCallLog } from "../metrics/model-call-log.ts";
+
+test(
+  "019.13 S002 T1 — spawnAgent installs a model-response hook: each invocation appends a model_call_log row; two calls → two rows; a failing append does not throw",
+  async () => {
+    let capturedOpts: AgentOptions | undefined;
+
+    const agentFactory = (opts: AgentOptions): {
+      abort(): void;
+      waitForIdle(): Promise<void>;
+      reset(): void;
+      state: { messages: unknown[] };
+      prompt(input: string): Promise<void>;
+    } => {
+      capturedOpts = opts;
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        state: { messages: [] },
+        async prompt(_input: string) {},
+      };
+    };
+
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+    initSchema(store);
+
+    const testTaskId = "task_019_13_s2t1";
+    const testAccountId = "acc_019_13_s2t1";
+    const testModelId = "gpt-4o-s2t1";
+
+    // accountId is a new field the SE adds to BuildRealDepsOpts
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deps = buildRealDeps({ store, featureDir: "/tmp/run-deps-019-13-s2t1", agentFactory, accountId: testAccountId } as any);
+
+    // task_id is a new field in rawOpts that the SE adds
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    deps.piSurface.spawnAgent({ tools: [...PI_DEFAULT_ALLOWED_MANIFEST], beforeToolCall: async (): Promise<undefined> => undefined, task_id: testTaskId, model: { provider: "openai-responses", id: testModelId } } as any);
+
+    assert.ok(capturedOpts !== undefined, "019.13 S002 T1: agentFactory must be called by spawnAgent");
+
+    const opts = capturedOpts as AgentOptions & Record<string, unknown>;
+    assert.ok(
+      typeof opts["prepareNextTurnWithContext"] === "function",
+      "019.13 S002 T1: spawnAgent must install a prepareNextTurnWithContext hook on AgentOptions to capture model-call usage — currently missing",
+    );
+
+    const hook = opts["prepareNextTurnWithContext"] as (ctx: unknown, signal?: AbortSignal) => Promise<unknown>;
+
+    const makeSynthCtx = (): unknown => ({
+      message: {
+        role: "assistant",
+        usage: { input: 42, output: 17, cacheRead: 0, cacheWrite: 0, totalTokens: 59, cost: { input: 0.0001, output: 0.0002, cacheRead: 0, cacheWrite: 0, total: 0.0003 } },
+        stopReason: "stop",
+        content: [],
+        api: "openai-responses",
+        provider: "openai",
+        model: testModelId,
+        timestamp: Date.now(),
+      },
+      toolResults: [],
+      newMessages: [],
+      context: { messages: [] },
+    });
+
+    await hook(makeSynthCtx());
+    await hook(makeSynthCtx());
+
+    const rows = queryModelCallLog(store, testTaskId);
+    assert.strictEqual(rows.length, 2, "019.13 S002 T1: two model responses must produce two model_call_log rows");
+
+    const row = rows[0]!;
+    assert.strictEqual(row.task_id, testTaskId, "019.13 S002 T1: row.task_id must match supplied task_id");
+    assert.strictEqual(row.account_id, testAccountId, "019.13 S002 T1: row.account_id must match the resolved account_id from buildRealDeps opts");
+    assert.strictEqual(row.model, testModelId, "019.13 S002 T1: row.model must match the AssistantMessage.model from the response");
+    assert.strictEqual(row.tokens_in, 42, "019.13 S002 T1: row.tokens_in must match usage.input from the response");
+    assert.strictEqual(row.tokens_out, 17, "019.13 S002 T1: row.tokens_out must match usage.output from the response");
+
+    // A failing append must not propagate out of the hook (best-effort metrics)
+    let capturedOpts2: AgentOptions | undefined;
+    const agentFactory2 = (o: AgentOptions): { abort(): void; waitForIdle(): Promise<void>; reset(): void; state: { messages: unknown[] }; prompt(i: string): Promise<void> } => {
+      capturedOpts2 = o;
+      return { abort() {}, async waitForIdle() {}, reset() {}, state: { messages: [] }, async prompt(_i: string) {} };
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const deps2 = buildRealDeps({ store: { run() { throw new Error("broken"); }, get: () => undefined, all: () => [] } as any, featureDir: "/tmp/run-deps-019-13-s2t1-broken", agentFactory: agentFactory2, accountId: testAccountId } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    deps2.piSurface.spawnAgent({ tools: [...PI_DEFAULT_ALLOWED_MANIFEST], beforeToolCall: async (): Promise<undefined> => undefined, task_id: testTaskId, model: { provider: "openai-responses", id: testModelId } } as any);
+    assert.ok(capturedOpts2 !== undefined, "agentFactory2 must be called");
+    const opts2 = capturedOpts2 as AgentOptions & Record<string, unknown>;
+    const hook2 = opts2["prepareNextTurnWithContext"] as (ctx: unknown, signal?: AbortSignal) => Promise<unknown>;
+    await assert.doesNotReject(
+      async () => { await hook2(makeSynthCtx()); },
+      "019.13 S002 T1: a failing store append must NOT throw out of the hook (best-effort observability)",
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
 // T1 (Story 019.12-001) — spawnAgent drives the Agent run with systemPrompt
 // ---------------------------------------------------------------------------
 

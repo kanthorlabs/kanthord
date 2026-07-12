@@ -4345,3 +4345,76 @@ test("019.8 S002 T1-b — queued dispatch result: session not spawned; task not 
     await rm(worktreesBase, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 019.13 S001 T1 — ring-1 is bound to the session worktree (not featureDir)
+// Asserts: a read to an absolute path inside the per-task worktree is allowed
+// by the ring-1 hook.  Currently RED: the allowlist is featureDir/**, so
+// mockWorktreePath/** is outside it → hook blocks → assert fails.
+// ---------------------------------------------------------------------------
+
+test("019.13 S001 T1 — ring-1 hook is bound to the session worktree; read inside worktree is allowed", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01913s1t1-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01913s1t1-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-01913-branch";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  // Sentinel: starts truthy so the assert fails if waitForIdle is never called.
+  let hookResult: { block: boolean; reason?: string } | undefined = { block: true };
+  const scriptedPiSurface = {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      const o = opts as Record<string, unknown>;
+      const hook = o["beforeToolCall"] as (ctx: unknown) => Promise<{ block: boolean; reason?: string } | undefined>;
+      return {
+        abort() {},
+        async waitForIdle() {
+          // Read to absolute path inside session worktree.
+          // Must be allowed when ring-1 is bound to mockWorktreePath.
+          // Currently blocked: allowlist is featureDir/**, not mockWorktreePath/**.
+          hookResult = await hook({
+            assistantMessage: { role: "assistant", content: [] },
+            toolCall: { id: "call-wt-read-001", name: "read", input: { path: join(mockWorktreePath, "slugify.mjs") } },
+            args: { path: join(mockWorktreePath, "slugify.mjs") },
+            context: { systemPrompt: "", messages: [], tools: [] },
+          });
+        },
+        reset() {},
+        contextTokens: 0,
+      };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger,
+    piSurface: scriptedPiSurface,
+    statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    // AC: a read inside the session worktree must pass ring-1 (hook returns undefined).
+    // Fails now because ring-1 uses featureDir/** as the allowlist; worktree path is outside it.
+    assert.equal(hookResult, undefined, "read inside session worktree must be allowed when ring-1 is bound to the session worktree (not featureDir)");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});

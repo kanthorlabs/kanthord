@@ -253,6 +253,11 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     }
   }
   const promptParts = [taskBody, epicBody, runbook, state, agentsMd];
+  if (worktreePath !== undefined) {
+    promptParts.push(
+      `## Working directory\n\nYou are working in the repository at \`${worktreePath}\`. Create and edit files inside this directory (e.g. \`${worktreePath}/<file>\`).`,
+    );
+  }
   if (evidence !== undefined && evidence !== null) {
     promptParts.push(
       `## Prior Attempt Evidence (attempt ${evidence.attempt}, phase ${evidence.phase})\n\n${evidence.summary}`,
@@ -416,6 +421,11 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     }
   }
   const promptParts = [taskBody, epicBody, runbook, state, agentsMd];
+  if (worktreePath !== undefined) {
+    promptParts.push(
+      `## Working directory\n\nYou are working in the repository at \`${worktreePath}\`. Create and edit files inside this directory (e.g. \`${worktreePath}/<file>\`).`,
+    );
+  }
   if (evidence !== undefined && evidence !== null) {
     promptParts.push(
       `## Prior Attempt Evidence (attempt ${evidence.attempt}, phase ${evidence.phase})\n\n${evidence.summary}`,
