@@ -129,7 +129,18 @@ export async function loadRepoSlot(
   }
   const identity = raw["identity"];
 
-  // 3. Validate repo path is a git repository via the git seam
+  // 3. Remote-URL repos are accepted as-is — no local work-tree check possible.
+  //    Detect by shape: https?://, ssh://, git@host:, or *.git on a URL-like path.
+  if (
+    /^https?:\/\//.test(repo) ||
+    /^ssh:\/\//.test(repo) ||
+    /^git@[^:]+:/.test(repo) ||
+    (!repo.startsWith("/") && repo.endsWith(".git") && repo.includes("/"))
+  ) {
+    return { repo, strategy: "worktree", maxConcurrentTasks, workflowsAllowed, identity };
+  }
+
+  // 4. Validate local repo path is a git work-tree via the git seam
 
   const result = await runGitFn(
     ["rev-parse", "--is-inside-work-tree"],

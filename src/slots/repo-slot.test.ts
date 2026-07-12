@@ -16,6 +16,7 @@ import {
   SlotConfigError,
   SlotRegistrationError,
   type RepoSlot,
+  type RunGitFn,
 } from "./repo-slot.ts";
 
 // ---------------------------------------------------------------------------
@@ -172,6 +173,48 @@ describe("src/slots/repo-slot", () => {
             );
             return true;
           },
+        );
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // (d) Remote URL repo → resolves without invoking runGit (Task T1 — 019.10)
+  // -------------------------------------------------------------------------
+
+  describe("loadRepoSlot — remote URL repo", () => {
+    test("a slot with a remote-URL repo resolves with slot.repo equal to the URL and does not invoke runGit", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "kslot-url-"));
+      try {
+        const remoteUrl = "https://github.com/kanthorlabs/kanthord-verify.git";
+        const yamlContent = [
+          `repo: ${remoteUrl}`,
+          `strategy: worktree`,
+          `max_concurrent_tasks: 1`,
+          `workflows_allowed: []`,
+          `identity: deploy-bot`,
+        ].join("\n");
+        const yamlPath = await writeTempYaml(dir, "slot.yaml", yamlContent);
+
+        let gitCallCount = 0;
+        const spyRunGit: RunGitFn = async (_args, _opts) => {
+          gitCallCount += 1;
+          throw new Error("runGit must NOT be called for a remote URL repo");
+        };
+
+        const slot: RepoSlot = await loadRepoSlot(yamlPath, spyRunGit);
+
+        assert.strictEqual(
+          slot.repo,
+          remoteUrl,
+          `slot.repo must equal the remote URL; got: ${slot.repo}`,
+        );
+        assert.strictEqual(
+          gitCallCount,
+          0,
+          "runGit must not be called for a remote URL repo",
         );
       } finally {
         await rm(dir, { recursive: true });
