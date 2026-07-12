@@ -18,7 +18,7 @@ import { bootstrapLiveRun } from "./bootstrap-live-run.ts";
 import { runDaemon } from "../daemon/run-loop.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { compile } from "../compiler/compile.ts";
-import { loadTasks } from "../scheduler/dispatch.ts";
+import { loadTasks, dispatchable } from "../scheduler/dispatch.ts";
 
 // Fake agent factory — prevents real pi-agent instantiation
 const fakeAgentFactory = (_opts: unknown) => ({
@@ -234,5 +234,234 @@ describe("src/cli/bootstrap-live-run", () => {
     } finally {
       await handle.stop().catch(() => {});
     }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Story 001 — compile on boot (Epic 019.9)
+  // ---------------------------------------------------------------------------
+  describe("Story 001 — compile on boot", () => {
+    const featureId = "feat-cob";
+    const epicMd = [
+      "---",
+      `id: ${featureId}`,
+      "---",
+      "",
+      "## Acceptance",
+      "",
+      "Feature complete.",
+    ].join("\n");
+    const taskMd = [
+      "---",
+      "id: task-cob",
+      "workflow: tdd@1",
+      "ticket_system: github",
+      "ticket: COB-1",
+      "write_scope:",
+      "  - src/",
+      "---",
+      "",
+      "## Prerequisites",
+      "",
+      "None.",
+      "",
+      "## Inputs",
+      "",
+      "Input.",
+      "",
+      "## Outputs",
+      "",
+      "Output.",
+      "",
+      "## Tests",
+      "",
+      "Tests.",
+    ].join("\n");
+
+    let cobBareDir = "";
+    let cobDataRoot = "";
+    let cobDeps: Awaited<ReturnType<typeof bootstrapLiveRun>>;
+
+    before(async () => {
+      cobBareDir = await mkdtemp(join(tmpdir(), "cob-bare-"));
+      execSync("git init --bare .", { cwd: cobBareDir, stdio: "pipe" });
+      cobDataRoot = await mkdtemp(join(tmpdir(), "cob-data-"));
+      const identityFile = join(cobDataRoot, "test-identity");
+      await writeFile(identityFile, "fake-cob-token\n", "utf8");
+      await chmod(identityFile, 0o600);
+      // Pre-create checkout (clone) + seed feature files so bootstrapLiveRun can compile them
+      const checkoutDir = join(cobDataRoot, "checkout");
+      execSync(`git clone "${cobBareDir}" "${checkoutDir}"`, { stdio: "pipe" });
+      const featureDir = join(checkoutDir, ".kanthord", "features");
+      await mkdir(join(featureDir, "001-cob-story"), { recursive: true });
+      await writeFile(join(featureDir, "epic.md"), epicMd, "utf8");
+      await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+      await writeFile(join(featureDir, "001-cob-story", "INDEX.md"), "# Story\n", "utf8");
+      await writeFile(join(featureDir, "001-cob-story", "001-task-cob.md"), taskMd, "utf8");
+      cobDeps = await bootstrapLiveRun({
+        slot: {
+          repo: cobBareDir,
+          strategy: "worktree",
+          maxConcurrentTasks: 1,
+          workflowsAllowed: [],
+          identity: "test-identity",
+        },
+        dataRoot: cobDataRoot,
+        providerModel: { provider: "acct_cob", id: "fake-model" } as unknown,
+        providerStreamFn: (async (): Promise<undefined> => undefined) as unknown,
+        runGit,
+        agentFactory: fakeAgentFactory,
+      });
+    });
+
+    after(async () => {
+      cobDeps?.store?.close();
+      if (cobDataRoot) await rm(cobDataRoot, { recursive: true, force: true });
+      if (cobBareDir) await rm(cobBareDir, { recursive: true, force: true });
+    });
+
+    it("plan_generation contains the feature after boot", () => {
+      const rows = cobDeps.store.all<{ feature_id: string }>(
+        "SELECT DISTINCT feature_id FROM plan_generation",
+      );
+      assert.ok(
+        rows.some((r) => r.feature_id === featureId),
+        `plan_generation must contain "${featureId}" after bootstrapLiveRun`,
+      );
+    });
+
+    it("loadTasks and dispatchable yield the feature tasks after boot", () => {
+      const tasks = loadTasks(cobDeps.store, featureId);
+      assert.ok(tasks.length >= 1, `loadTasks must return ≥1 task for ${featureId}`);
+      const ready = dispatchable(cobDeps.store, featureId);
+      assert.ok(ready.length >= 1, `dispatchable must return ≥1 task for ${featureId}`);
+    });
+
+    it("second bootstrapLiveRun leaves dispatchable set identical (idempotent)", async () => {
+      const tasksBefore = dispatchable(cobDeps.store, featureId).map((t) => t.id).sort();
+      const deps2 = await bootstrapLiveRun({
+        slot: {
+          repo: cobBareDir,
+          strategy: "worktree",
+          maxConcurrentTasks: 1,
+          workflowsAllowed: [],
+          identity: "test-identity",
+        },
+        dataRoot: cobDataRoot,
+        providerModel: { provider: "acct_cob", id: "fake-model" } as unknown,
+        providerStreamFn: (async (): Promise<undefined> => undefined) as unknown,
+        runGit,
+        agentFactory: fakeAgentFactory,
+      });
+      try {
+        loadTasks(deps2.store, featureId);
+        const tasksAfter = dispatchable(deps2.store, featureId).map((t) => t.id).sort();
+        assert.deepEqual(tasksAfter, tasksBefore, "dispatchable set must not change on re-boot");
+      } finally {
+        deps2.store.close();
+      }
+    });
+
+    it("empty featureDir yields zero features without error", async () => {
+      const emptyDataRoot = await mkdtemp(join(tmpdir(), "cob-empty-"));
+      try {
+        const emptyIdentityFile = join(emptyDataRoot, "test-identity");
+        await writeFile(emptyIdentityFile, "fake-empty-token\n", "utf8");
+        await chmod(emptyIdentityFile, 0o600);
+        const emptyCheckoutDir = join(emptyDataRoot, "checkout");
+        execSync(`git clone "${cobBareDir}" "${emptyCheckoutDir}"`, { stdio: "pipe" });
+        // No feature files seeded → featureDir has no epic.md
+        const emptyDeps = await bootstrapLiveRun({
+          slot: {
+            repo: cobBareDir,
+            strategy: "worktree",
+            maxConcurrentTasks: 1,
+            workflowsAllowed: [],
+            identity: "test-identity",
+          },
+          dataRoot: emptyDataRoot,
+          providerModel: { provider: "acct_cob", id: "fake-model" } as unknown,
+          providerStreamFn: (async (): Promise<undefined> => undefined) as unknown,
+          runGit,
+          agentFactory: fakeAgentFactory,
+        });
+        try {
+          const rows = emptyDeps.store.all<{ feature_id: string }>(
+            "SELECT DISTINCT feature_id FROM plan_generation",
+          );
+          assert.strictEqual(rows.length, 0, "empty featureDir must yield zero plan_generation rows");
+        } finally {
+          emptyDeps.store.close();
+        }
+      } finally {
+        await rm(emptyDataRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("invalid feature markdown at boot causes bootstrapLiveRun to reject (fail-closed)", async () => {
+      const badBareDir = await mkdtemp(join(tmpdir(), "cob-bad-bare-"));
+      const badDataRoot = await mkdtemp(join(tmpdir(), "cob-bad-data-"));
+      try {
+        execSync("git init --bare .", { cwd: badBareDir, stdio: "pipe" });
+        const identityFile = join(badDataRoot, "test-identity");
+        await writeFile(identityFile, "fake-bad-token\n", "utf8");
+        await chmod(identityFile, 0o600);
+        const checkoutDir = join(badDataRoot, "checkout");
+        execSync(`git clone "${badBareDir}" "${checkoutDir}"`, { stdio: "pipe" });
+        const featureDir = join(checkoutDir, ".kanthord", "features");
+        // Task file missing required sections — shapeLint throws (same pattern as compile.test.ts:107)
+        const badTaskMd = [
+          "---",
+          "id: task-bad-boot",
+          "workflow: tdd@1",
+          "ticket_system: github",
+          "ticket: BAD-BOOT-1",
+          "write_scope:",
+          "  - src/",
+          "---",
+          "",
+          "No required sections here.",
+        ].join("\n");
+        const badEpicMd = [
+          "---",
+          "id: feat-bad-boot",
+          "---",
+          "",
+          "## Acceptance",
+          "",
+          "Bad feature.",
+        ].join("\n");
+        await mkdir(join(featureDir, "001-bad-story"), { recursive: true });
+        await writeFile(join(featureDir, "epic.md"), badEpicMd, "utf8");
+        await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+        await writeFile(join(featureDir, "001-bad-story", "INDEX.md"), "# Story\n", "utf8");
+        await writeFile(
+          join(featureDir, "001-bad-story", "001-task-bad-boot.md"),
+          badTaskMd,
+          "utf8",
+        );
+        await assert.rejects(
+          () =>
+            bootstrapLiveRun({
+              slot: {
+                repo: badBareDir,
+                strategy: "worktree",
+                maxConcurrentTasks: 1,
+                workflowsAllowed: [],
+                identity: "test-identity",
+              },
+              dataRoot: badDataRoot,
+              providerModel: { provider: "acct_cob", id: "fake-model" } as unknown,
+              providerStreamFn: (async (): Promise<undefined> => undefined) as unknown,
+              runGit,
+              agentFactory: fakeAgentFactory,
+            }),
+          (err: unknown) => err instanceof Error,
+          "bootstrapLiveRun must reject with an Error when feature markdown is invalid (fail-closed)",
+        );
+      } finally {
+        await rm(badDataRoot, { recursive: true, force: true });
+        await rm(badBareDir, { recursive: true, force: true });
+      }
+    });
   });
 });

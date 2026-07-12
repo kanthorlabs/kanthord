@@ -11,9 +11,10 @@
  */
 
 import { join } from "node:path";
-import { mkdir } from "node:fs/promises";
+import { mkdir, access } from "node:fs/promises";
 import { openStore } from "../foundations/sqlite-store.ts";
 import { initSchema } from "../store/schema.ts";
+import { compile, applyCompiledPlanMigration } from "../compiler/compile.ts";
 import { loadIdentity } from "../git/keyring.ts";
 import { bootstrapLocalCheckout } from "../slots/local-checkout.ts";
 import { makeCommitsAhead } from "../daemon/commits-ahead.ts";
@@ -107,6 +108,30 @@ export async function bootstrapLiveRun(
   await mkdir(kanthordDir, { recursive: true });
   const store = openStore(dbPath, { busyTimeout: 5000 });
   initSchema(store);
+
+  // 4b. Compile feature plan on boot (Epic 019.9 S001)
+  //     Derive repoRegistry from HTTPS clone URL when parseable; skip when a
+  //     local path is supplied (e.g. bare-repo test fixtures).
+  let repoRegistry: string[] | undefined;
+  try {
+    const { pathname } = new URL(slot.repo);
+    const slug = pathname.replace(/^\//, "").replace(/\.git$/, "");
+    if (slug.length > 0) repoRegistry = [slug];
+  } catch {
+    // local path or non-HTTPS — skip repo registry check
+  }
+  let hasEpic = false;
+  try {
+    await access(join(featureDir, "epic.md"));
+    hasEpic = true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
+  if (hasEpic) {
+    await compile(featureDir, store, { repoRegistry });
+  } else {
+    applyCompiledPlanMigration(store);
+  }
 
   // 5. Assemble RunDaemonDeps via the async identity overload of buildRealDeps.
   //    patternRegistry: empty-patterns (allows all pushes; operator wires a
