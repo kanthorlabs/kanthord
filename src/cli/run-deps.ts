@@ -180,6 +180,7 @@ export function buildRealDeps(
         streamFn?: AgentAdapterOpts["streamFn"];
         systemPrompt?: string;
         task_id?: string;
+        worktreePath?: string;
       };
 
       const agentOpts = makeAgentOpts({
@@ -191,6 +192,7 @@ export function buildRealDeps(
           (async () => undefined as ReturnType<AgentAdapterOpts["beforeToolCall"]> extends Promise<infer R> ? R : never),
         model: spawnOpts.model ?? providerModel,
         streamFn: spawnOpts.streamFn ?? providerStreamFn,
+        worktreePath: spawnOpts.worktreePath,
       });
 
       // Install a best-effort model-call logging hook (Epic 019.13 S002).

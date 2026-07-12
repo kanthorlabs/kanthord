@@ -17,6 +17,7 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { PI_EXEC_TOOLS } from "./pi-tools.ts";
+import { buildWorktreeTools } from "./worktree-tools.ts";
 
 // ---------------------------------------------------------------------------
 // Adapter options
@@ -50,6 +51,12 @@ export interface AgentAdapterOpts {
    * so no api-key branch is active.
    */
   streamFn?: StreamFn;
+  /**
+   * Absolute path to the session's worktree directory.
+   * When present, real file-operation tools are built via buildWorktreeTools(cwd)
+   * instead of no-op stubs. bash remains excluded by construction (Epic 019.15).
+   */
+  worktreePath?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,38 +66,52 @@ export interface AgentAdapterOpts {
 /**
  * Build the AgentOptions for `new Agent(makeAgentOpts(opts))`.
  *
- * Each non-exec name in `opts.tools` becomes a minimal stub AgentTool whose
- * `execute` body is never invoked in production (pi dispatches built-in tools
- * internally); it satisfies the AgentTool interface shape only.
+ * When `opts.worktreePath` is present, real pi coding-agent factory tools
+ * (read/write/edit/grep/find/ls) are built via `buildWorktreeTools(cwd)` and
+ * their `execute` bodies perform live file operations inside the worktree.
+ * `bash` is excluded by construction inside `buildWorktreeTools` (Epic 019.15).
  *
- * `PI_EXEC_TOOLS` names (bash) are filtered out even if present in opts.tools,
- * so exec/shell tools are never exposed to the model regardless of the caller's
- * manifest — this is the "exclude bash by construction" invariant.
+ * When `opts.worktreePath` is absent (e.g. unit tests that do not exercise
+ * file I/O), each non-exec name in `opts.tools` becomes a minimal stub
+ * AgentTool whose `execute` body is a no-op placeholder.  `PI_EXEC_TOOLS`
+ * names (bash) are filtered out of the stub path as well, so exec/shell tools
+ * are never exposed to the model in either path — this is the "exclude bash by
+ * construction" invariant.
  *
  * `beforeToolCall` is passed through unchanged so the ring-1 hook reference is
  * preserved (test assertions use reference equality).
  */
 export function makeAgentOpts(opts: AgentAdapterOpts): AgentOptions {
-  const tools: AgentTool<any>[] = opts.tools
-    .filter((name) => !PI_EXEC_TOOLS.has(name))
-    .map((name): AgentTool<any> => {
-      // Minimal stub: satisfies the AgentTool interface with name/label/
-      // description/parameters/execute.  The cast via unknown is needed because
-      // TParameters is constrained to TSchema (typebox) and we supply a plain {}
-      // (valid structurally since TSchema is an empty interface).
-      const stub = {
-        name,
-        label: name,
-        description: `pi built-in: ${name}`,
-        // TSchema is an empty interface; {} satisfies it structurally.
-        parameters: {} as Record<string, never>,
-        execute: async (): Promise<{ content: never[]; details: undefined }> => ({
-          content: [],
-          details: undefined,
-        }),
-      };
-      return stub as unknown as AgentTool<any>;
-    });
+  // When a worktree cwd is available, use real factory tools (read/write/edit/
+  // grep/find/ls) bound to that directory. bash is excluded by construction in
+  // buildWorktreeTools. Fall back to minimal stubs when no cwd is provided
+  // (e.g. tests that do not exercise file I/O).
+  const tools: AgentTool<any>[] =
+    opts.worktreePath !== undefined
+      ? (buildWorktreeTools(opts.worktreePath) as AgentTool<any>[]).filter((t) =>
+          opts.tools.includes(t.name),
+        )
+      : opts.tools
+          .filter((name) => !PI_EXEC_TOOLS.has(name))
+          .map((name): AgentTool<any> => {
+            // Minimal stub: satisfies the AgentTool interface with name/label/
+            // description/parameters/execute.  The cast via unknown is needed because
+            // TParameters is constrained to TSchema (typebox) and we supply a plain {}
+            // (valid structurally since TSchema is an empty interface).
+            const stub = {
+              name,
+              label: name,
+              description: `pi built-in: ${name}`,
+              // TSchema is an empty interface; {} satisfies it structurally.
+              parameters: {} as Record<string, never>,
+              execute: async (): Promise<never> => {
+                throw new Error(
+                  `no workspace bound: tool "${name}" unavailable (no worktree cwd)`,
+                );
+              },
+            };
+            return stub as unknown as AgentTool<any>;
+          });
 
   const result: AgentOptions = {
     initialState: { tools },

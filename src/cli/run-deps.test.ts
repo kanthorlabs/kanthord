@@ -24,7 +24,7 @@ import type { Model } from "@earendil-works/pi-ai";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
-import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, chmod, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { IdentityLoadError } from "../git/keyring.ts";
@@ -717,5 +717,78 @@ test(
       "<brief-XYZ>",
       "T1: agent.prompt must be called with the systemPrompt brief",
     );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// T2 (019.15-S001) — spawnAgent with worktreePath uses real buildWorktreeTools
+// ---------------------------------------------------------------------------
+
+test(
+  "T2 (019.15-S001) — spawnAgent with worktreePath uses real buildWorktreeTools: write.execute creates a file and bash is absent",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-019-15-t2-"));
+    try {
+      let capturedOpts: AgentOptions | undefined;
+      const agentFactory = (opts: AgentOptions): {
+        abort(): void;
+        waitForIdle(): Promise<void>;
+        reset(): void;
+        state: { messages: unknown[] };
+        prompt(i: string): Promise<void>;
+      } => {
+        capturedOpts = opts;
+        return {
+          abort() {},
+          async waitForIdle() {},
+          reset() {},
+          state: { messages: [] },
+          async prompt(_i: string) {},
+        };
+      };
+
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const deps = buildRealDeps({ store, featureDir: dir, agentFactory });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      deps.piSurface.spawnAgent({
+        tools: [...PI_DEFAULT_ALLOWED_MANIFEST],
+        beforeToolCall: async (): Promise<undefined> => undefined,
+        worktreePath: dir,
+      } as any);
+
+      assert.ok(capturedOpts !== undefined, "agentFactory must be invoked");
+      const tools = (
+        ((capturedOpts.initialState as Record<string, unknown> | undefined)?.["tools"]) as
+          | Array<{ name: string; execute(id: string, args: unknown): Promise<unknown> }>
+          | undefined
+      ) ?? [];
+
+      // bash must be absent
+      assert.ok(
+        !tools.some((t) => t.name === "bash"),
+        "T2: bash must not be in tools",
+      );
+
+      // write tool must be present
+      const write = tools.find((t) => t.name === "write");
+      assert.ok(write !== undefined, "T2: write tool must be present in tools");
+
+      // execute must write a real file (not the empty stub)
+      await write.execute("call-t2-w1", { path: "019-15-t2.txt", content: "real-write-sentinel" });
+      const onDisk = await readFile(join(dir, "019-15-t2.txt"), "utf8").catch(() => null);
+      assert.notStrictEqual(
+        onDisk,
+        null,
+        "T2: write.execute must create the file in the worktree — stub no-op detected (real tool expected)",
+      );
+      assert.equal(
+        onDisk,
+        "real-write-sentinel",
+        "T2: write.execute must write the expected content (proves real factory tool, not stub)",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   },
 );

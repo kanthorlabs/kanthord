@@ -7,6 +7,9 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
 import { makeAgentOpts } from "./pi-agent-adapter.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST, PI_EXEC_TOOLS } from "./pi-tools.ts";
@@ -126,6 +129,73 @@ test(
 // ---------------------------------------------------------------------------
 // T2 (Story 003) — model + streamFn threading; no getApiKey when streamFn present
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// BLOCKER-1 (019.15 S2) — opts.tools filtering must apply when worktreePath present
+// ---------------------------------------------------------------------------
+
+test(
+  "BLOCKER-1 (019.15 S2) — makeAgentOpts with worktreePath + restricted opts.tools only builds the allowed tools",
+  async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), "kanthord-b1-"));
+    try {
+      const dummyHook = async (): Promise<undefined> => undefined;
+      const opts = makeAgentOpts({
+        tools: ["read"], // only "read" in the manifest
+        beforeToolCall: dummyHook,
+        worktreePath: tmpDir,
+      });
+      const tools = (opts.initialState?.tools ?? []) as Array<{ name: string }>;
+      const names = tools.map((t) => t.name);
+      assert.ok(names.includes("read"), "BLOCKER-1: read tool must be present");
+      for (const absent of ["write", "edit", "grep", "find", "ls", "bash"]) {
+        assert.ok(
+          !names.includes(absent),
+          `BLOCKER-1: ${absent} must NOT be in tool set when opts.tools restricts to ["read"]`,
+        );
+      }
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// BLOCKER-2 (019.15 S3) — fallback (no worktreePath) must NOT silently succeed
+// ---------------------------------------------------------------------------
+
+test(
+  "BLOCKER-2 (019.15 S3) — makeAgentOpts with no worktreePath: fallback tool execute throws a loud error",
+  async () => {
+    const dummyHook = async (): Promise<undefined> => undefined;
+    const opts = makeAgentOpts({
+      tools: ["read"],
+      beforeToolCall: dummyHook,
+      // intentionally no worktreePath — fallback stub path
+    });
+    type LooseTool = {
+      name: string;
+      execute: (...args: unknown[]) => Promise<unknown>;
+    };
+    const tools = (opts.initialState?.tools ?? []) as LooseTool[];
+    const readTool = tools.find((t) => t.name === "read");
+    if (readTool == null) throw new Error("BLOCKER-2: read stub tool missing (test setup)");
+    // Fallback stub must throw — silent empty-success (returning {content:[], details:undefined})
+    // is forbidden. Tools signal errors by throwing (pi-agent-core semantics).
+    await assert.rejects(
+      () => readTool.execute("id-001", { path: "foo.txt" }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "BLOCKER-2: execute must throw an Error instance");
+        assert.ok(
+          (err as Error).message.length > 0,
+          "BLOCKER-2: thrown error message must not be empty",
+        );
+        return true;
+      },
+      "BLOCKER-2: fallback stub execute must throw — silent empty-success is forbidden (no workspace bound)",
+    );
+  },
+);
 
 test(
   "T2 (Story 003) — makeAgentOpts threads streamFn into AgentOptions and omits getApiKey",

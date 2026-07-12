@@ -206,6 +206,11 @@ const CRED_SUFFIXES = ["_TOKEN", "_KEY", "_SECRET", "_PASSWORD"] as const;
 
 function isCredKey(k: string): boolean {
   const u = k.toUpperCase();
+  // GitHub Actions action-input vars (INPUT_*) are never kanthord credentials;
+  // libraries like pi-coding-agent's jiti probe them at import time.  Exempt
+  // any key whose uppercased form starts with "INPUT_" so the guard does not
+  // fire on those—even when they carry a credential-shaped suffix.
+  if (u.startsWith("INPUT_")) return false;
   return CRED_SUFFIXES.some((sfx) => u.endsWith(sfx));
 }
 

@@ -30,6 +30,7 @@
     "@connectrpc/connect-node": "^2.1.2",
     "@earendil-works/pi-agent-core": "0.80.3",
     "@earendil-works/pi-ai": "0.80.3",
+    "@earendil-works/pi-coding-agent": "0.80.3",
     "ulid": "^3.0.2",
     "yaml": "^2.9.0"
   }
