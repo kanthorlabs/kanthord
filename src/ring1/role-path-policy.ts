@@ -9,7 +9,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { resolve, normalize } from "node:path";
+import { resolve, normalize, relative } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 // ---------------------------------------------------------------------------
@@ -425,7 +425,15 @@ export function ring1PolicyChain(opts: {
       ? canonicalize(call.canonicalPath, call.worktree)
       : canonicalize(call.path, call.worktree);
 
-    const scopeDecision = writeScopeCheck(effectivePath);
+    // Relativize against the worktree so write_scope repo-relative entries
+    // (e.g. "src/foo", "**") can be compared in a consistent frame.
+    // A path outside the worktree, or when no worktree is set, passes through.
+    const writeScopePath =
+      call.worktree !== undefined && effectivePath.startsWith(call.worktree + "/")
+        ? relative(call.worktree, effectivePath)
+        : effectivePath;
+
+    const scopeDecision = writeScopeCheck(writeScopePath);
     if (scopeDecision === "block") {
       return { decision: "block" };
     }
@@ -436,7 +444,11 @@ export function ring1PolicyChain(opts: {
       const secondaryCanon = call.secondaryCanonicalPath !== undefined
         ? canonicalize(call.secondaryCanonicalPath, call.worktree)
         : canonicalize(call.secondaryPath, call.worktree);
-      const secondaryScopeDecision = writeScopeCheck(secondaryCanon);
+      const writeScopeSecondaryPath =
+        call.worktree !== undefined && secondaryCanon.startsWith(call.worktree + "/")
+          ? relative(call.worktree, secondaryCanon)
+          : secondaryCanon;
+      const secondaryScopeDecision = writeScopeCheck(writeScopeSecondaryPath);
       if (secondaryScopeDecision === "block") {
         return { decision: "block" };
       }

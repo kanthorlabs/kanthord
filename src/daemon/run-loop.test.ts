@@ -4418,3 +4418,86 @@ test("019.13 S001 T1 — ring-1 hook is bound to the session worktree; read insi
     await rm(worktreesBase, { recursive: true, force: true });
   }
 });
+
+// 019.14 S002 T1 — read of bare worktree root is allowed (no trailing slash)
+// Asserts: the ring-1 read allowlist includes the bare worktree path, not just
+// <wt>/**. A read of <wt> itself must return undefined (allowed), while a read
+// of a sibling path outside the worktree must return { block: true }.
+// Currently RED: allow=[<wt>/**] — globToRegex("…/**") does not match bare "…".
+
+test("019.14 S002 T1 — ring-1 read allowlist includes bare worktree root; sibling path remains blocked", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01914s2t1-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01914s2t1-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-01914s2-branch";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const siblingPath = join(worktreesBase, "sibling-outside-wt");
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  // Sentinel: starts truthy so the assert fails if waitForIdle is never called.
+  let bareRootResult: { block: boolean; reason?: string } | undefined = { block: true, reason: "sentinel — waitForIdle never called" };
+  let siblingResult: { block: boolean; reason?: string } | undefined = undefined;
+
+  const scriptedPiSurface = {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      const o = opts as Record<string, unknown>;
+      const hook = o["beforeToolCall"] as (ctx: unknown) => Promise<{ block: boolean; reason?: string } | undefined>;
+      return {
+        abort() {},
+        async waitForIdle() {
+          // AC1: read of the bare worktree root (no trailing slash) must be allowed.
+          // Currently blocked: allow=[<wt>/**] does not match bare <wt>.
+          bareRootResult = await hook({
+            assistantMessage: { role: "assistant", content: [] },
+            toolCall: { id: "call-bare-root", name: "read", input: { path: mockWorktreePath } },
+            args: { path: mockWorktreePath },
+            context: { systemPrompt: "", messages: [], tools: [] },
+          });
+          // AC2: read of a sibling path outside the worktree must remain blocked.
+          siblingResult = await hook({
+            assistantMessage: { role: "assistant", content: [] },
+            toolCall: { id: "call-sibling", name: "read", input: { path: siblingPath } },
+            args: { path: siblingPath },
+            context: { systemPrompt: "", messages: [], tools: [] },
+          });
+        },
+        reset() {},
+        contextTokens: 0,
+      };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger,
+    piSurface: scriptedPiSurface,
+    statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    // AC1: bare worktree root read must be allowed (undefined = no escalation).
+    // Fails today: allow=[<wt>/**] only — globToRegex("…/**") does not match bare "…".
+    assert.equal(bareRootResult, undefined, "read of bare worktree root must be allowed by ring-1 allowlist");
+    // AC2: sibling path outside the worktree must remain blocked.
+    assert.equal((siblingResult as { block: boolean; reason?: string } | undefined)?.block, true, "read of a sibling path outside the worktree must be blocked");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});

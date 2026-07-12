@@ -115,6 +115,10 @@ function normalizeScopePath(p: string): string {
 function isPathInScope(filePath: string, scopes: readonly string[]): boolean {
   for (const scope of scopes) {
     const ns = normalizeScopePath(scope);
+    // A scope that normalizes to "**" is the whole-repo sentinel — allow any path.
+    if (ns === "**") {
+      return true;
+    }
     if (filePath === ns || filePath.startsWith(ns + "/")) {
       return true;
     }

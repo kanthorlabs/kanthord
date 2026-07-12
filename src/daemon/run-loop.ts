@@ -418,13 +418,14 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
           // but PiSpawnOpts.ring1Chain is typed as (ctx: unknown) => ...; the
           // cast is safe because pi always calls beforeToolCall with a
           // BeforeToolCallContext-shaped object at runtime.
-          const featureDirAllowGlob = (sessionWorktreePath ?? featureDir) + "/**";
+          const wtRoot = sessionWorktreePath ?? featureDir;
+          const wtAllow = [wtRoot, wtRoot + "/**"];
           const ring1Chain = makeRing1HookAdapter({
             registry: {
               roles: {
                 agent: {
-                  read: { allow: [featureDirAllowGlob], deny: [] },
-                  write: { allow: [featureDirAllowGlob], deny: [] },
+                  read: { allow: wtAllow, deny: [] },
+                  write: { allow: wtAllow, deny: [] },
                 },
               },
             },

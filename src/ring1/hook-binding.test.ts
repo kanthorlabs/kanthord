@@ -301,8 +301,9 @@ describe("src/ring1/hook-binding.ts", () => {
 
 describe("B2+B3: hook worktree forwarding and multi-path secondary check", () => {
   test("B2: relative args.path resolved against worktree — allowed inside worktree/src/**", async () => {
-    // worktree=/workspace; allow=/workspace/src/**
-    // args.path="src/main.ts" (relative) → /workspace/src/main.ts → inside allowlist → pass
+    // worktree=/workspace; write_scope uses repo-relative entry "src/**" (019.14 semantics).
+    // args.path="src/main.ts" (relative) → canonicalize → /workspace/src/main.ts
+    //   → relativize against worktree → "src/main.ts" → matches scope "src/**" → allow.
     const registry: RolePathRegistry = {
       roles: {
         coding: {
@@ -315,7 +316,7 @@ describe("B2+B3: hook worktree forwarding and multi-path secondary check", () =>
     const opts = {
       registry,
       role: "coding",
-      writeScope: ["/workspace/src/**"],
+      writeScope: ["src/**"],
       worktree: "/workspace",
       onEscalate: (e: EscalationEvent & Record<string, unknown>) => escalations.push(e),
       unknownEffectfulToolNames: new Set<string>(),
@@ -1129,5 +1130,73 @@ describe("BLOCKER-019.1: exec deny via PI_EXEC_TOOLS at beforeToolCall seam", ()
     const result = await hook(ctx);
     assert.equal(result, undefined, "pathless read tool (not in PI_EXEC_TOOLS) must pass through");
     assert.equal(escalations.length, 0, "no escalation for pure pi tool not in exec set");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Epic 019.14 — write-scope accepts worktree writes (Story 001, Task T1)
+// ---------------------------------------------------------------------------
+
+describe("019.14-S001: write-scope check compares in repo-relative frame", () => {
+  const worktree = "/fake/worktree/task-slug";
+  const wtRegistry: RolePathRegistry = {
+    roles: {
+      coding: {
+        read: { allow: [worktree + "/**"], deny: [] },
+        write: { allow: [worktree + "/**"], deny: [] },
+      },
+    },
+  };
+
+  test("019.14-S001-T1a: write_scope ['**'] allows any write inside the worktree (returns undefined, no escalation)", async () => {
+    const escalations: EscalationEvent[] = [];
+    const opts: Ring1HookAdapterOpts = {
+      registry: wtRegistry,
+      role: "coding",
+      writeScope: ["**"],
+      worktree,
+      onEscalate: (e) => escalations.push(e),
+      unknownEffectfulToolNames: new Set<string>(),
+    };
+    const hook = makeRing1HookAdapter(opts);
+    const ctx = fakeContext("write", { path: worktree + "/slugify.mjs" });
+    const result = await hook(ctx);
+    assert.equal(result, undefined, "write_scope ['**'] inside worktree must be allowed (pass-through)");
+    assert.equal(escalations.length, 0, "no escalation when write is in scope");
+  });
+
+  test("019.14-S001-T1b: scoped write_scope ['src/foo'] allows write inside <wt>/src/foo and blocks write outside scope", async () => {
+    // In-scope write: <wt>/src/foo/x.ts → allowed
+    const escalationsIn: EscalationEvent[] = [];
+    const optsIn: Ring1HookAdapterOpts = {
+      registry: wtRegistry,
+      role: "coding",
+      writeScope: ["src/foo"],
+      worktree,
+      onEscalate: (e) => escalationsIn.push(e),
+      unknownEffectfulToolNames: new Set<string>(),
+    };
+    const hookIn = makeRing1HookAdapter(optsIn);
+    const ctxIn = fakeContext("write", { path: worktree + "/src/foo/x.ts" });
+    const resultIn = await hookIn(ctxIn);
+    assert.equal(resultIn, undefined, "write inside scoped path must be allowed (pass-through)");
+    assert.equal(escalationsIn.length, 0, "no escalation for in-scope write");
+
+    // Out-of-scope write: <wt>/other/y.ts → blocked with re-planning-signal
+    const escalationsOut: EscalationEvent[] = [];
+    const optsOut: Ring1HookAdapterOpts = {
+      registry: wtRegistry,
+      role: "coding",
+      writeScope: ["src/foo"],
+      worktree,
+      onEscalate: (e) => escalationsOut.push(e),
+      unknownEffectfulToolNames: new Set<string>(),
+    };
+    const hookOut = makeRing1HookAdapter(optsOut);
+    const ctxOut = fakeContext("write", { path: worktree + "/other/y.ts" });
+    const resultOut = await hookOut(ctxOut);
+    assert.ok(resultOut !== undefined && resultOut.block === true, "write outside scoped path must be blocked");
+    assert.equal(escalationsOut.length, 1, "one re-planning-signal escalation for out-of-scope write");
+    assert.equal((escalationsOut[0] as Record<string, unknown>)["tag"], "re-planning-signal", "escalation must carry re-planning-signal tag");
   });
 });
