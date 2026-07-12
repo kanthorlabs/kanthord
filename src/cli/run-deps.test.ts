@@ -22,6 +22,12 @@ import { openStore } from "../foundations/sqlite-store.ts";
 import type { AgentOptions, StreamFn } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
+import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
+import type { PatternRegistry } from "../ring1/secret-scan.ts";
+import { mkdtemp, writeFile, chmod, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { IdentityLoadError } from "../git/keyring.ts";
 
 // ---------------------------------------------------------------------------
 // RB1 — piSurface.spawnAgent uses makeAgentOpts
@@ -366,5 +372,184 @@ test(
         `toolGuidance["${name}"] must be a non-empty guidance string`,
       );
     }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// S002-T1 — per-identity PAT custody: buildRealDeps loads token from 0600 file
+// ---------------------------------------------------------------------------
+
+test(
+  "S002-T1-happy — buildRealDeps loads identity token from a 0600 file and exposes identityToken",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-s002-t1-"));
+    const tmpFile = join(dir, "credentials");
+    const fakeToken = "ghp_fake-token-s002t1-happy";
+    try {
+      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      // identity/identityFile are not yet in BuildRealDepsOpts — cast via any (RED seam)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = (await (buildRealDeps as any)({
+        store,
+        featureDir: dir,
+        identity: "kanthordverify",
+        identityFile: tmpFile,
+      })) as { identityToken?: string };
+      assert.strictEqual(
+        result.identityToken,
+        fakeToken,
+        "S002-T1: buildRealDeps must expose the loaded token as identityToken (trimmed from file)",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "S002-T1-insecure — buildRealDeps rejects with IdentityLoadError(insecure-file-mode) for a 0644 file, message names identity + file, no token",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-s002-t1-insec-"));
+    const tmpFile = join(dir, "credentials");
+    const fakeToken = "ghp_must-not-appear-in-error-message";
+    try {
+      await writeFile(tmpFile, fakeToken + "\n");
+      await chmod(tmpFile, 0o644);
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      await assert.rejects(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async () => { await (buildRealDeps as any)({ store, featureDir: dir, identity: "kanthordverify", identityFile: tmpFile }); },
+        (err: unknown) => {
+          assert.ok(err instanceof IdentityLoadError, `S002-T1-insecure: must throw IdentityLoadError, got ${String(err)}`);
+          const e = err as IdentityLoadError;
+          assert.strictEqual(e.code, "insecure-file-mode", "S002-T1-insecure: error code must be insecure-file-mode");
+          assert.ok(e.message.includes("kanthordverify"), "S002-T1-insecure: error message must name the identity");
+          assert.ok(e.message.includes(tmpFile), "S002-T1-insecure: error message must include the file path");
+          assert.ok(!e.message.includes(fakeToken), "S002-T1-insecure: error message must NOT contain the token");
+          return true;
+        },
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// S003-T1 — broker verb registry exposed on buildRealDeps deps
+// ---------------------------------------------------------------------------
+
+test(
+  "S003-T1 — buildRealDeps exposes verbAdapters with git.branch, git.commit, git.push, github.create_pr entries",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-s003-t1-"));
+    const tmpFile = join(dir, "credentials");
+    const fakeToken = "ghp_s003-build-verb-registry";
+    try {
+      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
+
+      // repo + patternRegistry are not yet in BuildRealDepsOpts — cast via any (RED seam)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deps = (await (buildRealDeps as any)({
+        store,
+        featureDir: dir,
+        identity: "kanthordverify",
+        identityFile: tmpFile,
+        repo: "kanthordlabs/kanthord-verify",
+        patternRegistry: stubPatternRegistry,
+      })) as RunDaemonDeps & {
+        identityToken?: string;
+        verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }>;
+      };
+
+      assert.ok(
+        deps.verbAdapters !== undefined,
+        "S003-T1: buildRealDeps must return deps.verbAdapters (broker verb registry) — field not yet wired",
+      );
+
+      const EXPECTED_VERBS = ["git.branch", "git.commit", "git.push", "github.create_pr"] as const;
+      for (const verb of EXPECTED_VERBS) {
+        assert.ok(
+          Object.prototype.hasOwnProperty.call(deps.verbAdapters, verb),
+          `S003-T1: deps.verbAdapters must contain an entry for verb "${verb}"`,
+        );
+        const verbEntry = deps.verbAdapters[verb];
+        assert.ok(
+          verbEntry !== undefined,
+          `S003-T1: deps.verbAdapters["${verb}"] must not be undefined`,
+        );
+        assert.ok(
+          typeof verbEntry.adapter.submit === "function",
+          `S003-T1: verbAdapters["${verb}"].adapter.submit must be a function (real constructor output)`,
+        );
+        assert.ok(
+          typeof verbEntry.adapter.poll_status === "function",
+          `S003-T1: verbAdapters["${verb}"].adapter.poll_status must be a function`,
+        );
+        assert.ok(
+          typeof verbEntry.adapter.reconcile === "function",
+          `S003-T1: verbAdapters["${verb}"].adapter.reconcile must be a function (reconcile-path required by PRD §5)`,
+        );
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// B1-regression — async (identity) path must preserve caller-supplied patternRegistry
+// ---------------------------------------------------------------------------
+
+test(
+  "B1 — buildRealDeps async path preserves caller-supplied patternRegistry (not null)",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-b1-reg-"));
+    const tmpFile = join(dir, "credentials");
+    const fakeToken = "ghp_b1-regression-pattern-registry";
+    try {
+      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deps = (await (buildRealDeps as any)({
+        store,
+        featureDir: dir,
+        identity: "kanthordverify",
+        identityFile: tmpFile,
+        patternRegistry: stubPatternRegistry,
+      })) as RunDaemonDeps;
+
+      assert.strictEqual(
+        deps.patternRegistry,
+        stubPatternRegistry,
+        "B1: buildRealDeps async path must return deps.patternRegistry === the supplied stub (was always null — blocker B1)",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  "S002-T1-missing — buildRealDeps rejects with an error naming identity + file when the identity file does not exist",
+  async () => {
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+    const missingFile = join(tmpdir(), "kanthord-s002-t1-nonexistent-credentials");
+    await assert.rejects(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async () => { await (buildRealDeps as any)({ store, featureDir: "/tmp/s002-missing", identity: "kanthordverify", identityFile: missingFile }); },
+      (err: unknown) => {
+        assert.ok(err instanceof Error, `S002-T1-missing: must throw an Error, got ${String(err)}`);
+        const msg = (err as Error).message;
+        assert.ok(msg.includes("kanthordverify"), "S002-T1-missing: error message must name the identity 'kanthordverify'");
+        assert.ok(msg.includes(missingFile), "S002-T1-missing: error message must include the file path");
+        return true;
+      },
+    );
   },
 );

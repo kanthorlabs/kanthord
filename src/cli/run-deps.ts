@@ -27,6 +27,14 @@ import type { PiSurface, RunDaemonDeps, StatusServerFactory } from "../daemon/ru
 import type { Clock } from "../foundations/clock.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Logger } from "../daemon/boot.ts";
+import { loadIdentity, IdentityLoadError } from "../git/keyring.ts";
+import { makeBranchAdapter, makeCommitAdapter } from "../broker/verbs/git-local.ts";
+import { makePushAdapter } from "../broker/verbs/git-push.ts";
+import { makeGithubHttpSeam } from "../broker/verbs/github-http.ts";
+import { makeCreatePrAdapter } from "../broker/verbs/github-create-pr.ts";
+import { makeOutboundScanGuard } from "../ring1/outbound-scan-guard.ts";
+import type { AsyncVerbAdapter, VerbRegistryEntry } from "../broker/registry.ts";
+import type { PatternRegistry } from "../ring1/secret-scan.ts";
 
 // ---------------------------------------------------------------------------
 // Default tool guidance (GAP5)
@@ -80,6 +88,35 @@ export interface BuildRealDepsOpts {
    * Used as the spawn streamFn when the caller does not supply one.
    */
   providerStreamFn?: AgentAdapterOpts["streamFn"];
+  /** Optional named identity for broker PAT authentication (Story 002). */
+  identity?: string;
+  /** Path to the 0600 credential file for the named identity. */
+  identityFile?: string;
+  /** Repository "owner/name" for github.create_pr adapter (Story 003). */
+  repo?: string;
+  /**
+   * Pattern registry for outbound secret scanning (Story 003).
+   * Overrides the fail-closed null default when explicitly provided.
+   */
+  patternRegistry?: PatternRegistry | null;
+}
+
+// ---------------------------------------------------------------------------
+// Minimal VerbRegistryEntry factory (Story 003 inline stubs)
+// ---------------------------------------------------------------------------
+
+function makeMinimalEntry(verb: string): VerbRegistryEntry {
+  return {
+    verb,
+    tier: "auto",
+    timeout: 60_000,
+    idempotency: { window_ms: 0 },
+    retry: { max: 3, backoff: "linear" },
+    poll_interval: 1_000,
+    terminal_states: ["done"],
+    rate_limit: { requests_per_minute: 60 },
+    observed_state_can_regress: false,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -93,9 +130,15 @@ export interface BuildRealDepsOpts {
  * ready to be threaded into spawnPiSession by tick().
  */
 export function buildRealDeps(
+  opts: BuildRealDepsOpts & { identity: string; identityFile: string },
+): Promise<RunDaemonDeps & { identityToken: string; toolGuidance: Record<string, string>; verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> }>;
+export function buildRealDeps(
   opts: BuildRealDepsOpts,
-): RunDaemonDeps & { toolGuidance: Record<string, string> } {
-  const { store, featureDir, agentFactory, providerModel, providerStreamFn } = opts;
+): RunDaemonDeps & { toolGuidance: Record<string, string> };
+export function buildRealDeps(
+  opts: BuildRealDepsOpts,
+): (RunDaemonDeps & { toolGuidance: Record<string, string> }) | Promise<RunDaemonDeps & { identityToken: string; toolGuidance: Record<string, string>; verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> }> {
+  const { store, featureDir, agentFactory, providerModel, providerStreamFn, identity, identityFile, repo, patternRegistry } = opts;
 
   const clock: Clock = {
     now(): number {
@@ -180,7 +223,7 @@ export function buildRealDeps(
     toolGuidance[name] = guidance !== undefined ? guidance : name;
   }
 
-  return {
+  const baseDeps = {
     store,
     featureDir,
     clock,
@@ -191,4 +234,51 @@ export function buildRealDeps(
     patternRegistry: null, // fail-closed: no registry file path wired yet (Gap 2 MVP)
     toolGuidance,
   };
+
+  if (identity !== undefined && identityFile !== undefined) {
+    const iName = identity;
+    const iFile = identityFile;
+    return (async () => {
+      let token: string;
+      try {
+        const id = await loadIdentity({ name: iName, file: iFile });
+        token = id.token;
+      } catch (err) {
+        if (err instanceof IdentityLoadError) {
+          throw new IdentityLoadError(
+            err.code,
+            `identity "${iName}" (file: "${iFile}"): ${err.message}`,
+          );
+        }
+        const cause = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `failed to load identity "${iName}" from file "${iFile}": ${cause}`,
+        );
+      }
+        // Build outbound scan guard from the (possibly caller-supplied) pattern registry.
+      const scanGuard = makeOutboundScanGuard({
+        registry: patternRegistry !== undefined ? patternRegistry : null,
+        onEscalate: () => { /* escalation surfaced via logger at tick call site */ },
+      });
+
+      // Construct real adapters for the four standard broker verbs.
+      const branchAdapter = makeBranchAdapter({ gitBin: "git" });
+      const commitAdapter = makeCommitAdapter({ gitBin: "git" });
+      const pushAdapter = makePushAdapter({ gitBin: "git", diffScanGuard: scanGuard });
+      const repoSlug = repo ?? "";
+      const http = makeGithubHttpSeam({ token });
+      const createPrAdapter = makeCreatePrAdapter({ repo: repoSlug, token, http });
+
+      const verbAdapters: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> = {
+        "git.branch": { entry: makeMinimalEntry("git.branch"), adapter: branchAdapter },
+        "git.commit": { entry: makeMinimalEntry("git.commit"), adapter: commitAdapter },
+        "git.push": { entry: makeMinimalEntry("git.push"), adapter: pushAdapter },
+        "github.create_pr": { entry: makeMinimalEntry("github.create_pr"), adapter: createPrAdapter },
+      };
+
+      return { ...baseDeps, patternRegistry: patternRegistry ?? null, identityToken: token, verbAdapters };
+    })();
+  }
+
+  return baseDeps;
 }

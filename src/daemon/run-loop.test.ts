@@ -22,6 +22,7 @@ import { resumeEscalationItem, haltEscalationItem } from "../rpc/inbox-respond.t
 import type { GateResult, GateResultSink } from "../workflow/workflow.ts";
 import { latestEvidence } from "../scheduler/attempt-evidence.ts";
 import { readAttempts, grantOne, rearmLedger } from "../scheduler/attempt-ledger.ts";
+import { initSchema } from "../store/schema.ts";
 
 // ---------------------------------------------------------------------------
 // Helper — issue a GET /healthz and resolve with the status code
@@ -1904,6 +1905,222 @@ test("GAP1 — tick() ring-1 beforeToolCall blocks exec tool (bash) fail-closed 
 });
 
 // ---------------------------------------------------------------------------
+// 019.7 Story 004 T1 — tick triggers deliverSession after committed session
+// ---------------------------------------------------------------------------
+
+const S4T1DEL_EPIC_MD = `---
+id: feat-s4t1del
+repo: backend
+ticket_system: jira
+ticket: JIRA-S4D1
+---
+
+## Acceptance
+
+Feature complete when task-del passes.
+`;
+
+const S4T1DEL_TASK_MD = `---
+id: task-del
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-S4D2
+write_scope:
+  - src/foo/
+---
+
+## Prerequisites
+
+setup
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+out
+
+## Tests
+
+tests
+`;
+
+const S4T1DEL_PUSH_ENTRY: VerbRegistryEntry = {
+  verb: "git.push",
+  tier: "auto",
+  timeout: 30000,
+  idempotency: { window_ms: 3600000 },
+  retry: { max: 3, backoff: "exponential" },
+  poll_interval: 50,
+  terminal_states: ["done", "failed"],
+  rate_limit: { requests_per_minute: 0 },
+  observed_state_can_regress: false,
+};
+
+const S4T1DEL_CREATE_PR_ENTRY: VerbRegistryEntry = {
+  verb: "github.create_pr",
+  tier: "auto_with_audit",
+  timeout: 30000,
+  idempotency: { window_ms: 3600000 },
+  retry: { max: 3, backoff: "exponential" },
+  poll_interval: 50,
+  terminal_states: ["done", "failed", "merged"],
+  rate_limit: { requests_per_minute: 60 },
+  observed_state_can_regress: false,
+};
+
+test("019.7 S4T1 — tick triggers deliverSession once after committed session; skips when no commits ahead", async () => {
+  // --- Phase A: commitsAhead=0 → delivery must NOT be triggered ---
+  {
+    const featureDirA = await mkdtemp(join(tmpdir(), "krl-s4t1del-a-"));
+    const storeA = openStore(":memory:", { busyTimeout: 1000 });
+    const clockA = new FakeClock(1_000_000_000);
+    const loggerA = { info(_r: Record<string, unknown>): void {} };
+    await writeFile(join(featureDirA, "epic.md"), S4T1DEL_EPIC_MD, "utf8");
+    await writeFile(join(featureDirA, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirA, "001-del"), { recursive: true });
+    await writeFile(join(featureDirA, "001-del", "INDEX.md"), "# Story Del\n", "utf8");
+    await writeFile(join(featureDirA, "001-del", "task-del.md"), S4T1DEL_TASK_MD, "utf8");
+    const piSurfaceA = {
+      spawnAgent(_opts: unknown) {
+        return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      },
+    };
+    let pushSubmitCallsA = 0;
+    const pushAdapterA: AsyncVerbAdapter = {
+      submit: async (_i: unknown): Promise<unknown> => { pushSubmitCallsA++; return "req-push-a"; },
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    const createPrAdapterA: AsyncVerbAdapter = {
+      submit: async (_i: unknown): Promise<unknown> => "req-pr-a",
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    const handleA = await runDaemon({
+      store: storeA,
+      featureDir: featureDirA,
+      clock: clockA,
+      logger: loggerA,
+      piSurface: piSurfaceA,
+      statusServerFactory: createStatusServer,
+      verbAdapters: {
+        "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterA },
+        "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapterA },
+      },
+      commitsAhead: async (_branch: string, _base: string): Promise<number> => 0,
+      remote: "origin",
+    } as unknown as Parameters<typeof runDaemon>[0]);
+    try {
+      await compile(featureDirA, storeA, { repoRegistry: ["backend"] });
+      loadTasks(storeA, "feat-s4t1del");
+      await handleA.tick();
+      assert.equal(
+        pushSubmitCallsA,
+        0,
+        "S4T1-A: deliverSession must NOT be called when commitsAhead=0",
+      );
+    } finally {
+      await handleA.stop();
+      storeA.close();
+      await rm(featureDirA, { recursive: true, force: true });
+    }
+  }
+
+  // --- Phase B: commitsAhead=1 → delivery triggered exactly once ---
+  {
+    const featureDirB = await mkdtemp(join(tmpdir(), "krl-s4t1del-b-"));
+    const storeB = openStore(":memory:", { busyTimeout: 1000 });
+    const clockB = new FakeClock(1_000_000_000);
+    const loggerB = { info(_r: Record<string, unknown>): void {} };
+    await writeFile(join(featureDirB, "epic.md"), S4T1DEL_EPIC_MD, "utf8");
+    await writeFile(join(featureDirB, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirB, "001-del"), { recursive: true });
+    await writeFile(join(featureDirB, "001-del", "INDEX.md"), "# Story Del\n", "utf8");
+    await writeFile(join(featureDirB, "001-del", "task-del.md"), S4T1DEL_TASK_MD, "utf8");
+    const piSurfaceB = {
+      spawnAgent(_opts: unknown) {
+        return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      },
+    };
+    const pushSubmitInputsB: unknown[] = [];
+    const pushAdapterB: AsyncVerbAdapter = {
+      submit: async (input: unknown): Promise<unknown> => {
+        pushSubmitInputsB.push(input);
+        return "req-push-b";
+      },
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    const createPrSubmitInputsB: unknown[] = [];
+    const createPrAdapterB: AsyncVerbAdapter = {
+      submit: async (input: unknown): Promise<unknown> => {
+        createPrSubmitInputsB.push(input);
+        return "req-pr-b";
+      },
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    const handleB = await runDaemon({
+      store: storeB,
+      featureDir: featureDirB,
+      clock: clockB,
+      logger: loggerB,
+      piSurface: piSurfaceB,
+      statusServerFactory: createStatusServer,
+      verbAdapters: {
+        "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterB },
+        "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapterB },
+      },
+      commitsAhead: async (_branch: string, _base: string): Promise<number> => 1,
+      remote: "origin",
+    } as unknown as Parameters<typeof runDaemon>[0]);
+    try {
+      await compile(featureDirB, storeB, { repoRegistry: ["backend"] });
+      loadTasks(storeB, "feat-s4t1del");
+      await handleB.tick();
+
+      // RED: delivery trigger not yet wired in tick() — this assertion fails first
+      assert.equal(
+        pushSubmitInputsB.length,
+        1,
+        "S4T1-B: tick must call deliverSession → push adapter submit once after ≥1 commit ahead",
+      );
+      const pushInput = pushSubmitInputsB[0] as Record<string, unknown>;
+      assert.ok(
+        typeof pushInput["branch"] === "string" && pushInput["branch"].length > 0,
+        "S4T1-B: push input must carry a non-empty branch",
+      );
+      assert.equal(pushInput["remote"], "origin", "S4T1-B: push input must carry remote 'origin'");
+
+      assert.equal(
+        createPrSubmitInputsB.length,
+        1,
+        "S4T1-B: tick must call deliverSession → create_pr adapter submit once",
+      );
+      const cpi = createPrSubmitInputsB[0] as Record<string, unknown>;
+      assert.equal(cpi["base"], "main", "S4T1-B: create_pr input must have base:'main'");
+      assert.equal(cpi["head"], pushInput["branch"], "S4T1-B: create_pr head must match push branch");
+      assert.ok(
+        typeof cpi["title"] === "string" && (cpi["title"] as string).length > 0,
+        "S4T1-B: create_pr input must carry a non-empty title",
+      );
+
+      // broker ledger carries both ops (push op → create_pr op chain)
+      const ops = storeB.all<{ verb: string }>("SELECT verb FROM broker_in_flight");
+      assert.ok(ops.some((r) => r.verb === "git.push"), "S4T1-B: push op must appear in broker_in_flight");
+      assert.ok(ops.some((r) => r.verb === "github.create_pr"), "S4T1-B: create_pr op must appear in broker_in_flight");
+    } finally {
+      await handleB.stop();
+      storeB.close();
+      await rm(featureDirB, { recursive: true, force: true });
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GAP2 — outbound secret-scan guard threaded into deliverSession
 // ---------------------------------------------------------------------------
 
@@ -3565,5 +3782,430 @@ test("Story 003 T3 (Epic 019.3) — re-arm: attempt counter resets to 0, subsequ
     await handle.stop();
     store.close();
     await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.7 Story 004 T2 — completion gating: open / merged / closed PR states
+// ---------------------------------------------------------------------------
+
+test("019.7 S4T2 — create_pr completion gating: open stays pending-merge; merged completes task; closed-unmerged escalates", async () => {
+  const piSurface = {
+    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_i: unknown): Promise<unknown> => "req-push-s4t2g",
+    poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_i: unknown): Promise<unknown> => "req-pr-s4t2g",
+    poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const TASK_ID = "task-s4t2";
+  const FEATURE_ID = "feat-s4t2";
+  const CLOCK_TS = 1_000_000_000;
+
+  // --- Phase OPEN: no broker_completion row → PR still open → task NOT complete ---
+  {
+    const featureDirO = await mkdtemp(join(tmpdir(), "krl-s4t2g-o-"));
+    const storeO = openStore(":memory:", { busyTimeout: 1000 });
+    const clockO = new FakeClock(CLOCK_TS);
+    await writeFile(join(featureDirO, "epic.md"), S004T2_EPIC_MD, "utf8");
+    await writeFile(join(featureDirO, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirO, "001-task"), { recursive: true });
+    await writeFile(join(featureDirO, "001-task", "INDEX.md"), S004T2_INDEX_MD, "utf8");
+    await writeFile(join(featureDirO, "001-task", "task-s4t2.md"), S004T2_TASK_MD, "utf8");
+    const handleO = await runDaemon({
+      store: storeO, featureDir: featureDirO, clock: clockO,
+      logger: { info(_r: Record<string, unknown>): void {} },
+      piSurface, statusServerFactory: createStatusServer,
+    });
+    try {
+      await compile(featureDirO, storeO, { repoRegistry: ["backend"] });
+      storeO.run("INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)", TASK_ID, FEATURE_ID, "running");
+      await handleO.deliverSession({
+        pushAdapter, pushEntry: S003T1_PUSH_ENTRY,
+        pushInput: { cwd: "/tmp/test", branch: TASK_ID, remote: "origin" },
+        pushIdempotencyKey: "push:s4t2g-o",
+        createPrAdapter, createPrEntry: S004T2_CREATE_PR_ENTRY,
+        createPrInput: { head: TASK_ID, base: "main", title: "T2 PR" },
+        createPrIdempotencyKey: "create_pr:s4t2g-o",
+        taskId: TASK_ID,
+      });
+      // no broker_completion row → PR still open/polling in progress
+      await handleO.tick();
+      const rowO = storeO.get<{ status: string }>(
+        "SELECT status FROM scheduler_task WHERE node_id = ?", TASK_ID,
+      );
+      assert.notEqual(rowO?.status, "complete",
+        "S4T2-O: task must NOT be complete while PR is still open (awaiting merge)");
+    } finally {
+      await handleO.stop(); storeO.close();
+      await rm(featureDirO, { recursive: true, force: true });
+    }
+  }
+
+  // --- Phase MERGED: broker_completion.status="merged" → task complete ---
+  {
+    const featureDirM = await mkdtemp(join(tmpdir(), "krl-s4t2g-m-"));
+    const storeM = openStore(":memory:", { busyTimeout: 1000 });
+    const clockM = new FakeClock(CLOCK_TS);
+    await writeFile(join(featureDirM, "epic.md"), S004T2_EPIC_MD, "utf8");
+    await writeFile(join(featureDirM, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirM, "001-task"), { recursive: true });
+    await writeFile(join(featureDirM, "001-task", "INDEX.md"), S004T2_INDEX_MD, "utf8");
+    await writeFile(join(featureDirM, "001-task", "task-s4t2.md"), S004T2_TASK_MD, "utf8");
+    const handleM = await runDaemon({
+      store: storeM, featureDir: featureDirM, clock: clockM,
+      logger: { info(_r: Record<string, unknown>): void {} },
+      piSurface, statusServerFactory: createStatusServer,
+    });
+    try {
+      await compile(featureDirM, storeM, { repoRegistry: ["backend"] });
+      storeM.run("INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)", TASK_ID, FEATURE_ID, "running");
+      const { createPrOpId: opIdM } = await handleM.deliverSession({
+        pushAdapter, pushEntry: S003T1_PUSH_ENTRY,
+        pushInput: { cwd: "/tmp/test", branch: TASK_ID, remote: "origin" },
+        pushIdempotencyKey: "push:s4t2g-m",
+        createPrAdapter, createPrEntry: S004T2_CREATE_PR_ENTRY,
+        createPrInput: { head: TASK_ID, base: "main", title: "T2 PR" },
+        createPrIdempotencyKey: "create_pr:s4t2g-m",
+        taskId: TASK_ID,
+      });
+      storeM.run("INSERT INTO broker_completion (op_id, status, at) VALUES (?, ?, ?)", opIdM, "merged", CLOCK_TS);
+      await handleM.tick();
+      const rowM = storeM.get<{ status: string }>(
+        "SELECT status FROM scheduler_task WHERE node_id = ?", TASK_ID,
+      );
+      assert.equal(rowM?.status, "complete",
+        "S4T2-M: task must transition to complete once create_pr reports 'merged'");
+    } finally {
+      await handleM.stop(); storeM.close();
+      await rm(featureDirM, { recursive: true, force: true });
+    }
+  }
+
+  // --- Phase CLOSED: broker_completion.status="closed" → escalation (RED — not yet wired) ---
+  {
+    const featureDirC = await mkdtemp(join(tmpdir(), "krl-s4t2g-c-"));
+    const storeC = openStore(":memory:", { busyTimeout: 1000 });
+    const clockC = new FakeClock(CLOCK_TS);
+    await writeFile(join(featureDirC, "epic.md"), S004T2_EPIC_MD, "utf8");
+    await writeFile(join(featureDirC, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirC, "001-task"), { recursive: true });
+    await writeFile(join(featureDirC, "001-task", "INDEX.md"), S004T2_INDEX_MD, "utf8");
+    await writeFile(join(featureDirC, "001-task", "task-s4t2.md"), S004T2_TASK_MD, "utf8");
+    const handleC = await runDaemon({
+      store: storeC, featureDir: featureDirC, clock: clockC,
+      logger: { info(_r: Record<string, unknown>): void {} },
+      piSurface, statusServerFactory: createStatusServer,
+    });
+    try {
+      await compile(featureDirC, storeC, { repoRegistry: ["backend"] });
+      storeC.run("INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)", TASK_ID, FEATURE_ID, "running");
+      const { createPrOpId: opIdC } = await handleC.deliverSession({
+        pushAdapter, pushEntry: S003T1_PUSH_ENTRY,
+        pushInput: { cwd: "/tmp/test", branch: TASK_ID, remote: "origin" },
+        pushIdempotencyKey: "push:s4t2g-c",
+        createPrAdapter, createPrEntry: S004T2_CREATE_PR_ENTRY,
+        createPrInput: { head: TASK_ID, base: "main", title: "T2 PR" },
+        createPrIdempotencyKey: "create_pr:s4t2g-c",
+        taskId: TASK_ID,
+      });
+      storeC.run("INSERT INTO broker_completion (op_id, status, at) VALUES (?, ?, ?)", opIdC, "closed", CLOCK_TS);
+      await handleC.tick();
+      // AC: closed-unmerged PR must create an open escalation inbox item
+      const inboxRows = storeC.all<{ kind: string; status: string }>(
+        "SELECT kind, status FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+      );
+      assert.ok(inboxRows.length > 0,
+        "S4T2-C: escalation inbox item must exist for a closed-unmerged PR");
+      // AC: task must NOT be complete
+      const rowC = storeC.get<{ status: string }>(
+        "SELECT status FROM scheduler_task WHERE node_id = ?", TASK_ID,
+      );
+      assert.notEqual(rowC?.status, "complete",
+        "S4T2-C: task must NOT be marked complete when PR was closed without merging");
+    } finally {
+      await handleC.stop(); storeC.close();
+      await rm(featureDirC, { recursive: true, force: true });
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 005 T1 (Epic 019.7) — reconcile held ops at daemon boot
+// ---------------------------------------------------------------------------
+
+test("019.7 S5T1 — runDaemon reconciles held ops at boot: held create_pr resolves with no second submit", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-s5t1rec-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  // Init schema before seeding held op — simulates a prior daemon crash mid-submit.
+  initSchema(store);
+  const HELD_OP_ID = "op-held-create-pr-s5t1";
+  store.run(
+    "INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, status) VALUES (?, ?, ?, ?, ?)",
+    HELD_OP_ID, "github.create_pr", "", "", "held",
+  );
+
+  // Adapter double: reconcile returns done (finds existing open PR via head-branch
+  // lookup); submit tracked to assert it is NEVER called (no duplicate PR).
+  let submitCallCount = 0;
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_i: unknown): Promise<unknown> => {
+      submitCallCount++;
+      return "req-duplicate-pr";
+    },
+    poll_status: async (_r: unknown): Promise<unknown> => ({ status: "open" }),
+    reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const S5T1_CREATE_PR_ENTRY: VerbRegistryEntry = {
+    verb: "github.create_pr",
+    tier: "auto",
+    timeout: 30000,
+    idempotency: { window_ms: 0 },
+    retry: { max: 0, backoff: "none" },
+    poll_interval: 5000,
+    terminal_states: ["done", "failed"],
+    rate_limit: { requests_per_minute: 60 },
+    observed_state_can_regress: false,
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    verbAdapters: {
+      "github.create_pr": { entry: S5T1_CREATE_PR_ENTRY, adapter: createPrAdapter },
+    },
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    // After boot, reconcileHeldOps must have been called.
+    // The held op must have a terminal broker_completion row (no duplicate submit).
+    const completion = store.get<{ status: string }>(
+      "SELECT status FROM broker_completion WHERE op_id = ?",
+      HELD_OP_ID,
+    );
+    assert.ok(
+      completion !== undefined,
+      "S5T1: broker_completion row must exist after boot-time reconcileHeldOps",
+    );
+    assert.equal(
+      submitCallCount,
+      0,
+      "S5T1: create_pr adapter submit must NOT be called during reconcile (no duplicate PR)",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 005 T2 (Epic 019.7) — secret-scan blocks the live push (tick-driven path)
+// ---------------------------------------------------------------------------
+
+const S5T2_EPIC_MD = `---
+id: feat-s5t2
+repo: backend
+ticket_system: jira
+ticket: JIRA-S5T2
+---
+
+## Acceptance
+
+Feature complete when task-s5t2 passes.
+`;
+
+const S5T2_TASK_MD = `---
+id: task-s5t2
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-S5T2B
+write_scope:
+  - src/foo/
+---
+
+## Prerequisites
+
+setup
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+out
+
+## Tests
+
+tests
+`;
+
+test("019.7 S5T2 — tick-driven delivery with matching pattern blocks push + escalates; null registry blocks fail-closed", async () => {
+  // Phase M — patternRegistry whose regex matches the push branch name embedded in
+  // JSON.stringify(pushInput).  pushInput.branch === "task-s5t2" so the pattern
+  // "task-s5t2" matches.  The wiring already exists (tick→deliverSession→scanGuard);
+  // this test pins the tick()-driven path explicitly as a coverage assertion.
+  {
+    const featureDirM = await mkdtemp(join(tmpdir(), "krl-s5t2m-"));
+    const storeM = openStore(":memory:", { busyTimeout: 1000 });
+    const clockM = new FakeClock(1_000_000_000);
+    const loggerM = { info(_r: Record<string, unknown>): void {} };
+    await writeFile(join(featureDirM, "epic.md"), S5T2_EPIC_MD, "utf8");
+    await writeFile(join(featureDirM, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirM, "001-scan"), { recursive: true });
+    await writeFile(join(featureDirM, "001-scan", "INDEX.md"), "# Story Scan\n", "utf8");
+    await writeFile(join(featureDirM, "001-scan", "task-s5t2.md"), S5T2_TASK_MD, "utf8");
+    const piSurfaceM = {
+      spawnAgent(_opts: unknown) {
+        return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      },
+    };
+    const patternRegistryM = {
+      version: "1.0",
+      patterns: [{ name: "scan-class-s5t2", regex: "task-s5t2" }],
+    };
+    let pushSubmitCallsM = 0;
+    const pushAdapterM: AsyncVerbAdapter = {
+      submit: async (_i: unknown): Promise<unknown> => { pushSubmitCallsM++; return "req-push-m"; },
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    let createPrSubmitCallsM = 0;
+    const createPrAdapterM: AsyncVerbAdapter = {
+      submit: async (_i: unknown): Promise<unknown> => { createPrSubmitCallsM++; return "req-pr-m"; },
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    const handleM = await runDaemon({
+      store: storeM,
+      featureDir: featureDirM,
+      clock: clockM,
+      logger: loggerM,
+      piSurface: piSurfaceM,
+      statusServerFactory: createStatusServer,
+      verbAdapters: {
+        "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterM },
+        "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapterM },
+      },
+      commitsAhead: async (_branch: string, _base: string): Promise<number> => 1,
+      remote: "origin",
+      patternRegistry: patternRegistryM,
+    } as unknown as Parameters<typeof runDaemon>[0]);
+    try {
+      await compile(featureDirM, storeM, { repoRegistry: ["backend"] });
+      loadTasks(storeM, "feat-s5t2");
+      // tick() throws when the scan blocks delivery — absorb the error
+      await handleM.tick().catch(() => {});
+      // AC: push adapter submit must NOT be called (blocked before remote)
+      assert.equal(
+        pushSubmitCallsM, 0,
+        "S5T2-M: push must be blocked — submit must not fire when pattern matches",
+      );
+      // AC: create_pr must NOT be called (delivery halts after push blocked)
+      assert.equal(
+        createPrSubmitCallsM, 0,
+        "S5T2-M: create_pr must not be called when push is blocked by scan",
+      );
+      // AC: escalation inbox item raised (block durably recorded in store)
+      const inboxRowsM = storeM.all<{ kind: string; status: string }>(
+        "SELECT kind, status FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+      );
+      assert.ok(
+        inboxRowsM.length > 0,
+        "S5T2-M: escalation inbox item must be raised when push is blocked by scan",
+      );
+    } finally {
+      await handleM.stop();
+      storeM.close();
+      await rm(featureDirM, { recursive: true, force: true });
+    }
+  }
+
+  // Phase N — patternRegistry=null → push blocked fail-closed, tagged scan-unavailable.
+  {
+    const featureDirN = await mkdtemp(join(tmpdir(), "krl-s5t2n-"));
+    const storeN = openStore(":memory:", { busyTimeout: 1000 });
+    const clockN = new FakeClock(1_000_000_000);
+    const loggerN = { info(_r: Record<string, unknown>): void {} };
+    await writeFile(join(featureDirN, "epic.md"), S5T2_EPIC_MD, "utf8");
+    await writeFile(join(featureDirN, "RUNBOOK.md"), "# Runbook\n", "utf8");
+    await mkdir(join(featureDirN, "001-scan"), { recursive: true });
+    await writeFile(join(featureDirN, "001-scan", "INDEX.md"), "# Story Scan\n", "utf8");
+    await writeFile(join(featureDirN, "001-scan", "task-s5t2.md"), S5T2_TASK_MD, "utf8");
+    const piSurfaceN = {
+      spawnAgent(_opts: unknown) {
+        return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      },
+    };
+    let pushSubmitCallsN = 0;
+    const pushAdapterN: AsyncVerbAdapter = {
+      submit: async (_i: unknown): Promise<unknown> => { pushSubmitCallsN++; return "req-push-n"; },
+      poll_status: async (_r: unknown): Promise<unknown> => ({ status: "done" }),
+      reconcile: async (_l: unknown): Promise<unknown> => ({ status: "done" }),
+    };
+    const handleN = await runDaemon({
+      store: storeN,
+      featureDir: featureDirN,
+      clock: clockN,
+      logger: loggerN,
+      piSurface: piSurfaceN,
+      statusServerFactory: createStatusServer,
+      verbAdapters: {
+        "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterN },
+        "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: pushAdapterN },
+      },
+      commitsAhead: async (_branch: string, _base: string): Promise<number> => 1,
+      remote: "origin",
+      patternRegistry: null,
+    } as unknown as Parameters<typeof runDaemon>[0]);
+    try {
+      await compile(featureDirN, storeN, { repoRegistry: ["backend"] });
+      loadTasks(storeN, "feat-s5t2");
+      // tick() throws when scan blocks — absorb
+      await handleN.tick().catch(() => {});
+      // AC: push blocked fail-closed when registry is absent
+      assert.equal(
+        pushSubmitCallsN, 0,
+        "S5T2-N: push must be blocked fail-closed when patternRegistry=null",
+      );
+      // AC: escalation tagged scan-unavailable
+      const inboxRowsN = storeN.all<{ kind: string; evidence: string }>(
+        "SELECT kind, evidence FROM inbox_items WHERE kind = 'escalation'",
+      );
+      assert.ok(inboxRowsN.length > 0, "S5T2-N: escalation inbox item must be raised for scan-unavailable");
+      const firstN = inboxRowsN[0];
+      assert.ok(firstN !== undefined, "S5T2-N: inbox item row must be non-undefined");
+      const evidenceN = JSON.stringify(JSON.parse(firstN.evidence));
+      assert.ok(
+        evidenceN.includes("scan-unavailable"),
+        "S5T2-N: escalation evidence must be tagged scan-unavailable when registry is null",
+      );
+    } finally {
+      await handleN.stop();
+      storeN.close();
+      await rm(featureDirN, { recursive: true, force: true });
+    }
   }
 });

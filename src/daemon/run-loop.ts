@@ -109,6 +109,20 @@ export interface RunDaemonDeps {
    * each gate evaluation so the result is durably recorded.
    */
   gateResultSink?: GateResultSink;
+  /**
+   * Verb adapter registry (Story 003 — delivery).
+   * When present alongside `commitsAhead`, `tick()` auto-delivers commits
+   * via git.push + github.create_pr after each clean session.
+   */
+  verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }>;
+  /**
+   * Returns the number of commits the task branch is ahead of `base`.
+   * When present alongside `verbAdapters`, `tick()` calls this after each
+   * clean session to decide whether to trigger delivery.
+   */
+  commitsAhead?: (branch: string, base: string) => Promise<number>;
+  /** Remote name to pass to the push adapter (default: "origin"). */
+  remote?: string;
 }
 
 /** Parameters for delivering a session's commits through the broker. */
@@ -459,6 +473,36 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
               setTaskStatus(store, task.id, "parked");
             }
           }
+
+          // Story 004 T1 — auto-deliver when commits are ahead of base.
+          // Triggered for every cleanly completed session when verbAdapters +
+          // commitsAhead are wired (deps.workflow may be absent).
+          if (
+            sessionHandle.stopReason !== "aborted" &&
+            sessionHandle.stopReason !== "error" &&
+            deps.verbAdapters !== undefined &&
+            deps.commitsAhead !== undefined
+          ) {
+            const taskBranch = task.id;
+            const ahead = await deps.commitsAhead(taskBranch, "main");
+            if (ahead > 0) {
+              const pushVA = deps.verbAdapters["git.push"];
+              const createPrVA = deps.verbAdapters["github.create_pr"];
+              if (pushVA !== undefined && createPrVA !== undefined) {
+                await handle.deliverSession({
+                  pushAdapter: pushVA.adapter,
+                  pushEntry: pushVA.entry,
+                  pushInput: { cwd: featureDir, branch: taskBranch, remote: deps.remote ?? "origin" },
+                  pushIdempotencyKey: `push:${task.id}`,
+                  createPrAdapter: createPrVA.adapter,
+                  createPrEntry: createPrVA.entry,
+                  createPrInput: { base: "main", head: taskBranch, title: task.id },
+                  createPrIdempotencyKey: `create_pr:${task.id}`,
+                  taskId: task.id,
+                });
+              }
+            }
+          }
         }
       }
 
@@ -473,6 +517,16 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
         );
         if (completion !== undefined && completion.status === "merged") {
           setTaskStatus(store, taskId, "complete");
+          completedOps.push(opId);
+        } else if (completion !== undefined && completion.status === "closed") {
+          createEscalationItem({
+            source_id: `${taskId}:pr-closed-unmerged`,
+            task_id: taskId,
+            reason: "pr-closed-unmerged",
+            payload_summary: `task ${taskId} PR was closed without merging`,
+            store,
+            clock,
+          });
           completedOps.push(opId);
         }
       }
@@ -644,6 +698,9 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
         scheduleNextTick();
       });
     });
+  }
+  if (deps.verbAdapters !== undefined) {
+    await handle.reconcileHeldOps(deps.verbAdapters);
   }
   scheduleNextTick();
 
