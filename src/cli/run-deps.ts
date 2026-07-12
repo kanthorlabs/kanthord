@@ -63,6 +63,7 @@ interface AgentHandle {
   abort(): void;
   waitForIdle(): Promise<void>;
   reset(): void;
+  prompt(input: string): Promise<void>;
 }
 
 /** Options accepted by buildRealDeps. */
@@ -171,6 +172,7 @@ export function buildRealDeps(
         beforeToolCall?: AgentAdapterOpts["beforeToolCall"];
         model?: AgentAdapterOpts["model"];
         streamFn?: AgentAdapterOpts["streamFn"];
+        systemPrompt?: string;
       };
 
       const agentOpts = makeAgentOpts({
@@ -184,13 +186,24 @@ export function buildRealDeps(
         streamFn: spawnOpts.streamFn ?? providerStreamFn,
       });
 
+      const systemPrompt = spawnOpts.systemPrompt;
+
       if (agentFactory !== undefined) {
         const handle = agentFactory(agentOpts);
+        const runPromise: Promise<void> | undefined =
+          typeof systemPrompt === "string" && systemPrompt.length > 0
+            ? handle.prompt(systemPrompt)
+            : undefined;
         return {
           abort: (): void => {
             handle.abort();
           },
-          waitForIdle: (): Promise<void> => handle.waitForIdle(),
+          waitForIdle: async (): Promise<void> => {
+            if (runPromise !== undefined) {
+              await runPromise.catch((_err: unknown) => undefined);
+            }
+            await handle.waitForIdle();
+          },
           reset: (): void => {
             handle.reset();
           },
@@ -200,11 +213,20 @@ export function buildRealDeps(
 
       // Live path: real Agent.
       const agent = new Agent(agentOpts);
+      const runPromise: Promise<void> | undefined =
+        typeof systemPrompt === "string" && systemPrompt.length > 0
+          ? agent.prompt(systemPrompt)
+          : undefined;
       return {
         abort: (): void => {
           agent.abort();
         },
-        waitForIdle: (): Promise<void> => agent.waitForIdle(),
+        waitForIdle: async (): Promise<void> => {
+          if (runPromise !== undefined) {
+            await runPromise.catch((_err: unknown) => undefined);
+          }
+          await agent.waitForIdle();
+        },
         reset: (): void => {
           agent.reset();
         },

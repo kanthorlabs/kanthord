@@ -51,6 +51,7 @@ test(
       waitForIdle(): Promise<void>;
       reset(): void;
       state: { messages: unknown[] };
+      prompt(_input: string): Promise<void>;
     } => {
       capturedOpts = opts;
       return {
@@ -58,6 +59,7 @@ test(
         async waitForIdle() {},
         reset() {},
         state: { messages: [] },
+        async prompt(_input: string) {},
       };
     };
 
@@ -118,6 +120,7 @@ test(
       waitForIdle(): Promise<void>;
       reset(): void;
       state: { messages: unknown[] };
+      prompt(_input: string): Promise<void>;
     } => {
       capturedOpts = opts;
       return {
@@ -125,6 +128,7 @@ test(
         async waitForIdle() {},
         reset() {},
         state: { messages: [] },
+        async prompt(_input: string) {},
       };
     };
 
@@ -223,6 +227,7 @@ test(
       waitForIdle(): Promise<void>;
       reset(): void;
       state: { messages: unknown[] };
+      prompt(_input: string): Promise<void>;
     } => {
       capturedOpts = opts;
       return {
@@ -230,6 +235,7 @@ test(
         async waitForIdle() {},
         reset() {},
         state: { messages: [] },
+        async prompt(_input: string) {},
       };
     };
 
@@ -284,6 +290,7 @@ test(
       waitForIdle(): Promise<void>;
       reset(): void;
       state: { messages: unknown[] };
+      prompt(_input: string): Promise<void>;
     } => {
       capturedOpts = opts;
       return {
@@ -291,6 +298,7 @@ test(
         async waitForIdle() {},
         reset() {},
         state: { messages: [] },
+        async prompt(_input: string) {},
       };
     };
 
@@ -550,6 +558,61 @@ test(
         assert.ok(msg.includes(missingFile), "S002-T1-missing: error message must include the file path");
         return true;
       },
+    );
+  },
+);
+
+// ---------------------------------------------------------------------------
+// T1 (Story 019.12-001) — spawnAgent drives the Agent run with systemPrompt
+// ---------------------------------------------------------------------------
+
+test(
+  "T1 (019.12-001) — spawnAgent invokes agent.prompt(systemPrompt) exactly once and waitForIdle resolves after",
+  async () => {
+    const recordedInputs: string[] = [];
+
+    const agentFactory = (_opts: unknown): {
+      abort(): void;
+      waitForIdle(): Promise<void>;
+      reset(): void;
+      state: { messages: unknown[] };
+      prompt(input: string): Promise<void>;
+    } => {
+      return {
+        abort() {},
+        async waitForIdle() {},
+        reset() {},
+        state: { messages: [] },
+        async prompt(input: string) {
+          recordedInputs.push(input);
+        },
+      };
+    };
+
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+    const deps = buildRealDeps({
+      store,
+      featureDir: "/tmp/run-deps-t1-019-12",
+      agentFactory,
+    });
+
+    const handle = deps.piSurface.spawnAgent({
+      systemPrompt: "<brief-XYZ>",
+      tools: [...PI_DEFAULT_ALLOWED_MANIFEST],
+      beforeToolCall: async (_ctx: unknown, _sig?: AbortSignal): Promise<undefined> => undefined,
+    });
+
+    await handle.waitForIdle();
+
+    assert.strictEqual(
+      recordedInputs.length,
+      1,
+      "T1: agent.prompt must be called exactly once (spawnAgent must drive the run)",
+    );
+    assert.strictEqual(
+      recordedInputs[0],
+      "<brief-XYZ>",
+      "T1: agent.prompt must be called with the systemPrompt brief",
     );
   },
 );

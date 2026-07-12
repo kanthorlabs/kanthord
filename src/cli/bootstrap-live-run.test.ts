@@ -25,6 +25,7 @@ const fakeAgentFactory = (_opts: unknown) => ({
   abort: (): void => {},
   waitForIdle: async (): Promise<void> => {},
   reset: (): void => {},
+  prompt: async (_input: string): Promise<void> => {},
 });
 
 describe("src/cli/bootstrap-live-run", () => {
