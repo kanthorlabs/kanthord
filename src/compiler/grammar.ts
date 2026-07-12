@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -104,7 +105,16 @@ function classifyFile(name: string): FileKind {
  * Groups are returned sorted ascending by major.
  */
 export async function walkFeature(dir: string): Promise<FeatureWalk> {
-  const entries = await readdir(dir, { withFileTypes: true });
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      entries = [];
+    } else {
+      throw err;
+    }
+  }
 
   const storyEntries: StoryEntry[] = [];
 

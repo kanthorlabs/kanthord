@@ -244,3 +244,28 @@ describe("walkFeature — feature dir walk", () => {
     },
   );
 });
+
+// 019.11 — walkFeature tolerates an absent feature dir
+describe("walkFeature — absent feature dir (019.11)", () => {
+  test(
+    "walkFeature on a non-existent dir resolves to the same empty walk as an empty dir (no throw)",
+    async () => {
+      const absentPath = join(
+        tmpdir(),
+        `kanthord-grammar-absent-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+      const emptyDir = await mkdtemp(join(tmpdir(), "kanthord-grammar-empty-"));
+      try {
+        const walkAbsent = await walkFeature(absentPath);
+        const walkEmpty = await walkFeature(emptyDir);
+        assert.deepEqual(
+          walkAbsent,
+          walkEmpty,
+          "absent dir should yield same empty walk as an empty dir",
+        );
+      } finally {
+        await rm(emptyDir, { recursive: true });
+      }
+    },
+  );
+});
