@@ -23,6 +23,7 @@ import type { GateResult, GateResultSink } from "../workflow/workflow.ts";
 import { latestEvidence } from "../scheduler/attempt-evidence.ts";
 import { readAttempts, grantOne, rearmLedger } from "../scheduler/attempt-ledger.ts";
 import { initSchema } from "../store/schema.ts";
+import type { WorktreeDispatchOpts, WorktreeDispatchResult } from "../slots/worktree.ts";
 
 // ---------------------------------------------------------------------------
 // Helper — issue a GET /healthz and resolve with the status code
@@ -4207,5 +4208,140 @@ test("019.7 S5T2 — tick-driven delivery with matching pattern blocks push + es
       storeN.close();
       await rm(featureDirN, { recursive: true, force: true });
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.8 S002 T1 — per-task worktree dispatch
+// Asserts: dispatchWorktree called with task id; session spawned with worktree
+// path; push branch = worktree branchName; queued → no spawn.
+// With no worktreeSlot configured, existing tests (above) already prove that
+// tick() spawns as before.
+// ---------------------------------------------------------------------------
+
+test("019.8 S002 T1-a — tick() calls dispatchWorktree with task id; session in worktree path; push branch = branchName", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-0198s2ta-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-0198s2ta-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  // Recording mock — branchName deliberately != task.id so push-branch assertion
+  // is sensitive: current tick() uses task.id; GREEN must use branchName.
+  const dispatchCalls: WorktreeDispatchOpts[] = [];
+  const mockBranchName = "wt-dispatch-branch";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> => {
+    dispatchCalls.push(opts);
+    return { worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false };
+  };
+
+  const spawnCalls: Array<Record<string, unknown>> = [];
+  const piSurface = {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCalls.push(opts as Record<string, unknown>);
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const pushInputs: Array<Record<string, unknown>> = [];
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (input: unknown): Promise<unknown> => { pushInputs.push(input as Record<string, unknown>); return "req-push-wt"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-wt",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapter },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapter },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 1,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    // AC1: dispatchWorktree must be called with the task id
+    assert.equal(dispatchCalls.length, 1, "dispatchWorktree must be called once per dispatched task");
+    assert.equal(dispatchCalls[0]?.taskId, "task-foo", "dispatchWorktree must receive the task id");
+
+    // AC2: spawnAgent must receive the worktree path from the dispatch result
+    assert.equal(spawnCalls.length, 1, "spawnAgent must be called once");
+    assert.equal(spawnCalls[0]?.["worktreePath"], mockWorktreePath, "spawnAgent must receive worktreePath from dispatch result");
+
+    // AC3: push branch = branchName from dispatch (not task.id)
+    assert.equal(pushInputs.length, 1, "push adapter must be called once for auto-delivery");
+    assert.equal(pushInputs[0]?.["branch"], mockBranchName, "push branch must equal worktree branchName from dispatchWorktree, not task.id");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+test("019.8 S002 T1-b — queued dispatch result: session not spawned; task not stranded in running", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-0198s2tb-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-0198s2tb-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  // Mock returns queued=true (lease cap reached)
+  const queuedDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: join(worktreesBase, "task-foo"), branchName: "task-foo", queued: true });
+
+  let spawnCount = 0;
+  const piSurface = {
+    spawnAgent(_: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      spawnCount++;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: queuedDispatch },
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    // AC: session must NOT be spawned when lease cap is reached (queued=true)
+    assert.equal(spawnCount, 0, "spawnAgent must not be called when dispatchWorktree returns queued=true");
+
+    // AC: task must not be stranded in 'running' after queued dispatch
+    const row = store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo");
+    assert.ok(row !== undefined, "task-foo must have a scheduler row");
+    assert.notEqual(row.status, "running", "queued task must not be left stranded in running status");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
   }
 });

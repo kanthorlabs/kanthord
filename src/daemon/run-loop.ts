@@ -33,6 +33,8 @@ import { createEscalationItem } from "../inbox/inbox.ts";
 import { makeOutboundScanGuard } from "../ring1/outbound-scan-guard.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
 import type { Workflow, GateResultSink } from "../workflow/workflow.ts";
+import type { WorktreeDispatchOpts, WorktreeDispatchResult, RunWorktreeGitFn } from "../slots/worktree.ts";
+import { runGit as execRunGit } from "../git/exec.ts";
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -123,6 +125,19 @@ export interface RunDaemonDeps {
   commitsAhead?: (branch: string, base: string) => Promise<number>;
   /** Remote name to pass to the push adapter (default: "origin"). */
   remote?: string;
+  /**
+   * Per-task worktree slot (Epic 019.8 Story 002).
+   * When present, tick() calls dispatch() for each task before spawning.
+   * If the dispatch result is queued (slot cap reached), the task reverts to
+   * pending and no session is spawned for this tick.
+   */
+  worktreeSlot?: {
+    worktreesBase: string;
+    repoPath: string;
+    dispatch: (opts: WorktreeDispatchOpts) => Promise<WorktreeDispatchResult>;
+    /** Injected git executor — defaults to the module-level execRunGit when absent. */
+    runGit?: RunWorktreeGitFn;
+  };
 }
 
 /** Parameters for delivering a session's commits through the broker. */
@@ -372,6 +387,27 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             }
           }
 
+          // Worktree dispatch (Epic 019.8 Story 002).
+          // Acquire a per-task worktree before spawning. When the slot cap is
+          // reached the dispatch returns queued=true: revert to pending so the
+          // next tick can retry; never strand the task in "running".
+          let sessionWorktreePath: string | undefined = undefined;
+          let taskBranch = task.id;
+          if (deps.worktreeSlot !== undefined) {
+            const dispatchResult = await deps.worktreeSlot.dispatch({
+              repoPath: deps.worktreeSlot.repoPath,
+              worktreesBase: deps.worktreeSlot.worktreesBase,
+              taskId: task.id,
+              runGit: deps.worktreeSlot.runGit ?? execRunGit,
+            });
+            if (dispatchResult.queued) {
+              setTaskStatus(store, task.id, "pending");
+              continue;
+            }
+            sessionWorktreePath = dispatchResult.worktreePath;
+            taskBranch = dispatchResult.branchName;
+          }
+
           // Assemble ring-1 write-scope hook.  The role read/write policy is
           // anchored to featureDir so absolute system paths (e.g. /etc/passwd)
           // are blocked at the role-policy layer; relative paths from the agent
@@ -425,6 +461,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             allowedToolNames: [...PI_DEFAULT_ALLOWED_MANIFEST],
             spawnEnv: {},
             evidence,
+            worktreePath: sessionWorktreePath,
           });
 
           await sessionHandle.waitForIdle();
@@ -483,7 +520,6 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             deps.verbAdapters !== undefined &&
             deps.commitsAhead !== undefined
           ) {
-            const taskBranch = task.id;
             const ahead = await deps.commitsAhead(taskBranch, "main");
             if (ahead > 0) {
               const pushVA = deps.verbAdapters["git.push"];
@@ -492,7 +528,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
                 await handle.deliverSession({
                   pushAdapter: pushVA.adapter,
                   pushEntry: pushVA.entry,
-                  pushInput: { cwd: featureDir, branch: taskBranch, remote: deps.remote ?? "origin" },
+                  pushInput: { cwd: sessionWorktreePath ?? featureDir, branch: taskBranch, remote: deps.remote ?? "origin" },
                   pushIdempotencyKey: `push:${task.id}`,
                   createPrAdapter: createPrVA.adapter,
                   createPrEntry: createPrVA.entry,

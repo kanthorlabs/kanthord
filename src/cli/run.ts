@@ -12,14 +12,12 @@
  */
 
 import { parseArgs } from "node:util";
-import { join } from "node:path";
-import { openStore } from "../foundations/sqlite-store.ts";
 import { loadRepoSlot } from "../slots/repo-slot.ts";
 import { runDaemon } from "../daemon/run-loop.ts";
-import type { RunDaemonDeps } from "../daemon/run-loop.ts";
-import { buildRealDeps } from "./run-deps.ts";
+import { bootstrapLiveRun } from "./bootstrap-live-run.ts";
 import { resolveDaemonProviderSession } from "./daemon-provider-session.ts";
 import { resolveDataRoot, ensureDataRoot } from "../foundations/data-root.ts";
+import { runGit as execRunGit } from "../git/exec.ts";
 
 // ---------------------------------------------------------------------------
 // Usage
@@ -67,12 +65,6 @@ async function main(): Promise<void> {
   const slotYamlPath = values.slot;
   const slot = await loadRepoSlot(slotYamlPath);
 
-  // Derive paths from the slot's repo root.
-  const repoRoot = slot.repo;
-  const featureDir = join(repoRoot, ".kanthord", "features");
-  const dbPath = join(repoRoot, ".kanthord", "db.sqlite");
-
-  const store = openStore(dbPath, { busyTimeout: 5000 });
   const holdPointEnabled = values["hold-point"] === true;
 
   // Resolve the provider account→session at boot; fail closed before daemon starts.
@@ -93,12 +85,21 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // buildRealDeps assembles the live-path deps (piSurface via makeAgentOpts,
-  // clock, logger, statusServerFactory, tickIntervalMs, patternRegistry,
-  // toolGuidance).  Cast to RunDaemonDeps before spread to prevent excess-property
-  // checking on toolGuidance (which runDaemon doesn't declare but harmlessly ignores).
-  const deps = buildRealDeps({ store, featureDir, providerModel, providerStreamFn });
-  await runDaemon({ ...(deps as RunDaemonDeps), holdPointEnabled });
+  // bootstrapLiveRun assembles the live-path deps: clones the repo, opens the
+  // store, loads identity, wires verbAdapters + commitsAhead + worktreeSlot.
+  const deps = await bootstrapLiveRun({
+    slot,
+    dataRoot,
+    providerModel,
+    providerStreamFn,
+    runGit: execRunGit,
+  }).catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`Error: bootstrap failed — ${msg}\n`);
+    process.exit(1);
+  });
+
+  await runDaemon({ ...deps, holdPointEnabled });
 
   // runDaemon installs SIGTERM/SIGINT → handle.stop() internally (T2).
   // The HTTP server keeps the event loop alive until the signal fires.
