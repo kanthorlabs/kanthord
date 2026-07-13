@@ -39,6 +39,7 @@ import {
   makeCommitAdapter,
   makeCloneAdapter,
   makeFetchAdapter,
+  makeAddAdapter,
 } from "./git-local.ts";
 import type { VerifyReport } from "../../git/verify-setup.ts";
 
@@ -1022,6 +1023,65 @@ describe("src/broker/verbs/git-local.ts", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // (r) S001-T1: git.add stages an untracked file and poll_status returns done
+  // -------------------------------------------------------------------------
+  test("git.add adapter stages untracked file and poll_status returns done", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "git-local-add-"));
+    try {
+      const bareDir = initBareRepo(dir);
+      const workDir = initWorkRepo(dir, bareDir);
+
+      // Create an untracked file in the work tree
+      await writeFile(join(workDir, "untracked.txt"), "staged-content");
+
+      // Confirm the file is untracked before the adapter runs
+      const untrackedBefore = execSync(
+        `git -C "${workDir}" status --porcelain`,
+        { encoding: "utf8" },
+      );
+      assert.ok(
+        untrackedBefore.includes("untracked.txt"),
+        "untracked.txt must appear as untracked before git.add",
+      );
+
+      const addAdapter = makeAddAdapter({ gitBin: "git", verifySetup: alwaysPassVerifySetup });
+      const requestId = await addAdapter.submit({ cwd: workDir });
+
+      const pollResult = await addAdapter.poll_status(requestId) as { status: string };
+      assert.equal(pollResult.status, "done", "poll_status must return done after git.add");
+
+      // The file must now be staged (show in diff --cached)
+      const staged = execSync(
+        `git -C "${workDir}" diff --cached --name-only`,
+        { encoding: "utf8" },
+      );
+      assert.ok(
+        staged.includes("untracked.txt"),
+        `untracked.txt must be staged after git.add; diff --cached output: ${staged}`,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // (s) S001-T1: omitting verifySetup blocks git.add submit
+  // -------------------------------------------------------------------------
+  test("omitting verifySetup blocks git.add submit (blocked-needs-setup)", async () => {
+    const addAdapter = makeAddAdapter({ gitBin: "git" });
+
+    const result = await addAdapter.submit({
+      cwd: "/nonexistent/no-preflight",
+    }) as { status: string };
+
+    assert.equal(
+      result.status,
+      "blocked-needs-setup",
+      "git.add submit without verifySetup must return blocked-needs-setup",
+    );
   });
 
   // -------------------------------------------------------------------------

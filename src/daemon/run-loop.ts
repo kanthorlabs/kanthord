@@ -362,8 +362,14 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
                 }
               }
             }
-          } catch {
+          } catch (err) {
             // Revert to pending so the task is not stranded in "running".
+            // Log why the feature read failed so the bounce is not invisible.
+            logger.info({
+              event: "feature-read-failed",
+              task_id: task.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
             setTaskStatus(store, task.id, "pending");
             continue;
           }
@@ -512,6 +518,33 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             }
           }
 
+          // Epic 019.16 S001 T2 — stage + commit worktree changes before delivery.
+          // After a clean session that wrote files, submit git.add then git.commit
+          // through the broker so that commitsAhead > 0 and the delivery block fires.
+          if (
+            sessionHandle.stopReason !== "aborted" &&
+            sessionHandle.stopReason !== "error" &&
+            deps.verbAdapters !== undefined
+          ) {
+            const addVA = deps.verbAdapters["git.add"];
+            const commitVA = deps.verbAdapters["git.commit"];
+            if (addVA !== undefined && commitVA !== undefined) {
+              const stageCwd = sessionWorktreePath ?? featureDir;
+              await handle.submitBrokerVerb(
+                addVA.entry,
+                addVA.adapter,
+                { cwd: stageCwd },
+                `git.add:${task.id}`,
+              );
+              await handle.submitBrokerVerb(
+                commitVA.entry,
+                commitVA.adapter,
+                { cwd: stageCwd, message: `agent delivery: ${task.id}` },
+                `git.commit:${task.id}`,
+              );
+            }
+          }
+
           // Story 004 T1 — auto-deliver when commits are ahead of base.
           // Triggered for every cleanly completed session when verbAdapters +
           // commitsAhead are wired (deps.workflow may be absent).
@@ -537,6 +570,11 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
                   createPrIdempotencyKey: `create_pr:${task.id}`,
                   taskId: task.id,
                 });
+                // Epic 019.16 S003 T1 — in the no-workflow live path, transition
+                // the task off "running" to "delivering" so it does not strand.
+                if (deps.workflow === undefined) {
+                  setTaskStatus(store, task.id, "delivering");
+                }
               }
             }
           }
@@ -731,7 +769,14 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
     const intervalMs = deps.tickIntervalMs;
     if (intervalMs === undefined) return;
     clock.setTimer(intervalMs, () => {
-      handle.tick().catch(() => {}).finally(() => {
+      handle.tick().catch((err: unknown) => {
+        // Never swallow a tick failure silently — an invisible tick error once hid
+        // a whole delivery bug (see AGENTS.md "Debugging and error handling").
+        logger.info({
+          event: "tick-error",
+          error: err instanceof Error ? (err.stack ?? err.message) : String(err),
+        });
+      }).finally(() => {
         scheduleNextTick();
       });
     });

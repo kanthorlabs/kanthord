@@ -42,6 +42,10 @@ export type GitFetchInput = {
   cwd: string;
 };
 
+export type GitAddInput = {
+  cwd: string;
+};
+
 // ---------------------------------------------------------------------------
 // Internal state shapes
 // ---------------------------------------------------------------------------
@@ -407,6 +411,74 @@ export function makeFetchAdapter(
 
   const reconcile = async (_ledger: unknown): Promise<unknown> => {
     // git.fetch is re-run-safe and idempotent — always reconciles as done.
+    return { status: "done" };
+  };
+
+  return { submit, poll_status, reconcile };
+}
+
+// ---------------------------------------------------------------------------
+// git.add adapter
+// ---------------------------------------------------------------------------
+
+type AddState =
+  | { status: "done" }
+  | { status: "failed"; error: { stderr: string } };
+
+/**
+ * Adapter for the `git.add` verb.
+ * submit:       runs `git add -A` in `input.cwd` — stages all changes including
+ *               untracked files; gates on verifySetup.
+ * poll_status:  returns stored outcome immediately (local op is synchronous).
+ * reconcile:    staging is idempotent → always returns done (re-run-safe).
+ */
+export function makeAddAdapter(
+  opts: GitLocalAdapterOpts,
+): AsyncVerbAdapter {
+  const states = new Map<string, AddState>();
+
+  const submit = async (input: unknown): Promise<unknown> => {
+    const i = input as GitAddInput;
+    const requestId = randomUUID();
+
+    if (opts.verifySetup === undefined) {
+      return { status: "blocked-needs-setup", inboxItems: [] };
+    }
+    const report = await opts.verifySetup();
+    if (report.ok === false) {
+      return { status: "blocked-needs-setup", inboxItems: report.inboxItems };
+    }
+
+    const result = await runGit(
+      ["add", "-A"],
+      { cwd: i.cwd, gitBin: opts.gitBin },
+    );
+
+    if (result.kind === "success" || result.kind === "noop") {
+      states.set(requestId, { status: "done" });
+    } else {
+      states.set(requestId, {
+        status: "failed",
+        error: { stderr: result.stderr.trim() || result.stdout.trim() },
+      });
+    }
+
+    return requestId;
+  };
+
+  const poll_status = async (requestId: unknown): Promise<unknown> => {
+    const state = states.get(requestId as string);
+    if (state === undefined) {
+      return { status: "failed", error: { stderr: "unknown request_id" } };
+    }
+    if (state.status === "done") {
+      return { status: "done" };
+    }
+    return { status: "failed", error: state.error };
+  };
+
+  const reconcile = async (_ledger: unknown): Promise<unknown> => {
+    // git add -A is idempotent; staging always reconciles as done.
     return { status: "done" };
   };
 

@@ -238,6 +238,36 @@ describe("src/cli/bootstrap-live-run", () => {
   });
 
   // ---------------------------------------------------------------------------
+  // 019.16 Story 002 Task T3 — bootstrapLiveRun threads checkoutDir into delivery preflight
+  // ---------------------------------------------------------------------------
+  it("019.16 S002 T3 — git.commit adapter from bootstrapLiveRun submits a real commit (not blocked-needs-setup)", async () => {
+    assert.ok(deps.verbAdapters !== undefined, "verbAdapters must be present on LiveRunDeps");
+    const va = deps.verbAdapters as Record<string, { adapter: { submit: (i: unknown) => Promise<unknown>; poll_status: (id: unknown) => Promise<unknown> } } | undefined>;
+    const commitAdapterEntry = va["git.commit"];
+    assert.ok(commitAdapterEntry !== undefined, "git.commit must be in verbAdapters from bootstrapLiveRun");
+
+    // Create a temp git repo with a staged change so git commit can succeed
+    const tmpGitDir = await mkdtemp(join(tmpdir(), "blr-t3-git-"));
+    try {
+      execSync("git init .", { cwd: tmpGitDir, stdio: "pipe" });
+      execSync("git config user.email test-t3@test.local", { cwd: tmpGitDir, stdio: "pipe" });
+      execSync("git config user.name T3Test", { cwd: tmpGitDir, stdio: "pipe" });
+      await writeFile(join(tmpGitDir, "t3.txt"), "019.16 S002 T3\n", "utf8");
+      execSync("git add t3.txt", { cwd: tmpGitDir, stdio: "pipe" });
+
+      const result = await commitAdapterEntry.adapter.submit({ cwd: tmpGitDir, message: "019.16 S002 T3 delivery preflight test" });
+      assert.ok(
+        typeof result === "string",
+        `git.commit submit must return a requestId string (not blocked-needs-setup); got ${JSON.stringify(result)}`,
+      );
+      const pollResult = await commitAdapterEntry.adapter.poll_status(result);
+      assert.deepEqual(pollResult, { status: "done" }, "poll_status must return done after a real commit");
+    } finally {
+      await rm(tmpGitDir, { recursive: true, force: true });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // Story 001 — compile on boot (Epic 019.9)
   // ---------------------------------------------------------------------------
   describe("Story 001 — compile on boot", () => {

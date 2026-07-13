@@ -4501,3 +4501,366 @@ test("019.14 S002 T1 — ring-1 read allowlist includes bare worktree root; sibl
     await rm(worktreesBase, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 019.16 S001 T2 — tick() stages + commits a writing session before delivery
+// ---------------------------------------------------------------------------
+
+const S016S1T2_GIT_ADD_ENTRY: VerbRegistryEntry = {
+  verb: "git.add",
+  tier: "auto",
+  timeout: 30000,
+  idempotency: { window_ms: 3600000 },
+  retry: { max: 3, backoff: "exponential" },
+  poll_interval: 50,
+  terminal_states: ["done", "failed"],
+  rate_limit: { requests_per_minute: 0 },
+  observed_state_can_regress: false,
+};
+
+const S016S1T2_GIT_COMMIT_ENTRY: VerbRegistryEntry = {
+  verb: "git.commit",
+  tier: "auto",
+  timeout: 30000,
+  idempotency: { window_ms: 3600000 },
+  retry: { max: 3, backoff: "exponential" },
+  poll_interval: 50,
+  terminal_states: ["done", "failed"],
+  rate_limit: { requests_per_minute: 0 },
+  observed_state_can_regress: false,
+};
+
+test("019.16 S001 T2-a — tick() submits git.add then git.commit before delivery; push fires when commitsAhead > 0", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01916s1t2a-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01916s1t2a-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-commit-test-a";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const addSubmitInputs: unknown[] = [];
+  const commitSubmitInputs: unknown[] = [];
+  const pushSubmitCalls: unknown[] = [];
+
+  const addAdapter: AsyncVerbAdapter = {
+    submit: async (i: unknown): Promise<unknown> => { addSubmitInputs.push(i); return "req-add-a"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const commitAdapter: AsyncVerbAdapter = {
+    submit: async (i: unknown): Promise<unknown> => { commitSubmitInputs.push(i); return "req-commit-a"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (i: unknown): Promise<unknown> => { pushSubmitCalls.push(i); return "req-push-a"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-a",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: addAdapter },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: commitAdapter },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapter },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapter },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 1,
+    remote: "origin",
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    // (a) git.add submit called with session worktree cwd
+    assert.equal(addSubmitInputs.length, 1, "git.add submit must be called once for a writing session");
+    assert.equal(
+      (addSubmitInputs[0] as Record<string, unknown>)["cwd"],
+      mockWorktreePath,
+      "git.add cwd must equal the session worktree path",
+    );
+    // (b) git.commit submit called with message containing task id
+    assert.equal(commitSubmitInputs.length, 1, "git.commit submit must be called once for a writing session");
+    assert.ok(
+      String((commitSubmitInputs[0] as Record<string, unknown>)["message"]).includes("task-foo"),
+      "git.commit message must contain the task id",
+    );
+    // (c) delivery ran because commitsAhead > 0
+    assert.equal(pushSubmitCalls.length, 1, "push adapter must be called when commitsAhead > 0 (delivery triggered)");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+test("019.16 S001 T2-b — tick() makes no delivery when commitsAhead stays 0 (no-change session)", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01916s1t2b-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01916s1t2b-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-commit-test-b";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  let pushSubmitCallsB = 0;
+  const addAdapterB: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-add-b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const commitAdapterB: AsyncVerbAdapter = {
+    // Simulates nothing-to-commit: submit succeeds but poll returns failed
+    submit: async (_: unknown): Promise<unknown> => "req-commit-b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "failed", error: { stderr: "nothing to commit" } }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "failed", error: { stderr: "nothing to commit" } }),
+  };
+  const pushAdapterB: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => { pushSubmitCallsB++; return "req-push-b"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapterB: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: addAdapterB },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: commitAdapterB },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterB },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapterB },
+    },
+    // commitsAhead always returns 0 — simulates nothing committed
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 0,
+    remote: "origin",
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    // delivery must NOT be triggered when commitsAhead stays 0
+    assert.equal(pushSubmitCallsB, 0, "push adapter must NOT be called when commitsAhead is 0 (no-change session)");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+// 019.16 S003 T1 — delivered task transitions to "delivering"; complete on merge
+// ---------------------------------------------------------------------------
+
+test("019.16 S003 T1-a/b — task is 'delivering' after delivery tick; 'complete' after PR merge observed", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01916s3t1ab-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01916s3t1ab-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-s3t1ab";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const addAdapterS3T1: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-add-s3t1ab",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const commitAdapterS3T1: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-commit-s3t1ab",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const pushAdapterS3T1: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-s3t1ab",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapterS3T1: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-s3t1ab",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: addAdapterS3T1 },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: commitAdapterS3T1 },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterS3T1 },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapterS3T1 },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 1,
+    remote: "origin",
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+
+    // Tick 1: session completes cleanly, commitsAhead > 0 → delivery fires
+    await handle.tick();
+
+    // T1-a: task must be "delivering" after delivery, not "running"
+    const afterDelivery = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(
+      afterDelivery?.status,
+      "delivering",
+      "task must be 'delivering' after delivery tick (not 'running')",
+    );
+
+    // T1-b: seed broker_completion with "merged" and verify next tick completes task
+    const prOp = store.get<{ op_id: string }>(
+      "SELECT op_id FROM broker_in_flight WHERE idempotency_key = ?",
+      "create_pr:task-foo",
+    );
+    assert.ok(prOp !== undefined, "create_pr op must be in broker_in_flight after delivery");
+    store.run(
+      "INSERT INTO broker_completion (op_id, status, at) VALUES (?, ?, ?)",
+      prOp.op_id, "merged", Date.now(),
+    );
+
+    await handle.tick();
+
+    const afterMerge = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(
+      afterMerge?.status,
+      "complete",
+      "task must be 'complete' after PR merge observed",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+test("019.16 S003 T1-c — clean session with commitsAhead = 0 does NOT set 'delivering'", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01916s3t1c-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01916s3t1c-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-s3t1c";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: { submit: async (_: unknown): Promise<unknown> => "req-add-s3t1c", poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }), reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }) } },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: { submit: async (_: unknown): Promise<unknown> => "req-commit-s3t1c", poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }), reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }) } },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: { submit: async (_: unknown): Promise<unknown> => "req-push-s3t1c", poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }), reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }) } },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: { submit: async (_: unknown): Promise<unknown> => "req-pr-s3t1c", poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }), reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }) } },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 0,
+    remote: "origin",
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    // guard: commitsAhead=0 must NOT set "delivering"
+    assert.notEqual(
+      taskRow?.status,
+      "delivering",
+      "task must NOT be 'delivering' when commitsAhead = 0 (nothing delivered)",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});

@@ -11,6 +11,7 @@
  */
 
 import { join } from "node:path";
+import { log, errMessage } from "../foundations/log.ts";
 import { mkdir, access } from "node:fs/promises";
 import { openStore } from "../foundations/sqlite-store.ts";
 import { initSchema } from "../store/schema.ts";
@@ -40,7 +41,8 @@ function repoUrlToSlug(url: string): string {
   try {
     const { pathname } = new URL(url);
     return pathname.replace(/^\//, "").replace(/\.git$/, "");
-  } catch {
+  } catch (err) {
+    log.debug("repo-url-parse-failed", { url, error: errMessage(err) });
     return url;
   }
 }
@@ -117,8 +119,9 @@ export async function bootstrapLiveRun(
     const { pathname } = new URL(slot.repo);
     const slug = pathname.replace(/^\//, "").replace(/\.git$/, "");
     if (slug.length > 0) repoRegistry = [slug];
-  } catch {
+  } catch (err) {
     // local path or non-HTTPS — skip repo registry check
+    log.debug("repo-registry-derive-skipped", { error: errMessage(err) });
   }
   let hasEpic = false;
   try {
@@ -143,6 +146,7 @@ export async function bootstrapLiveRun(
   const realDeps = await buildRealDeps({
     store,
     featureDir,
+    checkoutDir,
     agentFactory: agentFactory as BuildRealDepsOpts["agentFactory"],
     providerModel: providerModel as BuildRealDepsOpts["providerModel"],
     providerStreamFn: providerStreamFn as BuildRealDepsOpts["providerStreamFn"],

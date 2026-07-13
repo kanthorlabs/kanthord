@@ -27,8 +27,10 @@ import type { PiSurface, RunDaemonDeps, StatusServerFactory } from "../daemon/ru
 import type { Clock } from "../foundations/clock.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Logger } from "../daemon/boot.ts";
+import { createRecordLogger } from "../foundations/log.ts";
 import { loadIdentity, IdentityLoadError } from "../git/keyring.ts";
-import { makeBranchAdapter, makeCommitAdapter } from "../broker/verbs/git-local.ts";
+import { makeBranchAdapter, makeCommitAdapter, makeAddAdapter } from "../broker/verbs/git-local.ts";
+import { makeDeliveryVerifySetup } from "../git/delivery-preflight.ts";
 import { makePushAdapter } from "../broker/verbs/git-push.ts";
 import { makeGithubHttpSeam } from "../broker/verbs/github-http.ts";
 import { makeCreatePrAdapter } from "../broker/verbs/github-create-pr.ts";
@@ -106,6 +108,12 @@ export interface BuildRealDepsOpts {
    * Resolved at boot time from the active provider account.
    */
   accountId?: string;
+  /**
+   * Root directory of the local checkout (exists after clone).
+   * When provided, the delivery preflight runs its git probe in this directory
+   * instead of `featureDir` (which may not exist yet at preflight time).
+   */
+  checkoutDir?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,11 +164,10 @@ export function buildRealDeps(
     },
   };
 
-  const logger: Logger = {
-    info(record: Record<string, unknown>): void {
-      process.stdout.write(JSON.stringify(record) + "\n");
-    },
-  };
+  // Daemon operational log stream — pino-backed (foundations/log), so every
+  // logger.info({ event, ... }) call routes through the shared logger instead
+  // of a hand-rolled process.stdout.write.
+  const logger: Logger = createRecordLogger();
 
   const statusServerFactory: StatusServerFactory = createStatusServer;
 
@@ -217,8 +224,13 @@ export function buildRealDeps(
             latency_ms: 0,
             correlation_id: "",
           });
-        } catch {
-          // best-effort observability — never propagate into the agent loop
+        } catch (err) {
+          // best-effort observability — never propagate into the agent loop,
+          // but report the failure so a broken model-call log is not invisible.
+          logger.info({
+            event: "model-call-log-failed",
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
         return undefined;
       };
@@ -237,7 +249,14 @@ export function buildRealDeps(
           },
           waitForIdle: async (): Promise<void> => {
             if (runPromise !== undefined) {
-              await runPromise.catch((_err: unknown) => undefined);
+              await runPromise.catch((err: unknown) => {
+                // Agent-loop errors surface via stopReason; still report the
+                // run rejection so it is not an invisible swallow (AGENTS.md).
+                logger.info({
+                  event: "agent-run-error",
+                  error: err instanceof Error ? err.message : String(err),
+                });
+              });
             }
             await handle.waitForIdle();
           },
@@ -260,7 +279,14 @@ export function buildRealDeps(
         },
         waitForIdle: async (): Promise<void> => {
           if (runPromise !== undefined) {
-            await runPromise.catch((_err: unknown) => undefined);
+            await runPromise.catch((err: unknown) => {
+              // Agent-loop errors surface via stopReason; still report the
+              // run rejection so it is not an invisible swallow (AGENTS.md).
+              logger.info({
+                event: "agent-run-error",
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
           }
           await agent.waitForIdle();
         },
@@ -320,17 +346,26 @@ export function buildRealDeps(
         onEscalate: () => { /* escalation surfaced via logger at tick call site */ },
       });
 
+      // Build a shared delivery preflight that gates all delivery adapters
+      // on git availability + a non-empty identity token.
+      // Use checkoutDir when available (it exists post-clone); featureDir may
+      // not exist yet, causing the git probe to fail with ENOENT.
+      const preflightCwd = opts.checkoutDir ?? featureDir;
+      const deliveryPreflight = makeDeliveryVerifySetup({ token, gitBin: "git", cwd: preflightCwd });
+
       // Construct real adapters for the four standard broker verbs.
       const branchAdapter = makeBranchAdapter({ gitBin: "git" });
-      const commitAdapter = makeCommitAdapter({ gitBin: "git" });
-      const pushAdapter = makePushAdapter({ gitBin: "git", diffScanGuard: scanGuard });
+      const commitAdapter = makeCommitAdapter({ gitBin: "git", verifySetup: deliveryPreflight });
+      const addAdapter = makeAddAdapter({ gitBin: "git", verifySetup: deliveryPreflight });
+      const pushAdapter = makePushAdapter({ gitBin: "git", diffScanGuard: scanGuard, verifySetup: deliveryPreflight });
       const repoSlug = repo ?? "";
       const http = makeGithubHttpSeam({ token });
-      const createPrAdapter = makeCreatePrAdapter({ repo: repoSlug, token, http });
+      const createPrAdapter = makeCreatePrAdapter({ repo: repoSlug, token, http, verifySetup: deliveryPreflight });
 
       const verbAdapters: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> = {
         "git.branch": { entry: makeMinimalEntry("git.branch"), adapter: branchAdapter },
         "git.commit": { entry: makeMinimalEntry("git.commit"), adapter: commitAdapter },
+        "git.add": { entry: makeMinimalEntry("git.add"), adapter: addAdapter },
         "git.push": { entry: makeMinimalEntry("git.push"), adapter: pushAdapter },
         "github.create_pr": { entry: makeMinimalEntry("github.create_pr"), adapter: createPrAdapter },
       };

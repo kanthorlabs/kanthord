@@ -25,6 +25,7 @@ import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
 import { mkdtemp, writeFile, chmod, rm, readFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { IdentityLoadError } from "../git/keyring.ts";
@@ -509,6 +510,63 @@ test(
 );
 
 // ---------------------------------------------------------------------------
+// 019.16 S001 T3 — git.add is registered in the live verbAdapters map
+// ---------------------------------------------------------------------------
+
+test(
+  "019.16 S001 T3 — buildRealDeps verbAdapters includes git.add entry with submit/poll_status/reconcile",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-019-16-t3-"));
+    const tmpFile = join(dir, "credentials");
+    const fakeToken = "ghp_019-16-t3-git-add-entry";
+    try {
+      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deps = (await (buildRealDeps as any)({
+        store,
+        featureDir: dir,
+        identity: "kanthordverify",
+        identityFile: tmpFile,
+        repo: "kanthordlabs/kanthord-verify",
+        patternRegistry: stubPatternRegistry,
+      })) as RunDaemonDeps & {
+        verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }>;
+      };
+
+      assert.ok(
+        deps.verbAdapters !== undefined,
+        "019.16 S001 T3: buildRealDeps must return deps.verbAdapters",
+      );
+      assert.ok(
+        Object.prototype.hasOwnProperty.call(deps.verbAdapters, "git.add"),
+        "019.16 S001 T3: deps.verbAdapters must contain an entry for verb \"git.add\"",
+      );
+      const addEntry = deps.verbAdapters["git.add"];
+      assert.ok(
+        addEntry !== undefined,
+        "019.16 S001 T3: deps.verbAdapters[\"git.add\"] must not be undefined",
+      );
+      assert.ok(
+        typeof addEntry.adapter.submit === "function",
+        "019.16 S001 T3: verbAdapters[\"git.add\"].adapter.submit must be a function",
+      );
+      assert.ok(
+        typeof addEntry.adapter.poll_status === "function",
+        "019.16 S001 T3: verbAdapters[\"git.add\"].adapter.poll_status must be a function",
+      );
+      assert.ok(
+        typeof addEntry.adapter.reconcile === "function",
+        "019.16 S001 T3: verbAdapters[\"git.add\"].adapter.reconcile must be a function",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
 // B1-regression — async (identity) path must preserve caller-supplied patternRegistry
 // ---------------------------------------------------------------------------
 
@@ -787,6 +845,223 @@ test(
         "real-write-sentinel",
         "T2: write.execute must write the expected content (proves real factory tool, not stub)",
       );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 019.16 S002 T2 — delivery adapters built with passing preflight perform real effects
+// ---------------------------------------------------------------------------
+
+test(
+  "019.16 S002 T2 — git.commit adapter from buildRealDeps performs real commit not blocked-needs-setup",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-019-16-t2-"));
+    const repoDir = join(dir, "repo");
+    const credFile = join(dir, "credentials");
+    try {
+      // Set up a real git repo with a staged file
+      execFileSync("git", ["init", repoDir]);
+      execFileSync("git", ["-C", repoDir, "config", "user.email", "test@example.com"]);
+      execFileSync("git", ["-C", repoDir, "config", "user.name", "Test"]);
+      await writeFile(join(repoDir, "hello.txt"), "hello world", "utf8");
+      execFileSync("git", ["-C", repoDir, "add", "-A"]);
+
+      const fakeToken = "ghp_019-16-t2-commit-preflight";
+      await writeFile(credFile, fakeToken + "\n", { mode: 0o600 });
+
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deps = (await (buildRealDeps as any)({
+        store,
+        featureDir: repoDir,
+        identity: "kanthordverify",
+        identityFile: credFile,
+        repo: "kanthordlabs/kanthord-verify",
+        patternRegistry: stubPatternRegistry,
+      })) as RunDaemonDeps & {
+        verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }>;
+      };
+
+      assert.ok(deps.verbAdapters !== undefined, "019.16 S002 T2: verbAdapters must exist");
+      const commitEntry = deps.verbAdapters["git.commit"];
+      assert.ok(commitEntry !== undefined, "019.16 S002 T2: git.commit adapter must be present");
+
+      // Submit a commit — the delivery preflight is now wired, so submit runs the commit
+      // and returns a requestId (not blocked-needs-setup)
+      const result = await commitEntry.adapter.submit({ cwd: repoDir, message: "019.16 delivery test" });
+      assert.strictEqual(
+        typeof result,
+        "string",
+        `019.16 S002 T2: git.commit submit must return a requestId string (not blocked-needs-setup); got ${JSON.stringify(result)}`,
+      );
+
+      // poll_status must confirm the commit landed
+      const poll = await commitEntry.adapter.poll_status(result);
+      assert.deepStrictEqual(
+        poll,
+        { status: "done" },
+        "019.16 S002 T2: git.commit poll_status must be done after successful commit",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 019.16 S002 T2 — git.push adapter: passing preflight pushes branch to bare remote
+// ---------------------------------------------------------------------------
+
+test(
+  "019.16 S002 T2 — git.push adapter from buildRealDeps pushes branch to bare remote (passing preflight)",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-019-16-t2-push-a-"));
+    const bareDir = join(dir, "remote.git");
+    const workDir = join(dir, "work");
+    const credFile = join(dir, "credentials");
+    try {
+      // Set up bare remote + cloned work repo with origin pointing to bareDir
+      execFileSync("git", ["init", "--bare", bareDir], { stdio: "pipe" });
+      execFileSync("git", ["clone", bareDir, workDir], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "config", "user.email", "test@example.com"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "config", "user.name", "Test"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "commit", "--allow-empty", "-m", "init"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "push", "origin", "HEAD"], { stdio: "pipe" });
+
+      // Create feature branch with a commit to push
+      execFileSync("git", ["-C", workDir, "checkout", "-b", "feature/delivery-push"], { stdio: "pipe" });
+      await writeFile(join(workDir, "delivered.txt"), "agent output");
+      execFileSync("git", ["-C", workDir, "add", "delivered.txt"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "commit", "-m", "agent delivery"], { stdio: "pipe" });
+
+      const fakeToken = "ghp_019-16-t2-push-preflight";
+      await writeFile(credFile, fakeToken + "\n", { mode: 0o600 });
+
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deps = (await (buildRealDeps as any)({
+        store,
+        featureDir: workDir,
+        identity: "kanthordverify",
+        identityFile: credFile,
+        repo: "kanthordlabs/kanthord-verify",
+        patternRegistry: stubPatternRegistry,
+      })) as RunDaemonDeps & {
+        verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }>;
+      };
+
+      assert.ok(deps.verbAdapters !== undefined, "019.16 S002 T2 push(a): verbAdapters must exist");
+      const pushEntry = deps.verbAdapters["git.push"];
+      assert.ok(pushEntry !== undefined, "019.16 S002 T2 push(a): git.push adapter must be present");
+
+      // Submit — passing preflight → must return a requestId string, not blocked-needs-setup
+      const result = await pushEntry.adapter.submit({
+        cwd: workDir,
+        branch: "feature/delivery-push",
+        remote: "origin",
+      });
+      assert.strictEqual(
+        typeof result,
+        "string",
+        `019.16 S002 T2 push(a): git.push submit must return a requestId string; got ${JSON.stringify(result)}`,
+      );
+
+      // poll_status must confirm done
+      const poll = await pushEntry.adapter.poll_status(result) as { status: string };
+      assert.equal(
+        poll.status,
+        "done",
+        "019.16 S002 T2 push(a): git.push poll_status must be done after successful push",
+      );
+
+      // Bare remote must have the pushed branch ref
+      const remoteRef = execFileSync(
+        "git",
+        ["-C", bareDir, "rev-parse", "refs/heads/feature/delivery-push"],
+        { encoding: "utf8", stdio: "pipe" },
+      ).trim();
+      assert.ok(remoteRef.length > 0, "019.16 S002 T2 push(a): bare remote must have the pushed branch ref");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+// ---------------------------------------------------------------------------
+// 019.16 S002 T2 — git.push adapter: failing preflight returns blocked-needs-setup and does not push
+// ---------------------------------------------------------------------------
+
+test(
+  "019.16 S002 T2 — git.push adapter from buildRealDeps returns blocked-needs-setup with failing preflight (empty token)",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "kanthord-019-16-t2-push-b-"));
+    const bareDir = join(dir, "remote.git");
+    const workDir = join(dir, "work");
+    const credFile = join(dir, "credentials");
+    try {
+      // Set up bare remote + cloned work repo
+      execFileSync("git", ["init", "--bare", bareDir], { stdio: "pipe" });
+      execFileSync("git", ["clone", bareDir, workDir], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "config", "user.email", "test@example.com"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "config", "user.name", "Test"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "commit", "--allow-empty", "-m", "init"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "push", "origin", "HEAD"], { stdio: "pipe" });
+
+      // Create feature branch with a commit — must NOT be pushed due to failing preflight
+      execFileSync("git", ["-C", workDir, "checkout", "-b", "feature/blocked-push"], { stdio: "pipe" });
+      await writeFile(join(workDir, "blocked.txt"), "should not be pushed");
+      execFileSync("git", ["-C", workDir, "add", "blocked.txt"], { stdio: "pipe" });
+      execFileSync("git", ["-C", workDir, "commit", "-m", "should not push"], { stdio: "pipe" });
+
+      // Empty token: loadIdentity trims "\n" → token = "" → preflight returns ok:false
+      await writeFile(credFile, "\n", { mode: 0o600 });
+
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const deps = (await (buildRealDeps as any)({
+        store,
+        featureDir: workDir,
+        identity: "kanthordverify",
+        identityFile: credFile,
+        repo: "kanthordlabs/kanthord-verify",
+        patternRegistry: stubPatternRegistry,
+      })) as RunDaemonDeps & {
+        verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }>;
+      };
+
+      assert.ok(deps.verbAdapters !== undefined, "019.16 S002 T2 push(b): verbAdapters must exist");
+      const pushEntry = deps.verbAdapters["git.push"];
+      assert.ok(pushEntry !== undefined, "019.16 S002 T2 push(b): git.push adapter must be present");
+
+      // Submit — empty token → preflight ok:false → must return blocked-needs-setup
+      const result = await pushEntry.adapter.submit({
+        cwd: workDir,
+        branch: "feature/blocked-push",
+        remote: "origin",
+      }) as { status: string };
+      assert.equal(
+        result.status,
+        "blocked-needs-setup",
+        `019.16 S002 T2 push(b): git.push with empty token must return blocked-needs-setup; got ${JSON.stringify(result)}`,
+      );
+
+      // Bare remote must NOT have the feature branch (push must not have run)
+      let remoteHasBranch = true;
+      try {
+        execFileSync("git", ["-C", bareDir, "rev-parse", "refs/heads/feature/blocked-push"], { stdio: "pipe" });
+      } catch {
+        remoteHasBranch = false;
+      }
+      assert.ok(!remoteHasBranch, "019.16 S002 T2 push(b): bare remote must NOT have the branch when preflight fails");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
