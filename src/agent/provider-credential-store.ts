@@ -16,6 +16,7 @@ import { readFile, writeFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Credential, CredentialStore } from "@earendil-works/pi-ai";
 import { IdentityLoadError } from "../git/keyring.ts";
+import { log as leafLog } from "../foundations/log.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -58,7 +59,10 @@ class FileProviderCredentialStore implements CredentialStore {
 
   constructor(dataRoot: string, log?: (msg: string) => void) {
     this.filePath = join(dataRoot, "credentials.json");
-    this.logFn = log;
+    // Default to the shared pino wrapper (debug level) when no callback is
+    // supplied, so credential read/modify/delete events are not silent. The
+    // caller-supplied msg is already value-redacted (see redactedTag).
+    this.logFn = log ?? ((msg: string): void => leafLog.debug("provider-credential-store", { msg }));
     this.chains = new Map();
   }
 

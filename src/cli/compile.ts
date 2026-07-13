@@ -13,6 +13,7 @@
  */
 
 import { join } from "node:path";
+import { log, errMessage } from "../foundations/log.ts";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import type { Store } from "../foundations/sqlite-store.ts";
@@ -119,8 +120,9 @@ export async function main(argv: string[]): Promise<void> {
       const { pathname } = new URL(slot.repo);
       const slug = pathname.replace(/^\//, "").replace(/\.git$/, "");
       if (slug.length > 0) repoRegistry = [slug];
-    } catch {
+    } catch (err) {
       // non-HTTPS URL or unreadable slot — skip repo registry check
+      log.debug("repo-registry-derive-skipped", { error: errMessage(err) });
     }
   }
 

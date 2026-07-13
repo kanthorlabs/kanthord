@@ -16,6 +16,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { log, errMessage } from "../foundations/log.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -317,8 +318,9 @@ async function checkGhToolingAndScopes(
     if (Array.isArray(parsed.scopes)) {
       scopes = parsed.scopes as string[];
     }
-  } catch {
+  } catch (err) {
     // Ignore parse error — treat as empty scopes
+    log.debug("gh-scopes-parse-failed", { error: errMessage(err) });
   }
 
   const hasRepo = scopes.includes("repo");

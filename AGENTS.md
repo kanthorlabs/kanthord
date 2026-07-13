@@ -4,15 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Greenfield, clean slate. Only the **dev setup** exists: the Podman local dev
-sandbox (`Containerfile`, `Makefile`, `compose.yaml`, `scripts/dev/`) and the
-TDD agent pipeline (`.claude/`, `.opencode/`, `.agent/tdd/`). There is **no
-product source code and no tests yet** — do not assume an app to build or run
-beyond the sandbox harness. Architecture and design decisions are being
-brainstormed from scratch; nothing here is binding yet.
+`kanthord` is the daemon ("Core"): one long-running Node 24 / TypeScript process.
+**Phase 1 (foundations) is complete and Phase 2A (single-repo proof) is largely
+built** — Core is real product code now, not a stand-in. The pipeline runs end to
+end: scheduler dispatch → per-task git worktree → a `pi-agent-core` agent session
+driven with `pi-coding-agent` tool factories → ring-1 write-scope/secret gate →
+broker delivery (commit → push → open PR) → inbox/escalation + a Connect status
+server. As of 2026-07-13 the **LP-A1 live proof passes**: given a compiled feature,
+the agent writes real code in its worktree, the daemon commits it, pushes the branch,
+and opens a **real PR** on the target repo. ~1016 tests green (`node --test`).
 
-`kanthord` is the daemon ("Core"). The `scripts/dev/*.mjs` files are throwaway
-**stand-ins** that only exercise the dev sandbox until real Core exists.
+Source lives under `src/` (`scheduler/`, `broker/`, `ring1/`, `agent/`, `daemon/`
+run-loop, `git/` + `slots/`, `inbox/`, `config/`, `compiler/`, `store/`,
+`foundations/`, the Connect API, `harness/`). Work is planned as Epics/Stories under
+`.agent/plan/` — Phase 1 = epics `001`–`010` (done); Phase 2A = `011`–`019.x`. The
+`scripts/dev/*.mjs` files are dev-sandbox **probes** (host/UDS/boundary checks), not
+Core.
+
+**Still in flux (check `.agent/plan/` + the auto-memory index for live status):**
+committer-identity config (`019.17`), PR-merge escalation + review-state polling
+(`019.18`), the web control-plane dashboard (Epic `027`, Phase 2B), and multi-repo
+(Phase 2B). Design still evolves; nothing in later-phase plans is frozen.
 
 ## Development commands
 
@@ -44,6 +56,23 @@ make reset          # wipe .data/ (DESTRUCTIVE)
   so files in `.data/` stay host-owned with correct `0600`/`0700` perms.
 - Native (macOS) host capabilities throw "unsupported" inside the Linux container
   (`process.platform === "linux"`). Use native-on-Mac mode for capability work.
+
+## Debugging and error handling (learned the hard way)
+
+- **Logs first, then investigate manually — then close the gap.** If the logs
+  cannot tell you the root cause of a bug, do **not** guess: reproduce it and
+  investigate by hand (inspect live state, add temporary instrumentation, exec into
+  the container, read the DB). Once you have found the real root cause, **self-check:
+  "if this bug recurred, which single log line would have pinpointed it?"** — then add
+  that log to the code **permanently** (not just as a throwaway probe). A bug that was
+  invisible in the logs must never be invisible again.
+- **Never silently swallow an error.** Every caught error must be *reported* — logged
+  or escalated, depending on severity. Even an "unimportant" / best-effort error is
+  logged (at least at `debug`/`warn`) with enough context to identify it; a
+  user/operator-facing failure is escalated (inbox) *and* logged. An empty `catch {}`,
+  `catch (e) {}` that drops `e`, or `.catch(() => {})` is a defect — at minimum it must
+  `logger.*` the error. Use `pino`, never `console.*`, in production paths (see the
+  logging idiom in `.agent/tdd/PROFILE.md`).
 
 ## TDD pipeline
 

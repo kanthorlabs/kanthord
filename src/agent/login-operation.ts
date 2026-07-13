@@ -32,7 +32,7 @@ export type LoginOperationState =
   | { phase: "pending" }
   | { phase: "device-code"; userCode: string; verificationUri: string }
   | { phase: "complete"; accountId: string }
-  | { phase: "failed" };
+  | { phase: "failed"; error?: string };
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -129,8 +129,10 @@ export function startLoginOperation(opts: StartLoginOperationOpts): LoginOperati
       });
       await opts.store.modify(account.id, async () => oauthCred);
       state = { phase: "complete", accountId: account.id };
-    } catch {
-      state = { phase: "failed" };
+    } catch (err) {
+      // Surface the failure reason on the terminal state so it is not lost —
+      // the operation still resolves via the "failed" phase (by design).
+      state = { phase: "failed", error: err instanceof Error ? err.message : String(err) };
     }
   })();
 

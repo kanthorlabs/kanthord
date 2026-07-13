@@ -12,6 +12,7 @@
  */
 
 import { open, unlink, readFile, writeFile, appendFile } from "node:fs/promises";
+import { log, errMessage } from "../foundations/log.ts";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -118,8 +119,9 @@ export class WriterLock {
             holderPidStr = String(raw.pid);
           }
           if (typeof raw.acquiredAt === "string") holderAcquiredAt = raw.acquiredAt;
-        } catch {
+        } catch (err) {
           // If we can't read the lock file, assume alive.
+          log.warn("writer-lock-read-failed", { error: errMessage(err) });
         }
 
         // Check liveness when we have a PID.
@@ -127,9 +129,10 @@ export class WriterLock {
           let isAlive: boolean;
           try {
             isAlive = this.livenessProbe(holderPid);
-          } catch {
+          } catch (err) {
             // Probe threw (e.g., EPERM) — treat as alive.
             isAlive = true;
+            log.debug("writer-lock-liveness-probe-threw", { pid: holderPid, error: errMessage(err) });
           }
 
           if (!isAlive) {
@@ -202,17 +205,19 @@ export class WriterLock {
                         // the claim file is an internal concurrency mutex — always
                         // checked via process.kill(pid, 0), never via the injected probe.
                         claimOwnerAlive = defaultLivenessProbe(claimRaw.pid);
-                      } catch {
+                      } catch (err) {
                         // Probe threw (e.g., EPERM) — treat as alive.
                         claimOwnerAlive = true;
+                        log.debug("writer-lock-claim-probe-threw", { error: errMessage(err) });
                       }
                     } else {
                       // Claim has no PID (e.g., empty/corrupt) — treat as orphaned.
                       claimOwnerAlive = false;
                     }
-                  } catch {
+                  } catch (err) {
                     // JSON parse error — treat as orphaned.
                     claimOwnerAlive = false;
+                    log.warn("writer-lock-claim-parse-failed", { error: errMessage(err) });
                   }
                 }
 
@@ -381,20 +386,21 @@ export class WriterLock {
                       token?: string;
                     };
                     shouldUnlink = verifyCleanup.token === token;
-                  } catch {
+                  } catch (err) {
                     // Read threw (ENOENT = already gone, parse error = corrupt) —
                     // skip the unlink; either the winner already cleaned up or
                     // the file is not ours.
                     shouldUnlink = false;
+                    log.debug("writer-lock-cleanup-read-failed", { error: errMessage(err) });
                   }
                   if (shouldUnlink) {
-                    await unlink(lockPath).catch(() => undefined);
+                    await unlink(lockPath).catch((err) => log.debug("writer-lock-cleanup-unlink-failed", { error: errMessage(err) }));
                   }
                 }
-                await unlink(claimPath).catch(() => undefined);
+                await unlink(claimPath).catch((err) => log.debug("writer-lock-cleanup-unlink-failed", { error: errMessage(err) }));
                 // Also clean up the orphan-election file if we created one.
                 if (orphanElectPath !== undefined) {
-                  await unlink(orphanElectPath).catch(() => undefined);
+                  await unlink(orphanElectPath).catch((err) => log.debug("writer-lock-cleanup-unlink-failed", { error: errMessage(err) }));
                 }
               }
             }
@@ -438,8 +444,9 @@ export class WriterLock {
         token?: string;
       };
       storedToken = raw.token;
-    } catch {
+    } catch (err) {
       // Lock file already gone — nothing to do.
+      log.debug("writer-lock-release-read-failed", { error: errMessage(err) });
       return;
     }
 
@@ -461,9 +468,9 @@ export class WriterLock {
     // on disk intentionally (as a concurrent-takeover guard) and must be
     // cleaned up here.  Harmless ENOENT when no takeover occurred.
     const claimPath = lockPath + ".takeover-in-progress";
-    await unlink(claimPath).catch(() => undefined);
+    await unlink(claimPath).catch((err) => log.debug("writer-lock-cleanup-unlink-failed", { error: errMessage(err) }));
     // Also clean up the orphan-election file if a takeover used orphan recovery.
     const orphanElectPath = claimPath + ".orphan";
-    await unlink(orphanElectPath).catch(() => undefined);
+    await unlink(orphanElectPath).catch((err) => log.debug("writer-lock-cleanup-unlink-failed", { error: errMessage(err) }));
   }
 }

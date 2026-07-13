@@ -1,4 +1,5 @@
 import { readFile, writeFile, readdir } from "node:fs/promises";
+import { log, errMessage } from "../foundations/log.ts";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type { Store } from "../foundations/sqlite-store.ts";
@@ -740,7 +741,8 @@ export async function computeCompileHash(featureDir: string): Promise<string> {
     try {
       const parsed = parseNodeName(dirName);
       parsedKind = parsed.kind;
-    } catch {
+    } catch (err) {
+      log.debug("compile-skip-non-node-dir", { dir: dirName, error: errMessage(err) });
       continue;
     }
     if (parsedKind !== "story") continue;

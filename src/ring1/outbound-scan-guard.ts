@@ -1,5 +1,6 @@
 import { scanPayload } from "./secret-scan.ts";
 import type { PatternRegistry, ScanMatch } from "./secret-scan.ts";
+import { log, errMessage } from "../foundations/log.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -109,7 +110,10 @@ export function makeOutboundScanGuard(opts: OutboundScanGuardOpts): OutboundScan
     let matches: ScanMatch[];
     try {
       matches = scan(payload, registry);
-    } catch {
+    } catch (err) {
+      // Scanner threw — escalate (fail-closed) and also log the underlying
+      // error, which the escalation event does not carry.
+      log.warn("outbound-scan-failed", { verb, taskId, error: errMessage(err) });
       onEscalate({ tag: "scan-failed", verb, taskId });
       return { status: "blocked" };
     }

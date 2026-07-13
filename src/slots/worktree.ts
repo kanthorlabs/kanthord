@@ -5,6 +5,7 @@
  */
 
 import { realpath } from "node:fs/promises";
+import { log, errMessage } from "../foundations/log.ts";
 import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -137,7 +138,8 @@ async function worktreeExistsAtPath(
   let realCandidate: string;
   try {
     realCandidate = await realpath(worktreePath);
-  } catch {
+  } catch (err) {
+    log.debug("worktree-realpath-failed", { path: worktreePath, error: errMessage(err) });
     return false;
   }
 
@@ -150,8 +152,9 @@ async function worktreeExistsAtPath(
     let realGitPath: string;
     try {
       realGitPath = await realpath(gitPath);
-    } catch {
+    } catch (err) {
       realGitPath = gitPath;
+      log.debug("worktree-realpath-failed", { path: gitPath, error: errMessage(err) });
     }
     if (realGitPath === realCandidate) return true;
   }

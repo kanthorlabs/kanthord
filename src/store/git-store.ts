@@ -10,6 +10,7 @@
  */
 
 import { access, appendFile, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { log, errMessage } from "../foundations/log.ts";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
@@ -234,7 +235,7 @@ export class GitStore {
       await rename(tmpPath, destPath);
     } catch (err) {
       // Best-effort cleanup of the temp file on failure.
-      await unlink(tmpPath).catch(() => undefined);
+      await unlink(tmpPath).catch((e) => log.debug("git-store-tmp-cleanup-failed", { error: errMessage(e) }));
       throw err;
     }
   }

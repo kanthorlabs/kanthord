@@ -12,6 +12,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { log, errMessage } from "../foundations/log.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -264,8 +265,9 @@ export async function runGit(
         if (child.pid !== undefined) {
           process.kill(-child.pid, "SIGKILL");
         }
-      } catch {
+      } catch (err) {
         // process already dead
+        log.debug("git-kill-group-failed", { error: errMessage(err) });
       }
     };
 
