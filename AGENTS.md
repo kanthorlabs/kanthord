@@ -74,6 +74,39 @@ make reset          # wipe .data/ (DESTRUCTIVE)
   `logger.*` the error. Use `pino`, never `console.*`, in production paths (see the
   logging idiom in `.agent/tdd/PROFILE.md`).
 
+## Durable external-state tracking (learned the hard way)
+
+- **Every external effect the daemon must observe or act on later MUST be projected
+  into durable local state, and every tracker over it MUST be rebuildable at boot.**
+  External state = a PR, an issue, a remote branch, a future integration — anything
+  living in a remote system that the daemon must *later* poll, merge, escalate, or
+  resolve. Holding that tracking in an in-memory `Map`/`Set` is a defect: a crash
+  between "external effect created" and "external effect reached its terminal state"
+  must never lose the tracking. (This bit us: the create_pr → task link lived only in
+  `prOpTaskMap = new Map()`, so a restart stranded the task and no merge was ever
+  observed — memory `lp-a1-delivery-gap`.)
+- A local DB write and a remote API call **cannot be atomic**, so the rule is a
+  sequence, not a single "save":
+  - **Durable intent before the effect** (when feasible) — record that we are about
+    to create the external thing.
+  - **A durable idempotency key** sufficient to re-find the outcome after a crash
+    mid-call (e.g. `create_pr:${taskId}`).
+  - **A durable projection row after creation/discovery** — linking the external
+    reference, the local entity (task/op id), the observed external state, and the
+    tracking lifecycle.
+  - **Boot-time reconciliation for "attempted but not yet locally projected"
+    effects:** every reconciliation path that confirms external state MUST upsert the
+    projection row *before, or atomically with,* completing reconciliation. Reuse the
+    existing `recoverFromLedger` → `needs_reconciliation` → `reconcileOp` seam.
+- **Drive observation from the durable rows each tick, never from an in-memory map.**
+  An in-memory `Map`/`Set` is allowed **only** as a read-cache derived from, and
+  rebuildable from, the durable rows. Give the projection durable poll-scheduling
+  columns (`next_poll_at`, `attempt_count`, `last_error_json`) so a restart does not
+  thunder-poll or double-escalate. Keep the local tracking lifecycle
+  (`tracking_status`) separate from the observed external state (`observed_state`).
+- Scope: this covers external state the daemon must **act on after creation** — not
+  every value ever read from a remote.
+
 ## TDD pipeline
 
 Implementation work runs through the four-role TDD loop under `.claude/` and
