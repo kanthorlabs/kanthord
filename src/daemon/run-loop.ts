@@ -138,6 +138,14 @@ export interface RunDaemonDeps {
     /** Injected git executor — defaults to the module-level execRunGit when absent. */
     runGit?: RunWorktreeGitFn;
   };
+  /**
+   * Resolves the effective committer identity (name + email) for a task.
+   * Epic 019.17 — called before git.commit is submitted; when absent (backward
+   * compat), existing behavior is unchanged (no identity args injected).
+   * When present and the task returns undefined, git.commit is skipped and an
+   * escalation inbox item is raised with reason "committer-identity".
+   */
+  resolveCommitterIdentity?: (taskId: string) => Promise<{ name: string; email: string } | undefined>;
 }
 
 /** Parameters for delivering a session's commits through the broker. */
@@ -536,12 +544,35 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
                 { cwd: stageCwd },
                 `git.add:${task.id}`,
               );
-              await handle.submitBrokerVerb(
-                commitVA.entry,
-                commitVA.adapter,
-                { cwd: stageCwd, message: `agent delivery: ${task.id}` },
-                `git.commit:${task.id}`,
-              );
+              // Epic 019.17 — resolve committer identity before git.commit.
+              if (deps.resolveCommitterIdentity !== undefined) {
+                const identity = await deps.resolveCommitterIdentity(task.id);
+                if (identity === undefined) {
+                  // No identity configured — skip commit, escalate.
+                  createEscalationItem({
+                    source_id: `${task.id}:committer-identity`,
+                    task_id: task.id,
+                    reason: "committer-identity",
+                    payload_summary: `task ${task.id}: committer identity is not configured; git.commit skipped`,
+                    store,
+                    clock,
+                  });
+                } else {
+                  await handle.submitBrokerVerb(
+                    commitVA.entry,
+                    commitVA.adapter,
+                    { cwd: stageCwd, message: `agent delivery: ${task.id}`, name: identity.name, email: identity.email },
+                    `git.commit:${task.id}`,
+                  );
+                }
+              } else {
+                await handle.submitBrokerVerb(
+                  commitVA.entry,
+                  commitVA.adapter,
+                  { cwd: stageCwd, message: `agent delivery: ${task.id}` },
+                  `git.commit:${task.id}`,
+                );
+              }
             }
           }
 

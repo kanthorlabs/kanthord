@@ -495,4 +495,67 @@ describe("src/cli/bootstrap-live-run", () => {
       }
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // 019.17 blocker regression — resolveCommitterIdentity must be wired in live deps
+  // ---------------------------------------------------------------------------
+  describe("019.17 blocker regression — resolveCommitterIdentity wired in bootstrapLiveRun deps", () => {
+    let blrCiDataRoot = "";
+    let blrCiBareDir = "";
+    let blrCiDeps: Awaited<ReturnType<typeof bootstrapLiveRun>>;
+
+    before(async () => {
+      blrCiBareDir = await mkdtemp(join(tmpdir(), "blr-ci-bare-"));
+      execSync("git init --bare .", { cwd: blrCiBareDir, stdio: "pipe" });
+      blrCiDataRoot = await mkdtemp(join(tmpdir(), "blr-ci-data-"));
+      const identityFile = join(blrCiDataRoot, "test-identity");
+      await writeFile(identityFile, "fake-ci-token\n", "utf8");
+      await chmod(identityFile, 0o600);
+      // Global committer identity on disk (loadCommitterIdentity reads committer.json)
+      await writeFile(
+        join(blrCiDataRoot, "committer.json"),
+        JSON.stringify({ name: "Global Bot", email: "global@example.com" }),
+        "utf8",
+      );
+      blrCiDeps = await bootstrapLiveRun({
+        slot: {
+          repo: blrCiBareDir,
+          strategy: "worktree",
+          maxConcurrentTasks: 1,
+          workflowsAllowed: [],
+          identity: "test-identity",
+          committer: { name: "Slot Bot", email: "slot@example.com" },
+        },
+        dataRoot: blrCiDataRoot,
+        providerModel: { provider: "acct_ci", id: "fake-model" } as unknown,
+        providerStreamFn: (async (): Promise<undefined> => undefined) as unknown,
+        runGit,
+        agentFactory: fakeAgentFactory,
+      });
+    });
+
+    after(async () => {
+      blrCiDeps?.store?.close();
+      if (blrCiDataRoot) await rm(blrCiDataRoot, { recursive: true, force: true });
+      if (blrCiBareDir) await rm(blrCiBareDir, { recursive: true, force: true });
+    });
+
+    it("returned deps include a resolveCommitterIdentity function", () => {
+      assert.strictEqual(
+        typeof blrCiDeps.resolveCommitterIdentity,
+        "function",
+        "bootstrapLiveRun must wire resolveCommitterIdentity into RunDaemonDeps",
+      );
+    });
+
+    it("resolveCommitterIdentity resolves slot.committer when present (slot wins over global)", async () => {
+      assert.ok(blrCiDeps.resolveCommitterIdentity !== undefined);
+      const identity = await blrCiDeps.resolveCommitterIdentity("any-task-id");
+      assert.deepEqual(
+        identity,
+        { name: "Slot Bot", email: "slot@example.com" },
+        "slot committer must win over global identity when slot.committer is set",
+      );
+    });
+  });
 });

@@ -31,6 +31,8 @@ export type GitBranchInput = {
 export type GitCommitInput = {
   cwd: string;
   message: string;
+  name?: string;
+  email?: string;
 };
 
 export type GitCloneInput = {
@@ -186,8 +188,12 @@ export function makeCommitAdapter(
       return { status: "blocked-needs-setup", inboxItems: report.inboxItems };
     }
 
+    const identityArgs: string[] =
+      i.name !== undefined && i.email !== undefined
+        ? ["-c", `user.name=${i.name}`, "-c", `user.email=${i.email}`]
+        : [];
     const result = await runGit(
-      ["commit", "-m", i.message],
+      [...identityArgs, "commit", "-m", i.message],
       { cwd: i.cwd, gitBin: opts.gitBin },
     );
 

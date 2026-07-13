@@ -4864,3 +4864,147 @@ test("019.16 S003 T1-c — clean session with commitsAhead = 0 does NOT set 'del
     await rm(worktreesBase, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 019.17 S003 T2 — run-loop resolves + passes identity; escalates when unconfigured
+// ---------------------------------------------------------------------------
+
+test("019.17 S003 T2-a — git.commit submit carries resolved name and email when identity is configured", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01917s3t2a-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01917s3t2a-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-ident-test-a";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const commitSubmitInputsT2a: unknown[] = [];
+
+  const addAdapterT2a: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-add-t2a",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const commitAdapterT2a: AsyncVerbAdapter = {
+    submit: async (i: unknown): Promise<unknown> => { commitSubmitInputsT2a.push(i); return "req-commit-t2a"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: addAdapterT2a },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: commitAdapterT2a },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 0,
+    resolveCommitterIdentity: async (_taskId: string) => ({ name: "Ada Lovelace", email: "ada@example.com" }),
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    assert.equal(commitSubmitInputsT2a.length, 1, "git.commit submit must be called once when identity is configured");
+    const payloadT2a = commitSubmitInputsT2a[0] as Record<string, unknown>;
+    assert.equal(payloadT2a["name"], "Ada Lovelace", "git.commit submit must carry resolved committer name");
+    assert.equal(payloadT2a["email"], "ada@example.com", "git.commit submit must carry resolved committer email");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+test("019.17 S003 T2-b — no git.commit submit and escalation inbox item created when identity is unconfigured", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01917s3t2b-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01917s3t2b-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-ident-test-b";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatchT2b = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurfaceT2b = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const commitSubmitInputsT2b: unknown[] = [];
+
+  const addAdapterT2b: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-add-t2b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const commitAdapterT2b: AsyncVerbAdapter = {
+    submit: async (i: unknown): Promise<unknown> => { commitSubmitInputsT2b.push(i); return "req-commit-t2b"; },
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+
+  const handleT2b = await runDaemon({
+    store, featureDir, clock, logger, piSurface: piSurfaceT2b, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatchT2b },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: addAdapterT2b },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: commitAdapterT2b },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 0,
+    resolveCommitterIdentity: async (_taskId: string) => undefined,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handleT2b.tick();
+
+    assert.equal(commitSubmitInputsT2b.length, 0, "git.commit must NOT be submitted when committer identity is unconfigured");
+
+    const inboxRowsT2b = store.all<{ kind: string; evidence: string }>(
+      "SELECT kind, evidence FROM inbox_items",
+    );
+    assert.ok(inboxRowsT2b.length > 0, "at least one inbox item must exist when committer identity is unconfigured");
+    const itemT2b = inboxRowsT2b[0];
+    assert.ok(itemT2b !== undefined, "inbox item must be non-undefined");
+    assert.equal(itemT2b.kind, "escalation", "inbox item kind must be 'escalation'");
+    const evidenceT2b = JSON.parse(itemT2b.evidence) as { reason: string };
+    assert.ok(
+      evidenceT2b.reason.includes("committer-identity"),
+      `escalation reason must name the committer identity issue; got: ${evidenceT2b.reason}`,
+    );
+  } finally {
+    await handleT2b.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});

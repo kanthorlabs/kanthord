@@ -24,6 +24,7 @@ import type { WorktreeDispatchOpts } from "../slots/worktree.ts";
 import { buildRealDeps } from "./run-deps.ts";
 import type { BuildRealDepsOpts } from "./run-deps.ts";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
+import { loadCommitterIdentity } from "../config/committer-identity.ts";
 import type { RepoSlot, RunGitFn } from "../slots/repo-slot.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
@@ -167,9 +168,18 @@ export async function bootstrapLiveRun(
     dispatch: (dispatchOpts: WorktreeDispatchOpts) => dispatchWorktree(dispatchOpts),
   };
 
+  // 8. resolveCommitterIdentity: slot.committer wins; fall back to global file
+  const resolveCommitterIdentity = async (
+    _taskId: string,
+  ): Promise<{ name: string; email: string } | undefined> => {
+    if (slot.committer !== undefined) return slot.committer;
+    return loadCommitterIdentity(dataRoot);
+  };
+
   return {
     ...realDeps,
     commitsAhead,
     worktreeSlot,
+    resolveCommitterIdentity,
   };
 }

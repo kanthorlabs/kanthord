@@ -223,6 +223,62 @@ describe("src/slots/repo-slot", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Story 002 T1 — optional committer field on the repo slot
+  // -------------------------------------------------------------------------
+
+  describe("loadRepoSlot — optional committer field", () => {
+    test("slot yaml with committer block parses committer name and email", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "kslot-committer-"));
+      try {
+        const repoPath = await makeTempGitRepo(dir);
+        const yamlContent = [
+          `repo: ${repoPath}`,
+          `strategy: worktree`,
+          `max_concurrent_tasks: 1`,
+          `workflows_allowed: []`,
+          `identity: deploy-bot`,
+          `committer:`,
+          `  name: Ada Lovelace`,
+          `  email: ada@example.com`,
+        ].join("\n");
+        const yamlPath = await writeTempYaml(dir, "slot.yaml", yamlContent);
+
+        const slot: RepoSlot = await loadRepoSlot(yamlPath);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        assert.deepStrictEqual((slot as any).committer, {
+          name: "Ada Lovelace",
+          email: "ada@example.com",
+        });
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+
+    test("slot yaml without committer block parses with committer undefined", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "kslot-no-committer-"));
+      try {
+        const repoPath = await makeTempGitRepo(dir);
+        const yamlContent = [
+          `repo: ${repoPath}`,
+          `strategy: worktree`,
+          `max_concurrent_tasks: 1`,
+          `workflows_allowed: []`,
+          `identity: deploy-bot`,
+        ].join("\n");
+        const yamlPath = await writeTempYaml(dir, "slot.yaml", yamlContent);
+
+        const slot: RepoSlot = await loadRepoSlot(yamlPath);
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        assert.strictEqual((slot as any).committer, undefined);
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // (c) Non-git path → SlotRegistrationError at registration
   // -------------------------------------------------------------------------
 

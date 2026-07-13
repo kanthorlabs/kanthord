@@ -19,6 +19,7 @@ export interface RepoSlot {
   maxConcurrentTasks: number;
   workflowsAllowed: string[];
   identity: string;
+  committer?: { name: string; email: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -129,6 +130,19 @@ export async function loadRepoSlot(
   }
   const identity = raw["identity"];
 
+  // Parse optional committer block
+  let committer: { name: string; email: string } | undefined;
+  if (
+    "committer" in raw &&
+    raw["committer"] !== null &&
+    typeof raw["committer"] === "object"
+  ) {
+    const c = raw["committer"] as Record<string, unknown>;
+    if (typeof c["name"] === "string" && typeof c["email"] === "string") {
+      committer = { name: c["name"], email: c["email"] };
+    }
+  }
+
   // 3. Remote-URL repos are accepted as-is — no local work-tree check possible.
   //    Detect by shape: https?://, ssh://, git@host:, or *.git on a URL-like path.
   if (
@@ -137,7 +151,7 @@ export async function loadRepoSlot(
     /^git@[^:]+:/.test(repo) ||
     (!repo.startsWith("/") && repo.endsWith(".git") && repo.includes("/"))
   ) {
-    return { repo, strategy: "worktree", maxConcurrentTasks, workflowsAllowed, identity };
+    return { repo, strategy: "worktree", maxConcurrentTasks, workflowsAllowed, identity, committer };
   }
 
   // 4. Validate local repo path is a git work-tree via the git seam
@@ -165,5 +179,6 @@ export async function loadRepoSlot(
     maxConcurrentTasks,
     workflowsAllowed,
     identity,
+    committer,
   };
 }

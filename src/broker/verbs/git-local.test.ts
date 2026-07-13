@@ -1114,4 +1114,156 @@ describe("src/broker/verbs/git-local.ts", () => {
       `error payload must name the invalid ref or say 'invalid ref'; got: ${errorStr}`,
     );
   });
+
+  // -------------------------------------------------------------------------
+  // Story 003 T1: git.commit with identity name+email applies -c flags
+  //
+  // Verifies that when name+email are supplied in the submit payload, the
+  // adapter runs `git -c user.name=… -c user.email=… commit` so the commit
+  // is authored/committed by the supplied identity, overriding any ambient
+  // local git config.  The repo is pre-configured with a DIFFERENT local
+  // identity ("Wrong Name") to prove the -c flags WIN over ambient config.
+  // Fails today (adapter ignores name/email → wrong author in git log).
+  // -------------------------------------------------------------------------
+  test("git.commit with identity name and email applies -c flags so author and committer match the supplied identity even with empty ambient git config", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "git-local-identity-"));
+    try {
+      const bareDir = initBareRepo(dir);
+      const workDir = join(dir, "work");
+      execSync(`git clone "${bareDir}" "${workDir}"`, { stdio: "pipe" });
+      // Set a DIFFERENT local identity to prove -c flags override ambient config.
+      execSync(
+        `git -C "${workDir}" config user.name "Wrong Name" && git -C "${workDir}" config user.email "wrong@wrong.io"`,
+        { stdio: "pipe", shell: "/bin/sh" },
+      );
+      execSync(`git -C "${workDir}" commit --allow-empty -m "init"`, { stdio: "pipe" });
+      execSync(`git -C "${workDir}" push origin HEAD`, { stdio: "pipe" });
+
+      // Stage a new file.
+      await writeFile(join(workDir, "payload.txt"), "payload");
+      execSync(`git -C "${workDir}" add payload.txt`, { stdio: "pipe" });
+
+      const commitAdapter = makeCommitAdapter({ gitBin: "git", verifySetup: alwaysPassVerifySetup });
+      const requestId = await commitAdapter.submit({
+        cwd: workDir,
+        message: "identity commit",
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+      });
+
+      const pollResult = await commitAdapter.poll_status(requestId) as { status: string };
+      assert.equal(
+        pollResult.status,
+        "done",
+        "poll_status must be done when identity fields are supplied",
+      );
+
+      // git log must show Ada Lovelace as both author and committer (not "Wrong Name")
+      const logOut = execSync(
+        `git -C "${workDir}" log -1 --pretty='%an <%ae>|%cn <%ce>'`,
+        { encoding: "utf8" },
+      ).trim();
+      assert.equal(
+        logOut,
+        "Ada Lovelace <ada@example.com>|Ada Lovelace <ada@example.com>",
+        "git log must show the supplied identity as both author and committer",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Story 003 T1 (hardening): git.commit with name+email succeeds in a repo
+  // with genuinely EMPTY ambient git config (no local, no global, no system).
+  //
+  // buildChildEnv() in src/git/exec.ts already forces GIT_CONFIG_NOSYSTEM=1
+  // (system config disabled) and passes HOME through. By pointing HOME at a
+  // fresh temp dir with no .gitconfig, runGit's child git has ZERO ambient
+  // identity. If the -c flags were absent the commit would fail "Author
+  // identity unknown" — proving the -c flags are the sole identity source.
+  // -------------------------------------------------------------------------
+  test("git.commit with name/email succeeds when HOME has no .gitconfig and -c flags are the sole identity source", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "git-local-empty-cfg-"));
+    const fakeHome = await mkdtemp(join(tmpdir(), "git-fake-home-"));
+    const savedHome = process.env["HOME"];
+    const savedGitCfgGlobal = process.env["GIT_CONFIG_GLOBAL"];
+    const savedGitCfgSystem = process.env["GIT_CONFIG_SYSTEM"];
+    const savedGitCfgNosystem = process.env["GIT_CONFIG_NOSYSTEM"];
+    // process.env is a Proxy (installed by the no-network guard) with no set trap.
+    // Direct assignment would call Reflect.set with receiver !== target, which
+    // tries Object.defineProperty with an incomplete descriptor and throws
+    // ERR_INVALID_OBJECT_DEFINE_PROPERTY.  Use Object.defineProperty directly
+    // with the full writable/enumerable/configurable descriptor instead.
+    function setEnv(key: string, val: string): void {
+      Object.defineProperty(process.env, key, {
+        value: val,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+    }
+    function restoreEnv(key: string, saved: string | undefined): void {
+      if (saved === undefined) {
+        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+        delete (process.env as Record<string, string | undefined>)[key];
+      } else {
+        setEnv(key, saved);
+      }
+    }
+    // Override HOME so both execSync and runGit's child git find no .gitconfig.
+    // buildChildEnv() in src/git/exec.ts passes HOME through (it is allowlisted).
+    setEnv("HOME", fakeHome);
+    // Disable system + global config for execSync git calls (inherits process.env).
+    // buildChildEnv() already forces GIT_CONFIG_NOSYSTEM=1 for runGit subprocesses.
+    setEnv("GIT_CONFIG_GLOBAL", join(fakeHome, "nonexistent.gitconfig"));
+    setEnv("GIT_CONFIG_SYSTEM", join(fakeHome, "nonexistent-system.gitconfig"));
+    setEnv("GIT_CONFIG_NOSYSTEM", "1");
+    try {
+      const bareDir = initBareRepo(dir);
+      const workDir = join(dir, "work");
+      execSync(`git clone "${bareDir}" "${workDir}"`, { stdio: "pipe" });
+      // Seed commit: no local identity — supply via -c flags (no ambient config).
+      execSync(
+        `git -c "user.name=Ada Lovelace" -c "user.email=ada@example.com" -C "${workDir}" commit --allow-empty -m "init"`,
+        { stdio: "pipe" },
+      );
+      execSync(`git -C "${workDir}" push origin HEAD`, { stdio: "pipe" });
+
+      await writeFile(join(workDir, "payload-noconfig.txt"), "noconfig payload");
+      execSync(`git -C "${workDir}" add payload-noconfig.txt`, { stdio: "pipe" });
+
+      const commitAdapter = makeCommitAdapter({ gitBin: "git", verifySetup: alwaysPassVerifySetup });
+      const requestId = await commitAdapter.submit({
+        cwd: workDir,
+        message: "identity commit zero ambient config",
+        name: "Ada Lovelace",
+        email: "ada@example.com",
+      });
+
+      const pollResult = await commitAdapter.poll_status(requestId) as { status: string };
+      assert.equal(
+        pollResult.status,
+        "done",
+        "poll_status must be done when -c identity flags are the sole identity source",
+      );
+
+      const logOut2 = execSync(
+        `git -C "${workDir}" log -1 --pretty='%an <%ae>|%cn <%ce>'`,
+        { encoding: "utf8" },
+      ).trim();
+      assert.equal(
+        logOut2,
+        "Ada Lovelace <ada@example.com>|Ada Lovelace <ada@example.com>",
+        "git log must show the supplied identity as both author and committer with zero ambient config",
+      );
+    } finally {
+      restoreEnv("HOME", savedHome);
+      restoreEnv("GIT_CONFIG_GLOBAL", savedGitCfgGlobal);
+      restoreEnv("GIT_CONFIG_SYSTEM", savedGitCfgSystem);
+      restoreEnv("GIT_CONFIG_NOSYSTEM", savedGitCfgNosystem);
+      await rm(dir, { recursive: true, force: true });
+      await rm(fakeHome, { recursive: true, force: true });
+    }
+  });
 });
