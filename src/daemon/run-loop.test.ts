@@ -6720,3 +6720,208 @@ test("Phase 2A remediation B2 — overlapping model-call gates permit one reserv
     await rm(featureDir, { recursive: true, force: true });
   }
 });
+
+test("LP-A1 — absorbed budget rejection with undefined stopReason skips post-session mutation", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-lpa1-absorbed-budget-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  let providerEffects = 0;
+  let beforeModelCallCalls = 0;
+  let diffReviews = 0;
+  let workflowGates = 0;
+  const mutations: string[] = [];
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const piSurface = {
+    spawnAgent(opts: unknown) {
+      const beforeModelCall = (opts as Record<string, unknown>)["beforeModelCall"];
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof beforeModelCall !== "function") {
+            throw new Error("beforeModelCall must be supplied");
+          }
+          while (true) {
+            try {
+              beforeModelCallCalls++;
+              await beforeModelCall();
+              providerEffects++;
+            } catch {
+              return;
+            }
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+        get stopReason(): undefined { return undefined; },
+      };
+    },
+  };
+
+  const mutationAdapter = (verb: string): AsyncVerbAdapter => ({
+    submit: async (_input: unknown): Promise<unknown> => {
+      mutations.push(verb);
+      return `req-${verb}`;
+    },
+    poll_status: async (_requestId: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_ledger: unknown): Promise<unknown> => ({ status: "done" }),
+  });
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 15, conservativeCost: 10 },
+    inspectWorktreeDiff: async (_cwd: string) => {
+      diffReviews++;
+      return undefined;
+    },
+    workflow: {
+      currentPhase: () => "implementation",
+      gateCheck: async (_phase: string) => {
+        workflowGates++;
+        return { outcome: "pass" };
+      },
+    },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: mutationAdapter("git.add") },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: mutationAdapter("git.commit") },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: mutationAdapter("git.push") },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: mutationAdapter("github.create_pr") },
+    },
+    commitsAhead: async (_branch: string, _base: string): Promise<number> => 1,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    assert.equal(beforeModelCallCalls, 2, "the provider must retry model calls until the second reservation rejects");
+    assert.equal(providerEffects, 1, "the breaching model call must not reach the provider");
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "parked",
+      "the durable budget breach must park the task even when pi reports no stopReason",
+    );
+    const budgetEscalation = store.get<{ evidence: string }>("SELECT evidence FROM inbox_items");
+    assert.equal(
+      (JSON.parse(budgetEscalation?.evidence ?? "{}") as { reason?: string }).reason,
+      "budget-breach",
+      "the absorbed rejection must retain a durable budget escalation",
+    );
+    assert.equal(diffReviews, 0, "a durably parked task must skip diff review after waitForIdle");
+    assert.equal(workflowGates, 0, "a durably parked task must skip the workflow gate after waitForIdle");
+    assert.deepEqual(
+      mutations,
+      [],
+      "a durably parked task must not stage, commit, push, or create a PR after waitForIdle",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("reviewer blocker — missing or non-running durable task status skips all post-session mutation", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-post-session-status-"));
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  try {
+    for (const durableStatus of [undefined, "pending", "delivering"] as const) {
+      const store = openStore(":memory:", { busyTimeout: 1000 });
+      const clock = new FakeClock(1_000_000_000);
+      const statusLabel = durableStatus ?? "missing";
+      const logs: Array<Record<string, unknown>> = [];
+      const mutations: string[] = [];
+      let diffReviews = 0;
+      let workflowGates = 0;
+      const mutationAdapter = (verb: string): AsyncVerbAdapter => ({
+        submit: async (_input: unknown): Promise<unknown> => {
+          mutations.push(verb);
+          return `req-${verb}-${statusLabel}`;
+        },
+        poll_status: async (_requestId: unknown): Promise<unknown> => ({ status: "done" }),
+        reconcile: async (_ledger: unknown): Promise<unknown> => ({ status: "done" }),
+      });
+      const piSurface = {
+        spawnAgent(_opts: unknown) {
+          return {
+            abort() {},
+            async waitForIdle() {
+              if (durableStatus === undefined) {
+                store.run("DELETE FROM scheduler_task WHERE node_id = ?", "task-foo");
+              } else {
+                setTaskStatus(store, "task-foo", durableStatus);
+              }
+            },
+            reset() {},
+            contextTokens: 0,
+          };
+        },
+      };
+      const handle = await runDaemon({
+        store,
+        featureDir,
+        clock,
+        logger: { info(record: Record<string, unknown>): void { logs.push(record); } },
+        piSurface,
+        statusServerFactory: createStatusServer,
+        inspectWorktreeDiff: async (_cwd: string) => {
+          diffReviews++;
+          return undefined;
+        },
+        workflow: {
+          currentPhase: () => "implementation",
+          gateCheck: async (_phase: string) => {
+            workflowGates++;
+            return { outcome: "pass" };
+          },
+        },
+        verbAdapters: {
+          "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: mutationAdapter("git.add") },
+          "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: mutationAdapter("git.commit") },
+          "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: mutationAdapter("git.push") },
+          "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: mutationAdapter("github.create_pr") },
+        },
+        commitsAhead: async (_branch: string, _base: string): Promise<number> => 1,
+      } as unknown as Parameters<typeof runDaemon>[0]);
+
+      try {
+        await compile(featureDir, store, { repoRegistry: ["backend"] });
+        loadTasks(store, "feat-s002t1");
+        await handle.tick();
+
+        assert.equal(diffReviews, 0, `${statusLabel} durable status must skip diff review`);
+        assert.equal(workflowGates, 0, `${statusLabel} durable status must skip workflow gating`);
+        assert.deepEqual(
+          mutations,
+          [],
+          `${statusLabel} durable status must skip staging, commit, push, and PR creation`,
+        );
+        assert.ok(
+          logs.some((record) => record["event"] === "post-session-processing-skipped" && record["task_id"] === "task-foo"),
+          `${statusLabel} durable status must emit a post-session skip log`,
+        );
+      } finally {
+        await handle.stop();
+        store.close();
+      }
+    }
+  } finally {
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});

@@ -646,6 +646,20 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
 
           await sessionHandle.waitForIdle();
 
+          const postSessionTask = store.get<{ status: string }>(
+            "SELECT status FROM scheduler_task WHERE node_id = ?",
+            task.id,
+          );
+          if (postSessionTask?.status !== "running") {
+            logger.info({
+              event: "post-session-processing-skipped",
+              task_id: task.id,
+              status: postSessionTask?.status ?? "missing",
+              reason: "durable task is not running",
+            });
+            continue;
+          }
+
           if (
             sessionHandle.stopReason !== "aborted" &&
             sessionHandle.stopReason !== "error" &&
