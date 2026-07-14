@@ -16,6 +16,7 @@ interface InFlightRow {
   op_id: string;
   verb: string;
   request_id: string;
+  payload_json: string | null;
   status: string;
 }
 
@@ -46,26 +47,27 @@ export async function submit(
 
   // Dedup: return the existing op_id if this (verb, idempotencyKey) is already in flight.
   const existing = store.get<{ op_id: string }>(
-    `SELECT op_id FROM broker_in_flight WHERE verb = ? AND idempotency_key = ?`,
+    `SELECT op_id, status FROM broker_in_flight WHERE verb = ? AND idempotency_key = ?`,
     entry.verb,
     idempotencyKey,
-  );
-  if (existing !== undefined) {
+  ) as { op_id: string; status: string } | undefined;
+  const holdPoint = options?.holdPoint;
+  if (existing !== undefined && !(existing.status === "held" && holdPoint === undefined)) {
     return existing.op_id;
   }
 
   // Hold-point gate: if a pre-submit hold is configured for this verb, record
   // the op as "held" and do NOT invoke the adapter.
-  const holdPoint = options?.holdPoint;
   if (holdPoint?.shouldHold(entry.verb, "pre-submit")) {
     const opId = newId(ID_PREFIX.op);
     store.run(
-      `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, status)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, payload_json, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       opId,
       entry.verb,
       "",
       idempotencyKey,
+      payload !== undefined ? JSON.stringify(payload) : null,
       "held",
     );
     holdPoint.hold(opId);
@@ -74,16 +76,32 @@ export async function submit(
 
   const opId = newId(ID_PREFIX.op);
   const requestId = (await adapter.submit(payload)) as string;
+  if (holdPoint?.shouldHold(entry.verb, "pre-completion")) {
+    store.run(
+      `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, payload_json, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      opId,
+      entry.verb,
+      requestId,
+      idempotencyKey,
+      payload !== undefined ? JSON.stringify(payload) : null,
+      "held",
+    );
+    holdPoint.hold(opId);
+    return opId;
+  }
+  const finalOpId = existing?.op_id ?? opId;
   store.run(
-    `INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, status)
-     VALUES (?, ?, ?, ?, ?)`,
-    opId,
+    `INSERT OR REPLACE INTO broker_in_flight (op_id, verb, request_id, idempotency_key, payload_json, status)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    finalOpId,
     entry.verb,
     requestId,
     idempotencyKey,
+    payload !== undefined ? JSON.stringify(payload) : null,
     "in_flight",
   );
-  return opId;
+  return finalOpId;
 }
 
 /**
@@ -94,10 +112,11 @@ export function getInFlightOp(
   store: Store,
 ): InFlightOp | undefined {
   const row = store.get<InFlightRow>(
-    `SELECT op_id, verb, request_id, status FROM broker_in_flight WHERE op_id = ?`,
+    `SELECT op_id, verb, request_id, payload_json, status FROM broker_in_flight WHERE op_id = ?`,
     opId,
   );
   if (row === undefined) return undefined;
+  if (row.status !== "in_flight") return undefined;
   return {
     op_id: row.op_id,
     verb: row.verb,

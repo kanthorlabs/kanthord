@@ -98,7 +98,7 @@ export type CreatePrInput = {
  * poller's `observed_state_can_regress` check gets fresh live state each tick.
  */
 type PrState =
-  | { status: "in_flight"; prNumber: number; headBranch: string }
+  | { status: "in_flight"; prNumber: number; prUrl: string; headBranch: string }
   | { status: "failed"; error: { reason: string; observed_state: string } };
 
 // ---------------------------------------------------------------------------
@@ -143,6 +143,7 @@ export function makeCreatePrAdapter(opts: CreatePrAdapterOpts): AsyncVerbAdapter
       states.set(requestId, {
         status: "in_flight",
         prNumber: createResp.number,
+        prUrl: createResp.url,
         headBranch: i.head,
       });
       return requestId;
@@ -160,6 +161,7 @@ export function makeCreatePrAdapter(opts: CreatePrAdapterOpts): AsyncVerbAdapter
       states.set(requestId, {
         status: "in_flight",
         prNumber: existing.number,
+        prUrl: existing.url,
         headBranch: i.head,
       });
       return requestId;
@@ -197,7 +199,7 @@ export function makeCreatePrAdapter(opts: CreatePrAdapterOpts): AsyncVerbAdapter
 
     if (prResp.state === "open") {
       // PR is open — signal done to the poller (not stored; poller confirms)
-      return { status: "done", result: { head_branch: headBranch, pr_number: prNumber } };
+      return { status: "done", result: { head_branch: headBranch, pr_number: prNumber, pr_url: prResp.url } };
     }
 
     // closed or merged — failed with observed_state
@@ -213,8 +215,8 @@ export function makeCreatePrAdapter(opts: CreatePrAdapterOpts): AsyncVerbAdapter
     const l = ledger as { correlation?: string; head_branch?: string; pr_number?: number };
     let headBranch: string;
     if (l.correlation !== undefined) {
-      const parsed = JSON.parse(l.correlation) as { head_branch?: string; pr_number?: number };
-      headBranch = parsed.head_branch ?? "";
+      const parsed = JSON.parse(l.correlation) as { head_branch?: string; head?: string; pr_number?: number };
+      headBranch = parsed.head_branch ?? parsed.head ?? "";
     } else {
       headBranch = l.head_branch ?? "";
     }
@@ -233,7 +235,7 @@ export function makeCreatePrAdapter(opts: CreatePrAdapterOpts): AsyncVerbAdapter
 
     const { state, number: prNumber } = existing;
     if (state === "open") {
-      return { status: "done", result: { head_branch: headBranch, pr_number: prNumber } };
+      return { status: "done", result: { head_branch: headBranch, pr_number: prNumber, pr_url: existing.url } };
     }
 
     // closed or merged — escalate.

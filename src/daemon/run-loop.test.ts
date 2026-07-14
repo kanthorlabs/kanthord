@@ -24,6 +24,8 @@ import { latestEvidence } from "../scheduler/attempt-evidence.ts";
 import { readAttempts, grantOne, rearmLedger } from "../scheduler/attempt-ledger.ts";
 import { initSchema } from "../store/schema.ts";
 import type { WorktreeDispatchOpts, WorktreeDispatchResult } from "../slots/worktree.ts";
+import { createEscalationItem } from "../inbox/inbox.ts";
+import { getInFlightOp } from "../broker/submit.ts";
 
 // ---------------------------------------------------------------------------
 // Helper — issue a GET /healthz and resolve with the status code
@@ -231,6 +233,115 @@ test("Story 001 T3 — hold-point disabled: adapter called, op in_flight", async
 
     // AC: adapter.submit IS called when hold-point is disabled
     assert.equal(adapterSubmitCalled, 1, "adapter.submit must be called once when hold-point is inactive");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 001 T3 — hold-point verb filter holds only configured verbs", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-s001t3c-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    holdPointEnabled: true,
+    holdPointVerbs: ["github.create_pr"],
+  });
+
+  let pushSubmitCalled = 0;
+  let prSubmitCalled = 0;
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async () => { pushSubmitCalled++; return "req-push-filter"; },
+    poll_status: async () => ({ status: "done" }),
+    reconcile: async () => ({ status: "done" }),
+  };
+  const prAdapter: AsyncVerbAdapter = {
+    submit: async () => { prSubmitCalled++; return "req-pr-filter"; },
+    poll_status: async () => ({ status: "done" }),
+    reconcile: async () => ({ status: "done" }),
+  };
+
+  try {
+    const pushOpId = await handle.submitBrokerVerb(
+      { ...makeTestEntry(), verb: "git.push" },
+      pushAdapter,
+      { branch: "feat/filter" },
+      "push-filter",
+    );
+    const prOpId = await handle.submitBrokerVerb(
+      { ...makeTestEntry(), verb: "github.create_pr" },
+      prAdapter,
+      { head: "feat/filter", base: "main", title: "filter" },
+      "pr-filter",
+    );
+    const pushRow = store.get<{ status: string }>("SELECT status FROM broker_in_flight WHERE op_id = ?", pushOpId);
+    const prRow = store.get<{ status: string }>("SELECT status FROM broker_in_flight WHERE op_id = ?", prOpId);
+    assert.equal(pushSubmitCalled, 1, "git.push must not be held by the create_pr-only hold filter");
+    assert.equal(pushRow?.status, "in_flight");
+    assert.equal(prSubmitCalled, 0, "github.create_pr must be held");
+    assert.equal(prRow?.status, "held");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Story 001 T3 — pre-completion hold invokes adapter then records held op", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-s001t3d-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface,
+    statusServerFactory: createStatusServer,
+    holdPointEnabled: true,
+    holdPointVerbs: ["github.create_pr"],
+    holdPointCutpoint: "pre-completion",
+  });
+  let submitCalled = 0;
+  const adapter: AsyncVerbAdapter = {
+    submit: async () => { submitCalled++; return "req-pr-pre-completion"; },
+    poll_status: async () => ({ status: "done" }),
+    reconcile: async () => ({ status: "done" }),
+  };
+  try {
+    const opId = await handle.submitBrokerVerb(
+      { ...makeTestEntry(), verb: "github.create_pr" },
+      adapter,
+      { head: "feat/pre-completion", base: "main", title: "pre-completion" },
+      "pr-pre-completion",
+    );
+    const row = store.get<{ request_id: string; status: string }>(
+      "SELECT request_id, status FROM broker_in_flight WHERE op_id = ?",
+      opId,
+    );
+    assert.equal(submitCalled, 1, "adapter.submit must run before pre-completion hold");
+    assert.equal(row?.request_id, "req-pr-pre-completion");
+    assert.equal(row?.status, "held");
+    assert.equal(getInFlightOp(opId, store), undefined, "held pre-completion op must not start normal poller");
   } finally {
     await handle.stop();
     store.close();
@@ -5000,11 +5111,1137 @@ test("019.17 S003 T2-b — no git.commit submit and escalation inbox item create
     assert.ok(
       evidenceT2b.reason.includes("committer-identity"),
       `escalation reason must name the committer identity issue; got: ${evidenceT2b.reason}`,
-    );
+     );
   } finally {
     await handleT2b.stop();
     store.close();
     await rm(featureDir, { recursive: true, force: true });
     await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.18 B3/B4 — reviewRouter receives real prNumber; poller resolves real review item
+// ---------------------------------------------------------------------------
+
+test("019.18 B3 — deliverSession passes params.prNumber (not 0) to reviewRouter.requestReview", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b3-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const capturedReviewRequests: Array<{ taskId: string; prNumber: number; prUrl: string }> = [];
+  const reviewRouter = {
+    async requestReview(req: { taskId: string; prNumber: number; prUrl: string }) {
+      capturedReviewRequests.push({ taskId: req.taskId, prNumber: req.prNumber, prUrl: req.prUrl });
+    },
+  };
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-b3",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-b3",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger,
+    piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+    statusServerFactory: createStatusServer,
+    reviewRouter,
+    prStateSeam: { async getPrState(_r: string, _n: number) { return { state: "open", merged: false }; } },
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/b3", remote: "origin" },
+      pushIdempotencyKey: "push-b3-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/b3", base: "main", title: "B3 PR", body: "" },
+      createPrIdempotencyKey: "create-pr-b3-001",
+      taskId: "task-foo",
+      prNumber: 42,
+      prUrl: "https://github.com/org/repo/pull/42",
+    });
+
+    // B3 contract: reviewRouter must receive prNumber=42, not 0 or placeholder.
+    assert.equal(capturedReviewRequests.length, 1, "reviewRouter.requestReview must be called once");
+    assert.equal(
+      capturedReviewRequests[0]!.prNumber,
+      42,
+      "B3: reviewRouter must receive the real prNumber (42), not 0",
+    );
+    assert.equal(
+      capturedReviewRequests[0]!.prUrl,
+      "https://github.com/org/repo/pull/42",
+      "B3: reviewRouter must receive the real prUrl, not the opId placeholder",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("019.18 B4 — tick resolves review inbox item using real PR number (not hardcoded :0)", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b4-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger,
+    piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+    statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_r: string, _n: number) { return { state: "closed", merged: true }; } },
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    // Seed external_tracking row with prNumber=55 (simulates a persisted row after restart).
+    const { createHash } = await import("node:crypto");
+    const etId = `ext:${createHash("sha256").update("create_pr:task-foo").digest("hex").slice(0, 32)}`;    store.run(
+      `INSERT OR IGNORE INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '55',
+               'op-pr-b4', 'create_pr:task-foo', 'active', ?, 0, ?, ?)`,
+      etId, clock.now(), clock.now(), clock.now(),
+    );
+
+    // Seed the review inbox item using real PR number 55 (source_id = review_requested:task-foo:55).
+    const reviewItemB4 = createEscalationItem({
+      source_id: "review_requested:task-foo:55",
+      task_id: "task-foo",
+      reason: "review_requested",
+      payload_summary: "PR #55",
+      store,
+      clock,
+    });
+    const reviewItemId = reviewItemB4.id;
+
+    await handle.tick();
+
+    // B4 contract: the real review item (source_id with :55) must be resolved, not the :0 placeholder.
+    const reviewItem = store.get<{ status: string }>(
+      "SELECT status FROM inbox_items WHERE id = ?",
+      reviewItemId,
+    );
+    assert.equal(
+      reviewItem?.status,
+      "resolved",
+      "B4: review inbox item keyed by real prNumber (55) must be resolved when PR merges",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.18 B6 crash-survival gates — external_tracking durability
+// ---------------------------------------------------------------------------
+
+// Gate 1: after deliverSession, an external_tracking row exists for the PR (survives restart).
+test("019.18 B6 gate1 — deliverSession writes an external_tracking row for the PR", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b6g1-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-b6g1",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-b6g1",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_r: string, _n: number) { return { state: "open", merged: false }; } },
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/b6g1", remote: "origin" },
+      pushIdempotencyKey: "push-b6g1-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/b6g1", base: "main", title: "B6G1 PR", body: "" },
+      createPrIdempotencyKey: "create-pr-b6g1-001",
+      taskId: "task-foo",
+      prNumber: 77,
+    });
+
+    // The durable external_tracking row must exist immediately after deliverSession —
+    // so a crash before tick() does not lose the PR→task link.
+    const row = store.get<{ local_id: string; tracking_status: string; external_id: string }>(
+      "SELECT local_id, tracking_status, external_id FROM external_tracking WHERE local_id = ? AND local_kind = 'task'",
+      "task-foo",
+    );
+    assert.ok(row !== undefined, "external_tracking row must exist for the PR after deliverSession");
+    assert.equal(row.external_id, "77", "external_tracking.external_id must equal the PR number");
+    assert.equal(row.tracking_status, "active", "external_tracking.tracking_status must be 'active' after delivery");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// Gate 2: poller uses external_tracking rows even when prOpTaskMap is empty (restart scenario).
+test("019.18 B6 gate2 — poller completes task from external_tracking row when prOpTaskMap is empty (restart)", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b6g2-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  // Seed the external_tracking row directly (simulating post-restart state, prOpTaskMap is empty).
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_r: string, _n: number) { return { state: "closed", merged: true }; } },
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    // Seed the durable row directly — simulating a prior run that crashed after writing the row.
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '77',
+               'op-create-pr-b6g2', 'create-pr-b6g2', 'active', ?, 0, ?, ?)`,
+      "ext-b6g2-row", clock.now(), clock.now(), clock.now(),
+    );
+
+    // Tick with empty in-memory prOpTaskMap — poller must read from external_tracking.
+    await handle.tick();
+
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(
+      taskRow?.status,
+      "complete",
+      "task must become complete from external_tracking row even when prOpTaskMap is empty at restart",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// Gate 3: poll failure persists last_error_json and advances next_poll_at.
+test("019.18 B6 gate3 — poll failure persists last_error_json and advances next_poll_at", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b6g3-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_r: string, _n: number): Promise<{ state: string; merged: boolean }> {
+      throw new Error("network-error-b6g3");
+    }},
+    prStateRepo: "backend",
+    prPollIntervalMs: 60_000,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    // Seed durable tracking row due for polling now.
+    const beforePoll = clock.now();
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '77',
+               'op-b6g3', 'key-b6g3', 'active', ?, 0, ?, ?)`,
+      "ext-b6g3", beforePoll, beforePoll, beforePoll,
+    );
+
+    await handle.tick();
+
+    const row = store.get<{ last_error_json: string | null; next_poll_at: number; attempt_count: number }>(
+      "SELECT last_error_json, next_poll_at, attempt_count FROM external_tracking WHERE id = ?",
+      "ext-b6g3",
+    );
+    assert.ok(row !== undefined, "external_tracking row must still exist after poll failure");
+    assert.ok(row.last_error_json !== null, "last_error_json must be set after poll failure");
+    const err = JSON.parse(row.last_error_json!) as { message: string };
+    assert.ok(err.message.includes("network-error-b6g3"), "last_error_json must capture the error message");
+    assert.ok(row.next_poll_at > beforePoll, "next_poll_at must advance after poll failure (backoff)");
+    assert.equal(row.attempt_count, 1, "attempt_count must increment after poll failure");
+
+    // Tracking row must NOT be deleted — it survives failure.
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(taskRow?.status, "delivering", "task must remain delivering after poll failure");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// Gate 4: closed-unmerged escalates exactly once — second tick does not double-escalate.
+test("019.18 B6 gate4 — closed-unmerged PR escalates exactly once (idempotent after restart)", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b6g4-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_r: string, _n: number) { return { state: "closed", merged: false }; } },
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '77',
+               'op-b6g4', 'key-b6g4', 'active', ?, 0, ?, ?)`,
+      "ext-b6g4", clock.now(), clock.now(), clock.now(),
+    );
+
+    await handle.tick();
+    // Second tick simulates restart with same durable row but terminal tracking_status.
+    await handle.tick();
+
+    const escalations = store.all<{ kind: string }>(
+      "SELECT kind FROM inbox_items WHERE kind = 'escalation' AND json_extract(evidence, '$.reason') LIKE '%pr-closed%'",
+    );
+    assert.equal(escalations.length, 1, "closed-unmerged escalation must be created exactly once, not duplicated");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// Gate 5: merged PR completes task exactly once (idempotent after restart).
+test("019.18 B6 gate5 — merged PR completes task exactly once (idempotent after restart)", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b6g5-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  let getPrStateCalls = 0;
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_r: string, _n: number) {
+      getPrStateCalls++;
+      return { state: "closed", merged: true };
+    }},
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '77',
+               'op-b6g5', 'key-b6g5', 'active', ?, 0, ?, ?)`,
+      "ext-b6g5", clock.now(), clock.now(), clock.now(),
+    );
+
+    // First tick: transitions task to complete, sets tracking_status='terminal'.
+    await handle.tick();
+
+    const taskAfterFirst = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(taskAfterFirst?.status, "complete", "task must be complete after first tick");
+
+    // Second tick: tracking_status='terminal' — poller must NOT re-fire task transition.
+    const firstCallCount = getPrStateCalls;
+    await handle.tick();
+
+    // After second tick, prStateSeam must not be called again for a terminal row.
+    assert.equal(
+      getPrStateCalls,
+      firstCallCount,
+      "prStateSeam must not be called for a terminal external_tracking row on second tick",
+    );
+
+    const taskAfterSecond = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(taskAfterSecond?.status, "complete", "task must remain complete after second tick");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.18 Story 002 T2 — run-loop polls outstanding PRs and records terminal completions
+// ---------------------------------------------------------------------------
+
+// Reuse S002 fixtures for feature scaffolding
+const S01918S2T2_CREATE_PR_ENTRY: VerbRegistryEntry = {
+  verb: "github.create_pr",
+  tier: "auto_with_audit",
+  timeout: 30000,
+  idempotency: { window_ms: 3600_000 },
+  retry: { max: 3, backoff: "exponential" },
+  poll_interval: 50,
+  terminal_states: ["done", "failed", "merged"],
+  rate_limit: { requests_per_minute: 60 },
+  observed_state_can_regress: false,
+};
+
+test("019.18 S002 T2 — tick writes merged broker_completion and marks task complete when PR state is merged", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s2t2a-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  // fake pr-state seam: always reports merged
+  const seenGetPrState: Array<{ repo: string; prNumber: number }> = [];
+  const fakePrStateSeam = {
+    async getPrState(repo: string, prNumber: number): Promise<{ state: string; merged: boolean }> {
+      seenGetPrState.push({ repo, prNumber });
+      return { state: "closed", merged: true };
+    },
+  };
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-01918s2t2a",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-01918s2t2a",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: fakePrStateSeam,
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo",
+      "feat-s002t1",
+      "delivering",
+    );
+
+    const { createPrOpId } = await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/s2t2a", remote: "origin" },
+      pushIdempotencyKey: "push-s2t2a-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/s2t2a", base: "main", title: "S2T2A PR", body: "" },
+      createPrIdempotencyKey: "create-pr-s2t2a-001",
+      taskId: "task-foo",
+      prNumber: 42,
+    });
+
+     // tick: run-loop polls prStateSeam for outstanding ops → merged → sets external_tracking terminal → mark complete
+    await handle.tick();
+
+    const trackingRow = store.get<{ tracking_status: string }>(
+      "SELECT tracking_status FROM external_tracking WHERE created_by_op_id = ?",
+      createPrOpId,
+    );
+    assert.equal(
+      trackingRow?.tracking_status,
+      "terminal",
+      "external_tracking row must be set to terminal when PR state is merged",
+    );
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(taskRow?.status, "complete", "task must be marked complete after merged completion observed");
+    assert.equal(seenGetPrState.length >= 1, true, "prStateSeam.getPrState must be called at least once");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("019.18 S002 T2 — tick writes closed broker_completion and escalates when PR is closed unmerged", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s2t2b-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const fakePrStateSeam = {
+    async getPrState(_repo: string, _prNumber: number): Promise<{ state: string; merged: boolean }> {
+      return { state: "closed", merged: false };
+    },
+  };
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-01918s2t2b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-01918s2t2b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: fakePrStateSeam,
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo",
+      "feat-s002t1",
+      "delivering",
+    );
+
+    const { createPrOpId } = await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/s2t2b", remote: "origin" },
+      pushIdempotencyKey: "push-s2t2b-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/s2t2b", base: "main", title: "S2T2B PR", body: "" },
+      createPrIdempotencyKey: "create-pr-s2t2b-001",
+      taskId: "task-foo",
+      prNumber: 43,
+    });
+
+    await handle.tick();
+
+    const trackingRow2 = store.get<{ tracking_status: string }>(
+      "SELECT tracking_status FROM external_tracking WHERE created_by_op_id = ?",
+      createPrOpId,
+    );
+    assert.equal(
+      trackingRow2?.tracking_status,
+      "terminal",
+      "external_tracking row must be set to terminal when PR is closed unmerged",
+    );
+    const escalations = store.all<{ evidence: string }>(
+      "SELECT evidence FROM inbox_items WHERE json_extract(evidence, '$.task_id') = ?",
+      "task-foo",
+    );
+    assert.ok(
+      escalations.some((e) => {
+        try { return JSON.parse(e.evidence).reason === "pr-closed-unmerged"; } catch { return false; }
+      }),
+      "an escalation inbox item with reason 'pr-closed-unmerged' must be created",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("019.18 S002 T2 — tick writes no completion and task stays delivering when PR is still open", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s2t2c-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const fakePrStateSeam = {
+    async getPrState(_repo: string, _prNumber: number): Promise<{ state: string; merged: boolean }> {
+      return { state: "open", merged: false };
+    },
+  };
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-01918s2t2c",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-01918s2t2c",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: fakePrStateSeam,
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo",
+      "feat-s002t1",
+      "delivering",
+    );
+
+    const { createPrOpId } = await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/s2t2c", remote: "origin" },
+      pushIdempotencyKey: "push-s2t2c-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/s2t2c", base: "main", title: "S2T2C PR", body: "" },
+      createPrIdempotencyKey: "create-pr-s2t2c-001",
+      taskId: "task-foo",
+      prNumber: 44,
+    });
+
+    await handle.tick();
+
+    const completionRow = store.get<{ status: string }>(
+      "SELECT status FROM broker_completion WHERE op_id = ?",
+      createPrOpId,
+    );
+    assert.equal(completionRow, undefined, "no broker_completion must be written when PR is still open");
+    const taskRow = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(taskRow?.status, "delivering", "task must remain in delivering status when PR is open");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("019.18 S002 T2 — prStateSeam is never called when no outstanding create_pr op exists", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s2t2d-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  let getPrStateCalls = 0;
+  const fakePrStateSeam = {
+    async getPrState(_repo: string, _prNumber: number): Promise<{ state: string; merged: boolean }> {
+      getPrStateCalls++;
+      return { state: "open", merged: false };
+    },
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: fakePrStateSeam,
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+
+    // tick with no outstanding create_pr ops → seam must not be called
+    await handle.tick();
+
+    assert.equal(getPrStateCalls, 0, "prStateSeam.getPrState must not be called when no outstanding create_pr op exists");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.18 Story 001 T2 — run-loop invokes ReviewRouter after delivery
+// ---------------------------------------------------------------------------
+
+test("019.18 S001 T2 — run-loop calls reviewRouter.requestReview with task id and PR details after delivery", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s1t2-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-01918s1t2-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const mockBranchName = "wt-01918s1t2";
+  const mockWorktreePath = join(worktreesBase, mockBranchName);
+  const mockDispatch = async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> =>
+    ({ worktreePath: mockWorktreePath, branchName: mockBranchName, queued: false });
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const addAdapterT2: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-add-01918t2",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const commitAdapterT2: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-commit-01918t2",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const pushAdapterT2: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-01918t2",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapterT2: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-01918t2",
+    poll_status: async (_: unknown): Promise<unknown> => ({
+      status: "done",
+      result: {
+        pr_number: 46,
+        pr_url: "https://github.com/example/repo/pull/46",
+      },
+    }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  // Fake ReviewRouter — captures calls for assertion
+  const reviewRequests: Array<{ taskId: string; prNumber: number; prUrl: string }> = [];
+  const fakeReviewRouter = {
+    async requestReview(req: { taskId: string; prNumber: number; prUrl: string }): Promise<void> {
+      reviewRequests.push(req);
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    worktreeSlot: { worktreesBase, repoPath: worktreesBase, dispatch: mockDispatch },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: addAdapterT2 },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: commitAdapterT2 },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: pushAdapterT2 },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: createPrAdapterT2 },
+    },
+    commitsAhead: async (_b: string, _base: string): Promise<number> => 1,
+    remote: "origin",
+    reviewRouter: fakeReviewRouter,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+
+    // Tick 1: session completes cleanly, commitsAhead > 0 → delivery fires
+    await handle.tick();
+    clock.advance(S4T1DEL_CREATE_PR_ENTRY.poll_interval);
+    await Promise.resolve();
+    await handle.tick();
+
+    // T2: reviewRouter.requestReview must have been called once with task id and PR info
+    assert.equal(reviewRequests.length, 1, "reviewRouter.requestReview must be called exactly once after delivery");
+    assert.equal(reviewRequests[0]?.taskId, "task-foo", "requestReview must receive the delivered task id");
+    assert.ok(
+      reviewRequests[0]?.prNumber === 46,
+      "requestReview must receive the real prNumber",
+    );
+    assert.ok(
+      reviewRequests[0]?.prUrl === "https://github.com/example/repo/pull/46",
+      "requestReview must receive the real prUrl string",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 019.18 Story 003 T1 — resolve review_requested inbox item on terminal PR state
+// ---------------------------------------------------------------------------
+
+test("019.18 S003 T1 — merged PR resolves the review_requested inbox item", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s3t1a-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const fakePrStateSeam = {
+    async getPrState(_repo: string, _prNumber: number): Promise<{ state: string; merged: boolean }> {
+      return { state: "closed", merged: true };
+    },
+  };
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-01918s3t1a",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-01918s3t1a",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: fakePrStateSeam,
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo",
+      "feat-s002t1",
+      "delivering",
+    );
+
+    await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/s3t1a", remote: "origin" },
+      pushIdempotencyKey: "push-s3t1a-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/s3t1a", base: "main", title: "S3T1A PR", body: "" },
+      createPrIdempotencyKey: "create-pr-s3t1a-001",
+      taskId: "task-foo",
+      prNumber: 44,
+    });
+
+    // Pre-seed a review_requested inbox item using the real PR number (B4 contract).
+    const reviewItem = createEscalationItem({
+      source_id: "review_requested:task-foo:44",
+      task_id: "task-foo",
+      reason: "review_requested",
+      payload_summary: "task task-foo PR ready for review",
+      store,
+      clock,
+    });
+
+    await handle.tick();
+
+    // The review_requested item must no longer be open.
+    const itemRow = store.get<{ status: string }>(
+      "SELECT status FROM inbox_items WHERE id = ?",
+      reviewItem.id,
+    );
+    assert.equal(
+      itemRow?.status,
+      "resolved",
+      "review_requested inbox item must be resolved after PR merges",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("019.18 S003 T1 — closed-unmerged PR resolves the review_requested inbox item", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s3t1b-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const fakePrStateSeam = {
+    async getPrState(_repo: string, _prNumber: number): Promise<{ state: string; merged: boolean }> {
+      return { state: "closed", merged: false };
+    },
+  };
+
+  const pushAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-push-01918s3t1b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "done" }),
+  };
+  const createPrAdapter: AsyncVerbAdapter = {
+    submit: async (_: unknown): Promise<unknown> => "req-pr-01918s3t1b",
+    poll_status: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+    reconcile: async (_: unknown): Promise<unknown> => ({ status: "pending" }),
+  };
+
+  const piSurface = {
+    spawnAgent(_opts: unknown) {
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
+    prStateSeam: fakePrStateSeam,
+    prStateRepo: "backend",
+    prPollIntervalMs: 0,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo",
+      "feat-s002t1",
+      "delivering",
+    );
+
+    await handle.deliverSession({
+      pushAdapter,
+      pushEntry: S003T1_PUSH_ENTRY,
+      pushInput: { cwd: "/tmp/test", branch: "feat/s3t1b", remote: "origin" },
+      pushIdempotencyKey: "push-s3t1b-001",
+      createPrAdapter,
+      createPrEntry: S01918S2T2_CREATE_PR_ENTRY,
+      createPrInput: { head: "feat/s3t1b", base: "main", title: "S3T1B PR", body: "" },
+      createPrIdempotencyKey: "create-pr-s3t1b-001",
+      taskId: "task-foo",
+      prNumber: 45,
+    });
+
+    // Pre-seed a review_requested inbox item using the real PR number (B4 contract).
+    const reviewItem = createEscalationItem({
+      source_id: "review_requested:task-foo:45",
+      task_id: "task-foo",
+      reason: "review_requested",
+      payload_summary: "task task-foo PR ready for review",
+      store,
+      clock,
+    });
+
+    await handle.tick();
+
+    // The review_requested item must no longer be open after closed-unmerged.
+    const itemRow = store.get<{ status: string }>(
+      "SELECT status FROM inbox_items WHERE id = ?",
+      reviewItem.id,
+    );
+    assert.equal(
+      itemRow?.status,
+      "resolved",
+      "review_requested inbox item must be resolved after PR is closed unmerged",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
   }
 });

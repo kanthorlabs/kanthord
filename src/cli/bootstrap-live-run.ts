@@ -25,6 +25,7 @@ import { buildRealDeps } from "./run-deps.ts";
 import type { BuildRealDepsOpts } from "./run-deps.ts";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 import { loadCommitterIdentity } from "../config/committer-identity.ts";
+import { UserReviewRouter } from "../review/review-router.ts";
 import type { RepoSlot, RunGitFn } from "../slots/repo-slot.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
@@ -90,7 +91,14 @@ export async function bootstrapLiveRun(
 
   // 1. Resolve identity file path + load the PAT token
   const identityFile = join(dataRoot, slot.identity);
-  const identity = await loadIdentity({ name: slot.identity, file: identityFile });
+  let identity: Awaited<ReturnType<typeof loadIdentity>>;
+  try {
+    await access(identityFile);
+    identity = await loadIdentity({ name: slot.identity, file: identityFile });
+  } catch (loadErr) {
+    if ((loadErr as NodeJS.ErrnoException).code !== "ENOENT") throw loadErr;
+    identity = await loadIdentity({ name: slot.identity, env: true });
+  }
   const identityToken = identity.token;
 
   // 2. Derive paths: checkoutDir lives under dataRoot, featureDir + db under it
@@ -181,5 +189,19 @@ export async function bootstrapLiveRun(
     commitsAhead,
     worktreeSlot,
     resolveCommitterIdentity,
+    reviewRouter: new UserReviewRouter({ store, clock: realDeps.clock }),
+    prStateSeam: {
+      async getPrState(_repo: string, prNumber: number): Promise<{ state: string; merged: boolean }> {
+        const http = (realDeps.verbAdapters as Record<string, { adapter: unknown }> | undefined)?.["github.create_pr"];
+        void http;
+        const token = (realDeps as { identityToken?: string }).identityToken ?? identityToken;
+        const gh = await import("../broker/verbs/github-http.ts");
+        const seam = gh.makeGithubHttpSeam({ token: token });
+        const pr = await seam.getPr(`/repos/${repoUrlToSlug(slot.repo)}/pulls/${prNumber}`, {},);
+        if ("status" in pr) throw new Error(`GitHub rate limited PR poll; retry_after=${pr.retry_after}`);
+        return { state: pr.state, merged: pr.merged };
+      },
+    },
+    prStateRepo: repoUrlToSlug(slot.repo),
   };
 }

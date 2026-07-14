@@ -100,6 +100,37 @@ describe("src/cli/bootstrap-live-run", () => {
     );
   });
 
+  it("loads slot identity from KANTHOR_IDENTITY_<NAME>_TOKEN when no identity file exists", async () => {
+    const envBareDir = await mkdtemp(join(tmpdir(), "blr-env-bare-"));
+    const envDataRoot = await mkdtemp(join(tmpdir(), "blr-env-data-"));
+    const savedEnv = process.env;
+    const tempEnv = Object.fromEntries(Object.entries(savedEnv)) as NodeJS.ProcessEnv;
+    tempEnv["KANTHOR_IDENTITY_ENVBOT_TOKEN"] = "fake-env-token";
+    process.env = tempEnv;
+    try {
+      execSync("git init --bare .", { cwd: envBareDir, stdio: "pipe" });
+      const envDeps = await bootstrapLiveRun({
+        slot: {
+          repo: envBareDir,
+          strategy: "worktree",
+          maxConcurrentTasks: 1,
+          workflowsAllowed: [],
+          identity: "envbot",
+        },
+        dataRoot: envDataRoot,
+        providerModel: { provider: "acct_env", id: "fake-model" } as unknown,
+        providerStreamFn: (async (): Promise<undefined> => undefined) as unknown,
+        runGit,
+        agentFactory: fakeAgentFactory,
+      });
+      envDeps.store.close();
+    } finally {
+      process.env = savedEnv;
+      await rm(envDataRoot, { recursive: true, force: true });
+      await rm(envBareDir, { recursive: true, force: true });
+    }
+  });
+
   // Story 004 AC2 — integration: boots runDaemon with bootstrapLiveRun deps,
   // drives a completed session with ≥1 commit ahead (mock), and confirms that
   // BOTH the push adapter submit AND the create_pr adapter submit fire.

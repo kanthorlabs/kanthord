@@ -18,6 +18,7 @@
  */
 
 import { Agent, estimateContextTokens } from "@earendil-works/pi-agent-core";
+import { access } from "node:fs/promises";
 import type { AgentOptions, PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
 import { makeAgentOpts } from "../agent/pi-agent-adapter.ts";
 import type { AgentAdapterOpts } from "../agent/pi-agent-adapter.ts";
@@ -114,6 +115,18 @@ export interface BuildRealDepsOpts {
    * instead of `featureDir` (which may not exist yet at preflight time).
    */
   checkoutDir?: string;
+}
+
+async function loadIdentityFileOrEnv(name: string, file: string): Promise<string> {
+  try {
+    await access(file);
+    const id = await loadIdentity({ name, file });
+    return id.token;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    const id = await loadIdentity({ name, env: true });
+    return id.token;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -326,8 +339,7 @@ export function buildRealDeps(
     return (async () => {
       let token: string;
       try {
-        const id = await loadIdentity({ name: iName, file: iFile });
-        token = id.token;
+        token = await loadIdentityFileOrEnv(iName, iFile);
       } catch (err) {
         if (err instanceof IdentityLoadError) {
           throw new IdentityLoadError(

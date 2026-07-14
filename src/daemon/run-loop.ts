@@ -12,6 +12,7 @@
  */
 
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { bootDaemon } from "./boot.ts";
 import { submit, getInFlightOp } from "../broker/submit.ts";
 import { startPolling } from "../broker/poller.ts";
@@ -35,6 +36,9 @@ import type { PatternRegistry } from "../ring1/secret-scan.ts";
 import type { Workflow, GateResultSink } from "../workflow/workflow.ts";
 import type { WorktreeDispatchOpts, WorktreeDispatchResult, RunWorktreeGitFn } from "../slots/worktree.ts";
 import { runGit as execRunGit } from "../git/exec.ts";
+import type { ReviewRouter } from "../review/review-router.ts";
+import { pollPrState } from "../review/pr-state.ts";
+import type { PrHttpSeam } from "../review/pr-state.ts";
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -70,6 +74,7 @@ export interface StatusServerHandle {
 export type StatusServerFactory = (opts: {
   store: Store;
   logger?: Logger;
+  port?: number;
 }) => StatusServerHandle;
 
 export interface RunDaemonDeps {
@@ -79,7 +84,13 @@ export interface RunDaemonDeps {
   logger: Logger;
   piSurface: PiSurface;
   statusServerFactory: StatusServerFactory;
+  /** Optional fixed status HTTP port. Omit or 0 for OS-assigned. */
+  statusPort?: number;
   holdPointEnabled?: boolean;
+  /** Verbs held when holdPointEnabled is true. Defaults to all verbs for tests. */
+  holdPointVerbs?: string[];
+  /** Cutpoint used by the debug hold-point. Defaults to pre-submit for tests. */
+  holdPointCutpoint?: "pre-submit" | "pre-completion";
   /** Hard ceiling for each task's token budget.  When set, `tick()` calls
    *  `makeBudgetBreaker` and halts + parks a task before spawning if the
    *  ceiling would be breached (LP3). */
@@ -146,6 +157,22 @@ export interface RunDaemonDeps {
    * escalation inbox item is raised with reason "committer-identity".
    */
   resolveCommitterIdentity?: (taskId: string) => Promise<{ name: string; email: string } | undefined>;
+  /**
+   * Optional review router (Epic 019.18 Story 001).
+   * When set, called after a successful delivery (push + create_pr) to record
+   * a review-request inbox escalation for the task.
+   */
+  reviewRouter?: ReviewRouter;
+  /**
+   * HTTP seam for polling PR state (Epic 019.18 Story 002).
+   * When set alongside `prStateRepo`, `tick()` polls each outstanding create_pr op
+   * and writes a `broker_completion` row when the PR reaches a terminal state.
+   */
+  prStateSeam?: PrHttpSeam;
+  /** Repository (owner/name) to pass to `prStateSeam.getPrState`. */
+  prStateRepo?: string;
+  /** Interval hint for PR polling (currently unused; reserved for future throttle). */
+  prPollIntervalMs?: number;
 }
 
 /** Parameters for delivering a session's commits through the broker. */
@@ -164,6 +191,16 @@ export interface DeliverSessionParams {
    * (Story 004 T2 — completion-after-merge observation.)
    */
   taskId?: string;
+  /**
+   * PR number associated with the create_pr op (Epic 019.18 Story 002).
+   * When set alongside `taskId`, stored so tick() can pass it to prStateSeam.
+   */
+  prNumber?: number;
+  /**
+   * PR URL associated with the create_pr op (Epic 019.18 B3).
+   * When set alongside `taskId`, passed to reviewRouter.requestReview.
+   */
+  prUrl?: string;
 }
 
 export interface RunDaemonHandle {
@@ -210,8 +247,10 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
   // adapter is never invoked until the operator releases the hold (LP4 cutpoint).
   const holdPoint: HoldPoint | undefined = deps.holdPointEnabled
     ? {
-        shouldHold(_verb: string, cutpoint: "pre-submit" | "pre-completion"): boolean {
-          return cutpoint === "pre-submit";
+        shouldHold(verb: string, cutpoint: "pre-submit" | "pre-completion"): boolean {
+          const verbs = deps.holdPointVerbs;
+          const configuredCutpoint = deps.holdPointCutpoint ?? "pre-submit";
+          return cutpoint === configuredCutpoint && (verbs === undefined || verbs.includes(verb));
         },
         hold(_opId: string): void {},
         release(_opId: string): void {},
@@ -280,7 +319,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
   // to mark a task "complete" once the PR reaches the "merged" terminal state.
   // In-memory is sufficient for the completion observation pattern — durable
   // halt (budget halt, LP3/T3) is handled separately via the scheduler status.
-  const prOpTaskMap = new Map<string, string>();
+  const prOpTaskMap = new Map<string, { taskId: string; prNumber: number }>();
 
   // Step 1 — Schema init + ledger recovery + structured boot log records.
   // bootDaemon.start() calls initSchema internally (Epic 009 contract).
@@ -294,7 +333,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
   await lifecycle.start();
 
   // Step 2 — Start the status server (loopback, port 0 → assigned by OS).
-  const statusServer = statusServerFactory({ store, logger });
+  const statusServer = statusServerFactory({ store, logger, port: deps.statusPort });
   const address = await statusServer.start();
 
   // Step 3 — Graceful shutdown: install SIGTERM/SIGINT handlers.
@@ -317,6 +356,61 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
 
   process.on("SIGTERM", handleSignal);
   process.on("SIGINT", handleSignal);
+
+  async function recoverPrTrackingFromCompletions(): Promise<void> {
+    if (deps.reviewRouter === undefined) return;
+    const rows = store.all<{
+      op_id: string;
+      idempotency_key: string;
+      result_json: string | null;
+    }>(
+      `SELECT c.op_id, i.idempotency_key, c.result_json
+       FROM broker_completion c
+       JOIN broker_in_flight i ON i.op_id = c.op_id
+       WHERE i.verb = 'github.create_pr'
+         AND c.status = 'done'
+         AND i.idempotency_key LIKE 'create_pr:%'`,
+    );
+    for (const row of rows) {
+      if (row.result_json === null) continue;
+      const taskId = row.idempotency_key.slice("create_pr:".length);
+      if (taskId.length === 0) continue;
+      const parsed = JSON.parse(row.result_json) as { pr_number?: number; pr_url?: string };
+      if (typeof parsed.pr_number !== "number" || parsed.pr_number <= 0) continue;
+      const prUrl = typeof parsed.pr_url === "string"
+        ? parsed.pr_url
+        : deps.prStateRepo !== undefined
+          ? `https://github.com/${deps.prStateRepo}/pull/${parsed.pr_number}`
+          : row.op_id;
+      const etId = `ext:${createHash("sha256").update(`create_pr:${taskId}`).digest("hex").slice(0, 32)}`;
+      store.run(
+        `INSERT OR IGNORE INTO external_tracking
+           (id, local_kind, local_id, external_kind, external_provider, external_id, external_url,
+            created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+         VALUES (?, 'task', ?, 'pull_request', 'github', ?, ?, ?, ?, 'active', ?, 0, ?, ?)`,
+        etId,
+        taskId,
+        String(parsed.pr_number),
+        prUrl,
+        row.op_id,
+        row.idempotency_key,
+        clock.now(),
+        clock.now(),
+        clock.now(),
+      );
+      store.run(
+        `UPDATE external_tracking
+         SET external_id = ?, external_url = ?, created_by_op_id = ?, updated_at = ?
+         WHERE id = ?`,
+        String(parsed.pr_number),
+        prUrl,
+        row.op_id,
+        clock.now(),
+        etId,
+      );
+      await deps.reviewRouter.requestReview({ taskId, prNumber: parsed.pr_number, prUrl });
+    }
+  }
 
   const handle: RunDaemonHandle = {
     address,
@@ -590,7 +684,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
               const pushVA = deps.verbAdapters["git.push"];
               const createPrVA = deps.verbAdapters["github.create_pr"];
               if (pushVA !== undefined && createPrVA !== undefined) {
-                await handle.deliverSession({
+                const { createPrOpId } = await handle.deliverSession({
                   pushAdapter: pushVA.adapter,
                   pushEntry: pushVA.entry,
                   pushInput: { cwd: sessionWorktreePath ?? featureDir, branch: taskBranch, remote: deps.remote ?? "origin" },
@@ -601,6 +695,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
                   createPrIdempotencyKey: `create_pr:${task.id}`,
                   taskId: task.id,
                 });
+                void createPrOpId;
                 // Epic 019.16 S003 T1 — in the no-workflow live path, transition
                 // the task off "running" to "delivering" so it does not strand.
                 if (deps.workflow === undefined) {
@@ -612,17 +707,177 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
         }
       }
 
-      // Completion check (Story 004 T2) — observe broker_completion for create_pr
-      // ops that have reached the "merged" terminal state and mark the associated
-      // tasks complete.  The daemon never merges the PR itself; it only observes.
+      // Completion check (B1 / B5 / B6) — read durable external_tracking rows that are
+      // due for polling (tracking_status='active' AND next_poll_at <= now).  The
+      // in-memory prOpTaskMap is consulted only as a same-process fast-path; on restart
+      // the rows drive the loop independently.
+      const prPollIntervalMs: number = deps.prPollIntervalMs ?? 60_000;
+      const activeRows = store.all<{
+        id: string;
+        local_id: string;
+        external_id: string;
+        external_url: string | null;
+        created_by_op_id: string;
+        attempt_count: number;
+      }>(
+        `SELECT id, local_id, external_id, external_url, created_by_op_id, attempt_count
+         FROM external_tracking
+         WHERE local_kind = 'task'
+           AND external_kind = 'pull_request'
+           AND tracking_status = 'active'
+           AND next_poll_at <= ?`,
+        clock.now(),
+      );
+      for (const row of activeRows) {
+        const taskId = row.local_id;
+        let prNumber = Number(row.external_id);
+        let prUrl = row.external_url ?? "";
+
+        const openedCompletion = store.get<{ result_json: string | null }>(
+          "SELECT result_json FROM broker_completion WHERE op_id = ? AND status = 'done'",
+          row.created_by_op_id,
+        );
+        if (openedCompletion?.result_json !== undefined && openedCompletion.result_json !== null) {
+          const opened = JSON.parse(openedCompletion.result_json) as { pr_number?: number; pr_url?: string };
+          if (typeof opened.pr_number === "number" && opened.pr_number > 0) {
+            prNumber = opened.pr_number;
+            prUrl = typeof opened.pr_url === "string" ? opened.pr_url : prUrl;
+            if (row.external_id !== String(prNumber) || row.external_url !== prUrl) {
+              store.run(
+                "UPDATE external_tracking SET external_id = ?, external_url = ?, updated_at = ? WHERE id = ?",
+                String(prNumber), prUrl, clock.now(), row.id,
+              );
+              if (deps.reviewRouter !== undefined) {
+                await deps.reviewRouter.requestReview({ taskId, prNumber, prUrl });
+              }
+            }
+          }
+        }
+
+        if (Number.isFinite(prNumber) && prNumber > 0 && deps.prStateSeam !== undefined && deps.prStateRepo !== undefined) {
+          let prState: { state: string; merged: boolean } | undefined;
+          try {
+            prState = await deps.prStateSeam.getPrState(deps.prStateRepo, prNumber);
+          } catch (err: unknown) {
+            // B5 — persist failure, advance next_poll_at with backoff, keep row active.
+            const backoff = prPollIntervalMs > 0 ? prPollIntervalMs : 60_000;
+            store.run(
+              `UPDATE external_tracking
+               SET last_error_json = ?, attempt_count = ?, next_poll_at = ?, updated_at = ?
+               WHERE id = ?`,
+              JSON.stringify({ message: err instanceof Error ? err.message : String(err) }),
+              row.attempt_count + 1,
+              clock.now() + backoff,
+              clock.now(),
+              row.id,
+            );
+            continue;
+          }
+          if (prState !== undefined && (prState.merged || prState.state === "closed")) {
+            // Mark terminal before acting so a second tick skips it.
+            store.run(
+              "UPDATE external_tracking SET tracking_status = 'terminal', updated_at = ? WHERE id = ?",
+              clock.now(), row.id,
+            );
+            if (prState.merged) {
+              setTaskStatus(store, taskId, "complete");
+              const reviewItemId = `esc:${createHash("sha256").update(`review_requested:${taskId}:${row.external_id}`).digest("hex").slice(0, 32)}`;
+              store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", reviewItemId);
+            } else {
+              // closed without merge — INSERT OR IGNORE for exactly-once escalation.
+              createEscalationItem({
+                source_id: `${taskId}:pr-closed-unmerged`,
+                task_id: taskId,
+                reason: "pr-closed-unmerged",
+                payload_summary: `task ${taskId} PR was closed without merging`,
+                store,
+                clock,
+              });
+              const reviewItemId = `esc:${createHash("sha256").update(`review_requested:${taskId}:${row.external_id}`).digest("hex").slice(0, 32)}`;
+              store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", reviewItemId);
+            }
+            // Remove from in-memory cache if present.
+            prOpTaskMap.delete(row.created_by_op_id);
+          }
+        }
+
+        const legacyCompletion = store.get<{ status: string }>(
+          "SELECT status FROM broker_completion WHERE op_id = ?",
+          row.created_by_op_id,
+        );
+        if (legacyCompletion !== undefined && (legacyCompletion.status === "merged" || legacyCompletion.status === "closed")) {
+          store.run(
+            "UPDATE external_tracking SET tracking_status = 'terminal', updated_at = ? WHERE id = ?",
+            clock.now(), row.id,
+          );
+          if (legacyCompletion.status === "merged") {
+            setTaskStatus(store, taskId, "complete");
+            const reviewItemId = `esc:${createHash("sha256").update(`review_requested:${taskId}:${row.external_id}`).digest("hex").slice(0, 32)}`;
+            store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", reviewItemId);
+          } else {
+            createEscalationItem({
+              source_id: `${taskId}:pr-closed-unmerged`,
+              task_id: taskId,
+              reason: "pr-closed-unmerged",
+              payload_summary: `task ${taskId} PR was closed without merging`,
+              store,
+              clock,
+            });
+            const reviewItemId = `esc:${createHash("sha256").update(`review_requested:${taskId}:${row.external_id}`).digest("hex").slice(0, 32)}`;
+            store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", reviewItemId);
+          }
+          prOpTaskMap.delete(row.created_by_op_id);
+        }
+      }
+
+      // Legacy fallback: handle any prOpTaskMap entries NOT yet in external_tracking
+      // (created before the durable row was introduced).
       const completedOps: string[] = [];
-      for (const [opId, taskId] of prOpTaskMap) {
+      for (const [opId, { taskId, prNumber }] of prOpTaskMap) {
+        // Skip if already handled via external_tracking above.
+        const alreadyTracked = store.get<{ id: string }>(
+          "SELECT id FROM external_tracking WHERE created_by_op_id = ? AND tracking_status = 'terminal'",
+          opId,
+        );
+        if (alreadyTracked !== undefined) {
+          completedOps.push(opId);
+          continue;
+        }
+        // Also skip rows that are active and were just polled above.
+        const activeTracked = store.get<{ id: string }>(
+          "SELECT id FROM external_tracking WHERE created_by_op_id = ?",
+          opId,
+        );
+        if (activeTracked !== undefined) {
+          // Handled by the external_tracking loop; don't double-poll.
+          continue;
+        }
+
+        // No durable row — legacy path using broker_completion.
+        if (deps.prStateSeam !== undefined && deps.prStateRepo !== undefined) {
+          const prStateLegacy = await pollPrState({
+            repo: deps.prStateRepo,
+            prNumber,
+            http: deps.prStateSeam,
+          });
+          if (prStateLegacy === "merged" || prStateLegacy === "closed") {
+            store.run(
+              "INSERT OR REPLACE INTO broker_completion (op_id, status, result_json, error_json, at) VALUES (?, ?, NULL, NULL, ?)",
+              opId,
+              prStateLegacy,
+              clock.now(),
+            );
+          }
+        }
+
         const completion = store.get<{ status: string }>(
           "SELECT status FROM broker_completion WHERE op_id = ?",
           opId,
         );
         if (completion !== undefined && completion.status === "merged") {
           setTaskStatus(store, taskId, "complete");
+          const reviewItemId = `esc:${createHash("sha256").update(`review_requested:${taskId}:0`).digest("hex").slice(0, 32)}`;
+          store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", reviewItemId);
           completedOps.push(opId);
         } else if (completion !== undefined && completion.status === "closed") {
           createEscalationItem({
@@ -633,6 +888,8 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             store,
             clock,
           });
+          const reviewItemId = `esc:${createHash("sha256").update(`review_requested:${taskId}:0`).digest("hex").slice(0, 32)}`;
+          store.run("UPDATE inbox_items SET status = 'resolved' WHERE id = ?", reviewItemId);
           completedOps.push(opId);
         }
       }
@@ -743,10 +1000,40 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
         );
       }
 
-      // Record task→op association for PR merge completion tracking.
+      // Record task→op association in durable external_tracking so PR merge
+      // completion survives a daemon restart (B1 — replaces in-memory prOpTaskMap
+      // as source of truth).
       const { taskId } = params;
       if (taskId !== undefined && taskId !== "") {
-        prOpTaskMap.set(createPrOpId, taskId);
+        const prNum = params.prNumber ?? 0;
+        const etId = `ext:${createHash("sha256").update(`create_pr:${taskId}`).digest("hex").slice(0, 32)}`;
+        store.run(
+          `INSERT OR IGNORE INTO external_tracking
+             (id, local_kind, local_id, external_kind, external_provider, external_id, external_url,
+              created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+           VALUES (?, 'task', ?, 'pull_request', 'github', ?, ?,
+                   ?, ?, 'active', ?, 0, ?, ?)`,
+          etId,
+          taskId,
+          String(prNum),
+          params.prUrl ?? null,
+          createPrOpId,
+          params.createPrIdempotencyKey,
+          clock.now(),
+          clock.now(),
+          clock.now(),
+        );
+        // Also keep the in-memory map as a fast read-cache for the same process.
+        prOpTaskMap.set(createPrOpId, { taskId, prNumber: prNum });
+
+        // Epic 019.18 B3 — route review request with real prNumber/prUrl from params.
+        if (deps.reviewRouter !== undefined && params.prNumber !== undefined) {
+          await deps.reviewRouter.requestReview({
+            taskId,
+            prNumber: prNum,
+            prUrl: params.prUrl ?? createPrOpId,
+          });
+        }
       }
 
       return { pushOpId, createPrOpId };
@@ -766,9 +1053,10 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
         op_id: string;
         verb: string;
         idempotency_key: string;
+        payload_json: string | null;
       }
       const heldRows = store.all<HeldRow>(
-        `SELECT bif.op_id, bif.verb, bif.idempotency_key
+        `SELECT bif.op_id, bif.verb, bif.idempotency_key, bif.payload_json
          FROM broker_in_flight bif
          LEFT JOIN broker_completion bc ON bc.op_id = bif.op_id
          WHERE bif.status = 'held' AND bc.op_id IS NULL`,
@@ -782,12 +1070,24 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
           op_id: row.op_id,
           verb: row.verb,
           idempotency_key: row.idempotency_key,
-          correlation: "",
+          correlation: row.payload_json ?? "",
           desired_effect_hash: "",
           status: "needs_reconciliation" as const,
         };
 
-        await reconcileOp(ledgerEntry, entry.entry, entry.adapter, store, clock);
+        const payload = row.payload_json !== null ? JSON.parse(row.payload_json) : undefined;
+        const outcome = await reconcileOp(ledgerEntry, entry.entry, entry.adapter, store, clock, payload);
+        // A held op reconciled at boot must be visible in the logs — an earlier
+        // LP-A4 failure was invisible because this path logged nothing (the
+        // boot.ts "reconciledOps" counter is a different, misleading path).
+        // AGENTS.md "logs first": one line that pinpoints the recovery.
+        logger.info({
+          event: "held-op-reconciled",
+          op_id: row.op_id,
+          verb: row.verb,
+          idempotency_key: row.idempotency_key,
+          outcome,
+        });
       }
     },
   };
@@ -815,6 +1115,7 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
   if (deps.verbAdapters !== undefined) {
     await handle.reconcileHeldOps(deps.verbAdapters);
   }
+  await recoverPrTrackingFromCompletions();
   scheduleNextTick();
 
   return handle;

@@ -8,6 +8,8 @@ import type { Clock } from "../foundations/clock.ts";
 interface ReconcileResult {
   /** Adapters' native contract — the single source of terminal status. */
   status?: "done" | "failed" | "resubmit" | "escalate";
+  /** Optional adapter result to persist as immutable completion evidence. */
+  result?: unknown;
   /** Present only when the adapter can hash-verify the desired effect (e.g. git verbs). */
   observed_hash?: string;
 }
@@ -17,12 +19,15 @@ function writeCompletionRow(
   opId: string,
   status: string,
   now: number,
+  result?: unknown,
 ): void {
+  const resultJson = result !== undefined ? JSON.stringify(result) : null;
   store.run(
     `INSERT OR REPLACE INTO broker_completion (op_id, status, result_json, error_json, at)
-     VALUES (?, ?, NULL, NULL, ?)`,
+     VALUES (?, ?, ?, NULL, ?)`,
     opId,
     status,
+    resultJson,
     now,
   );
 }
@@ -72,7 +77,7 @@ export async function reconcileOp(
       if (result.observed_hash !== undefined) {
         // Hash invariant: only enforced when the adapter supplies an observed_hash.
         if (result.observed_hash === ledgerEntry.desired_effect_hash) {
-          writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now());
+          writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now(), result.result);
           return "done";
         }
         // Hash mismatch: desired effect unverifiable — treat as failed.
@@ -81,7 +86,7 @@ export async function reconcileOp(
         return "failed";
       }
       // No observed_hash (e.g. github.create_pr has no content hash): accept done.
-      writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now());
+      writeCompletionRow(store, ledgerEntry.op_id, "done", clock.now(), result.result);
       return "done";
     }
     case "failed": {

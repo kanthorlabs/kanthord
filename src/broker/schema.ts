@@ -13,9 +13,14 @@ export function initBrokerSchema(store: Store): void {
       verb TEXT NOT NULL,
       request_id TEXT NOT NULL,
       idempotency_key TEXT NOT NULL,
+      payload_json TEXT,
       status TEXT NOT NULL
     )`,
   );
+  const columns = store.all<{ name: string }>("PRAGMA table_info(broker_in_flight)");
+  if (!columns.some((c) => c.name === "payload_json")) {
+    store.run("ALTER TABLE broker_in_flight ADD COLUMN payload_json TEXT");
+  }
   store.run(
     `CREATE TABLE IF NOT EXISTS broker_completion (
       op_id TEXT PRIMARY KEY,

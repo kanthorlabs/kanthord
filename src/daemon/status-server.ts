@@ -45,6 +45,7 @@ export function createStatusServer(opts: {
   store: Store;
   version?: string;
   logger?: { info(record: Record<string, unknown>): void };
+  port?: number;
   /** Bind address for the HTTP listener; defaults to '127.0.0.1' (loopback-only).
    *  Control methods (respondToEscalation, respondToApproval) refuse requests
    *  when bind is not a loopback address — 2A safety gate (debate finding). */
@@ -55,7 +56,7 @@ export function createStatusServer(opts: {
     op_id: string,
   ) => { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter; payload: unknown } | undefined;
 }): StatusServer {
-  const { version = "0.0.0", bind = "127.0.0.1" } = opts;
+  const { version = "0.0.0", bind = "127.0.0.1", port = 0 } = opts;
 
   let server: ReturnType<typeof createServer> | undefined;
   let startedAt = 0;
@@ -203,7 +204,7 @@ export function createStatusServer(opts: {
       });
 
       return new Promise<{ host: string; port: number }>((resolve, reject) => {
-        server!.listen(0, bind, () => {
+        server!.listen(port, bind, () => {
           const addr = server!.address();
           if (addr === null || typeof addr === "string") {
             reject(new Error("unexpected server address type"));

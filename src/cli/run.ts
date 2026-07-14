@@ -26,7 +26,7 @@ import { runGit as execRunGit } from "../git/exec.ts";
 const USAGE = `kanthord run — start the kanthord daemon
 
 Usage:
-  node src/cli/run.ts --slot <path> [--account <label>] [--model <id>] [--port <n>] [--hold-point] [--help]
+  node src/cli/run.ts --slot <path> [--account <label>] [--model <id>] [--port <n>] [--hold-point] [--budget-ceiling <n>] [--budget-cost <n>] [--help]
 
 Options:
   --slot <path>      Path to the slot YAML file (required)
@@ -34,6 +34,8 @@ Options:
   --model <id>       Model id to use (default: account defaultModel)
   --port <n>         Status HTTP server port (default: OS-assigned on 127.0.0.1)
   --hold-point       Enable broker pre-submit hold-point (LP4 cutpoint)
+  --budget-ceiling <n>  Hard task budget ceiling for LP3
+  --budget-cost <n>     Conservative per-call cost for LP3
   --help             Show this usage and exit 0`.trim();
 
 // ---------------------------------------------------------------------------
@@ -48,6 +50,8 @@ async function main(): Promise<void> {
       model: { type: "string" },
       port: { type: "string" },
       "hold-point": { type: "boolean" },
+      "budget-ceiling": { type: "string" },
+      "budget-cost": { type: "string" },
       help: { type: "boolean" },
     },
   });
@@ -99,7 +103,31 @@ async function main(): Promise<void> {
     process.exit(1);
   });
 
-  await runDaemon({ ...deps, holdPointEnabled });
+  const statusPort = values.port !== undefined ? Number(values.port) : undefined;
+  if (statusPort !== undefined && (!Number.isInteger(statusPort) || statusPort < 0 || statusPort > 65535)) {
+    process.stderr.write(`Error: --port must be an integer from 0 to 65535\n`);
+    process.exit(3);
+  }
+
+  let taskBudget: { ceiling: number; conservativeCost: number } | undefined;
+  if (values["budget-ceiling"] !== undefined || values["budget-cost"] !== undefined) {
+    const ceiling = Number(values["budget-ceiling"]);
+    const conservativeCost = Number(values["budget-cost"] ?? 1);
+    if (!Number.isFinite(ceiling) || !Number.isFinite(conservativeCost)) {
+      process.stderr.write(`Error: --budget-ceiling and --budget-cost must be numbers\n`);
+      process.exit(3);
+    }
+    taskBudget = { ceiling, conservativeCost };
+  }
+
+  await runDaemon({
+    ...deps,
+    holdPointEnabled,
+    holdPointVerbs: holdPointEnabled ? ["github.create_pr"] : undefined,
+    holdPointCutpoint: holdPointEnabled ? "pre-completion" : undefined,
+    statusPort,
+    taskBudget,
+  });
 
   // runDaemon installs SIGTERM/SIGINT → handle.stop() internally (T2).
   // The HTTP server keeps the event loop alive until the signal fires.
