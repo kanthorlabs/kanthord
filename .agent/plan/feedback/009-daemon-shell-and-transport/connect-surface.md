@@ -107,3 +107,54 @@ SU6 is codegen plumbing; Epic 017 owns behavior. So the messages deliberately
 - `InboxItem` = `{ id, kind, feature_id, summary }`; respond requests carry the
   `id` + the minimal decision (`response` for escalation; `approve` + `reason` for
   approval); respond responses carry a resulting `status`. Epic 017 refines fields.
+
+---
+
+## Phase-2B control-plane surface (Epic 020 SU6, 2026-07-14)
+
+Epic 020 SU6 extends the descriptor with the full Phase-2B control-plane surface
+for Epic 026. Same protocol as the 2A section: **the gate asserts the descriptor is
+exactly the allowlist, by local name + method kind + read/control class**
+(`src/daemon/status-server.test.ts`). Regenerated with `npm run generate:proto`;
+`buf lint` clean. **These 2B messages are an INTERFACE HYPOTHESIS** — Epic 026's
+stories own behavior; any mismatch is a decision-recorded re-gen appended **here**.
+
+### Method map (logical surface → RPC local name → kind → class)
+
+| Epic 026 surface | RPC (local name) | kind | class |
+|---|---|---|---|
+| `features.list` | `listFeatures` | unary | read |
+| `features.get` | `getFeature` | unary | read |
+| `broker.operations` | `listBrokerOperations` | unary | read |
+| `broker.verbs` | `listBrokerVerbs` | unary | read (registry view; **no write method**) |
+| `slots.list` | `listSlots` | unary | read |
+| `budgets.get` | `getBudget` | unary | read |
+| `daemon.status` | `getDaemonStatus` | unary | read |
+| `audit.taskTimeline` | `getTaskTimeline` | unary | read |
+| audit session-event stream | `subscribeSessionEvents` | **server_streaming** | read (subscription) |
+| `daemon.verify` | `triggerVerify` | unary | **read-with-single-write** (the report record; excluded from the zero-write read list — debate finding) |
+| `plan.signOff` | `signOffPlan` | unary | control |
+| `task.halt` | `haltTask` | unary | control |
+| `feature.halt` | `haltFeature` | unary | control |
+| `plan.approveReplan` | `approveReplan` | unary | control |
+| `budget.override` | `overrideBudget` | unary | control (sole ring-1 exception — PRD §4) |
+
+Full descriptor after SU6 = **19 methods** (4 Phase-1+2A + 15 Phase-2B). The gate
+test asserts this exact set, the streaming kind on `subscribeSessionEvents`, and
+that broker write verbs (`mergePr`/`createIssue`/`enqueue`/`lease`/`registerVerb`)
+are **never** RPC methods (they flow through the broker registry, not the descriptor).
+
+### Hypotheses carried (to confirm or re-gen in Epic 026)
+
+- **Naming:** logical dotted names map to verb-first PascalCase RPCs
+  (`features.list` → `ListFeatures`), matching the existing proto style. If Epic
+  026 tests want the dotted names surfaced differently, that is a re-gen decision.
+- **`audit.taskTimeline` + session-event stream are thin wiring only** — the
+  timeline logic, per-call record, and SIGNAL_MAP live in Epic 019.5; 026 exposes
+  them. `SubscribeSessionEventsResponse` wraps a `SessionEvent` (the wrapper only
+  satisfies buf's RPC-response-name rule; the semantic payload is `SessionEvent`).
+- **`plan.approveReplan` diff = authored-file edit set** (`FileEdit{path,new_content}`)
+  + `base_generation` for the conflict check — never the compiled plan (PRD §7.1.1).
+- Field-level shapes (budget cost unit, breaker-state vocabulary, timeline event
+  types, verify report body) are placeholders pending Epic 026's golden fixtures.
+- `int64` fields cross the wire as BigInt (unchanged from the 2A note).

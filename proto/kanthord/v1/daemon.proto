@@ -7,6 +7,13 @@
 //   control-plane API is Phase 2B (Epic 026). These methods are an INTERFACE
 //   HYPOTHESIS — Epic 017 owns their behavior and may force a re-gen (decision
 //   record) if the shapes are wrong. Health stays a plain HTTP route, NOT an RPC.
+// Phase-2B (Epic 020 SU6): adds the full control-plane surface for Epic 026 —
+//   reads (features/broker/slots/budgets/daemon/audit) and control verbs
+//   (sign-off, halt, re-plan approval, budget override). All 2B messages are an
+//   INTERFACE HYPOTHESIS: Epic 026's stories own behavior and may force a re-gen
+//   (decision record appended to the 2B section of connect-surface.md). Reads
+//   perform zero writes; TriggerVerify is the single declared write among reads.
+//   Auth/TLS/bind policy (Story 003) is transport-level and adds no RPC method.
 syntax = "proto3";
 
 package kanthord.v1;
@@ -26,6 +33,47 @@ service DaemonService {
   rpc RespondToEscalation(RespondToEscalationRequest) returns (RespondToEscalationResponse);
   // Records a human approve/reject decision on an approval inbox item.
   rpc RespondToApproval(RespondToApprovalRequest) returns (RespondToApprovalResponse);
+
+  // --- Phase-2B reads (Epic 026 Story 001; zero writes) ---
+  // features.list — per-feature id, status, phase, and progress summary.
+  rpc ListFeatures(ListFeaturesRequest) returns (ListFeaturesResponse);
+  // features.get — drill-down: stories/tasks + DAG progress + in-flight ops +
+  // STATE/JOURNAL content views.
+  rpc GetFeature(GetFeatureRequest) returns (GetFeatureResponse);
+  // broker.operations — in-flight / pending / expiring ops with state + correlation.
+  rpc ListBrokerOperations(ListBrokerOperationsRequest) returns (ListBrokerOperationsResponse);
+  // broker.verbs — read-only registry view with tiers (no registry-write method exists).
+  rpc ListBrokerVerbs(ListBrokerVerbsRequest) returns (ListBrokerVerbsResponse);
+  // slots.list — registered repos, strategy, held leases, active sessions.
+  rpc ListSlots(ListSlotsRequest) returns (ListSlotsResponse);
+  // budgets.get — per-task ledger view + breaker state incl. any recorded override.
+  rpc GetBudget(GetBudgetRequest) returns (GetBudgetResponse);
+  // daemon.status — health, last dead-man ping (Epic 029), last verify report.
+  rpc GetDaemonStatus(GetDaemonStatusRequest) returns (GetDaemonStatusResponse);
+  // audit.taskTimeline — a task's ordered timeline (Epic 019.5 queryTaskTimeline).
+  rpc GetTaskTimeline(GetTaskTimelineRequest) returns (GetTaskTimelineResponse);
+  // audit session-event stream — outbound read-only subscription (Epic 019.5).
+  rpc SubscribeSessionEvents(SubscribeSessionEventsRequest) returns (stream SubscribeSessionEventsResponse);
+
+  // --- Phase-2B read-with-single-write (Epic 026 Story 001; debate finding) ---
+  // daemon.verify — triggers the Epic 018 engine (read-only run); stores + returns
+  // the report. The report record is this method's single declared write.
+  rpc TriggerVerify(TriggerVerifyRequest) returns (TriggerVerifyResponse);
+
+  // --- Phase-2B control verbs (Epic 026 Story 002; journaled with actor) ---
+  // plan.signOff — runs the Epic 002 compile; invalid ⇒ verbatim diagnostics,
+  // valid ⇒ generation stamped + sign-off journaled.
+  rpc SignOffPlan(SignOffPlanRequest) returns (SignOffPlanResponse);
+  // task.halt — parks a task through Epic 004 transitions; double-halt ⇒ conflict.
+  rpc HaltTask(HaltTaskRequest) returns (HaltTaskResponse);
+  // feature.halt — feature-scoped halt.
+  rpc HaltFeature(HaltFeatureRequest) returns (HaltFeatureResponse);
+  // plan.approveReplan — applies the authored-file edit set atomically, recompiles
+  // to G+1, re-opens exactly the affected downstream gates.
+  rpc ApproveReplan(ApproveReplanRequest) returns (ApproveReplanResponse);
+  // budget.override — one-shot per-task ceiling raise (rate-limited + per-day cap);
+  // sole ring-1 exception (PRD §4). Annotates the ledger + emits an interaction event.
+  rpc OverrideBudget(OverrideBudgetRequest) returns (OverrideBudgetResponse);
 }
 
 message GetStatusRequest {}
@@ -107,4 +155,280 @@ message RespondToApprovalRequest {
 message RespondToApprovalResponse {
   // Resulting item status after the decision is recorded.
   string status = 1;
+}
+
+// ===========================================================================
+// Phase-2B control-plane messages (Epic 026 — INTERFACE HYPOTHESIS).
+// int64 fields cross the wire as BigInt (connect-surface.md note). Field shapes
+// are refined by Epic 026's stories; mismatches are decision-recorded re-gens.
+// ===========================================================================
+
+// --- features.list ---
+message FeatureSummary {
+  string feature_id = 1;
+  string status = 2;
+  // Lifecycle phase (e.g. "coding", "deploy", "done").
+  string phase = 3;
+  // Human-readable progress summary (e.g. "3/7 tasks satisfied").
+  string progress_summary = 4;
+}
+
+message ListFeaturesRequest {}
+
+message ListFeaturesResponse {
+  repeated FeatureSummary features = 1;
+}
+
+// --- features.get (drill-down) ---
+message TaskDetail {
+  string task_id = 1;
+  string status = 2;
+  bool exit_gate_passed = 3;
+  // Attempt count for the task's goal loop.
+  int64 attempt = 4;
+}
+
+message StoryDetail {
+  string story_id = 1;
+  string status = 2;
+  repeated TaskDetail tasks = 3;
+}
+
+message DagProgress {
+  int64 total_nodes = 1;
+  int64 satisfied_nodes = 2;
+  int64 total_edges = 3;
+  int64 satisfied_edges = 4;
+}
+
+message GetFeatureRequest {
+  string feature_id = 1;
+}
+
+message GetFeatureResponse {
+  string feature_id = 1;
+  string status = 2;
+  string phase = 3;
+  repeated StoryDetail stories = 4;
+  DagProgress dag = 5;
+  // In-flight broker ops for this feature.
+  repeated BrokerOperation in_flight_ops = 6;
+  // STATE.md content view for the feature.
+  string state_view = 7;
+  // JOURNAL.md content view for the feature.
+  string journal_view = 8;
+}
+
+// --- broker.operations ---
+message BrokerOperation {
+  string op_id = 1;
+  string verb = 2;
+  // Op lifecycle state (pending / in_flight / expiring / done / ...).
+  string state = 3;
+  // Correlation reference (external id / idempotency key).
+  string correlation = 4;
+  string feature_id = 5;
+  // Lease/attempt expiry (epoch ms); expiring==true when near expiry.
+  int64 expires_at = 6;
+  bool expiring = 7;
+}
+
+message ListBrokerOperationsRequest {}
+
+message ListBrokerOperationsResponse {
+  repeated BrokerOperation operations = 1;
+}
+
+// --- broker.verbs (read-only registry view; no write method) ---
+message BrokerVerbInfo {
+  string verb = 1;
+  // Approval tier: "auto" / "auto-with-audit" / "approval-required" / "read-only".
+  string tier = 2;
+}
+
+message ListBrokerVerbsRequest {}
+
+message ListBrokerVerbsResponse {
+  repeated BrokerVerbInfo verbs = 1;
+}
+
+// --- slots.list ---
+message SlotInfo {
+  string name = 1;
+  string repo = 2;
+  string strategy = 3;
+  repeated string held_leases = 4;
+  repeated string active_sessions = 5;
+}
+
+message ListSlotsRequest {}
+
+message ListSlotsResponse {
+  repeated SlotInfo slots = 1;
+}
+
+// --- budgets.get ---
+message BudgetOverrideInfo {
+  bool present = 1;
+  double amount = 2;
+  string reason = 3;
+  string actor = 4;
+}
+
+message GetBudgetRequest {
+  string task_id = 1;
+}
+
+message GetBudgetResponse {
+  string task_id = 1;
+  // Spend + ceiling in the ledger's cost unit.
+  double spent = 2;
+  double ceiling = 3;
+  // Circuit-breaker state ("closed" / "open" / "half-open").
+  string breaker_state = 4;
+  BudgetOverrideInfo override = 5;
+}
+
+// --- daemon.status ---
+message DeadManPing {
+  // present==false until Epic 029 populates it.
+  bool present = 1;
+  int64 sent_at = 2;
+  int64 tasks_processed = 3;
+}
+
+message VerifyReport {
+  bool present = 1;
+  // Overall outcome ("pass" / "fail" / "degraded").
+  string outcome = 2;
+  int64 ran_at = 3;
+  // Serialized Epic 018 report body.
+  string report_json = 4;
+}
+
+message GetDaemonStatusRequest {}
+
+message GetDaemonStatusResponse {
+  string version = 1;
+  int64 uptime_seconds = 2;
+  DeadManPing last_ping = 3;
+  VerifyReport last_verify = 4;
+}
+
+// --- daemon.verify (single declared write among reads) ---
+message TriggerVerifyRequest {}
+
+message TriggerVerifyResponse {
+  VerifyReport report = 1;
+}
+
+// --- audit.taskTimeline ---
+message TimelineEvent {
+  // Event type from Epic 019.5's timeline vocabulary.
+  string event_type = 1;
+  int64 at = 2;
+  // Machine failure signal, when the event carries one (Epic 019.5).
+  string observed_failure_signal = 3;
+  // Present on model-call events (Epic 019.5).
+  string account_id = 4;
+  string model = 5;
+  // Serialized event detail.
+  string detail_json = 6;
+}
+
+message GetTaskTimelineRequest {
+  string task_id = 1;
+  int64 attempt = 2;
+}
+
+message GetTaskTimelineResponse {
+  repeated TimelineEvent events = 1;
+}
+
+// --- audit session-event stream (server streaming) ---
+message SubscribeSessionEventsRequest {
+  string task_id = 1;
+}
+
+message SessionEvent {
+  string event_type = 1;
+  int64 at = 2;
+  // Serialized session-event payload.
+  string payload_json = 3;
+}
+
+// One streamed session event (wrapper satisfies the RPC response-name rule).
+message SubscribeSessionEventsResponse {
+  SessionEvent event = 1;
+}
+
+// --- plan.signOff ---
+message SignOffPlanRequest {
+  string feature_id = 1;
+  // Human actor recorded in the journal.
+  string actor = 2;
+}
+
+message SignOffPlanResponse {
+  bool valid = 1;
+  // Planner-vocabulary diagnostics returned verbatim when invalid.
+  repeated string diagnostics = 2;
+  // Stamped generation when valid.
+  int64 generation = 3;
+}
+
+// --- task.halt / feature.halt ---
+message HaltTaskRequest {
+  string task_id = 1;
+  string actor = 2;
+}
+
+message HaltTaskResponse {
+  string status = 1;
+}
+
+message HaltFeatureRequest {
+  string feature_id = 1;
+  string actor = 2;
+}
+
+message HaltFeatureResponse {
+  string status = 1;
+}
+
+// --- plan.approveReplan ---
+message FileEdit {
+  // Authored plan-file path (feature-relative; traversal/symlink rejected).
+  string path = 1;
+  // Full new content for the file (the authored file, never the compiled plan).
+  string new_content = 2;
+}
+
+message ApproveReplanRequest {
+  string feature_id = 1;
+  // Base generation the diff was authored against; a live mismatch ⇒ conflict.
+  int64 base_generation = 2;
+  repeated FileEdit edits = 3;
+  string actor = 4;
+}
+
+message ApproveReplanResponse {
+  // Newly minted generation (base + 1).
+  int64 new_generation = 1;
+  // Task ids whose gates were re-opened by the re-plan.
+  repeated string reopened_task_ids = 2;
+}
+
+// --- budget.override ---
+message OverrideBudgetRequest {
+  string task_id = 1;
+  double amount = 2;
+  // Required reason (debate finding — scoped, no ratchet).
+  string reason = 3;
+  string actor = 4;
+}
+
+message OverrideBudgetResponse {
+  // Raised ceiling after the one-shot override.
+  double new_ceiling = 1;
 }

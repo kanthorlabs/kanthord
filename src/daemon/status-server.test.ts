@@ -44,36 +44,60 @@ describe("src/daemon/status-server", () => {
   });
 
   describe("T2 — Read-only status method over SQLite", () => {
-    // Epic 011 SU6 superseded the Epic 000 read-only rule FOR PHASE 2A ONLY: the
-    // gate is now "descriptor is exactly this allowlist" (Phase-1 read + the named
-    // 2A inbox surface), asserted by local name + method kind + read/control class.
-    test("descriptor lists exactly the Phase-1 read + 2A control allowlist", () => {
+    // Epic 011 SU6 superseded the Epic 000 read-only rule for 2A; Epic 020 SU6
+    // extends the descriptor with the full Phase-2B control-plane surface (Epic
+    // 026). The gate stays "descriptor is exactly this allowlist", asserted by
+    // local name + method kind + read/control class. 2B messages are an interface
+    // hypothesis — Epic 026 owns behavior and may force a re-gen (decision record
+    // in connect-surface.md).
+    test("descriptor lists exactly the Phase-1 + 2A + 2B allowlist", () => {
       const methodNames = Object.keys(DaemonService.method).sort();
-      // Phase-1 read: getStatus. 2A read: listInboxItems. 2A control: the responds.
       const allowlist = [
+        // Phase-1 read + 2A inbox surface.
         "getStatus",
         "listInboxItems",
         "respondToApproval",
         "respondToEscalation",
+        // 2B reads (Epic 026 Story 001).
+        "listFeatures",
+        "getFeature",
+        "listBrokerOperations",
+        "listBrokerVerbs",
+        "listSlots",
+        "getBudget",
+        "getDaemonStatus",
+        "getTaskTimeline",
+        "subscribeSessionEvents",
+        // 2B read-with-single-write.
+        "triggerVerify",
+        // 2B control verbs (Epic 026 Story 002).
+        "signOffPlan",
+        "haltTask",
+        "haltFeature",
+        "approveReplan",
+        "overrideBudget",
       ].sort();
       assert.deepEqual(
         methodNames,
         allowlist,
         `descriptor must list exactly ${JSON.stringify(allowlist)}; got ${JSON.stringify(methodNames)}`
       );
-      // All methods are unary (Epic 026 depends on kind-level checks, not just names).
+      // Method kinds: the session-event stream is server-streaming; all others
+      // are unary (Epic 026 depends on kind-level checks, not just names).
       for (const [local, m] of Object.entries(DaemonService.method)) {
-        assert.equal(m.methodKind, "unary", `method ${local} must be unary`);
+        const expectedKind =
+          local === "subscribeSessionEvents" ? "server_streaming" : "unary";
+        assert.equal(m.methodKind, expectedKind, `method ${local} must be ${expectedKind}`);
       }
-      // Nothing broader than 2A: no full control-plane / 2B verbs (Epic 026), no
-      // Phase-1-forbidden control RPCs.
+      // Broker write verbs are NEVER control-plane RPC methods: they flow through
+      // the broker registry, not the descriptor (Epic 026 AC — no registry-write
+      // method; broker.verbs is read-only).
       const forbidden = [
-        "signOff",
-        "halt",
         "mergePr",
         "createIssue",
         "enqueue",
         "lease",
+        "registerVerb",
       ];
       for (const name of forbidden) {
         assert.ok(
