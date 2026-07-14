@@ -861,3 +861,40 @@ END: TEST-ENGINEER
 - No SQLite DDL gotcha violation found in the reviewed changed files (`.agent/tdd/memory/sqlite-gotchas.md:8`).
 
 END: REVIEWER-ENGINEER
+## TEST-ENGINEER - 018-kanthord-verify-basic - T1 required --store and --db
+
+**Cycle.** RED for Task `T1 required store/db validation` (`src/cli/verify.test.ts`).
+**Test written.**
+- file: `src/cli/verify.test.ts` (edited) - suite: `src/cli/verify — missing required flags` - methods: `missing --store ⇒ usage exit 3, names --store, and opens neither store`; `missing --db ⇒ usage exit 3, names --db, and opens neither store`
+- asserts: each omitted path option produces exit 3, identifies that option, and invokes neither `openStoreRoot` nor `openLiveStore`.
+**RED proof.**
+- command: `node --import ./src/harness/no-network-guard.ts --test src/cli/verify.test.ts`
+- exit: non-zero - failure: `AssertionError [ERR_ASSERTION]: missing --store must be a usage error` (`0 !== 3`, `src/cli/verify.test.ts:333`); the --db case fails equivalently at `src/cli/verify.test.ts:364`.
+**Open to Software Engineer.**
+- `main(args: string[], deps: CliDeps): Promise<number>` must treat `--store` and `--db` as required usage options before invoking `CliDeps.openStoreRoot` or `CliDeps.openLiveStore`.
+
+END: TEST-ENGINEER
+## SOFTWARE-ENGINEER - 018-kanthord-verify-basic - T1 required store/db validation
+
+**Cycle.** GREEN+REFACTOR for `src/cli/verify.test.ts`.
+**Files changed.**
+- `src/cli/verify.ts` (edited) - required path-option validation in `main`
+**Seam (GREEN).** Missing or empty `--store` and `--db` now join the mode flags in the usage validation before either store-opening seam is invoked.
+**Refactor.** None required by Story.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: `.agent/tdd/typecheck-018-002-required-store-db.log`
+- `npm run verify:handoff`: VERIFY: PASS - log: `.agent/tdd/verify-handoff-018-002-required-store-db.log`
+**Assumptions.**
+- VERIFIED: absent `--store`/`--db` are reported with exit 3 before any store opens; empty string values follow the same validation path.
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER - 018-kanthord-verify-basic - T1 required --store and --db
+
+**Cycle.** GREEN confirmation for Task `T1 required store/db validation` (`src/cli/verify.test.ts`).
+**Independent verification.**
+- targeted: `node --import ./src/harness/no-network-guard.ts --test src/cli/verify.test.ts` — exit 0; 23 pass, 0 fail.
+- core unit: `npm test` — exit 0; 1063 pass, 0 fail.
+- handoff: `npm run verify:handoff` — exit 0; `VERIFY: PASS`.
+**GREEN.** Missing `--store` and missing `--db` each return usage exit 3, name the missing option, and invoke neither store-opening seam.
+
+END: TEST-ENGINEER

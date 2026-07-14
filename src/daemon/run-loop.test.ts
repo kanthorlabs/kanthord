@@ -26,6 +26,7 @@ import { initSchema } from "../store/schema.ts";
 import type { WorktreeDispatchOpts, WorktreeDispatchResult } from "../slots/worktree.ts";
 import { createEscalationItem } from "../inbox/inbox.ts";
 import { getInFlightOp } from "../broker/submit.ts";
+import { readTimelineEvents } from "../metrics/task-timeline.ts";
 
 // ---------------------------------------------------------------------------
 // Helper — issue a GET /healthz and resolve with the status code
@@ -528,6 +529,86 @@ test("Story 002 T1 — tick dispatches to ring-1-guarded pi session; second tick
   }
 });
 
+test("per-model-call budget — spawned session reserves durably for each call and parks on its first breach", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-per-model-budget-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  let beforeModelCall: (() => Promise<void>) | undefined;
+  const piSurface = {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+      const candidate = (opts as Record<string, unknown>)["beforeModelCall"];
+      if (typeof candidate === "function") beforeModelCall = candidate as () => Promise<void>;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_r: Record<string, unknown>): void {} },
+    piSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 15, conservativeCost: 10 },
+  });
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    assert.equal(
+      typeof beforeModelCall,
+      "function",
+      "runDaemon must supply the per-task beforeModelCall callback in pi spawn options",
+    );
+    if (beforeModelCall === undefined) throw new Error("beforeModelCall was not supplied");
+    const reserveBeforeModelCall = beforeModelCall;
+
+    await reserveBeforeModelCall();
+    const firstReservation = store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger");
+    assert.equal(
+      Number(firstReservation?.ledger),
+      10,
+      "the first model call must durably reserve exactly one conservative cost",
+    );
+
+    await assert.rejects(
+      () => reserveBeforeModelCall(),
+      (err: unknown) => err instanceof Error && err.message.length > 0,
+      "the first over-ceiling model-call reservation must reject with a non-empty error",
+    );
+    const afterBreach = store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger");
+    assert.equal(
+      Number(afterBreach?.ledger),
+      10,
+      "the rejected reservation must not durably charge the breaching call",
+    );
+
+    const inbox = store.get<{ evidence: string }>("SELECT evidence FROM inbox_items");
+    assert.equal(
+      (JSON.parse(inbox?.evidence ?? "{}") as { reason?: string }).reason,
+      "budget-breach",
+      "the over-ceiling model call must create budget-breach inbox evidence",
+    );
+    const task = store.get<{ status: string }>(
+      "SELECT status FROM scheduler_task WHERE node_id = ?",
+      "task-foo",
+    );
+    assert.equal(task?.status, "parked", "the task must be parked after its budget breach");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Story 002 T2 — LP2: out-of-scope write blocked, inbox item, task parked
 // ---------------------------------------------------------------------------
@@ -571,7 +652,7 @@ out
 tests
 `;
 
-test("Story 002 T2 — LP2: out-of-scope write blocked, inbox item created, task parked; read allowed", async () => {
+test("Story 002 T2 — LP-A2: out-of-scope write is blocked, durably journaled, and cannot execute", async () => {
   const featureDir = await mkdtemp(join(tmpdir(), "krl-s002t2-"));
   const store = openStore(":memory:", { busyTimeout: 1000 });
   const clock = new FakeClock(1_000_000_000);
@@ -586,6 +667,7 @@ test("Story 002 T2 — LP2: out-of-scope write blocked, inbox item created, task
   let writeHookResult: { block: boolean; reason?: string } | undefined;
   let readHookCalled = false;
   let readHookResult: { block: boolean; reason?: string } | undefined;
+  let outOfScopeEffectsExecuted = 0;
 
   // Scripted pi surface: captures beforeToolCall and calls it with one
   // out-of-scope write call and one read call during waitForIdle().
@@ -604,6 +686,9 @@ test("Story 002 T2 — LP2: out-of-scope write blocked, inbox item created, task
             args: { path: "src/outside/file.ts" },
             context: { systemPrompt: "", messages: [], tools: [] },
           });
+          if (writeHookResult?.block !== true) {
+            outOfScopeEffectsExecuted += 1;
+          }
           // Read to same out-of-scope path (pi "read" tool) — must be allowed
           readHookCalled = true;
           readHookResult = await hook({
@@ -648,6 +733,17 @@ test("Story 002 T2 — LP2: out-of-scope write blocked, inbox item created, task
     const firstItem = inboxRows[0];
     assert.ok(firstItem !== undefined, "inbox item row must be non-undefined");
     assert.equal(firstItem.kind, "escalation", "inbox item kind must be 'escalation'");
+
+    // LP-A2: ring-1 blocks are independently durable audit events, not inbox-only.
+    const timelineEvents = readTimelineEvents(store, "task-bar");
+    const ring1Block = timelineEvents.find((event) => event.kind === "ring1_block");
+    assert.ok(ring1Block !== undefined, "out-of-scope write must append a ring1_block task timeline event");
+    assert.equal(ring1Block.task_id, "task-bar", "ring-1 block timeline event belongs to the escalated task");
+    assert.equal(ring1Block.attempt, 1, "ring-1 block timeline event belongs to the first task attempt");
+    assert.equal(ring1Block.correlation_id, "task-bar:1", "ring-1 block timeline event correlates to the task escalation attempt");
+    assert.equal(ring1Block.summary, "re-planning-signal", "ring-1 block timeline event records the re-planning escalation reason");
+
+    assert.equal(outOfScopeEffectsExecuted, 0, "blocked out-of-scope write must not execute its effect");
 
     // AC: task is parked (not advanced past the ring-1 block)
     const taskRow = store.get<{ status: string }>(
@@ -721,18 +817,34 @@ test("Story 002 T3 — LP3: budget breach halts before model-call effect; inbox 
   await writeFile(join(featureDir, "001-alpha", "INDEX.md"), "# Story Alpha\n", "utf8");
   await writeFile(join(featureDir, "001-alpha", "task-bud.md"), S002T3_TASK_MD, "utf8");
 
-  // Scripted pi surface: setting modelCallEffectFired=true proves the session was spawned
+  let spawnCount = 0;
   let modelCallEffectFired = false;
   const scriptedPiSurface = {
-    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
-      modelCallEffectFired = true;
-      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number; stopReason?: "aborted" | "error" } {
+      spawnCount++;
+      const beforeModelCall = (opts as Record<string, unknown>)["beforeModelCall"];
+      let stopReason: "error" | undefined;
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof beforeModelCall !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await beforeModelCall();
+            modelCallEffectFired = true;
+          } catch {
+            stopReason = "error";
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+        get stopReason() { return stopReason; },
+      };
     },
   };
 
   const logger = { info(_r: Record<string, unknown>): void {} };
 
-  // taskBudget: ceiling=0, conservativeCost=1 → first reserve(taskId, null) halts immediately
+  // taskBudget: ceiling=0, conservativeCost=1 → the session spawns, then its first model call halts.
   const handle = await runDaemon({
     store,
     featureDir,
@@ -749,12 +861,13 @@ test("Story 002 T3 — LP3: budget breach halts before model-call effect; inbox 
 
     await handle.tick();
 
-    // AC: model-call effect (spawnAgent) must NOT have fired — halted before spawn
+    assert.equal(spawnCount, 1, "the session may spawn before its first model-call reservation");
     assert.equal(
       modelCallEffectFired,
       false,
-      "model-call effect must not fire after budget breach halt",
+      "model-call effect must not fire after the rejected reservation",
     );
+    assert.equal(store.all("SELECT ledger FROM budget_ledger").length, 0, "rejected call must not charge spend");
 
     // AC: inbox escalation item with cost attribution (task_id) exists
     const inboxRows = store.all<{ kind: string; evidence: string }>(
@@ -1493,10 +1606,27 @@ test("Story 004 T3 — LP3 respawn: budget-halted task is not re-dispatched afte
   const logger = { info(_r: Record<string, unknown>): void {} };
 
   let spawnCount = 0;
+  let providerEffects = 0;
   const countingPiSurface = {
-    spawnAgent(_opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number; stopReason?: "aborted" | "error" } {
       spawnCount++;
-      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      const beforeModelCall = (opts as Record<string, unknown>)["beforeModelCall"];
+      let stopReason: "error" | undefined;
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof beforeModelCall !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await beforeModelCall();
+            providerEffects++;
+          } catch {
+            stopReason = "error";
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+        get stopReason() { return stopReason; },
+      };
     },
   };
 
@@ -1523,13 +1653,14 @@ test("Story 004 T3 — LP3 respawn: budget-halted task is not re-dispatched afte
 
   await handle1.tick();
 
-  // Pre-restart assertion: task is parked, no session was spawned
+  // Pre-restart assertion: the session spawned, but its rejected model call parked the task.
   const parkedRow = store.get<{ status: string }>(
     "SELECT status FROM scheduler_task WHERE node_id = ?",
     "task-restart-halt",
   );
   assert.equal(parkedRow?.status, "parked", "task must be parked after budget breach (pre-restart)");
-  assert.equal(spawnCount, 0, "spawnAgent must not be called when budget is breached");
+  assert.equal(spawnCount, 1, "spawnAgent must be called once before its first model-call reservation");
+  assert.equal(providerEffects, 0, "the rejected first model call must not reach the provider");
 
   await handle1.stop();
 
@@ -1548,7 +1679,8 @@ test("Story 004 T3 — LP3 respawn: budget-halted task is not re-dispatched afte
     await handle2.tick();
 
     // AC: LP3 respawn clause — parked task is not re-dispatched after restart
-    assert.equal(spawnCount, 0, "spawnAgent must NOT be called after restart — task remains parked");
+    assert.equal(spawnCount, 1, "spawnAgent must NOT be called after restart — task remains parked");
+    assert.equal(providerEffects, 0, "restart must not produce another provider effect");
 
     // AC: halt is durable — task status unchanged in store
     const restartRow = store.get<{ status: string }>(
@@ -2558,12 +2690,27 @@ test("GAP4 — budget spend survives daemon restart; partially-spent task is hal
   const logger = { info(_r: Record<string, unknown>): void {} };
 
   let spawnCount = 0;
+  let providerEffects = 0;
   const countingPiSurface = {
-    spawnAgent(
-      _opts: unknown,
-    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number; stopReason?: "aborted" | "error" } {
       spawnCount++;
-      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      const beforeModelCall = (opts as Record<string, unknown>)["beforeModelCall"];
+      let stopReason: "error" | undefined;
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof beforeModelCall !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await beforeModelCall();
+            providerEffects++;
+          } catch {
+            stopReason = "error";
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+        get stopReason() { return stopReason; },
+      };
     },
   };
 
@@ -2573,7 +2720,7 @@ test("GAP4 — budget spend survives daemon restart; partially-spent task is hal
   await writeFile(join(featureDir, "001-spend", "INDEX.md"), "# Story Spend\n", "utf8");
   await writeFile(join(featureDir, "001-spend", "task-gap4-spend.md"), GAP4_TASK_MD, "utf8");
 
-  // --- Daemon 1: first reserve proceeds; spend is consumed ---
+  // --- Daemon 1: first model-call reserve proceeds; spend is consumed ---
   const handle1 = await runDaemon({
     store,
     featureDir,
@@ -2589,11 +2736,17 @@ test("GAP4 — budget spend survives daemon restart; partially-spent task is hal
 
   await handle1.tick();
 
-  // Phase 1 assertion: first reserve proceeded — session was spawned, spend consumed
+  // Phase 1 assertion: first model-call reserve proceeded — provider effect fired and spend persisted.
   assert.equal(
     spawnCount,
     1,
     "GAP4: first tick must spawn the session (budget not yet breached; 0+10=10 < 15)",
+  );
+  assert.equal(providerEffects, 1, "GAP4: first model call must reach the provider");
+  assert.equal(
+    Number(store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger")?.ledger),
+    10,
+    "GAP4: first model call must durably reserve one conservative cost",
   );
   // Reset task to 'pending' to simulate re-queue after restart
   store.run(
@@ -2617,11 +2770,17 @@ test("GAP4 — budget spend survives daemon restart; partially-spent task is hal
   try {
     await handle2.tick();
 
-    // AC: spend is durable — second tick must NOT spawn (10+10=20 > 15 → halted)
+    // AC: spend is durable — the second session spawns, but its model call is rejected.
     assert.equal(
       spawnCount,
-      1,
-      "GAP4: budget spend must survive daemon restart — spawnAgent must not be called again",
+      2,
+      "GAP4: restart may spawn a session before the per-model-call reservation",
+    );
+    assert.equal(providerEffects, 1, "GAP4: rejected post-restart call must not reach the provider");
+    assert.equal(
+      Number(store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger")?.ledger),
+      10,
+      "GAP4: the rejected post-restart reservation must not change durable spend",
     );
 
     // AC: task is parked after the second budget halt
@@ -3311,8 +3470,8 @@ test("Story 002 T3 (Epic 019.3) — fail-then-pass: evidence recorded after fail
 
 test("S4 (Epic 019.3) — budget-parked-after-fail: evidence survives budget park; budget outranks retry on tick 2", async () => {
   // ceiling=15, conservativeCost=10:
-  //   tick 1 pre-spawn reserve: current=0,  projected=10 ≤ 15 → proceed (spawn)
-  //   tick 2 pre-spawn reserve: current=10, projected=20 > 15 → budget park (no second spawn)
+  //   tick 1 model-call reserve: current=0, projected=10 ≤ 15 → provider effect + fail gate
+  //   tick 2 model-call reserve: current=10, projected=20 > 15 → budget park (no provider effect)
   // Evidence recorded on tick 1 must survive the budget park on tick 2.
   const featureDir = await mkdtemp(join(tmpdir(), "krl-019-3-s4-budgetpark-"));
   const store = openStore(":memory:", { busyTimeout: 1000 });
@@ -3326,16 +3485,31 @@ test("S4 (Epic 019.3) — budget-parked-after-fail: evidence survives budget par
   await writeFile(join(featureDir, "001-alpha", "task-t2-alpha.md"), T2_TASK_ALPHA_MD, "utf8");
 
   let spawnCount = 0;
+  let providerEffects = 0;
   const piSurface = {
-    spawnAgent(
-      _opts: unknown,
-    ): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number } {
+    spawnAgent(opts: unknown): { abort(): void; waitForIdle(): Promise<void>; reset(): void; contextTokens: number; stopReason?: "aborted" | "error" } {
       spawnCount++;
-      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      const beforeModelCall = (opts as Record<string, unknown>)["beforeModelCall"];
+      let stopReason: "error" | undefined;
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof beforeModelCall !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await beforeModelCall();
+            providerEffects++;
+          } catch {
+            stopReason = "error";
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+        get stopReason() { return stopReason; },
+      };
     },
   };
 
-  // Script only a fail on attempt 1; gateCheck is never called on tick 2 (budget gate fires before spawn)
+  // Script only a fail on attempt 1; the rejected second model call must skip the gate.
   const workflow = new MockWorkflow019_3T3([{ outcome: "fail", summary: EVIDENCE_SUMMARY_T3_SENTINEL }]);
   const sink = new MockGateResultSink019_3T2();
 
@@ -3355,9 +3529,10 @@ test("S4 (Epic 019.3) — budget-parked-after-fail: evidence survives budget par
     await compile(featureDir, store, { repoRegistry: ["backend"] });
     loadTasks(store, "feat-019-3-t2");
 
-    // Tick 1: dispatch → session → fail gate → evidence recorded; spend=10 consumed
+    // Tick 1: dispatch → model call → fail gate → evidence recorded; spend=10 consumed
     await handle.tick();
     assert.equal(spawnCount, 1, "S4: exactly one session spawned on tick 1");
+    assert.equal(providerEffects, 1, "S4: first model call must reach the provider");
 
     const evidenceAfterTick1 = latestEvidence(store, "task-t2-alpha");
     assert.ok(evidenceAfterTick1, "S4: evidence row must exist after tick 1 fail");
@@ -3367,9 +3542,11 @@ test("S4 (Epic 019.3) — budget-parked-after-fail: evidence survives budget par
       "S4: evidence must carry the sentinel summary after tick 1 fail",
     );
 
-    // Tick 2: budget gate fires before spawn (spend=10+cost=10=20 > ceiling=15) → no spawn, task parked
+    // Tick 2: session spawns, but reservation rejects before provider, gate, or delivery.
     await handle.tick();
-    assert.equal(spawnCount, 1, "S4: budget outranks retry — spawnAgent must NOT be called on tick 2");
+    assert.equal(spawnCount, 2, "S4: retry may spawn before the per-model-call budget gate");
+    assert.equal(providerEffects, 1, "S4: rejected retry must not reach the provider");
+    assert.equal(sink.calls.length, 1, "S4: rejected retry must not run another gate check");
 
     const taskRow = store.get<{ status: string }>(
       "SELECT status FROM scheduler_task WHERE node_id = ?",
@@ -6238,6 +6415,304 @@ test("019.18 S003 T1 — closed-unmerged PR resolves the review_requested inbox 
       itemRow?.status,
       "resolved",
       "review_requested inbox item must be resolved after PR is closed unmerged",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 2A escalate-all-diffs — a diff hash must be responded to before staging or delivery, and a changed hash re-escalates", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-diff-review-gate-"));
+  const worktreesBase = await mkdtemp(join(tmpdir(), "krl-diff-review-gate-wt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  const logger = { info(_r: Record<string, unknown>): void {} };
+  const worktreePath = join(worktreesBase, "wt-diff-review");
+  let observedDiff = { hash: "diff-hash-a", summary: "src/example.ts changed" };
+  const inspectionPaths: string[] = [];
+  const mutations: string[] = [];
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const makeMutationAdapter = (name: string): AsyncVerbAdapter => ({
+    submit: async (_input: unknown): Promise<unknown> => {
+      mutations.push(name);
+      return `req-${name}`;
+    },
+    poll_status: async (_requestId: unknown): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (_requestId: unknown): Promise<unknown> => ({ status: "done" }),
+  });
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger,
+    piSurface: {
+      spawnAgent(_opts: unknown) {
+        return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+      },
+    },
+    statusServerFactory: createStatusServer,
+    worktreeSlot: {
+      worktreesBase,
+      repoPath: worktreesBase,
+      dispatch: async (_opts: WorktreeDispatchOpts): Promise<WorktreeDispatchResult> => ({
+        worktreePath,
+        branchName: "wt-diff-review",
+        queued: false,
+      }),
+    },
+    inspectWorktreeDiff: async (cwd: string): Promise<{ hash: string; summary: string }> => {
+      inspectionPaths.push(cwd);
+      return observedDiff;
+    },
+    verbAdapters: {
+      "git.add": { entry: S016S1T2_GIT_ADD_ENTRY, adapter: makeMutationAdapter("git.add") },
+      "git.commit": { entry: S016S1T2_GIT_COMMIT_ENTRY, adapter: makeMutationAdapter("git.commit") },
+      "git.push": { entry: S4T1DEL_PUSH_ENTRY, adapter: makeMutationAdapter("git.push") },
+      "github.create_pr": { entry: S4T1DEL_CREATE_PR_ENTRY, adapter: makeMutationAdapter("github.create_pr") },
+    },
+    commitsAhead: async (_branch: string, _base: string): Promise<number> => 1,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+
+    await handle.tick();
+
+    assert.deepEqual(
+      inspectionPaths,
+      [worktreePath],
+      "a clean session must inspect its worktree diff before any staging or delivery",
+    );
+    const firstItems = store.all<{ id: string; evidence: string }>(
+      "SELECT id, evidence FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+    );
+    assert.equal(firstItems.length, 1, "the first unreviewed diff hash must create one open escalation");
+    const firstItem = firstItems[0];
+    assert.ok(firstItem !== undefined, "the diff-review escalation must be durable");
+    const firstEvidence = JSON.parse(firstItem.evidence) as Record<string, unknown>;
+    assert.equal(firstEvidence["reason"], "diff-review", "the escalation reason must identify diff review");
+    assert.equal(firstEvidence["hash"], "diff-hash-a", "the escalation evidence must retain the reviewed diff hash");
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "parked",
+      "an unreviewed diff must park the task",
+    );
+    assert.deepEqual(mutations, [], "no staging, commit, push, or PR creation may occur before a diff response");
+
+    await handle.tick();
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE kind = 'escalation' AND status = 'open'").length,
+      1,
+      "the same unresponded diff hash must not create a duplicate open escalation",
+    );
+
+    resumeEscalationItem({
+      item_id: firstItem.id,
+      task_id: "task-foo",
+      actor: "operator",
+      store,
+      clock,
+    });
+    await handle.tick();
+
+    assert.deepEqual(
+      mutations,
+      ["git.add", "git.commit", "git.push", "github.create_pr"],
+      "a durable response for the same hash may permit the existing staging and delivery path",
+    );
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE kind = 'escalation' AND status = 'open'").length,
+      0,
+      "a response for the reviewed hash must not produce another open diff-review item",
+    );
+
+    observedDiff = { hash: "diff-hash-b", summary: "src/example.ts changed again" };
+    setTaskStatus(store, "task-foo", "pending");
+    await handle.tick();
+
+    const changedItems = store.all<{ evidence: string }>(
+      "SELECT evidence FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
+    );
+    assert.equal(changedItems.length, 1, "a changed diff hash must require a new open response");
+    const changedEvidence = JSON.parse(changedItems[0]?.evidence ?? "{}") as Record<string, unknown>;
+    assert.equal(changedEvidence["hash"], "diff-hash-b", "the new escalation must identify the changed hash");
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "parked",
+      "a changed unreviewed diff must park the task again",
+    );
+    assert.deepEqual(
+      mutations,
+      ["git.add", "git.commit", "git.push", "github.create_pr"],
+      "the changed hash must not trigger another external mutation before its response",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(worktreesBase, { recursive: true, force: true });
+  }
+});
+
+test("Phase 2A remediation B1 — omitted taskBudget still gates every spawned session with a durable conservative reservation", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-phase2a-b1-default-budget-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  type ModelCallGate = () => Promise<void>;
+  const capturedGates: Array<ModelCallGate | undefined> = [];
+  const reservationsBeforeProvider: number[] = [];
+  let providerEffects = 0;
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const piSurface = {
+    spawnAgent(opts: unknown) {
+      const candidate = (opts as Record<string, unknown>)["beforeModelCall"];
+      const gate = typeof candidate === "function" ? candidate as ModelCallGate : undefined;
+      capturedGates.push(gate);
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (gate !== undefined) {
+            await gate();
+            reservationsBeforeProvider.push(
+              Number(store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger WHERE task_id = ?", "spend:task-foo")?.ledger),
+            );
+          }
+          providerEffects++;
+        },
+        reset() {},
+        contextTokens: 0,
+      };
+    },
+  };
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_r: Record<string, unknown>): void {} },
+    piSurface,
+    statusServerFactory: createStatusServer,
+  });
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+    setTaskStatus(store, "task-foo", "pending");
+    await handle.tick();
+
+    assert.equal(capturedGates.length, 2, "the test must spawn two sessions for the same task");
+    assert.equal(
+      capturedGates.filter((gate) => gate !== undefined).length,
+      2,
+      "every spawned session must receive a beforeModelCall gate when taskBudget is omitted",
+    );
+    assert.equal(providerEffects, 2, "both provider effects must run only after their default-budget gates");
+    assert.ok(
+      reservationsBeforeProvider.every((reservation) => Number.isFinite(reservation) && reservation > 0),
+      "the safe default must durably record a positive conservative reservation before each provider effect",
+    );
+    assert.ok(
+      Number(store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger WHERE task_id = ?", "spend:task-foo")?.ledger) > 0,
+      "the default budget must leave durable spend instead of bypassing budget enforcement",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Phase 2A remediation B2 — overlapping model-call gates permit one reservation and reject the competing call", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-phase2a-b2-atomic-budget-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  type ModelCallGate = () => Promise<void>;
+  let capturedGate: ModelCallGate | undefined;
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const piSurface = {
+    spawnAgent(opts: unknown) {
+      const candidate = (opts as Record<string, unknown>)["beforeModelCall"];
+      capturedGate = typeof candidate === "function" ? candidate as ModelCallGate : undefined;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_r: Record<string, unknown>): void {} },
+    piSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 1, conservativeCost: 1 },
+  });
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    assert.ok(capturedGate !== undefined, "the spawned session must expose a model-call gate");
+    const reserveBeforeModelCall = capturedGate;
+    let providerPermissions = 0;
+    const attemptProviderCall = async (): Promise<void> => {
+      await reserveBeforeModelCall();
+      providerPermissions++;
+    };
+    const results = await Promise.allSettled([attemptProviderCall(), attemptProviderCall()]);
+
+    assert.equal(
+      providerPermissions,
+      1,
+      "two overlapping reservations at a one-call ceiling must grant exactly one provider permission",
+    );
+    assert.equal(
+      results.filter((result) => result.status === "rejected").length,
+      1,
+      "exactly one overlapping model call must be rejected",
+    );
+    assert.equal(
+      store.all<{ evidence: string }>("SELECT evidence FROM inbox_items").length,
+      1,
+      "the rejected competing call must create exactly one durable budget escalation",
+    );
+    assert.equal(
+      (JSON.parse(store.get<{ evidence: string }>("SELECT evidence FROM inbox_items")?.evidence ?? "{}") as { reason?: string }).reason,
+      "budget-breach",
+      "the competing call must be rejected as a budget breach",
+    );
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "parked",
+      "the rejected competing call must park the task",
+    );
+    assert.equal(
+      Number(store.get<{ ledger: string }>("SELECT ledger FROM budget_ledger WHERE task_id = ?", "spend:task-foo")?.ledger),
+      1,
+      "the durable total must contain exactly one conservative reservation",
     );
   } finally {
     await handle.stop();

@@ -52,11 +52,20 @@ export interface AgentAdapterOpts {
    */
   streamFn?: StreamFn;
   /**
+   * Durable model-call gate invoked immediately before each provider stream.
+   * A rejected gate prevents that provider invocation.
+   */
+  beforeModelCall?: () => Promise<void>;
+  /**
    * Absolute path to the session's worktree directory.
    * When present, real file-operation tools are built via buildWorktreeTools(cwd)
    * instead of no-op stubs. bash remains excluded by construction (Epic 019.15).
    */
   worktreePath?: string;
+}
+
+interface GuardedAgentOptions extends AgentOptions {
+  streamFn?: (...args: Parameters<StreamFn>) => Promise<Awaited<ReturnType<StreamFn>>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +90,7 @@ export interface AgentAdapterOpts {
  * `beforeToolCall` is passed through unchanged so the ring-1 hook reference is
  * preserved (test assertions use reference equality).
  */
-export function makeAgentOpts(opts: AgentAdapterOpts): AgentOptions {
+export function makeAgentOpts(opts: AgentAdapterOpts): GuardedAgentOptions {
   // When a worktree cwd is available, use real factory tools (read/write/edit/
   // grep/find/ls) bound to that directory. bash is excluded by construction in
   // buildWorktreeTools. Fall back to minimal stubs when no cwd is provided
@@ -113,7 +122,7 @@ export function makeAgentOpts(opts: AgentAdapterOpts): AgentOptions {
             return stub as unknown as AgentTool<any>;
           });
 
-  const result: AgentOptions = {
+  const result: GuardedAgentOptions = {
     initialState: { tools },
     beforeToolCall: opts.beforeToolCall,
   };
@@ -124,7 +133,11 @@ export function makeAgentOpts(opts: AgentAdapterOpts): AgentOptions {
     (result.initialState as Record<string, unknown>)["model"] = opts.model;
   }
   if (opts.streamFn !== undefined) {
-    result.streamFn = opts.streamFn;
+    const providerStreamFn = opts.streamFn;
+    result.streamFn = async (model, context, streamOptions) => {
+      await opts.beforeModelCall?.();
+      return providerStreamFn(model, context, streamOptions);
+    };
     // When streamFn is provided, suppress getApiKey — the provider session
     // owns authentication via the stream function.
   } else if (opts.getApiKey !== undefined) {

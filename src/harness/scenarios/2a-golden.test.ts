@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 
 import { run2aGoldenScenario } from "./2a-golden.ts";
+import type { TwoAHermeticWiringManifest } from "./2a-golden.ts";
 import { harness } from "../harness.ts";
 import { GitStore } from "../../store/git-store.ts";
 import type { GithubHttpSeam } from "../../broker/verbs/github-create-pr.ts";
@@ -50,9 +51,11 @@ const githubDouble: GithubHttpSeam = {
 };
 
 let piSpawnAgentCallCount = 0;
+let attachedRing1Hook: unknown;
 const fakePiSurface: FakePiSurface = {
-  spawnAgent(_opts): PiSessionHandle {
+  spawnAgent(opts): PiSessionHandle {
     piSpawnAgentCallCount++;
+    attachedRing1Hook = opts.beforeToolCall;
     return {
       abort(): void {},
       waitForIdle(): Promise<void> {
@@ -69,8 +72,8 @@ const fakePiSurface: FakePiSurface = {
 // ---------------------------------------------------------------------------
 
 test(
-  "2A golden tdd@1 feature reaches complete with real git store and verb adapters",
-  async () => {
+  "2A golden tdd@1 feature reaches complete with the mandatory hermetic wiring manifest",
+  async (t) => {
     const h = await harness();
 
     // Temp bare remote for git.push verb
@@ -95,11 +98,108 @@ test(
         githubDouble,
         piSurface: fakePiSurface,
       });
+      const manifest: TwoAHermeticWiringManifest = result.hermeticWiringManifest;
+
+      t.diagnostic(
+        JSON.stringify(manifest ?? { missing: "hermeticWiringManifest" }),
+      );
+      assert.deepEqual(
+        {
+          markdownStore: manifest.markdownStore,
+          gitVerbs: {
+            branch: {
+              kind: manifest.gitVerbs.branch.kind,
+              implementation: manifest.gitVerbs.branch.implementation,
+            },
+            commit: {
+              kind: manifest.gitVerbs.commit.kind,
+              implementation: manifest.gitVerbs.commit.implementation,
+            },
+            push: {
+              kind: manifest.gitVerbs.push.kind,
+              implementation: manifest.gitVerbs.push.implementation,
+              boundary: manifest.gitVerbs.push.boundary,
+            },
+          },
+          githubCreatePr: manifest.githubCreatePr,
+          piSession: {
+            kind: manifest.piSession.kind,
+            implementation: manifest.piSession.implementation,
+            boundary: manifest.piSession.boundary,
+          },
+          clock: manifest.clock,
+          jira: manifest.jira,
+          slack: manifest.slack,
+          s3: manifest.s3,
+          observers: manifest.observers,
+          ring2: manifest.ring2,
+        },
+        {
+          markdownStore: { kind: "real", implementation: "GitStore" },
+          gitVerbs: {
+            branch: { kind: "real", implementation: "adapter" },
+            commit: { kind: "real", implementation: "adapter" },
+            push: {
+              kind: "real",
+              implementation: "adapter",
+              boundary: "temp-remote",
+            },
+          },
+          githubCreatePr: {
+            kind: "real",
+            implementation: "adapter",
+            boundary: "in-process-http-double",
+          },
+          piSession: {
+            kind: "real",
+            implementation: "session-adapter",
+            boundary: "FakePiSurface",
+          },
+          clock: { kind: "double" },
+          jira: { kind: "deferred", applicability: "not-applicable" },
+          slack: { kind: "deferred", applicability: "not-applicable" },
+          s3: { kind: "deferred", applicability: "not-applicable" },
+          observers: { kind: "deferred", applicability: "not-applicable" },
+          ring2: { kind: "deferred", applicability: "not-applicable" },
+        },
+        "the public scenario result must report the actual Phase 2A hermetic seam bindings",
+      );
+      assert.ok(
+        manifest.gitVerbs.branch.callCount >= 1,
+        "the branch adapter must be called at least once",
+      );
+      assert.ok(
+        manifest.gitVerbs.commit.callCount >= 1,
+        "the commit adapter must be called at least once",
+      );
+      assert.ok(
+        manifest.gitVerbs.push.callCount >= 1,
+        "the push adapter must be called at least once",
+      );
+      assert.ok(
+        manifest.piSession.spawnCallCount >= 1,
+        "spawnPiSession must invoke FakePiSurface at least once",
+      );
+      assert.equal(
+        manifest.piSession.spawnCallCount,
+        piSpawnAgentCallCount,
+        "pi session manifest evidence must match FakePiSurface invocations",
+      );
+      assert.equal(
+        manifest.piSession.ring1HookAttached,
+        true,
+        "pi session manifest must report that the ring-1 hook was attached",
+      );
+      assert.equal(
+        typeof attachedRing1Hook,
+        "function",
+        "spawnPiSession must attach a callable ring-1 hook to FakePiSurface",
+      );
 
       assert.equal(
         result.status,
         "complete",
-        "2A golden must reach feature-complete with 2A bricks — fake clock and fault injection retained",
+        "2A golden must reach feature-complete with 2A bricks and the fake clock retained",
       );
       assert.equal(
         result.brokerCompletionStatus,

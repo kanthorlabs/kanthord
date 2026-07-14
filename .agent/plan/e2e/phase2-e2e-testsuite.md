@@ -75,10 +75,10 @@ and 2B), Epic `019-phase2a-single-repo-proof` (the 2A checkpoint gate), Epic
 |---|---|
 | `npm run typecheck` | `tsc` type-check of `src/`; must exit 0 |
 | `npm test` | full `node:test` harness suite under the zero-network guard, on real components (2A: Epic 019 Story 001; 2B: Epic 030 Story 001) |
-| `npm run typecheck:web` | `tsc` of `web/src`; must exit 0 (PROFILE web variant) |
+| `npm run typecheck:web` | `tsc` of `web/src`; must exit 0 in Part B (PROFILE web variant) |
 | `npm run test:web` | Vitest + Testing Library unit suite for the dashboard |
 | `npm run e2e:web` | Playwright dashboard E2E against the pre-flight daemon seeded with the golden fixture (Epic 027 gate run) |
-| `node src/cli/verify.ts --from-markdown --read-only` | shadow-rebuild drift check; **exit 0 clean / 1 divergent / 2 contract-version mismatch** (Epic 018) |
+| `node src/cli/verify.ts --from-markdown --read-only --store <feature-dir> --db <db-path>` | shadow-rebuild drift check; **exit 0 clean / 1 divergent / 2 contract-version mismatch** (Epic 018) |
 
 **2A live surface** (Part A only): the Epic 017 approval/metrics inbox over
 Connect **HTTP/JSON**, driven with plain `curl` (no client build in 2A). Exact
@@ -141,10 +141,12 @@ If any precondition fails, **stop** — that part's gate cannot be evaluated.
 
 Properties the whole suite must satisfy, not individual scenarios.
 
-### G1 — Type-check clean (core + web)
-- **Run:** `npm run typecheck` and `npm run typecheck:web`.
-- **Pass:** both exit 0.
-- **Human verify:** [ ] both exit codes are 0.
+### G1 — Type-check clean for the active part
+- **Run, Part A:** `npm run typecheck`.
+- **Run, Part B:** `npm run typecheck` and `npm run typecheck:web`.
+- **Pass:** every command required for the active part exits 0.
+- **Human verify:** [ ] Part A core exit code is 0; [ ] Part B core + web exit
+  codes are both 0.
 - **Maps:** Epic 026/027 Verification Gates.
 
 ### G2 — Hermetic suites green on real components
@@ -333,7 +335,8 @@ outputs, ledger/inbox excerpts, verify exit code, decision-record links).
 ### LP-A5 — Zero divergence + corrections recorded (live)
 - **Maps:** phases.md 2A criterion 3/4; Epic 019 LP5.
 - **Action:** after LP-A1…LP-A4, run
-  `node src/cli/verify.ts --from-markdown --read-only`; review 2A seam
+  `node src/cli/verify.ts --from-markdown --read-only --store <feature-dir>
+  --db <db-path>` against the LP-A1 feature projection; review 2A seam
   corrections.
 - **Pass:** verify **exits 0** (zero divergence); every interface correction
   made during 2A has a decision record (in or linked from `proof-run.md`); `npm
@@ -503,8 +506,8 @@ non-dashboard surface across LP-B1…LP-B4 fails the gate.
 
 ### LP-B5 — Verify, corrections, harness green (live)
 - **Maps:** phases.md 2B criterion 1; Epic 030 LP5.
-- **Action:** run `node src/cli/verify.ts --from-markdown --read-only` after
-  LP-B1; review all 2B seam corrections.
+- **Action:** run `node src/cli/verify.ts --from-markdown --read-only --store
+  <feature-dir> --db <db-path>` after LP-B1; review all 2B seam corrections.
 - **Pass:** verify **exits 0**; every 2B correction has an Epic 019-format
   decision record; `npm test` green on the corrected seams (the harness stayed
   the regression net through every brick swap).

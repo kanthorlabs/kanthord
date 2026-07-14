@@ -84,6 +84,8 @@ message RespondToEscalationRequest {
   string id = 1;
   // The human's response text/decision for the escalation.
   string response = 2;
+  // Human-confirmed interaction category from the PRD interaction vocabulary.
+  string confirmed_category = 3;
 }
 
 message RespondToEscalationResponse {
@@ -98,6 +100,8 @@ message RespondToApprovalRequest {
   bool approve = 2;
   // Reason for the decision.
   string reason = 3;
+  // Human-confirmed interaction category from the PRD interaction vocabulary.
+  string confirmed_category = 4;
 }
 
 message RespondToApprovalResponse {

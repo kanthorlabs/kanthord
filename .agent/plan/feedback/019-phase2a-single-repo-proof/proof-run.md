@@ -1,5 +1,12 @@
 # Phase-2A Single-Repo Proof — Run Record
 
+Current gate status: **LIVE RERUN REQUIRED**. The 2026-07-13/14 runs below are
+retained as historical evidence, but a 2026-07-14 gate audit found that the live
+path reserved budget once per session rather than once per model call, did not
+wire typed interaction capture, and did not stop delivery for escalate-all-diffs.
+Those implementation gaps are now fixed hermetically; LP1–LP5 must be rerun on
+the corrected build before Part A may be marked passed.
+
 Sandbox repo: `kanthorlabs/kanthord-verify` (throwaway; no production code). The
 daemon uses the **HTTPS** remote (`https://github.com/kanthorlabs/kanthord-verify.git`)
 with a per-identity PAT; humans may clone via SSH.
@@ -196,16 +203,36 @@ that keeps the suite green). Both landed with `npm test` green (697 tests) and
   and that representative methods throw `no such table` on an uninitialised store.
   Whole suite green at 703 tests.
 
-## LP1–LP5 results
+## LP1–LP5 historical results and rerun status
 
 _To be filled during the live proof (see Epic 019 authoring for each LP's Action /
 Pass criteria)._
 
-- LP1 — Golden single-repo feature end-to-end: **PASS** (2026-07-13; evidence below)
-- LP2 — Forced out-of-scope write (live): **PASS** (2026-07-14; evidence below)
-- LP3 — Forced budget breach (live): **PASS** (2026-07-13; evidence below)
-- LP4 — Kill mid-`create_pr`, reconcile against real GitHub: **PASS** (2026-07-14; evidence below)
-- LP5 — Zero divergence + corrections recorded: **PASS** (2026-07-14; evidence below)
+- LP1 — historical run completed 2026-07-13; **RERUN REQUIRED** for per-call
+  reservations, diff approval, and typed interaction evidence.
+- LP2 — historical scripted-model probe completed 2026-07-14; **RERUN REQUIRED**
+  on the corrected durable `ring1_block` journal path.
+- LP3 — historical run completed 2026-07-13 with cost attribution explicitly
+  recorded as partial; **RERUN REQUIRED**.
+- LP4 — historical direct broker probe completed 2026-07-14; **RERUN REQUIRED**
+  using the shipped daemon hold-point/kill path.
+- LP5 — historical scoped verify completed 2026-07-14; **RERUN REQUIRED** after
+  LP1–LP4 using the explicit `--store` and `--db` arguments.
+
+### 2026-07-14 remediation gate
+
+- Per-model-call reservation is enforced immediately before provider stream
+  invocation; a rejected reservation prevents the provider call, parks the task,
+  and survives restart.
+- Every Connect inbox response requires a human-confirmed category and appends a
+  typed interaction JSONL event with durable budget cost-to-date.
+- A content-hashed `diff-review` escalation blocks staging, commit, push, and PR
+  creation until the exact diff hash has a durable resume response.
+- Ring-1 write blocks append a durable `ring1_block` task-timeline event without
+  storing the blocked payload.
+- The 2A golden scenario emits and asserts a machine-readable wiring manifest.
+- Hermetic verification after remediation: `npm run typecheck` clean and `npm
+  test` green (**1075 tests, 0 fail** at the remediation run).
 
 ### LP1 — Golden single-repo feature end-to-end (PASS, 2026-07-13)
 

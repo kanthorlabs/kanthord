@@ -675,3 +675,72 @@ IMPLEMENTATION_READY_FOR_REVIEW:
 END: TEST-ENGINEER
 
 HUMAN_REVIEW: PASS
+## SOFTWARE-ENGINEER - 017-approval-surface-and-metrics - Capture control-plane interactions
+
+**Cycle.** GREEN+REFACTOR for `src/inbox/respond.test.ts`.
+**Files changed.**
+- `src/metrics/interaction-capture.ts` (edited) - exported boundary category validation
+- `src/daemon/status-server.ts` (edited) - captures valid escalation and approval responses with durable cost attribution
+- `src/cli/run-deps.ts` (edited) - wires the live feature JSONL interaction log
+**Seam (GREEN).** Injected logs capture one successful response after its state transition; category validation runs before mutation and returns `invalid_argument`.
+**Refactor.** Reused one validation seam for capture and RPC-boundary validation.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: terminal output
+**Assumptions.**
+- VERIFIED: live task budgets use `budget_ledger` key `spend:<taskId>` (`src/daemon/run-loop.ts`).
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER - 017-approval-surface-and-metrics - B4 unconditional category validation
+
+**Cycle.** RED for Task `B4` (`src/inbox/respond.test.ts`).
+**Test written.**
+- file: `src/inbox/respond.test.ts` (edited) - suite: `src/rpc/inbox-respond.ts` - methods: `control RPCs without interaction capture reject missing and invalid categories before mutating inbox items`; `control RPCs without interaction capture fail closed for valid categories instead of resolving uncaptured decisions`
+- asserts: real loopback Connect calls to both response methods reject missing/invalid categories with `invalid_argument` before durable state changes; valid categories without capture fail closed with a distinct `failed_precondition` capture error and leave the item open.
+**RED proof.**
+- command: `npm test -- src/inbox/respond.test.ts`
+- exit: non-zero - failure: `AssertionError [ERR_ASSERTION]: Missing expected rejection.`
+**Open to Software Engineer.**
+- seam: `createStatusServer(opts: { store: Store; interactionLog?: JsonlLog; ... }): StatusServer`; `RespondToEscalation` and `RespondToApproval` must return typed Connect errors at the HTTP boundary.
+
+ATTEMPT-FAILED: B4 - current no-`interactionLog` requests resolve instead of rejecting.
+
+END: TEST-ENGINEER
+## SOFTWARE-ENGINEER - 017-approval-surface-and-metrics - Durable interaction capture outbox
+
+**Cycle.** GREEN+REFACTOR for `src/inbox/respond.test.ts`.
+**Files changed.**
+- `src/metrics/interaction-capture.ts` (edited) - interaction intent schema, event projection, idempotent JSONL reconciliation
+- `src/store/schema.ts` (edited) - registers interaction outbox schema at bootstrap
+- `src/daemon/status-server.ts` (edited) - fail-closed validation, intent-before-response, startup and retry projection
+**Seam (GREEN).** Both control RPCs validate category before mutation, require capture, durably persist a complete item-keyed event intent before acting, then project it exactly once after confirmed JSONL presence.
+**Refactor.** Replaced post-mutation direct capture with shared build/persist/project helpers; removed lazy timeline schema initialization from capture.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: terminal output
+**Assumptions.**
+- VERIFIED: `JsonlLog.readAll()` returns all parsed records and propagates non-ENOENT IO failures (`src/foundations/jsonl.ts`).
+- VERIFIED: `initSchema` is the central bootstrap aggregator (`src/store/schema.ts`).
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER - 017-approval-surface-and-metrics - B4 unconditional category validation
+
+**Cycle.** GREEN confirmation for Task `B4` (`src/inbox/respond.test.ts`).
+**GREEN proof.**
+- `npm test -- src/inbox/respond.test.ts` - exit 0 (1070 pass, 0 fail); both no-log loopback Connect cases pass.
+- `npm run verify:handoff` - `VERIFY: PASS`.
+**Verified contract.** Missing and invalid categories reject before durable mutation on both control methods; valid categories without interaction capture fail closed with the distinct capture-configuration error.
+
+END: TEST-ENGINEER
+## SOFTWARE-ENGINEER - 017-approval-surface-and-metrics - Reject unsupported escalation actions
+
+**Cycle.** GREEN+REFACTOR for `src/inbox/respond.test.ts`.
+**Files changed.**
+- `src/daemon/status-server.ts` (edited) - `respondToEscalation` action-domain guard
+**Seam (GREEN).** Only exact `resume` and `halt` responses proceed to category validation, intent persistence, and task action; every other response returns Connect `InvalidArgument`.
+**Refactor.** Deferred; the local guard keeps the action domain next to the RPC boundary.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: terminal output
+- `npm run verify:handoff`: `VERIFY: PASS` - log: terminal output
+**Assumptions.**
+- VERIFIED: the action-domain guard runs before category capture and all durable response effects (`src/daemon/status-server.ts`).
+
+END: SOFTWARE-ENGINEER

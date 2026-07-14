@@ -93,17 +93,19 @@ export async function main(args: string[], deps: CliDeps): Promise<number> {
   // -------------------------------------------------------------------------
   // Validate required flags
   // -------------------------------------------------------------------------
-  if (!fromMarkdown || !readOnly) {
+  if (!fromMarkdown || !readOnly || storePath === undefined || storePath.length === 0 || dbPath === undefined || dbPath.length === 0) {
     const missing: string[] = [];
     if (!fromMarkdown) missing.push("--from-markdown");
     if (!readOnly) missing.push("--read-only");
-    deps.stderr.write(`verify: missing required flags: ${missing.join(", ")}\n`);
+    if (storePath === undefined || storePath.length === 0) missing.push("--store");
+    if (dbPath === undefined || dbPath.length === 0) missing.push("--db");
+    deps.stderr.write(`verify: missing required options: ${missing.join(", ")}\n`);
     deps.stderr.write("Usage: verify --from-markdown --read-only --store <path> --db <path>\n");
     return 3;
   }
 
-  const resolvedStore = storePath ?? "";
-  const resolvedDb = dbPath ?? "";
+  const resolvedStore = storePath;
+  const resolvedDb = dbPath;
 
   // -------------------------------------------------------------------------
   // Open stores via injected seams (read-only — no writer lock)

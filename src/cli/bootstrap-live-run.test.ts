@@ -234,6 +234,7 @@ describe("src/cli/bootstrap-live-run", () => {
       ...deps,
       clock: new FakeClock(1_000_000_000),
       patternRegistry: undefined,
+      inspectWorktreeDiff: async (_cwd: string): Promise<undefined> => undefined,
       verbAdapters: {
         "git.push": { entry: pushEntry, adapter: recordingPushAdapter },
         "github.create_pr": { entry: createPrEntry, adapter: recordingCreatePrAdapter },

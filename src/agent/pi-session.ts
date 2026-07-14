@@ -69,6 +69,7 @@ export interface FakePiSurface {
     worktreePath?: string;
     model?: Model<any>;
     streamFn?: StreamFn;
+    beforeModelCall?: () => Promise<void>;
     /** Outbound, read-only event sink forwarded from PiSpawnOpts (Epic 019.5). */
     eventSink?: (e: SessionEvent) => void;
   }): PiSessionHandle;
@@ -105,6 +106,8 @@ export interface PiSpawnOpts {
   model?: Model<any>;
   /** Provider stream function for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
   streamFn?: StreamFn;
+  /** Durable gate invoked immediately before every provider model call. */
+  beforeModelCall?: () => Promise<void>;
   /**
    * Outbound, read-only event sink (Epic 019.5). When present, forwarded to
    * piSurface.spawnAgent so the real pi adapter can wire agent.subscribe to it.
@@ -149,6 +152,8 @@ export interface PiRespawnOpts {
   model?: Model<any>;
   /** Provider stream function for this session (Epic 019.4). When present, forwarded to piSurface.spawnAgent. */
   streamFn?: StreamFn;
+  /** Durable gate invoked immediately before every provider model call. */
+  beforeModelCall?: () => Promise<void>;
   /**
    * Outbound, read-only event sink (Epic 019.5). When present, forwarded to
    * piSurface.spawnAgent so the real pi adapter can wire agent.subscribe to it.
@@ -190,6 +195,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     evidence,
     model,
     streamFn,
+    beforeModelCall,
     eventSink,
   } = opts;
 
@@ -288,6 +294,7 @@ export async function spawnPiSession(opts: PiSpawnOpts): Promise<PiSessionHandle
     worktreePath,
     model,
     streamFn,
+    beforeModelCall,
     eventSink,
   });
 
@@ -363,6 +370,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     evidence,
     model,
     streamFn,
+    beforeModelCall,
     eventSink,
   } = opts;
 
@@ -456,6 +464,7 @@ export async function respawnPiSession(opts: PiRespawnOpts): Promise<PiSessionHa
     worktreePath,
     model,
     streamFn,
+    beforeModelCall,
     eventSink,
   });
 

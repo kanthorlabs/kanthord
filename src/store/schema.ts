@@ -17,6 +17,7 @@ import { initSchedulerSubsystemSchema } from "../scheduler/schema.ts";
 import { initRing1Schema } from "../ring1/schema.ts";
 import { initTaskTimelineSchema } from "../metrics/task-timeline.ts";
 import { initModelCallLogSchema } from "../metrics/model-call-log.ts";
+import { initInteractionCaptureSchema } from "../metrics/interaction-capture.ts";
 import { initExternalTrackingSchema } from "./external-tracking-schema.ts";
 
 export function initSchema(store: Store): void {
@@ -27,5 +28,6 @@ export function initSchema(store: Store): void {
   initRing1Schema(store);
   initTaskTimelineSchema(store);
   initModelCallLogSchema(store);
+  initInteractionCaptureSchema(store);
   initExternalTrackingSchema(store);
 }

@@ -112,8 +112,8 @@ test(
 // ---------------------------------------------------------------------------
 
 test(
-  "RB1b — S3 run-deps: spawnAgent threads model+streamFn through makeAgentOpts and omits getApiKey",
-  () => {
+  "RB1b — S3 run-deps: spawnAgent delegates model streamFn through makeAgentOpts and omits getApiKey",
+  async () => {
     let capturedOpts: unknown;
 
     const agentFactory = (opts: unknown): {
@@ -141,7 +141,12 @@ test(
     });
 
     const fakeModel = { provider: "acct_s3_run_deps", id: "gpt-s3-run-deps" };
-    const fakeStreamFn = async (): Promise<undefined> => undefined;
+    const providerResult = { source: "rb1b-provider" };
+    let providerCalls = 0;
+    const fakeStreamFn: StreamFn = (() => {
+      providerCalls++;
+      return providerResult;
+    }) as unknown as StreamFn;
 
     deps.piSurface.spawnAgent({
       tools: [...PI_DEFAULT_ALLOWED_MANIFEST],
@@ -155,11 +160,10 @@ test(
     assert.ok(capturedOpts !== undefined, "agentFactory must be invoked");
     const opts = capturedOpts as AgentOptions;
 
-    assert.strictEqual(
-      opts.streamFn,
-      fakeStreamFn,
-      "RB1b: run-deps spawnAgent must forward streamFn to agentFactory via makeAgentOpts",
-    );
+    if (opts.streamFn === undefined) throw new Error("RB1b: AgentOptions.streamFn must be present");
+    const returned = await opts.streamFn({} as never, {} as never);
+    assert.strictEqual(returned, providerResult, "RB1b: guarded streamFn must return the provider result");
+    assert.equal(providerCalls, 1, "RB1b: guarded streamFn must delegate exactly once to the provider");
     assert.strictEqual(
       opts.getApiKey,
       undefined,
@@ -220,7 +224,7 @@ test("RB5 — buildRealDeps returns patternRegistry (not undefined; null = fail-
 
 test(
   "T2-a — spawnAgent without model/streamFn uses providerModel+providerStreamFn from buildRealDeps opts",
-  () => {
+  async () => {
     let capturedOpts: unknown;
 
     const agentFactory = (opts: unknown): {
@@ -241,7 +245,12 @@ test(
     };
 
     const providerModel = { provider: "openai-codex", id: "gpt-5.5-t2" } as unknown as Model<any>;
-    const providerStreamFn = (async (): Promise<undefined> => undefined) as unknown as StreamFn;
+    const providerResult = { source: "provider-default" };
+    let providerCalls = 0;
+    const providerStreamFn: StreamFn = (() => {
+      providerCalls++;
+      return providerResult;
+    }) as unknown as StreamFn;
 
     const store = openStore(":memory:", { busyTimeout: 1000 });
     const deps = buildRealDeps({
@@ -269,11 +278,10 @@ test(
       providerModel,
       "T2-a: spawnAgent without model/streamFn must use providerModel from buildRealDeps opts",
     );
-    assert.strictEqual(
-      opts.streamFn,
-      providerStreamFn,
-      "T2-a: spawnAgent without model/streamFn must use providerStreamFn from buildRealDeps opts",
-    );
+    if (opts.streamFn === undefined) throw new Error("T2-a: AgentOptions.streamFn must be present");
+    const returned = await opts.streamFn({} as never, {} as never);
+    assert.strictEqual(returned, providerResult, "T2-a: guarded streamFn must return the provider-default result");
+    assert.equal(providerCalls, 1, "T2-a: guarded streamFn must delegate to the provider default");
   },
 );
 
@@ -283,7 +291,7 @@ test(
 
 test(
   "T2-b — spawnAgent with its own model/streamFn ignores providerModel+providerStreamFn",
-  () => {
+  async () => {
     let capturedOpts: unknown;
 
     const agentFactory = (opts: unknown): {
@@ -304,9 +312,19 @@ test(
     };
 
     const providerModel = { provider: "openai-codex", id: "gpt-5.5-t2-default" } as unknown as Model<any>;
-    const providerStreamFn = (async (): Promise<undefined> => undefined) as unknown as StreamFn;
+    const providerResult = { source: "provider-default" };
+    let providerCalls = 0;
+    const providerStreamFn: StreamFn = (() => {
+      providerCalls++;
+      return providerResult;
+    }) as unknown as StreamFn;
     const callerModel = { provider: "caller-prov", id: "caller-model-t2" };
-    const callerStreamFn = async (): Promise<undefined> => undefined;
+    const callerResult = { source: "caller" };
+    let callerCalls = 0;
+    const callerStreamFn: StreamFn = (() => {
+      callerCalls++;
+      return callerResult;
+    }) as unknown as StreamFn;
 
     const store = openStore(":memory:", { busyTimeout: 1000 });
     const deps = buildRealDeps({
@@ -335,11 +353,11 @@ test(
       callerModel,
       "T2-b: spawnAgent with caller model must use caller's model, not providerModel",
     );
-    assert.strictEqual(
-      opts.streamFn,
-      callerStreamFn,
-      "T2-b: spawnAgent with caller streamFn must use caller's streamFn, not providerStreamFn",
-    );
+    if (opts.streamFn === undefined) throw new Error("T2-b: AgentOptions.streamFn must be present");
+    const returned = await opts.streamFn({} as never, {} as never);
+    assert.strictEqual(returned, callerResult, "T2-b: guarded streamFn must return the caller stream result");
+    assert.equal(callerCalls, 1, "T2-b: guarded streamFn must delegate to the caller stream");
+    assert.equal(providerCalls, 0, "T2-b: guarded streamFn must not delegate to the provider default");
   },
 );
 

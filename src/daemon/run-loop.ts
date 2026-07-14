@@ -19,7 +19,6 @@ import { startPolling } from "../broker/poller.ts";
 import { reconcileOp } from "../broker/reconcile.ts";
 import { FeatureStore } from "../store/feature-store.ts";
 import { makeRing1HookAdapter } from "../ring1/hook-binding.ts";
-import { makeBudgetBreaker } from "../ring1/budget.ts";
 import { spawnPiSession } from "../agent/pi-session.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST, PI_EXEC_TOOLS } from "../agent/pi-tools.ts";
 import { loadTasks, dispatchable, setTaskStatus, markExitGatePassed } from "../scheduler/dispatch.ts";
@@ -39,6 +38,8 @@ import { runGit as execRunGit } from "../git/exec.ts";
 import type { ReviewRouter } from "../review/review-router.ts";
 import { pollPrState } from "../review/pr-state.ts";
 import type { PrHttpSeam } from "../review/pr-state.ts";
+import { appendTimelineEvent } from "../metrics/task-timeline.ts";
+import { deriveFailureSignal } from "../metrics/failure-signal.ts";
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -91,9 +92,8 @@ export interface RunDaemonDeps {
   holdPointVerbs?: string[];
   /** Cutpoint used by the debug hold-point. Defaults to pre-submit for tests. */
   holdPointCutpoint?: "pre-submit" | "pre-completion";
-  /** Hard ceiling for each task's token budget.  When set, `tick()` calls
-   *  `makeBudgetBreaker` and halts + parks a task before spawning if the
-   *  ceiling would be breached (LP3). */
+  /** Hard ceiling for each task's token budget. Omission uses the bounded
+   * conservative default below; budget enforcement is never disabled. */
   taskBudget?: { ceiling: number; conservativeCost: number };
   /**
    * When set, `runDaemon` automatically calls `tick()` on this interval using
@@ -137,6 +137,11 @@ export interface RunDaemonDeps {
   /** Remote name to pass to the push adapter (default: "origin"). */
   remote?: string;
   /**
+   * Inspects a session worktree before staging or delivery. `undefined` means
+   * clean; a returned hash and summary require an explicit diff-review resume.
+   */
+  inspectWorktreeDiff?: (cwd: string) => Promise<{ hash: string; summary: string } | undefined>;
+  /**
    * Per-task worktree slot (Epic 019.8 Story 002).
    * When present, tick() calls dispatch() for each task before spawning.
    * If the dispatch result is queued (slot cap reached), the task reverts to
@@ -174,6 +179,17 @@ export interface RunDaemonDeps {
   /** Interval hint for PR polling (currently unused; reserved for future throttle). */
   prPollIntervalMs?: number;
 }
+
+/**
+ * Safe live-path fallback: every provider call reserves 10,000 tokens and a
+ * task is halted after 100,000 tokens unless the operator configures a lower
+ * ceiling. This deliberately finite default keeps the budget gate fail-closed
+ * when a caller omits taskBudget.
+ */
+export const DEFAULT_TASK_BUDGET = Object.freeze({
+  ceiling: 100_000,
+  conservativeCost: 10_000,
+});
 
 /** Parameters for delivering a session's commits through the broker. */
 export interface DeliverSessionParams {
@@ -260,39 +276,32 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
       }
     : undefined;
 
-  // Budget breaker: durable per-task spend stored in budget_ledger via the
-  // shared store so spend survives a daemon restart (GAP4).  Rows use the key
-  // "spend:<taskId>" to namespace from reconcile-ledger entries in the same
-  // table.  budget_ledger is created by initRing1Schema (called inside
-  // lifecycle.start() below); the store calls happen lazily inside tick()
-  // — after lifecycle.start() has run — so the table always exists at call
-  // time.
-  const budgetBreaker =
-    deps.taskBudget !== undefined
-      ? makeBudgetBreaker(
-          deps.taskBudget,
-          {
-            async load(taskId: string): Promise<number> {
-              const row = store.get<{ ledger: string }>(
-                "SELECT ledger FROM budget_ledger WHERE task_id = ?",
-                `spend:${taskId}`,
-              );
-              if (row === undefined) return 0;
-              const n = Number(row.ledger);
-              return Number.isFinite(n) ? n : 0;
-            },
-            async save(taskId: string, spent: number): Promise<void> {
-              store.run(
-                "INSERT OR REPLACE INTO budget_ledger (task_id, ledger) VALUES (?, ?)",
-                `spend:${taskId}`,
-                String(spent),
-              );
-            },
-          },
-          () => {}, // onEscalate: halting is handled at the tick call site
-          () => {}, // onLog: no-op for finer budgets
-        )
-      : undefined;
+  // Budget reservations are durable and use one conditional upsert, rather
+  // than a load/add/save sequence. SQLite executes this statement atomically:
+  // one contender can advance a task at its ceiling and every other contender
+  // observes the committed ledger and receives no RETURNING row. Rows use the
+  // "spend:<taskId>" namespace so they do not collide with reconcile entries.
+  // initSchema creates budget_ledger during lifecycle.start() before tick().
+  const taskBudget = deps.taskBudget ?? DEFAULT_TASK_BUDGET;
+  function reserveTaskBudget(taskId: string): "proceed" | "halted" {
+    const cost = taskBudget.conservativeCost;
+    const reservation = store.get<{ ledger: string }>(
+      `INSERT INTO budget_ledger (task_id, ledger)
+       SELECT ?, ?
+       WHERE ? <= ?
+       ON CONFLICT(task_id) DO UPDATE SET ledger = CAST(CAST(ledger AS REAL) + ? AS TEXT)
+       WHERE CAST(ledger AS REAL) + ? <= ?
+       RETURNING ledger`,
+      `spend:${taskId}`,
+      String(cost),
+      cost,
+      taskBudget.ceiling,
+      cost,
+      cost,
+      taskBudget.ceiling,
+    );
+    return reservation === undefined ? "halted" : "proceed";
+  }
 
   // Outbound scan guard (GAP2): blocks push payloads that match secret patterns.
   // Created only when patternRegistry is explicitly provided (null = fail-closed).
@@ -412,6 +421,59 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
     }
   }
 
+  async function requireDiffReview(taskId: string, cwd: string): Promise<boolean> {
+    if (deps.inspectWorktreeDiff === undefined) return true;
+
+    let diff: { hash: string; summary: string } | undefined;
+    try {
+      diff = await deps.inspectWorktreeDiff(cwd);
+    } catch (err: unknown) {
+      logger.info({
+        event: "worktree-diff-inspection-failed",
+        task_id: taskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      createEscalationItem({
+        source_id: `${taskId}:diff-review:inspection-error`,
+        task_id: taskId,
+        reason: "diff-review",
+        payload_summary: "worktree diff inspection failed; delivery is blocked",
+        store,
+        clock,
+      });
+      setTaskStatus(store, taskId, "parked");
+      return false;
+    }
+    if (diff === undefined) return true;
+
+    const item = createEscalationItem({
+      source_id: `${taskId}:diff-review:${diff.hash}`,
+      task_id: taskId,
+      reason: "diff-review",
+      payload_summary: diff.summary,
+      store,
+      clock,
+    });
+    store.run(
+      "UPDATE inbox_items SET evidence = ? WHERE id = ?",
+      JSON.stringify({
+        task_id: taskId,
+        reason: "diff-review",
+        hash: diff.hash,
+        summary: diff.summary,
+      }),
+      item.id,
+    );
+    const response = store.get<{ action: string }>(
+      "SELECT action FROM escalation_responses WHERE item_id = ? ORDER BY responded_at DESC LIMIT 1",
+      item.id,
+    );
+    if (response?.action === "resume") return true;
+
+    setTaskStatus(store, taskId, "parked");
+    return false;
+  }
+
   const handle: RunDaemonHandle = {
     address,
     stop: doStop,
@@ -478,22 +540,20 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
 
           const taskStem = task.id;
 
-          // Budget gate — halt-and-park BEFORE spawning when ceiling is breached.
-          if (budgetBreaker !== undefined) {
-            const budgetOutcome = await budgetBreaker.reserve(task.id, null);
-            if (budgetOutcome === "halted") {
-              createEscalationItem({
-                source_id: `${task.id}:budget-breach`,
-                task_id: task.id,
-                reason: "budget-breach",
-                payload_summary: `task ${task.id} budget ceiling breached`,
-                store,
-                clock,
-              });
-              setTaskStatus(store, task.id, "parked");
-              continue;
-            }
-          }
+          const beforeModelCall = async (): Promise<void> => {
+            if (reserveTaskBudget(task.id) !== "halted") return;
+            createEscalationItem({
+              source_id: `${task.id}:budget-breach`,
+              task_id: task.id,
+              reason: "budget-breach",
+              payload_summary: `task ${task.id} budget ceiling breached`,
+              store,
+              clock,
+            });
+            setTaskStatus(store, task.id, "parked");
+            logger.info({ event: "budget-breach", task_id: task.id });
+            throw new Error(`task ${task.id} budget ceiling breached`);
+          };
 
           // Worktree dispatch (Epic 019.8 Story 002).
           // Acquire a per-task worktree before spawning. When the slot cap is
@@ -541,8 +601,18 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             writeScope,
             worktree: sessionWorktreePath ?? featureDir,
             onEscalate: (e) => {
+              const escalationSource = String(e["path"] ?? e["toolName"] ?? e.tag);
+              appendTimelineEvent(store, {
+                task_id: task.id,
+                attempt: 1,
+                correlation_id: `${task.id}:1`,
+                kind: "ring1_block",
+                ts: clock.now(),
+                observed_failure_signal: deriveFailureSignal({ kind: "ring1_block" }),
+                summary: e.tag,
+              });
               createEscalationItem({
-                source_id: `${task.id}:${String(e["path"] ?? e["toolName"] ?? e.tag)}`,
+                source_id: `${task.id}:${escalationSource}`,
                 task_id: task.id,
                 reason: e.tag,
                 payload_summary: JSON.stringify(e),
@@ -571,9 +641,18 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
             spawnEnv: {},
             evidence,
             worktreePath: sessionWorktreePath,
+            beforeModelCall,
           });
 
           await sessionHandle.waitForIdle();
+
+          if (
+            sessionHandle.stopReason !== "aborted" &&
+            sessionHandle.stopReason !== "error" &&
+            !(await requireDiffReview(task.id, sessionWorktreePath ?? featureDir))
+          ) {
+            continue;
+          }
 
           // Session-end classification (Epic 019.3 Story 001 T2).
           // Only a cleanly completed session (stopReason absent) is gate-checked.

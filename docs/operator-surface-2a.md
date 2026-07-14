@@ -83,15 +83,16 @@ scheduler seam:
 - `halt` → the task is marked `halted` and is not re-dispatched.
 
 Either way the response is journaled (actor + timestamp in
-`escalation_responses`) and the inbox item is resolved as durable state — a
-restart never re-opens it.
+`escalation_responses`), captured as a typed interaction with cost-to-date, and
+the inbox item is resolved as durable state — a restart never re-opens it.
 
 **Request:** `RespondToEscalationRequest`
 
-| Field      | Type   | Meaning                                  |
-|------------|--------|------------------------------------------|
-| `id`       | string | Target escalation item id (from `ListInboxItems`) |
-| `response` | string | `"resume"` or `"halt"`                   |
+| Field                | Type   | Meaning                                  |
+|----------------------|--------|------------------------------------------|
+| `id`                 | string | Target escalation item id (from `ListInboxItems`) |
+| `response`           | string | `"resume"` or `"halt"`                   |
+| `confirmedCategory`  | string | Required human-confirmed interaction category |
 
 **Response:** `RespondToEscalationResponse`
 
@@ -105,7 +106,7 @@ restart never re-opens it.
 curl -sS -X POST \
   http://127.0.0.1:7777/kanthord.v1.DaemonService/RespondToEscalation \
   -H 'Content-Type: application/json' \
-  -d '{"id": "inbox-esc-a1b2c3", "response": "resume"}'
+  -d '{"id": "inbox-esc-a1b2c3", "response": "resume", "confirmedCategory": "correction"}'
 ```
 
 ```json
@@ -117,6 +118,7 @@ curl -sS -X POST \
 | Condition                              | Connect code        | HTTP | Body `message`                                                   |
 |----------------------------------------|---------------------|------|------------------------------------------------------------------|
 | Item id does not exist                 | `not_found`         | 404  | `inbox item not found: <id>`                                     |
+| Category missing or invalid            | `invalid_argument`  | 400  | category validation error                                        |
 | Server on a non-loopback bind          | `permission_denied` | 403  | `respondToEscalation is restricted to loopback binds in phase 2A` |
 
 ```json
@@ -137,17 +139,19 @@ the existing broker seam:
 - `approve: false` → resolves the op `failed` (reason `denied`); the adapter never
   runs.
 
-Either way the response is journaled and the inbox item is resolved as durable
-state. An approval item whose op has passed per-verb expiry cannot be approved —
+Either way the response is journaled, captured as a typed interaction with
+cost-to-date, and the inbox item is resolved as durable state. An approval item
+whose op has passed per-verb expiry cannot be approved —
 it auto-resolves `expired` and the transition is journaled.
 
 **Request:** `RespondToApprovalRequest`
 
-| Field     | Type   | Meaning                          |
-|-----------|--------|----------------------------------|
-| `id`      | string | Target approval item id          |
-| `approve` | bool   | `true` = approve, `false` = deny |
-| `reason`  | string | Reason for the decision          |
+| Field               | Type   | Meaning                          |
+|---------------------|--------|----------------------------------|
+| `id`                | string | Target approval item id          |
+| `approve`           | bool   | `true` = approve, `false` = deny |
+| `reason`            | string | Reason for the decision          |
+| `confirmedCategory` | string | Required human-confirmed interaction category |
 
 **Response:** `RespondToApprovalResponse`
 
@@ -161,7 +165,7 @@ it auto-resolves `expired` and the transition is journaled.
 curl -sS -X POST \
   http://127.0.0.1:7777/kanthord.v1.DaemonService/RespondToApproval \
   -H 'Content-Type: application/json' \
-  -d '{"id": "inbox-appr-d4e5f6", "approve": true, "reason": "looks good"}'
+  -d '{"id": "inbox-appr-d4e5f6", "approve": true, "reason": "looks good", "confirmedCategory": "approval"}'
 ```
 
 ```json
@@ -174,6 +178,7 @@ curl -sS -X POST \
 |----------------------------------------------|----------------------|------|------------------------------------------------------------------|
 | Item id does not exist                       | `not_found`          | 404  | `inbox item not found: <id>`                                    |
 | Item is not an approval item (kind mismatch) | `invalid_argument`   | 400  | `item <id> is not an approval item`                             |
+| Category missing or invalid                  | `invalid_argument`   | 400  | category validation error                                      |
 | Server on a non-loopback bind                | `permission_denied`  | 403  | `respondToApproval is restricted to loopback binds in phase 2A` |
 | Op past per-verb expiry                      | (typed expiry error) | —    | approval rejected; item auto-resolves `expired`                 |
 
@@ -189,3 +194,7 @@ The inbox is one queue but actions are kind-typed:
 A mismatched action (e.g. approving an escalation item) is a typed error at the
 domain boundary (`approveItem` rejects a non-approval item). List an item's
 `kind` first to choose the correct respond call.
+
+Valid categories are `approval`, `clarification`, `correction`, `rework`,
+`takeover`, and `external`. The operator must explicitly accept the proposed
+category or supply an override on every response.

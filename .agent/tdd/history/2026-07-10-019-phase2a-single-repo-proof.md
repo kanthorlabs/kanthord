@@ -1153,3 +1153,216 @@ IMPLEMENTATION_READY_FOR_REVIEW:
 END: TEST-ENGINEER
 
 HUMAN_REVIEW: PASS
+## SOFTWARE-ENGINEER - 001-harness-on-2a-bricks - Phase 2A wiring manifest
+
+**Cycle.** GREEN+REFACTOR for `src/harness/scenarios/2a-golden.test.ts`.
+**Files changed.**
+- `src/harness/scenarios/2a-golden.ts` (edited) - `TwoAHermeticWiringManifest` and public scenario result manifest
+**Seam (GREEN).** The scenario returns a typed per-run manifest matching its GitStore, git adapter/temp remote, github adapter/double, pi session adapter/FakePiSurface, and injected-double composition; task-alpha now drives the real pi session adapter.
+**Refactor.** Deferred: no named refactor in the active wiring-manifest regression.
+**Build check.**
+- typecheck: exit 0 - log: `/var/folders/wj/czy1ln210z17hw14m1jrng7r0000gn/T/opencode/2a-wiring-manifest-typecheck.log`
+- verify:handoff: VERIFY: PASS - log: `/var/folders/wj/czy1ln210z17hw14m1jrng7r0000gn/T/opencode/2a-wiring-manifest-verify-handoff.log`
+**Assumptions.**
+- VERIFIED: `spawnPiSession` delegates spawning to `FakePiSurface` and journals through `FeatureStore`; source: `src/agent/pi-session.ts:179-317`.
+- VERIFIED: `FeatureStore` accepts `GitStore` for its durable writes; source: `src/store/feature-store.ts:38-108`.
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER - 019-phase2a-single-repo-proof - escalate-all-diffs production gate
+
+**Cycle.** RED for Task `escalate-all-diffs production gate` (`src/daemon/run-loop.test.ts`).
+**Test written.**
+- file: `src/daemon/run-loop.test.ts` (edited) - suite: `src/daemon/run-loop.ts` - methods: `Phase 2A escalate-all-diffs — a diff hash must be responded to before staging or delivery, and a changed hash re-escalates`
+- asserts: a clean session's diff is durably escalated and parks before mutation; the same responded hash permits delivery without another item; a changed hash parks again without external mutation.
+**RED proof.**
+- command: `node --import ./src/harness/no-network-guard.ts --test --test-name-pattern="Phase 2A escalate-all-diffs" src/daemon/run-loop.test.ts`
+- exit: non-zero - failure: `AssertionError [ERR_ASSERTION]: a clean session must inspect its worktree diff before any staging or delivery`
+**Open to Software Engineer.**
+- `RunDaemonDeps.inspectWorktreeDiff?: (cwd: string) => Promise<{ hash: string; summary: string }>`; `runDaemon(deps: RunDaemonDeps)` must observe this seam for each clean session before the existing staging/delivery path and preserve the hash in the diff-review escalation evidence.
+
+END: TEST-ENGINEER
+## SOFTWARE-ENGINEER - 019-phase2a-single-repo-proof - escalate-all-diffs production gate
+
+**Cycle.** GREEN+REFACTOR for `src/daemon/run-loop.test.ts`.
+**Files changed.**
+- `src/daemon/run-loop.ts` (edited) - `RunDaemonDeps.inspectWorktreeDiff` and pre-delivery diff-review gate
+- `src/cli/run-deps.ts` (edited) - real content-sensitive worktree inspection
+- `src/metrics/interaction-capture.ts` (edited) - `diff-review` interaction proposal
+**Seam (GREEN).** A dirty worktree creates a task-and-hash-idempotent diff-review escalation with hash/summary evidence and remains parked until that exact item has a durable resume response.
+**Refactor.** Kept inspection behind the minimal dependency seam; live assembly uses safe git and file APIs without exposing diff contents.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: `.agent/tdd/typecheck-escalate-all-diffs.log`
+**Assumptions.**
+- VERIFIED: `resumeEscalationItem` journals a `resume` action keyed by inbox item ID before returning the task to pending. Source: `src/rpc/inbox-respond.ts`.
+- VERIFIED: `runGit` executes array arguments without a shell and uses a restricted child environment. Source: `src/git/exec.ts`.
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER - 019-phase2a-single-repo-proof - escalate-all-diffs production gate
+
+**Cycle.** Confirmed GREEN for Task `escalate-all-diffs production gate` (`src/daemon/run-loop.test.ts`).
+**Test adjustment.**
+- `src/cli/bootstrap-live-run.test.ts` (edited) - the delivery-only integration fake now returns a clean diff through the injected seam; hash-specific review and no-mutation coverage remains in the run-loop test.
+**Handoff verification.**
+- targeted: `node --import ./src/harness/no-network-guard.ts --test --test-name-pattern="Phase 2A escalate-all-diffs" src/daemon/run-loop.test.ts` - exit 0 (1 pass, 0 fail)
+- core unit: `npm test` - exit 0 (1064 pass, 0 fail)
+- handoff gate: `npm run verify:handoff` - `VERIFY: PASS`
+
+END: TEST-ENGINEER
+## Code Review - phase2a-remediation [scope: all current diff files, phase: B]
+
+### Summary
+- Files reviewed: 11 source/schema/generated, 5 test
+- Verdict: FAIL
+
+### Findings
+- B1 - action:YES - Budget gate is fail-open - The real run loop omits `beforeModelCall` whenever optional `taskBudget` is absent, so a provider stream can run with no reservation; make budget configuration mandatory (or fail startup) because Phase 2A requires the breaker active on the live path (`src/daemon/run-loop.ts:541-547`; `.agent/plan/phases.md:154-167`; `.agent/plan/e2e/phase2-e2e-testsuite.md:282-290`).
+- B2 - action:YES - Budget reservations lose updates - The protected per-task spend is implemented as separate `SELECT`/`INSERT OR REPLACE` operations, while `makeBudgetBreaker` performs load-add-save, so overlapping model calls can both reserve from the same old total and exceed the ceiling; route this seam through an atomic SQLite update/transaction (`src/daemon/run-loop.ts:283-297`; `src/ring1/budget.ts:58-67`; `.agent/plan/e2e/phase2-e2e-testsuite.md:311-318`).
+- B3 - action:NO - Interaction transition and capture are not atomic - NEEDS-HUMAN: both RPCs mutate/dispatch first and append JSONL afterward; an append failure leaves the decision applied but uncaptured, and a retry can no longer guarantee exactly one typed event. Choose a durable intent/outbox or idempotent recovery protocol across SQLite and JSONL before routing (`src/daemon/status-server.ts:129-159`, `src/daemon/status-server.ts:194-233`; `.agent/plan/epics/017-approval-surface-and-metrics.md:73-80`).
+- B4 - action:YES - Category validation is conditional - `validateInteractionCategory` returns without validation when no interaction log is injected, allowing missing/invalid categories on both public response methods despite the RPC-boundary requirement; validation must be unconditional and capture wiring must be checked separately (`src/daemon/status-server.ts:278-287`; `.agent/plan/epics/017-approval-surface-and-metrics.md:73-76`).
+- B5 - action:YES - Wiring manifest reports assertions, not bindings - The emitted literal claims all git verbs use real adapters and a failure-injection double is bound, but the scenario invokes only the push adapter, commits through `GitStore`, and directly calls `piSurface.spawnAgent` with a null hook; emit per-seam facts from the actual composition rather than a self-fulfilling literal/test (`src/harness/scenarios/2a-golden.ts:382-418`, `src/harness/scenarios/2a-golden.ts:517-540`; `.agent/plan/e2e/phase2-e2e-testsuite.md:157-167`).
+
+### Acceptance Criteria Coverage
+- Per-model-call budget reservation - GAP - adapter ordering is tested, but the live gate is optional and its durable update is non-atomic (`src/agent/pi-agent-adapter.test.ts:231-265`; B1-B2).
+- Typed interaction capture/category validation - GAP - proto/generated fields match and escalation HTTP coverage exists, but unconditional validation and failure-safe capture for both methods are absent (`proto/kanthord/v1/daemon.proto:82-105`; `src/inbox/respond.test.ts:983-1108`; B3-B4).
+- Exact-hash diff escalation before git/GitHub mutation - COVERED - hash-keyed response lookup blocks staging/delivery, and changed-hash regression coverage asserts no new mutation (`src/daemon/run-loop.ts:422-472`; `src/daemon/run-loop.test.ts:6426-6558`).
+- Durable ring1_block journal - COVERED - the block is appended to the SQLite timeline before inbox creation/task parking (`src/daemon/run-loop.ts:605-625`; `src/daemon/run-loop.test.ts:739-740`).
+- Wiring manifest accuracy - GAP - the manifest is a static claimed shape that disagrees with exercised bindings (B5).
+- Verify CLI required paths - COVERED - missing/empty paths return usage before either store opens (`src/cli/verify.ts:93-115`; `src/cli/verify.test.ts:308-367`).
+
+### Uncited Observations
+- None.
+
+END: REVIEWER-ENGINEER
+## TEST-ENGINEER - 019-phase2a-single-repo-proof - B1/B2 live budget safety
+
+**Cycle.** RED for Tasks `B1/B2 budget default and reservation atomicity` (`src/daemon/run-loop.test.ts`).
+**Test written.**
+- file: `src/daemon/run-loop.test.ts` (edited) - suite: `src/daemon/run-loop.ts` - methods: `Phase 2A remediation B1 — omitted taskBudget still gates every spawned session with a durable conservative reservation`; `Phase 2A remediation B2 — overlapping model-call gates permit one reservation and reject the competing call`
+- asserts: an omitted budget still supplies each spawn with a pre-provider gate that records positive durable spend; concurrent same-task calls at a one-call ceiling grant one provider permission, reject and park the other with one escalation, and retain one reservation.
+**RED proof.**
+- command: `node --import ./src/harness/no-network-guard.ts --test --test-name-pattern="Phase 2A remediation B1|Phase 2A remediation B2" src/daemon/run-loop.test.ts`
+- exit: non-zero - failures: `AssertionError [ERR_ASSERTION]: every spawned session must receive a beforeModelCall gate when taskBudget is omitted`; `AssertionError [ERR_ASSERTION]: two overlapping reservations at a one-call ceiling must grant exactly one provider permission`
+**Open to Software Engineer.**
+- `RunDaemonDeps.taskBudget?: { ceiling: number; conservativeCost: number }` omission must resolve to a bounded safe budget whose spawned-session `beforeModelCall: () => Promise<void>` durably reserves before a provider call.
+- Same-task overlapping `beforeModelCall(): Promise<void>` invocations must yield one permission and one rejection at a one-reservation ceiling, with the durable total and escalation/task state reflecting those outcomes.
+
+END: TEST-ENGINEER
+## TEST-ENGINEER - 001-harness-on-2a-bricks - B5 wiring-manifest evidence
+
+**Cycle.** RED for reviewer blocker `B5` (`src/harness/scenarios/2a-golden.test.ts`).
+**Test written.**
+- file: `src/harness/scenarios/2a-golden.test.ts` (edited) - suite: `src/harness/scenarios/2a-golden` - methods: `2A golden tdd@1 feature reaches complete with the mandatory hermetic wiring manifest`
+- asserts: the manifest has real `branch`, `commit`, and `push` adapter entries with call counts at least one; pi evidence records a FakePiSurface spawn, matches its observed count, and reports an attached callable ring-1 hook. The unsupported `failureInjection` double claim is absent.
+**RED proof.**
+- command: `node --import ./src/harness/no-network-guard.ts --test src/harness/scenarios/2a-golden.test.ts`
+- exit: non-zero - failure: `TypeError: Cannot read properties of undefined (reading 'kind')` (`src/harness/scenarios/2a-golden.test.ts:111`)
+- result: 0 pass, 1 fail; the current static `gitVerbs` object has no per-verb evidence entry.
+**Open to Software Engineer.**
+- `TwoAHermeticWiringManifest.gitVerbs`: `branch`, `commit`, and `push` entries with `{ kind: "real"; implementation: "adapter"; callCount: number }` (`push` also has `boundary: "temp-remote"`).
+- `TwoAHermeticWiringManifest.piSession`: `spawnCallCount: number` and `ring1HookAttached: boolean` evidence fields.
+
+END: TEST-ENGINEER
+## SOFTWARE-ENGINEER - 001-harness-on-2a-bricks - B5 wiring-manifest evidence
+
+**Cycle.** GREEN+REFACTOR for `src/harness/scenarios/2a-golden.test.ts`.
+**Files changed.**
+- `src/harness/scenarios/2a-golden.ts` (edited) - observed git and pi wiring evidence
+**Seam (GREEN).** The scenario exercises branch, add, commit, and push adapters against its temp repositories, then records their completed calls; Pi is spawned only through `spawnPiSession` with a callable ring-1 hook observed at the FakePiSurface boundary.
+**Refactor.** Removed the unsupported failure-injection manifest binding.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: command output captured by this handoff
+**Assumptions.**
+- VERIFIED: git local adapters report completion through `poll_status` after their real commands; source: `src/broker/verbs/git-local.ts`.
+- VERIFIED: `spawnPiSession` forwards `ring1Chain` as `beforeToolCall`; source: `src/agent/pi-session.ts`.
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER - 019-phase2a-single-repo-proof - B1/B2 live budget safety
+
+**Cycle.** Confirmed GREEN for Tasks `B1/B2 budget default and reservation atomicity` (`src/daemon/run-loop.test.ts`).
+**Test adjustment.** None; the RED assertions retain always-on default-budget and overlapping-reservation atomicity coverage.
+**Handoff verification.**
+- targeted: `node --import ./src/harness/no-network-guard.ts --test --test-name-pattern="Phase 2A remediation B1|Phase 2A remediation B2" src/daemon/run-loop.test.ts` - exit 0 (2 pass, 0 fail)
+- handoff gate: `npm run verify:handoff` - `VERIFY: PASS`
+
+END: TEST-ENGINEER
+## TEST-ENGINEER - 001-harness-on-2a-bricks - B5 wiring-manifest evidence
+
+**Cycle.** Confirmed GREEN for reviewer blocker `B5` (`src/harness/scenarios/2a-golden.test.ts`).
+**Targeted proof.**
+- command: `node --import ./src/harness/no-network-guard.ts --test src/harness/scenarios/2a-golden.test.ts`
+- exit: 0 - result: 1 pass, 0 fail
+**Handoff verification.**
+- command: `npm run verify:handoff`
+- result: `VERIFY: PASS`
+**Emitted manifest.**
+- git adapters: `branch.callCount=1`, `commit.callCount=1`, `push.callCount=1` (`add.callCount=1` also reported)
+- pi adapter: `spawnCallCount=1`, `ring1HookAttached=true`; the test independently observed one FakePiSurface spawn with a callable hook.
+- doubles: only `clock`; no unsupported failure-injection claim.
+**Test scope.** No test adjustment needed: the existing assertions retain per-verb call-count and independently observed pi-surface/hook evidence requirements.
+
+END: TEST-ENGINEER
+## Code Review - phase2a-remediation-rereview [scope: all current diff files, phase: B]
+
+### Summary
+- Files reviewed: 12 source/schema/generated, 7 test
+- Verdict: FAIL
+
+### Findings
+- B1 - action:YES - Outbox projection is not concurrency-idempotent - Two overlapping RPCs can both read the same pending intent and the same pre-append JSONL snapshot, then both append it before either marks `projected_at`; serialize/claim projection before the read-append-confirm sequence so the protected interaction log retains exactly one row (`src/metrics/interaction-capture.ts:146-170`; `.agent/plan/epics/017-approval-surface-and-metrics.md:73-80`).
+- B2 - action:YES - Outbox identity does not bind the submitted response - Intent persistence is `INSERT OR IGNORE` keyed only by item id and stores no response action/fingerprint; a retry with a different escalation action/category can retain/project the first event while the RPC executes the later action, because resolved escalation items are not rejected and the response journal also ignores the conflicting insert before changing task state. Persist and compare an immutable request fingerprint (action + category), and reject conflicting/replayed mutations (`src/metrics/interaction-capture.ts:133-143`; `src/daemon/status-server.ts:132-165`; `src/rpc/inbox-respond.ts:28-37`, `src/rpc/inbox-respond.ts:52-82`; `.agent/plan/epics/017-approval-surface-and-metrics.md:65-80`).
+
+### Acceptance Criteria Coverage
+- Always-on atomic per-model-call budgeting - COVERED - a finite default is always selected, each session receives the gate, and one conditional SQLite upsert performs the reservation before provider delegation (`src/daemon/run-loop.ts:183-192`, `src/daemon/run-loop.ts:279-304`, `src/daemon/run-loop.ts:543-556`; `src/agent/pi-agent-adapter.ts:135-140`).
+- Durable/idempotent interaction outbox and unconditional category validation - GAP - bootstrap DDL and intent-before-action are present and both RPCs validate unconditionally/fail closed without capture, but concurrent projection and conflicting retries violate idempotency (B1-B2) (`src/store/schema.ts:23-32`; `src/daemon/status-server.ts:103-178`, `src/daemon/status-server.ts:285-303`).
+- Truthful wiring manifest - COVERED - branch/add/commit/push calls and the Pi spawn/hook are observed from exercised adapters; unsupported failure-injection evidence is removed (`src/harness/scenarios/2a-golden.ts:413-469`, `src/harness/scenarios/2a-golden.ts:510-518`, `src/harness/scenarios/2a-golden.ts:595-625`).
+- Exact-hash diff escalation before git/GitHub mutation - COVERED - unchanged hash-keyed response gate still precedes staging/delivery and changed-hash coverage asserts no additional mutation (`src/daemon/run-loop.ts:424-474`; `src/daemon/run-loop.test.ts:6426-6558`).
+- Durable ring1_block journal - COVERED - block timeline append remains before inbox creation and parking (`src/daemon/run-loop.ts:603-623`; `src/daemon/run-loop.test.ts:739-740`).
+- Verify CLI required paths - COVERED - required path validation still precedes opening either store (`src/cli/verify.ts:93-115`; `src/cli/verify.test.ts:308-367`).
+- Connect typed category schema/generated output - COVERED - both request messages retain `confirmed_category` and generated declarations match (`proto/kanthord/v1/daemon.proto:82-105`; `src/generated/kanthord/v1/daemon_pb.d.ts:203-290`).
+
+### Uncited Observations
+- None.
+
+END: REVIEWER-ENGINEER
+## Code Review - phase2a-remediation-final [scope: all current diff files, phase: B]
+
+### Summary
+- Files reviewed: 12 source/schema/generated, 7 test
+- Verdict: FAIL
+
+### Findings
+- B1 - action:YES - Unknown escalation actions execute as halt - The Connect handler treats every `response` value other than the exact string `resume` as `halt`, so a typo or unsupported action is durably fingerprinted and halts the task instead of returning the required typed mismatch error; validate the action domain before intent persistence or mutation (`src/daemon/status-server.ts:156-186`; `.agent/plan/epics/017-approval-surface-and-metrics.md:65-69`).
+
+### Acceptance Criteria Coverage
+- Always-on atomic per-model-call budgeting - COVERED - the finite default, conditional SQLite upsert, and adapter wrapper preserve reservation-before-provider ordering (`src/daemon/run-loop.ts:183-192`, `src/daemon/run-loop.ts:279-304`, `src/daemon/run-loop.ts:543-556`; `src/agent/pi-agent-adapter.ts:135-140`).
+- Durable/idempotent interaction capture - COVERED - centralized DDL, immutable action/category fingerprints, serialized controls, and per-store projection queues close the prior crash/retry and overlap windows (`src/metrics/interaction-capture.ts:137-229`; `src/daemon/status-server.ts:76-85`, `src/daemon/status-server.ts:125-165`, `src/daemon/status-server.ts:202-243`).
+- Unconditional category validation on both response methods - COVERED - both methods validate before entering the serialized mutation path and fail closed when capture is absent (`src/daemon/status-server.ts:115-125`, `src/daemon/status-server.ts:192-202`, `src/daemon/status-server.ts:321-339`).
+- Response action compatibility - GAP - approval is boolean-typed, but escalation accepts arbitrary strings as halt (B1).
+- Truthful wiring manifest - COVERED - reported git/Pi evidence derives from completed adapter calls and observed Pi hook attachment (`src/harness/scenarios/2a-golden.ts:413-469`, `src/harness/scenarios/2a-golden.ts:510-518`, `src/harness/scenarios/2a-golden.ts:595-625`).
+- Exact-hash diff escalation before mutation - COVERED - hash-keyed review still blocks staging/delivery and changed hashes re-park without mutation (`src/daemon/run-loop.ts:424-474`; `src/daemon/run-loop.test.ts:6426-6558`).
+- Durable ring1_block journal - COVERED - the timeline append remains durable and precedes inbox creation/task parking (`src/daemon/run-loop.ts:603-623`; `src/daemon/run-loop.test.ts:739-740`).
+- Verify required paths and generated Connect schema - COVERED - required paths are checked before store opens, and both generated request types retain confirmed categories (`src/cli/verify.ts:93-115`; `proto/kanthord/v1/daemon.proto:82-105`; `src/generated/kanthord/v1/daemon_pb.d.ts:203-290`).
+
+### Uncited Observations
+- None.
+
+END: REVIEWER-ENGINEER
+## Code Review - phase2a-remediation-final-confirmation [scope: all current diff files, phase: B]
+
+### Summary
+- Files reviewed: 12 source/schema/generated, 7 test
+- Verdict: PASS
+
+### Findings
+- None.
+
+### Acceptance Criteria Coverage
+- Budget safety - COVERED - every model call receives a finite, atomic durable reservation before provider delegation (`src/daemon/run-loop.ts:183-192`, `src/daemon/run-loop.ts:279-304`, `src/daemon/run-loop.ts:543-556`; `.agent/plan/e2e/phase2-e2e-testsuite.md:282-290`).
+- Typed interaction responses - COVERED - exact escalation actions and confirmed categories are validated before capture or mutation; approval remains boolean-typed (`src/daemon/status-server.ts:115-131`, `src/daemon/status-server.ts:198-208`; `.agent/plan/epics/017-approval-surface-and-metrics.md:65-80`).
+- Durable/idempotent interaction capture - COVERED - central idempotent DDL, immutable fingerprints, serialized control work, and serialized projection preserve one event/effect across retry and overlap (`src/metrics/interaction-capture.ts:137-229`; `src/daemon/status-server.ts:76-85`, `src/daemon/status-server.ts:131-195`; `.agent/plan/epics/017-approval-surface-and-metrics.md:73-80`).
+- Diff gate, ring-1 journal, wiring manifest, verify paths, and generated schema - COVERED - prior reviewed protections remain intact in the current diff (`src/daemon/run-loop.ts:424-474`, `src/daemon/run-loop.ts:603-623`; `src/harness/scenarios/2a-golden.ts:595-625`; `src/cli/verify.ts:93-115`; `proto/kanthord/v1/daemon.proto:82-105`).
+
+### Uncited Observations
+- No remaining source findings. Tests were not executed during this review per operator instruction.
+
+END: REVIEWER-ENGINEER

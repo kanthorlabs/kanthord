@@ -4,8 +4,8 @@
  *
  * Wires: real GitStore (Epic 012) commits feature files into the git-backed
  * store root; fixture.store (SQLite) carries all scheduler/broker state as
- * in the Phase-1 golden. GithubHttpSeam and FakePiSurface are accepted at the
- * seam and will be wired in the T2 security scenarios.
+ * in the Phase-1 golden. The real git verb adapters, GithubHttpSeam, and
+ * FakePiSurface are exercised through their public seams.
  */
 
 import type { FakeClock } from "../../foundations/clock.ts";
@@ -13,8 +13,15 @@ import type { Store } from "../../foundations/sqlite-store.ts";
 import type { GitStore } from "../../store/git-store.ts";
 import type { GithubHttpSeam } from "../../broker/verbs/github-create-pr.ts";
 import { makeCreatePrAdapter } from "../../broker/verbs/github-create-pr.ts";
+import {
+  makeAddAdapter,
+  makeBranchAdapter,
+  makeCommitAdapter,
+} from "../../broker/verbs/git-local.ts";
 import { makePushAdapter } from "../../broker/verbs/git-push.ts";
 import type { FakePiSurface } from "../../agent/pi-session.ts";
+import { spawnPiSession } from "../../agent/pi-session.ts";
+import { FeatureStore } from "../../store/feature-store.ts";
 import { compile } from "../../compiler/compile.ts";
 import {
   markExitGatePassed,
@@ -46,6 +53,40 @@ import { join } from "node:path";
 
 export type { GoldenResult } from "../golden.ts";
 import type { GoldenResult } from "../golden.ts";
+
+/** Concrete 2A bindings used by this hermetic scenario. */
+export type TwoAHermeticWiringManifest = {
+  markdownStore: { kind: "real"; implementation: "GitStore" };
+  gitVerbs: {
+    branch: { kind: "real"; implementation: "adapter"; callCount: number };
+    add: { kind: "real"; implementation: "adapter"; callCount: number };
+    commit: { kind: "real"; implementation: "adapter"; callCount: number };
+    push: {
+      kind: "real";
+      implementation: "adapter";
+      boundary: "temp-remote";
+      callCount: number;
+    };
+  };
+  githubCreatePr: {
+    kind: "real";
+    implementation: "adapter";
+    boundary: "in-process-http-double";
+  };
+  piSession: {
+    kind: "real";
+    implementation: "session-adapter";
+    boundary: "FakePiSurface";
+    spawnCallCount: number;
+    ring1HookAttached: boolean;
+  };
+  clock: { kind: "double" };
+  jira: { kind: "deferred"; applicability: "not-applicable" };
+  slack: { kind: "deferred"; applicability: "not-applicable" };
+  s3: { kind: "deferred"; applicability: "not-applicable" };
+  observers: { kind: "deferred"; applicability: "not-applicable" };
+  ring2: { kind: "deferred"; applicability: "not-applicable" };
+};
 
 export type Run2aGoldenFixture = {
   clock: FakeClock;
@@ -232,6 +273,25 @@ async function runTaskWorkflow(sink: GateResultSink): Promise<void> {
   await wf.gateCheck("tests_pass");
 }
 
+async function submitCompletedAdapterCall(
+  adapter: AsyncVerbAdapter,
+  input: unknown,
+  label: string,
+): Promise<void> {
+  const requestId = await adapter.submit(input);
+  if (typeof requestId !== "string") {
+    throw new Error(`run2aGoldenScenario: ${label} did not return a request ID`);
+  }
+  const outcome = await adapter.poll_status(requestId);
+  if (
+    typeof outcome !== "object" ||
+    outcome === null ||
+    (outcome as { status?: unknown }).status !== "done"
+  ) {
+    throw new Error(`run2aGoldenScenario: ${label} did not complete`);
+  }
+}
+
 async function exerciseSuccessfulBrokerWakeup(
   store: Store,
   clock: FakeClock,
@@ -308,8 +368,16 @@ async function exerciseSuccessfulBrokerWakeup(
  */
 export async function run2aGoldenScenario(
   fixture: Run2aGoldenFixture,
-): Promise<GoldenResult> {
-  const { clock, store, gitStore, bareRemoteDir, githubDouble, piSurface } = fixture;
+): Promise<GoldenResult & { hermeticWiringManifest: TwoAHermeticWiringManifest }> {
+  const {
+    clock,
+    store,
+    gitWorkDir,
+    gitStore,
+    bareRemoteDir,
+    githubDouble,
+    piSurface,
+  } = fixture;
 
   // -------------------------------------------------------------------------
   // 1. Write golden fixture files via real GitStore (Epic 012 commit-per-write)
@@ -342,20 +410,63 @@ export async function run2aGoldenScenario(
   );
 
   // -------------------------------------------------------------------------
-  // 1b. Epic 014 — push the commit to the bare remote via the real git.push seam
+  // 1b. Epic 014 — exercise the local git adapters before publishing the ref.
   // -------------------------------------------------------------------------
+  const verifiedGitSetup = async () => ({
+    platform: "github" as const,
+    repo: "org/repo",
+    identity: "kanthord",
+    ok: true,
+    checks: [],
+    inboxItems: [],
+  });
+  const branchAdapter = makeBranchAdapter({
+    gitBin: "git",
+    verifySetup: verifiedGitSetup,
+  });
+  const addAdapter = makeAddAdapter({
+    gitBin: "git",
+    verifySetup: verifiedGitSetup,
+  });
+  const commitAdapter = makeCommitAdapter({
+    gitBin: "git",
+    verifySetup: verifiedGitSetup,
+  });
   const pushAdapter = makePushAdapter({
     gitBin: "git",
-    verifySetup: async () => ({
-      platform: "github",
-      repo: "org/repo",
-      identity: "kanthord",
-      ok: true,
-      checks: [],
-      inboxItems: [],
-    }),
+    verifySetup: verifiedGitSetup,
   });
-  await pushAdapter.submit({ cwd: gitStore.dir, branch: "main", remote: bareRemoteDir });
+  let branchCallCount = 0;
+  let addCallCount = 0;
+  let commitCallCount = 0;
+  let pushCallCount = 0;
+
+  branchCallCount++;
+  await submitCompletedAdapterCall(
+    branchAdapter,
+    { cwd: gitStore.dir, branch: "feature/golden-2a", startPoint: "main" },
+    "git.branch",
+  );
+  await writeFile(join(gitStore.dir, ".golden-2a-adapter-proof"), "adapter proof\n");
+  addCallCount++;
+  await submitCompletedAdapterCall(addAdapter, { cwd: gitStore.dir }, "git.add");
+  commitCallCount++;
+  await submitCompletedAdapterCall(
+    commitAdapter,
+    {
+      cwd: gitStore.dir,
+      message: "golden 2A adapter proof",
+      name: "kanthord",
+      email: "kanthord@example.test",
+    },
+    "git.commit",
+  );
+  pushCallCount++;
+  await submitCompletedAdapterCall(
+    pushAdapter,
+    { cwd: gitStore.dir, branch: "main", remote: bareRemoteDir },
+    "git.push",
+  );
 
   // -------------------------------------------------------------------------
   // 1c. Epic 015 — invoke github.create_pr against the fixture double
@@ -374,11 +485,6 @@ export async function run2aGoldenScenario(
     }),
   });
   await prAdapter.submit({ head: "feature/golden-2a", base: "main", title: "Golden 2A PR", body: "proof" });
-
-  // -------------------------------------------------------------------------
-  // 1d. Epic 016 — spawn a pi session via the fixture surface
-  // -------------------------------------------------------------------------
-  piSurface.spawnAgent({ systemPrompt: "golden-2a", tools: [], beforeToolCall: null, env: {} });
 
   // -------------------------------------------------------------------------
   // 2. Compile the feature plan into fixture.store (SQLite)
@@ -400,6 +506,16 @@ export async function run2aGoldenScenario(
   const registry = new InMemoryArtifactRegistry();
   const sink = new NoopSink();
   const taskCapabilities = new Map<string, Capability[]>();
+  const featureStore = new FeatureStore(featureDir, { gitStore });
+  let piSpawnCallCount = 0;
+  let ring1HookAttached = false;
+  const observedPiSurface: FakePiSurface = {
+    spawnAgent(opts) {
+      piSpawnCallCount++;
+      ring1HookAttached ||= typeof opts.beforeToolCall === "function";
+      return piSurface.spawnAgent(opts);
+    },
+  };
 
   const brokerWakeup = await exerciseSuccessfulBrokerWakeup(store, clock, lm);
 
@@ -409,6 +525,17 @@ export async function run2aGoldenScenario(
   const w1 = pollOnce(store, "feat-001", liveHash, lm, taskCapabilities);
   const alphaTask = w1.find((t) => t.taskId === "task-alpha");
   if (alphaTask !== undefined) {
+    await spawnPiSession({
+      store: featureStore,
+      storyId: "001-story-a",
+      taskStem: "001-task-alpha",
+      agentsMdPath: join(gitWorkDir, "AGENTS.md"),
+      ring1Chain: async () => undefined,
+      piSurface: observedPiSurface,
+      allowedToolNames: [],
+      spawnEnv: {},
+      worktreePath: gitWorkDir,
+    });
     await runTaskWorkflow(sink);
     await publishArtifact({
       taskId: "task-alpha",
@@ -465,6 +592,39 @@ export async function run2aGoldenScenario(
     })),
   ];
 
+  const hermeticWiringManifest: TwoAHermeticWiringManifest = {
+    markdownStore: { kind: "real", implementation: "GitStore" },
+    gitVerbs: {
+      branch: { kind: "real", implementation: "adapter", callCount: branchCallCount },
+      add: { kind: "real", implementation: "adapter", callCount: addCallCount },
+      commit: { kind: "real", implementation: "adapter", callCount: commitCallCount },
+      push: {
+        kind: "real",
+        implementation: "adapter",
+        boundary: "temp-remote",
+        callCount: pushCallCount,
+      },
+    },
+    githubCreatePr: {
+      kind: "real",
+      implementation: "adapter",
+      boundary: "in-process-http-double",
+    },
+    piSession: {
+      kind: "real",
+      implementation: "session-adapter",
+      boundary: "FakePiSurface",
+      spawnCallCount: piSpawnCallCount,
+      ring1HookAttached,
+    },
+    clock: { kind: "double" },
+    jira: { kind: "deferred", applicability: "not-applicable" },
+    slack: { kind: "deferred", applicability: "not-applicable" },
+    s3: { kind: "deferred", applicability: "not-applicable" },
+    observers: { kind: "deferred", applicability: "not-applicable" },
+    ring2: { kind: "deferred", applicability: "not-applicable" },
+  };
+
   return {
     status: "complete",
     brokerCompletionStatus: brokerWakeup.completionStatus,
@@ -472,5 +632,6 @@ export async function run2aGoldenScenario(
     schedulerWakeupTaskIds: brokerWakeup.wakeupTaskIds,
     deployDispatches,
     deployEvents,
+    hermeticWiringManifest,
   };
 }

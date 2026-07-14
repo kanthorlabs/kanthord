@@ -18,7 +18,9 @@
  */
 
 import { Agent, estimateContextTokens } from "@earendil-works/pi-agent-core";
-import { access } from "node:fs/promises";
+import { access, lstat, readFile, readlink } from "node:fs/promises";
+import { join, relative, resolve } from "node:path";
+import { createHash } from "node:crypto";
 import type { AgentOptions, PrepareNextTurnContext } from "@earendil-works/pi-agent-core";
 import { makeAgentOpts } from "../agent/pi-agent-adapter.ts";
 import type { AgentAdapterOpts } from "../agent/pi-agent-adapter.ts";
@@ -29,6 +31,7 @@ import type { Clock } from "../foundations/clock.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Logger } from "../daemon/boot.ts";
 import { createRecordLogger } from "../foundations/log.ts";
+import { JsonlLog } from "../foundations/jsonl.ts";
 import { loadIdentity, IdentityLoadError } from "../git/keyring.ts";
 import { makeBranchAdapter, makeCommitAdapter, makeAddAdapter } from "../broker/verbs/git-local.ts";
 import { makeDeliveryVerifySetup } from "../git/delivery-preflight.ts";
@@ -39,6 +42,7 @@ import { makeOutboundScanGuard } from "../ring1/outbound-scan-guard.ts";
 import type { AsyncVerbAdapter, VerbRegistryEntry } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
 import { appendModelCallRecord } from "../metrics/model-call-log.ts";
+import { runGit } from "../git/exec.ts";
 
 // ---------------------------------------------------------------------------
 // Default tool guidance (GAP5)
@@ -147,6 +151,58 @@ function makeMinimalEntry(verb: string): VerbRegistryEntry {
   };
 }
 
+function worktreePath(root: string, path: string): string {
+  const candidate = resolve(root, path);
+  const outsideRoot = relative(root, candidate).startsWith("..");
+  if (outsideRoot) throw new Error("git status returned a path outside the worktree");
+  return candidate;
+}
+
+function changedPaths(status: string): Array<{ status: string; path: string }> {
+  const paths: Array<{ status: string; path: string }> = [];
+  for (const record of status.split("\0")) {
+    if (record.length < 4 || record[2] !== " ") continue;
+    const code = record.slice(0, 2);
+    if (!/^[ MADRCU?!]{2}$/.test(code)) continue;
+    paths.push({ status: code, path: record.slice(3) });
+  }
+  return paths;
+}
+
+async function inspectWorktreeDiff(cwd: string): Promise<{ hash: string; summary: string } | undefined> {
+  const status = await runGit(["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd });
+  const unstaged = await runGit(["diff", "--binary", "--no-ext-diff", "--"], { cwd });
+  const staged = await runGit(["diff", "--cached", "--binary", "--no-ext-diff", "--"], { cwd });
+  if (status.kind !== "success" || unstaged.kind !== "success" || staged.kind !== "success") {
+    throw new Error("git worktree inspection failed");
+  }
+  if (status.stdout.length === 0) return undefined;
+
+  const hash = createHash("sha256");
+  hash.update("status\0").update(status.stdout);
+  hash.update("unstaged\0").update(unstaged.stdout);
+  hash.update("staged\0").update(staged.stdout);
+  const paths = changedPaths(status.stdout);
+  for (const changed of paths) {
+    if (changed.status !== "??") continue;
+    const path = worktreePath(cwd, changed.path);
+    const file = await lstat(path);
+    hash.update("untracked\0").update(changed.path).update("\0");
+    if (file.isSymbolicLink()) {
+      hash.update("symlink\0").update(await readlink(path));
+    } else if (file.isFile()) {
+      hash.update("file\0").update(await readFile(path));
+    } else {
+      hash.update("other\0");
+    }
+  }
+
+  const summary = paths
+    .map((changed) => `${changed.status} ${changed.path.replace(/[\r\n\t]/g, "?")}`)
+    .join("; ");
+  return { hash: hash.digest("hex"), summary };
+}
+
 // ---------------------------------------------------------------------------
 // buildRealDeps
 // ---------------------------------------------------------------------------
@@ -182,7 +238,9 @@ export function buildRealDeps(
   // of a hand-rolled process.stdout.write.
   const logger: Logger = createRecordLogger();
 
-  const statusServerFactory: StatusServerFactory = createStatusServer;
+  const interactionLog = new JsonlLog(join(featureDir, "interactions.jsonl"));
+  const statusServerFactory: StatusServerFactory = (statusOpts) =>
+    createStatusServer({ ...statusOpts, interactionLog });
 
   const piSurface: PiSurface = {
     spawnAgent(rawOpts: unknown): {
@@ -190,6 +248,7 @@ export function buildRealDeps(
       waitForIdle(): Promise<void>;
       reset(): void;
       contextTokens: number;
+      stopReason?: "aborted" | "error";
     } {
       // rawOpts is typed as unknown at the PiSurface seam; extract the
       // fields makeAgentOpts needs (tools + beforeToolCall + model + streamFn).
@@ -198,6 +257,7 @@ export function buildRealDeps(
         beforeToolCall?: AgentAdapterOpts["beforeToolCall"];
         model?: AgentAdapterOpts["model"];
         streamFn?: AgentAdapterOpts["streamFn"];
+        beforeModelCall?: AgentAdapterOpts["beforeModelCall"];
         systemPrompt?: string;
         task_id?: string;
         worktreePath?: string;
@@ -212,6 +272,7 @@ export function buildRealDeps(
           (async () => undefined as ReturnType<AgentAdapterOpts["beforeToolCall"]> extends Promise<infer R> ? R : never),
         model: spawnOpts.model ?? providerModel,
         streamFn: spawnOpts.streamFn ?? providerStreamFn,
+        beforeModelCall: spawnOpts.beforeModelCall,
         worktreePath: spawnOpts.worktreePath,
       });
 
@@ -252,6 +313,7 @@ export function buildRealDeps(
 
       if (agentFactory !== undefined) {
         const handle = agentFactory(agentOpts);
+        let stopReason: "error" | undefined;
         const runPromise: Promise<void> | undefined =
           typeof systemPrompt === "string" && systemPrompt.length > 0
             ? handle.prompt(systemPrompt)
@@ -263,6 +325,7 @@ export function buildRealDeps(
           waitForIdle: async (): Promise<void> => {
             if (runPromise !== undefined) {
               await runPromise.catch((err: unknown) => {
+                stopReason = "error";
                 // Agent-loop errors surface via stopReason; still report the
                 // run rejection so it is not an invisible swallow (AGENTS.md).
                 logger.info({
@@ -277,11 +340,15 @@ export function buildRealDeps(
             handle.reset();
           },
           contextTokens: 0,
+          get stopReason(): "error" | undefined {
+            return stopReason;
+          },
         };
       }
 
       // Live path: real Agent.
       const agent = new Agent(agentOpts);
+      let stopReason: "error" | undefined;
       const runPromise: Promise<void> | undefined =
         typeof systemPrompt === "string" && systemPrompt.length > 0
           ? agent.prompt(systemPrompt)
@@ -291,8 +358,9 @@ export function buildRealDeps(
           agent.abort();
         },
         waitForIdle: async (): Promise<void> => {
-          if (runPromise !== undefined) {
-            await runPromise.catch((err: unknown) => {
+            if (runPromise !== undefined) {
+              await runPromise.catch((err: unknown) => {
+                stopReason = "error";
               // Agent-loop errors surface via stopReason; still report the
               // run rejection so it is not an invisible swallow (AGENTS.md).
               logger.info({
@@ -308,6 +376,9 @@ export function buildRealDeps(
         },
         get contextTokens(): number {
           return estimateContextTokens(agent.state.messages).tokens;
+        },
+        get stopReason(): "error" | undefined {
+          return stopReason;
         },
       };
     },
@@ -330,6 +401,7 @@ export function buildRealDeps(
     statusServerFactory,
     tickIntervalMs: 5_000,
     patternRegistry: null, // fail-closed: no registry file path wired yet (Gap 2 MVP)
+    inspectWorktreeDiff,
     toolGuidance,
   };
 

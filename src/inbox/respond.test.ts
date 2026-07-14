@@ -1,12 +1,13 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { createPendingOp } from "../broker/expiry.ts";
 import { initSchema } from "../store/schema.ts";
+import { JsonlLog } from "../foundations/jsonl.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import { createApprovalItem, createEscalationItem } from "./inbox.ts";
 import {
@@ -19,6 +20,7 @@ import {
 } from "./respond.ts";
 import { resumeEscalationItem, haltEscalationItem } from "../rpc/inbox-respond.ts";
 import { createStatusServer } from "../daemon/status-server.ts";
+import { projectPendingInteractionIntents } from "../metrics/interaction-capture.ts";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { createClient, ConnectError, Code } from "@connectrpc/connect";
 import { DaemonService } from "../generated/kanthord/v1/daemon_pb.js";
@@ -66,6 +68,48 @@ function makeFakeAdapter(submitResults: string[]): {
     reconcile: async () => ({ outcome: "done" }),
   };
   return { adapter, submitCalls: () => calls };
+}
+
+class SlowJsonlLog extends JsonlLog {
+  private appendCalls = 0;
+  private releaseAppend!: () => void;
+  private resolveFirstAppend!: () => void;
+  private readonly appendGate = new Promise<void>((resolve) => {
+    this.releaseAppend = resolve;
+  });
+  private readonly firstAppend = new Promise<void>((resolve) => {
+    this.resolveFirstAppend = resolve;
+  });
+
+  async append(record: unknown): Promise<void> {
+    this.appendCalls++;
+    if (this.appendCalls === 1) this.resolveFirstAppend();
+    await this.appendGate;
+    await super.append(record);
+  }
+
+  waitForFirstAppend(): Promise<void> {
+    return this.firstAppend;
+  }
+
+  release(): void {
+    this.releaseAppend();
+  }
+}
+
+async function expectResolvedOrTypedReplay(
+  request: () => Promise<{ status: string }>,
+): Promise<void> {
+  try {
+    const response = await request();
+    assert.equal(response.status, "resolved", "an exact retry may report the prior resolved result");
+  } catch (error) {
+    assert.ok(error instanceof ConnectError, "a replay rejection must cross the Connect boundary");
+    assert.ok(
+      error.code === Code.AlreadyExists || error.code === Code.FailedPrecondition,
+      `a replay rejection must be already_exists or failed_precondition, got ${error.code}`,
+    );
+  }
 }
 
 describe("src/inbox/respond.ts", () => {
@@ -663,7 +707,10 @@ describe("src/rpc/inbox-respond.ts", () => {
         });
 
         // Start the status server (loopback bind — default)
-        const srv = createStatusServer({ store });
+        const srv = createStatusServer({
+          store,
+          interactionLog: new JsonlLog(join(dir, "t2c-interactions.jsonl")),
+        });
         const { host, port } = await srv.start();
         try {
           const transport = createConnectTransport({
@@ -682,7 +729,11 @@ describe("src/rpc/inbox-respond.ts", () => {
           assert.equal(listedItem.kind, "escalation", "listed item kind must be escalation");
 
           // Step 2: respond (resume) — must succeed with status "resolved"
-          const respondResp = await client.respondToEscalation({ id: item.id, response: "resume" });
+          const respondResp = await client.respondToEscalation({
+            id: item.id,
+            response: "resume",
+            confirmedCategory: "correction",
+          });
           assert.equal(
             respondResp.status,
             "resolved",
@@ -842,6 +893,7 @@ describe("src/rpc/inbox-respond.ts", () => {
         // excess-property TS error — SE must add this opt + wire the handler.
         const srvOpts = {
           store,
+          interactionLog: new JsonlLog(join(dir, "b1a-interactions.jsonl")),
           getApprovalContext: (_opId: string) => ({
             entry: FAKE_ENTRY,
             adapter,
@@ -857,7 +909,12 @@ describe("src/rpc/inbox-respond.ts", () => {
           });
           const client = createClient(DaemonService, transport);
 
-          const resp = await client.respondToApproval({ id: item.id, approve: true, reason: "" });
+          const resp = await client.respondToApproval({
+            id: item.id,
+            approve: true,
+            reason: "",
+            confirmedCategory: "approval",
+          });
           assert.equal(resp.status, "resolved", "respondToApproval must return status='resolved'");
 
           // Op must be dispatched (in broker_in_flight)
@@ -967,6 +1024,882 @@ describe("src/rpc/inbox-respond.ts", () => {
               );
               return true;
             },
+          );
+        } finally {
+          await srv.stop();
+        }
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("respondToEscalation captures one budget-breach override interaction with cumulative durable ledger cost over loopback HTTP", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-ic-http-"));
+    try {
+      const store = openStore(join(dir, "interaction.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const taskId = "task-ic-http";
+        const featureId = "feature-ic-http";
+        insertSchedulerTask(store, taskId, featureId, {
+          status: "running",
+          blocked_on: "budget-op-ic-http",
+        });
+        store.run(
+          "INSERT INTO budget_ledger (task_id, ledger) VALUES (?, ?)",
+          taskId,
+          JSON.stringify([
+            { kind: "reservation", reservationId: "reserve-1", conservativeCharge: 10 },
+            { kind: "reservation", reservationId: "reserve-2", conservativeCharge: 5 },
+            { kind: "reconcile", reservationId: "reserve-1", finalActual: 7.25 },
+          ]),
+        );
+        const item = createEscalationItem({
+          source_id: "evt-ic-http-001",
+          task_id: taskId,
+          reason: "budget-breach",
+          payload_summary: "durable budget ledger was exceeded",
+          store,
+          clock: new FakeClock(Date.now()),
+        });
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const srvOpts = { store, interactionLog: log };
+        const srv = createStatusServer(srvOpts);
+        const { host, port } = await srv.start();
+        try {
+          const transport = createConnectTransport({
+            baseUrl: `http://${host}:${port}`,
+            httpVersion: "1.1",
+          });
+          const client = createClient(DaemonService, transport);
+
+          const response = await client.respondToEscalation({
+            id: item.id,
+            response: "halt",
+            confirmedCategory: "rework",
+          });
+          assert.equal(response.status, "resolved");
+
+          const events = await log.readAll();
+          assert.equal(events.length, 1, "one successful response must append exactly one interaction event");
+          const event = events[0] as Record<string, unknown>;
+          assert.equal(event["item_id"], item.id);
+          assert.equal(event["task_id"], taskId);
+          assert.equal(event["feature_id"], featureId);
+          assert.equal(event["proposed_type"], "correction");
+          assert.equal(event["confirmed_category"], "rework");
+          assert.equal(event["classification_mode"], "override");
+          assert.equal(event["actor"], "operator");
+          assert.ok(typeof event["timestamp"] === "number" && event["timestamp"] > 0);
+          assert.equal(event["cost_to_date"], 12.25);
+          assert.equal(event["no_ledger"], false);
+        } finally {
+          await srv.stop();
+        }
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("respondToEscalation rejects a missing confirmed category as invalid_argument over loopback HTTP", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-ic-category-"));
+    try {
+      const store = openStore(join(dir, "category.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const taskId = "task-ic-category";
+        insertSchedulerTask(store, taskId, "feature-ic-category", {
+          status: "running",
+          blocked_on: "budget-op-ic-category",
+        });
+        const item = createEscalationItem({
+          source_id: "evt-ic-category-001",
+          task_id: taskId,
+          reason: "budget-breach",
+          payload_summary: "missing category must not resolve this item",
+          store,
+          clock: new FakeClock(Date.now()),
+        });
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const srvOpts = { store, interactionLog: log };
+        const srv = createStatusServer(srvOpts);
+        const { host, port } = await srv.start();
+        try {
+          const transport = createConnectTransport({
+            baseUrl: `http://${host}:${port}`,
+            httpVersion: "1.1",
+          });
+          const client = createClient(DaemonService, transport);
+
+          await assert.rejects(
+            () =>
+              client.respondToEscalation({
+                id: item.id,
+                response: "halt",
+                confirmedCategory: "",
+              }),
+            (err: unknown) => {
+              assert.ok(err instanceof ConnectError, "missing category must be surfaced as ConnectError");
+              assert.equal(err.code, Code.InvalidArgument, "missing category must be invalid_argument");
+              assert.match(err.message, /confirmed_category/i);
+              return true;
+            },
+          );
+          assert.equal((await log.readAll()).length, 0, "a rejected response must not append an interaction event");
+        } finally {
+          await srv.stop();
+        }
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("respondToEscalation rejects every non-exact resume or halt response before recording any effect over loopback HTTP", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-escalation-action-"));
+    try {
+      const store = openStore(join(dir, "action.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const srv = createStatusServer({ store, interactionLog: log });
+        const { host, port } = await srv.start();
+        try {
+          const transport = createConnectTransport({
+            baseUrl: `http://${host}:${port}`,
+            httpVersion: "1.1",
+          });
+          const client = createClient(DaemonService, transport);
+
+          for (const response of ["resume ", "halt ", "RESUME", "continue"]) {
+            const taskId = `task-escalation-action-${response}`;
+            insertSchedulerTask(store, taskId, "feature-escalation-action", {
+              status: "running",
+              blocked_on: "blocked-escalation-action",
+            });
+            const item = createEscalationItem({
+              source_id: `evt-escalation-action-${response}`,
+              task_id: taskId,
+              reason: "budget-breach",
+              payload_summary: "invalid response must not change durable state",
+              store,
+              clock: new FakeClock(Date.now()),
+            });
+
+            await assert.rejects(
+              () => client.respondToEscalation({ id: item.id, response, confirmedCategory: "correction" }),
+              (err: unknown) => {
+                assert.ok(err instanceof ConnectError, "invalid response must cross the Connect boundary");
+                assert.equal(err.code, Code.InvalidArgument, "invalid response must be invalid_argument");
+                return true;
+              },
+            );
+
+            const task = store.get<{ status: string; blocked_on: string | null }>(
+              "SELECT status, blocked_on FROM scheduler_task WHERE node_id = ?",
+              taskId,
+            );
+            assert.ok(task !== undefined, "the scheduler task must still exist");
+            assert.equal(task.status, "running", `invalid response ${JSON.stringify(response)} must not mutate the task status`);
+            assert.equal(task.blocked_on, "blocked-escalation-action", `invalid response ${JSON.stringify(response)} must not clear the task block`);
+            assert.equal(
+              store.get<{ count: number }>(
+                "SELECT COUNT(*) AS count FROM interaction_outbox WHERE item_id = ?",
+                item.id,
+              )?.count,
+              0,
+              `invalid response ${JSON.stringify(response)} must not persist an interaction intent`,
+            );
+            assert.equal(
+              store.get<{ count: number }>(
+                "SELECT COUNT(*) AS count FROM escalation_responses WHERE item_id = ?",
+                item.id,
+              )?.count,
+              0,
+              `invalid response ${JSON.stringify(response)} must not journal a response`,
+            );
+            assert.equal(
+              store.get<{ status: string }>("SELECT status FROM inbox_items WHERE id = ?", item.id)?.status,
+              "open",
+              `invalid response ${JSON.stringify(response)} must not resolve the inbox item`,
+            );
+          }
+
+          assert.equal((await log.readAll()).length, 0, "invalid responses must not append interaction events");
+        } finally {
+          await srv.stop();
+        }
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("respondToEscalation persists a keyed intent before resolution and startup reconciles a failed or interrupted JSONL projection exactly once", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-interaction-outbox-escalation-"));
+    try {
+      const store = openStore(join(dir, "interaction-outbox.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const taskId = "task-interaction-outbox-escalation";
+        insertSchedulerTask(store, taskId, "feature-interaction-outbox-escalation", {
+          status: "running",
+          blocked_on: "blocked-interaction-outbox",
+        });
+        const item = createEscalationItem({
+          source_id: "evt-interaction-outbox-escalation",
+          task_id: taskId,
+          reason: "budget-breach",
+          payload_summary: "capture must survive an unavailable journal",
+          store,
+          clock: new FakeClock(Date.now()),
+        });
+        store.run(
+          `CREATE TRIGGER require_interaction_intent_before_resolution
+           BEFORE UPDATE OF status ON inbox_items
+           WHEN NEW.id = '${item.id}' AND NEW.status = 'resolved'
+             AND NOT EXISTS (
+               SELECT 1 FROM interaction_outbox WHERE item_id = NEW.id
+             )
+           BEGIN
+             SELECT RAISE(ABORT, 'interaction intent missing before resolution');
+           END`,
+        );
+
+        const failedLogPath = join(dir, "failed-interactions.jsonl");
+        await mkdir(failedLogPath);
+        const failedServer = createStatusServer({
+          store,
+          interactionLog: new JsonlLog(failedLogPath),
+        });
+        const { host, port } = await failedServer.start();
+        try {
+          const client = createClient(
+            DaemonService,
+            createConnectTransport({ baseUrl: `http://${host}:${port}`, httpVersion: "1.1" }),
+          );
+          await client.respondToEscalation({
+            id: item.id,
+            response: "halt",
+            confirmedCategory: "correction",
+          }).catch(() => undefined);
+        } finally {
+          await failedServer.stop();
+        }
+
+        const resolved = store.get<{ status: string }>(
+          "SELECT status FROM inbox_items WHERE id = ?",
+          item.id,
+        );
+        assert.equal(resolved?.status, "resolved", "a journal failure must not roll back the response");
+        const intent = store.get<{ item_id: string; projected_at: number | null }>(
+          "SELECT item_id, projected_at FROM interaction_outbox WHERE item_id = ?",
+          item.id,
+        );
+        assert.equal(intent?.item_id, item.id, "the durable interaction intent is keyed by inbox item id");
+        assert.equal(intent?.projected_at, null, "a failed append remains pending for reconciliation");
+
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const reconcileOnce = createStatusServer({ store, interactionLog: log });
+        await reconcileOnce.start();
+        await reconcileOnce.stop();
+        assert.equal(
+          (await log.readAll()).filter((event) => (event as { item_id?: string }).item_id === item.id).length,
+          1,
+          "startup reconciliation must project one pending interaction",
+        );
+
+        store.run("UPDATE interaction_outbox SET projected_at = NULL WHERE item_id = ?", item.id);
+        const reconcileAfterMarkingCrash = createStatusServer({ store, interactionLog: log });
+        await reconcileAfterMarkingCrash.start();
+        await reconcileAfterMarkingCrash.stop();
+        assert.equal(
+          (await log.readAll()).filter((event) => (event as { item_id?: string }).item_id === item.id).length,
+          1,
+          "reconciliation must recognize an already-appended item id rather than duplicate it",
+        );
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("respondToApproval persists interaction intent before its external action and retries do not submit twice", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-interaction-outbox-approval-"));
+    try {
+      const store = openStore(join(dir, "interaction-outbox.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const clock = new FakeClock(Date.now());
+        const opId = createPendingOp(FAKE_ENTRY, "idem-interaction-outbox-approval", store, clock);
+        const item = createApprovalItem({
+          op_id: opId,
+          verb: FAKE_ENTRY.verb,
+          tier: FAKE_ENTRY.tier,
+          desired_effect: "perform exactly one external effect",
+          store,
+          clock,
+        });
+        let submitCalls = 0;
+        const adapter: AsyncVerbAdapter = {
+          submit: async () => {
+            submitCalls++;
+            const intent = store.get<{ item_id: string }>(
+              "SELECT item_id FROM interaction_outbox WHERE item_id = ?",
+              item.id,
+            );
+            assert.equal(intent?.item_id, item.id, "intent must be durable before adapter.submit");
+            return "request-interaction-outbox-approval";
+          },
+          poll_status: async () => ({}),
+          reconcile: async () => ({ outcome: "done" }),
+        };
+        const failedLogPath = join(dir, "failed-interactions.jsonl");
+        await mkdir(failedLogPath);
+        const failedServer = createStatusServer({
+          store,
+          interactionLog: new JsonlLog(failedLogPath),
+          getApprovalContext: () => ({ entry: FAKE_ENTRY, adapter, payload: {} }),
+        });
+        const { host, port } = await failedServer.start();
+        try {
+          const client = createClient(
+            DaemonService,
+            createConnectTransport({ baseUrl: `http://${host}:${port}`, httpVersion: "1.1" }),
+          );
+          await client.respondToApproval({
+            id: item.id,
+            approve: true,
+            confirmedCategory: "approval",
+          }).catch(() => undefined);
+        } finally {
+          await failedServer.stop();
+        }
+
+        assert.equal(submitCalls, 1, "the response may dispatch its external effect once");
+        assert.equal(
+          store.get<{ status: string }>("SELECT status FROM inbox_items WHERE id = ?", item.id)?.status,
+          "resolved",
+          "a failed JSONL append leaves the approval response resolved",
+        );
+
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const retryServer = createStatusServer({
+          store,
+          interactionLog: log,
+          getApprovalContext: () => ({ entry: FAKE_ENTRY, adapter, payload: {} }),
+        });
+        const retryAddress = await retryServer.start();
+        try {
+          const client = createClient(
+            DaemonService,
+            createConnectTransport({
+              baseUrl: `http://${retryAddress.host}:${retryAddress.port}`,
+              httpVersion: "1.1",
+            }),
+          );
+          await client.respondToApproval({
+            id: item.id,
+            approve: true,
+            confirmedCategory: "approval",
+          }).catch(() => undefined);
+        } finally {
+          await retryServer.stop();
+        }
+        assert.equal(submitCalls, 1, "retrying a resolved approval must not submit the adapter again");
+        assert.equal(
+          (await log.readAll()).filter((event) => (event as { item_id?: string }).item_id === item.id).length,
+          1,
+          "approval retry and startup reconciliation must retain exactly one interaction event",
+        );
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("control RPCs without interaction capture reject missing and invalid categories before mutating inbox items", async () => {
+    for (const endpoint of ["escalation", "approval"] as const) {
+      for (const confirmedCategory of ["", "not-a-category"]) {
+        const dir = await mkdtemp(join(tmpdir(), `respond-b4-${endpoint}-`));
+        try {
+          const store = openStore(join(dir, "b4.db"), { busyTimeout: 1000 });
+          initSchema(store);
+          try {
+            const clock = new FakeClock(Date.now());
+            const taskId = `task-b4-${endpoint}`;
+            let itemId: string;
+            let opId: string | undefined;
+
+            if (endpoint === "escalation") {
+              insertSchedulerTask(store, taskId, "feature-b4", {
+                status: "running",
+                blocked_on: "b4-escalation",
+              });
+              itemId = createEscalationItem({
+                source_id: `evt-b4-${confirmedCategory || "missing"}`,
+                task_id: taskId,
+                reason: "budget-breach",
+                payload_summary: "category validation must precede resolution",
+                store,
+                clock,
+              }).id;
+            } else {
+              opId = createPendingOp(FAKE_ENTRY, `idem-b4-${confirmedCategory || "missing"}`, store, clock);
+              itemId = createApprovalItem({
+                op_id: opId,
+                verb: FAKE_ENTRY.verb,
+                tier: FAKE_ENTRY.tier,
+                desired_effect: "category validation must precede denial",
+                store,
+                clock,
+              }).id;
+            }
+
+            // Deliberately omit interactionLog: public validation cannot depend on capture wiring.
+            const srv = createStatusServer({ store });
+            const { host, port } = await srv.start();
+            try {
+              const transport = createConnectTransport({
+                baseUrl: `http://${host}:${port}`,
+                httpVersion: "1.1",
+              });
+              const client = createClient(DaemonService, transport);
+              const send = async (): Promise<void> => {
+                if (endpoint === "escalation") {
+                  await client.respondToEscalation({
+                    id: itemId,
+                    response: "halt",
+                    confirmedCategory,
+                  });
+                } else {
+                  await client.respondToApproval({
+                    id: itemId,
+                    approve: false,
+                    reason: "",
+                    confirmedCategory,
+                  });
+                }
+              };
+
+              await assert.rejects(send, (err: unknown) => {
+                assert.ok(err instanceof ConnectError, "category rejection must cross the Connect boundary");
+                assert.equal(err.code, Code.InvalidArgument, "category rejection must be invalid_argument");
+                assert.match(err.message, /confirmed_category/i);
+                return true;
+              });
+
+              const item = store.get<{ status: string }>(
+                "SELECT status FROM inbox_items WHERE id = ?",
+                itemId,
+              );
+              assert.equal(item?.status, "open", "a category-rejected item must remain open");
+              if (endpoint === "escalation") {
+                const task = store.get<{ status: string }>(
+                  "SELECT status FROM scheduler_task WHERE node_id = ?",
+                  taskId,
+                );
+                assert.equal(task?.status, "running", "a category-rejected escalation must not change task state");
+                assert.equal(
+                  store.all("SELECT * FROM escalation_responses WHERE item_id = ?", itemId).length,
+                  0,
+                  "a category-rejected escalation must not be journaled",
+                );
+              } else {
+                assert.equal(
+                  store.get<{ status: string }>("SELECT status FROM broker_pending WHERE op_id = ?", opId)?.status,
+                  "pending",
+                  "a category-rejected approval must not alter the pending operation",
+                );
+                assert.equal(
+                  store.all("SELECT * FROM approval_decisions WHERE item_id = ?", itemId).length,
+                  0,
+                  "a category-rejected approval must not be journaled",
+                );
+              }
+            } finally {
+              await srv.stop();
+            }
+          } finally {
+            store.close();
+          }
+        } finally {
+          await rm(dir, { recursive: true });
+        }
+      }
+    }
+  });
+
+  test("control RPCs without interaction capture fail closed for valid categories instead of resolving uncaptured decisions", async () => {
+    for (const endpoint of ["escalation", "approval"] as const) {
+      const dir = await mkdtemp(join(tmpdir(), `respond-b4-capture-${endpoint}-`));
+      try {
+        const store = openStore(join(dir, "b4-capture.db"), { busyTimeout: 1000 });
+        initSchema(store);
+        try {
+          const clock = new FakeClock(Date.now());
+          const taskId = `task-b4-capture-${endpoint}`;
+          let itemId: string;
+          let opId: string | undefined;
+
+          if (endpoint === "escalation") {
+            insertSchedulerTask(store, taskId, "feature-b4-capture", {
+              status: "running",
+              blocked_on: "b4-capture",
+            });
+            itemId = createEscalationItem({
+              source_id: "evt-b4-capture",
+              task_id: taskId,
+              reason: "budget-breach",
+              payload_summary: "capture configuration is required",
+              store,
+              clock,
+            }).id;
+          } else {
+            opId = createPendingOp(FAKE_ENTRY, "idem-b4-capture", store, clock);
+            itemId = createApprovalItem({
+              op_id: opId,
+              verb: FAKE_ENTRY.verb,
+              tier: FAKE_ENTRY.tier,
+              desired_effect: "capture configuration is required",
+              store,
+              clock,
+            }).id;
+          }
+
+          // A valid category isolates missing capture configuration from category validation.
+          const srv = createStatusServer({ store });
+          const { host, port } = await srv.start();
+          try {
+            const transport = createConnectTransport({
+              baseUrl: `http://${host}:${port}`,
+              httpVersion: "1.1",
+            });
+            const client = createClient(DaemonService, transport);
+            const send = async (): Promise<void> => {
+              if (endpoint === "escalation") {
+                await client.respondToEscalation({
+                  id: itemId,
+                  response: "halt",
+                  confirmedCategory: "correction",
+                });
+              } else {
+                await client.respondToApproval({
+                  id: itemId,
+                  approve: false,
+                  reason: "",
+                  confirmedCategory: "approval",
+                });
+              }
+            };
+
+            await assert.rejects(send, (err: unknown) => {
+              assert.ok(err instanceof ConnectError, "capture configuration failure must cross Connect");
+              assert.equal(err.code, Code.FailedPrecondition, "missing capture must fail closed");
+              assert.match(err.message, /interaction.*capture/i);
+              return true;
+            });
+
+            const item = store.get<{ status: string }>(
+              "SELECT status FROM inbox_items WHERE id = ?",
+              itemId,
+            );
+            assert.equal(item?.status, "open", "an uncaptured decision must leave its item open");
+            if (endpoint === "escalation") {
+              assert.equal(
+                store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", taskId)?.status,
+                "running",
+                "an uncaptured escalation must not change task state",
+              );
+            } else {
+              assert.equal(
+                store.get<{ status: string }>("SELECT status FROM broker_pending WHERE op_id = ?", opId)?.status,
+                "pending",
+                "an uncaptured approval must not alter the pending operation",
+              );
+            }
+          } finally {
+            await srv.stop();
+          }
+        } finally {
+          store.close();
+        }
+      } finally {
+        await rm(dir, { recursive: true });
+      }
+    }
+  });
+
+  test("concurrent pending interaction projections append exactly one JSONL record for an inbox item", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-interaction-concurrency-"));
+    try {
+      const store = openStore(join(dir, "interaction-concurrency.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const itemId = "esc:concurrent-projection";
+        store.run(
+          "INSERT INTO interaction_outbox (item_id, event_json, projected_at) VALUES (?, ?, NULL)",
+          itemId,
+          JSON.stringify({ item_id: itemId, confirmed_category: "correction" }),
+        );
+        const log = new SlowJsonlLog(join(dir, "interactions.jsonl"));
+
+        const firstProjection = projectPendingInteractionIntents(store, log, 1000);
+        await log.waitForFirstAppend();
+        const secondProjection = projectPendingInteractionIntents(store, log, 1001);
+
+        // The first append is deliberately held while the second projection reads
+        // the still-pending intent and reaches its own pre-append window.
+        await new Promise<void>((resolve) => setTimeout(resolve, 25));
+        log.release();
+        await Promise.all([firstProjection, secondProjection]);
+
+        assert.equal(
+          (await log.readAll()).filter((event) => (event as { item_id?: string }).item_id === itemId).length,
+          1,
+          "overlapping projection attempts for one intent must emit one JSONL record",
+        );
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("an exact escalation retry does not reapply the task transition", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-escalation-exact-retry-"));
+    try {
+      const store = openStore(join(dir, "escalation-exact-retry.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const taskId = "task-escalation-exact-retry";
+        insertSchedulerTask(store, taskId, "feature-escalation-exact-retry", {
+          status: "running",
+          blocked_on: "blocked-exact-retry",
+        });
+        const item = createEscalationItem({
+          source_id: "evt-escalation-exact-retry",
+          task_id: taskId,
+          reason: "budget-breach",
+          payload_summary: "exact retries must not reapply the transition",
+          store,
+          clock: new FakeClock(Date.now()),
+        });
+        const srv = createStatusServer({
+          store,
+          interactionLog: new JsonlLog(join(dir, "interactions.jsonl")),
+        });
+        const { host, port } = await srv.start();
+        try {
+          const client = createClient(
+            DaemonService,
+            createConnectTransport({ baseUrl: `http://${host}:${port}`, httpVersion: "1.1" }),
+          );
+          await client.respondToEscalation({
+            id: item.id,
+            response: "halt",
+            confirmedCategory: "correction",
+          });
+          store.run(
+            `CREATE TRIGGER reject_exact_escalation_retry_transition
+             BEFORE UPDATE OF status ON scheduler_task
+             WHEN NEW.node_id = '${taskId}'
+             BEGIN SELECT RAISE(ABORT, 'exact retry reapplied escalation transition'); END`,
+          );
+
+          await expectResolvedOrTypedReplay(() =>
+            client.respondToEscalation({
+              id: item.id,
+              response: "halt",
+              confirmedCategory: "correction",
+            }),
+          );
+          assert.equal(
+            store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", taskId)?.status,
+            "halted",
+            "an exact retry must leave the completed escalation transition unchanged",
+          );
+          assert.equal(
+            store.all("SELECT * FROM escalation_responses WHERE item_id = ?", item.id).length,
+            1,
+            "an exact retry must not journal a second escalation response",
+          );
+        } finally {
+          await srv.stop();
+        }
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("conflicting escalation action or category retries are typed and leave the original task state and interaction intact", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-escalation-conflict-retry-"));
+    try {
+      const store = openStore(join(dir, "escalation-conflict-retry.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const taskId = "task-escalation-conflict-retry";
+        insertSchedulerTask(store, taskId, "feature-escalation-conflict-retry", {
+          status: "running",
+          blocked_on: "blocked-conflict-retry",
+        });
+        const item = createEscalationItem({
+          source_id: "evt-escalation-conflict-retry",
+          task_id: taskId,
+          reason: "budget-breach",
+          payload_summary: "conflicting retries cannot alter a completed escalation",
+          store,
+          clock: new FakeClock(Date.now()),
+        });
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const srv = createStatusServer({ store, interactionLog: log });
+        const { host, port } = await srv.start();
+        try {
+          const client = createClient(
+            DaemonService,
+            createConnectTransport({ baseUrl: `http://${host}:${port}`, httpVersion: "1.1" }),
+          );
+          await client.respondToEscalation({
+            id: item.id,
+            response: "halt",
+            confirmedCategory: "correction",
+          });
+
+          for (const conflictingRetry of [
+            { response: "resume" as const, confirmedCategory: "correction" },
+            { response: "halt" as const, confirmedCategory: "rework" },
+          ]) {
+            await assert.rejects(
+              () => client.respondToEscalation({ id: item.id, ...conflictingRetry }),
+              (error: unknown) => {
+                assert.ok(error instanceof ConnectError, "a conflicting retry must cross Connect");
+                assert.ok(
+                  error.code === Code.AlreadyExists || error.code === Code.FailedPrecondition,
+                  `a conflicting retry must be already_exists or failed_precondition, got ${error.code}`,
+                );
+                return true;
+              },
+            );
+          }
+          assert.equal(
+            store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", taskId)?.status,
+            "halted",
+            "a conflicting retry must not change the original halted task state",
+          );
+          assert.equal(
+            store.get<{ action: string }>("SELECT action FROM escalation_responses WHERE item_id = ?", item.id)?.action,
+            "halt",
+            "a conflicting retry must not replace the recorded escalation action",
+          );
+          const events = await log.readAll();
+          assert.equal(events.length, 1, "a conflicting retry must not append a second interaction event");
+          assert.equal(
+            (events[0] as Record<string, unknown>)["confirmed_category"],
+            "correction",
+            "a conflicting retry must not replace the original confirmed category",
+          );
+        } finally {
+          await srv.stop();
+        }
+      } finally {
+        store.close();
+      }
+    } finally {
+      await rm(dir, { recursive: true });
+    }
+  });
+
+  test("approval retries bind the original action and category without redispatching the adapter", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "respond-approval-conflict-retry-"));
+    try {
+      const store = openStore(join(dir, "approval-conflict-retry.db"), { busyTimeout: 1000 });
+      initSchema(store);
+      try {
+        const clock = new FakeClock(Date.now());
+        const { adapter, submitCalls } = makeFakeAdapter(["request-approval-conflict-retry"]);
+        const opId = createPendingOp(FAKE_ENTRY, "idem-approval-conflict-retry", store, clock);
+        const item = createApprovalItem({
+          op_id: opId,
+          verb: FAKE_ENTRY.verb,
+          tier: FAKE_ENTRY.tier,
+          desired_effect: "conflicting approval retries must not redispatch",
+          store,
+          clock,
+        });
+        const log = new JsonlLog(join(dir, "interactions.jsonl"));
+        const srv = createStatusServer({
+          store,
+          interactionLog: log,
+          getApprovalContext: () => ({ entry: FAKE_ENTRY, adapter, payload: {} }),
+        });
+        const { host, port } = await srv.start();
+        try {
+          const client = createClient(
+            DaemonService,
+            createConnectTransport({ baseUrl: `http://${host}:${port}`, httpVersion: "1.1" }),
+          );
+          await client.respondToApproval({
+            id: item.id,
+            approve: true,
+            confirmedCategory: "approval",
+          });
+
+          await expectResolvedOrTypedReplay(() =>
+            client.respondToApproval({
+              id: item.id,
+              approve: true,
+              confirmedCategory: "approval",
+            }),
+          );
+          for (const conflictingRetry of [
+            { approve: false, confirmedCategory: "approval" },
+            { approve: true, confirmedCategory: "rework" },
+          ]) {
+            await assert.rejects(
+              () => client.respondToApproval({ id: item.id, ...conflictingRetry }),
+              (error: unknown) => {
+                assert.ok(error instanceof ConnectError, "a conflicting retry must cross Connect");
+                assert.ok(
+                  error.code === Code.AlreadyExists || error.code === Code.FailedPrecondition,
+                  `a conflicting retry must be already_exists or failed_precondition, got ${error.code}`,
+                );
+                return true;
+              },
+            );
+          }
+          assert.equal(submitCalls(), 1, "approval retries must not submit the adapter again");
+          assert.ok(
+            store.get<{ op_id: string }>(
+              "SELECT op_id FROM broker_in_flight WHERE verb = ? AND idempotency_key = ?",
+              FAKE_ENTRY.verb,
+              "idem-approval-conflict-retry",
+            ),
+            "conflicting retries must leave the original operation in_flight",
+          );
+          const events = await log.readAll();
+          assert.equal(events.length, 1, "approval retries must not append another interaction event");
+          assert.equal(
+            (events[0] as Record<string, unknown>)["confirmed_category"],
+            "approval",
+            "approval retries must preserve the original confirmed category",
           );
         } finally {
           await srv.stop();

@@ -217,6 +217,13 @@ export declare type RespondToEscalationRequest = Message<"kanthord.v1.RespondToE
    * @generated from field: string response = 2;
    */
   response: string;
+
+  /**
+   * Human-confirmed interaction category from the PRD interaction vocabulary.
+   *
+   * @generated from field: string confirmed_category = 3;
+   */
+  confirmedCategory: string;
 };
 
 /**
@@ -267,6 +274,13 @@ export declare type RespondToApprovalRequest = Message<"kanthord.v1.RespondToApp
    * @generated from field: string reason = 3;
    */
   reason: string;
+
+  /**
+   * Human-confirmed interaction category from the PRD interaction vocabulary.
+   *
+   * @generated from field: string confirmed_category = 4;
+   */
+  confirmedCategory: string;
 };
 
 /**

@@ -304,6 +304,68 @@ describe("src/cli/verify — missing required flags", () => {
 
     assert.notEqual(exitCode, 0, "exit code must be non-zero when --from-markdown is absent");
   });
+
+  test("missing --store ⇒ usage exit 3, names --store, and opens neither store", async () => {
+    const stdout = makeOutput();
+    const stderr = makeOutput();
+    let openStoreRootCalls = 0;
+    let openLiveStoreCalls = 0;
+
+    const deps: CliDeps = {
+      runVerify: async () => ({ divergences: [] }),
+      openLiveStore: () => {
+        openLiveStoreCalls++;
+        return makeWriteCountingStore();
+      },
+      openStoreRoot: () => {
+        openStoreRootCalls++;
+        return { close() {} };
+      },
+      stdout,
+      stderr,
+    };
+
+    const exitCode = await main(
+      ["--from-markdown", "--read-only", "--db", "/tmp/live.db"],
+      deps,
+    );
+
+    assert.equal(exitCode, 3, "missing --store must be a usage error");
+    assert.match(stderr.value, /--store/, "usage output must name the missing --store option");
+    assert.equal(openStoreRootCalls, 0, "missing --store must not open the store root");
+    assert.equal(openLiveStoreCalls, 0, "missing --store must not open the live store");
+  });
+
+  test("missing --db ⇒ usage exit 3, names --db, and opens neither store", async () => {
+    const stdout = makeOutput();
+    const stderr = makeOutput();
+    let openStoreRootCalls = 0;
+    let openLiveStoreCalls = 0;
+
+    const deps: CliDeps = {
+      runVerify: async () => ({ divergences: [] }),
+      openLiveStore: () => {
+        openLiveStoreCalls++;
+        return makeWriteCountingStore();
+      },
+      openStoreRoot: () => {
+        openStoreRootCalls++;
+        return { close() {} };
+      },
+      stdout,
+      stderr,
+    };
+
+    const exitCode = await main(
+      ["--from-markdown", "--read-only", "--store", "/tmp/store"],
+      deps,
+    );
+
+    assert.equal(exitCode, 3, "missing --db must be a usage error");
+    assert.match(stderr.value, /--db/, "usage output must name the missing --db option");
+    assert.equal(openStoreRootCalls, 0, "missing --db must not open the store root");
+    assert.equal(openLiveStoreCalls, 0, "missing --db must not open the live store");
+  });
 });
 
 // ---------------------------------------------------------------------------

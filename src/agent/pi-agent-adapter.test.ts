@@ -198,35 +198,69 @@ test(
 );
 
 test(
-  "T2 (Story 003) — makeAgentOpts threads streamFn into AgentOptions and omits getApiKey",
-  () => {
+  "T2 (Story 003) — makeAgentOpts delegates its guarded streamFn and omits getApiKey",
+  async () => {
     const fakeModel = { id: "gpt-4.1", name: "gpt-4.1", provider: "acct_test-001" } as unknown;
-    // Minimal StreamFn-shaped function; cast satisfies the type without importing
-    // all pi-ai event-stream types.
+    const providerResult = { providerResult: true };
+    let providerCalls = 0;
     const fakeStreamFn: StreamFn = (() => {
-      throw new Error("not called in test");
+      providerCalls++;
+      return providerResult;
     }) as unknown as StreamFn;
     const dummyHook = async (): Promise<undefined> => undefined;
 
-    // streamFn is not on AgentAdapterOpts yet — cast via unknown so the runtime
-    // receives the field; makeAgentOpts currently ignores it, so result.streamFn
-    // is undefined and the assertion fails for the right reason (RED).
     const result = makeAgentOpts({
       tools: [],
       beforeToolCall: dummyHook,
-      model: fakeModel,
+      model: fakeModel as Parameters<typeof makeAgentOpts>[0]["model"],
       streamFn: fakeStreamFn,
-    } as unknown as Parameters<typeof makeAgentOpts>[0]);
+    });
 
-    assert.strictEqual(
-      result.streamFn,
-      fakeStreamFn,
-      "T2: streamFn must be forwarded into AgentOptions.streamFn — not yet threaded (RED)",
-    );
+    if (result.streamFn === undefined) throw new Error("T2: streamFn must be present");
+    const returned = await result.streamFn({} as never, {} as never);
+    assert.strictEqual(returned, providerResult, "T2: guarded streamFn must return the provider result");
+    assert.equal(providerCalls, 1, "T2: guarded streamFn must delegate exactly once to the provider");
     assert.strictEqual(
       result.getApiKey,
       undefined,
       "T2: getApiKey must be absent when streamFn is provided (no api-key branch)",
     );
+  },
+);
+
+test(
+  "per-model-call budget — beforeModelCall reserves before every provider stream and blocks the rejected call",
+  async () => {
+    let reservationCalls = 0;
+    let providerCalls = 0;
+    const beforeModelCall = async (): Promise<void> => {
+      reservationCalls++;
+      if (reservationCalls === 2) throw new Error("budget ceiling breached");
+    };
+    const providerStreamFn: StreamFn = (() => {
+      providerCalls++;
+      return {};
+    }) as unknown as StreamFn;
+
+    const result = makeAgentOpts({
+      tools: [],
+      beforeToolCall: async (): Promise<undefined> => undefined,
+      streamFn: providerStreamFn,
+      beforeModelCall,
+    });
+    const guardedStreamFn = result.streamFn;
+    assert.ok(guardedStreamFn !== undefined, "streamFn must be present when supplied");
+
+    await guardedStreamFn({} as never, {} as never);
+    assert.equal(reservationCalls, 1, "the first provider invocation must reserve once");
+    assert.equal(providerCalls, 1, "the provider runs after a successful reservation");
+
+    await assert.rejects(
+      () => guardedStreamFn({} as never, {} as never),
+      /budget ceiling breached/,
+      "the rejected reservation must fail the model call",
+    );
+    assert.equal(reservationCalls, 2, "two provider invocations must make two reservations");
+    assert.equal(providerCalls, 1, "the provider must not run after a rejected reservation");
   },
 );
