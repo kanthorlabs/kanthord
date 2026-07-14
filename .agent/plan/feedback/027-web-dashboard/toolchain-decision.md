@@ -1,8 +1,47 @@
 # SU7 Decision — Web Dashboard Toolchain (Epic 020 SU7)
 
-Status: **DECIDED (option b) — bootstrap demo PENDING; SU7 Verify is NOT yet
-passed.** Epic 027's stories are authored (see Amendment 2026-07-03) but no
-web story may **dispatch** until the hello-world run below is green.
+Status: **DECIDED (option b) — bootstrap COMPLETE; SU7 Verify PASSED 2026-07-14.**
+Epic 027 web stories are now dispatch-unblocked. See "SU7 bootstrap — PASSED"
+below for the run record.
+
+## SU7 bootstrap — PASSED (2026-07-14)
+
+All six bootstrap items landed on `main` and the hello-world flowed through the
+full four-role pipeline:
+
+1. **Scaffold** `clients/web/` — standalone Vite 8 / React 19 / TS / Tailwind v4
+   pkg (NOT a root workspace, so the core Podman image never installs the web
+   toolchain), shadcn token `globals.css` (light+dark), `cn()`, configs — commit
+   `61fee18`.
+2. **Connect-Web client** generated into `clients/web/src/gen/` (buf.gen.yaml 2nd
+   output; protobuf-es v2 descriptors consumed directly by connect-web) —
+   `a48e3e2`.
+3. **lane-check.sh** web predicates + generated dir declared forbidden — `5f9a87e`.
+4. **`scripts/web-e2e-preflight.mjs`** (serves the bundle over the SU5 TLS cert) +
+   seeded `.agent/tdd/memory/web-gotchas.md` (Tailwind v4-vs-v3, shadcn, connect-web) — `5f9a87e`.
+5. **render.py re-render** → `.claude/` + `.opencode/` role agents carry the web
+   variant — `5f9a87e`.
+6. **Hello-world through the pipeline:**
+   - `HelloBanner` + Vitest test + **Playwright E2E over TLS** (desktop + iPhone 13
+     gate viewport, chromium — HD-C), all green — `6e87763`. Proves browser-over-
+     TLS + the design path (vendored primitive styled by a semantic token).
+   - `PipelinePing` driven **RED→GREEN→reviewer via `/work --variant web`** in an
+     isolated worktree (TE t0 → SE t1 → TE t2 confirm+gate → reviewer PASS 0
+     blockers → `HUMAN_REVIEW: PASS`) — `a26c6e4`. Proves the four-role lane
+     enforcement + gate commands end to end. Discussion record:
+     `.agent/tdd/history/2026-07-14-020.1-web-bootstrap-helloworld-web.md`.
+
+Foundation shadcn primitives (DESIGN §5 set) vendored via the CLI — `b953c89`.
+Both variants green on `main`: web 4/4 tests + `typecheck:web`; core 1094/1094.
+
+Browser-consumability of the **Epic 026 API over TLS** is proven at the transport
++ type level (generated client compiles; browser loads over TLS same-origin); a
+live method call awaits Epic 026 handlers (no handlers exist yet — SU6 added only
+the schema).
+
+---
+
+_(Original decision record follows.)_
 
 ## Decision
 
