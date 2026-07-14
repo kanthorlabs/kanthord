@@ -1,6 +1,6 @@
 ---
 description: Drive an implementation cycle for one EPIC — TDD (lock) by default, dispatching test-engineer / software-engineer in alternation until IMPLEMENTATION_READY_FOR_REVIEW; or --sketch (Phase A) dispatching only software-engineer turns gated by human visual review. Runs serial (all variants) by default, or variant-scoped in an isolated git worktree (--variant) so variants can be built in parallel, with a --join step to merge and gate all. Escalates to the human when one Task fails its attempt limit. Lifecycle state lives in the discussion file; the orchestrator writes no frontmatter or status board.
-argument-hint: <epic-file-path> [--variant core] [--base <ref>] [--sketch] [--join] [--max-turns N]
+argument-hint: <epic-file-path> [--variant core, web] [--base <ref>] [--sketch] [--join] [--max-turns N]
 allowed-tools: Bash, Read, Agent
 ---
 
@@ -23,7 +23,15 @@ You do **not** commit; the human reviews and commits. You do **not** write to th
 A "turn" is one logical handoff, not one keystroke. A subagent may make many tool calls inside a single Task invocation (read context, edit sources / test files, build, append) and produce one substantive entry in the discussion file. Granularity below that belongs in version-control commits, not in the discussion file.
 
 The canonical TDD cycle:
-- `test-engineer` opens with either a failing test (RED) for the next unimplemented Task, or a GREEN-ONLY pass-through for Tasks that have no `Action — RED:` block. Tasks are `### Task` headings in the Story files — there are no checkboxes; progress is tracked from the discussion file. If the project has UI/E2E tests, the TE registers element locators per `Not applicable — Core has no UI/E2E tests, so there is no locator registry and the test-engineer omits the locator section of its turn format` before writing the test.
+- `test-engineer` opens with either a failing test (RED) for the next unimplemented Task, or a GREEN-ONLY pass-through for Tasks that have no `Action — RED:` block. Tasks are `### Task` headings in the Story files — there are no checkboxes; progress is tracked from the discussion file. If the project has UI/E2E tests, the TE registers element locators per `Core has no UI — core dispatches omit the locator section. For **web**: the
+locator registry is `clients/web/src/locators.ts`, a production module of exported
+`data-testid` string constants **owned by the software-engineer lane** (debate
+finding — TE ownership of production-consumed code would break the lanes).
+Components attach ids only from the registry; tests (component + E2E) select
+only via the registry; when a RED test needs a locator that does not exist
+yet, the test imports the constant it expects and the Story's GREEN action
+adds it — the missing constant is part of the failing state, the SE supplies
+it with the component.` before writing the test.
 - `software-engineer` makes that test green by editing production sources (RED flow), or implements the forwarded Task(s) directly from the Story spec (GREEN-ONLY flow).
 - `test-engineer` runs the test (GREEN), then either opens the next RED or — when every Task is green and the EPIC's Verification Gate runs clean on every in-scope target — appends `IMPLEMENTATION_READY_FOR_REVIEW:`. For GREEN-ONLY Tasks, the TE runs a build-only check instead of a test.
 
@@ -35,17 +43,40 @@ Separately, while the TDD loop runs, the orchestrator counts `ATTEMPT-FAILED: <t
 
 This project's build variants and their dependency order:
 
-**One variant: `core`.** Core (the daemon) is the whole product for this
-pipeline. The Web SPA, the macOS/iOS Swift app, and the CLI are pure
-visualization over one gRPC schema and ship from separate bakes (the Swift app
-in particular is a different language and gets its own pipeline later).
+**Two variants: `core` and `web`.** The macOS/iOS Swift app and the CLI remain
+pure visualization over the same gRPC schema and still ship from separate
+bakes (the Swift app is a different language and gets its own pipeline later);
+the Web SPA joined this pipeline per the Epic 020 SU7 decision.
 
-- **`core`** — owns `src/`. Build target: the TypeScript program type-checked by
-  `tsc` and exercised by `node --test`. No dependency on any other variant.
+- **`core`** — owns `src/`. Build target: the TypeScript program type-checked
+  by `tsc` and exercised by `node --test`. No dependency on any other variant.
+- **`web`** — owns `clients/web/` (source `clients/web/src/**`, unit/component tests
+  `clients/web/src/**/*.test.ts` and `*.test.tsx`, E2E `clients/web/e2e/**`). Build target: the
+  Vite production bundle, type-checked by `tsc` and exercised by Vitest (+
+  Playwright where a Story names it). Depends on core **only** through the
+  maintainer-generated Connect-Web client (committed generated code; when the
+  Epic 026 schema changes, the maintainer re-generates — the client is never an
+  engineer edit).
 
-Because there is exactly one variant, the worktree / `--variant` / `--join`
-machinery collapses to a no-op: `/work <epic>` runs serially in the main tree.
-There are no cross-variant shared files and therefore no merge policy to define.
+Source path sets are disjoint (`src/` vs `clients/web/`); `--variant web` runs in an
+isolated worktree; `--join` runs both variants' cheap gates (typecheck + unit)
+and needs no shared-file merge policy — the only shared inputs (proto schema,
+generated clients, root package config) are lane-forbidden to every engineer
+role.
+
+**Web bootstrap gate (hard precondition, debate finding):** before the first
+web story dispatches, the maintainer bootstrap must have landed and passed:
+`clients/web/` scaffold + toolchain deps + configs, the generated Connect-Web client,
+the design foundation (Tailwind v4 + shadcn init, `clients/web/src/styles/globals.css`
+tokens, the DESIGN.md §5 foundation component set — kept a separable item so a
+styling-toolchain failure is isolatable from the rest of the bootstrap; debate
+finding), the E2E pre-flight script, the seeded `web-gotchas.md`, and one
+hello-world component + one hello-world E2E driven through the full four-role
+pipeline — the hello-world component renders a vendored primitive styled by a
+semantic token, proving the design-system path end to end.
+The SU7 decision record links the passing run. Browser-consumability of the
+Epic 026 API (auth over TLS from the browser, same-origin serving or dev
+proxy — no CORS surprises) is part of what the hello-world must prove.
 
 Throughout, **scope** is either one variant name (variant mode) or `all` (serial mode, every variant in dependency order).
 
@@ -54,7 +85,7 @@ Throughout, **scope** is either one variant name (variant mode) or `all` (serial
 `/work` runs in one of four modes, chosen by flags:
 
 - **serial** (default — no `--variant`, no `--join`): one cycle over the whole EPIC in the main working tree, Tasks in dependency order. This is the original behavior, and the "Step N" spine below describes it.
-- **variant** (`--variant core`): one cycle scoped to a single variant's Stories, running inside a dedicated **git worktree** so two variant cycles can run at once without sharing a working tree, a build cache, or the lane-check snapshot. Independent variants touch disjoint dirs and disjoint build targets, so they parallelize cleanly **once their shared dependency variant is done**.
+- **variant** (`--variant core, web`): one cycle scoped to a single variant's Stories, running inside a dedicated **git worktree** so two variant cycles can run at once without sharing a working tree, a build cache, or the lane-check snapshot. Independent variants touch disjoint dirs and disjoint build targets, so they parallelize cleanly **once their shared dependency variant is done**.
 - **sketch** (`--sketch`, Phase A): no TDD loop and no test-engineer. The software-engineer is dispatched turn after turn until it appends `IMPLEMENTATION_READY_FOR_REVIEW:` with Phase A proof. The reviewer-engineer then reviews with the narrowed Phase A scope and the loop pauses for the human's **visual review**. Requires sketch mode to be enabled for this project; mutually exclusive with `--join`. See `Not applicable — this project has no sketch phase; all work is test-gated and the --sketch flag must error (there is no Phase A and no artifact-only review)` for what it produces. If sketch mode is not enabled, abort.
 - **join** (`--join`): not a TDD cycle — merges the finished variant branches into one tree and runs the EPIC's full Verification Gate on **every** target, the cross-variant attestation a single-variant cycle cannot give. See "Join mode" near the end. Never run `--join` on a sketch-only branch — there is nothing to gate until the flow's lock epic (Phase B) is done.
 
@@ -66,7 +97,7 @@ In variant and join modes every path in the steps below is rooted at the worktre
 
 From `$ARGUMENTS`:
 - **First positional** = EPIC file path (required). If missing or empty, print usage and stop.
-- **`--variant core`** = scope this cycle to one variant and run it in a worktree (variant mode). Omit for serial mode. Capture as `VARIANT` (empty in serial mode); the "scope" label is `VARIANT` in variant mode, `all` in serial mode. If the value is not one of `core`, abort with usage **before** any worktree is created.
+- **`--variant core, web`** = scope this cycle to one variant and run it in a worktree (variant mode). Omit for serial mode. Capture as `VARIANT` (empty in serial mode); the "scope" label is `VARIANT` in variant mode, `all` in serial mode. If the value is not one of `core, web`, abort with usage **before** any worktree is created.
 - **`--base <ref>`** = git ref the worktree branches off (variant/join modes). Default `HEAD`. For parallel dependent-variant runs, point this at the committed base variant.
 - **`--sketch`** = Phase A sketch mode. Capture as `SKETCH=true`. Mutually exclusive with `--join` (abort with usage if both). Requires sketch mode enabled + the variant sketch runs on — abort otherwise.
 - **`--join`** = run join mode instead of a TDD cycle. Mutually exclusive with `--variant`; if both are given, abort with usage.
@@ -108,7 +139,7 @@ All path checks below resolve under `<root>`.
 5. `.claude/agents/reviewer-engineer.md` exists.
 6. `.agent/tdd/history/` exists (create it with `mkdir -p` if not).
 7. **No double review on resume.** If the discussion file (Step 3) already exists and its latest `HUMAN_REVIEW:` line is `PASS`, this cycle is already done — report `already closed` and stop without dispatching.
-8. **Variant mode only.** `VARIANT` is one of `core`, and the base ref resolves (`git -C "$REPO_ROOT" rev-parse --verify <base-ref>`). If a dependent variant is run with `--base HEAD`, warn (do not abort): the base variant may not be frozen — prefer running it first and pointing `--base` at that committed ref.
+8. **Variant mode only.** `VARIANT` is one of `core, web`, and the base ref resolves (`git -C "$REPO_ROOT" rev-parse --verify <base-ref>`). If a dependent variant is run with `--base HEAD`, warn (do not abort): the base variant may not be frozen — prefer running it first and pointing `--base` at that committed ref.
 
 ## Step 3 — Derive the discussion file path
 
@@ -148,9 +179,21 @@ TDD protocol:
 
 ## Step 4 — Environment pre-flight (once)
 
-None. Tests and typecheck run in-process with no emulator, database, browser, or
-booted resource. The orchestrator skips Step 4 and passes `n/a` as the
-pre-flight value to every dispatch.
+#### core
+None. Tests and typecheck run in-process with no emulator, database, browser,
+or booted resource. The orchestrator skips Step 4 and passes `n/a` for core
+dispatches.
+
+#### web
+Unit/component tests need nothing (`n/a`). **E2E dispatches only:** the
+orchestrator runs the maintainer-owned pre-flight script
+(`scripts/web-e2e-preflight.mjs`, lane-forbidden): boots the daemon in
+dev/test mode (loopback bind, test TLS certs, golden fixture store — the
+script owns fixture seeding), serves the built SPA, waits on both readiness
+probes, and exports the allocated ports via env. A pre-flight failure is an
+environment failure, never a story failure (debate finding — ownership,
+seeding, auth material, and port allocation are the script's, not the
+engineers').
 
 If the pre-flight is required for the scope and fails, **stop immediately** — do not enter the dispatch loop. Ask the human to resolve it, then re-run `/work`. Otherwise store whatever it captured for use in every Step 5f dispatch prompt.
 
@@ -230,15 +273,6 @@ SINGLE-TURN CONTRACT (OVERRIDES everything below):
 - Do NOT spawn or dispatch any sub-agent.
 - Append "IMPLEMENTATION_READY_FOR_REVIEW:" ONLY when this turn IS it (test-engineer, every in-scope Task already green).
 
-RESPONSE-SIZE DISCIPLINE (OVERRIDES everything below — ignoring it can abort your turn and lose all its work):
-- The model caps a SINGLE assistant response at 32000 output tokens, counting your extended thinking + prose + EVERY tool-call input (a `Write` body, an `Edit` hunk, a `Bash` heredoc). You cannot see your own token count, so control size STRUCTURALLY, never by estimating.
-- Emit AT MOST ONE source/test-file mutation per assistant response: one `Write` or one `Edit`, then let the tool result return before the next. A few tiny edits to the SAME file may share a response; never batch edits across files, and never put a large write in a batched response.
-- Never write/edit a source or test file with a Bash heredoc (`cat > file`) — use `Write`/`Edit`. The only heredoc allowed is the small `cat >>` append to the discussion file.
-- Never rewrite an existing file wholesale — use targeted `Edit` hunks; reserve `Write` for new files, and scaffold a large new file across responses.
-- A multi-file ("ripple") change is still ONE Task but NOT one response: change the seam and one conformer, let feedback return, then the next. If your change would touch more than ~3 files or a file over ~10 KB, split it across responses (one file or small group per round).
-- test-engineer: create at most one NEW test file per response; scaffold a large suite first, then add cases in later responses.
-- Never paste file contents or full command/test output into thinking or the draft — cite `path:line` and summarize (the one failing assertion line, pass/fail counts). Keep the appended turn short (~40 lines).
-
 Follow your discussion-channel protocol exactly:
 1. Read the EPIC file and the discussion file for full context. The EPIC's `## Verification Gate` is binding. The discussion file's last turn (if any) tells you what was just done.
 2. Do the work your persona owns this turn:
@@ -269,7 +303,7 @@ Return one short sentence summarizing what you wrote.
 
 ### 5g. Verify the subagent wrote
 Re-read the tail (same pipeline as 5c) and also check for any new `^IMPLEMENTATION_READY_FOR_REVIEW:` line. Compare with `tail_before`:
-- If the tail is unchanged AND no new `IMPLEMENTATION_READY_FOR_REVIEW:` line appeared → the turn did not land. **Response-size abort recovery:** if the Agent call errored with an output-token-limit abort (the "32000 output token maximum" error) — or returned without appending — the subagent likely tried to do too much in one response. Re-dispatch the **same role** once with the same `TURN_ID`, prepending: *"Your previous attempt aborted by exceeding the single-response output-token cap. This turn, make only ONE small mutation (a single `Edit`/`Write`), rely on the RESPONSE-SIZE DISCIPLINE, and split the remaining work across later turns."* Count it toward the Task's attempt limit (5h). If it aborts a second time on the same Task, escalate to the human. Only if it is not a size abort → abort with `"subagent <next> returned but discussion file unchanged"` and leave the file for human review.
+- If the tail is unchanged AND no new `IMPLEMENTATION_READY_FOR_REVIEW:` line appeared → abort with `"subagent <next> returned but discussion file unchanged"`. Leave the file as-is for human review.
 
 ### 5g.1 Lane ownership check (git diff)
 
@@ -286,20 +320,31 @@ Tests are **co-located** with source (`bar.ts` + `bar.test.ts` in one dir), so a
 prefix table cannot separate the lanes — this project uses a **predicate
 script**: `scripts/lane-check.sh <role> <scope> <path>` (exit 0 = in-lane).
 
-- **test-engineer** lane: `src/**/*.test.ts`, `src/**/*.spec.ts`, plus its draft
-  files under `.agent/tdd/` and its journal under `.agent/tdd/memory/test-engineer/`.
+- **test-engineer** lane: `src/**/*.test.ts`, `src/**/*.spec.ts` (core);
+  `clients/web/src/**/*.test.ts`, `clients/web/src/**/*.test.tsx`, `clients/web/e2e/**` (web); plus its
+  draft files under `.agent/tdd/` and its journal under
+  `.agent/tdd/memory/test-engineer/`.
 - **software-engineer** lane: `src/**/*.ts` that is NOT a `*.test.ts` /
-  `*.spec.ts`, plus its draft files under `.agent/tdd/` and its journal under
-  `.agent/tdd/memory/software-engineer/`.
+  `*.spec.ts` (core); `clients/web/src/**` that is NOT a test file (web) — this
+  **includes the locator registry `clients/web/src/locators.ts`**: it is production
+  code the SE owns; the TE consumes it and, when a test needs a missing
+  locator, the Story's GREEN action adds it (debate finding — a TE-owned
+  production-consumed module would break the lanes); plus its draft files and
+  journal as for core.
 - **Always forbidden to BOTH** (the lane script denies these for every role):
   the locked plan tree `.agent/plan/**`; the pipeline files `.claude/**`;
   toolchain/config `package.json`, `package-lock.json`, `tsconfig*.json`,
-  `*.config.*`, `scripts/**`; container/build files `Containerfile`,
-  `compose.yaml`, `Makefile`; any generated proto output. The reviewer-engineer
-  edits nothing at all.
+  `*.config.*`, `scripts/**`, `clients/web/package.json`, `clients/web/tsconfig*.json`,
+  `clients/web/vite.config.*`, `clients/web/playwright.config.*`, `clients/web/vitest.config.*`;
+  container/build files `Containerfile`, `compose.yaml`, `Makefile`; any
+  generated proto/client output (server or web); the design contract
+  `DESIGN.md`, the token file `clients/web/src/styles/globals.css`, and the vendored
+  shadcn primitives `clients/web/src/components/ui/**` (changes route through
+  DESIGN.md §P2; HD-A decided 2026-07-03 — hard deny). The
+  reviewer-engineer edits nothing at all.
 
-The scope argument is always `core` (or `all`, the serial alias) — the lane
-rules are identical for both since there is one variant.
+The scope argument is `core`, `web`, or `all` (the serial alias running both);
+lane rules are variant-scoped as listed above.
 
 Both roles may also write `.agent/tdd/` and their own `.agent/tdd/memory/<role>/` journal dir (under `<root>`). In sketch mode the software-engineer may additionally write the proof-artifact dir named in `Not applicable — this project has no sketch phase; all work is test-gated and the --sketch flag must error (there is no Phase A and no artifact-only review)`.
 
@@ -349,12 +394,6 @@ grep -E '^HUMAN_REVIEW: (PASS|FAIL)' '<discussion-file>' | tail -1
 
 ### 6b. Reviewer-engineer review gate + auto-routing of `action:YES` findings
 
-**One reviewer round only.** Dispatch the `reviewer-engineer` **exactly once** per
-cycle. After that single round — including after auto-routing `action:YES`
-findings back through the TDD loop and fixing them — do **not** dispatch the
-reviewer again (the `AUTO_DONE` guard below enforces this). Hand the result to
-the human. Run another reviewer round only when the human explicitly asks for one.
-
 The reviewer-engineer IS the code review. Every finding it returns is tagged `action:YES` (must be applied) or `action:NO` (no-op / informational). The orchestrator auto-routes the `action:YES` findings straight back through the TDD loop — **once** per review cycle — and surfaces only the `action:NO` findings to the human.
 
 **First, has the auto-fix pass already run this review cycle?** It fires at most once between human verdicts:
@@ -372,10 +411,9 @@ Extract the base ref and compute the changed files:
 ```bash
 BASE_REF=$(grep '^base-ref:' '<discussion-file>' | head -1 | sed 's/^base-ref:[[:space:]]*//')
 CHANGED_FILES=$(git -C '<root>' diff --name-only "$BASE_REF"..HEAD)
-REVIEWER_DRAFT=<root>/.agent/tdd/.reviewer-response-<epic-slug>-$(date -u +%Y%m%d-%H%M%S).md   # minted here by /work so it can be deleted by exact name after the turn
 ```
 
-Dispatch one `reviewer-engineer` agent (substituting `<root>`, `<EPIC_FILE>`, `<DISCUSSION_FILE>`, `<SCOPE>`, `<BASE_REF>`, `<CHANGED_FILES>`, `<REVIEWER_DRAFT>`, and the phase):
+Dispatch one `reviewer-engineer` agent (substituting `<root>`, `<EPIC_FILE>`, `<DISCUSSION_FILE>`, `<SCOPE>`, `<BASE_REF>`, `<CHANGED_FILES>`, and the phase):
 
 ```
 Review the implementation for EPIC <EPIC_FILE>.
@@ -383,7 +421,6 @@ Review the implementation for EPIC <EPIC_FILE>.
 Working root: <root>
 EPIC file: <EPIC_FILE>
 Discussion file: <DISCUSSION_FILE>
-Draft file: <REVIEWER_DRAFT>     # draft your verdict into THIS exact file; /work deletes it by name after your turn
 Scope: <SCOPE>
 Phase: <"A (sketch) — apply the narrowed Phase A review scope from the review dimensions" when SKETCH=true, else "B (lock) — all dimensions">
 Base ref: <BASE_REF>
@@ -391,11 +428,7 @@ Changed files (review ONLY these — do not review unchanged files):
 <CHANGED_FILES>
 
 Follow your per-review workflow exactly. Read the gotcha files first, then the EPIC/Story files, then the changed source and test files. Cross-reference against all review dimensions and produce your structured verdict.
-
-RESPONSE-SIZE DISCIPLINE (ignoring it can abort your review and lose it): the model caps a SINGLE assistant response at 32000 output tokens, counting your extended thinking + prose + every tool-call input. You cannot see your own token count, so keep the verdict tight: never reproduce source code, full diffs, long logs, or an exhaustive per-AC table — state each finding as `<B/S> - action - name - one-line` with a `file:line` cite plus a compact coverage summary, and read only the line ranges you need.
 ```
-
-**Clean up the reviewer draft.** The reviewer, like the engineers, leaves its draft temp behind for the orchestrator to remove. Delete it by its exact minted name — `rm -f '<REVIEWER_DRAFT>'` — so reviewer drafts do not accumulate under `.agent/tdd/` across review cycles.
 
 **Parse the reviewer's verdict** into two lists by each finding's `action:` tag: `YES` = apply, `NO` = informational.
 
@@ -472,7 +505,7 @@ If the merge reports conflicts → stop and hand to the human. Conflicts should 
 ### J3. Gate every target
 Set `<root>` = `JOIN_PATH`. Run the env pre-flight (Step 4). Seed a join discussion file (`scope: join`, `opener: test-engineer`). Dispatch **one** test-engineer turn (the Step 5f prompt with scope `all`) plus:
 
-> Do not write new tests. Run the EPIC's full `## Verification Gate` on EVERY target (`core` only (single variant) — run npm run typecheck then npm test; --join is effectively a no-op since there is nothing to merge). Append a turn reporting each target's exit code; if all are green append `IMPLEMENTATION_READY_FOR_REVIEW:`, otherwise name the failing target/test and end the turn.
+> Do not write new tests. Run the EPIC's full `## Verification Gate` on EVERY target (Both variants, cheap gates only: `core` (npm run typecheck, npm test) then `web` (npm run typecheck:web, npm run test:web). Variant path sets are disjoint at the source level (`src/` vs `clients/web/`), so --join merges worktrees without a shared-file policy; the one shared input — the proto schema and its generated clients (server + web) — is maintainer-regenerated, lane-forbidden, and committed, so it can never appear in an engineer's diff (debate finding: the generated client is the non-disjoint edge, owned explicitly).). Append a turn reporting each target's exit code; if all are green append `IMPLEMENTATION_READY_FOR_REVIEW:`, otherwise name the failing target/test and end the turn.
 
 ### J4. Hand to human
 - Both/all gates green → pause for human review like Step 6c (verdict in the join discussion file). On `HUMAN_REVIEW: PASS` the EPIC is done — the human merges the join branch and removes the worktrees. `reason=join-ready`.
