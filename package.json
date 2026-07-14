@@ -16,7 +16,13 @@
     "build": "tsc --noEmit",
     "test": "node --import ./src/harness/no-network-guard.ts --test \"src/**/*.test.ts\"",
     "generate:proto": "buf generate",
-    "verify:handoff": "node scripts/verify-handoff.mjs"
+    "verify:handoff": "node scripts/verify-handoff.mjs",
+    "install:web": "npm --prefix clients/web install",
+    "typecheck:web": "npm --prefix clients/web run typecheck",
+    "build:web": "npm --prefix clients/web run build",
+    "test:web": "npm --prefix clients/web run test",
+    "e2e:web": "npm --prefix clients/web run e2e",
+    "verify:handoff:web": "npm --prefix clients/web run verify:handoff"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.71.0",

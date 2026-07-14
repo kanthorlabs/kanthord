@@ -151,3 +151,10 @@ vite.config.ts.timestamp-*
 **/worktrees/
 # probe transcript (may contain redacted-but-sensitive output)
 scripts/dev/probes/su2-su5-transcript.txt
+
+# Web dashboard (clients/web) — standalone package build + test artifacts.
+clients/web/node_modules/
+clients/web/dist/
+clients/web/test-results/
+clients/web/playwright-report/
+clients/web/.vite/
