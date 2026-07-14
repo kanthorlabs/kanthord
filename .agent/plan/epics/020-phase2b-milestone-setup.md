@@ -1,5 +1,13 @@
 # 020 Phase-2B Milestone Setup (maintainer gate — blocks all 2B TDD epics)
 
+> **Scope amendment 2026-07-14 (Ulrich):** **SU3 (Jira/Slack) and SU4 (classifier
+> model config) are DEFERRED to a later phase, after the web UI (Epic 027) is
+> done.** They are not needed in the current state. This gate's active scope is
+> **SU1, SU2, SU5, SU6, SU7**. Consequently Epics 022, 025, and 029 stay
+> setup-blocked by intent until SU3/SU4 are picked back up — that ordering is
+> deliberate, not a gap. The Verification Gate below is read as SU1/SU2/SU5/SU6/SU7
+> for this pass.
+
 ## Outcome
 
 The dependencies, credentials, external accounts, spikes, and codegen that Phase
@@ -56,7 +64,7 @@ every SU here (scratch-only targets, least-privilege tokens, probe cleanup).
   declaration (debate finding — "works on my Mac" does not unblock a
   container-run pipeline); the findings file answers each point.
 
-### SU3 — Jira + Slack credential custody + API spikes  *(unblocks Epics 022, 029)*
+### SU3 — Jira + Slack credential custody + API spikes  *(unblocks Epics 022, 029)*  **[DEFERRED 2026-07-14 — post-UI]**
 - **Action (maintainer):** provision least-privilege API credentials for Jira
   (scratch project) and Slack (a DM/bot scope able to message the maintainer);
   add to custody config. Spike and record in
@@ -70,7 +78,7 @@ every SU here (scratch-only targets, least-privilege tokens, probe cleanup).
 - **Verify:** custody invariants hold (the Epic 011 SU4 checks); the findings
   file answers each point; probes ran against scratch targets and cleaned up.
 
-### SU4 — ring-2 classifier model config  *(unblocks Epic 025; two steps — debate finding: the registry shape is Epic 024's, a later TDD epic)*
+### SU4 — ring-2 classifier model config  *(unblocks Epic 025; two steps — debate finding: the registry shape is Epic 024's, a later TDD epic)*  **[DEFERRED 2026-07-14 — post-UI]**
 - **Action (maintainer), step 1 — now:** provision the classifier provider
   credential into the Epic 011 SU4 custody config.
 - **Action (maintainer), step 2 — after Epic 024 Story 004 lands the provider
