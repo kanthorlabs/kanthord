@@ -15,4 +15,14 @@ export function initRing1Schema(store: Store): void {
       ledger  TEXT NOT NULL
     )`,
   );
+  store.run(
+    `CREATE TABLE IF NOT EXISTS budget_reservation_attempt (
+      id                INTEGER PRIMARY KEY,
+      task_id           TEXT NOT NULL,
+      attempted_at      INTEGER NOT NULL,
+      conservative_cost REAL NOT NULL,
+      outcome           TEXT NOT NULL CHECK (outcome IN ('proceed', 'halted')),
+      reserved_total    REAL NOT NULL
+    )`,
+  );
 }

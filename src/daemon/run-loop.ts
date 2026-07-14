@@ -31,6 +31,7 @@ import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts"
 import type { HoldPoint } from "../broker/hold-point.ts";
 import { createEscalationItem } from "../inbox/inbox.ts";
 import { makeOutboundScanGuard } from "../ring1/outbound-scan-guard.ts";
+import { reserveBudgetReservation } from "../ring1/budget-reservation.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
 import type { Workflow, GateResultSink } from "../workflow/workflow.ts";
 import type { WorktreeDispatchOpts, WorktreeDispatchResult, RunWorktreeGitFn } from "../slots/worktree.ts";
@@ -275,31 +276,32 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
       }
     : undefined;
 
-  // Budget reservations are durable and use one conditional upsert, rather
-  // than a load/add/save sequence. SQLite executes this statement atomically:
-  // one contender can advance a task at its ceiling and every other contender
-  // observes the committed ledger and receives no RETURNING row. Rows use the
-  // "spend:<taskId>" namespace so they do not collide with reconcile entries.
-  // initSchema creates budget_ledger during lifecycle.start() before tick().
   const taskBudget = deps.taskBudget ?? DEFAULT_TASK_BUDGET;
+  let fatalBudgetStorageLatch: { taskId: string; error: unknown } | undefined;
+
+  function fatalBudgetStorageFailure(): { taskId: string; error: unknown } | undefined {
+    return fatalBudgetStorageLatch;
+  }
+
   function reserveTaskBudget(taskId: string): "proceed" | "halted" {
-    const cost = taskBudget.conservativeCost;
-    const reservation = store.get<{ ledger: string }>(
-      `INSERT INTO budget_ledger (task_id, ledger)
-       SELECT ?, ?
-       WHERE ? <= ?
-       ON CONFLICT(task_id) DO UPDATE SET ledger = CAST(CAST(ledger AS REAL) + ? AS TEXT)
-       WHERE CAST(ledger AS REAL) + ? <= ?
-       RETURNING ledger`,
-      `spend:${taskId}`,
-      String(cost),
-      cost,
-      taskBudget.ceiling,
-      cost,
-      cost,
-      taskBudget.ceiling,
-    );
-    return reservation === undefined ? "halted" : "proceed";
+    try {
+      return reserveBudgetReservation({
+        store,
+        taskId,
+        attemptedAt: clock.now(),
+        conservativeCost: taskBudget.conservativeCost,
+        ceiling: taskBudget.ceiling,
+        logger,
+      }).outcome;
+    } catch (error: unknown) {
+      fatalBudgetStorageLatch = { taskId, error };
+      logger.info({
+        event: "fatal-budget-storage-latched",
+        task_id: taskId,
+        error,
+      });
+      throw error;
+    }
   }
 
   // Outbound scan guard (GAP2): blocks push payloads that match secret patterns.
@@ -510,6 +512,16 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
     // After the dispatch loop, observes broker_completion for create_pr ops
     // whose PR has been merged and marks the associated task "complete".
     async tick(): Promise<void> {
+      const tickBudgetStorageFailure = fatalBudgetStorageFailure();
+      if (tickBudgetStorageFailure !== undefined) {
+        logger.info({
+          event: "tick-skipped-fatal-budget-storage-latch",
+          task_id: tickBudgetStorageFailure.taskId,
+          error: tickBudgetStorageFailure.error,
+        });
+        return;
+      }
+
       const featureRows = store.all<{ feature_id: string }>(
         "SELECT DISTINCT feature_id FROM plan_generation",
       );
@@ -567,15 +579,6 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
 
           const beforeModelCall = async (): Promise<void> => {
             if (reserveTaskBudget(task.id) !== "halted") return;
-            createEscalationItem({
-              source_id: `${task.id}:budget-breach`,
-              task_id: task.id,
-              reason: "budget-breach",
-              payload_summary: `task ${task.id} budget ceiling breached`,
-              store,
-              clock,
-            });
-            setTaskStatus(store, task.id, "parked");
             logger.info({ event: "budget-breach", task_id: task.id });
             throw new Error(`task ${task.id} budget ceiling breached`);
           };
@@ -670,6 +673,18 @@ export async function runDaemon(deps: RunDaemonDeps): Promise<RunDaemonHandle> {
           });
 
           await sessionHandle.waitForIdle();
+
+          const postSessionBudgetStorageFailure = fatalBudgetStorageFailure();
+          if (postSessionBudgetStorageFailure !== undefined) {
+            logger.info({
+              event: "post-session-processing-skipped",
+              task_id: task.id,
+              reason: "fatal budget storage latch",
+              latched_task_id: postSessionBudgetStorageFailure.taskId,
+              error: postSessionBudgetStorageFailure.error,
+            });
+            return;
+          }
 
           const postSessionTask = store.get<{ status: string }>(
             "SELECT status FROM scheduler_task WHERE node_id = ?",

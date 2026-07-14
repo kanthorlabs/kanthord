@@ -11,6 +11,9 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { get as httpGet } from "node:http";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 import { openStore } from "../foundations/sqlite-store.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
@@ -28,6 +31,8 @@ import type { WorktreeDispatchOpts, WorktreeDispatchResult } from "../slots/work
 import { createEscalationItem } from "../inbox/inbox.ts";
 import { getInFlightOp } from "../broker/submit.ts";
 import { readTimelineEvents } from "../metrics/task-timeline.ts";
+
+const execFileAsync = promisify(execFile);
 
 // ---------------------------------------------------------------------------
 // Helper — issue a GET /healthz and resolve with the status code
@@ -6746,7 +6751,6 @@ test("Phase 2A remediation B2 — overlapping model-call gates permit one reserv
     statusServerFactory: createStatusServer,
     taskBudget: { ceiling: 1, conservativeCost: 1 },
   });
-
   try {
     await compile(featureDir, store, { repoRegistry: ["backend"] });
     loadTasks(store, "feat-s002t1");
@@ -6795,6 +6799,592 @@ test("Phase 2A remediation B2 — overlapping model-call gates permit one reserv
     await handle.stop();
     store.close();
     await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+type BudgetReservationAttempt = {
+  task_id: string;
+  attempted_at: number;
+  conservative_cost: number;
+  outcome: "proceed" | "halted";
+  reserved_total: number;
+};
+
+function plainBudgetReservationAttempt(attempt: BudgetReservationAttempt): BudgetReservationAttempt {
+  return {
+    task_id: attempt.task_id,
+    attempted_at: attempt.attempted_at,
+    conservative_cost: attempt.conservative_cost,
+    outcome: attempt.outcome,
+    reserved_total: attempt.reserved_total,
+  };
+}
+
+function readBudgetReservationAttempts(store: Store): BudgetReservationAttempt[] {
+  return store.all<BudgetReservationAttempt>(
+    `SELECT task_id, attempted_at, conservative_cost, outcome, reserved_total
+     FROM budget_reservation_attempt
+     ORDER BY attempted_at, outcome`,
+  ).map(plainBudgetReservationAttempt);
+}
+
+async function seedStrictBudgetEvidenceFeature(featureDir: string): Promise<void> {
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+}
+
+test("LP-A1/LP-A3 strict budget evidence — schema exposes a durable per-decision reservation table", () => {
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  try {
+    initSchema(store);
+    const table = store.get<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'budget_reservation_attempt'",
+    );
+    assert.equal(table?.name, "budget_reservation_attempt", "schema must create the budget reservation attempt table");
+
+    const columns = store.all<{ name: string }>("PRAGMA table_info(budget_reservation_attempt)");
+    assert.deepEqual(
+      columns.map((column) => column.name).filter((name) => [
+        "task_id",
+        "attempted_at",
+        "conservative_cost",
+        "outcome",
+        "reserved_total",
+      ].includes(name)).sort(),
+      ["attempted_at", "conservative_cost", "outcome", "reserved_total", "task_id"],
+      "each reservation attempt must retain task, injected-clock instant, cost, outcome, and resulting reserved total",
+    );
+  } finally {
+    store.close();
+  }
+});
+
+test("LP-A1/LP-A3 strict budget evidence — a ceiling-zero first call durably halts before any provider effect", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-strict-budget-halt-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_234_567_890);
+  let providerEffects = 0;
+
+  await seedStrictBudgetEvidenceFeature(featureDir);
+  const piSurface = {
+    spawnAgent(opts: unknown) {
+      const gate = (opts as Record<string, unknown>)["beforeModelCall"];
+      let stopReason: "error" | undefined;
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof gate !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await gate();
+            providerEffects++;
+          } catch {
+            stopReason = "error";
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+        get stopReason() { return stopReason; },
+      };
+    },
+  };
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 0, conservativeCost: 1 },
+  });
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+
+    assert.deepEqual(readBudgetReservationAttempts(store), [{
+      task_id: "task-foo",
+      attempted_at: 1_234_567_890,
+      conservative_cost: 1,
+      outcome: "halted",
+      reserved_total: 0,
+    }], "the rejected first decision must be durable evidence, not an omitted ledger write");
+    assert.equal(
+      Number(store.get<{ total: number }>(
+        "SELECT COALESCE((SELECT CAST(ledger AS REAL) FROM budget_ledger WHERE task_id = ?), 0) AS total",
+        "spend:task-foo",
+      )?.total),
+      0,
+      "a halted first decision must leave the cumulative reserved total at zero",
+    );
+    assert.equal(providerEffects, 0, "a halted attempt must not invoke the provider");
+    assert.equal(
+      (JSON.parse(store.get<{ evidence: string }>("SELECT evidence FROM inbox_items")?.evidence ?? "{}") as { reason?: string }).reason,
+      "budget-breach",
+      "the halted decision must create budget-breach escalation evidence",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("LP-A1/LP-A3 strict budget evidence — concurrent one-slot decisions atomically retain evidence through restart", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-strict-budget-concurrent-"));
+  const dbDir = await mkdtemp(join(tmpdir(), "krl-strict-budget-db-"));
+  const dbPath = join(dbDir, "budget.db");
+  const clock = new FakeClock(2_000_000_000);
+  const store = openStore(dbPath, { busyTimeout: 1000 });
+  let storeClosed = false;
+  type ModelCallGate = () => Promise<void>;
+  let gate: ModelCallGate | undefined;
+  let providerEffects = 0;
+
+  await seedStrictBudgetEvidenceFeature(featureDir);
+  const piSurface = {
+    spawnAgent(opts: unknown) {
+      const candidate = (opts as Record<string, unknown>)["beforeModelCall"];
+      gate = typeof candidate === "function" ? candidate as ModelCallGate : undefined;
+      return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 };
+    },
+  };
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 1, conservativeCost: 1 },
+  });
+  let handleStopped = false;
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    loadTasks(store, "feat-s002t1");
+    await handle.tick();
+    assert.ok(gate !== undefined, "the spawned session must expose its before-model-call gate");
+    const beforeModelCall = gate;
+
+    const invokeProvider = async (): Promise<void> => {
+      await beforeModelCall();
+      const proceed = store.get<BudgetReservationAttempt>(
+        `SELECT task_id, attempted_at, conservative_cost, outcome, reserved_total
+         FROM budget_reservation_attempt
+         WHERE task_id = ? AND outcome = 'proceed'`,
+        "task-foo",
+      );
+      assert.deepEqual(
+        proceed === undefined ? undefined : plainBudgetReservationAttempt(proceed),
+        {
+          task_id: "task-foo",
+          attempted_at: 2_000_000_000,
+          conservative_cost: 1,
+          outcome: "proceed",
+          reserved_total: 1,
+        },
+        "provider invocation is permitted only after its committed proceed evidence exists",
+      );
+      assert.equal(
+        Number(store.get<{ total: number }>(
+          "SELECT CAST(ledger AS REAL) AS total FROM budget_ledger WHERE task_id = ?",
+          "spend:task-foo",
+        )?.total),
+        1,
+        "a proceed attempt exposes its matching cumulative ledger total before provider invocation",
+      );
+      providerEffects++;
+    };
+
+    const results = await Promise.allSettled([invokeProvider(), invokeProvider()]);
+    assert.equal(providerEffects, 1, "only the single proceed decision may invoke the provider");
+    assert.equal(results.filter((result) => result.status === "rejected").length, 1, "one concurrent one-slot decision must halt");
+    assert.deepEqual(readBudgetReservationAttempts(store), [
+      {
+        task_id: "task-foo",
+        attempted_at: 2_000_000_000,
+        conservative_cost: 1,
+        outcome: "halted",
+        reserved_total: 1,
+      },
+      {
+        task_id: "task-foo",
+        attempted_at: 2_000_000_000,
+        conservative_cost: 1,
+        outcome: "proceed",
+        reserved_total: 1,
+      },
+    ], "each competing decision must leave exactly one durable outcome with its resulting total");
+    assert.equal(
+      Number(store.get<{ total: number }>(
+        "SELECT CAST(ledger AS REAL) AS total FROM budget_ledger WHERE task_id = ?",
+        "spend:task-foo",
+      )?.total),
+      1,
+      "the successful ledger update and its proceed evidence must expose one cumulative cost",
+    );
+
+    await handle.stop();
+    handleStopped = true;
+    store.close();
+    storeClosed = true;
+
+    const restartedStore = openStore(dbPath, { busyTimeout: 1000 });
+    const restartedHandle = await runDaemon({
+      store: restartedStore,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent() { throw new Error("parked task must not respawn after restart"); } },
+      statusServerFactory: createStatusServer,
+      taskBudget: { ceiling: 1, conservativeCost: 1 },
+    });
+    try {
+      assert.deepEqual(
+        readBudgetReservationAttempts(restartedStore),
+        [
+          { task_id: "task-foo", attempted_at: 2_000_000_000, conservative_cost: 1, outcome: "halted", reserved_total: 1 },
+          { task_id: "task-foo", attempted_at: 2_000_000_000, conservative_cost: 1, outcome: "proceed", reserved_total: 1 },
+        ],
+        "restart must retain every pre-call decision as durable budget evidence",
+      );
+      await restartedHandle.tick();
+      assert.equal(providerEffects, 1, "restart must not resume spending after the halted competing decision");
+    } finally {
+      await restartedHandle.stop();
+      restartedStore.close();
+    }
+  } finally {
+    if (!handleStopped) await handle.stop();
+    if (!storeClosed) store.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(dbDir, { recursive: true, force: true });
+  }
+});
+
+test("reviewer budget B1 — failed reservation and failed fallback latch an absorbed session before post-session mutation", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-review-budget-b1-"));
+  const baseStore = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(3_000_000_000);
+  const mutations: string[] = [];
+  const logRecords: Array<Record<string, unknown>> = [];
+  let diffInspections = 0;
+  let spawnCount = 0;
+  let fallbackPersistenceFailed = false;
+  let handleStopped = false;
+  const faultStore: Store = {
+    get: baseStore.get.bind(baseStore),
+    all: baseStore.all.bind(baseStore),
+    close: baseStore.close.bind(baseStore),
+    run(sql: string, ...params: unknown[]): void {
+      if (sql.includes("INSERT INTO budget_reservation_attempt")) {
+        throw new Error("injected budget reservation transaction failure");
+      }
+      if (!fallbackPersistenceFailed && sql.includes("INSERT OR IGNORE INTO inbox_items")) {
+        fallbackPersistenceFailed = true;
+        throw new Error("injected budget fallback persistence failure");
+      }
+      baseStore.run(sql, ...params);
+    },
+  };
+
+  await seedStrictBudgetEvidenceFeature(featureDir);
+  const piSurface = {
+    spawnAgent(opts: unknown) {
+      spawnCount++;
+      const gate = (opts as Record<string, unknown>)["beforeModelCall"];
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof gate !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await gate();
+          } catch {
+            // The provider surface may absorb a gate rejection; lifecycle safety remains durable.
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+      };
+    },
+  };
+  const mutationAdapter = (verb: string): AsyncVerbAdapter => ({
+    submit: async (): Promise<unknown> => {
+      mutations.push(verb);
+      return `request-${verb}`;
+    },
+    poll_status: async (): Promise<unknown> => ({ status: "done" }),
+    reconcile: async (): Promise<unknown> => ({ status: "done" }),
+  });
+  const handle = await runDaemon({
+    store: faultStore,
+    featureDir,
+    clock,
+    logger: { info(record: Record<string, unknown>): void { logRecords.push({ ...record }); } },
+    piSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 1, conservativeCost: 1 },
+    inspectWorktreeDiff: async () => {
+      diffInspections++;
+      return undefined;
+    },
+    verbAdapters: {
+      "git.add": { entry: { ...makeTestEntry(), verb: "git.add" }, adapter: mutationAdapter("git.add") },
+      "git.commit": { entry: { ...makeTestEntry(), verb: "git.commit" }, adapter: mutationAdapter("git.commit") },
+      "git.push": { entry: { ...makeTestEntry(), verb: "git.push" }, adapter: mutationAdapter("git.push") },
+      "github.create_pr": { entry: { ...makeTestEntry(), verb: "github.create_pr" }, adapter: mutationAdapter("github.create_pr") },
+    },
+    commitsAhead: async () => 1,
+  });
+
+  try {
+    await compile(featureDir, faultStore, { repoRegistry: ["backend"] });
+    loadTasks(faultStore, "feat-s002t1");
+    await handle.tick();
+
+    assert.equal(
+      baseStore.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "running",
+      "when fallback persistence also fails, the durable row may remain running while the in-memory latch blocks it",
+    );
+    assert.equal(
+      baseStore.all("SELECT id FROM inbox_items").length,
+      0,
+      "the injected fallback persistence failure must leave no durable fallback inbox row",
+    );
+    assert.ok(
+      logRecords.some((record) => record["event"] === "budget-reservation-transaction-failed"),
+      "the reservation transaction error must be logged",
+    );
+    assert.ok(
+      logRecords.some((record) => record["event"] === "budget-ledger-failure-persistence-failed"),
+      "the fallback persistence error must be logged",
+    );
+    assert.equal(diffInspections, 0, "the fatal in-memory latch must skip post-session diff inspection");
+    assert.deepEqual(mutations, [], "the fatal in-memory latch must block staging and delivery mutations");
+
+    setTaskStatus(baseStore, "task-foo", "pending");
+    await handle.tick();
+    assert.equal(spawnCount, 1, "a latched task must not re-dispatch on a later tick even when SQLite says pending");
+    assert.deepEqual(mutations, [], "a later tick must not issue git or GitHub mutations for a latched task");
+  } finally {
+    if (!handleStopped) {
+      await handle.stop();
+      handleStopped = true;
+    }
+    baseStore.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("reviewer budget S1 — a one-shot transactional escalation fault rolls back the halt before durable fallback parking", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-review-budget-b2-"));
+  const dbDir = await mkdtemp(join(tmpdir(), "krl-review-budget-b2-db-"));
+  const dbPath = join(dbDir, "budget.db");
+  const clock = new FakeClock(3_100_000_000);
+  const crashingStore = openStore(dbPath, { busyTimeout: 1000 });
+  let failTransactionalEscalation = true;
+  let firstHandleStopped = false;
+  let crashingStoreClosed = false;
+  const crashAfterHaltStore: Store = {
+    get: crashingStore.get.bind(crashingStore),
+    all: crashingStore.all.bind(crashingStore),
+    close: crashingStore.close.bind(crashingStore),
+    run(sql: string, ...params: unknown[]): void {
+      if (failTransactionalEscalation && sql.includes("INSERT OR IGNORE INTO inbox_items")) {
+        failTransactionalEscalation = false;
+        throw new Error("injected transactional budget escalation failure");
+      }
+      crashingStore.run(sql, ...params);
+    },
+  };
+
+  await seedStrictBudgetEvidenceFeature(featureDir);
+  const absorbingPiSurface = {
+    spawnAgent(opts: unknown) {
+      const gate = (opts as Record<string, unknown>)["beforeModelCall"];
+      return {
+        abort() {},
+        async waitForIdle() {
+          if (typeof gate !== "function") throw new Error("beforeModelCall must be supplied");
+          try {
+            await gate();
+          } catch {
+            // The provider may absorb the rejected pre-call gate.
+          }
+        },
+        reset() {},
+        contextTokens: 0,
+      };
+    },
+  };
+  const firstHandle = await runDaemon({
+    store: crashAfterHaltStore,
+    featureDir,
+    clock,
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface: absorbingPiSurface,
+    statusServerFactory: createStatusServer,
+    taskBudget: { ceiling: 0, conservativeCost: 1 },
+  });
+
+  try {
+    await compile(featureDir, crashAfterHaltStore, { repoRegistry: ["backend"] });
+    loadTasks(crashAfterHaltStore, "feat-s002t1");
+    await firstHandle.tick();
+    assert.equal(
+      crashingStore.all("SELECT id FROM budget_reservation_attempt").length,
+      0,
+      "a transactional escalation failure must roll back the halted attempt evidence",
+    );
+    assert.equal(
+      crashingStore.all("SELECT task_id FROM budget_ledger WHERE task_id = ?", "spend:task-foo").length,
+      0,
+      "a transactional escalation failure must roll back the rejected reservation ledger write",
+    );
+    assert.equal(
+      crashingStore.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "parked",
+      "the durable fallback must park the task after the transaction rolls back",
+    );
+    assert.equal(
+      (JSON.parse(crashingStore.get<{ evidence: string }>("SELECT evidence FROM inbox_items")?.evidence ?? "{}") as { reason?: string }).reason,
+      "budget-ledger-failure",
+      "the durable fallback must record budget-ledger failure escalation evidence",
+    );
+    await firstHandle.stop();
+    firstHandleStopped = true;
+    crashingStore.close();
+    crashingStoreClosed = true;
+
+    const restartedStore = openStore(dbPath, { busyTimeout: 1000 });
+    const restartedHandle = await runDaemon({
+      store: restartedStore,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent() { throw new Error("reconciled halted task must not respawn"); } },
+      statusServerFactory: createStatusServer,
+      taskBudget: { ceiling: 0, conservativeCost: 1 },
+    });
+    try {
+      assert.equal(
+        restartedStore.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+        "parked",
+        "restart must retain the fallback parked lifecycle after the transaction rollback",
+      );
+      assert.equal(
+        (JSON.parse(restartedStore.get<{ evidence: string }>("SELECT evidence FROM inbox_items")?.evidence ?? "{}") as { reason?: string }).reason,
+        "budget-ledger-failure",
+        "restart must retain durable fallback budget-ledger failure evidence",
+      );
+    } finally {
+      await restartedHandle.stop();
+      restartedStore.close();
+    }
+  } finally {
+    if (!firstHandleStopped) await firstHandle.stop();
+    if (!crashingStoreClosed) crashingStore.close();
+    await rm(featureDir, { recursive: true, force: true });
+    await rm(dbDir, { recursive: true, force: true });
+  }
+});
+
+test("reviewer budget B3 — lifecycle stop errors are asserted instead of swallowed by test cleanup", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-review-budget-b3-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock: new FakeClock(3_200_000_000),
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface: { spawnAgent() { throw new Error("no task must spawn"); } },
+    statusServerFactory: () => ({
+      async start() { return { host: "127.0.0.1", port: 0 }; },
+      async stop() { throw new Error("injected lifecycle stop failure"); },
+    }),
+  });
+  try {
+    await assert.rejects(
+      () => handle.stop(),
+      /injected lifecycle stop failure/,
+      "test lifecycle cleanup must expose a daemon stop failure",
+    );
+  } finally {
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("reviewer budget S1 — independent processes contend through the public reservation seam without a lost update", async () => {
+  const dbDir = await mkdtemp(join(tmpdir(), "krl-review-budget-s1-"));
+  const dbPath = join(dbDir, "budget.db");
+  const bootstrapStore = openStore(dbPath, { busyTimeout: 5000 });
+  initSchema(bootstrapStore);
+  bootstrapStore.close();
+  const reservationUrl = pathToFileURL(join(process.cwd(), "src/ring1/budget-reservation.ts")).href;
+  const workerSource = `
+    import { DatabaseSync } from "node:sqlite";
+    import { reserveBudgetReservation } from ${JSON.stringify(reservationUrl)};
+    const db = new DatabaseSync(process.env.BUDGET_RESERVATION_DB_PATH);
+    db.exec("PRAGMA busy_timeout = 5000");
+    const store = {
+      get(sql, ...params) { return db.prepare(sql).get(...params); },
+      run(sql, ...params) { db.prepare(sql).run(...params); },
+      all(sql, ...params) { return db.prepare(sql).all(...params); },
+      close() { db.close(); },
+    };
+    try {
+      console.log(JSON.stringify(reserveBudgetReservation({
+        store,
+        taskId: "task-contention",
+        attemptedAt: 3_300_000_000,
+        conservativeCost: 1,
+        ceiling: 1,
+      })));
+    } finally {
+      store.close();
+    }
+  `;
+
+  try {
+    const runReservation = async (): Promise<{ outcome: "proceed" | "halted"; reservedTotal: number }> => {
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        ["--input-type=module", "--eval", workerSource],
+        { env: { ...process.env, BUDGET_RESERVATION_DB_PATH: dbPath } },
+      );
+      return JSON.parse(stdout) as { outcome: "proceed" | "halted"; reservedTotal: number };
+    };
+    const outcomes = await Promise.all([runReservation(), runReservation()]);
+    assert.deepEqual(
+      outcomes.map((outcome) => outcome.outcome).sort(),
+      ["halted", "proceed"],
+      "independent SQLite processes must return exactly one proceed and one halted decision",
+    );
+
+    const checkStore = openStore(dbPath, { busyTimeout: 5000 });
+    try {
+      assert.deepEqual(readBudgetReservationAttempts(checkStore), [
+        { task_id: "task-contention", attempted_at: 3_300_000_000, conservative_cost: 1, outcome: "halted", reserved_total: 1 },
+        { task_id: "task-contention", attempted_at: 3_300_000_000, conservative_cost: 1, outcome: "proceed", reserved_total: 1 },
+      ]);
+      assert.equal(
+        Number(checkStore.get<{ ledger: string }>("SELECT ledger FROM budget_ledger WHERE task_id = ?", "spend:task-contention")?.ledger),
+        1,
+        "cross-process contention must retain the one successful cumulative reservation",
+      );
+    } finally {
+      checkStore.close();
+    }
+  } finally {
+    await rm(dbDir, { recursive: true, force: true });
   }
 });
 
