@@ -20,6 +20,7 @@ import { execFile as _execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
   loadIdentity,
+  loadCredentialsFile,
   type Identity,
   type IdentityLoadError,
 } from "./keyring.ts";
@@ -42,8 +43,8 @@ async function makeTempDir(): Promise<{ dir: string; cleanup: () => Promise<void
 test("src/git/keyring — loads identity from a 0600 file", async () => {
   const { dir, cleanup } = await makeTempDir();
   try {
-    const tokenFile = join(dir, "identity.token");
-    await writeFile(tokenFile, "ghp_testtoken123\n", { mode: 0o600 });
+    const tokenFile = join(dir, "credentials");
+    await writeFile(tokenFile, "KANTHOR_IDENTITY_MYBOT_TOKEN=ghp_testtoken123\n", { mode: 0o600 });
     const identity = await loadIdentity({ name: "mybot", file: tokenFile });
     assert.equal(identity.name, "mybot");
     assert.equal(identity.token, "ghp_testtoken123");
@@ -132,9 +133,9 @@ test("src/git/keyring — missing env var when env:true is a typed error", async
 test("src/git/keyring — canary token value never appears in log sink", async () => {
   const { dir, cleanup } = await makeTempDir();
   try {
-    const tokenFile = join(dir, "identity.token");
+    const tokenFile = join(dir, "credentials");
     const canaryToken = "ghp_CANARY_MUST_NOT_APPEAR_IN_LOGS";
-    await writeFile(tokenFile, canaryToken + "\n", { mode: 0o600 });
+    await writeFile(tokenFile, `KANTHOR_IDENTITY_LOGTEST_TOKEN=${canaryToken}\n`, { mode: 0o600 });
 
     const logMessages: string[] = [];
     // Provide a log sink that captures all strings
@@ -203,5 +204,90 @@ test("src/git/keyring — spawned child via runGit does not see token in env or 
     }
   } finally {
     await rm(repoDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// loadCredentialsFile — multi-key KEY=VALUE custody file (Option A unification)
+// ---------------------------------------------------------------------------
+
+test("src/git/keyring — loadCredentialsFile parses a multi-key file, ignoring blanks + comments", async () => {
+  const { dir, cleanup } = await makeTempDir();
+  try {
+    const file = join(dir, "credentials");
+    await writeFile(
+      file,
+      [
+        "# custody file",
+        "KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=github_pat_abc",
+        "",
+        "KANTHOR_S3_ACCESS_KEY_ID=AKIA123456789012345",
+        "  # indented comment",
+        "KANTHOR_S3_SECRET_ACCESS_KEY=secret/with=equals+sign",
+      ].join("\n") + "\n",
+      { mode: 0o600 },
+    );
+    const secrets = await loadCredentialsFile(file);
+    assert.equal(secrets["KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN"], "github_pat_abc");
+    assert.equal(secrets["KANTHOR_S3_ACCESS_KEY_ID"], "AKIA123456789012345");
+    // first "=" splits — a value may itself contain "="
+    assert.equal(secrets["KANTHOR_S3_SECRET_ACCESS_KEY"], "secret/with=equals+sign");
+    assert.equal(Object.keys(secrets).length, 3, "blank + comment lines are ignored");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("src/git/keyring — loadCredentialsFile rejects a non-KEY=VALUE line (line number, no content)", async () => {
+  const { dir, cleanup } = await makeTempDir();
+  try {
+    const file = join(dir, "credentials");
+    // A bare value-only line (the legacy format that caused the corruption).
+    await writeFile(file, "KANTHOR_IDENTITY_MYBOT_TOKEN=ok\ngithub_pat_barevalue\n", { mode: 0o600 });
+    await assert.rejects(
+      () => loadCredentialsFile(file),
+      (err: unknown) => {
+        assert.equal((err as IdentityLoadError).code, "malformed-credentials");
+        assert.ok((err as Error).message.includes("line 2"), "must name the line NUMBER");
+        assert.ok(!(err as Error).message.includes("github_pat_barevalue"), "must NOT echo the line content");
+        return true;
+      },
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test("src/git/keyring — loadIdentity file mode picks the right key when several are present", async () => {
+  const { dir, cleanup } = await makeTempDir();
+  try {
+    const file = join(dir, "credentials");
+    await writeFile(
+      file,
+      "KANTHOR_IDENTITY_ALPHA_TOKEN=tok_alpha\nKANTHOR_IDENTITY_BETA_TOKEN=tok_beta\n",
+      { mode: 0o600 },
+    );
+    const beta = await loadIdentity({ name: "beta", file });
+    assert.equal(beta.token, "tok_beta");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("src/git/keyring — loadIdentity file mode throws missing-file-token when the identity key is absent", async () => {
+  const { dir, cleanup } = await makeTempDir();
+  try {
+    const file = join(dir, "credentials");
+    await writeFile(file, "KANTHOR_IDENTITY_OTHER_TOKEN=tok\n", { mode: 0o600 });
+    await assert.rejects(
+      () => loadIdentity({ name: "kanthordverify", file }),
+      (err: unknown) => {
+        assert.equal((err as IdentityLoadError).code, "missing-file-token");
+        assert.ok((err as Error).message.includes("kanthordverify"), "names the identity");
+        return true;
+      },
+    );
+  } finally {
+    await cleanup();
   }
 });

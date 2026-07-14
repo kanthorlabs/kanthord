@@ -48,8 +48,8 @@ describe("src/cli/bootstrap-live-run", () => {
 
     // 2. Create temp dataRoot + 0600 identity file
     dataRoot = await mkdtemp(join(tmpdir(), "blr-data-"));
-    const identityFile = join(dataRoot, "test-identity");
-    await writeFile(identityFile, "fake-pat-token-abc123\n", "utf8");
+    const identityFile = join(dataRoot, "credentials");
+    await writeFile(identityFile, "KANTHOR_IDENTITY_TEST-IDENTITY_TOKEN=fake-pat-token-abc123\n", "utf8");
     await chmod(identityFile, 0o600);
 
     // 3. Run the assembler once; all sub-tests share the result
@@ -348,8 +348,8 @@ describe("src/cli/bootstrap-live-run", () => {
       cobBareDir = await mkdtemp(join(tmpdir(), "cob-bare-"));
       execSync("git init --bare .", { cwd: cobBareDir, stdio: "pipe" });
       cobDataRoot = await mkdtemp(join(tmpdir(), "cob-data-"));
-      const identityFile = join(cobDataRoot, "test-identity");
-      await writeFile(identityFile, "fake-cob-token\n", "utf8");
+      const identityFile = join(cobDataRoot, "credentials");
+      await writeFile(identityFile, "KANTHOR_IDENTITY_TEST-IDENTITY_TOKEN=fake-cob-token\n", "utf8");
       await chmod(identityFile, 0o600);
       // Pre-create checkout (clone) + seed feature files so bootstrapLiveRun can compile them
       const checkoutDir = join(cobDataRoot, "checkout");
@@ -427,8 +427,8 @@ describe("src/cli/bootstrap-live-run", () => {
     it("empty featureDir yields zero features without error", async () => {
       const emptyDataRoot = await mkdtemp(join(tmpdir(), "cob-empty-"));
       try {
-        const emptyIdentityFile = join(emptyDataRoot, "test-identity");
-        await writeFile(emptyIdentityFile, "fake-empty-token\n", "utf8");
+        const emptyIdentityFile = join(emptyDataRoot, "credentials");
+        await writeFile(emptyIdentityFile, "KANTHOR_IDENTITY_TEST-IDENTITY_TOKEN=fake-empty-token\n", "utf8");
         await chmod(emptyIdentityFile, 0o600);
         const emptyCheckoutDir = join(emptyDataRoot, "checkout");
         execSync(`git clone "${cobBareDir}" "${emptyCheckoutDir}"`, { stdio: "pipe" });
@@ -465,8 +465,8 @@ describe("src/cli/bootstrap-live-run", () => {
       const badDataRoot = await mkdtemp(join(tmpdir(), "cob-bad-data-"));
       try {
         execSync("git init --bare .", { cwd: badBareDir, stdio: "pipe" });
-        const identityFile = join(badDataRoot, "test-identity");
-        await writeFile(identityFile, "fake-bad-token\n", "utf8");
+        const identityFile = join(badDataRoot, "credentials");
+        await writeFile(identityFile, "KANTHOR_IDENTITY_TEST-IDENTITY_TOKEN=fake-bad-token\n", "utf8");
         await chmod(identityFile, 0o600);
         const checkoutDir = join(badDataRoot, "checkout");
         execSync(`git clone "${badBareDir}" "${checkoutDir}"`, { stdio: "pipe" });
@@ -540,8 +540,8 @@ describe("src/cli/bootstrap-live-run", () => {
       blrCiBareDir = await mkdtemp(join(tmpdir(), "blr-ci-bare-"));
       execSync("git init --bare .", { cwd: blrCiBareDir, stdio: "pipe" });
       blrCiDataRoot = await mkdtemp(join(tmpdir(), "blr-ci-data-"));
-      const identityFile = join(blrCiDataRoot, "test-identity");
-      await writeFile(identityFile, "fake-ci-token\n", "utf8");
+      const identityFile = join(blrCiDataRoot, "credentials");
+      await writeFile(identityFile, "KANTHOR_IDENTITY_TEST-IDENTITY_TOKEN=fake-ci-token\n", "utf8");
       await chmod(identityFile, 0o600);
       // Global committer identity on disk (loadCommitterIdentity reads committer.json)
       await writeFile(

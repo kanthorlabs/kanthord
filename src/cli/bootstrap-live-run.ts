@@ -2,7 +2,8 @@
  * src/cli/bootstrap-live-run — Live-run dependency assembler (Epic 019.8 S004 T1)
  *
  * Orchestrates:
- *  1. Reads the identity token from dataRoot/<slot.identity> via loadIdentity
+ *  1. Reads the identity token from the shared dataRoot/credentials custody
+ *     file (KEY=VALUE, key KANTHOR_IDENTITY_<NAME>_TOKEN) via loadIdentity
  *  2. Clones slot.repo into dataRoot/checkout via bootstrapLocalCheckout
  *  3. Opens a SQLite store under the checkout .kanthord dir + inits schema
  *  4. Assembles RunDaemonDeps via buildRealDeps (async identity path)
@@ -89,8 +90,10 @@ export async function bootstrapLiveRun(
 ): Promise<LiveRunDeps> {
   const { slot, dataRoot, providerModel, providerStreamFn, runGit, agentFactory } = opts;
 
-  // 1. Resolve identity file path + load the PAT token
-  const identityFile = join(dataRoot, slot.identity);
+  // 1. Resolve identity file path + load the PAT token.
+  //    The shared custody file "<dataRoot>/credentials" (env-style KEY=VALUE)
+  //    holds every identity keyed KANTHOR_IDENTITY_<NAME>_TOKEN.
+  const identityFile = join(dataRoot, "credentials");
   let identity: Awaited<ReturnType<typeof loadIdentity>>;
   try {
     await access(identityFile);

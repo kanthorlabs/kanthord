@@ -413,7 +413,7 @@ test(
     const tmpFile = join(dir, "credentials");
     const fakeToken = "ghp_fake-token-s002t1-happy";
     try {
-      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      await writeFile(tmpFile, `KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=${fakeToken}\n`, { mode: 0o600 });
       const store = openStore(":memory:", { busyTimeout: 1000 });
       // identity/identityFile are not yet in BuildRealDepsOpts — cast via any (RED seam)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -474,7 +474,7 @@ test(
     const tmpFile = join(dir, "credentials");
     const fakeToken = "ghp_s003-build-verb-registry";
     try {
-      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      await writeFile(tmpFile, `KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=${fakeToken}\n`, { mode: 0o600 });
       const store = openStore(":memory:", { busyTimeout: 1000 });
       const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
 
@@ -538,7 +538,7 @@ test(
     const tmpFile = join(dir, "credentials");
     const fakeToken = "ghp_019-16-t3-git-add-entry";
     try {
-      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      await writeFile(tmpFile, `KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=${fakeToken}\n`, { mode: 0o600 });
       const store = openStore(":memory:", { busyTimeout: 1000 });
       const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -595,7 +595,7 @@ test(
     const tmpFile = join(dir, "credentials");
     const fakeToken = "ghp_b1-regression-pattern-registry";
     try {
-      await writeFile(tmpFile, fakeToken + "\n", { mode: 0o600 });
+      await writeFile(tmpFile, `KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=${fakeToken}\n`, { mode: 0o600 });
       const store = openStore(":memory:", { busyTimeout: 1000 });
       const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
 
@@ -888,7 +888,7 @@ test(
       execFileSync("git", ["-C", repoDir, "add", "-A"]);
 
       const fakeToken = "ghp_019-16-t2-commit-preflight";
-      await writeFile(credFile, fakeToken + "\n", { mode: 0o600 });
+      await writeFile(credFile, `KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=${fakeToken}\n`, { mode: 0o600 });
 
       const store = openStore(":memory:", { busyTimeout: 1000 });
       const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
@@ -958,7 +958,7 @@ test(
       execFileSync("git", ["-C", workDir, "commit", "-m", "agent delivery"], { stdio: "pipe" });
 
       const fakeToken = "ghp_019-16-t2-push-preflight";
-      await writeFile(credFile, fakeToken + "\n", { mode: 0o600 });
+      await writeFile(credFile, `KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=${fakeToken}\n`, { mode: 0o600 });
 
       const store = openStore(":memory:", { busyTimeout: 1000 });
       const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
@@ -1038,8 +1038,8 @@ test(
       execFileSync("git", ["-C", workDir, "add", "blocked.txt"], { stdio: "pipe" });
       execFileSync("git", ["-C", workDir, "commit", "-m", "should not push"], { stdio: "pipe" });
 
-      // Empty token: loadIdentity trims "\n" → token = "" → preflight returns ok:false
-      await writeFile(credFile, "\n", { mode: 0o600 });
+      // Empty token: key present with an empty value → token = "" → preflight returns ok:false
+      await writeFile(credFile, "KANTHOR_IDENTITY_KANTHORDVERIFY_TOKEN=\n", { mode: 0o600 });
 
       const store = openStore(":memory:", { busyTimeout: 1000 });
       const stubPatternRegistry: PatternRegistry = { version: "1", patterns: [] };
