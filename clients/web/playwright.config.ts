@@ -21,7 +21,12 @@ export default defineConfig({
   },
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "iphone-13", use: { ...devices["iPhone 13"] } },
+    // iPhone 13 gate viewport (390×844, DESIGN §6) but chromium engine — the
+    // device profile defaults to WebKit; HD-C is chromium-only E2E.
+    {
+      name: "iphone-13",
+      use: { ...devices["iPhone 13"], browserName: "chromium", defaultBrowserType: "chromium" },
+    },
   ],
   webServer: process.env.WEB_E2E_BASE_URL
     ? undefined
