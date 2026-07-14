@@ -104,3 +104,17 @@ END: TEST-ENGINEER
 - No remaining findings in the requested scope; the regression uses the public daemon seam and does not duplicate enforcement logic.
 
 END: REVIEWER-ENGINEER
+## SOFTWARE-ENGINEER - 019.18-pr-merge-escalation-and-polling - reviewer blockers B1-B3
+
+**Cycle.** GREEN+REFACTOR for `src/daemon/run-loop.test.ts`.
+**Files changed.**
+- `src/daemon/run-loop.ts` (edited) - durable PR recovery, terminal-effect ordering, and poll failure logging
+**Seam (GREEN).** PR terminal local effects are applied before terminal tracking, completed PRs always reconstruct durable tracking, and poll errors retain backoff while logging full row context.
+**Refactor.** Kept the durable tracking row as the sole worklist; no new abstraction needed.
+**Build check.**
+- `npm run typecheck`: exit 0 - log: `.agent/tdd/typecheck-reviewer-b1-b3.log`
+- `npm run verify:handoff`: exit 0 (`VERIFY: PASS`) - log: `.agent/tdd/verify-handoff-reviewer-b1-b3.log`
+**Assumptions.**
+- VERIFIED: the RED handoff covers terminal-marker crashes, no-router completion recovery, and structured poll-error logging.
+
+END: SOFTWARE-ENGINEER

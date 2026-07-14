@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { get as httpGet } from "node:http";
 import { openStore } from "../foundations/sqlite-store.ts";
+import type { Store } from "../foundations/sqlite-store.ts";
 import { FakeClock } from "../foundations/clock.ts";
 import { createStatusServer } from "./status-server.ts";
 import { runDaemon } from "./run-loop.ts";
@@ -1491,6 +1492,8 @@ test("Story 004 T2 — observe merged PR state; tick marks task complete; no mer
     logger,
     piSurface,
     statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: true }; } },
+    prStateRepo: "backend",
   });
 
   try {
@@ -1519,6 +1522,7 @@ test("Story 004 T2 — observe merged PR state; tick marks task complete; no mer
       createPrInput: { head: "feat/t2", base: "main", title: "T2 PR", body: "" },
       createPrIdempotencyKey: "create-pr-s4t2-001",
       taskId: "task-s4t2",
+      prNumber: 99,
     });
 
     // Advance clock to fire both pollers (push → done; create_pr → merged)
@@ -1534,7 +1538,7 @@ test("Story 004 T2 — observe merged PR state; tick marks task complete; no mer
     assert.ok(completionRow !== undefined, "broker_completion row must exist after poller fires");
     assert.equal(completionRow.status, "merged", "completion status must be 'merged'");
 
-    // tick() observes the "merged" broker_completion and marks the task complete
+    // tick() observes the merged PR through durable external_tracking and completes the task.
     await handle.tick();
 
     const taskRow = store.get<{ status: string }>(
@@ -1542,6 +1546,15 @@ test("Story 004 T2 — observe merged PR state; tick marks task complete; no mer
       "task-s4t2",
     );
     assert.equal(taskRow?.status, "complete", "task must be marked complete after PR merge observed");
+    const tracking = store.get<{ observed_state_json: string | null }>(
+      "SELECT observed_state_json FROM external_tracking WHERE created_by_op_id = ?",
+      createPrOpId,
+    );
+    assert.deepEqual(
+      JSON.parse(tracking?.observed_state_json ?? "null"),
+      { state: "closed", merged: true },
+      "merged observation must be durable",
+    );
 
     // AC: daemon never calls merge — submit was called exactly once (initial PR creation only)
     assert.equal(
@@ -4152,6 +4165,8 @@ test("019.7 S4T2 — create_pr completion gating: open stays pending-merge; merg
       store: storeM, featureDir: featureDirM, clock: clockM,
       logger: { info(_r: Record<string, unknown>): void {} },
       piSurface, statusServerFactory: createStatusServer,
+      prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: true }; } },
+      prStateRepo: "backend",
     });
     try {
       await compile(featureDirM, storeM, { repoRegistry: ["backend"] });
@@ -4164,14 +4179,18 @@ test("019.7 S4T2 — create_pr completion gating: open stays pending-merge; merg
         createPrInput: { head: TASK_ID, base: "main", title: "T2 PR" },
         createPrIdempotencyKey: "create_pr:s4t2g-m",
         taskId: TASK_ID,
+        prNumber: 91,
       });
-      storeM.run("INSERT INTO broker_completion (op_id, status, at) VALUES (?, ?, ?)", opIdM, "merged", CLOCK_TS);
       await handleM.tick();
       const rowM = storeM.get<{ status: string }>(
         "SELECT status FROM scheduler_task WHERE node_id = ?", TASK_ID,
       );
       assert.equal(rowM?.status, "complete",
-        "S4T2-M: task must transition to complete once create_pr reports 'merged'");
+        "S4T2-M: task must transition to complete once the durable PR poll reports 'merged'");
+      const observedM = storeM.get<{ observed_state_json: string | null }>(
+        "SELECT observed_state_json FROM external_tracking WHERE created_by_op_id = ?", opIdM,
+      );
+      assert.deepEqual(JSON.parse(observedM?.observed_state_json ?? "null"), { state: "closed", merged: true });
     } finally {
       await handleM.stop(); storeM.close();
       await rm(featureDirM, { recursive: true, force: true });
@@ -4192,6 +4211,9 @@ test("019.7 S4T2 — create_pr completion gating: open stays pending-merge; merg
       store: storeC, featureDir: featureDirC, clock: clockC,
       logger: { info(_r: Record<string, unknown>): void {} },
       piSurface, statusServerFactory: createStatusServer,
+      prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: false }; } },
+      prStateRepo: "backend",
+      prPollIntervalMs: 60_000,
     });
     try {
       await compile(featureDirC, storeC, { repoRegistry: ["backend"] });
@@ -4204,15 +4226,21 @@ test("019.7 S4T2 — create_pr completion gating: open stays pending-merge; merg
         createPrInput: { head: TASK_ID, base: "main", title: "T2 PR" },
         createPrIdempotencyKey: "create_pr:s4t2g-c",
         taskId: TASK_ID,
+        prNumber: 92,
       });
-      storeC.run("INSERT INTO broker_completion (op_id, status, at) VALUES (?, ?, ?)", opIdC, "closed", CLOCK_TS);
+      await handleC.tick();
+      const firstClosed = storeC.get<{ tracking_status: string }>(
+        "SELECT tracking_status FROM external_tracking WHERE created_by_op_id = ?", opIdC,
+      );
+      assert.equal(firstClosed?.tracking_status, "active", "first closed-unmerged poll must await confirmation");
+      clockC.advance(60_000);
       await handleC.tick();
       // AC: closed-unmerged PR must create an open escalation inbox item
       const inboxRows = storeC.all<{ kind: string; status: string }>(
         "SELECT kind, status FROM inbox_items WHERE kind = 'escalation' AND status = 'open'",
       );
-      assert.ok(inboxRows.length > 0,
-        "S4T2-C: escalation inbox item must exist for a closed-unmerged PR");
+      assert.equal(inboxRows.length, 1,
+        "S4T2-C: second consecutive closed-unmerged poll must create exactly one escalation");
       // AC: task must NOT be complete
       const rowC = storeC.get<{ status: string }>(
         "SELECT status FROM scheduler_task WHERE node_id = ?", TASK_ID,
@@ -5043,6 +5071,8 @@ test("019.16 S003 T1-a/b — task is 'delivering' after delivery tick; 'complete
     },
     commitsAhead: async (_b: string, _base: string): Promise<number> => 1,
     remote: "origin",
+    prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: true }; } },
+    prStateRepo: "backend",
   } as unknown as Parameters<typeof runDaemon>[0]);
 
   try {
@@ -5063,15 +5093,17 @@ test("019.16 S003 T1-a/b — task is 'delivering' after delivery tick; 'complete
       "task must be 'delivering' after delivery tick (not 'running')",
     );
 
-    // T1-b: seed broker_completion with "merged" and verify next tick completes task
+    // T1-b: reconciliation has learned the PR number; the next durable poll reports merged.
     const prOp = store.get<{ op_id: string }>(
       "SELECT op_id FROM broker_in_flight WHERE idempotency_key = ?",
       "create_pr:task-foo",
     );
     assert.ok(prOp !== undefined, "create_pr op must be in broker_in_flight after delivery");
     store.run(
-      "INSERT INTO broker_completion (op_id, status, at) VALUES (?, ?, ?)",
-      prOp.op_id, "merged", Date.now(),
+      `UPDATE external_tracking
+       SET external_id = ?, observed_state_json = ?, next_poll_at = ?
+       WHERE created_by_op_id = ?`,
+      "46", JSON.stringify({ state: "open", merged: false }), clock.now(), prOp.op_id,
     );
 
     await handle.tick();
@@ -5085,6 +5117,10 @@ test("019.16 S003 T1-a/b — task is 'delivering' after delivery tick; 'complete
       "complete",
       "task must be 'complete' after PR merge observed",
     );
+    const observedMerge = store.get<{ observed_state_json: string | null }>(
+      "SELECT observed_state_json FROM external_tracking WHERE created_by_op_id = ?", prOp.op_id,
+    );
+    assert.deepEqual(JSON.parse(observedMerge?.observed_state_json ?? "null"), { state: "closed", merged: true });
   } finally {
     await handle.stop();
     store.close();
@@ -5589,12 +5625,13 @@ test("019.18 B6 gate2 — poller completes task from external_tracking row when 
   }
 });
 
-// Gate 3: poll failure persists last_error_json and advances next_poll_at.
-test("019.18 B6 gate3 — poll failure persists last_error_json and advances next_poll_at", async () => {
+// Gate 3 / reviewer B3: poll failure remains durable and visible to operators.
+test("Reviewer B3 — prStateSeam failure persists backoff and logs tracking context", async () => {
   const featureDir = await mkdtemp(join(tmpdir(), "krl-01918b6g3-"));
   const store = openStore(":memory:", { busyTimeout: 1000 });
   const clock = new FakeClock(1_000_000_000);
-  const logger = { info(_r: Record<string, unknown>): void {} };
+  const logRecords: Array<Record<string, unknown>> = [];
+  const logger = { info(record: Record<string, unknown>): void { logRecords.push({ ...record }); } };
 
   await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
   await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
@@ -5647,6 +5684,19 @@ test("019.18 B6 gate3 — poll failure persists last_error_json and advances nex
     assert.ok(err.message.includes("network-error-b6g3"), "last_error_json must capture the error message");
     assert.ok(row.next_poll_at > beforePoll, "next_poll_at must advance after poll failure (backoff)");
     assert.equal(row.attempt_count, 1, "attempt_count must increment after poll failure");
+
+    const failureLog = logRecords.find(
+      (record) =>
+        record["tracking_id"] === "ext-b6g3" &&
+        record["task_id"] === "task-foo" &&
+        record["pr_number"] === 77 &&
+        typeof record["error"] === "string" &&
+        record["error"].includes("network-error-b6g3"),
+    );
+    assert.ok(
+      failureLog !== undefined,
+      "prStateSeam failure must emit a structured log with tracking, task, PR, and error context",
+    );
 
     // Tracking row must NOT be deleted — it survives failure.
     const taskRow = store.get<{ status: string }>(
@@ -5855,7 +5905,7 @@ test("019.18 S002 T2 — tick writes merged broker_completion and marks task com
     store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
     prStateSeam: fakePrStateSeam,
     prStateRepo: "backend",
-    prPollIntervalMs: 0,
+    prPollIntervalMs: 60_000,
   } as unknown as Parameters<typeof runDaemon>[0]);
 
   try {
@@ -5905,7 +5955,7 @@ test("019.18 S002 T2 — tick writes merged broker_completion and marks task com
   }
 });
 
-test("019.18 S002 T2 — tick writes closed broker_completion and escalates when PR is closed unmerged", async () => {
+test("019.18 S002 T2 — two closed-unmerged polls terminalize and escalate exactly once", async () => {
   const featureDir = await mkdtemp(join(tmpdir(), "krl-01918s2t2b-"));
   const store = openStore(":memory:", { busyTimeout: 1000 });
   const clock = new FakeClock(1_000_000_000);
@@ -5971,6 +6021,19 @@ test("019.18 S002 T2 — tick writes closed broker_completion and escalates when
 
     await handle.tick();
 
+    const firstTrackingRow = store.get<{ tracking_status: string }>(
+      "SELECT tracking_status FROM external_tracking WHERE created_by_op_id = ?",
+      createPrOpId,
+    );
+    assert.equal(firstTrackingRow?.tracking_status, "active", "first closed-unmerged poll must remain active");
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE json_extract(evidence, '$.reason') = 'pr-closed-unmerged'").length,
+      0,
+      "first closed-unmerged poll must not escalate",
+    );
+    clock.advance(60_000);
+    await handle.tick();
+
     const trackingRow2 = store.get<{ tracking_status: string }>(
       "SELECT tracking_status FROM external_tracking WHERE created_by_op_id = ?",
       createPrOpId,
@@ -5989,6 +6052,12 @@ test("019.18 S002 T2 — tick writes closed broker_completion and escalates when
         try { return JSON.parse(e.evidence).reason === "pr-closed-unmerged"; } catch { return false; }
       }),
       "an escalation inbox item with reason 'pr-closed-unmerged' must be created",
+    );
+    await handle.tick();
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE json_extract(evidence, '$.reason') = 'pr-closed-unmerged'").length,
+      1,
+      "terminal tracking must preserve exactly-once escalation across subsequent ticks",
     );
   } finally {
     await handle.stop();
@@ -6276,7 +6345,7 @@ test("019.18 S003 T1 — merged PR resolves the review_requested inbox item", as
     store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
     prStateSeam: fakePrStateSeam,
     prStateRepo: "backend",
-    prPollIntervalMs: 0,
+    prPollIntervalMs: 60_000,
   } as unknown as Parameters<typeof runDaemon>[0]);
 
   try {
@@ -6369,7 +6438,7 @@ test("019.18 S003 T1 — closed-unmerged PR resolves the review_requested inbox 
     store, featureDir, clock, logger, piSurface, statusServerFactory: createStatusServer,
     prStateSeam: fakePrStateSeam,
     prStateRepo: "backend",
-    prPollIntervalMs: 0,
+    prPollIntervalMs: 60_000,
   } as unknown as Parameters<typeof runDaemon>[0]);
 
   try {
@@ -6404,6 +6473,14 @@ test("019.18 S003 T1 — closed-unmerged PR resolves the review_requested inbox 
       clock,
     });
 
+    await handle.tick();
+
+    const afterFirstPoll = store.get<{ status: string }>(
+      "SELECT status FROM inbox_items WHERE id = ?",
+      reviewItem.id,
+    );
+    assert.equal(afterFirstPoll?.status, "open", "first closed-unmerged poll must leave the review request open");
+    clock.advance(60_000);
     await handle.tick();
 
     // The review_requested item must no longer be open after closed-unmerged.
@@ -6922,6 +6999,442 @@ test("reviewer blocker — missing or non-running durable task status skips all 
       }
     }
   } finally {
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("LP-A1 merge race — first closed-unmerged observation is durably confirmed before escalation", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-lpa1-merge-race-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+    statusServerFactory: createStatusServer,
+    prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: false }; } },
+    prStateRepo: "backend",
+    prPollIntervalMs: 60_000,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run(
+      "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+      "task-foo", "feat-s002t1", "delivering",
+    );
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '88',
+               'op-lpa1-race', 'create_pr:task-foo', 'active', ?, 0, ?, ?)`,
+      "ext-lpa1-race", clock.now(), clock.now(), clock.now(),
+    );
+
+    await handle.tick();
+
+    const first = store.get<{
+      tracking_status: string;
+      observed_state_json: string | null;
+      next_poll_at: number;
+    }>(
+      "SELECT tracking_status, observed_state_json, next_poll_at FROM external_tracking WHERE id = ?",
+      "ext-lpa1-race",
+    );
+    assert.equal(first?.tracking_status, "active", "first closed-unmerged observation must remain non-terminal");
+    const firstObservation = JSON.parse(first?.observed_state_json ?? "null") as {
+      state?: string;
+      merged?: boolean;
+    };
+    assert.deepEqual(
+      { state: firstObservation.state, merged: firstObservation.merged },
+      { state: "closed", merged: false },
+      "first closed-unmerged observation must be stored durably for confirmation",
+    );
+    assert.ok(first!.next_poll_at > clock.now(), "first closed-unmerged observation must schedule another poll");
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE json_extract(evidence, '$.reason') = 'pr-closed-unmerged'").length,
+      0,
+      "first closed-unmerged observation must not create a pr-closed-unmerged escalation",
+    );
+
+    clock.advance(60_000);
+    await handle.tick();
+
+    const second = store.get<{ tracking_status: string }>(
+      "SELECT tracking_status FROM external_tracking WHERE id = ?",
+      "ext-lpa1-race",
+    );
+    assert.equal(second?.tracking_status, "terminal", "second consecutive closed-unmerged observation may terminalize");
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE json_extract(evidence, '$.reason') = 'pr-closed-unmerged'").length,
+      1,
+      "second consecutive closed-unmerged observation may create one escalation",
+    );
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("LP-A1 merge race — legacy terminal unobserved PR is re-polled and repaired when merged", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-lpa1-legacy-pr-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  initSchema(store);
+  await compile(featureDir, store, { repoRegistry: ["backend"] });
+  store.run(
+    "INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)",
+    "task-foo", "feat-s002t1", "delivering",
+  );
+  store.run(
+    `INSERT INTO external_tracking
+       (id, local_kind, local_id, external_kind, external_provider, external_id,
+        created_by_op_id, idempotency_key, tracking_status, observed_state_json,
+        next_poll_at, attempt_count, created_at, updated_at)
+     VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '89',
+             'op-lpa1-legacy', 'create_pr:task-foo', 'terminal', NULL, ?, 0, ?, ?)`,
+    "ext-lpa1-legacy", clock.now(), clock.now(), clock.now(),
+  );
+  const reviewItem = createEscalationItem({
+    source_id: "review_requested:task-foo:89",
+    task_id: "task-foo",
+    reason: "review_requested",
+    payload_summary: "PR #89",
+    store,
+    clock,
+  });
+  const falseClosedItem = createEscalationItem({
+    source_id: "task-foo:pr-closed-unmerged",
+    task_id: "task-foo",
+    reason: "pr-closed-unmerged",
+    payload_summary: "stale close observation",
+    store,
+    clock,
+  });
+  let prStateCalls = 0;
+  const handle = await runDaemon({
+    store,
+    featureDir,
+    clock,
+    logger: { info(_record: Record<string, unknown>): void {} },
+    piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+    statusServerFactory: createStatusServer,
+    prStateSeam: {
+      async getPrState(_repo: string, _prNumber: number) {
+        prStateCalls++;
+        return { state: "closed", merged: true };
+      },
+    },
+    prStateRepo: "backend",
+    prPollIntervalMs: 60_000,
+  } as unknown as Parameters<typeof runDaemon>[0]);
+
+  try {
+    await handle.tick();
+
+    assert.equal(prStateCalls, 1, "legacy terminal row without an observation must be re-polled");
+    const tracking = store.get<{ tracking_status: string; observed_state_json: string | null }>(
+      "SELECT tracking_status, observed_state_json FROM external_tracking WHERE id = ?",
+      "ext-lpa1-legacy",
+    );
+    assert.equal(tracking?.tracking_status, "terminal", "merged recovery must terminalize the tracking row as merged");
+    assert.deepEqual(
+      JSON.parse(tracking?.observed_state_json ?? "null"),
+      { state: "closed", merged: true },
+      "merged recovery must durably record the observed GitHub state",
+    );
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "complete",
+      "merged recovery must complete the task",
+    );
+    assert.equal(store.get<{ status: string }>("SELECT status FROM inbox_items WHERE id = ?", reviewItem.id)?.status, "resolved");
+    assert.equal(store.get<{ status: string }>("SELECT status FROM inbox_items WHERE id = ?", falseClosedItem.id)?.status, "resolved");
+  } finally {
+    await handle.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Reviewer blockers B1-B3 — terminal-effect ordering and crash recovery
+// ---------------------------------------------------------------------------
+
+function storeThatCrashesAfterPrTrackingTerminalMarker(store: Store): Store {
+  let crashed = false;
+  return {
+    get: store.get.bind(store),
+    all: store.all.bind(store),
+    close: store.close.bind(store),
+    run(sql: string, ...params: unknown[]): void {
+      store.run(sql, ...params);
+      if (
+        !crashed &&
+        sql.includes("UPDATE external_tracking") &&
+        sql.includes("tracking_status = 'terminal'")
+      ) {
+        crashed = true;
+        throw new Error("crash-after-pr-tracking-terminal-marker");
+      }
+    },
+  };
+}
+
+test("Reviewer B1 — merged terminal effects survive a crash after the tracking terminal marker", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-reviewer-b1-merged-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const crashingStore = storeThatCrashesAfterPrTrackingTerminalMarker(store);
+  const clock = new FakeClock(1_000_000_000);
+  let crashedHandle: Awaited<ReturnType<typeof runDaemon>> | undefined;
+  let restartedHandle: Awaited<ReturnType<typeof runDaemon>> | undefined;
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  try {
+    crashedHandle = await runDaemon({
+      store: crashingStore,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+      statusServerFactory: createStatusServer,
+      prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: true }; } },
+      prStateRepo: "backend",
+    });
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run("INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)", "task-foo", "feat-s002t1", "delivering");
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '101',
+               'op-reviewer-b1-merged', 'create_pr:task-foo', 'active', ?, 0, ?, ?)`,
+      "ext-reviewer-b1-merged", clock.now(), clock.now(), clock.now(),
+    );
+    const reviewItem = createEscalationItem({
+      source_id: "review_requested:task-foo:101",
+      task_id: "task-foo",
+      reason: "review_requested",
+      payload_summary: "PR #101",
+      store,
+      clock,
+    });
+
+    await assert.rejects(
+      () => crashedHandle!.tick(),
+      /crash-after-pr-tracking-terminal-marker/,
+      "the test store must simulate a process crash after durable terminalization",
+    );
+    await crashedHandle.stop();
+    crashedHandle = undefined;
+
+    restartedHandle = await runDaemon({
+      store,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+      statusServerFactory: createStatusServer,
+      prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: true }; } },
+      prStateRepo: "backend",
+    });
+    await restartedHandle.tick();
+
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "complete",
+      "restart must retain or repair merged task completion after terminal-marker crash",
+    );
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM inbox_items WHERE id = ?", reviewItem.id)?.status,
+      "resolved",
+      "restart must retain or repair the merged PR review-item resolution",
+    );
+  } finally {
+    await restartedHandle?.stop();
+    await crashedHandle?.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Reviewer B1 — closed-unmerged escalation survives a crash after the tracking terminal marker", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-reviewer-b1-closed-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const crashingStore = storeThatCrashesAfterPrTrackingTerminalMarker(store);
+  const clock = new FakeClock(1_000_000_000);
+  let crashedHandle: Awaited<ReturnType<typeof runDaemon>> | undefined;
+  let restartedHandle: Awaited<ReturnType<typeof runDaemon>> | undefined;
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  try {
+    crashedHandle = await runDaemon({
+      store: crashingStore,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+      statusServerFactory: createStatusServer,
+      prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: false }; } },
+      prStateRepo: "backend",
+    });
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run("INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)", "task-foo", "feat-s002t1", "delivering");
+    store.run(
+      `INSERT INTO external_tracking
+         (id, local_kind, local_id, external_kind, external_provider, external_id,
+          created_by_op_id, idempotency_key, tracking_status, observed_state_json,
+          next_poll_at, attempt_count, created_at, updated_at)
+       VALUES (?, 'task', 'task-foo', 'pull_request', 'github', '102',
+               'op-reviewer-b1-closed', 'create_pr:task-foo', 'active', ?, ?, 0, ?, ?)`,
+      "ext-reviewer-b1-closed",
+      JSON.stringify({ state: "closed", merged: false, confirmation_count: 1 }),
+      clock.now(), clock.now(), clock.now(),
+    );
+    const reviewItem = createEscalationItem({
+      source_id: "review_requested:task-foo:102",
+      task_id: "task-foo",
+      reason: "review_requested",
+      payload_summary: "PR #102",
+      store,
+      clock,
+    });
+
+    await assert.rejects(() => crashedHandle!.tick(), /crash-after-pr-tracking-terminal-marker/);
+    await crashedHandle.stop();
+    crashedHandle = undefined;
+
+    restartedHandle = await runDaemon({
+      store,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+      statusServerFactory: createStatusServer,
+      prStateSeam: { async getPrState(_repo: string, _prNumber: number) { return { state: "closed", merged: false }; } },
+      prStateRepo: "backend",
+    });
+    await restartedHandle.tick();
+
+    assert.equal(
+      store.all("SELECT id FROM inbox_items WHERE json_extract(evidence, '$.reason') = 'pr-closed-unmerged'").length,
+      1,
+      "restart must retain or repair exactly one closed-unmerged escalation after terminal-marker crash",
+    );
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM inbox_items WHERE id = ?", reviewItem.id)?.status,
+      "resolved",
+      "restart must retain or repair the closed PR review-item resolution",
+    );
+  } finally {
+    await restartedHandle?.stop();
+    await crashedHandle?.stop();
+    store.close();
+    await rm(featureDir, { recursive: true, force: true });
+  }
+});
+
+test("Reviewer B2 — restart projects a completed create_pr and polls it without a review router", async () => {
+  const featureDir = await mkdtemp(join(tmpdir(), "krl-reviewer-b2-"));
+  const store = openStore(":memory:", { busyTimeout: 1000 });
+  const clock = new FakeClock(1_000_000_000);
+  let handle: Awaited<ReturnType<typeof runDaemon>> | undefined;
+
+  await writeFile(join(featureDir, "epic.md"), S002_EPIC_MD, "utf8");
+  await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+  await mkdir(join(featureDir, "001-alpha"), { recursive: true });
+  await writeFile(join(featureDir, "001-alpha", "INDEX.md"), S002_INDEX_MD, "utf8");
+  await writeFile(join(featureDir, "001-alpha", "task-foo.md"), S002_TASK_FOO_MD, "utf8");
+
+  try {
+    initSchema(store);
+    await compile(featureDir, store, { repoRegistry: ["backend"] });
+    store.run("INSERT INTO scheduler_task (node_id, feature_id, status) VALUES (?, ?, ?)", "task-foo", "feat-s002t1", "delivering");
+    // Durable checkpoint left by a process that completed github.create_pr, then
+    // crashed before it could project the PR into external_tracking.
+    store.run(
+      "INSERT INTO broker_in_flight (op_id, verb, request_id, idempotency_key, payload_json, status) VALUES (?, ?, ?, ?, ?, ?)",
+      "op-reviewer-b2", "github.create_pr", "request-reviewer-b2", "create_pr:task-foo", "{}", "in_flight",
+    );
+    store.run(
+      "INSERT INTO broker_completion (op_id, status, result_json, error_json, at) VALUES (?, ?, ?, NULL, ?)",
+      "op-reviewer-b2", "done", JSON.stringify({ pr_number: 103, pr_url: "https://github.com/backend/pull/103" }), clock.now(),
+    );
+    assert.equal(store.all("SELECT id FROM external_tracking").length, 0, "crash boundary must start without a tracking projection");
+
+    let polls = 0;
+    handle = await runDaemon({
+      store,
+      featureDir,
+      clock,
+      logger: { info(_record: Record<string, unknown>): void {} },
+      piSurface: { spawnAgent(_opts: unknown) { return { abort() {}, async waitForIdle() {}, reset() {}, contextTokens: 0 }; } },
+      statusServerFactory: createStatusServer,
+      prStateSeam: {
+        async getPrState(_repo: string, prNumber: number) {
+          polls++;
+          assert.equal(prNumber, 103, "recovered tracking must use the completed create_pr number");
+          return { state: "closed", merged: true };
+        },
+      },
+      prStateRepo: "backend",
+      // Deliberately no reviewRouter: recovery cannot be conditional on routing.
+    });
+
+    const projection = store.get<{ local_id: string; external_id: string; tracking_status: string }>(
+      "SELECT local_id, external_id, tracking_status FROM external_tracking WHERE created_by_op_id = ?",
+      "op-reviewer-b2",
+    );
+    assert.ok(projection !== undefined, "restart must upsert a durable tracking row from the create_pr completion");
+    assert.deepEqual(
+      {
+        local_id: projection.local_id,
+        external_id: projection.external_id,
+        tracking_status: projection.tracking_status,
+      },
+      { local_id: "task-foo", external_id: "103", tracking_status: "active" },
+      "restart must upsert an active durable tracking row from the create_pr completion",
+    );
+
+    await handle.tick();
+    assert.equal(polls, 1, "recovered durable tracking must be polled once");
+    assert.equal(
+      store.get<{ status: string }>("SELECT status FROM scheduler_task WHERE node_id = ?", "task-foo")?.status,
+      "complete",
+      "merged state from the recovered projection must complete the task",
+    );
+  } finally {
+    await handle?.stop();
+    store.close();
     await rm(featureDir, { recursive: true, force: true });
   }
 });
