@@ -1,11 +1,8 @@
 # Phase-2A Single-Repo Proof — Run Record
 
-Current gate status: **LIVE RERUN REQUIRED**. The 2026-07-13/14 runs below are
-retained as historical evidence, but a 2026-07-14 gate audit found that the live
-path reserved budget once per session rather than once per model call, did not
-wire typed interaction capture, and did not stop delivery for escalate-all-diffs.
-Those implementation gaps are now fixed hermetically; LP1–LP5 must be rerun on
-the corrected build before Part A may be marked passed.
+Current gate status: **PART A PASS** (corrected-build rerun completed
+2026-07-14). The earlier 2026-07-13/14 runs remain below as historical evidence;
+the authoritative rerun record is the corrected-build section below.
 
 Sandbox repo: `kanthorlabs/kanthord-verify` (throwaway; no production code). The
 daemon uses the **HTTPS** remote (`https://github.com/kanthorlabs/kanthord-verify.git`)
@@ -203,21 +200,116 @@ that keeps the suite green). Both landed with `npm test` green (697 tests) and
   and that representative methods throw `no such table` on an uninitialised store.
   Whole suite green at 703 tests.
 
-## LP1–LP5 historical results and rerun status
+## LP1–LP5 corrected-build rerun (authoritative, 2026-07-14)
 
-_To be filled during the live proof (see Epic 019 authoring for each LP's Action /
-Pass criteria)._
+Run context:
+- Core commit/image for the final live scenarios:
+  `762f3ad59ca3a9207c069d13f2eecb0c45423d00` /
+  `kanthord-phase2a:762f3ad`.
+- Runtime: rootless Podman with source copied into the image and only `.data/`
+  mounted at `/data`; model `gpt-5.4-mini`; repo-scoped identity
+  `kanthordverify`.
+- Isolated roots: `.data/phase2a-rerun`, `.data/phase2a-lpa2-rerun`,
+  `.data/phase2a-lpa3-rerun`, and `.data/phase2a-lpa4-rerun`.
+- Corrections forced by the rerun landed in `4d6edc9`, `728564f`, `52910f7`,
+  and `762f3ad`; their TDD evidence and reviews are in
+  `.agent/tdd/history/2026-07-14-019-phase2a-single-repo-proof.md`.
 
-- LP1 — historical run completed 2026-07-13; **RERUN REQUIRED** for per-call
-  reservations, diff approval, and typed interaction evidence.
-- LP2 — historical scripted-model probe completed 2026-07-14; **RERUN REQUIRED**
-  on the corrected durable `ring1_block` journal path.
-- LP3 — historical run completed 2026-07-13 with cost attribution explicitly
-  recorded as partial; **RERUN REQUIRED**.
-- LP4 — historical direct broker probe completed 2026-07-14; **RERUN REQUIRED**
-  using the shipped daemon hold-point/kill path.
-- LP5 — historical scoped verify completed 2026-07-14; **RERUN REQUIRED** after
-  LP1–LP4 using the explicit `--store` and `--db` arguments.
+### Corrected LP-A1 — golden feature (PASS)
+
+- Real provider sessions created `src/truncate.mjs` and
+  `test/truncate.test.mjs`; all writes stayed inside the declared scope.
+- Exact-hash diff review parked delivery until typed operator approvals were
+  recorded. `interaction_outbox` contains one correction and two approval
+  interactions with durable cost attribution (`80000`, `160000`, `240000`).
+- Broker delivery created agent commit
+  `d19c795cceda68bdfc0f69b68467268ca55910f3` and PR
+  <https://github.com/kanthorlabs/kanthord-verify/pull/10>.
+- Human approval/merge produced merge commit
+  `6d0b63f256251fda4c8e3118d1bbbece73b48f8c`.
+- Durable terminal evidence: task `implement-truncate` is `complete`;
+  `broker_completion` links create-PR op `op_01KXFH780B7M87BXTD01QT0HAJ` to PR
+  #10; `external_tracking` is `terminal` with observed state
+  `{"state":"merged","merged":true}`.
+
+### Corrected LP-A2 — write-scope block (PASS)
+
+- A real provider session attempted `/worktree/proof.txt`, outside the declared
+  scope. The protected worktree diff stayed empty and no broker completion row
+  was created.
+- Durable evidence: `task_timeline_event`
+  `evt_01KXFK77M9B80CHV3MSHTW1H93`, kind `ring1_block`, signal
+  `tool_blocked`; task `force-out-of-scope` was parked and then halted.
+- Typed operator correction `esc:8a30b01e3107d3a0ed961cceba603b2a`
+  records `cost_to_date=20000` and `no_ledger=false`.
+
+### Corrected LP-A3 — budget halt and restart (PASS)
+
+- Run configuration: `--budget-ceiling 0 --budget-cost 1`.
+- The first reservation produced exactly one durable
+  `budget_reservation_attempt`: task `budget-breach-rerun`, cost `1`, outcome
+  `halted`, resulting total `0`. `model_call_log` remained empty and
+  `src/should-not-exist.mjs` was never created.
+- After a real container restart, the task remained parked, the same single
+  attempt remained, and provider effects remained zero.
+- Typed correction `esc:71ff7b5d393bb42a538e69d9bfe25bb2` records
+  `cost_to_date=0`, `no_ledger=true`; the final task state is `halted`.
+
+### Corrected LP-A4 — create-PR crash recovery (PASS)
+
+- The shipped daemon `--hold-point` stopped create-PR after the real GitHub
+  effect. Before the kill, op `op_01KXFP4NCNFTMH0X54FDTG25XS` was durably
+  `held`, had no completion, and GitHub showed exactly one PR for head
+  `lp-a4-reconcile-rerun`: PR
+  <https://github.com/kanthorlabs/kanthord-verify/pull/11>, head commit
+  `c5da24f4a422e8e6f95a034041730b3c5eca2cc1`.
+- The actual daemon container was killed with SIGKILL (`exit 137`). On restart,
+  log event `held-op-reconciled` reported `outcome=done`; no second PR was
+  created.
+- After restart, `broker_completion` records PR #11 and its URL, and durable
+  tracking row `ext:54c61d2354cef81351f5b02efe9e9d36` records external id
+  `11` with observed state `{"state":"open","merged":false}`.
+- Cleanup after evidence capture closed PR #11 and deleted its branch.
+
+### Corrected LP-A5 — zero divergence and final gates (PASS)
+
+- Command:
+  `node src/cli/verify.ts --from-markdown --read-only --store .data/phase2a-rerun/checkout/.kanthord/features --db .data/phase2a-rerun/checkout/.kanthord/db.sqlite`.
+- Final result at `2026-07-14T06:59:35Z`:
+  `verify: 0 divergences — store matches markdown source`, exit 0.
+- `npm test`: **1090 tests, 1090 pass, 0 fail** at
+  `2026-07-14T07:02:25Z`. `npm run typecheck`: exit 0 at
+  `2026-07-14T06:59:39Z`.
+- The first verify run exposed IC-5 below: it compared the retained generation-1
+  compile hash with the current generation-2 markdown. A RED regression now
+  proves historical generations remain durable but only the latest generation
+  per feature participates in current-source verification.
+
+### IC-5 — Verify compares the latest compile generation
+
+- **What changed:** `diffProjection` selects the highest `plan_generation`
+  generation per feature before comparing live state with the rebuilt markdown
+  shadow. Historical generation rows remain unchanged in SQLite.
+- **Why the run forced it:** corrected LP-A1 legitimately retained generation 1
+  (`7eab1f7a…`) and generation 2 (`2171d54d…`). The markdown and latest durable
+  row matched, but verify compared both live rows to one current shadow row and
+  reported a false divergence.
+- **Epics/stories affected:** Epic 018 verify/rebuild and Epic 019 LP-A5.
+- **Harness update:** `src/store/rebuild.test.ts` creates two generations with
+  different hashes and requires zero divergence when the latest hash matches;
+  full suite green at 1090 tests.
+
+### Part A gate decision
+
+LP-A1 through LP-A5 are PASS on corrected seams. The hermetic gate is green,
+the security/write-scope and fail-closed budget conditions hold, every live
+correction has a decision record, and LP-A5 reports zero divergence. **Phase 2A
+Part A passes.**
+
+## LP1–LP5 historical results
+
+The sections below are retained for provenance and are superseded by the
+corrected-build rerun above.
 
 ### 2026-07-14 remediation gate
 

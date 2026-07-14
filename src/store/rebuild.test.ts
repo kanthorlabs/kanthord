@@ -390,4 +390,49 @@ describe("src/store/rebuild", () => {
       );
     });
   });
+
+  describe("diffProjection: plan_generation history", () => {
+    test("ignores historical compile hashes when the latest generation matches the shadow", async () => {
+      const featureDir = await mkdtemp(join(tmpdir(), "kanthord-rebuild-lp-a5-"));
+      const liveStore = openStore(join(featureDir, "live.db"), { busyTimeout: 1000 });
+
+      try {
+        await writeFile(join(featureDir, "epic.md"), EPIC_MD);
+        await writeFile(join(featureDir, "RUNBOOK.md"), "# Runbook\n");
+        const storyDir = join(featureDir, "001-story-a");
+        await mkdir(storyDir);
+        await writeFile(join(storyDir, "INDEX.md"), "# Story A\n");
+        await writeFile(join(storyDir, "001-task-alpha.md"), TASK_ALPHA_MD);
+        await writeFile(join(storyDir, "002-task-beta.md"), TASK_BETA_MD);
+
+        await compile(featureDir, liveStore, OPTS);
+        await writeFile(join(featureDir, "epic.md"), EPIC_MD.replace("Feature complete.", "Feature revised."));
+        await compile(featureDir, liveStore, OPTS);
+
+        const generations = liveStore.all<{ generation: number; compile_hash: string }>(
+          "SELECT generation, compile_hash FROM plan_generation WHERE feature_id = 'feat-001' ORDER BY generation",
+        );
+        assert.equal(generations.length, 2, "live store must retain both generations");
+        assert.notEqual(
+          generations[0]?.compile_hash,
+          generations[1]?.compile_hash,
+          "historical and current generations must have distinct compile hashes",
+        );
+
+        const shadowStore = await rebuildFromMarkdown(featureDir, OPTS);
+        try {
+          assert.deepEqual(
+            diffProjection(liveStore, shadowStore),
+            [],
+            "historical plan_generation compile hashes must not diverge from the current shadow",
+          );
+        } finally {
+          shadowStore.close();
+        }
+      } finally {
+        liveStore.close();
+        await rm(featureDir, { recursive: true, force: true });
+      }
+    });
+  });
 });

@@ -205,6 +205,29 @@ function getTableRows(store: Store, table: string): Record<string, unknown>[] {
   return store.all<Record<string, unknown>>(`SELECT * FROM ${table}`);
 }
 
+/** Retains the current compile generation for each feature. */
+function latestPlanGenerationRows(
+  rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const latestByFeature = new Map<string, Record<string, unknown>>();
+
+  for (const row of rows) {
+    const featureId = row["feature_id"];
+    const generation = row["generation"];
+    if (typeof featureId !== "string" || typeof generation !== "number") {
+      return rows;
+    }
+
+    const current = latestByFeature.get(featureId);
+    const currentGeneration = current?.["generation"];
+    if (current === undefined || typeof currentGeneration !== "number" || generation > currentGeneration) {
+      latestByFeature.set(featureId, row);
+    }
+  }
+
+  return [...latestByFeature.values()];
+}
+
 /**
  * Compares the projection of `live` against the projection of `shadow` for
  * every table in PROJECTION_CONTRACT.tableScope. Returns one `Divergence`
@@ -267,13 +290,17 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
     // ERR_SQLITE_ERROR when op_ledger is absent from compiled-plan stores.
     const liveRows = getTableRows(live, table);
     const shadowRows = getTableRows(shadow, table);
+    const verificationLiveRows =
+      table === "plan_generation" ? latestPlanGenerationRows(liveRows) : liveRows;
+    const verificationShadowRows =
+      table === "plan_generation" ? latestPlanGenerationRows(shadowRows) : shadowRows;
 
     // Build a map from serialised projected row identity to the shadow row's
     // contract-projected form. Using projected identity keys means runtime-only
     // fields (e.g. generation=0 sentinel in shadow vs generation=1 in live) do
     // not prevent rows from matching.
     const shadowMap = new Map<string, Record<string, unknown>>();
-    for (const row of shadowRows) {
+    for (const row of verificationShadowRows) {
       shadowMap.set(
         serializeRowIdentity(row, projectedIdentityKeys),
         contractProjectionOf(row, contractDerivedCols),
@@ -284,7 +311,7 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
     // shadow-only pass below can report the remainder.
     const matchedShadowKeys = new Set<string>();
 
-    for (const liveRow of liveRows) {
+    for (const liveRow of verificationLiveRows) {
       const identityKey = serializeRowIdentity(liveRow, projectedIdentityKeys);
       matchedShadowKeys.add(identityKey);
       const rowIdentity = extractRowIdentity(liveRow, projectedIdentityKeys);
@@ -315,7 +342,7 @@ export function diffProjection(live: Store, shadow: Store): Divergence[] {
 
     // Shadow-only pass: scan shadow rows for identity keys that no live row
     // matched; report each projected field as a divergence (live: undefined).
-    for (const shadowRow of shadowRows) {
+    for (const shadowRow of verificationShadowRows) {
       const key = serializeRowIdentity(shadowRow, projectedIdentityKeys);
       if (matchedShadowKeys.has(key)) continue;
       const rowIdentity = extractRowIdentity(shadowRow, projectedIdentityKeys);

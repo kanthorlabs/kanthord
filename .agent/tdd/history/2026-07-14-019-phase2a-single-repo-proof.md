@@ -336,3 +336,37 @@ END: TEST-ENGINEER
 - No remaining findings. Residual risk is limited to failures that make every durable fallback write impossible; the process-lifetime latch now fails closed for that process and logs the condition for operator recovery.
 
 END: REVIEWER-ENGINEER
+
+## TEST-ENGINEER - 019-phase2a-single-repo-proof - LP-A5 multi-generation verify
+
+**Cycle.** RED for Task `LP-A5 multi-generation verify` (`src/store/rebuild.test.ts`).
+**Test written.**
+- asserts: verification ignores historical `plan_generation` hashes when the latest generation matches the current markdown shadow.
+**RED proof.**
+- command: `npm test -- --test-name-pattern="ignores historical compile hashes" src/store/rebuild.test.ts`
+- exit: non-zero - failure: `historical plan_generation compile hashes must not diverge from the current shadow`.
+
+END: TEST-ENGINEER
+
+## SOFTWARE-ENGINEER - 019-phase2a-single-repo-proof - LP-A5 multi-generation verify
+
+**Cycle.** GREEN for `src/store/rebuild.test.ts`.
+**Files changed.**
+- `src/store/rebuild.ts` (edited) - verification selects the latest generation per feature while retaining durable history.
+**Build check.**
+- `npm test`: exit 0 (1090 pass, 0 fail).
+- `npm run typecheck`: exit 0.
+- LP-A5 verify: exit 0 (`verify: 0 divergences — store matches markdown source`).
+
+END: SOFTWARE-ENGINEER
+
+## Code Review - 019-phase2a-single-repo-proof [scope: LP-A5 multi-generation verify, phase: A]
+
+### Summary
+- Files reviewed: 1 source, 1 test
+- Verdict: PASS
+
+### Findings
+- None.
+
+END: REVIEWER-ENGINEER
