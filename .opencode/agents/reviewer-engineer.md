@@ -1,7 +1,8 @@
 ---
 description: TDD reviewer-engineer for kanthord Core. Reviews against cited sources; edits nothing but its own verdict, which it appends to the discussion file. Never runs build/test.
 mode: subagent
-model: github-copilot/gpt-5.5
+model: openai/gpt-5.6-sol
+variant: medium
 permission:
   read: allow
   glob: allow
