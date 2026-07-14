@@ -2,7 +2,9 @@
 #
 # "No build": Node 24 runs the TypeScript sources directly (type-stripping), so
 # there is NO tsc/compile step — fast rebuilds for local testing. Deps are
-# installed with `npm ci` (all packages are public; zero native bindings).
+# installed with `npm ci` (all packages public). @ff-labs/fff-node ships a
+# prebuilt native binary per platform (via ffi-rs); npm ci pulls the matching
+# linux binary as an optional dependency — verified in-container by Epic 020 SU2.
 #
 # Sandbox rule (unchanged): source is COPYed into the image, never bind-mounted;
 # the ONLY host path mounted at runtime is .data/ (mounted at /data). The pi
