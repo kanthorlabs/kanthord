@@ -65,6 +65,8 @@ describe("src/daemon/status-server", () => {
         "listBrokerVerbs",
         "listSlots",
         "getBudget",
+        "listBudgets",          // Epic 027 N4 — per-task ledger list
+        "getInboxItem",         // Epic 027 N2 — deep-link item view
         "getDaemonStatus",
         "getTaskTimeline",
         "subscribeSessionEvents",

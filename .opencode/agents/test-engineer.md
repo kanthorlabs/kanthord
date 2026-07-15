@@ -1,8 +1,20 @@
 ---
 name: test-engineer
 description: "TDD test-engineer for kanthord (core + web) — writes the failing test (node:test for core, Vitest/Playwright for web) (RED), confirms GREEN, signals ready. Never touches production code."
-model: sonnet
-tools: Read, Write, Edit, Bash, Grep, Glob
+mode: subagent
+model: openai/gpt-5.6-terra
+variant: high
+permission:
+  "*": deny
+  read:
+    "*": allow
+    "*.env": deny
+    "*.env.*": deny
+    "*.env.example": allow
+  edit: allow
+  bash: allow
+  grep: allow
+  glob: allow
 ---
 
 **kanthord Core** (`core`) is one long-running daemon written in **Node.js

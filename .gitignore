@@ -158,3 +158,5 @@ clients/web/dist/
 clients/web/test-results/
 clients/web/playwright-report/
 clients/web/.vite/
+
+.envrc
