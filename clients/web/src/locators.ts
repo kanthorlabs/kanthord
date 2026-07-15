@@ -1,5 +1,5 @@
 // Locator registry (SE-owned, DESIGN §8). Tests query by these ids, never by
-// raw strings. Grouped by surface. Seeded with the SU7 hello-world.
+// raw strings. Grouped by dashboard surface.
 export const locators = {
   helloBanner: {
     title: "hello-banner-title",
@@ -25,6 +25,7 @@ export const locators = {
     mobileIndicator: "app-shell-mobile-indicator",
     header: "app-shell-header",
     content: "app-shell-content",
+    navCountError: "app-shell-nav-count-error",
   },
   // Story 000 T3 — ListPage template slots
   listPage: {
@@ -32,7 +33,7 @@ export const locators = {
     toolbar: "list-page-toolbar",
     content: "list-page-content",
   },
-  // Story 000 T4 — per-area placeholders (real surfaces come from later stories)
+  // Story 000 T4 — legacy route-surface locator namespace
   features: {
     placeholder: "features-placeholder",
     // Story 001 T1 — features list surface
@@ -61,6 +62,7 @@ export const locators = {
       table: "inbox-list-table",
       row: "inbox-list-row",
       empty: "inbox-list-empty",
+      itemLink: (id: string) => `inbox-list-item-link-${id}`,
       typeFilter: "inbox-list-type-filter",
       typeFilterItem: (type: string) => `inbox-list-type-filter-item-${type}`,
     },
@@ -147,6 +149,18 @@ export const locators = {
     verifyOutcome: "daemon-ops-verify-outcome",
     // B3 — inline error element when triggerVerify rejects
     verifyError: "daemon-ops-verify-error",
+  },
+  metrics: {
+    featureSummary: {
+      root: "metrics-feature-summary-root",
+      headline: "metrics-feature-summary-headline",
+      breakdownTable: "metrics-feature-summary-breakdown-table",
+      breakdownRow: (type: string) => `metrics-feature-summary-breakdown-row-${type}`,
+      excluded: "metrics-feature-summary-excluded",
+      loading: "metrics-feature-summary-loading",
+      empty: "metrics-feature-summary-empty",
+      error: "metrics-feature-summary-error",
+    },
   },
   // Story 001 T2 — DetailPage template (DESIGN §6, §8)
   detailPage: {

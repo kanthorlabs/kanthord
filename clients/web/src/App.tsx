@@ -1,12 +1,12 @@
-import { HelloBanner } from "@/components/HelloBanner.tsx";
+import { BrowserRouter } from "react-router-dom";
+import { AppRouter } from "@/app/AppRouter";
+import { AuthProvider } from "@/auth/AuthProvider";
+import { DaemonClientProvider } from "@/auth/DaemonClientProvider";
+import { createDaemonClient } from "@/lib/client";
 
-// Bootstrap placeholder. Story 000 mounts the real AppShell here. The SU7
-// hello-world renders a token-styled primitive so the E2E proves the design
-// path end to end over TLS.
+const daemonClient = createDaemonClient();
+
+// The application root owns the single daemon client and route/auth providers.
 export function App() {
-  return (
-    <main className="min-h-dvh bg-background text-foreground p-8">
-      <HelloBanner label="kanthord control plane" />
-    </main>
-  );
+  return <BrowserRouter><DaemonClientProvider client={daemonClient}><AuthProvider client={daemonClient}><AppRouter /></AuthProvider></DaemonClientProvider></BrowserRouter>;
 }

@@ -1,22 +1,52 @@
-/**
- * Story 000 T4 — AppRouter component tests.
- * Uses react-router-dom v6 MemoryRouter (hermetic, no daemon).
- * Asserts: (a) each of the six nav areas has a route in routes.ts, and
- * rendering at that path mounts the area's placeholder; (b) activating a nav
- * item changes the URL to that area's path.
- *
- * AppRouter renders Routes + AppShell (no built-in BrowserRouter); tests wrap
- * it in MemoryRouter. AppShell uses Sidebar → useIsMobile → window.matchMedia;
- * matchMedia is mocked to desktop before each test.
- */
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { DaemonClientProvider } from "@/auth/DaemonClientProvider";
+import { AuthContext, AuthProvider } from "@/auth/AuthProvider";
 import { AppRouter } from "@/app/AppRouter";
 import { ROUTES } from "@/app/routes";
+import type { DaemonClient } from "@/lib/client";
 import { locators } from "@/locators";
 
-// matchMedia mock — required because AppShell → Sidebar → useIsMobile calls it.
+const FEATURE = {
+  featureId: "feature-summary-target",
+  status: "running",
+  phase: "coding",
+  progressSummary: "1/1 tasks satisfied",
+  name: "Summary target",
+};
+
+const FEATURE_DETAIL = {
+  featureId: FEATURE.featureId,
+  status: "running",
+  phase: "coding",
+  stories: [
+    {
+      storyId: "summary-story",
+      status: "running",
+      tasks: [
+        {
+          taskId: "summary-task",
+          status: "running",
+          exitGatePassed: false,
+          attempt: 1n,
+        },
+      ],
+    },
+  ],
+  dag: {
+    totalNodes: 1n,
+    satisfiedNodes: 1n,
+    totalEdges: 0n,
+    satisfiedEdges: 0n,
+  },
+  inFlightOps: [],
+  stateView: "state",
+  journalView: "journal",
+};
+
 function setupDesktopMedia() {
   Object.defineProperty(window, "innerWidth", {
     writable: true,
@@ -39,143 +69,336 @@ function setupDesktopMedia() {
   });
 }
 
-describe("AppRouter — route foundation (Story 000 T4)", () => {
+function safeClient(): DaemonClient {
+  return {
+    listFeatures: async () => ({ features: [FEATURE] }),
+    getFeature: async () => FEATURE_DETAIL,
+    getFeatureSummary: async () => ({
+      featureId: FEATURE.featureId,
+      headline: 4,
+      byConfirmedType: {
+        approval: 2,
+        clarification: 1,
+        correction: 1,
+        rework: 0,
+        takeover: 0,
+        external: 0,
+      },
+      excluded: 1,
+      netCost: 11,
+    }),
+    listInboxItems: async () => ({
+      items: [
+        {
+          id: "router-inbox-item",
+          kind: "escalation",
+          featureId: FEATURE.featureId,
+          summary: "Router inbox item",
+          type: "write-access-request",
+          severity: "medium",
+          suggestedCategory: "correction",
+          evidence: { type: "text", text: "evidence" },
+          status: "open",
+          expiresAt: 0n,
+          expired: false,
+        },
+      ],
+    }),
+    getInboxItem: async () => ({
+      item: {
+        id: "router-inbox-item",
+        kind: "escalation",
+        featureId: FEATURE.featureId,
+        summary: "Router inbox item",
+        type: "write-access-request",
+        severity: "medium",
+        suggestedCategory: "correction",
+        evidence: { type: "text", text: "evidence" },
+        status: "open",
+        expiresAt: 0n,
+        expired: false,
+      },
+    }),
+    listBrokerOperations: async () => ({
+      operations: [
+        {
+          opId: "router-op",
+          state: "in_flight",
+          correlation: "router-correlation",
+          verb: "github.commit",
+          expiring: false,
+        },
+      ],
+    }),
+    listBrokerVerbs: async () => ({
+      verbs: [{ verb: "github.commit", tier: "approval" }],
+    }),
+    listSlots: async () => ({
+      slots: [
+        {
+          name: "router-slot",
+          repo: "org/router",
+          strategy: "single",
+          heldLeases: [],
+          activeSessions: [],
+        },
+      ],
+    }),
+    listBudgets: async () => ({
+      budgets: [
+        {
+          taskId: "router-budget-task",
+          spent: 1,
+          ceiling: 2,
+          breakerState: "closed",
+          override: undefined,
+        },
+      ],
+    }),
+    getDaemonStatus: async () => ({
+      version: "test",
+      uptimeSeconds: 0n,
+      lastPing: { present: true, sentAt: 1n, tasksProcessed: 1n },
+    }),
+    triggerVerify: async () => ({ report: undefined }),
+    respondToEscalation: async () => ({}),
+    respondToApproval: async () => ({}),
+    overrideBudget: async () => ({ newCeiling: 0 }),
+  } as unknown as DaemonClient;
+}
+
+function renderRoute(path: string) {
+  return render(
+    <DaemonClientProvider client={safeClient()}>
+      <MemoryRouter initialEntries={[path]}>
+        <AppRouter />
+      </MemoryRouter>
+    </DaemonClientProvider>,
+  );
+}
+
+function renderRouteWithClient(path: string, client: DaemonClient) {
+  return render(
+    <DaemonClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <AppRouter />
+      </MemoryRouter>
+    </DaemonClientProvider>,
+  );
+}
+
+describe("AppRouter — real dashboard routes", () => {
   beforeEach(() => {
     setupDesktopMedia();
   });
 
-  // (a) routes.ts defines all six area paths + auth-required path
+  it("mounts the real list and operations routes inside AppShell", async () => {
+    const routes = [
+      [ROUTES.features, locators.features.list.row],
+      [ROUTES.inbox, locators.inbox.list.row],
+      [ROUTES.broker, locators.broker.ops.row],
+      [ROUTES.slots, locators.slots.row],
+      [ROUTES.budgets, locators.budgets.ledger.row],
+      [ROUTES.ops, locators.daemonOps.healthCard],
+    ] as const;
 
-  describe("routes.ts — path constants", () => {
-    it("exports a path for each of the six nav areas", () => {
-      const areas = [
-        "features",
-        "inbox",
-        "broker",
-        "slots",
-        "budgets",
-        "ops",
-      ] as const;
-      for (const area of areas) {
-        expect(ROUTES[area]).toMatch(/^\//);
-      }
-    });
-
-    it("exports an authRequired path", () => {
-      expect(ROUTES.authRequired).toMatch(/^\//);
-    });
+    for (const [path, surfaceLocator] of routes) {
+      const result = renderRoute(path);
+      expect(await screen.findByTestId(surfaceLocator)).toBeInTheDocument();
+      expect(screen.getByTestId(locators.appShell.content)).toBeInTheDocument();
+      result.unmount();
+    }
   });
 
-  // (a) rendering at each area path mounts that area's placeholder
+  it("mounts the real inbox item route", async () => {
+    renderRoute("/inbox/router-inbox-item");
 
-  describe("area routes — placeholder rendering", () => {
-    it("renders the features placeholder at the features path", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.features]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      expect(
-        screen.getByTestId(locators.features.placeholder)
-      ).toBeInTheDocument();
-    });
-
-    it("renders the inbox placeholder at the inbox path", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.inbox]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      expect(
-        screen.getByTestId(locators.inbox.placeholder)
-      ).toBeInTheDocument();
-    });
-
-    it("renders the broker placeholder at the broker path", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.broker]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      expect(
-        screen.getByTestId(locators.broker.placeholder)
-      ).toBeInTheDocument();
-    });
-
-    it("renders the slots placeholder at the slots path", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.slots]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      expect(
-        screen.getByTestId(locators.slots.placeholder)
-      ).toBeInTheDocument();
-    });
-
-    it("renders the budgets placeholder at the budgets path", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.budgets]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      expect(
-        screen.getByTestId(locators.budgets.placeholder)
-      ).toBeInTheDocument();
-    });
-
-    it("renders the ops placeholder at the ops path", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.ops]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      expect(
-        screen.getByTestId(locators.ops.placeholder)
-      ).toBeInTheDocument();
-    });
+    expect(await screen.findByTestId(locators.inbox.item.root)).toBeInTheDocument();
   });
 
-  // (b) activating a nav item changes the URL (observed via rendered placeholder)
+  it("reaches FeatureSummary from the feature detail summary tab", async () => {
+    const user = userEvent.setup();
+    renderRoute(`/features/${FEATURE.featureId}`);
 
-  describe("nav-item activation changes the URL", () => {
-    it("clicking the inbox nav item navigates from features to inbox", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.features]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
+    await user.click(
+      await screen.findByTestId(locators.detailPage.tabTrigger("summary")),
+    );
 
-      // Start at features: features placeholder visible, inbox not
-      expect(
-        screen.getByTestId(locators.features.placeholder)
-      ).toBeInTheDocument();
-      expect(
-        screen.queryByTestId(locators.inbox.placeholder)
-      ).not.toBeInTheDocument();
+    expect(
+      await screen.findByTestId(locators.metrics.featureSummary.root),
+    ).toBeInTheDocument();
+  });
 
-      // Activate the inbox nav item
-      fireEvent.click(screen.getByTestId(locators.appShell.navItem("inbox")));
+  it("mounts the auth-required route", () => {
+    renderRoute(ROUTES.authRequired);
 
-      // URL changed to inbox: inbox placeholder now visible
-      expect(
-        screen.getByTestId(locators.inbox.placeholder)
-      ).toBeInTheDocument();
-      expect(
-        screen.queryByTestId(locators.features.placeholder)
-      ).not.toBeInTheDocument();
+    expect(screen.getByTestId(locators.auth.required)).toBeInTheDocument();
+  });
+
+  it("redirects the root route to features and shows the open Inbox count in AppShell", async () => {
+    const openItems = [
+      {
+        id: "root-inbox-1",
+        kind: "escalation",
+        featureId: FEATURE.featureId,
+        summary: "First open inbox item",
+        type: "write-access-request",
+        severity: "medium",
+        suggestedCategory: "correction",
+        evidence: { type: "text", text: "evidence" },
+        status: "open",
+        expiresAt: 0n,
+        expired: false,
+      },
+      {
+        id: "root-inbox-2",
+        kind: "approval",
+        featureId: FEATURE.featureId,
+        summary: "Second open inbox item",
+        type: "github.merge",
+        severity: "high",
+        suggestedCategory: "approval",
+        evidence: { type: "text", text: "evidence" },
+        status: "open",
+        expiresAt: 0n,
+        expired: false,
+      },
+    ];
+    const client = {
+      ...safeClient(),
+      listInboxItems: async () => ({ items: openItems }),
+    } as unknown as DaemonClient;
+
+    renderRouteWithClient("/", client);
+
+    expect(await screen.findByTestId(locators.features.list.row)).toBeInTheDocument();
+    expect(screen.getByTestId(locators.appShell.navBadge)).toHaveTextContent("2");
+  });
+
+  it("does not load the Inbox count while the AuthProvider probe is pending or after it rejects as unauthenticated", async () => {
+    let pendingInboxCalls = 0;
+    const pendingClient = {
+      ...safeClient(),
+      listFeatures: () => new Promise(() => {}),
+      listInboxItems: async () => {
+        pendingInboxCalls += 1;
+        return { items: [] };
+      },
+    } as unknown as DaemonClient;
+
+    const pending = render(
+      <DaemonClientProvider client={pendingClient}>
+        <AuthProvider client={pendingClient}>
+          <MemoryRouter initialEntries={[ROUTES.features]}>
+            <AppRouter />
+          </MemoryRouter>
+        </AuthProvider>
+      </DaemonClientProvider>,
+    );
+    await act(async () => {
+      await Promise.resolve();
     });
+    expect(pendingInboxCalls).toBe(0);
+    pending.unmount();
 
-    it("clicking the broker nav item navigates to broker", () => {
-      render(
-        <MemoryRouter initialEntries={[ROUTES.features]}>
-          <AppRouter />
-        </MemoryRouter>
-      );
-      fireEvent.click(screen.getByTestId(locators.appShell.navItem("broker")));
-      expect(
-        screen.getByTestId(locators.broker.placeholder)
-      ).toBeInTheDocument();
-    });
+    let unauthenticatedInboxCalls = 0;
+    const unauthenticatedClient = {
+      ...safeClient(),
+      listFeatures: async () => {
+        throw new ConnectError("unauthenticated", Code.Unauthenticated);
+      },
+      listInboxItems: async () => {
+        unauthenticatedInboxCalls += 1;
+        return { items: [] };
+      },
+    } as unknown as DaemonClient;
+
+    render(
+      <DaemonClientProvider client={unauthenticatedClient}>
+        <AuthProvider client={unauthenticatedClient}>
+          <MemoryRouter initialEntries={[ROUTES.features]}>
+            <AppRouter />
+          </MemoryRouter>
+        </AuthProvider>
+      </DaemonClientProvider>,
+    );
+
+    expect(await screen.findByTestId(locators.auth.required)).toBeInTheDocument();
+    expect(unauthenticatedInboxCalls).toBe(0);
+  });
+
+  it("restores an unauthenticated protected deep link when authentication becomes available", async () => {
+    const client = safeClient();
+    const renderTree = (status: "authenticated" | "unauthenticated") => (
+      <DaemonClientProvider client={client}>
+        <AuthContext.Provider value={{ status }}>
+          <MemoryRouter initialEntries={[`/features/${FEATURE.featureId}`]}>
+            <AppRouter />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      </DaemonClientProvider>
+    );
+    const result = render(renderTree("unauthenticated"));
+
+    expect(await screen.findByTestId(locators.auth.required)).toBeInTheDocument();
+    result.rerender(renderTree("authenticated"));
+
+    expect(
+      await screen.findByTestId(locators.features.detail.taskRow("summary-task")),
+    ).toBeInTheDocument();
+  });
+
+  it("surfaces an Inbox-count loading failure in the shell", async () => {
+    const client = {
+      ...safeClient(),
+      listInboxItems: async () => {
+        throw new Error("Inbox count unavailable");
+      },
+    } as unknown as DaemonClient;
+
+    renderRouteWithClient(ROUTES.features, client);
+
+    expect(await screen.findByTestId(locators.appShell.navCountError)).toBeInTheDocument();
+  });
+
+  it("updates the AppShell Inbox badge after a successful inbox response changes the open count", async () => {
+    const user = userEvent.setup();
+    let responded = false;
+    const firstItem = {
+      id: "badge-response-first",
+      kind: "escalation",
+      featureId: FEATURE.featureId,
+      summary: "First badge item",
+      type: "write-access-request",
+      severity: "medium",
+      suggestedCategory: "correction",
+      evidence: { type: "text", text: "first evidence" },
+      status: "open",
+      expiresAt: 0n,
+      expired: false,
+    };
+    const secondItem = {
+      ...firstItem,
+      id: "badge-response-second",
+      summary: "Second badge item",
+    };
+    const client = {
+      ...safeClient(),
+      getInboxItem: async () => ({ item: firstItem }),
+      listInboxItems: async () => ({
+        items: responded ? [secondItem] : [firstItem, secondItem],
+      }),
+      respondToEscalation: async () => {
+        responded = true;
+        return {};
+      },
+    } as unknown as DaemonClient;
+
+    renderRouteWithClient(`/inbox/${firstItem.id}`, client);
+
+    expect(await screen.findByTestId(locators.appShell.navBadge)).toHaveTextContent("2");
+    await user.click(screen.getByTestId(locators.inbox.respond.acceptButton));
+    expect(await screen.findByTestId(locators.inbox.respond.successState)).toBeInTheDocument();
+    expect(await screen.findByTestId(locators.appShell.navBadge)).toHaveTextContent("1");
   });
 });

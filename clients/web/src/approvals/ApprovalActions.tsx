@@ -25,9 +25,10 @@ import type { ApprovalItemVM } from "./approval-vm";
 
 interface ApprovalActionsProps {
   vm: ApprovalItemVM;
+  onSuccess?: () => void | Promise<void>;
 }
 
-export function ApprovalActions({ vm }: ApprovalActionsProps) {
+export function ApprovalActions({ vm, onSuccess }: ApprovalActionsProps) {
   const client = useDaemonClient();
   const [approved, setApproved] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null); // B4
@@ -41,6 +42,7 @@ export function ApprovalActions({ vm }: ApprovalActionsProps) {
         reason: "",
         confirmedCategory: "",
       });
+      await onSuccess?.();
       setApproved(true);
     } catch (err: unknown) {
       // B4: surface rejection inline; do NOT set success state on failure

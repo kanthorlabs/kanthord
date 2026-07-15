@@ -1,7 +1,7 @@
 /**
  * Inbox — escalation/approval inbox list surface (Story 003 T1).
  *
- * Fetches open items via listInboxItems, adapts each through toInboxItemVM,
+ * Receives items adapted by InboxContainer,
  * applies the deterministic sort (escalation-first, then id alphabetically),
  * and renders the list with per-row EscalationSeverityBadge (DESIGN §4).
  *
@@ -14,8 +14,8 @@
  *
  * Locator placement follows DESIGN §8.
  */
-import { useState, useEffect } from "react";
-import { useDaemonClient } from "@/auth/DaemonClientProvider";
+import { useState } from "react";
+import { Link, useInRouterContext } from "react-router-dom";
 import { ListPage } from "@/components/templates/ListPage";
 import { EscalationSeverityBadge } from "@/components/status/EscalationSeverityBadge";
 import { Empty } from "@/components/ui/empty";
@@ -34,7 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toInboxItemVM, sortInboxItems } from "@/inbox/inbox-vm";
+import { sortInboxItems } from "@/inbox/inbox-vm";
 import type { InboxItemVM } from "@/inbox/inbox-vm";
 import { locators } from "@/locators";
 
@@ -42,47 +42,22 @@ import { locators } from "@/locators";
 // Component state
 // ---------------------------------------------------------------------------
 
-type State =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "data"; items: InboxItemVM[] };
+export interface InboxProps {
+  loading?: boolean;
+  error?: { message: string };
+  items?: InboxItemVM[];
+}
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function Inbox() {
-  const client = useDaemonClient();
-  const [state, setState] = useState<State>({ status: "loading" });
+export function Inbox(props: InboxProps = {}) {
+  const { loading, error, items = [] } = props;
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    client
-      .listInboxItems({})
-      .then((res) => {
-        if (!cancelled) {
-          // The adapter passes through extended fields when present (N2 design)
-          // and defaults them when absent (current bare proto).
-          const vms = res.items.map((item) =>
-            toInboxItemVM(item as Parameters<typeof toInboxItemVM>[0])
-          );
-          setState({ status: "data", items: vms });
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setState({ status: "error", message: String(err) });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [client]);
-
   // Derived: sort + filter (computed from data state)
-  const sortedItems =
-    state.status === "data" ? sortInboxItems(state.items) : [];
+  const sortedItems = sortInboxItems(items);
   const filteredItems =
     selectedType !== null
       ? sortedItems.filter((i) => i.type === selectedType)
@@ -131,12 +106,10 @@ export function Inbox() {
     <ListPage
       title="Inbox"
       toolbar={typeFilterUI}
-      loading={state.status === "loading"}
-      error={
-        state.status === "error" ? { message: state.message } : undefined
-      }
+      loading={loading}
+      error={error}
     >
-      {state.status === "data" &&
+      {!loading && error === undefined &&
         (filteredItems.length === 0 ? (
           <Empty data-testid={locators.inbox.list.empty}>
             No open items.
@@ -158,7 +131,7 @@ export function Inbox() {
                   key={item.id}
                   data-testid={locators.inbox.list.row}
                 >
-                  <TableCell>{item.id}</TableCell>
+                  <TableCell><InboxItemLink id={item.id} /></TableCell>
                   <TableCell>{item.kind}</TableCell>
                   <TableCell>{item.featureId}</TableCell>
                   <TableCell>{item.summary}</TableCell>
@@ -175,4 +148,16 @@ export function Inbox() {
         ))}
     </ListPage>
   );
+}
+
+function InboxItemLink({ id }: { id: string }) {
+  const inRouter = useInRouterContext();
+  const href = `/inbox/${encodeURIComponent(id)}`;
+  const testId = locators.inbox.list.itemLink(id);
+
+  if (!inRouter) {
+    return <a href={href} data-testid={testId}>{id}</a>;
+  }
+
+  return <Link to={href} data-testid={testId}>{id}</Link>;
 }

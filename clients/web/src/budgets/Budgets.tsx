@@ -20,6 +20,7 @@ import type { BudgetVM } from "./budget-vm";
 
 interface BudgetsProps {
   budgets: BudgetVM[];
+  onOverrideSuccess?: () => void | Promise<void>;
 }
 
 type OverrideResult =
@@ -27,7 +28,7 @@ type OverrideResult =
   | { kind: "success" }
   | { kind: "error"; message: string };
 
-export function Budgets({ budgets }: BudgetsProps) {
+export function Budgets({ budgets, onOverrideSuccess }: BudgetsProps) {
   const client = useDaemonClient();
   const [overrideResult, setOverrideResult] = useState<OverrideResult>({
     kind: "idle",
@@ -36,6 +37,7 @@ export function Budgets({ budgets }: BudgetsProps) {
   async function handleOverride(taskId: string, reason: string) {
     try {
       await client.overrideBudget({ taskId, reason });
+      await onOverrideSuccess?.();
       setOverrideResult({ kind: "success" });
     } catch (err: unknown) {
       // B6: surface ALL error types — ConnectError shows typed message, any

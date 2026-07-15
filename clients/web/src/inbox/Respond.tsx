@@ -50,12 +50,13 @@ interface RespondProps {
   item: InboxItemVM;
   /** All currently open items (for Next-open-item computation). */
   openItems: InboxItemVM[];
+  onSuccess?: () => void | Promise<void>;
 }
 
 type Mode = "initial" | "override";
 type ResponseState = "idle" | "submitting" | "success" | "error";
 
-export function Respond({ item, openItems }: RespondProps) {
+export function Respond({ item, openItems, onSuccess }: RespondProps) {
   const client = useDaemonClient();
   const navigate = useNavigate();
 
@@ -63,6 +64,7 @@ export function Respond({ item, openItems }: RespondProps) {
   const [overrideCategory, setOverrideCategory] = useState("");
   const [responseState, setResponseState] = useState<ResponseState>("idle");
   const [apiError, setApiError] = useState<string | null>(null);
+  const [submittedNextItem, setSubmittedNextItem] = useState<InboxItemVM | null>(null);
 
   // ---------------------------------------------------------------------------
   // Next-open-item — deterministic per the shared sort
@@ -78,6 +80,7 @@ export function Respond({ item, openItems }: RespondProps) {
   // Respond helpers
   // ---------------------------------------------------------------------------
   async function callRespond(confirmedCategory: string) {
+    const nextItemAtSubmit = nextItem ?? null;
     setResponseState("submitting");
     setApiError(null);
     try {
@@ -95,6 +98,8 @@ export function Respond({ item, openItems }: RespondProps) {
           confirmedCategory,
         });
       }
+      setSubmittedNextItem(nextItemAtSubmit);
+      await onSuccess?.();
       setResponseState("success");
     } catch (err) {
       setResponseState("error");
@@ -126,15 +131,15 @@ export function Respond({ item, openItems }: RespondProps) {
       >
         <p className="text-muted-foreground text-sm">Response recorded.</p>
         <div className="flex gap-2">
-          {nextItem && (
+          {submittedNextItem && (
             <Button
               data-testid={locators.inbox.respond.nextOpenItem}
-              onClick={() => navigate(`/inbox/${nextItem.id}`)}
+              onClick={() => navigate(`/inbox/${submittedNextItem.id}`)}
             >
               Next open item
             </Button>
           )}
-          {!nextItem && (
+          {!submittedNextItem && (
             <Button
               data-testid={locators.inbox.respond.nextOpenItem}
               variant="outline"
