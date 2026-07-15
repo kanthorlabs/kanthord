@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir } from "node:fs/promises";
+import { readFile, writeFile, readdir, rename, unlink } from "node:fs/promises";
 import { log, errMessage } from "../foundations/log.ts";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -777,11 +777,22 @@ export async function computeCompileHash(featureDir: string): Promise<string> {
 
 async function writeCompileBlock(featureDir: string, hash: string): Promise<void> {
   const epicPath = join(featureDir, "epic.md");
+  const tmpPath = `${epicPath}.tmp`;
   const epicRaw = await readFile(epicPath, "utf8");
   const { frontmatter: rawFm, body: epicBody } = parsePlanFile(epicPath, epicRaw);
   const fm = rawFm as Record<string, unknown>;
   fm["compile"] = { shape: "tdd@1", hash, at: new Date().toISOString() };
-  await writeFile(epicPath, serializeFrontmatter(fm) + epicBody, "utf8");
+  try {
+    await writeFile(tmpPath, serializeFrontmatter(fm) + epicBody, "utf8");
+    await rename(tmpPath, epicPath);
+  } catch (err) {
+    try {
+      await unlink(tmpPath);
+    } catch (unlinkErr) {
+      log.debug("writeCompileBlock.temp-cleanup", { error: errMessage(unlinkErr) });
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -829,129 +840,147 @@ export async function compile(
   );
   const nextGen = (maxGenRow?.max_gen ?? 0) + 1;
 
-  // 7. Delete existing plan rows for this feature
-  const oldNodeIds = store
-    .all<{ id: string }>("SELECT id FROM plan_node WHERE feature_id = ?", featureId)
-    .map((r) => r.id);
-  if (oldNodeIds.length > 0) {
-    const ph = oldNodeIds.map(() => "?").join(",");
-    const oldArtIds = store
-      .all<{ id: string }>(
-        `SELECT id FROM plan_artifact WHERE publisher_node_id IN (${ph})`,
-        ...oldNodeIds,
-      )
+  // 7–16. Mutating section: wrapped in a nestable SQLite SAVEPOINT so that any
+  // failure (including the step-8 async sourceProvider throw) rolls back all
+  // DELETEs and leaves the original generation rows intact.  Must not use
+  // BEGIN/COMMIT — approveReplan can call compile() inside its own SAVEPOINT
+  // and SQLite forbids nested BEGIN.
+  store.run("SAVEPOINT compile_apply");
+  try {
+    // 7. Delete existing plan rows for this feature
+    const oldNodeIds = store
+      .all<{ id: string }>("SELECT id FROM plan_node WHERE feature_id = ?", featureId)
       .map((r) => r.id);
-    if (oldArtIds.length > 0) {
-      const aph = oldArtIds.map(() => "?").join(",");
-      store.run(`DELETE FROM plan_artifact_consumer WHERE artifact_id IN (${aph})`, ...oldArtIds);
+    if (oldNodeIds.length > 0) {
+      const ph = oldNodeIds.map(() => "?").join(",");
+      const oldArtIds = store
+        .all<{ id: string }>(
+          `SELECT id FROM plan_artifact WHERE publisher_node_id IN (${ph})`,
+          ...oldNodeIds,
+        )
+        .map((r) => r.id);
+      if (oldArtIds.length > 0) {
+        const aph = oldArtIds.map(() => "?").join(",");
+        store.run(`DELETE FROM plan_artifact_consumer WHERE artifact_id IN (${aph})`, ...oldArtIds);
+      }
+      store.run(
+        `DELETE FROM plan_edge WHERE from_node_id IN (${ph}) OR to_node_id IN (${ph})`,
+        ...oldNodeIds,
+        ...oldNodeIds,
+      );
+      store.run(`DELETE FROM plan_gate WHERE node_id IN (${ph})`, ...oldNodeIds);
+      store.run(`DELETE FROM plan_artifact WHERE publisher_node_id IN (${ph})`, ...oldNodeIds);
+      store.run(`DELETE FROM plan_deploy_stage WHERE node_id IN (${ph})`, ...oldNodeIds);
+      store.run("DELETE FROM plan_node WHERE feature_id = ?", featureId);
     }
-    store.run(
-      `DELETE FROM plan_edge WHERE from_node_id IN (${ph}) OR to_node_id IN (${ph})`,
-      ...oldNodeIds,
-      ...oldNodeIds,
-    );
-    store.run(`DELETE FROM plan_gate WHERE node_id IN (${ph})`, ...oldNodeIds);
-    store.run(`DELETE FROM plan_artifact WHERE publisher_node_id IN (${ph})`, ...oldNodeIds);
-    store.run(`DELETE FROM plan_deploy_stage WHERE node_id IN (${ph})`, ...oldNodeIds);
-    store.run("DELETE FROM plan_node WHERE feature_id = ?", featureId);
-  }
 
-  // 8. Fetch content snapshots per node (optional sourceProvider)
-  const snapshots = new Map<string, { content_hash: string; snapshot_at: number }>();
-  if (opts.sourceProvider !== undefined) {
-    const provider = opts.sourceProvider;
-    await Promise.all(
-      graph.nodes.map(async (node) => {
-        const snap = await provider.getSnapshot(node.id);
-        snapshots.set(node.id, snap);
-      }),
-    );
-  }
+    // 8. Fetch content snapshots per node (optional sourceProvider).
+    //    Runs inside the SAVEPOINT so a getSnapshot throw rolls back the DELETEs.
+    const snapshots = new Map<string, { content_hash: string; snapshot_at: number }>();
+    if (opts.sourceProvider !== undefined) {
+      const provider = opts.sourceProvider;
+      await Promise.all(
+        graph.nodes.map(async (node) => {
+          const snap = await provider.getSnapshot(node.id);
+          snapshots.set(node.id, snap);
+        }),
+      );
+    }
 
-  // 9. Write plan_node rows (with updated generation and optional snapshot fields)
-  for (const node of graph.nodes) {
-    const snap = snapshots.get(node.id);
+    // 9. Write plan_node rows (with updated generation and optional snapshot fields)
+    for (const node of graph.nodes) {
+      const snap = snapshots.get(node.id);
+      store.run(
+        "INSERT INTO plan_node (id, kind, feature_id, repo, ticket_system, ticket_ref, major, lane, slug, generation, content_hash, snapshot_at, max_attempts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        node.id,
+        node.kind,
+        node.feature_id,
+        node.repo,
+        node.ticket_system,
+        node.ticket_ref,
+        node.major,
+        node.lane,
+        node.slug,
+        nextGen,
+        snap?.content_hash ?? null,
+        snap?.snapshot_at ?? null,
+        node.max_attempts ?? null,
+      );
+    }
+
+    // 10. Write plan_edge rows
+    for (const edge of graph.edges) {
+      store.run(
+        "INSERT INTO plan_edge (from_node_id, to_node_id, kind, semantics) VALUES (?, ?, ?, ?)",
+        edge.from_node_id,
+        edge.to_node_id,
+        edge.kind,
+        edge.semantics,
+      );
+    }
+
+    // 11. Write plan_gate rows
+    for (const gate of graph.gates) {
+      store.run(
+        "INSERT INTO plan_gate (node_id, phase, position, name, artifact_id, semantics) VALUES (?, ?, ?, ?, ?, ?)",
+        gate.node_id,
+        gate.phase,
+        gate.position,
+        gate.name,
+        gate.artifact_id,
+        gate.semantics,
+      );
+    }
+
+    // 12. Write plan_artifact rows
+    for (const artifact of graph.artifacts) {
+      store.run(
+        "INSERT INTO plan_artifact (id, publisher_node_id, kind, path) VALUES (?, ?, ?, ?)",
+        artifact.id,
+        artifact.publisher_node_id,
+        artifact.kind,
+        artifact.path,
+      );
+    }
+
+    // 13. Write plan_artifact_consumer rows
+    for (const consumer of graph.artifactConsumers) {
+      store.run(
+        "INSERT INTO plan_artifact_consumer (artifact_id, consumer_node_id) VALUES (?, ?)",
+        consumer.artifact_id,
+        consumer.consumer_node_id,
+      );
+    }
+
+    // 14. Write plan_deploy_stage rows (B4)
+    for (const ds of graph.deployStages ?? []) {
+      store.run(
+        "INSERT INTO plan_deploy_stage (node_id, handlers, success_criteria, soak_duration) VALUES (?, ?, ?, ?)",
+        ds.node_id,
+        ds.handlers,
+        ds.success_criteria,
+        ds.soak_duration,
+      );
+    }
+
+    // 16. Stamp plan_generation (keeps all previous rows for history)
     store.run(
-      "INSERT INTO plan_node (id, kind, feature_id, repo, ticket_system, ticket_ref, major, lane, slug, generation, content_hash, snapshot_at, max_attempts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      node.id,
-      node.kind,
-      node.feature_id,
-      node.repo,
-      node.ticket_system,
-      node.ticket_ref,
-      node.major,
-      node.lane,
-      node.slug,
+      "INSERT INTO plan_generation (generation, compile_hash, feature_id, at) VALUES (?, ?, ?, ?)",
       nextGen,
-      snap?.content_hash ?? null,
-      snap?.snapshot_at ?? null,
-      node.max_attempts ?? null,
+      hash,
+      featureId,
+      new Date().toISOString(),
     );
+  } catch (err) {
+    try {
+      store.run("ROLLBACK TO compile_apply");
+      store.run("RELEASE compile_apply");
+    } catch (cleanupErr) {
+      log.warn("compile.savepoint-rollback-error", { error: errMessage(cleanupErr) });
+    }
+    throw err;
   }
-
-  // 10. Write plan_edge rows
-  for (const edge of graph.edges) {
-    store.run(
-      "INSERT INTO plan_edge (from_node_id, to_node_id, kind, semantics) VALUES (?, ?, ?, ?)",
-      edge.from_node_id,
-      edge.to_node_id,
-      edge.kind,
-      edge.semantics,
-    );
-  }
-
-  // 11. Write plan_gate rows
-  for (const gate of graph.gates) {
-    store.run(
-      "INSERT INTO plan_gate (node_id, phase, position, name, artifact_id, semantics) VALUES (?, ?, ?, ?, ?, ?)",
-      gate.node_id,
-      gate.phase,
-      gate.position,
-      gate.name,
-      gate.artifact_id,
-      gate.semantics,
-    );
-  }
-
-  // 12. Write plan_artifact rows
-  for (const artifact of graph.artifacts) {
-    store.run(
-      "INSERT INTO plan_artifact (id, publisher_node_id, kind, path) VALUES (?, ?, ?, ?)",
-      artifact.id,
-      artifact.publisher_node_id,
-      artifact.kind,
-      artifact.path,
-    );
-  }
-
-  // 13. Write plan_artifact_consumer rows
-  for (const consumer of graph.artifactConsumers) {
-    store.run(
-      "INSERT INTO plan_artifact_consumer (artifact_id, consumer_node_id) VALUES (?, ?)",
-      consumer.artifact_id,
-      consumer.consumer_node_id,
-    );
-  }
-
-  // 14. Write plan_deploy_stage rows (B4)
-  for (const ds of graph.deployStages ?? []) {
-    store.run(
-      "INSERT INTO plan_deploy_stage (node_id, handlers, success_criteria, soak_duration) VALUES (?, ?, ?, ?)",
-      ds.node_id,
-      ds.handlers,
-      ds.success_criteria,
-      ds.soak_duration,
-    );
-  }
-
-  // 16. Stamp plan_generation (keeps all previous rows for history)
-  store.run(
-    "INSERT INTO plan_generation (generation, compile_hash, feature_id, at) VALUES (?, ?, ?, ?)",
-    nextGen,
-    hash,
-    featureId,
-    new Date().toISOString(),
-  );
+  store.run("RELEASE compile_apply");
 
   // 17. Write compile: { shape, hash, at } block into epic.md
   await writeCompileBlock(featureDir, hash);

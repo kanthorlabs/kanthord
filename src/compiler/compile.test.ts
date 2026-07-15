@@ -1424,6 +1424,80 @@ tests.
   });
 
   // --------------------------------------------------------------------------
+  // compile — atomicity: snapshot failure after step-7 DELETEs must not leave
+  // the feature with no plan rows (partial-delete stranded state).
+  // --------------------------------------------------------------------------
+
+  describe("compile — atomicity: snapshot failure after DELETE leaves original rows intact", () => {
+    test(
+      "snapshot-provider throw after step-7 DELETEs must leave generation-1 plan_node rows intact",
+      async () => {
+        // Arrange: compile once successfully — generation 1
+        const dir = await makeMinimalFixture();
+        const store = openStore(join(dir, "atm.db"), { busyTimeout: 1000 });
+        try {
+          await compile(dir, store, COMPILE_OPTS);
+
+          const gen1Nodes = store.all<{ id: string }>(
+            "SELECT id FROM plan_node WHERE feature_id = 'feat-001'",
+          );
+          assert.ok(
+            gen1Nodes.length > 0,
+            "precondition: generation-1 plan_node rows must exist after first compile",
+          );
+          const gen1Count = gen1Nodes.length;
+
+          // Mutate a covered file so compile_hash differs → second compile skips early-return
+          const epicPath = join(dir, "epic.md");
+          const original = await readFile(epicPath, "utf8");
+          await writeFile(epicPath, original + "\n<!-- atomicity-test body change -->\n");
+
+          // Act: second compile — sourceProvider.getSnapshot throws for every node
+          // (deterministic failure between step-7 DELETEs and step-9 INSERTs)
+          const failingProvider: SourceProvider = {
+            async getSnapshot(
+              _nodeId: string,
+            ): Promise<{ content_hash: string; snapshot_at: number }> {
+              throw new Error("snapshot fetch failed deterministically");
+            },
+          };
+
+          await assert.rejects(
+            compile(dir, store, { ...COMPILE_OPTS, sourceProvider: failingProvider }),
+            (err: unknown) =>
+              err instanceof Error &&
+              err.message.includes("snapshot fetch failed deterministically"),
+            "compile() must propagate the snapshot provider error",
+          );
+
+          // Assert (a): original generation-1 plan_node rows must still exist (DELETE rolled back)
+          const nodesAfter = store.all<{ id: string }>(
+            "SELECT id FROM plan_node WHERE feature_id = 'feat-001'",
+          );
+          assert.equal(
+            nodesAfter.length,
+            gen1Count,
+            `compile() atomicity: plan_node rows must be fully preserved after mid-compile failure; expected ${gen1Count} rows (generation 1), got ${nodesAfter.length} — DELETEs must be rolled back with the INSERTs`,
+          );
+
+          // Assert (b): MAX(generation) for feat-001 must still be 1
+          const maxGenRow = store.get<{ max_gen: number | null }>(
+            "SELECT MAX(generation) AS max_gen FROM plan_generation WHERE feature_id = 'feat-001'",
+          );
+          assert.equal(
+            maxGenRow?.max_gen,
+            1,
+            "compile() atomicity: MAX(generation) must remain 1 — no partial new generation may be committed after a mid-compile failure",
+          );
+        } finally {
+          store.close();
+          await rm(dir, { recursive: true, force: true });
+        }
+      },
+    );
+  });
+
+  // --------------------------------------------------------------------------
   // 008.1 Story 001-T1 — compiler wires terminal task(s) of last-major story
   // to the first deploy-stage node (additive; story→deploy edges kept).
   // --------------------------------------------------------------------------

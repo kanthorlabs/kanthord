@@ -1443,4 +1443,233 @@ Unit tests.
       );
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // Concurrent serialization regression (deferred follow-up)
+  //
+  // approveReplan's critical section (read liveGen → validate → apply edits →
+  // compile → stamp new gen) is NOT protected by an async mutex in the current
+  // code. The comment at line ~358-362 in control-verbs.ts acknowledges this
+  // and defers serializing concurrent approvals as a follow-up.
+  //
+  // Race mechanism (Node.js cooperative multitasking):
+  //   Both calls start concurrently via Promise.allSettled. Each hits
+  //   `await lstat(...)` inside the path-validation loop before reaching the
+  //   liveGen check (store.get is synchronous, no yield). Because both lstat
+  //   requests are queued to libuv in the same tick, both calls suspend before
+  //   either advances past its lstat. When each lstat resolves the call resumes,
+  //   runs the synchronous liveGen check, and immediately suspends again at
+  //   `await readFile(...)`. By this point BOTH have read liveGen=N (=1) and
+  //   PASSED the generation check — before either has called compile() or
+  //   stamped a new generation. Both therefore proceed to compile and attempt to
+  //   write gen N+1 (or N+2) to the store.
+  //
+  // Expected serialized behavior (post-fix):
+  //   A per-feature async mutex wraps the read-liveGen→compile→stamp→journal
+  //   critical section. Whichever call acquires the lock first succeeds
+  //   (gen→N+1); the second call enters the lock, reads liveGen=N+1 ≠ N, and
+  //   throws GenerationConflictError. Final MAX(generation) = N+1 = 2.
+  //
+  // Current (unserialized) behavior:
+  //   Both calls pass the liveGen check, both compile, both stamp. The
+  //   SAVEPOINT same-name nesting means A's RELEASE releases B's savepoint and
+  //   vice-versa (both still succeed). Final MAX(generation) > 2 (or =2 when
+  //   compile's hash-equality early-return fires for the second call, in which
+  //   case both calls STILL return fulfilled — the GenerationConflictError is
+  //   never thrown). Either way the assertions below fail. That is the RED.
+  // ---------------------------------------------------------------------------
+
+  describe("approveReplan — concurrent serialization (deferred follow-up)", () => {
+    let concTmpDir: string;
+    let concStore: Store;
+    let concFeatureDir: string;
+
+    const CONC_FEAT_ID   = "feat-replan-conc";
+    const CONC_TASK_A_ID = "task-conc-a";
+    const CONC_TASK_B_ID = "task-conc-b";
+
+    const CONC_EPIC_MD = `---
+id: ${CONC_FEAT_ID}
+repo: conc-repo
+ticket_system: jira
+ticket: CONC-0
+---
+
+## Acceptance
+
+Concurrent replan serialization feature.
+`;
+
+    const CONC_TASK_A_MD = `---
+id: ${CONC_TASK_A_ID}
+workflow: tdd@1
+repo: conc-repo
+ticket_system: jira
+ticket: CONC-1
+---
+
+## Prerequisites
+
+Initial prerequisites before concurrent replan.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Nothing.
+
+## Tests
+
+Unit tests.
+`;
+
+    const CONC_TASK_A_MD_V2 = `---
+id: ${CONC_TASK_A_ID}
+workflow: tdd@1
+repo: conc-repo
+ticket_system: jira
+ticket: CONC-1
+---
+
+## Prerequisites
+
+Updated prerequisites after concurrent replan.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Nothing.
+
+## Tests
+
+Unit tests.
+`;
+
+    const CONC_TASK_B_MD = `---
+id: ${CONC_TASK_B_ID}
+workflow: tdd@1
+repo: conc-repo
+ticket_system: jira
+ticket: CONC-2
+---
+
+## Prerequisites
+
+None.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Nothing.
+
+## Tests
+
+Unit tests.
+`;
+
+    before(async () => {
+      concTmpDir = await mkdtemp(join(tmpdir(), "ctl-conc-replan-"));
+      concFeatureDir = join(concTmpDir, CONC_FEAT_ID);
+
+      await mkdir(join(concFeatureDir, "001-s1"), { recursive: true });
+      await mkdir(join(concFeatureDir, "002-s2"), { recursive: true });
+      await writeFile(join(concFeatureDir, "epic.md"), CONC_EPIC_MD, "utf8");
+      await writeFile(join(concFeatureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
+      await writeFile(join(concFeatureDir, "001-s1", "INDEX.md"), "# Story 1\n", "utf8");
+      await writeFile(join(concFeatureDir, "001-s1", "001-task-a.md"), CONC_TASK_A_MD, "utf8");
+      await writeFile(join(concFeatureDir, "002-s2", "INDEX.md"), "# Story 2\n", "utf8");
+      await writeFile(join(concFeatureDir, "002-s2", "001-task-b.md"), CONC_TASK_B_MD, "utf8");
+
+      concStore = openStore(join(concTmpDir, "test.db"), { busyTimeout: 1000 });
+      initSchema(concStore);
+
+      // Compile to G=1 — creates plan_node, plan_generation, plan_edge rows.
+      await compile(concFeatureDir, concStore, {});
+
+      // Pre-insert scheduler_task rows (simulating tasks that have run and passed
+      // their exit gate, so re-opening the gate on replan is observable).
+      concStore.run(
+        "INSERT INTO scheduler_task (node_id, feature_id, status, exit_gate_passed, max_attempts) VALUES (?, ?, ?, ?, ?)",
+        CONC_TASK_A_ID, CONC_FEAT_ID, "pending", 1, 3,
+      );
+      concStore.run(
+        "INSERT INTO scheduler_task (node_id, feature_id, status, exit_gate_passed, max_attempts) VALUES (?, ?, ?, ?, ?)",
+        CONC_TASK_B_ID, CONC_FEAT_ID, "pending", 1, 3,
+      );
+    });
+
+    after(async () => {
+      concStore.close();
+      await rm(concTmpDir, { recursive: true, force: true });
+    });
+
+    test(
+      "approveReplan — concurrent calls for same feature are serialized: exactly one succeeds, the other throws GenerationConflictError",
+      async () => {
+        const deps: ControlVerbsDeps = {
+          store: concStore,
+          featureDirFn: (_id: string) => concFeatureDir,
+        };
+        // Both calls are submitted at baseGeneration=1 concurrently — each sees
+        // the same live generation before either can commit a new generation.
+        const diff: ReplanDiff = {
+          featureId: CONC_FEAT_ID,
+          baseGeneration: 1,
+          edits: [{ path: "001-s1/001-task-a.md", newContent: CONC_TASK_A_MD_V2 }],
+        };
+
+        const [resultA, resultB] = await Promise.allSettled([
+          approveReplan(diff, "actor-a", deps),
+          approveReplan(diff, "actor-b", deps),
+        ]);
+
+        const fulfilled = [resultA, resultB].filter((r) => r.status === "fulfilled");
+        const rejected  = [resultA, resultB].filter((r) => r.status === "rejected");
+
+        // Serialized behavior: exactly one call must succeed.
+        assert.equal(
+          fulfilled.length,
+          1,
+          `serialized approveReplan: expected exactly 1 fulfilled result; got ${fulfilled.length} ` +
+            "(both succeeded — the race was not serialized; the second call must have " +
+            "thrown GenerationConflictError after acquiring the per-feature lock)",
+        );
+        assert.equal(
+          rejected.length,
+          1,
+          `serialized approveReplan: expected exactly 1 rejected result; got ${rejected.length}`,
+        );
+
+        // The rejection must be a GenerationConflictError (serialized second call
+        // reads the already-bumped generation and detects the mismatch).
+        const rejected0 = rejected[0];
+        assert.ok(rejected0 !== undefined, "rejected result must be defined");
+        assert.ok(
+          (rejected0 as PromiseRejectedResult).reason instanceof GenerationConflictError,
+          `the losing concurrent call must reject with GenerationConflictError; ` +
+            `got: ${String((rejected0 as PromiseRejectedResult).reason)}`,
+        );
+
+        // Final generation must be N+1=2, not N+2=3 (double-apply).
+        const finalGenRow = concStore.get<{ max_gen: number }>(
+          "SELECT MAX(generation) AS max_gen FROM plan_generation WHERE feature_id = ?",
+          CONC_FEAT_ID,
+        );
+        assert.equal(
+          finalGenRow?.max_gen,
+          2,
+          `final generation must be 2 (N+1=1+1); got ${String(finalGenRow?.max_gen)} ` +
+            "(value > 2 indicates double-apply; no serialization in place)",
+        );
+      },
+    );
+  });
 });
