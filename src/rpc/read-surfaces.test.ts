@@ -264,6 +264,13 @@ async function makeDeps(dir: string): Promise<{ deps: ReadSurfacesDeps; store: S
 // ---------------------------------------------------------------------------
 
 describe("src/rpc/read-surfaces.ts", () => {
+  test("DaemonService descriptor exposes the GetFeatureSummary read method", () => {
+    assert.ok(
+      DaemonService.methods.some((method) => method.localName === "getFeatureSummary"),
+      "DaemonService must expose GetFeatureSummary as the getFeatureSummary read method",
+    );
+  });
+
   // -------------------------------------------------------------------------
   // (a) listFeatures – per-feature id, status, phase, progress summary
   // -------------------------------------------------------------------------

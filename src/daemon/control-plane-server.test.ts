@@ -47,6 +47,7 @@ import { openStore } from "../foundations/sqlite-store.ts";
 import { initSchema } from "../store/schema.ts";
 import { applyCompiledPlanMigration } from "../compiler/compile.ts";
 import { appendTimelineEvent } from "../metrics/task-timeline.ts";
+import { JsonlLog } from "../foundations/jsonl.ts";
 import { createStatusServer } from "./status-server.ts";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { createClient } from "@connectrpc/connect";
@@ -112,6 +113,7 @@ describe("src/daemon/control-plane-server.ts — WIRE-1 serve-wiring + D1 auth",
   let srv: StatusServer;
   let srvHost = "";
   let srvPort = 0;
+  let interactionLog: JsonlLog;
 
   before(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "wire1-"));
@@ -162,6 +164,13 @@ describe("src/daemon/control-plane-server.ts — WIRE-1 serve-wiring + D1 auth",
       "INSERT INTO budget_ledger (task_id, ledger) VALUES (?, ?)",
       TASK_A, BUDGET_LEDGER_A,
     );
+    interactionLog = new JsonlLog(join(tmpDir, "interactions.jsonl"));
+    await interactionLog.append({
+      item_id: "wire1-feature-summary-approval",
+      task_id: TASK_A,
+      feature_id: FEAT_ID,
+      confirmed_category: "approval",
+    });
 
     // ---- inbox_items fixture (for getInboxItem) ----
     store.run(
@@ -212,6 +221,7 @@ describe("src/daemon/control-plane-server.ts — WIRE-1 serve-wiring + D1 auth",
       daemonVersion: DAEMON_VERSION,
       uptimeFn: () => 99,
       verifyFn: async () => ({ outcome: "pass", reportJson: '{"checks":[]}' }),
+      interactionLog,
 
       // ── control-verbs deps ─────────────────────────────────────────────
       featureDirFn: (featureId: string) => join(tmpDir, featureId),
@@ -251,6 +261,44 @@ describe("src/daemon/control-plane-server.ts — WIRE-1 serve-wiring + D1 auth",
     assert.ok(
       res.stateView.includes("Wire-1"),
       "stateView must contain STATE.md content (proves filesystem read)",
+    );
+  });
+
+  test("getFeatureSummary — handler routes to the live summary with the generated response shape", async () => {
+    const client = makeClient(srvHost, srvPort);
+    const res = await client.getFeatureSummary({ featureId: FEAT_ID });
+    const byConfirmedType = res.byConfirmedType;
+    assert.ok(byConfirmedType !== undefined, "byConfirmedType must be present");
+
+    assert.deepEqual(
+      {
+        featureId: res.featureId,
+        headline: res.headline,
+        byConfirmedType: {
+          approval: byConfirmedType.approval,
+          clarification: byConfirmedType.clarification,
+          correction: byConfirmedType.correction,
+          rework: byConfirmedType.rework,
+          takeover: byConfirmedType.takeover,
+          external: byConfirmedType.external,
+        },
+        excluded: res.excluded,
+        netCost: res.netCost,
+      },
+      {
+        featureId: FEAT_ID,
+        headline: 1,
+        byConfirmedType: {
+          approval: 1,
+          clarification: 0,
+          correction: 0,
+          rework: 0,
+          takeover: 0,
+          external: 0,
+        },
+        excluded: 0,
+        netCost: 5,
+      },
     );
   });
 

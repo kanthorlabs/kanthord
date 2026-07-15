@@ -40,6 +40,8 @@ service DaemonService {
   // features.get — drill-down: stories/tasks + DAG progress + in-flight ops +
   // STATE/JOURNAL content views.
   rpc GetFeature(GetFeatureRequest) returns (GetFeatureResponse);
+  // features.summary — on-read human-interaction and net ledger-cost metrics.
+  rpc GetFeatureSummary(GetFeatureSummaryRequest) returns (GetFeatureSummaryResponse);
   // broker.operations — in-flight / pending / expiring ops with state + correlation.
   rpc ListBrokerOperations(ListBrokerOperationsRequest) returns (ListBrokerOperationsResponse);
   // broker.verbs — read-only registry view with tiers (no registry-write method exists).
@@ -275,6 +277,31 @@ message GetFeatureResponse {
   string state_view = 7;
   // JOURNAL.md content view for the feature.
   string journal_view = 8;
+}
+
+// --- features.summary (Epic 029 Story 002) ---
+message GetFeatureSummaryRequest {
+  string feature_id = 1;
+}
+
+message InteractionTypeBreakdown {
+  uint32 approval = 1;
+  uint32 clarification = 2;
+  uint32 correction = 3;
+  uint32 rework = 4;
+  uint32 takeover = 5;
+  uint32 external = 6;
+}
+
+message GetFeatureSummaryResponse {
+  string feature_id = 1;
+  // Included interaction count. Flagged events are never counted here.
+  uint32 headline = 2;
+  InteractionTypeBreakdown by_confirmed_type = 3;
+  // Flagged events are reported separately rather than silently dropped.
+  uint32 excluded = 4;
+  // Epic 013 net cumulative cost summed across the feature's tasks.
+  double net_cost = 5;
 }
 
 // --- broker.operations ---

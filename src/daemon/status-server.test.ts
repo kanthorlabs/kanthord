@@ -61,6 +61,7 @@ describe("src/daemon/status-server", () => {
         // 2B reads (Epic 026 Story 001).
         "listFeatures",
         "getFeature",
+        "getFeatureSummary",
         "listBrokerOperations",
         "listBrokerVerbs",
         "listSlots",

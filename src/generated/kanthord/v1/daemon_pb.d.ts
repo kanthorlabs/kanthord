@@ -736,6 +736,107 @@ export declare type GetFeatureResponse = Message<"kanthord.v1.GetFeatureResponse
 export declare const GetFeatureResponseSchema: GenMessage<GetFeatureResponse>;
 
 /**
+ * --- features.summary (Epic 029 Story 002) ---
+ *
+ * @generated from message kanthord.v1.GetFeatureSummaryRequest
+ */
+export declare type GetFeatureSummaryRequest = Message<"kanthord.v1.GetFeatureSummaryRequest"> & {
+  /**
+   * @generated from field: string feature_id = 1;
+   */
+  featureId: string;
+};
+
+/**
+ * Describes the message kanthord.v1.GetFeatureSummaryRequest.
+ * Use `create(GetFeatureSummaryRequestSchema)` to create a new message.
+ */
+export declare const GetFeatureSummaryRequestSchema: GenMessage<GetFeatureSummaryRequest>;
+
+/**
+ * @generated from message kanthord.v1.InteractionTypeBreakdown
+ */
+export declare type InteractionTypeBreakdown = Message<"kanthord.v1.InteractionTypeBreakdown"> & {
+  /**
+   * @generated from field: uint32 approval = 1;
+   */
+  approval: number;
+
+  /**
+   * @generated from field: uint32 clarification = 2;
+   */
+  clarification: number;
+
+  /**
+   * @generated from field: uint32 correction = 3;
+   */
+  correction: number;
+
+  /**
+   * @generated from field: uint32 rework = 4;
+   */
+  rework: number;
+
+  /**
+   * @generated from field: uint32 takeover = 5;
+   */
+  takeover: number;
+
+  /**
+   * @generated from field: uint32 external = 6;
+   */
+  external: number;
+};
+
+/**
+ * Describes the message kanthord.v1.InteractionTypeBreakdown.
+ * Use `create(InteractionTypeBreakdownSchema)` to create a new message.
+ */
+export declare const InteractionTypeBreakdownSchema: GenMessage<InteractionTypeBreakdown>;
+
+/**
+ * @generated from message kanthord.v1.GetFeatureSummaryResponse
+ */
+export declare type GetFeatureSummaryResponse = Message<"kanthord.v1.GetFeatureSummaryResponse"> & {
+  /**
+   * @generated from field: string feature_id = 1;
+   */
+  featureId: string;
+
+  /**
+   * Included interaction count. Flagged events are never counted here.
+   *
+   * @generated from field: uint32 headline = 2;
+   */
+  headline: number;
+
+  /**
+   * @generated from field: kanthord.v1.InteractionTypeBreakdown by_confirmed_type = 3;
+   */
+  byConfirmedType?: InteractionTypeBreakdown | undefined;
+
+  /**
+   * Flagged events are reported separately rather than silently dropped.
+   *
+   * @generated from field: uint32 excluded = 4;
+   */
+  excluded: number;
+
+  /**
+   * Epic 013 net cumulative cost summed across the feature's tasks.
+   *
+   * @generated from field: double net_cost = 5;
+   */
+  netCost: number;
+};
+
+/**
+ * Describes the message kanthord.v1.GetFeatureSummaryResponse.
+ * Use `create(GetFeatureSummaryResponseSchema)` to create a new message.
+ */
+export declare const GetFeatureSummaryResponseSchema: GenMessage<GetFeatureSummaryResponse>;
+
+/**
  * --- broker.operations ---
  *
  * @generated from message kanthord.v1.BrokerOperation
@@ -1691,6 +1792,16 @@ export declare const DaemonService: GenService<{
     methodKind: "unary";
     input: typeof GetFeatureRequestSchema;
     output: typeof GetFeatureResponseSchema;
+  },
+  /**
+   * features.summary — on-read human-interaction and net ledger-cost metrics.
+   *
+   * @generated from rpc kanthord.v1.DaemonService.GetFeatureSummary
+   */
+  getFeatureSummary: {
+    methodKind: "unary";
+    input: typeof GetFeatureSummaryRequestSchema;
+    output: typeof GetFeatureSummaryResponseSchema;
   },
   /**
    * broker.operations — in-flight / pending / expiring ops with state + correlation.

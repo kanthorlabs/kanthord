@@ -22,6 +22,7 @@ import type { Store } from "../foundations/sqlite-store.ts";
 import type { JsonlLog } from "../foundations/jsonl.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import type { InteractionEvent } from "../metrics/interaction-capture.ts";
+import { getFeatureSummary } from "../metrics/feature-summary.ts";
 import { listOpenInboxItems } from "../rpc/inbox-list.ts";
 import { resumeEscalationItem, haltEscalationItem } from "../rpc/inbox-respond.ts";
 import { approveItem, denyItem } from "../inbox/respond.ts";
@@ -462,6 +463,13 @@ export function createStatusServer(opts: {
                 stateView: result.stateView,
                 journalView: result.journalView,
               };
+            },
+
+            async getFeatureSummary(req) {
+              return getFeatureSummary(req.featureId, {
+                interactionLog: opts.interactionLog ?? { readAll: async () => [] },
+                store: opts.store,
+              });
             },
 
             listBrokerOperations() {
