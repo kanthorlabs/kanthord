@@ -25,7 +25,7 @@ import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2
  * Describes the file kanthord/v1/daemon.proto.
  */
 export const file_kanthord_v1_daemon = /*@__PURE__*/
-  fileDesc("ChhrYW50aG9yZC92MS9kYWVtb24ucHJvdG8SC2thbnRob3JkLnYxIhIKEEdldFN0YXR1c1JlcXVlc3QiRwoKVGFza1N0YXR1cxIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIIlsKDUZlYXR1cmVTdGF0dXMSEgoKZmVhdHVyZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSJgoFdGFza3MYAyADKAsyFy5rYW50aG9yZC52MS5UYXNrU3RhdHVzImoKEUdldFN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSLAoIZmVhdHVyZXMYAyADKAsyGi5rYW50aG9yZC52MS5GZWF0dXJlU3RhdHVzIkoKCUluYm94SXRlbRIKCgJpZBgBIAEoCRIMCgRraW5kGAIgASgJEhIKCmZlYXR1cmVfaWQYAyABKAkSDwoHc3VtbWFyeRgEIAEoCSIXChVMaXN0SW5ib3hJdGVtc1JlcXVlc3QiPwoWTGlzdEluYm94SXRlbXNSZXNwb25zZRIlCgVpdGVtcxgBIAMoCzIWLmthbnRob3JkLnYxLkluYm94SXRlbSJWChpSZXNwb25kVG9Fc2NhbGF0aW9uUmVxdWVzdBIKCgJpZBgBIAEoCRIQCghyZXNwb25zZRgCIAEoCRIaChJjb25maXJtZWRfY2F0ZWdvcnkYAyABKAkiLQobUmVzcG9uZFRvRXNjYWxhdGlvblJlc3BvbnNlEg4KBnN0YXR1cxgBIAEoCSJjChhSZXNwb25kVG9BcHByb3ZhbFJlcXVlc3QSCgoCaWQYASABKAkSDwoHYXBwcm92ZRgCIAEoCBIOCgZyZWFzb24YAyABKAkSGgoSY29uZmlybWVkX2NhdGVnb3J5GAQgASgJIisKGVJlc3BvbmRUb0FwcHJvdmFsUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIl0KDkZlYXR1cmVTdW1tYXJ5EhIKCmZlYXR1cmVfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXBoYXNlGAMgASgJEhgKEHByb2dyZXNzX3N1bW1hcnkYBCABKAkiFQoTTGlzdEZlYXR1cmVzUmVxdWVzdCJFChRMaXN0RmVhdHVyZXNSZXNwb25zZRItCghmZWF0dXJlcxgBIAMoCzIbLmthbnRob3JkLnYxLkZlYXR1cmVTdW1tYXJ5IlgKClRhc2tEZXRhaWwSDwoHdGFza19pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSGAoQZXhpdF9nYXRlX3Bhc3NlZBgDIAEoCBIPCgdhdHRlbXB0GAQgASgDIlcKC1N0b3J5RGV0YWlsEhAKCHN0b3J5X2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRImCgV0YXNrcxgDIAMoCzIXLmthbnRob3JkLnYxLlRhc2tEZXRhaWwiaQoLRGFnUHJvZ3Jlc3MSEwoLdG90YWxfbm9kZXMYASABKAMSFwoPc2F0aXNmaWVkX25vZGVzGAIgASgDEhMKC3RvdGFsX2VkZ2VzGAMgASgDEhcKD3NhdGlzZmllZF9lZGdlcxgEIAEoAyInChFHZXRGZWF0dXJlUmVxdWVzdBISCgpmZWF0dXJlX2lkGAEgASgJIvgBChJHZXRGZWF0dXJlUmVzcG9uc2USEgoKZmVhdHVyZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSDQoFcGhhc2UYAyABKAkSKQoHc3RvcmllcxgEIAMoCzIYLmthbnRob3JkLnYxLlN0b3J5RGV0YWlsEiUKA2RhZxgFIAEoCzIYLmthbnRob3JkLnYxLkRhZ1Byb2dyZXNzEjMKDWluX2ZsaWdodF9vcHMYBiADKAsyHC5rYW50aG9yZC52MS5Ccm9rZXJPcGVyYXRpb24SEgoKc3RhdGVfdmlldxgHIAEoCRIUCgxqb3VybmFsX3ZpZXcYCCABKAkijAEKD0Jyb2tlck9wZXJhdGlvbhINCgVvcF9pZBgBIAEoCRIMCgR2ZXJiGAIgASgJEg0KBXN0YXRlGAMgASgJEhMKC2NvcnJlbGF0aW9uGAQgASgJEhIKCmZlYXR1cmVfaWQYBSABKAkSEgoKZXhwaXJlc19hdBgGIAEoAxIQCghleHBpcmluZxgHIAEoCCIdChtMaXN0QnJva2VyT3BlcmF0aW9uc1JlcXVlc3QiUAocTGlzdEJyb2tlck9wZXJhdGlvbnNSZXNwb25zZRIwCgpvcGVyYXRpb25zGAEgAygLMhwua2FudGhvcmQudjEuQnJva2VyT3BlcmF0aW9uIiwKDkJyb2tlclZlcmJJbmZvEgwKBHZlcmIYASABKAkSDAoEdGllchgCIAEoCSIYChZMaXN0QnJva2VyVmVyYnNSZXF1ZXN0IkUKF0xpc3RCcm9rZXJWZXJic1Jlc3BvbnNlEioKBXZlcmJzGAEgAygLMhsua2FudGhvcmQudjEuQnJva2VyVmVyYkluZm8iZgoIU2xvdEluZm8SDAoEbmFtZRgBIAEoCRIMCgRyZXBvGAIgASgJEhAKCHN0cmF0ZWd5GAMgASgJEhMKC2hlbGRfbGVhc2VzGAQgAygJEhcKD2FjdGl2ZV9zZXNzaW9ucxgFIAMoCSISChBMaXN0U2xvdHNSZXF1ZXN0IjkKEUxpc3RTbG90c1Jlc3BvbnNlEiQKBXNsb3RzGAEgAygLMhUua2FudGhvcmQudjEuU2xvdEluZm8iVAoSQnVkZ2V0T3ZlcnJpZGVJbmZvEg8KB3ByZXNlbnQYASABKAgSDgoGYW1vdW50GAIgASgBEg4KBnJlYXNvbhgDIAEoCRINCgVhY3RvchgEIAEoCSIjChBHZXRCdWRnZXRSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkijgEKEUdldEJ1ZGdldFJlc3BvbnNlEg8KB3Rhc2tfaWQYASABKAkSDQoFc3BlbnQYAiABKAESDwoHY2VpbGluZxgDIAEoARIVCg1icmVha2VyX3N0YXRlGAQgASgJEjEKCG92ZXJyaWRlGAUgASgLMh8ua2FudGhvcmQudjEuQnVkZ2V0T3ZlcnJpZGVJbmZvIkgKC0RlYWRNYW5QaW5nEg8KB3ByZXNlbnQYASABKAgSDwoHc2VudF9hdBgCIAEoAxIXCg90YXNrc19wcm9jZXNzZWQYAyABKAMiVQoMVmVyaWZ5UmVwb3J0Eg8KB3ByZXNlbnQYASABKAgSDwoHb3V0Y29tZRgCIAEoCRIOCgZyYW5fYXQYAyABKAMSEwoLcmVwb3J0X2pzb24YBCABKAkiGAoWR2V0RGFlbW9uU3RhdHVzUmVxdWVzdCKfAQoXR2V0RGFlbW9uU3RhdHVzUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRIWCg51cHRpbWVfc2Vjb25kcxgCIAEoAxIrCglsYXN0X3BpbmcYAyABKAsyGC5rYW50aG9yZC52MS5EZWFkTWFuUGluZxIuCgtsYXN0X3ZlcmlmeRgEIAEoCzIZLmthbnRob3JkLnYxLlZlcmlmeVJlcG9ydCIWChRUcmlnZ2VyVmVyaWZ5UmVxdWVzdCJCChVUcmlnZ2VyVmVyaWZ5UmVzcG9uc2USKQoGcmVwb3J0GAEgASgLMhkua2FudGhvcmQudjEuVmVyaWZ5UmVwb3J0IogBCg1UaW1lbGluZUV2ZW50EhIKCmV2ZW50X3R5cGUYASABKAkSCgoCYXQYAiABKAMSHwoXb2JzZXJ2ZWRfZmFpbHVyZV9zaWduYWwYAyABKAkSEgoKYWNjb3VudF9pZBgEIAEoCRINCgVtb2RlbBgFIAEoCRITCgtkZXRhaWxfanNvbhgGIAEoCSI6ChZHZXRUYXNrVGltZWxpbmVSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkSDwoHYXR0ZW1wdBgCIAEoAyJFChdHZXRUYXNrVGltZWxpbmVSZXNwb25zZRIqCgZldmVudHMYASADKAsyGi5rYW50aG9yZC52MS5UaW1lbGluZUV2ZW50IjAKHVN1YnNjcmliZVNlc3Npb25FdmVudHNSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkiRAoMU2Vzc2lvbkV2ZW50EhIKCmV2ZW50X3R5cGUYASABKAkSCgoCYXQYAiABKAMSFAoMcGF5bG9hZF9qc29uGAMgASgJIkoKHlN1YnNjcmliZVNlc3Npb25FdmVudHNSZXNwb25zZRIoCgVldmVudBgBIAEoCzIZLmthbnRob3JkLnYxLlNlc3Npb25FdmVudCI3ChJTaWduT2ZmUGxhblJlcXVlc3QSEgoKZmVhdHVyZV9pZBgBIAEoCRINCgVhY3RvchgCIAEoCSJNChNTaWduT2ZmUGxhblJlc3BvbnNlEg0KBXZhbGlkGAEgASgIEhMKC2RpYWdub3N0aWNzGAIgAygJEhIKCmdlbmVyYXRpb24YAyABKAMiMQoPSGFsdFRhc2tSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkSDQoFYWN0b3IYAiABKAkiIgoQSGFsdFRhc2tSZXNwb25zZRIOCgZzdGF0dXMYASABKAkiNwoSSGFsdEZlYXR1cmVSZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAkSDQoFYWN0b3IYAiABKAkiJQoTSGFsdEZlYXR1cmVSZXNwb25zZRIOCgZzdGF0dXMYASABKAkiLQoIRmlsZUVkaXQSDAoEcGF0aBgBIAEoCRITCgtuZXdfY29udGVudBgCIAEoCSJ4ChRBcHByb3ZlUmVwbGFuUmVxdWVzdBISCgpmZWF0dXJlX2lkGAEgASgJEhcKD2Jhc2VfZ2VuZXJhdGlvbhgCIAEoAxIkCgVlZGl0cxgDIAMoCzIVLmthbnRob3JkLnYxLkZpbGVFZGl0Eg0KBWFjdG9yGAQgASgJIkoKFUFwcHJvdmVSZXBsYW5SZXNwb25zZRIWCg5uZXdfZ2VuZXJhdGlvbhgBIAEoAxIZChFyZW9wZW5lZF90YXNrX2lkcxgCIAMoCSJXChVPdmVycmlkZUJ1ZGdldFJlcXVlc3QSDwoHdGFza19pZBgBIAEoCRIOCgZhbW91bnQYAiABKAESDgoGcmVhc29uGAMgASgJEg0KBWFjdG9yGAQgASgJIi0KFk92ZXJyaWRlQnVkZ2V0UmVzcG9uc2USEwoLbmV3X2NlaWxpbmcYASABKAEytA0KDURhZW1vblNlcnZpY2USSgoJR2V0U3RhdHVzEh0ua2FudGhvcmQudjEuR2V0U3RhdHVzUmVxdWVzdBoeLmthbnRob3JkLnYxLkdldFN0YXR1c1Jlc3BvbnNlElkKDkxpc3RJbmJveEl0ZW1zEiIua2FudGhvcmQudjEuTGlzdEluYm94SXRlbXNSZXF1ZXN0GiMua2FudGhvcmQudjEuTGlzdEluYm94SXRlbXNSZXNwb25zZRJoChNSZXNwb25kVG9Fc2NhbGF0aW9uEicua2FudGhvcmQudjEuUmVzcG9uZFRvRXNjYWxhdGlvblJlcXVlc3QaKC5rYW50aG9yZC52MS5SZXNwb25kVG9Fc2NhbGF0aW9uUmVzcG9uc2USYgoRUmVzcG9uZFRvQXBwcm92YWwSJS5rYW50aG9yZC52MS5SZXNwb25kVG9BcHByb3ZhbFJlcXVlc3QaJi5rYW50aG9yZC52MS5SZXNwb25kVG9BcHByb3ZhbFJlc3BvbnNlElMKDExpc3RGZWF0dXJlcxIgLmthbnRob3JkLnYxLkxpc3RGZWF0dXJlc1JlcXVlc3QaIS5rYW50aG9yZC52MS5MaXN0RmVhdHVyZXNSZXNwb25zZRJNCgpHZXRGZWF0dXJlEh4ua2FudGhvcmQudjEuR2V0RmVhdHVyZVJlcXVlc3QaHy5rYW50aG9yZC52MS5HZXRGZWF0dXJlUmVzcG9uc2USawoUTGlzdEJyb2tlck9wZXJhdGlvbnMSKC5rYW50aG9yZC52MS5MaXN0QnJva2VyT3BlcmF0aW9uc1JlcXVlc3QaKS5rYW50aG9yZC52MS5MaXN0QnJva2VyT3BlcmF0aW9uc1Jlc3BvbnNlElwKD0xpc3RCcm9rZXJWZXJicxIjLmthbnRob3JkLnYxLkxpc3RCcm9rZXJWZXJic1JlcXVlc3QaJC5rYW50aG9yZC52MS5MaXN0QnJva2VyVmVyYnNSZXNwb25zZRJKCglMaXN0U2xvdHMSHS5rYW50aG9yZC52MS5MaXN0U2xvdHNSZXF1ZXN0Gh4ua2FudGhvcmQudjEuTGlzdFNsb3RzUmVzcG9uc2USSgoJR2V0QnVkZ2V0Eh0ua2FudGhvcmQudjEuR2V0QnVkZ2V0UmVxdWVzdBoeLmthbnRob3JkLnYxLkdldEJ1ZGdldFJlc3BvbnNlElwKD0dldERhZW1vblN0YXR1cxIjLmthbnRob3JkLnYxLkdldERhZW1vblN0YXR1c1JlcXVlc3QaJC5rYW50aG9yZC52MS5HZXREYWVtb25TdGF0dXNSZXNwb25zZRJcCg9HZXRUYXNrVGltZWxpbmUSIy5rYW50aG9yZC52MS5HZXRUYXNrVGltZWxpbmVSZXF1ZXN0GiQua2FudGhvcmQudjEuR2V0VGFza1RpbWVsaW5lUmVzcG9uc2UScwoWU3Vic2NyaWJlU2Vzc2lvbkV2ZW50cxIqLmthbnRob3JkLnYxLlN1YnNjcmliZVNlc3Npb25FdmVudHNSZXF1ZXN0Gisua2FudGhvcmQudjEuU3Vic2NyaWJlU2Vzc2lvbkV2ZW50c1Jlc3BvbnNlMAESVgoNVHJpZ2dlclZlcmlmeRIhLmthbnRob3JkLnYxLlRyaWdnZXJWZXJpZnlSZXF1ZXN0GiIua2FudGhvcmQudjEuVHJpZ2dlclZlcmlmeVJlc3BvbnNlElAKC1NpZ25PZmZQbGFuEh8ua2FudGhvcmQudjEuU2lnbk9mZlBsYW5SZXF1ZXN0GiAua2FudGhvcmQudjEuU2lnbk9mZlBsYW5SZXNwb25zZRJHCghIYWx0VGFzaxIcLmthbnRob3JkLnYxLkhhbHRUYXNrUmVxdWVzdBodLmthbnRob3JkLnYxLkhhbHRUYXNrUmVzcG9uc2USUAoLSGFsdEZlYXR1cmUSHy5rYW50aG9yZC52MS5IYWx0RmVhdHVyZVJlcXVlc3QaIC5rYW50aG9yZC52MS5IYWx0RmVhdHVyZVJlc3BvbnNlElYKDUFwcHJvdmVSZXBsYW4SIS5rYW50aG9yZC52MS5BcHByb3ZlUmVwbGFuUmVxdWVzdBoiLmthbnRob3JkLnYxLkFwcHJvdmVSZXBsYW5SZXNwb25zZRJZCg5PdmVycmlkZUJ1ZGdldBIiLmthbnRob3JkLnYxLk92ZXJyaWRlQnVkZ2V0UmVxdWVzdBojLmthbnRob3JkLnYxLk92ZXJyaWRlQnVkZ2V0UmVzcG9uc2ViBnByb3RvMw");
+  fileDesc("ChhrYW50aG9yZC92MS9kYWVtb24ucHJvdG8SC2thbnRob3JkLnYxIhIKEEdldFN0YXR1c1JlcXVlc3QiRwoKVGFza1N0YXR1cxIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIIlsKDUZlYXR1cmVTdGF0dXMSEgoKZmVhdHVyZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSJgoFdGFza3MYAyADKAsyFy5rYW50aG9yZC52MS5UYXNrU3RhdHVzImoKEUdldFN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSLAoIZmVhdHVyZXMYAyADKAsyGi5rYW50aG9yZC52MS5GZWF0dXJlU3RhdHVzIvoBCglJbmJveEl0ZW0SCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRISCgpmZWF0dXJlX2lkGAMgASgJEg8KB3N1bW1hcnkYBCABKAkSDAoEdHlwZRgFIAEoCRIQCghzZXZlcml0eRgGIAEoCRIaChJzdWdnZXN0ZWRfY2F0ZWdvcnkYByABKAkSDgoGc3RhdHVzGAggASgJEhIKCmV4cGlyZXNfYXQYCSABKAMSDwoHZXhwaXJlZBgKIAEoCBInCghldmlkZW5jZRgLIAEoCzIVLmthbnRob3JkLnYxLkV2aWRlbmNlEhQKDGJyb2tlcl9vcF9pZBgMIAEoCSJPCghFdmlkZW5jZRIMCgR0eXBlGAEgASgJEgwKBHRleHQYAiABKAkSJwoEZGlmZhgDIAEoCzIZLmthbnRob3JkLnYxLkRpZmZFdmlkZW5jZSI0CgxEaWZmRXZpZGVuY2USJAoFZmlsZXMYASADKAsyFS5rYW50aG9yZC52MS5EaWZmRmlsZSI+CghEaWZmRmlsZRIMCgRwYXRoGAEgASgJEiQKBWxpbmVzGAIgAygLMhUua2FudGhvcmQudjEuRGlmZkxpbmUiKQoIRGlmZkxpbmUSDAoEa2luZBgBIAEoCRIPCgdjb250ZW50GAIgASgJIhcKFUxpc3RJbmJveEl0ZW1zUmVxdWVzdCI/ChZMaXN0SW5ib3hJdGVtc1Jlc3BvbnNlEiUKBWl0ZW1zGAEgAygLMhYua2FudGhvcmQudjEuSW5ib3hJdGVtIiEKE0dldEluYm94SXRlbVJlcXVlc3QSCgoCaWQYASABKAkiPAoUR2V0SW5ib3hJdGVtUmVzcG9uc2USJAoEaXRlbRgBIAEoCzIWLmthbnRob3JkLnYxLkluYm94SXRlbSJWChpSZXNwb25kVG9Fc2NhbGF0aW9uUmVxdWVzdBIKCgJpZBgBIAEoCRIQCghyZXNwb25zZRgCIAEoCRIaChJjb25maXJtZWRfY2F0ZWdvcnkYAyABKAkiLQobUmVzcG9uZFRvRXNjYWxhdGlvblJlc3BvbnNlEg4KBnN0YXR1cxgBIAEoCSJjChhSZXNwb25kVG9BcHByb3ZhbFJlcXVlc3QSCgoCaWQYASABKAkSDwoHYXBwcm92ZRgCIAEoCBIOCgZyZWFzb24YAyABKAkSGgoSY29uZmlybWVkX2NhdGVnb3J5GAQgASgJIisKGVJlc3BvbmRUb0FwcHJvdmFsUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJImsKDkZlYXR1cmVTdW1tYXJ5EhIKCmZlYXR1cmVfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXBoYXNlGAMgASgJEhgKEHByb2dyZXNzX3N1bW1hcnkYBCABKAkSDAoEbmFtZRgFIAEoCSIVChNMaXN0RmVhdHVyZXNSZXF1ZXN0IkUKFExpc3RGZWF0dXJlc1Jlc3BvbnNlEi0KCGZlYXR1cmVzGAEgAygLMhsua2FudGhvcmQudjEuRmVhdHVyZVN1bW1hcnkiWAoKVGFza0RldGFpbBIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIEg8KB2F0dGVtcHQYBCABKAMiVwoLU3RvcnlEZXRhaWwSEAoIc3RvcnlfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEiYKBXRhc2tzGAMgAygLMhcua2FudGhvcmQudjEuVGFza0RldGFpbCJpCgtEYWdQcm9ncmVzcxITCgt0b3RhbF9ub2RlcxgBIAEoAxIXCg9zYXRpc2ZpZWRfbm9kZXMYAiABKAMSEwoLdG90YWxfZWRnZXMYAyABKAMSFwoPc2F0aXNmaWVkX2VkZ2VzGAQgASgDIicKEUdldEZlYXR1cmVSZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAki+AEKEkdldEZlYXR1cmVSZXNwb25zZRISCgpmZWF0dXJlX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgVwaGFzZRgDIAEoCRIpCgdzdG9yaWVzGAQgAygLMhgua2FudGhvcmQudjEuU3RvcnlEZXRhaWwSJQoDZGFnGAUgASgLMhgua2FudGhvcmQudjEuRGFnUHJvZ3Jlc3MSMwoNaW5fZmxpZ2h0X29wcxgGIAMoCzIcLmthbnRob3JkLnYxLkJyb2tlck9wZXJhdGlvbhISCgpzdGF0ZV92aWV3GAcgASgJEhQKDGpvdXJuYWxfdmlldxgIIAEoCSKrAQoPQnJva2VyT3BlcmF0aW9uEg0KBW9wX2lkGAEgASgJEgwKBHZlcmIYAiABKAkSDQoFc3RhdGUYAyABKAkSEwoLY29ycmVsYXRpb24YBCABKAkSEgoKZmVhdHVyZV9pZBgFIAEoCRISCgpleHBpcmVzX2F0GAYgASgDEhAKCGV4cGlyaW5nGAcgASgIEh0KFXJlY29uY2lsaWF0aW9uX3N0YXR1cxgIIAEoCSIdChtMaXN0QnJva2VyT3BlcmF0aW9uc1JlcXVlc3QiUAocTGlzdEJyb2tlck9wZXJhdGlvbnNSZXNwb25zZRIwCgpvcGVyYXRpb25zGAEgAygLMhwua2FudGhvcmQudjEuQnJva2VyT3BlcmF0aW9uIiwKDkJyb2tlclZlcmJJbmZvEgwKBHZlcmIYASABKAkSDAoEdGllchgCIAEoCSIYChZMaXN0QnJva2VyVmVyYnNSZXF1ZXN0IkUKF0xpc3RCcm9rZXJWZXJic1Jlc3BvbnNlEioKBXZlcmJzGAEgAygLMhsua2FudGhvcmQudjEuQnJva2VyVmVyYkluZm8iZgoIU2xvdEluZm8SDAoEbmFtZRgBIAEoCRIMCgRyZXBvGAIgASgJEhAKCHN0cmF0ZWd5GAMgASgJEhMKC2hlbGRfbGVhc2VzGAQgAygJEhcKD2FjdGl2ZV9zZXNzaW9ucxgFIAMoCSISChBMaXN0U2xvdHNSZXF1ZXN0IjkKEUxpc3RTbG90c1Jlc3BvbnNlEiQKBXNsb3RzGAEgAygLMhUua2FudGhvcmQudjEuU2xvdEluZm8iVAoSQnVkZ2V0T3ZlcnJpZGVJbmZvEg8KB3ByZXNlbnQYASABKAgSDgoGYW1vdW50GAIgASgBEg4KBnJlYXNvbhgDIAEoCRINCgVhY3RvchgEIAEoCSIjChBHZXRCdWRnZXRSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkijgEKEUdldEJ1ZGdldFJlc3BvbnNlEg8KB3Rhc2tfaWQYASABKAkSDQoFc3BlbnQYAiABKAESDwoHY2VpbGluZxgDIAEoARIVCg1icmVha2VyX3N0YXRlGAQgASgJEjEKCG92ZXJyaWRlGAUgASgLMh8ua2FudGhvcmQudjEuQnVkZ2V0T3ZlcnJpZGVJbmZvIhQKEkxpc3RCdWRnZXRzUmVxdWVzdCJGChNMaXN0QnVkZ2V0c1Jlc3BvbnNlEi8KB2J1ZGdldHMYASADKAsyHi5rYW50aG9yZC52MS5HZXRCdWRnZXRSZXNwb25zZSJICgtEZWFkTWFuUGluZxIPCgdwcmVzZW50GAEgASgIEg8KB3NlbnRfYXQYAiABKAMSFwoPdGFza3NfcHJvY2Vzc2VkGAMgASgDIlUKDFZlcmlmeVJlcG9ydBIPCgdwcmVzZW50GAEgASgIEg8KB291dGNvbWUYAiABKAkSDgoGcmFuX2F0GAMgASgDEhMKC3JlcG9ydF9qc29uGAQgASgJIhgKFkdldERhZW1vblN0YXR1c1JlcXVlc3QinwEKF0dldERhZW1vblN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSKwoJbGFzdF9waW5nGAMgASgLMhgua2FudGhvcmQudjEuRGVhZE1hblBpbmcSLgoLbGFzdF92ZXJpZnkYBCABKAsyGS5rYW50aG9yZC52MS5WZXJpZnlSZXBvcnQiFgoUVHJpZ2dlclZlcmlmeVJlcXVlc3QiQgoVVHJpZ2dlclZlcmlmeVJlc3BvbnNlEikKBnJlcG9ydBgBIAEoCzIZLmthbnRob3JkLnYxLlZlcmlmeVJlcG9ydCKIAQoNVGltZWxpbmVFdmVudBISCgpldmVudF90eXBlGAEgASgJEgoKAmF0GAIgASgDEh8KF29ic2VydmVkX2ZhaWx1cmVfc2lnbmFsGAMgASgJEhIKCmFjY291bnRfaWQYBCABKAkSDQoFbW9kZWwYBSABKAkSEwoLZGV0YWlsX2pzb24YBiABKAkiOgoWR2V0VGFza1RpbWVsaW5lUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg8KB2F0dGVtcHQYAiABKAMiRQoXR2V0VGFza1RpbWVsaW5lUmVzcG9uc2USKgoGZXZlbnRzGAEgAygLMhoua2FudGhvcmQudjEuVGltZWxpbmVFdmVudCIwCh1TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJIkQKDFNlc3Npb25FdmVudBISCgpldmVudF90eXBlGAEgASgJEgoKAmF0GAIgASgDEhQKDHBheWxvYWRfanNvbhgDIAEoCSJKCh5TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVzcG9uc2USKAoFZXZlbnQYASABKAsyGS5rYW50aG9yZC52MS5TZXNzaW9uRXZlbnQiNwoSU2lnbk9mZlBsYW5SZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAkSDQoFYWN0b3IYAiABKAkiTQoTU2lnbk9mZlBsYW5SZXNwb25zZRINCgV2YWxpZBgBIAEoCBITCgtkaWFnbm9zdGljcxgCIAMoCRISCgpnZW5lcmF0aW9uGAMgASgDIjEKD0hhbHRUYXNrUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg0KBWFjdG9yGAIgASgJIiIKEEhhbHRUYXNrUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIjcKEkhhbHRGZWF0dXJlUmVxdWVzdBISCgpmZWF0dXJlX2lkGAEgASgJEg0KBWFjdG9yGAIgASgJIiUKE0hhbHRGZWF0dXJlUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIi0KCEZpbGVFZGl0EgwKBHBhdGgYASABKAkSEwoLbmV3X2NvbnRlbnQYAiABKAkieAoUQXBwcm92ZVJlcGxhblJlcXVlc3QSEgoKZmVhdHVyZV9pZBgBIAEoCRIXCg9iYXNlX2dlbmVyYXRpb24YAiABKAMSJAoFZWRpdHMYAyADKAsyFS5rYW50aG9yZC52MS5GaWxlRWRpdBINCgVhY3RvchgEIAEoCSJKChVBcHByb3ZlUmVwbGFuUmVzcG9uc2USFgoObmV3X2dlbmVyYXRpb24YASABKAMSGQoRcmVvcGVuZWRfdGFza19pZHMYAiADKAkiVwoVT3ZlcnJpZGVCdWRnZXRSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkSDgoGYW1vdW50GAIgASgBEg4KBnJlYXNvbhgDIAEoCRINCgVhY3RvchgEIAEoCSItChZPdmVycmlkZUJ1ZGdldFJlc3BvbnNlEhMKC25ld19jZWlsaW5nGAEgASgBMtsOCg1EYWVtb25TZXJ2aWNlEkoKCUdldFN0YXR1cxIdLmthbnRob3JkLnYxLkdldFN0YXR1c1JlcXVlc3QaHi5rYW50aG9yZC52MS5HZXRTdGF0dXNSZXNwb25zZRJZCg5MaXN0SW5ib3hJdGVtcxIiLmthbnRob3JkLnYxLkxpc3RJbmJveEl0ZW1zUmVxdWVzdBojLmthbnRob3JkLnYxLkxpc3RJbmJveEl0ZW1zUmVzcG9uc2USaAoTUmVzcG9uZFRvRXNjYWxhdGlvbhInLmthbnRob3JkLnYxLlJlc3BvbmRUb0VzY2FsYXRpb25SZXF1ZXN0Gigua2FudGhvcmQudjEuUmVzcG9uZFRvRXNjYWxhdGlvblJlc3BvbnNlEmIKEVJlc3BvbmRUb0FwcHJvdmFsEiUua2FudGhvcmQudjEuUmVzcG9uZFRvQXBwcm92YWxSZXF1ZXN0GiYua2FudGhvcmQudjEuUmVzcG9uZFRvQXBwcm92YWxSZXNwb25zZRJTCgxMaXN0RmVhdHVyZXMSIC5rYW50aG9yZC52MS5MaXN0RmVhdHVyZXNSZXF1ZXN0GiEua2FudGhvcmQudjEuTGlzdEZlYXR1cmVzUmVzcG9uc2USTQoKR2V0RmVhdHVyZRIeLmthbnRob3JkLnYxLkdldEZlYXR1cmVSZXF1ZXN0Gh8ua2FudGhvcmQudjEuR2V0RmVhdHVyZVJlc3BvbnNlEmsKFExpc3RCcm9rZXJPcGVyYXRpb25zEigua2FudGhvcmQudjEuTGlzdEJyb2tlck9wZXJhdGlvbnNSZXF1ZXN0Gikua2FudGhvcmQudjEuTGlzdEJyb2tlck9wZXJhdGlvbnNSZXNwb25zZRJcCg9MaXN0QnJva2VyVmVyYnMSIy5rYW50aG9yZC52MS5MaXN0QnJva2VyVmVyYnNSZXF1ZXN0GiQua2FudGhvcmQudjEuTGlzdEJyb2tlclZlcmJzUmVzcG9uc2USSgoJTGlzdFNsb3RzEh0ua2FudGhvcmQudjEuTGlzdFNsb3RzUmVxdWVzdBoeLmthbnRob3JkLnYxLkxpc3RTbG90c1Jlc3BvbnNlEkoKCUdldEJ1ZGdldBIdLmthbnRob3JkLnYxLkdldEJ1ZGdldFJlcXVlc3QaHi5rYW50aG9yZC52MS5HZXRCdWRnZXRSZXNwb25zZRJQCgtMaXN0QnVkZ2V0cxIfLmthbnRob3JkLnYxLkxpc3RCdWRnZXRzUmVxdWVzdBogLmthbnRob3JkLnYxLkxpc3RCdWRnZXRzUmVzcG9uc2USUwoMR2V0SW5ib3hJdGVtEiAua2FudGhvcmQudjEuR2V0SW5ib3hJdGVtUmVxdWVzdBohLmthbnRob3JkLnYxLkdldEluYm94SXRlbVJlc3BvbnNlElwKD0dldERhZW1vblN0YXR1cxIjLmthbnRob3JkLnYxLkdldERhZW1vblN0YXR1c1JlcXVlc3QaJC5rYW50aG9yZC52MS5HZXREYWVtb25TdGF0dXNSZXNwb25zZRJcCg9HZXRUYXNrVGltZWxpbmUSIy5rYW50aG9yZC52MS5HZXRUYXNrVGltZWxpbmVSZXF1ZXN0GiQua2FudGhvcmQudjEuR2V0VGFza1RpbWVsaW5lUmVzcG9uc2UScwoWU3Vic2NyaWJlU2Vzc2lvbkV2ZW50cxIqLmthbnRob3JkLnYxLlN1YnNjcmliZVNlc3Npb25FdmVudHNSZXF1ZXN0Gisua2FudGhvcmQudjEuU3Vic2NyaWJlU2Vzc2lvbkV2ZW50c1Jlc3BvbnNlMAESVgoNVHJpZ2dlclZlcmlmeRIhLmthbnRob3JkLnYxLlRyaWdnZXJWZXJpZnlSZXF1ZXN0GiIua2FudGhvcmQudjEuVHJpZ2dlclZlcmlmeVJlc3BvbnNlElAKC1NpZ25PZmZQbGFuEh8ua2FudGhvcmQudjEuU2lnbk9mZlBsYW5SZXF1ZXN0GiAua2FudGhvcmQudjEuU2lnbk9mZlBsYW5SZXNwb25zZRJHCghIYWx0VGFzaxIcLmthbnRob3JkLnYxLkhhbHRUYXNrUmVxdWVzdBodLmthbnRob3JkLnYxLkhhbHRUYXNrUmVzcG9uc2USUAoLSGFsdEZlYXR1cmUSHy5rYW50aG9yZC52MS5IYWx0RmVhdHVyZVJlcXVlc3QaIC5rYW50aG9yZC52MS5IYWx0RmVhdHVyZVJlc3BvbnNlElYKDUFwcHJvdmVSZXBsYW4SIS5rYW50aG9yZC52MS5BcHByb3ZlUmVwbGFuUmVxdWVzdBoiLmthbnRob3JkLnYxLkFwcHJvdmVSZXBsYW5SZXNwb25zZRJZCg5PdmVycmlkZUJ1ZGdldBIiLmthbnRob3JkLnYxLk92ZXJyaWRlQnVkZ2V0UmVxdWVzdBojLmthbnRob3JkLnYxLk92ZXJyaWRlQnVkZ2V0UmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * Describes the message kanthord.v1.GetStatusRequest.
@@ -63,347 +63,403 @@ export const InboxItemSchema = /*@__PURE__*/
   messageDesc(file_kanthord_v1_daemon, 4);
 
 /**
+ * Describes the message kanthord.v1.Evidence.
+ * Use `create(EvidenceSchema)` to create a new message.
+ */
+export const EvidenceSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 5);
+
+/**
+ * Describes the message kanthord.v1.DiffEvidence.
+ * Use `create(DiffEvidenceSchema)` to create a new message.
+ */
+export const DiffEvidenceSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 6);
+
+/**
+ * Describes the message kanthord.v1.DiffFile.
+ * Use `create(DiffFileSchema)` to create a new message.
+ */
+export const DiffFileSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 7);
+
+/**
+ * Describes the message kanthord.v1.DiffLine.
+ * Use `create(DiffLineSchema)` to create a new message.
+ */
+export const DiffLineSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 8);
+
+/**
  * Describes the message kanthord.v1.ListInboxItemsRequest.
  * Use `create(ListInboxItemsRequestSchema)` to create a new message.
  */
 export const ListInboxItemsRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 5);
+  messageDesc(file_kanthord_v1_daemon, 9);
 
 /**
  * Describes the message kanthord.v1.ListInboxItemsResponse.
  * Use `create(ListInboxItemsResponseSchema)` to create a new message.
  */
 export const ListInboxItemsResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 6);
+  messageDesc(file_kanthord_v1_daemon, 10);
+
+/**
+ * Describes the message kanthord.v1.GetInboxItemRequest.
+ * Use `create(GetInboxItemRequestSchema)` to create a new message.
+ */
+export const GetInboxItemRequestSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 11);
+
+/**
+ * Describes the message kanthord.v1.GetInboxItemResponse.
+ * Use `create(GetInboxItemResponseSchema)` to create a new message.
+ */
+export const GetInboxItemResponseSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 12);
 
 /**
  * Describes the message kanthord.v1.RespondToEscalationRequest.
  * Use `create(RespondToEscalationRequestSchema)` to create a new message.
  */
 export const RespondToEscalationRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 7);
+  messageDesc(file_kanthord_v1_daemon, 13);
 
 /**
  * Describes the message kanthord.v1.RespondToEscalationResponse.
  * Use `create(RespondToEscalationResponseSchema)` to create a new message.
  */
 export const RespondToEscalationResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 8);
+  messageDesc(file_kanthord_v1_daemon, 14);
 
 /**
  * Describes the message kanthord.v1.RespondToApprovalRequest.
  * Use `create(RespondToApprovalRequestSchema)` to create a new message.
  */
 export const RespondToApprovalRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 9);
+  messageDesc(file_kanthord_v1_daemon, 15);
 
 /**
  * Describes the message kanthord.v1.RespondToApprovalResponse.
  * Use `create(RespondToApprovalResponseSchema)` to create a new message.
  */
 export const RespondToApprovalResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 10);
+  messageDesc(file_kanthord_v1_daemon, 16);
 
 /**
  * Describes the message kanthord.v1.FeatureSummary.
  * Use `create(FeatureSummarySchema)` to create a new message.
  */
 export const FeatureSummarySchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 11);
+  messageDesc(file_kanthord_v1_daemon, 17);
 
 /**
  * Describes the message kanthord.v1.ListFeaturesRequest.
  * Use `create(ListFeaturesRequestSchema)` to create a new message.
  */
 export const ListFeaturesRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 12);
+  messageDesc(file_kanthord_v1_daemon, 18);
 
 /**
  * Describes the message kanthord.v1.ListFeaturesResponse.
  * Use `create(ListFeaturesResponseSchema)` to create a new message.
  */
 export const ListFeaturesResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 13);
+  messageDesc(file_kanthord_v1_daemon, 19);
 
 /**
  * Describes the message kanthord.v1.TaskDetail.
  * Use `create(TaskDetailSchema)` to create a new message.
  */
 export const TaskDetailSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 14);
+  messageDesc(file_kanthord_v1_daemon, 20);
 
 /**
  * Describes the message kanthord.v1.StoryDetail.
  * Use `create(StoryDetailSchema)` to create a new message.
  */
 export const StoryDetailSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 15);
+  messageDesc(file_kanthord_v1_daemon, 21);
 
 /**
  * Describes the message kanthord.v1.DagProgress.
  * Use `create(DagProgressSchema)` to create a new message.
  */
 export const DagProgressSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 16);
+  messageDesc(file_kanthord_v1_daemon, 22);
 
 /**
  * Describes the message kanthord.v1.GetFeatureRequest.
  * Use `create(GetFeatureRequestSchema)` to create a new message.
  */
 export const GetFeatureRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 17);
+  messageDesc(file_kanthord_v1_daemon, 23);
 
 /**
  * Describes the message kanthord.v1.GetFeatureResponse.
  * Use `create(GetFeatureResponseSchema)` to create a new message.
  */
 export const GetFeatureResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 18);
+  messageDesc(file_kanthord_v1_daemon, 24);
 
 /**
  * Describes the message kanthord.v1.BrokerOperation.
  * Use `create(BrokerOperationSchema)` to create a new message.
  */
 export const BrokerOperationSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 19);
+  messageDesc(file_kanthord_v1_daemon, 25);
 
 /**
  * Describes the message kanthord.v1.ListBrokerOperationsRequest.
  * Use `create(ListBrokerOperationsRequestSchema)` to create a new message.
  */
 export const ListBrokerOperationsRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 20);
+  messageDesc(file_kanthord_v1_daemon, 26);
 
 /**
  * Describes the message kanthord.v1.ListBrokerOperationsResponse.
  * Use `create(ListBrokerOperationsResponseSchema)` to create a new message.
  */
 export const ListBrokerOperationsResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 21);
+  messageDesc(file_kanthord_v1_daemon, 27);
 
 /**
  * Describes the message kanthord.v1.BrokerVerbInfo.
  * Use `create(BrokerVerbInfoSchema)` to create a new message.
  */
 export const BrokerVerbInfoSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 22);
+  messageDesc(file_kanthord_v1_daemon, 28);
 
 /**
  * Describes the message kanthord.v1.ListBrokerVerbsRequest.
  * Use `create(ListBrokerVerbsRequestSchema)` to create a new message.
  */
 export const ListBrokerVerbsRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 23);
+  messageDesc(file_kanthord_v1_daemon, 29);
 
 /**
  * Describes the message kanthord.v1.ListBrokerVerbsResponse.
  * Use `create(ListBrokerVerbsResponseSchema)` to create a new message.
  */
 export const ListBrokerVerbsResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 24);
+  messageDesc(file_kanthord_v1_daemon, 30);
 
 /**
  * Describes the message kanthord.v1.SlotInfo.
  * Use `create(SlotInfoSchema)` to create a new message.
  */
 export const SlotInfoSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 25);
+  messageDesc(file_kanthord_v1_daemon, 31);
 
 /**
  * Describes the message kanthord.v1.ListSlotsRequest.
  * Use `create(ListSlotsRequestSchema)` to create a new message.
  */
 export const ListSlotsRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 26);
+  messageDesc(file_kanthord_v1_daemon, 32);
 
 /**
  * Describes the message kanthord.v1.ListSlotsResponse.
  * Use `create(ListSlotsResponseSchema)` to create a new message.
  */
 export const ListSlotsResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 27);
+  messageDesc(file_kanthord_v1_daemon, 33);
 
 /**
  * Describes the message kanthord.v1.BudgetOverrideInfo.
  * Use `create(BudgetOverrideInfoSchema)` to create a new message.
  */
 export const BudgetOverrideInfoSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 28);
+  messageDesc(file_kanthord_v1_daemon, 34);
 
 /**
  * Describes the message kanthord.v1.GetBudgetRequest.
  * Use `create(GetBudgetRequestSchema)` to create a new message.
  */
 export const GetBudgetRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 29);
+  messageDesc(file_kanthord_v1_daemon, 35);
 
 /**
  * Describes the message kanthord.v1.GetBudgetResponse.
  * Use `create(GetBudgetResponseSchema)` to create a new message.
  */
 export const GetBudgetResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 30);
+  messageDesc(file_kanthord_v1_daemon, 36);
+
+/**
+ * Describes the message kanthord.v1.ListBudgetsRequest.
+ * Use `create(ListBudgetsRequestSchema)` to create a new message.
+ */
+export const ListBudgetsRequestSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 37);
+
+/**
+ * Describes the message kanthord.v1.ListBudgetsResponse.
+ * Use `create(ListBudgetsResponseSchema)` to create a new message.
+ */
+export const ListBudgetsResponseSchema = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 38);
 
 /**
  * Describes the message kanthord.v1.DeadManPing.
  * Use `create(DeadManPingSchema)` to create a new message.
  */
 export const DeadManPingSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 31);
+  messageDesc(file_kanthord_v1_daemon, 39);
 
 /**
  * Describes the message kanthord.v1.VerifyReport.
  * Use `create(VerifyReportSchema)` to create a new message.
  */
 export const VerifyReportSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 32);
+  messageDesc(file_kanthord_v1_daemon, 40);
 
 /**
  * Describes the message kanthord.v1.GetDaemonStatusRequest.
  * Use `create(GetDaemonStatusRequestSchema)` to create a new message.
  */
 export const GetDaemonStatusRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 33);
+  messageDesc(file_kanthord_v1_daemon, 41);
 
 /**
  * Describes the message kanthord.v1.GetDaemonStatusResponse.
  * Use `create(GetDaemonStatusResponseSchema)` to create a new message.
  */
 export const GetDaemonStatusResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 34);
+  messageDesc(file_kanthord_v1_daemon, 42);
 
 /**
  * Describes the message kanthord.v1.TriggerVerifyRequest.
  * Use `create(TriggerVerifyRequestSchema)` to create a new message.
  */
 export const TriggerVerifyRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 35);
+  messageDesc(file_kanthord_v1_daemon, 43);
 
 /**
  * Describes the message kanthord.v1.TriggerVerifyResponse.
  * Use `create(TriggerVerifyResponseSchema)` to create a new message.
  */
 export const TriggerVerifyResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 36);
+  messageDesc(file_kanthord_v1_daemon, 44);
 
 /**
  * Describes the message kanthord.v1.TimelineEvent.
  * Use `create(TimelineEventSchema)` to create a new message.
  */
 export const TimelineEventSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 37);
+  messageDesc(file_kanthord_v1_daemon, 45);
 
 /**
  * Describes the message kanthord.v1.GetTaskTimelineRequest.
  * Use `create(GetTaskTimelineRequestSchema)` to create a new message.
  */
 export const GetTaskTimelineRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 38);
+  messageDesc(file_kanthord_v1_daemon, 46);
 
 /**
  * Describes the message kanthord.v1.GetTaskTimelineResponse.
  * Use `create(GetTaskTimelineResponseSchema)` to create a new message.
  */
 export const GetTaskTimelineResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 39);
+  messageDesc(file_kanthord_v1_daemon, 47);
 
 /**
  * Describes the message kanthord.v1.SubscribeSessionEventsRequest.
  * Use `create(SubscribeSessionEventsRequestSchema)` to create a new message.
  */
 export const SubscribeSessionEventsRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 40);
+  messageDesc(file_kanthord_v1_daemon, 48);
 
 /**
  * Describes the message kanthord.v1.SessionEvent.
  * Use `create(SessionEventSchema)` to create a new message.
  */
 export const SessionEventSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 41);
+  messageDesc(file_kanthord_v1_daemon, 49);
 
 /**
  * Describes the message kanthord.v1.SubscribeSessionEventsResponse.
  * Use `create(SubscribeSessionEventsResponseSchema)` to create a new message.
  */
 export const SubscribeSessionEventsResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 42);
+  messageDesc(file_kanthord_v1_daemon, 50);
 
 /**
  * Describes the message kanthord.v1.SignOffPlanRequest.
  * Use `create(SignOffPlanRequestSchema)` to create a new message.
  */
 export const SignOffPlanRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 43);
+  messageDesc(file_kanthord_v1_daemon, 51);
 
 /**
  * Describes the message kanthord.v1.SignOffPlanResponse.
  * Use `create(SignOffPlanResponseSchema)` to create a new message.
  */
 export const SignOffPlanResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 44);
+  messageDesc(file_kanthord_v1_daemon, 52);
 
 /**
  * Describes the message kanthord.v1.HaltTaskRequest.
  * Use `create(HaltTaskRequestSchema)` to create a new message.
  */
 export const HaltTaskRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 45);
+  messageDesc(file_kanthord_v1_daemon, 53);
 
 /**
  * Describes the message kanthord.v1.HaltTaskResponse.
  * Use `create(HaltTaskResponseSchema)` to create a new message.
  */
 export const HaltTaskResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 46);
+  messageDesc(file_kanthord_v1_daemon, 54);
 
 /**
  * Describes the message kanthord.v1.HaltFeatureRequest.
  * Use `create(HaltFeatureRequestSchema)` to create a new message.
  */
 export const HaltFeatureRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 47);
+  messageDesc(file_kanthord_v1_daemon, 55);
 
 /**
  * Describes the message kanthord.v1.HaltFeatureResponse.
  * Use `create(HaltFeatureResponseSchema)` to create a new message.
  */
 export const HaltFeatureResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 48);
+  messageDesc(file_kanthord_v1_daemon, 56);
 
 /**
  * Describes the message kanthord.v1.FileEdit.
  * Use `create(FileEditSchema)` to create a new message.
  */
 export const FileEditSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 49);
+  messageDesc(file_kanthord_v1_daemon, 57);
 
 /**
  * Describes the message kanthord.v1.ApproveReplanRequest.
  * Use `create(ApproveReplanRequestSchema)` to create a new message.
  */
 export const ApproveReplanRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 50);
+  messageDesc(file_kanthord_v1_daemon, 58);
 
 /**
  * Describes the message kanthord.v1.ApproveReplanResponse.
  * Use `create(ApproveReplanResponseSchema)` to create a new message.
  */
 export const ApproveReplanResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 51);
+  messageDesc(file_kanthord_v1_daemon, 59);
 
 /**
  * Describes the message kanthord.v1.OverrideBudgetRequest.
  * Use `create(OverrideBudgetRequestSchema)` to create a new message.
  */
 export const OverrideBudgetRequestSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 52);
+  messageDesc(file_kanthord_v1_daemon, 60);
 
 /**
  * Describes the message kanthord.v1.OverrideBudgetResponse.
  * Use `create(OverrideBudgetResponseSchema)` to create a new message.
  */
 export const OverrideBudgetResponseSchema = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 53);
+  messageDesc(file_kanthord_v1_daemon, 61);
 
 /**
  * @generated from service kanthord.v1.DaemonService

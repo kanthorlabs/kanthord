@@ -169,6 +169,62 @@ export declare type InboxItem = Message<"kanthord.v1.InboxItem"> & {
    * @generated from field: string summary = 4;
    */
   summary: string;
+
+  /**
+   * --- Epic 027 N2/N3 fields (Story 003/004; adapters default when absent) ---
+   * Escalation/approval type incl. the distinct "unclassified-artifact-change".
+   *
+   * @generated from field: string type = 5;
+   */
+  type: string;
+
+  /**
+   * Severity for the per-row domain badge ("low"/"medium"/"high"/...).
+   *
+   * @generated from field: string severity = 6;
+   */
+  severity: string;
+
+  /**
+   * Daemon's proposed interaction category (approval/clarification/correction/
+   * takeover) so the respond control can offer "Accept suggested: <type>".
+   *
+   * @generated from field: string suggested_category = 7;
+   */
+  suggestedCategory: string;
+
+  /**
+   * Item lifecycle status ("open"/"resolved"/"expired"/"missing") for deep links.
+   *
+   * @generated from field: string status = 8;
+   */
+  status: string;
+
+  /**
+   * Approval/lease expiry (epoch ms) and whether it has expired (Story 004).
+   *
+   * @generated from field: int64 expires_at = 9;
+   */
+  expiresAt: bigint;
+
+  /**
+   * @generated from field: bool expired = 10;
+   */
+  expired: boolean;
+
+  /**
+   * Attached evidence CONTENT (never a bare reference) — phases.md 2B D6.
+   *
+   * @generated from field: kanthord.v1.Evidence evidence = 11;
+   */
+  evidence?: Evidence | undefined;
+
+  /**
+   * Stable reference to the parked broker op this approval item gates (N3).
+   *
+   * @generated from field: string broker_op_id = 12;
+   */
+  brokerOpId: string;
 };
 
 /**
@@ -176,6 +232,100 @@ export declare type InboxItem = Message<"kanthord.v1.InboxItem"> & {
  * Use `create(InboxItemSchema)` to create a new message.
  */
 export declare const InboxItemSchema: GenMessage<InboxItem>;
+
+/**
+ * Attached inbox evidence. type selects which payload is populated.
+ *
+ * @generated from message kanthord.v1.Evidence
+ */
+export declare type Evidence = Message<"kanthord.v1.Evidence"> & {
+  /**
+   * "diff" | "text" | "" (none).
+   *
+   * @generated from field: string type = 1;
+   */
+  type: string;
+
+  /**
+   * Displayed text for non-diff evidence.
+   *
+   * @generated from field: string text = 2;
+   */
+  text: string;
+
+  /**
+   * Structured diff for type=="diff" (the Story 002 DiffPane consumes this).
+   *
+   * @generated from field: kanthord.v1.DiffEvidence diff = 3;
+   */
+  diff?: DiffEvidence | undefined;
+};
+
+/**
+ * Describes the message kanthord.v1.Evidence.
+ * Use `create(EvidenceSchema)` to create a new message.
+ */
+export declare const EvidenceSchema: GenMessage<Evidence>;
+
+/**
+ * @generated from message kanthord.v1.DiffEvidence
+ */
+export declare type DiffEvidence = Message<"kanthord.v1.DiffEvidence"> & {
+  /**
+   * @generated from field: repeated kanthord.v1.DiffFile files = 1;
+   */
+  files: DiffFile[];
+};
+
+/**
+ * Describes the message kanthord.v1.DiffEvidence.
+ * Use `create(DiffEvidenceSchema)` to create a new message.
+ */
+export declare const DiffEvidenceSchema: GenMessage<DiffEvidence>;
+
+/**
+ * @generated from message kanthord.v1.DiffFile
+ */
+export declare type DiffFile = Message<"kanthord.v1.DiffFile"> & {
+  /**
+   * @generated from field: string path = 1;
+   */
+  path: string;
+
+  /**
+   * @generated from field: repeated kanthord.v1.DiffLine lines = 2;
+   */
+  lines: DiffLine[];
+};
+
+/**
+ * Describes the message kanthord.v1.DiffFile.
+ * Use `create(DiffFileSchema)` to create a new message.
+ */
+export declare const DiffFileSchema: GenMessage<DiffFile>;
+
+/**
+ * @generated from message kanthord.v1.DiffLine
+ */
+export declare type DiffLine = Message<"kanthord.v1.DiffLine"> & {
+  /**
+   * "add" | "del" | "ctx".
+   *
+   * @generated from field: string kind = 1;
+   */
+  kind: string;
+
+  /**
+   * @generated from field: string content = 2;
+   */
+  content: string;
+};
+
+/**
+ * Describes the message kanthord.v1.DiffLine.
+ * Use `create(DiffLineSchema)` to create a new message.
+ */
+export declare const DiffLineSchema: GenMessage<DiffLine>;
 
 /**
  * @generated from message kanthord.v1.ListInboxItemsRequest
@@ -206,6 +356,40 @@ export declare type ListInboxItemsResponse = Message<"kanthord.v1.ListInboxItems
  * Use `create(ListInboxItemsResponseSchema)` to create a new message.
  */
 export declare const ListInboxItemsResponseSchema: GenMessage<ListInboxItemsResponse>;
+
+/**
+ * @generated from message kanthord.v1.GetInboxItemRequest
+ */
+export declare type GetInboxItemRequest = Message<"kanthord.v1.GetInboxItemRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+};
+
+/**
+ * Describes the message kanthord.v1.GetInboxItemRequest.
+ * Use `create(GetInboxItemRequestSchema)` to create a new message.
+ */
+export declare const GetInboxItemRequestSchema: GenMessage<GetInboxItemRequest>;
+
+/**
+ * @generated from message kanthord.v1.GetInboxItemResponse
+ */
+export declare type GetInboxItemResponse = Message<"kanthord.v1.GetInboxItemResponse"> & {
+  /**
+   * The full item incl. its evidence (Epic 027 N2 deep-link item view).
+   *
+   * @generated from field: kanthord.v1.InboxItem item = 1;
+   */
+  item?: InboxItem | undefined;
+};
+
+/**
+ * Describes the message kanthord.v1.GetInboxItemResponse.
+ * Use `create(GetInboxItemResponseSchema)` to create a new message.
+ */
+export declare const GetInboxItemResponseSchema: GenMessage<GetInboxItemResponse>;
 
 /**
  * @generated from message kanthord.v1.RespondToEscalationRequest
@@ -343,6 +527,13 @@ export declare type FeatureSummary = Message<"kanthord.v1.FeatureSummary"> & {
    * @generated from field: string progress_summary = 4;
    */
   progressSummary: string;
+
+  /**
+   * Human-readable feature display name (Epic 027 N1, Story 001 AC1 columns).
+   *
+   * @generated from field: string name = 5;
+   */
+  name: string;
 };
 
 /**
@@ -590,6 +781,14 @@ export declare type BrokerOperation = Message<"kanthord.v1.BrokerOperation"> & {
    * @generated from field: bool expiring = 7;
    */
   expiring: boolean;
+
+  /**
+   * Reconciliation status distinct from lifecycle state (Epic 027 N5):
+   * e.g. "externally-reconciled" vs "locally-resolved" ("" when not tracked).
+   *
+   * @generated from field: string reconciliation_status = 8;
+   */
+  reconciliationStatus: string;
 };
 
 /**
@@ -833,6 +1032,36 @@ export declare type GetBudgetResponse = Message<"kanthord.v1.GetBudgetResponse">
  * Use `create(GetBudgetResponseSchema)` to create a new message.
  */
 export declare const GetBudgetResponseSchema: GenMessage<GetBudgetResponse>;
+
+/**
+ * --- budgets.list (Epic 027 N4 — per-task ledger rows for every tracked task) ---
+ *
+ * @generated from message kanthord.v1.ListBudgetsRequest
+ */
+export declare type ListBudgetsRequest = Message<"kanthord.v1.ListBudgetsRequest"> & {
+};
+
+/**
+ * Describes the message kanthord.v1.ListBudgetsRequest.
+ * Use `create(ListBudgetsRequestSchema)` to create a new message.
+ */
+export declare const ListBudgetsRequestSchema: GenMessage<ListBudgetsRequest>;
+
+/**
+ * @generated from message kanthord.v1.ListBudgetsResponse
+ */
+export declare type ListBudgetsResponse = Message<"kanthord.v1.ListBudgetsResponse"> & {
+  /**
+   * @generated from field: repeated kanthord.v1.GetBudgetResponse budgets = 1;
+   */
+  budgets: GetBudgetResponse[];
+};
+
+/**
+ * Describes the message kanthord.v1.ListBudgetsResponse.
+ * Use `create(ListBudgetsResponseSchema)` to create a new message.
+ */
+export declare const ListBudgetsResponseSchema: GenMessage<ListBudgetsResponse>;
 
 /**
  * --- daemon.status ---
@@ -1502,6 +1731,27 @@ export declare const DaemonService: GenService<{
     methodKind: "unary";
     input: typeof GetBudgetRequestSchema;
     output: typeof GetBudgetResponseSchema;
+  },
+  /**
+   * budgets.list — per-task ledger rows for every tracked task (Epic 027 N4).
+   *
+   * @generated from rpc kanthord.v1.DaemonService.ListBudgets
+   */
+  listBudgets: {
+    methodKind: "unary";
+    input: typeof ListBudgetsRequestSchema;
+    output: typeof ListBudgetsResponseSchema;
+  },
+  /**
+   * inbox.get — one inbox item incl. its attached evidence, for the deep-link
+   * item view (Epic 027 N2; read-only).
+   *
+   * @generated from rpc kanthord.v1.DaemonService.GetInboxItem
+   */
+  getInboxItem: {
+    methodKind: "unary";
+    input: typeof GetInboxItemRequestSchema;
+    output: typeof GetInboxItemResponseSchema;
   },
   /**
    * daemon.status — health, last dead-man ping (Epic 029), last verify report.
