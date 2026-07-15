@@ -216,6 +216,28 @@ export function haltFeature(
 }
 
 // ---------------------------------------------------------------------------
+// Per-feature async mutex for approveReplan's critical section
+// ---------------------------------------------------------------------------
+
+// Tail of the serialized promise chain per featureId. The stored promise never
+// rejects (errors are suppressed by .catch) so subsequent callers can always
+// queue on it; the entry is deleted once the chain drains to avoid leaks.
+const pendingByFeature = new Map<string, Promise<unknown>>();
+
+function withFeatureLock<T>(featureId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = pendingByFeature.get(featureId) ?? Promise.resolve();
+  const resultPromise = prev.then(() => fn());
+  const tail = resultPromise.catch(() => {});
+  pendingByFeature.set(featureId, tail);
+  void tail.finally(() => {
+    if (pendingByFeature.get(featureId) === tail) {
+      pendingByFeature.delete(featureId);
+    }
+  });
+  return resultPromise;
+}
+
+// ---------------------------------------------------------------------------
 // approveReplan — apply edit set atomically; rollback on compile failure
 // ---------------------------------------------------------------------------
 
@@ -281,7 +303,7 @@ function assertAllowedEditPath(editPath: string): void {
   }
 }
 
-export async function approveReplan(
+async function doApproveReplan(
   diff: ReplanDiff,
   actor: string,
   deps: ControlVerbsDeps,
@@ -358,8 +380,10 @@ export async function approveReplan(
   // 4 + 5. Apply edits to disk and recompile inside a SQLite SAVEPOINT.
   //
   // Transactional store rollback on a caught compile error + best-effort disk restore
-  // under the daemon single-writer assumption — NOT crash-atomic. Making compile()
-  // self-atomic and serializing concurrent approvals are deferred follow-ups.
+  // under the daemon single-writer assumption — NOT crash-atomic. compile() is now
+  // self-atomic (SAVEPOINT compile_apply); the only remaining deferred item is
+  // subscribeSessionEvents live streaming. Concurrent-approval serialization is
+  // done (per-feature async mutex in the public approveReplan wrapper).
   store.run("SAVEPOINT replan_apply");
   try {
     // 4. Apply edits to disk.
@@ -433,6 +457,14 @@ export async function approveReplan(
   );
 
   return { generation: newGen };
+}
+
+export async function approveReplan(
+  diff: ReplanDiff,
+  actor: string,
+  deps: ControlVerbsDeps,
+): Promise<{ generation: number }> {
+  return withFeatureLock(diff.featureId, () => doApproveReplan(diff, actor, deps));
 }
 
 // ---------------------------------------------------------------------------
