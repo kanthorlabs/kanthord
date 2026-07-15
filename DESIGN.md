@@ -59,9 +59,12 @@ guess a shadcn API from memory.
 ## §3 Tokens & styling rules
 
 The theme is the shadcn semantic CSS-variable set (`--background`,
-`--foreground`, `--card`, `--muted`, `--accent`, `--destructive`, `--border`,
-`--ring`, `--radius`, `--chart-1..5`, `--sidebar-*`), defined once in
-`clients/web/src/styles/globals.css`.
+`--foreground`, `--card`, `--muted`, `--accent`, `--destructive`,
+`--success`, `--warning`, `--diff-add`, `--diff-del` (each with a
+`-foreground`), `--border`, `--ring`, `--radius`, `--chart-1..5`,
+`--sidebar-*`), defined once in `clients/web/src/styles/globals.css`. The
+`--success`/`--warning`/`--diff-*` tokens were added by the 2026-07-15 §P4 pass
+(§11) so status tones and diff lines have true green/amber treatment.
 
 - **MUST** style with semantic utility classes only: `bg-background`,
   `text-muted-foreground`, `border-border`, `bg-destructive`, …
@@ -81,7 +84,12 @@ dumping ground):
 
 1. `clients/web/src/design/status.ts` — the **visual vocabulary** only: a `Tone`
    union (`neutral | info | success | warning | danger`) and its mapping to
-   Badge/Alert variants and token classes. No domain knowledge.
+   Badge/Alert variants and token classes. No domain knowledge. The
+   `TONE_BADGE_VARIANT` map uses the dedicated Badge variants:
+   `neutral→secondary`, `info→default`, `success→success` (green),
+   `warning→warning` (amber), `danger→destructive` (the `success`/`warning`
+   Badge variants were added with the §P4 token pass, §11 2026-07-15).
+   Diff add/del lines use the `--diff-add`/`--diff-del` tokens (DiffPane, §5/§7).
 2. **Domain mappings live beside their composite**: `FeatureStatusBadge`,
    `TaskStatusBadge`, `EscalationSeverityBadge`, `BreakerStateBadge`,
    `ApprovalStateBadge` — each a tier-2 composite mapping its domain states
@@ -121,10 +129,21 @@ empty, input, label, separator, sidebar, tooltip` + `globals.css` tokens +
   Inbox, Broker, Slots, Budgets, Ops — plus a header region (page title /
   breadcrumb + connection/auth state) and the content region. Every story
   surface mounts inside `AppShell`; no bespoke page scaffolding per story.
+- **Nav count-badge slot** (daily-usage Input 6, §P4 2026-07-15): each nav
+  item supports an optional count badge (the Inbox item carries the open-items
+  count). When the shell is collapsed to its mobile off-canvas state, the menu
+  toggle shows an **indicator** so a pending count is never hidden behind the
+  closed nav. MVP is a single plain count — no urgency split, and the badge is
+  not a substitute for an overview page.
 - **Page templates** (tier-2): `ListPage` (title + toolbar + table + the §7
   state slots), `DetailPage` (breadcrumb + tabs), `OpsPage` (card grid). Use
   a template; extend the template if it lacks a slot (that is design-system
   work, visible in the diff).
+- **Data-freshness slot** (daily-usage Input 8, §P4 2026-07-15): page templates
+  own a freshness affordance in the header/toolbar — `Updated HH:MM` (client
+  fetch time) + a manual refresh control — and the rule that a **successful
+  mutation refetches the affected view** rather than leaning on the manual
+  refresh. No polling and no push in MVP (§7 carries the state-pattern row).
 - **Responsive is a must-have** (Ulrich, 2026-07-03 — the console is used
   from iPad/iPhone away from the desk; a dedicated mobile app may come
   later, responsive is the bridge until then). Reference phone device:
@@ -167,6 +186,7 @@ breaker-open).
 | Mutation result | `sonner` toast, unless the AC demands inline rendering |
 | Destructive / irreversible verbs (halt, override, `github.merge`, …) | ALWAYS `alert-dialog`; when the Epic 017 contract requires a typed category, the dialog carries the `select`/`input` and disables confirm until valid |
 | Domain states (expired item, conflict, breaker open, …) | per Story AC, composed from `badge`/`alert` + the §4 domain vocabulary |
+| Data freshness (daily-usage Input 8) | template header/toolbar slot: `Updated HH:MM` (client fetch time) + a refresh affordance; a successful mutation refetches the affected view — no polling/push in MVP |
 
 ## §8 Locator placement & naming
 
@@ -251,7 +271,12 @@ mismatches route through the decision-record protocol.
 
 | Date | Component(s) | Driven by |
 |---|---|---|
-| — (bootstrap pending) | foundation set (§5) | SU7 bootstrap |
+| 2026-07-14 | foundation set (§5) | SU7 bootstrap (`b953c89`) |
+| 2026-07-15 | `tabs` | Story 001 DetailPage (§6) |
+| 2026-07-15 | `alert-dialog` | Story 002 `ConfirmActionDialog` (§7); reused 004/006 |
+| 2026-07-15 | `scroll-area` | Story 002 `DiffPane` + Story 003 evidence (§7) |
+| 2026-07-15 | `select` | Story 003 typed-category respond (§5) |
+| 2026-07-15 | `badge` variants `success`/`warning` (token pass) | domain status colors (§4) |
 
 **Changelog:**
 
@@ -269,3 +294,16 @@ mismatches route through the decision-record protocol.
   Epic 027 gate spot-checks a phone-width viewport. Follow-up same day:
   **iPhone 13 (390×844) fixed as the standard phone device** — the §6 floor
   and the gate viewport.
+- 2026-07-15 — §P4 pass folding `daily-usage-operator-loop.md` Inputs 6 & 8
+  (owed before Story 000 dispatches): §6 gains the AppShell **nav count-badge
+  slot** + collapsed-shell indicator (Input 6) and the template-owned
+  **data-freshness slot** (Input 8); §7 gains the **data-freshness** state row.
+  Motivation recorded in `toolchain-decision.md`. Unblocks the Story 000
+  fold-in (Inputs 5–6).
+- 2026-07-15 — §P4 **status-color token pass** (Ulrich): added `--success`,
+  `--warning`, `--diff-add`, `--diff-del` semantic tokens (light+dark, §3) and
+  `success`/`warning` Badge variants (§4). `TONE_BADGE_VARIANT` now maps
+  `success→success`/`warning→warning` so `done`/`halted`/breaker/parked states
+  render true green/amber (previously both collapsed to `outline`); `DiffPane`
+  additions/deletions use `--diff-add`/`--diff-del` (previously neutral accent).
+  Closes the recurring color gap noted in `api-needs-for-026.md`.

@@ -2,12 +2,13 @@
 
 Epic: `.agent/plan/epics/027-web-dashboard.md`
 
-> **PENDING FOLD-IN (2026-07-10) — check before dispatch:**
+> **FOLDED IN (2026-07-15):**
 > `.agent/plan/feedback/027-web-dashboard/daily-usage-operator-loop.md`
-> Input 7 (dead-man health card renders "N tasks processed today" beside
-> the last ping; depends on the Epic 026/029 API exposing the count) must
-> be folded into this story's ACs at authoring time — not improvised
-> mid-task.
+> Input 7 (dead-man health card renders "N tasks processed today" beside the
+> last ping, as one glanceable card) is folded into the ACs and T2 below. The
+> proto already exposes the count (`DeadManPing.tasks_processed`,
+> `present==false until Epic 029 populates it`); until it is populated the UI
+> renders the not-yet-available state. See `toolchain-decision.md`.
 
 ## Goal
 
@@ -27,6 +28,14 @@ status, trigger `kanthord verify` + view its report).
   field via Epic 026), and a verify trigger; triggering verify invokes the
   `daemon.verify` method and renders the returned report (divergence list or
   clean).
+- **Dead-man health card (Input 7):** the last dead-man ping renders as one
+  compact glanceable health card showing the last ping time + outcome **and
+  the processed count "N tasks processed today"** (`DeadManPing.tasks_processed`)
+  — not a bare table row (a table row is not glanceable at 390px). The
+  N==0-with-everything-up case (silent-idle, §6.3.1) is the dangerous line the
+  count exists to surface; the count sits beside the ping so it is read
+  together. When `present==false` (Epic 029 has not yet populated the count),
+  the card renders the count as not-yet-available, distinct from a real "0".
 - Empty/unknown states are explicit (e.g. no ping yet recorded renders "no
   ping recorded", not a blank).
 
@@ -75,9 +84,13 @@ rejection fixture renders the typed error.
 `clients/web/src/components/templates/OpsPage.test.tsx` (the DESIGN §6 template this
 surface introduces)
 
-**Action - RED:** Component tests: health + last-ping fixture renders (and the
-no-ping-yet explicit state); the verify trigger invokes `daemon.verify` and
-renders the report fixture (both a clean and a divergence-list case).
+**Action - RED:** Component tests: health + last-ping fixture renders as the
+glanceable dead-man health card (and the no-ping-yet explicit state); the card
+renders the processed count "N tasks processed today" from
+`DeadManPing.tasks_processed` beside the ping, renders a real "0" distinctly
+from the not-yet-available state (`present==false`), and the verify trigger
+invokes `daemon.verify` and renders the report fixture (both a clean and a
+divergence-list case).
 
 **Action - GREEN:** Implement the daemon-ops view.
 

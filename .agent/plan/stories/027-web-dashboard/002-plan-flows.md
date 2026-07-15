@@ -77,12 +77,20 @@ rendered as such (type surfaced, not a generic failure).
 ### Task T3 - Re-planning diff approval
 
 **Input:** `clients/web/src/plan-flows/ReplanApproval.tsx`,
-`clients/web/src/plan-flows/ReplanApproval.test.tsx`, `clients/web/src/locators.ts`
+`clients/web/src/plan-flows/ReplanApproval.test.tsx`, `clients/web/src/locators.ts`,
+`clients/web/src/components/DiffPane.tsx`,
+`clients/web/src/components/DiffPane.test.tsx` (the DESIGN §5 diff-pane composite
+this flow introduces — file boundaries preserved, additions/deletions colored
+via semantic tokens, long content scrolls inside the pane per DESIGN §7; Story
+003 consumes it for diff-type escalation evidence without re-declaring it)
 
-**Action - RED:** Component tests: the diff + base generation render from the
-fixture; approve invokes the approval method and renders the re-opened gates;
-a generation-mismatch conflict fixture renders the typed conflict and no
-apply happened (fake client asserts no second call).
+**Action - RED:** Component tests: the `DiffPane` composite renders a multi-file
+diff fixture with file boundaries preserved and add/del lines carrying the
+semantic-token treatment (asserted via registry locators); `ReplanApproval`
+renders the diff (via `DiffPane`) + base generation from the fixture; approve
+invokes the approval method and renders the re-opened gates; a
+generation-mismatch conflict fixture renders the typed conflict and no apply
+happened (fake client asserts no second call).
 
 **Action - GREEN:** Implement the re-planning approval component.
 

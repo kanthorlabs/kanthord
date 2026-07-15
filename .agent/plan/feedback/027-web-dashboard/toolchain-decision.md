@@ -207,3 +207,51 @@ and Story 000 proves the mobile shell behavior hermetically. Follow-up
 (Ulrich, same day): **iPhone 13 is the standard phone device** — 390×844
 CSS px is the §6 supported floor and the gate spot-check viewport
 (Playwright's `iPhone 13` device profile in the gate run).
+
+## §P4 pass 2026-07-15 — daily-usage Inputs 6 & 8 (owed before Story 000)
+
+Recorded by Aelita during the Epic 027 web build (Ulrich directed: build the UI
+first in a worktree, raise API needs at the end, since Epic 026 is in progress
+in a sibling worktree — no live daemon yet, so E2E stays deferred). The epic's
+Dependencies section made a DESIGN.md §P4 pass a hard precondition for Story 000
+dispatch; it had not been done. This pass closes it.
+
+**Motivation** (`daily-usage-operator-loop.md`):
+- **Input 6** — the Inbox nav item needs an open-items count badge, and the
+  collapsed mobile shell needs an indicator on the menu toggle (a badge inside
+  off-canvas nav is invisible exactly when mobile needs it).
+- **Input 8** — no surface owns data freshness today; phone tabs re-open hours
+  stale. One template-owned pattern: `Updated HH:MM` (client fetch time) + a
+  refresh affordance, plus the rule that a successful mutation refetches the
+  affected view. No polling/push in MVP.
+
+**DESIGN.md changes** (§0 authority; recorded here per §P4):
+- §6 — added the **nav count-badge slot** bullet (Input 6) and the
+  template-owned **data-freshness slot** bullet (Input 8).
+- §7 — added the **data-freshness** state-pattern row (Input 8).
+- §11 changelog — dated entry appended.
+
+**Router dependency:** `react-router-dom@^6` added to `clients/web/package.json`
+(maintainer/config lane, not an engineer edit). Input 5's stable deep-link URLs
++ auth-redirect preservation require real URL routing, and the six-area nav is a
+route switch; hand-rolling a router to dodge the import would re-derive a solved
+problem (Principle 6). v6 is stable and React 19-compatible.
+
+## Fold-in pass 2026-07-15 — pending story fold-ins applied at authoring time
+
+The feedback files required these to be folded into the story ACs "at authoring
+time — not improvised mid-task"; they had not been. Applied now, before the
+build, by Aelita (authoring lane), each story's `PENDING FOLD-IN` banner
+replaced with a `FOLDED IN (2026-07-15)` note:
+- **Story 000** — Inputs 5 (route foundation + auth-redirect preservation) and
+  6 (Inbox nav count badge + collapsed-shell indicator).
+- **Story 003** — `honest-classification-and-diff-policy.md` + `daily-usage`
+  Inputs 1–5 (low-friction classification confirm, scannable type-badge inbox
+  with distinct `unclassified-artifact-change`, diff-pane evidence, "Next open
+  item" flow, stable per-item deep links).
+- **Story 006** — Input 7 (dead-man health card shows "N tasks processed
+  today"; the proto already exposes `DeadManPing.tasks_processed`).
+
+Where a fold-in needs a new file/Task not in the original story, it is added as a
+Task under the same story with hermetic Verify, consistent with the story's
+existing lane spec.

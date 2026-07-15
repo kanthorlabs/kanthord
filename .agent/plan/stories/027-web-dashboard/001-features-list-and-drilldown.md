@@ -45,8 +45,8 @@ surface.
 
 ## Verification Gate
 
-- `npm run test:web` green for `clients/web/src/features/**`; `npm run e2e:web` green
-  for `clients/web/e2e/features.spec.ts`.
+- `npm run test:web` green for `clients/web/src/features/**` and `clients/web/src/auth/**`;
+  `npm run e2e:web` green for `clients/web/e2e/features.spec.ts`.
 
 ### Task T1 - Features list + empty state
 
@@ -105,3 +105,34 @@ inputs.
 
 **Verify:** `npm run e2e:web` green for `clients/web/e2e/features.spec.ts` (story-gated
 per PROFILE).
+
+### Task T4 - Auth baseline: auth source + auth-required screen (hermetic)
+
+> Added 2026-07-15 (authoring): AC4 (unauthenticated → auth-required, no
+> surface) was covered only by the deferred T3 E2E. Story 000's `RequireAuth`
+> needs a real auth source and DESIGN §7 names the auth-required screen a
+> Story 001 baseline, so this hermetic task builds + tests it now. See
+> `toolchain-decision.md`.
+
+**Input:** `clients/web/src/auth/AuthProvider.tsx`,
+`clients/web/src/auth/AuthProvider.test.tsx`,
+`clients/web/src/auth/AuthRequired.tsx`, `clients/web/src/auth/AuthRequired.test.tsx`,
+`clients/web/src/locators.ts`
+
+**Action - RED:** Component tests (hermetic, fake generated client — the T1
+pattern): (a) `AuthProvider` derives the authenticated state from a probe call
+on the injected client — a fake client whose probe resolves ⇒ authenticated;
+a fake client whose probe rejects with the Connect `Unauthenticated` code ⇒
+not authenticated (any other error ⇒ an explicit error state, not a false
+"authenticated"); (b) `AuthRequired` renders the DESIGN §7 auth-required
+pattern (registry locator), showing no feature/surface data; (c) with the
+unauthenticated provider state, a protected surface renders `AuthRequired`
+(via Story 000 `RequireAuth`), never a cached surface.
+
+**Action - GREEN:** Implement `AuthProvider`/`useAuth` over the injected client
+seam and the `AuthRequired` screen; wire the app entry so `RequireAuth` reads
+`useAuth`. Add the locators the tests name.
+
+**Action - REFACTOR:** none.
+
+**Verify:** `npm run test:web` green; `npm run typecheck:web` exits 0.
