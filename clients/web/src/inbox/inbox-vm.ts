@@ -1,15 +1,16 @@
 /**
- * inbox-vm — InboxItemVM view-model + adapter (Story 003 T1).
+ * inbox-vm — InboxItemVM view-model + adapter.
  *
- * The adapter toInboxItemVM maps the generated proto InboxItem (which currently
- * carries only {id, kind, featureId, summary}) to the richer InboxItemVM that
- * all Story 003 surfaces are driven from.  Its input type is a SUPERSET of
- * InboxItem: when the proto eventually carries the extended fields (N2 in
- * api-needs-for-026.md) they pass through directly; when absent, deterministic
- * defaults are applied.
+ * toInboxItemVM maps the generated proto InboxItem (N1–N5 real fields after
+ * Epic 026) to InboxItemVM. The input is now the real proto type directly —
+ * the hand-rolled RichInboxItem superset has been removed.
  *
- * This lets the adapter test (bare proto → defaults) and the Inbox component
- * test (pre-built VMs → passthrough) both pass against a single implementation.
+ * Evidence mapping:
+ *   evidence undefined        → { kind:"text", text: summary }
+ *   evidence.type == ""       → { kind:"text", text: summary }
+ *   evidence.type == "text"   → { kind:"text", text: evidence.text }
+ *   evidence.type == "diff"   → { kind:"diff", files: [...] }
+ *     DiffLine.kind ("add"|"del"|"ctx") → DiffLine.type ("add"|"del"|"ctx")
  */
 import type { InboxItem } from "@/gen/kanthord/v1/daemon_pb";
 import type { DiffFile } from "@/components/DiffPane";
@@ -31,9 +32,9 @@ export interface InboxItemVM {
   kind: "escalation" | "approval";
   featureId: string;
   summary: string;
-  /** Escalation / approval type string (e.g. "write-access-request"). Empty when not yet provided by the proto. */
+  /** Escalation / approval type string (e.g. "write-access-request"). */
   type: string;
-  /** Severity string (e.g. "high" | "medium" | "low"). Empty when not yet provided. */
+  /** Severity string (e.g. "high" | "medium" | "low"). */
   severity: string;
   /** Daemon-suggested interaction category for the respond control. */
   suggestedCategory: string;
@@ -41,28 +42,40 @@ export interface InboxItemVM {
   evidence: InboxEvidence;
   /** Item lifecycle status ("open" | "resolved" | "expired"). */
   status: string;
+  /** Approval/lease expiry (epoch ms). 0n when not set. */
+  expiresAt?: bigint;
+  /** Whether the item has expired. */
+  expired?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Extended input type — superset of the current proto InboxItem.
-// The optional fields are the N2 fields that the UI expects but the current
-// proto does not carry.  When 026 adds them the adapter passes them through;
-// until then the defaults below apply.
+// Evidence helper
 // ---------------------------------------------------------------------------
 
-type RichInboxItem = InboxItem & {
-  type?: string;
-  severity?: string;
-  suggestedCategory?: string;
-  evidence?: InboxEvidence;
-  status?: string;
-};
+function mapEvidence(item: InboxItem): InboxEvidence {
+  const ev = item.evidence;
+  if (!ev || ev.type === "") {
+    return { kind: "text", text: item.summary };
+  }
+  if (ev.type === "text") {
+    return { kind: "text", text: ev.text };
+  }
+  // type === "diff"
+  const files: DiffFile[] = (ev.diff?.files ?? []).map((f) => ({
+    path: f.path,
+    lines: f.lines.map((l) => ({
+      type: l.kind as "add" | "del" | "ctx",
+      content: l.content,
+    })),
+  }));
+  return { kind: "diff", files };
+}
 
 // ---------------------------------------------------------------------------
 // Adapter
 // ---------------------------------------------------------------------------
 
-export function toInboxItemVM(item: RichInboxItem): InboxItemVM {
+export function toInboxItemVM(item: InboxItem): InboxItemVM {
   const kind: "escalation" | "approval" =
     item.kind === "escalation" || item.kind === "approval"
       ? item.kind
@@ -73,11 +86,13 @@ export function toInboxItemVM(item: RichInboxItem): InboxItemVM {
     kind,
     featureId: item.featureId,
     summary: item.summary,
-    type: item.type ?? "",
-    severity: item.severity ?? "",
-    suggestedCategory: item.suggestedCategory ?? "",
-    evidence: item.evidence ?? { kind: "text", text: item.summary },
-    status: item.status ?? "open",
+    type: item.type,
+    severity: item.severity,
+    suggestedCategory: item.suggestedCategory,
+    evidence: mapEvidence(item),
+    status: item.status,
+    expiresAt: item.expiresAt,
+    expired: item.expired,
   };
 }
 

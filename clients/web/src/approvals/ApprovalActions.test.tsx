@@ -62,7 +62,7 @@ const EXPIRED_VM: ApprovalItemVM = {
   verb: "github.merge",
   target: "acme/repo#43",
   state: "expired",
-  expiresAt: "2026-07-14T00:00:00Z",
+  expiresAt: 1752451200000n,
 };
 
 // ---------------------------------------------------------------------------

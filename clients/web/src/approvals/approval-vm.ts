@@ -1,16 +1,18 @@
 /**
  * approval-vm — Story 004 T1 view-model adapter.
  *
- * Maps a raw approval item (superset of the current InboxItem proto carrying
- * optional N3 fields per api-needs-for-026.md) to the ApprovalItemVM that all
- * Story 004 surfaces are driven from.
+ * toApprovalItemVM maps the real proto InboxItem (kind=="approval") to
+ * ApprovalItemVM. The hand-rolled RawApprovalItem superset has been removed;
+ * the input is now the generated InboxItem directly (N1–N5 after Epic 026).
  *
- * N3 gap defaults (fields not yet on the proto):
- *   verb      → ""
- *   target    → ""
- *   state     → "parked" (unless expired === true → "expired")
- *   expiresAt → undefined
+ * Mapping:
+ *   id       → item.id
+ *   verb     → item.type   (approval verb, e.g. "github.merge")
+ *   target   → item.summary
+ *   state    → item.expired === true ? "expired" : "parked"
+ *   expiresAt → item.expiresAt === 0n ? undefined : item.expiresAt
  */
+import type { InboxItem } from "@/gen/kanthord/v1/daemon_pb";
 
 export type ApprovalState = "parked" | "expired";
 
@@ -19,27 +21,15 @@ export interface ApprovalItemVM {
   verb: string;
   target: string;
   state: ApprovalState;
-  expiresAt?: string;
+  expiresAt?: bigint;
 }
 
-/**
- * Superset input type — the current proto InboxItem fields plus the optional
- * N3 fields the adapter defaults when absent.
- */
-interface RawApprovalItem {
-  id: string;
-  verb?: string;
-  target?: string;
-  expiresAt?: string;
-  expired?: boolean;
-}
-
-export function toApprovalItemVM(raw: RawApprovalItem): ApprovalItemVM {
+export function toApprovalItemVM(item: InboxItem): ApprovalItemVM {
   return {
-    id: raw.id,
-    verb: raw.verb ?? "",
-    target: raw.target ?? "",
-    state: raw.expired === true ? "expired" : "parked",
-    expiresAt: raw.expiresAt,
+    id: item.id,
+    verb: item.type,
+    target: item.summary,
+    state: item.expired === true ? "expired" : "parked",
+    expiresAt: item.expiresAt === 0n ? undefined : item.expiresAt,
   };
 }
