@@ -48,6 +48,11 @@ service DaemonService {
   rpc ListSlots(ListSlotsRequest) returns (ListSlotsResponse);
   // budgets.get — per-task ledger view + breaker state incl. any recorded override.
   rpc GetBudget(GetBudgetRequest) returns (GetBudgetResponse);
+  // budgets.list — per-task ledger rows for every tracked task (Epic 027 N4).
+  rpc ListBudgets(ListBudgetsRequest) returns (ListBudgetsResponse);
+  // inbox.get — one inbox item incl. its attached evidence, for the deep-link
+  // item view (Epic 027 N2; read-only).
+  rpc GetInboxItem(GetInboxItemRequest) returns (GetInboxItemResponse);
   // daemon.status — health, last dead-man ping (Epic 029), last verify report.
   rpc GetDaemonStatus(GetDaemonStatusRequest) returns (GetDaemonStatusResponse);
   // audit.taskTimeline — a task's ordered timeline (Epic 019.5 queryTaskTimeline).
@@ -118,6 +123,48 @@ message InboxItem {
   string feature_id = 3;
   // Human-readable summary of what needs a decision.
   string summary = 4;
+  // --- Epic 027 N2/N3 fields (Story 003/004; adapters default when absent) ---
+  // Escalation/approval type incl. the distinct "unclassified-artifact-change".
+  string type = 5;
+  // Severity for the per-row domain badge ("low"/"medium"/"high"/...).
+  string severity = 6;
+  // Daemon's proposed interaction category (approval/clarification/correction/
+  // takeover) so the respond control can offer "Accept suggested: <type>".
+  string suggested_category = 7;
+  // Item lifecycle status ("open"/"resolved"/"expired"/"missing") for deep links.
+  string status = 8;
+  // Approval/lease expiry (epoch ms) and whether it has expired (Story 004).
+  int64 expires_at = 9;
+  bool expired = 10;
+  // Attached evidence CONTENT (never a bare reference) — phases.md 2B D6.
+  Evidence evidence = 11;
+  // Stable reference to the parked broker op this approval item gates (N3).
+  string broker_op_id = 12;
+}
+
+// Attached inbox evidence. type selects which payload is populated.
+message Evidence {
+  // "diff" | "text" | "" (none).
+  string type = 1;
+  // Displayed text for non-diff evidence.
+  string text = 2;
+  // Structured diff for type=="diff" (the Story 002 DiffPane consumes this).
+  DiffEvidence diff = 3;
+}
+
+message DiffEvidence {
+  repeated DiffFile files = 1;
+}
+
+message DiffFile {
+  string path = 1;
+  repeated DiffLine lines = 2;
+}
+
+message DiffLine {
+  // "add" | "del" | "ctx".
+  string kind = 1;
+  string content = 2;
 }
 
 message ListInboxItemsRequest {}
@@ -125,6 +172,15 @@ message ListInboxItemsRequest {}
 message ListInboxItemsResponse {
   // Pending items (escalations and approvals), each tagged by kind.
   repeated InboxItem items = 1;
+}
+
+message GetInboxItemRequest {
+  string id = 1;
+}
+
+message GetInboxItemResponse {
+  // The full item incl. its evidence (Epic 027 N2 deep-link item view).
+  InboxItem item = 1;
 }
 
 message RespondToEscalationRequest {
@@ -171,6 +227,8 @@ message FeatureSummary {
   string phase = 3;
   // Human-readable progress summary (e.g. "3/7 tasks satisfied").
   string progress_summary = 4;
+  // Human-readable feature display name (Epic 027 N1, Story 001 AC1 columns).
+  string name = 5;
 }
 
 message ListFeaturesRequest {}
@@ -231,6 +289,9 @@ message BrokerOperation {
   // Lease/attempt expiry (epoch ms); expiring==true when near expiry.
   int64 expires_at = 6;
   bool expiring = 7;
+  // Reconciliation status distinct from lifecycle state (Epic 027 N5):
+  // e.g. "externally-reconciled" vs "locally-resolved" ("" when not tracked).
+  string reconciliation_status = 8;
 }
 
 message ListBrokerOperationsRequest {}
@@ -287,6 +348,13 @@ message GetBudgetResponse {
   // Circuit-breaker state ("closed" / "open" / "half-open").
   string breaker_state = 4;
   BudgetOverrideInfo override = 5;
+}
+
+// --- budgets.list (Epic 027 N4 — per-task ledger rows for every tracked task) ---
+message ListBudgetsRequest {}
+
+message ListBudgetsResponse {
+  repeated GetBudgetResponse budgets = 1;
 }
 
 // --- daemon.status ---
