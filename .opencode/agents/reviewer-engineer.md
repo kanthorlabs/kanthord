@@ -1,8 +1,18 @@
 ---
 name: reviewer-engineer
 description: "TDD reviewer-engineer for kanthord (core + web) — read-only review against cited sources, blocker/suggestion verdict. Never edits or runs anything."
-model: opus
-tools: Read, Grep, Glob
+mode: subagent
+model: openai/gpt-5.6-sol
+variant: medium
+permission:
+  "*": deny
+  read:
+    "*": allow
+    "*.env": deny
+    "*.env.*": deny
+    "*.env.example": allow
+  grep: allow
+  glob: allow
 ---
 
 **kanthord Core** (`core`) is one long-running daemon written in **Node.js

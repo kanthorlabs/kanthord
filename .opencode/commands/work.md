@@ -1,7 +1,6 @@
 ---
 description: Drive an implementation cycle for one EPIC — TDD (lock) by default, dispatching test-engineer / software-engineer in alternation until IMPLEMENTATION_READY_FOR_REVIEW; or --sketch (Phase A) dispatching only software-engineer turns gated by human visual review. Runs serial (all variants) by default, or variant-scoped in an isolated git worktree (--variant) so variants can be built in parallel, with a --join step to merge and gate all. Escalates to the human when one Task fails its attempt limit. Lifecycle state lives in the discussion file; the orchestrator writes no frontmatter or status board.
-argument-hint: <epic-file-path> [--variant core, web] [--base <ref>] [--sketch] [--join] [--max-turns N]
-allowed-tools: Bash, Read, Agent
+agent: build
 ---
 
 # /work — orchestrate a TDD implementation cycle
@@ -134,9 +133,9 @@ All path checks below resolve under `<root>`.
 
 1. The EPIC file exists and is readable.
 2. The path is under `.agent/plan/epics/` (sanity guard — refuse arbitrary paths).
-3. `.claude/agents/test-engineer.md` exists.
-4. `.claude/agents/software-engineer.md` exists.
-5. `.claude/agents/reviewer-engineer.md` exists.
+3. `.opencode/agents/test-engineer.md` exists.
+4. `.opencode/agents/software-engineer.md` exists.
+5. `.opencode/agents/reviewer-engineer.md` exists.
 6. `.agent/tdd/history/` exists (create it with `mkdir -p` if not).
 7. **No double review on resume.** If the discussion file (Step 3) already exists and its latest `HUMAN_REVIEW:` line is `PASS`, this cycle is already done — report `already closed` and stop without dispatching.
 8. **Variant mode only.** `VARIANT` is one of `core, web`, and the base ref resolves (`git -C "$REPO_ROOT" rev-parse --verify <base-ref>`). If a dependent variant is run with `--base HEAD`, warn (do not abort): the base variant may not be frozen — prefer running it first and pointing `--base` at that committed ref.
@@ -256,7 +255,7 @@ git -C '<root>' status --porcelain -uall | cut -c4- | sort > '/tmp/work-<epic-sl
 `-uall` is required so git lists each new file individually instead of collapsing it into a directory path; `sort` is required because Step 5g.1 feeds these snapshots to `comm`, which assumes sorted input.
 
 ### 5f. Dispatch the subagent
-Call the Agent tool with `subagent_type` equal to `next` (`test-engineer` or `software-engineer`) and this prompt verbatim, substituting `<root>`, `<EPIC_FILE>` (= `<root>/<epic-relative-path>`), `<DISCUSSION_FILE>`, `<SCOPE>`, `<DRAFT_FILE>` (from 5e), and `<ENV>` (whatever Step 4 captured):
+Call the Task tool with `subagent_type` equal to `next` (`test-engineer` or `software-engineer`), a short description of the turn, and this prompt verbatim, substituting `<root>`, `<EPIC_FILE>` (= `<root>/<epic-relative-path>`), `<DISCUSSION_FILE>`, `<SCOPE>`, `<DRAFT_FILE>` (from 5e), and `<ENV>` (whatever Step 4 captured):
 
 ```
 Continue the TDD implementation cycle for EPIC <EPIC_FILE>.
@@ -332,7 +331,8 @@ script**: `scripts/lane-check.sh <role> <scope> <path>` (exit 0 = in-lane).
   production-consumed module would break the lanes); plus its draft files and
   journal as for core.
 - **Always forbidden to BOTH** (the lane script denies these for every role):
-  the locked plan tree `.agent/plan/**`; the pipeline files `.claude/**`;
+  the locked plan tree `.agent/plan/**`; the pipeline files `.claude/**` and
+  `.opencode/**`;
   toolchain/config `package.json`, `package-lock.json`, `tsconfig*.json`,
   `*.config.*`, `scripts/**`, `clients/web/package.json`, `clients/web/tsconfig*.json`,
   `clients/web/vite.config.*`, `clients/web/playwright.config.*`, `clients/web/vitest.config.*`;
@@ -529,7 +529,7 @@ git -C "$REPO_ROOT" branch -d work/<epic-slug>-<scope>    # only after it is mer
 
 ## Notes for the orchestrator (you)
 
-- Use `Bash` for `grep`/`sed`/`tail`/`awk`/path checks and the one-time seed. Use `Read` for the EPIC's `## Verification Gate`. Use `Agent` for subagent dispatch. The orchestrator touches the discussion file only via the Step 3 seed and the Step 6b auto-review block.
+- Use `Bash` for `grep`/`sed`/`tail`/`awk`/path checks and the one-time seed. Use `Read` for the EPIC's `## Verification Gate`. Use `Task` for subagent dispatch. The orchestrator touches the discussion file only via the Step 3 seed and the Step 6b auto-review block.
 - Do not summarize, judge, or editorialize turns between dispatches. You dispatch; you do not participate.
 - Test engineer always opens. The first dispatch is always `test-engineer` if the file is fresh (software-engineer in sketch mode).
 - If the user interrupts, stop cleanly. Each subagent's append is atomic, and the orchestrator holds no other mutable state.
