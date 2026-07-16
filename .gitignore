@@ -148,3 +148,6 @@ vite.config.ts.timestamp-*
 
 # AI
 **/worktrees/
+
+# Local direnv (loads OpenCode model config from .data/)
+.envrc

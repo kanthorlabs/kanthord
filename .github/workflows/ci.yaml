@@ -15,5 +15,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
+      # Node 24 bundles npm 11.6.x; engines require >= 11.18, so bump first
+      # (engine-strict would otherwise fail `npm ci`).
+      - run: npm install -g npm@11.18.0
       - run: npm ci
       - run: npm run typecheck
