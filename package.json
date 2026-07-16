@@ -22,5 +22,10 @@
     "pino": "^10.3.1",
     "ulid": "^3.0.2",
     "yaml": "^2.9.0"
+  },
+  "allowScripts": {
+    "@google/genai@1.52.0": true,
+    "protobufjs@7.6.4": true,
+    "protobufjs@7.6.5": true
   }
 }
