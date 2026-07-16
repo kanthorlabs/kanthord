@@ -43,10 +43,14 @@ node src/main.ts list task --initiative "$INITIATIVE"
 - **AgentRunner port + resolver.** `agent-runner/port.ts` (`run(task, context)
   → result`) and the resolver — the seam EPIC 006 fills with pi. **Runner
   selection contract (debate finding — Agent is not a Resource):** the
-  resolver selects by the task's assigned **agent type** plus the
-  **AIProvider resource** bound in the task's Context; a task with no
-  AIProvider binding gets the configured default runner (`fake` in this
-  epic), and an unresolvable combination fails the task with a named error.
+  resolver selects by the **AIProvider resource** bound in the task's
+  Context; a task with no AIProvider binding gets the configured default
+  runner (`fake` in this epic), and an unresolvable combination (an
+  AIProvider binding with no runner registered for it — always, in this
+  epic) fails the task with a named error. `Task.agent` (assigned agent
+  type) stays deferred to EPIC 006 per the EPIC 002 canonical model; the
+  resolver seam takes `(task, context)` so adding the field changes no
+  port (narrowing confirmed by Ulrich, 2026-07-16).
 - **FakeRunner adapter.** Deterministic: succeeds instantly, records what it
   was asked, supports scripted failures by task id (`--fail <task-id>`,
   repeatable) — the test double and the `--runner fake` implementation are
@@ -58,8 +62,11 @@ node src/main.ts list task --initiative "$INITIATIVE"
   **claim time** inside the claim transaction — the loop caches no static
   ready-list, so a task or dependency added through the EPIC 004 CLI while the
   daemon runs is picked up on the next claim, and a queued task whose
-  dependencies became unmet by a mutation is skipped and re-queued rather than
-  executed. A new dependency can only touch a `pending` task (the EPIC 002
+  dependencies became unmet by a mutation is skipped rather than executed —
+  its stale job is discarded and the readiness scan re-enqueues the task once
+  its dependencies are met again (the queue is operational state; events are
+  the audit trail — decision confirmed by Ulrich, 2026-07-16). A new
+  dependency can only touch a `pending` task (the EPIC 002
   guard), so it never retro-blocks a running or completed task.
 - **Pause / resume per initiative.** `pause initiative <id>` /
   `resume initiative <id>` set a flag the loop honors: a paused initiative's

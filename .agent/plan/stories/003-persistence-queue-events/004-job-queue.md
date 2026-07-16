@@ -11,9 +11,12 @@ policy decided and written down.
 
 ## Acceptance Criteria
 
-- `src/queue/port.ts`: `JobQueue { enqueue(taskId: string): void;
+- `src/queue/port.ts`: `JobQueue { enqueue(taskId: string): boolean;
   claim(): ClaimedJob | undefined }`, `ClaimedJob { id: string; taskId:
-  string }`.
+  string }`. `enqueue` returns `true` when a new `queued` job row was
+  inserted, `false` on the idempotent no-op — EPIC 005 emits `task.ready`
+  exactly once per actual insertion (amended for EPIC 005, Ulrich,
+  2026-07-16).
 - Enqueue is idempotent **while queued**: re-enqueueing a task that
   already has a `queued` job is a no-op (partial unique index +
   `ON CONFLICT DO NOTHING`); after that job is claimed (`running`), a new
@@ -57,8 +60,9 @@ policy decided and written down.
 **Action - RED:** temp-DB tests (task rows seeded for FK): (a) `enqueue`
 then `claim` returns `{ id, taskId }` and the job is `running`; (b)
 `claim` on empty queue → `undefined`; (c) double `enqueue` of one task
-leaves one `queued` job; (d) after claiming, `enqueue` of the same task
-creates a new `queued` job; (e) two tasks enqueued in order are claimed
+leaves one `queued` job and returns `true` then `false`; (d) after
+claiming, `enqueue` of the same task creates a new `queued` job and
+returns `true`; (e) two tasks enqueued in order are claimed
 oldest-first. Fails today: module does not exist.
 
 **Action - GREEN:** implement `SqliteJobQueue`

@@ -13,8 +13,12 @@ task. Dependencies are task-level only.
 ## Acceptance Criteria
 
 - Transition table (locked): `pending→running`, `running→completed`,
-  `running→failed`, `failed→running` (retry — confirmed by Ulrich,
-  2026-07-16). Nothing else.
+  `running→failed`, `failed→pending` (retry), `running→pending` (crash
+  recovery). Nothing else. (Amended for EPIC 005 — confirmed by Ulrich,
+  2026-07-16, replacing the earlier `failed→running` retry edge: EPIC 005
+  locks "claimable = pending", so everything that runs again is first reset
+  to `pending` and enters execution through the single `pending→running`
+  edge.)
 - `transitionTask(task, to)` returns a **new** task with the new status; the
   input task is not mutated.
 - Any pair outside the table throws `IllegalTransitionError` carrying
@@ -42,9 +46,10 @@ existing `Task`/`TaskStatus`/`newTask`.
 
 **Action - RED:** test asserts: (a) the chain pending→running→completed via
 `transitionTask` yields the expected statuses and never mutates its input;
-(b) running→failed and failed→running succeed; (c) pending→completed,
-pending→failed, completed→running, completed→failed, failed→completed each
-throw `IllegalTransitionError` whose `from`/`to` name the attempted pair.
+(b) running→failed, failed→pending, and running→pending succeed;
+(c) pending→completed, pending→failed, completed→running, completed→failed,
+completed→pending, failed→running, failed→completed each throw
+`IllegalTransitionError` whose `from`/`to` name the attempted pair.
 Fails today: `transitionTask` does not exist.
 
 **Action - GREEN:** implement the transition table, `transitionTask`, and
@@ -54,9 +59,9 @@ Fails today: `transitionTask` does not exist.
 
 **Output:** `src/domain/task.ts` additionally exports
 `transitionTask(task: Task, to: TaskStatus): Task` and
-`IllegalTransitionError { from, to }` enforcing exactly the four legal edges.
+`IllegalTransitionError { from, to }` enforcing exactly the five legal edges.
 
-**Verify:** `npm test` green (legal chain + all five illegal pairs);
+**Verify:** `npm test` green (legal chain + all seven illegal pairs);
 `npm run typecheck` exit 0.
 
 ### Task T2 - dependency-mutation guard
