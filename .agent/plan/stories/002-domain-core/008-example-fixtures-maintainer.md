@@ -34,11 +34,11 @@ invisible to that scan. **M1 and M2 run BEFORE the /work dispatch** — Story
   - Verify: the script exits 0 and prints `PROOF-OK`.
 
         set -e
-        diff <(node src/main.ts graph check examples/demo-graph.yaml) <(printf 'design: ready\nimplement: blocked (waiting: design)\ntest: blocked (waiting: implement)\ndocs: blocked (waiting: design)\n')
-        ! node src/main.ts graph check examples/invalid-cycle.yaml 2>/dev/null
-        node src/main.ts graph check examples/invalid-cycle.yaml 2>&1 >/dev/null | grep -qx 'error: cycle detected: a -> b -> a'
-        ! node src/main.ts graph check examples/invalid-unknown-dep.yaml 2>/dev/null
-        node src/main.ts graph check examples/invalid-unknown-dep.yaml 2>&1 >/dev/null | grep -qx 'error: unknown dependency: ghost (referenced by a)'
+        diff <(node src/main.ts check graph --path examples/demo-graph.yaml) <(printf 'design: ready\nimplement: blocked (waiting: design)\ntest: blocked (waiting: implement)\ndocs: blocked (waiting: design)\n')
+        ! node src/main.ts check graph --path examples/invalid-cycle.yaml 2>/dev/null
+        node src/main.ts check graph --path examples/invalid-cycle.yaml 2>&1 >/dev/null | grep -qx 'error: cycle detected: a -> b -> a'
+        ! node src/main.ts check graph --path examples/invalid-unknown-dep.yaml 2>/dev/null
+        node src/main.ts check graph --path examples/invalid-unknown-dep.yaml 2>&1 >/dev/null | grep -qx 'error: unknown dependency: ghost (referenced by a)'
         echo PROOF-OK
 
 - [ ] **M4 — remove the entity sketch from README.md + repoint every

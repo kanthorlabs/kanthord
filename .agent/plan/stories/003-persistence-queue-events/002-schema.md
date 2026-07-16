@@ -58,7 +58,8 @@ CREATE UNIQUE INDEX jobs_queued_taskId ON jobs(taskId) WHERE status = 'queued';
 CREATE TABLE events (
   id     TEXT PRIMARY KEY,
   type   TEXT NOT NULL CHECK (type IN
-          ('task.created','task.ready','task.started','task.completed','task.failed')),
+          ('task.created','task.ready','task.started','task.completed','task.failed',
+           'task.dependencies_changed')),
   taskId TEXT NOT NULL REFERENCES tasks(id)
 );
 ```
@@ -74,7 +75,7 @@ CREATE TABLE events (
   readiness report depends on.
 - **`resources.projectId`** — the Resource union has no `projectId` field;
   the column is the aggregate association (Project owns resources —
-  canonical model / EPIC 004 `resource add --project`). Storage-level, not
+  canonical model / EPIC 004 `create <resource-type> --project`). Storage-level, not
   a domain change.
 - **`resources.attributes`** — JSON text with verbatim vendor keys
   (`organization`, `branch`, `provider`, `secretRef`, `destination`,
@@ -87,7 +88,9 @@ CREATE TABLE events (
   when the failure reason lands.
 - Vocabularies (`TaskStatus`, `EventType`, `ResourceType`) come verbatim
   from EPIC 002's canonical model (stories 002/003/006) — not invented
-  here.
+  here. `EventType` is the full **6**-value set including
+  `task.dependencies_changed` (EPIC 004 insert/re-arrange audit), so the
+  `events.type` CHECK never needs a later rebuild for it.
 
 ## Verification Gate
 

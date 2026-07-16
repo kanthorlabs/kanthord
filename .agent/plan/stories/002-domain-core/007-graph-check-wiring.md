@@ -1,10 +1,10 @@
-# Story 007 - graph check wiring
+# Story 007 - check graph wiring
 
 Epic: `.agent/plan/epics/002-domain-core.md`
 
 ## Goal
 
-`graph check` runs end to end in the real program: `apps/cli` parses the YAML
+`check graph` runs end to end in the real program: `apps/cli` parses the YAML
 file and passes plain data to the `CheckGraph` use case, which builds
 `GraphNode`s and returns the readiness report. YAML stays in the app adapter
 (`app/` imports only `domain/` and ports).
@@ -29,9 +29,10 @@ file and passes plain data to the `CheckGraph` use case, which builds
     YAML parse failure → `error: invalid graph file: invalid YAML`;
     wrong shape → `error: invalid graph file: tasks must be a list of
     { id, dependencies? }`.
-- `node src/main.ts graph check <file>` prints `stdout` lines to stdout and
-  `stderr` lines to stderr, exits with the returned code; the EPIC 001
-  `status` command still works.
+- `node src/main.ts check graph --path <file>` prints `stdout` lines to stdout
+  and `stderr` lines to stderr, exits with the returned code; the EPIC 001
+  `status` command still works. Command grammar is verb-first `check graph`
+  with the file path in the `--path <file>` flag (no positional argument).
 
 ## Constraints
 
@@ -39,8 +40,8 @@ file and passes plain data to the `CheckGraph` use case, which builds
   no `deps` alias). Extra top-level keys in the file are ignored.
 - YAML parsing (the `yaml` package) and file reading live in
   `src/apps/cli/graph-check.ts` only. `src/app/graph/check-graph.ts` imports
-  only `domain/`. `main.ts` registers `graph check` in the existing command
-  table beside `status`; `graph check` opens no database.
+  only `domain/`. `main.ts` registers `check graph` in the existing command
+  table beside `status`; `check graph` opens no database.
 - T2's tests read the committed `examples/*.yaml` fixtures (read-only inputs;
   maintainer story 008 M2 commits them before /work). Cases with no committed
   fixture (malformed file, duplicate id) use temp files the test creates and
@@ -80,7 +81,7 @@ only `domain/`.
 **Verify:** `npm test` green (all four RED cases); `npm run typecheck`
 exit 0.
 
-### Task T2 - CLI `graph check` + composition
+### Task T2 - CLI `check graph` + composition
 
 **Requires:** S007-T1 (`CheckGraph`); story 008 M2 (fixtures committed —
 maintainer, before /work).
@@ -100,13 +101,14 @@ locked `error:` line each. Fails today: module does not exist.
 
 **Action - GREEN:** implement `runGraphCheck`: read the file, `yaml` parse,
 shape-validate, call `CheckGraph`, format the locked lines; catch the three
-domain errors into their locked messages. Register `graph check` in the CLI
-command table; `main.ts` prints the two streams and sets `process.exitCode`.
+domain errors into their locked messages. Register `check graph` in the CLI
+command table (the `--path` flag supplies the file path); `main.ts` prints
+the two streams and sets `process.exitCode`.
 
 **Action - REFACTOR:** none.
 
 **Output:** `src/apps/cli/graph-check.ts` exports `runGraphCheck(filePath):
-{ exitCode, stdout, stderr }` per the Acceptance Criteria; `graph check` is
+{ exitCode, stdout, stderr }` per the Acceptance Criteria; `check graph` is
 registered in the command table; `main.ts` wires it; `status` unaffected.
 
 **Verify:** `npm test` green (all six RED cases); `npm run typecheck`

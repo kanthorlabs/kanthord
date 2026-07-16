@@ -21,16 +21,16 @@ Proof:  (fresh EPIC 004-style setup shell; `SANDBOX` is a local throwaway
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
 node src/main.ts db migrate
 # ... EPIC 004-style creates, plus:
-node src/main.ts resource add ai-provider --project "$PROJECT" \
+node src/main.ts create ai-provider --project "$PROJECT" \
   --name openai --provider openai --model gpt-5.6 --secret-ref OPENAI_API_KEY
-node src/main.ts resource add repository --project "$PROJECT" \
+node src/main.ts create repository --project "$PROJECT" \
   --name sandbox --path "$SANDBOX" --branch main
-TASK=$(node src/main.ts task create --objective "$OBJECTIVE" \
+TASK=$(node src/main.ts create task --objective "$OBJECTIVE" \
   --title "add a title line to README" \
   --context repository=<sandbox-resource-id> --context ai_provider=<openai-resource-id>)
 
 node src/main.ts daemon run --until-idle
-node src/main.ts task show "$TASK"
+node src/main.ts get task "$TASK"
 # prints completed + the TaskResult: workspace path, branch
 # kanthord/<task-id>, commit sha, summary.
 git -C "<printed workspace path>" log --oneline -1
@@ -46,11 +46,11 @@ node src/main.ts events --after 0   # shows the agent's progress events.
 ## Stories
 
 - **Resource authority (decision, debate B7).** The **database is the single
-  resource store** — resources enter via EPIC 004's `resource add` commands.
-  `secretRef` names an env var resolved **at use time**; secrets are never
-  stored in the DB or any file. `resource import kanthord.yaml` is added as
-  a pure convenience that runs the same `resource add` use cases from a YAML
-  declaration file — an import, not live configuration and not a second
+  resource store** — resources enter via EPIC 004's `create <resource-type>`
+  commands. `secretRef` names an env var resolved **at use time**; secrets are
+  never stored in the DB or any file. `import resource kanthord.yaml` is added
+  as a pure convenience that runs the same resource-creation use cases from a
+  YAML declaration file — an import, not live configuration and not a second
   source of truth.
 - **PiAgentRunner adapter.** `agent-runner/pi.ts` implementing the EPIC 005
   port on pi-agent-core's `Agent` with pi-coding-agent's tool factories
@@ -65,7 +65,7 @@ node src/main.ts events --after 0   # shows the agent's progress events.
   hand the agent that directory; workspace paths recorded on the task.
 - **Result capture.** Agent outcome → commit on the task branch **in the
   task workspace clone** → TaskResult (workspace path, branch name, commit
-  sha, summary) persisted and printed by `task show`; the workspace is kept
+  sha, summary) persisted and printed by `get task`; the workspace is kept
   after completion so the human can inspect/push the branch. Agent progress
   mapped to events (agent-started, tool-call summaries throttled,
   agent-finished).

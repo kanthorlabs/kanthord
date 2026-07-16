@@ -5,7 +5,10 @@ Epic: `.agent/plan/epics/002-domain-core.md`
 ## Goal
 
 Legal task-status transitions are enforced in the domain; illegal transitions
-throw a named domain error.
+throw a named domain error. The same module owns the **dependency-mutation
+guard**: a task's `dependencies` may be replaced only while it is `pending`,
+so insert/re-arrange (EPIC 004) can never retro-order a running or finished
+task. Dependencies are task-level only.
 
 ## Acceptance Criteria
 
@@ -16,6 +19,11 @@ throw a named domain error.
   input task is not mutated.
 - Any pair outside the table throws `IllegalTransitionError` carrying
   `{ from, to }`.
+- `setDependencies(task, dependencies)` returns a **new** task with the given
+  `dependencies` array (input not mutated) **only when `task.status ===
+  'pending'`**; otherwise it throws `DependenciesLockedError { taskId,
+  status }`. It performs no cycle/unknown validation — that is `validateGraph`
+  (story 005), run by the EPIC 004 use case over the whole graph.
 
 ## Constraints
 
@@ -50,3 +58,30 @@ Fails today: `transitionTask` does not exist.
 
 **Verify:** `npm test` green (legal chain + all five illegal pairs);
 `npm run typecheck` exit 0.
+
+### Task T2 - dependency-mutation guard
+
+**Requires:** S004-T1 (`transitionTask` shape — `setDependencies` mirrors its
+immutable, named-error style).
+
+**Input:** `src/domain/task.ts`, `src/domain/task.test.ts`; consumes the
+existing `Task`/`TaskStatus`.
+
+**Action - RED:** test asserts: (a) `setDependencies(pendingTask, ['x','y'])`
+returns a new task whose `dependencies` equals `['x','y']` and does not mutate
+the input; (b) calling it on a `running`, `completed`, or `failed` task throws
+`DependenciesLockedError` whose `taskId`/`status` name the offending task;
+(c) `setDependencies(pendingTask, [])` clears dependencies. Fails today:
+`setDependencies` does not exist.
+
+**Action - GREEN:** implement `setDependencies` and `DependenciesLockedError`
+in `task.ts`; the pending check is the only gate (no cycle/unknown check).
+
+**Action - REFACTOR:** none.
+
+**Output:** `src/domain/task.ts` additionally exports
+`setDependencies(task: Task, dependencies: string[]): Task` and
+`DependenciesLockedError { taskId, status }` — replace-only, pending-gated.
+
+**Verify:** `npm test` green (pending replace + three non-pending throws +
+clear-to-empty); `npm run typecheck` exit 0.

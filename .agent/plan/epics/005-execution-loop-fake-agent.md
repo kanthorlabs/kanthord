@@ -18,16 +18,22 @@ Proof:  (continues in the EPIC 004 Proof shell — same exported `KANTHORD_DB`,
 ```bash
 node src/main.ts daemon run --runner fake --until-idle
 # claims and executes every task in dependency order, exits 0 when idle.
-node src/main.ts task list --initiative "$INITIATIVE"
+node src/main.ts list task --initiative "$INITIATIVE"
 # every task shows completed.
 node src/main.ts events --after 0
 # prints the full lifecycle stream (ready → started → completed per task)
 # in ULID order.
 
+# insert missed work after a completed run, then continue:
+TASK_MORE=$(node src/main.ts create task --objective "$OBJECTIVE" --title "add tests")
+node src/main.ts daemon run --runner fake --until-idle
+# claims and completes only the newly-inserted task; the already-completed
+# tasks are untouched. Exit 0.
+
 # failure path: fresh DB, re-run the EPIC 004 Proof sequence, then:
 node src/main.ts daemon run --runner fake --fail "$TASK_DEPLOY" --until-idle
 # exits non-zero (a task failed).
-node src/main.ts task list --initiative "$INITIATIVE"
+node src/main.ts list task --initiative "$INITIATIVE"
 # shows "deploy" failed and its dependents blocked; the failure event
 # (with reason) appears in `events --after 0`.
 ```
@@ -48,6 +54,17 @@ node src/main.ts task list --initiative "$INITIATIVE"
 - **Scheduling use cases.** `enqueue-ready-tasks` (domain readiness → queue)
   and `run-next-task` (claim → resolve runner → execute → complete/fail →
   re-enqueue newly-ready dependents) — the loop body as testable use cases.
+- **Live insert / re-arrange while running.** Readiness is recomputed at
+  **claim time** inside the claim transaction — the loop caches no static
+  ready-list, so a task or dependency added through the EPIC 004 CLI while the
+  daemon runs is picked up on the next claim, and a queued task whose
+  dependencies became unmet by a mutation is skipped and re-queued rather than
+  executed. A new dependency can only touch a `pending` task (the EPIC 002
+  guard), so it never retro-blocks a running or completed task.
+- **Pause / resume per initiative.** `pause initiative <id>` /
+  `resume initiative <id>` set a flag the loop honors: a paused initiative's
+  tasks are never claimed, so a human can re-arrange its graph without racing
+  the claimer. `daemon run` skips paused initiatives.
 - **Daemon loop.** `apps/cli/` `daemon run` command: poll-claim loop with
   `--until-idle` (exit when queue empty) and `--poll-interval`; clean SIGINT
   shutdown finishing the in-flight task.
@@ -56,7 +73,7 @@ node src/main.ts task list --initiative "$INITIATIVE"
   `events --after <cursor>` and `events --follow` (poll loop) CLI commands —
   the pull-based notification surface.
 - **Failure semantics.** A failed task stays failed, dependents stay blocked,
-  the daemon moves on; `task retry <id>` resets a failed task to pending and
+  the daemon moves on; `retry task <id>` resets a failed task to pending and
   re-enqueues it.
 - **Crash consistency (debate finding).** Task state transition, queue
   update, and event append happen in **one SQLite transaction** — a crash

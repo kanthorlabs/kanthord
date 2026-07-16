@@ -8,7 +8,7 @@ The EPIC 002 graph functions gain a persisted path in both directions
 (debate finding): `StoreGraph` validates a plain graph **before** storing
 it atomically; `CheckStoredGraph` loads an initiative's tasks back and
 recomputes readiness — proving domain ↔ storage round-trips through the
-ports. `CheckStoredGraph` is the read model EPIC 004's `task list` will
+ports. `CheckStoredGraph` is the read model EPIC 004's `list task` will
 reuse.
 
 ## Acceptance Criteria

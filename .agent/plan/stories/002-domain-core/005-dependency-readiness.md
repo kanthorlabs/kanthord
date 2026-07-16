@@ -7,8 +7,12 @@ Epic: `.agent/plan/epics/002-domain-core.md`
 The pure scheduling heart: DAG validation (duplicate id, unknown dependency,
 cycle — all named, structured errors, in that precedence) and the readiness
 report, both over a structural `GraphNode` — so the same functions serve
-`graph check` (YAML labels as node ids) today and real `Task` entities
-(ULID ids) in EPIC 005.
+`check graph` (YAML labels as node ids) today and real `Task` entities
+(ULID ids) in EPIC 005. `validateGraph` is also the guard reused when a
+dependency edge is **added or re-arranged** later (EPIC 004): the use case
+applies the proposed edge to the task set and re-runs `validateGraph`, so a
+mutation that would create a cycle or reference an unknown task is rejected by
+this same function — no separate mutation path.
 
 ## Acceptance Criteria
 

@@ -14,7 +14,16 @@ IDs first. Every `create` command prints the new ULID as its **only stdout**
 (human messages go to stderr), so scripts capture ids with plain `$(…)`.
 Every reference flag (`--project`, `--objective`, `--depends-on`, …) takes a
 ULID. Name-based lookup is a separate convenience command
-(`<aggregate> find`), never a second reference system inside other flags.
+(`find <aggregate>`), never a second reference system inside other flags.
+
+**Command grammar (locked):** verb-first `<verb> <object> <flags>`, k8s-style,
+so each command key maps 1:1 to its use-case class — `create task` →
+`CreateTask`, `list task` → `ListTasks`, `find initiative` → `FindInitiative`.
+Verbs used: `create`, `rename`, `list`, `get`, `find`, `add`, `remove`.
+Pre-existing subsystem commands (`db migrate`, `db status`) keep their form;
+EPIC 002's `check graph --path <file>` is already verb-first. All flag names equal
+domain field names verbatim (kebab is
+the canonical rendering, e.g. `--secret-ref` → `secretRef`); no aliases.
 
 ## Verification Gate
 
@@ -25,20 +34,31 @@ Proof:
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
 node src/main.ts db migrate
 
-PROJECT=$(node src/main.ts project create --name demo)
-node src/main.ts resource add repository --project "$PROJECT" \
-  --name backend --org acme --repo backend --branch main
-INITIATIVE=$(node src/main.ts initiative create --project "$PROJECT" --name oauth)
-OBJECTIVE=$(node src/main.ts objective create --initiative "$INITIATIVE" --name backend)
-TASK_API=$(node src/main.ts task create --objective "$OBJECTIVE" --title "implement api")
-TASK_DEPLOY=$(node src/main.ts task create --objective "$OBJECTIVE" --title "deploy" \
+PROJECT=$(node src/main.ts create project --name demo)
+node src/main.ts create repository --project "$PROJECT" \
+  --name backend --organization acme --branch main
+INITIATIVE=$(node src/main.ts create initiative --project "$PROJECT" --name oauth)
+OBJECTIVE=$(node src/main.ts create objective --initiative "$INITIATIVE" --name backend)
+TASK_API=$(node src/main.ts create task --objective "$OBJECTIVE" --title "implement api")
+TASK_DEPLOY=$(node src/main.ts create task --objective "$OBJECTIVE" --title "deploy" \
   --depends-on "$TASK_API")
 
-node src/main.ts task list --initiative "$INITIATIVE"
+node src/main.ts list task --initiative "$INITIATIVE"
 # shows "implement api" as ready and "deploy" as
 # blocked (waiting: implement api). Exit 0.
 
-node src/main.ts task create --objective "$TASK_API" --title "bad parent"
+# insert missed prep work and re-arrange the graph after creation:
+TASK_PREP=$(node src/main.ts create task --objective "$OBJECTIVE" --title "spike auth")
+node src/main.ts add dependency --task "$TASK_API" --depends-on "$TASK_PREP"
+node src/main.ts list task --initiative "$INITIATIVE"
+# now "spike auth" ready; "implement api" blocked (waiting: spike auth);
+# "deploy" still blocked (waiting: implement api). Exit 0.
+
+node src/main.ts add dependency --task "$TASK_PREP" --depends-on "$TASK_DEPLOY"
+# would create a cycle: exits non-zero with a named cycle error, graph
+# left unchanged, never a stack trace.
+
+node src/main.ts create task --objective "$TASK_API" --title "bad parent"
 # unknown/wrong-type reference: exits non-zero with a named error,
 # never a stack trace.
 ```
@@ -54,19 +74,36 @@ node src/main.ts task create --objective "$TASK_API" --title "bad parent"
   scripting.
 - **Identity contract.** Creates print the ULID as sole stdout; reference
   flags accept ULIDs only and reject unknown or wrong-type ids with a named
-  error; `<aggregate> find --project <id> --name <name>` resolves a name to
-  an id within an explicit scope (ambiguity → error listing candidates).
-- **Typed resource commands.** `resource add repository|credential|notification|ai-provider|filesystem`
-  with the per-type required flags from the README union (repository:
-  `--org --repo --branch`; credential: `--provider --secret-ref`; …) —
-  validation errors name the missing flag.
-- **Task context bindings.** `task create` accepts resource bindings
-  (`--context repository=<resource-id>`), stored as the Task's Context for
-  later resolver use (EPIC 005/006). `--depends-on` is repeatable for
-  multiple dependencies.
+  error via a `resolveKind(id)` read port (`undefined` → unknown; found but
+  different aggregate → wrong-type); `find <aggregate> --<scope> <id> --name
+  <name>` resolves a name to an id within an explicit scope (ambiguity →
+  error listing candidates).
+- **Typed resource commands.** `create repository|credential|notification|ai-provider|filesystem`
+  — all carry `--project --name`, plus the per-type vendor flags from the
+  Resource union (repository: `--organization --branch`; credential:
+  `--provider --secret-ref`; notification: `--provider --destination`;
+  ai-provider: `--provider --model`; filesystem: `--path`). Vendor fields are
+  written to the `resources.attributes` JSON (EPIC 003 schema); validation
+  errors name the missing flag.
+- **Task context bindings.** `create task` accepts resource bindings
+  (`--context repository=<resource-id>`, repeatable), persisted in a new
+  `task_context` table (migration 3) — **stored, not interpreted**; the
+  `TaskContext` resolver stays EPIC 005 and the domain `Task` entity is
+  unchanged (no `context` field). `--depends-on` is repeatable.
+- **Graph mutation (insert / re-arrange).** `add dependency --task <id>
+  --depends-on <id>` and `remove dependency --task <id> --depends-on <id>`
+  edit the DAG after creation (rows in EPIC 003's `task_dependencies`) — the
+  model has no positions, so re-arranging work is edge editing and inserting
+  work is just `create task`. Both reject a mutation that would form a cycle
+  or reference an unknown task (`validateGraph`, EPIC 002) and a mutation of a
+  non-pending task (`DependenciesLockedError`, EPIC 002), each a named
+  non-zero error that leaves the graph unchanged; a successful edit emits
+  `task.dependencies_changed` (needs EPIC 003's `events` type CHECK to include
+  the 6th event type). Task-level dependencies only.
 - **CLI argument layer.** `node:util` `parseArgs`-based command router in
-  `apps/cli/` — explicit command table (grep-able, per `AGENTS.md`), `--help`
-  per command, human table output on stderr/`--json` on stdout for queries.
+  `apps/cli/` — **verb-first** explicit command table (grep-able, per
+  `AGENTS.md`, each key mapping 1:1 to a use-case class), `--help` per command,
+  human table output on stderr/`--json` on stdout for queries.
 - **Error surface.** Domain errors (unknown reference, illegal transition,
   duplicate name in scope) map to non-zero exits with one clear line — never
   a stack trace for an expected error.
@@ -76,7 +113,7 @@ node src/main.ts task create --objective "$TASK_API" --title "bad parent"
 
 ## Non-goals
 
-- No execution of tasks (EPIC 005) — `task list` may show everything pending.
+- No execution of tasks (EPIC 005) — `list task` may show everything pending.
 - No agent or workflow assignment semantics; fields are stored, not
   interpreted.
 - No REST/HTTP app, no interactive TUI — plain commands and exit codes.
