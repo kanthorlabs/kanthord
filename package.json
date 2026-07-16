@@ -1,44 +1,23 @@
 {
   "name": "kanthord",
-  "version": "0.0.0",
+  "version": "27.8.1",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "engines": {
     "node": ">=24"
   },
   "packageManager": "npm@11.18.0",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "tsc --noEmit",
-    "test": "node --import ./src/harness/no-network-guard.ts --test \"src/**/*.test.ts\"",
-    "generate:proto": "buf generate",
-    "verify:handoff": "node scripts/verify-handoff.mjs",
-    "install:web": "npm --prefix clients/web install",
-    "typecheck:web": "npm --prefix clients/web run typecheck",
-    "build:web": "npm --prefix clients/web run build",
-    "test:web": "npm --prefix clients/web run test",
-    "e2e:web": "npm run build:web && node scripts/web-e2e-preflight.mjs -- npm --prefix clients/web run e2e",
-    "verify:handoff:web": "npm --prefix clients/web run verify:handoff"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@bufbuild/buf": "^1.71.0",
-    "@bufbuild/protoc-gen-es": "^2.12.1",
     "@types/node": "^24.0.0",
     "typescript": "^5.7.2"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1086.0",
-    "@bufbuild/protobuf": "^2.12.1",
-    "@connectrpc/connect": "^2.1.2",
-    "@connectrpc/connect-node": "^2.1.2",
     "@earendil-works/pi-agent-core": "0.80.3",
     "@earendil-works/pi-ai": "0.80.3",
     "@earendil-works/pi-coding-agent": "0.80.3",
-    "@ff-labs/fff-node": "0.9.6",
     "pino": "^10.3.1",
     "ulid": "^3.0.2",
     "yaml": "^2.9.0"

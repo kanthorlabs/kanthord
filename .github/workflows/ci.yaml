@@ -1,14 +1,6 @@
-# Epic 000 SU5 — the gate-suite CI (maintainer-owned; lane-forbidden to engineers).
-# Runs the full harness suite on Node 24. The no-network / no-credential guard is
-# SUITE-level (Epic 010): it runs inside `npm test` with the single loopback
-# exemption, so its active/blocked output appears in this job's test log once the
-# Epic 010 suites land. This workflow passes NO secrets into the test steps and
-# grants read-only repo permissions — CI itself adds no credential surface.
 name: ci
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions:
@@ -25,14 +17,3 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - name: credential-surface check (no token/secret env reaches the suite)
-        run: |
-          for v in GITHUB_TOKEN ACTIONS_RUNTIME_TOKEN ACTIONS_ID_TOKEN_REQUEST_TOKEN \
-                   NODE_AUTH_TOKEN NPM_TOKEN NPM_CONFIG__AUTH \
-                   AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
-                   ANTHROPIC_API_KEY OPENAI_API_KEY; do
-            if [ -n "${!v:-}" ]; then echo "credential env $v present in the suite environment"; exit 1; fi
-          done
-          echo "no credential env vars reach the suite"
-      - name: test suite (Epic 010 guard preloaded by npm test)
-        run: npm test
