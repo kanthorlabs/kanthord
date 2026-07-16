@@ -1,0 +1,8 @@
+tasks:
+  - id: design
+  - id: implement
+    dependencies: [design]
+  - id: test
+    dependencies: [implement]
+  - id: docs
+    dependencies: [design]
