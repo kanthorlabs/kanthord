@@ -59,6 +59,11 @@ describe("FeatureList — features list surface (Story 001 T1)", () => {
       expect(screen.getAllByTestId(locators.features.list.row)[0]).toHaveTextContent("feat-001");
     });
 
+    it("first row contains the feature name", () => {
+      renderFeatureList({ features: THREE_FEATURES });
+      expect(screen.getAllByTestId(locators.features.list.row)[0]).toHaveTextContent("Feature 001");
+    });
+
     it("first row contains the feature status", () => {
       renderFeatureList({ features: THREE_FEATURES });
       expect(screen.getAllByTestId(locators.features.list.row)[0]).toHaveTextContent("running");

@@ -22,7 +22,7 @@
  *   - locators.planFlows.halt.{trigger,result,conflict} are not in locators.ts
  *   - locators.confirmDialog.{confirm,cancel} are not in locators.ts
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConnectError, Code } from "@connectrpc/connect";
@@ -96,6 +96,20 @@ describe("Halt — halt flow (Story 002 T2)", () => {
   });
 
   describe("running fixture — parked state + acting user", () => {
+    it("invokes onSuccess exactly once after a successful halt", async () => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeHaltClient([])}>
+          <Halt taskId={RUNNING_TASK.taskId} actor={RUNNING_TASK.actor} onSuccess={onSuccess} />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.halt.trigger));
+      await user.click(screen.getByTestId(locators.confirmDialog.confirm));
+      await screen.findByTestId(locators.planFlows.halt.result);
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
     it("renders the parked status in the result after confirming halt", async () => {
       const user = userEvent.setup();
       const callLog: string[] = [];
@@ -128,6 +142,20 @@ describe("Halt — halt flow (Story 002 T2)", () => {
   });
 
   describe("second-halt typed CONFLICT fixture", () => {
+    it("does not invoke onSuccess when the API returns a halt conflict", async () => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeConflictHaltClient([])}>
+          <Halt taskId={RUNNING_TASK.taskId} actor={RUNNING_TASK.actor} onSuccess={onSuccess} />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.halt.trigger));
+      await user.click(screen.getByTestId(locators.confirmDialog.confirm));
+      await screen.findByTestId(locators.planFlows.halt.conflict);
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
     it("renders the typed conflict element when the API returns AlreadyExists", async () => {
       const user = userEvent.setup();
       const callLog: string[] = [];

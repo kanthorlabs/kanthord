@@ -307,7 +307,7 @@ async function doApproveReplan(
   diff: ReplanDiff,
   actor: string,
   deps: ControlVerbsDeps,
-): Promise<{ generation: number }> {
+): Promise<{ generation: number; reopenedTaskIds: string[] }> {
   const { store, featureDirFn } = deps;
   const featureDir = featureDirFn(diff.featureId);
 
@@ -434,15 +434,24 @@ async function doApproveReplan(
   );
   const newGen = newGenRow?.max_gen ?? liveGen;
 
-  // 7. Re-open exit gates for tasks whose plan files were edited.
-  //    The task node_id is the `id:` field in the YAML frontmatter of the file.
+  // 7. Re-open exit gates for edited, compiled task files in request edit order.
+  const reopenedTaskIds: string[] = [];
   for (const edit of diff.edits) {
     const taskId = extractIdFromContent(edit.newContent);
-    if (taskId !== null) {
+    const compiledTask = taskId === null
+      ? undefined
+      : store.get<{ id: string }>(
+        "SELECT id FROM plan_node WHERE id = ? AND feature_id = ? AND generation = ? AND kind = 'task'",
+        taskId,
+        diff.featureId,
+        newGen,
+      );
+    if (compiledTask !== undefined) {
       store.run(
         "UPDATE scheduler_task SET exit_gate_passed = 0 WHERE node_id = ?",
         taskId,
       );
+      reopenedTaskIds.push(taskId!);
     }
   }
 
@@ -456,14 +465,14 @@ async function doApproveReplan(
     Date.now(),
   );
 
-  return { generation: newGen };
+  return { generation: newGen, reopenedTaskIds };
 }
 
 export async function approveReplan(
   diff: ReplanDiff,
   actor: string,
   deps: ControlVerbsDeps,
-): Promise<{ generation: number }> {
+): Promise<{ generation: number; reopenedTaskIds: string[] }> {
   return withFeatureLock(diff.featureId, () => doApproveReplan(diff, actor, deps));
 }
 

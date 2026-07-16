@@ -40,7 +40,7 @@ export function ApprovalActions({ vm, onSuccess }: ApprovalActionsProps) {
         id: vm.id,
         approve: true,
         reason: "",
-        confirmedCategory: "",
+        confirmedCategory: "approval",
       });
       await onSuccess?.();
       setApproved(true);

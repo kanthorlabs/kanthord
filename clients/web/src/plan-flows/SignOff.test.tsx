@@ -19,7 +19,7 @@
  *   - locators.planFlows.signOff.{trigger,result,generation,diagnostic} are not
  *     in clients/web/src/locators.ts
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SignOff } from "@/plan-flows/SignOff";
@@ -79,6 +79,19 @@ describe("SignOff — plan sign-off flow (Story 002 T1)", () => {
   });
 
   describe("valid-plan fixture", () => {
+    it("invokes onSuccess exactly once after a valid plan is signed off", async () => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeSignOffClient(VALID_PLAN_RESPONSE, [])}>
+          <SignOff featureId="feat-001" actor="operator@kanthord" onSuccess={onSuccess} />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.signOff.trigger));
+      await screen.findByTestId(locators.planFlows.signOff.result);
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
     it("renders the result area after sign-off on a valid plan", async () => {
       const user = userEvent.setup();
       const callLog: string[] = [];
@@ -125,6 +138,19 @@ describe("SignOff — plan sign-off flow (Story 002 T1)", () => {
   });
 
   describe("invalid-plan fixture — diagnostics verbatim", () => {
+    it("does not invoke onSuccess when sign-off returns invalid diagnostics", async () => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeSignOffClient(INVALID_PLAN_RESPONSE, [])}>
+          <SignOff featureId="feat-001" actor="operator@kanthord" onSuccess={onSuccess} />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.signOff.trigger));
+      await screen.findAllByTestId(locators.planFlows.signOff.diagnostic);
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
     it("renders the first diagnostic string verbatim (no rewording)", async () => {
       const user = userEvent.setup();
       const callLog: string[] = [];

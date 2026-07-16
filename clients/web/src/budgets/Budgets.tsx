@@ -14,6 +14,7 @@ import { BreakerStateBadge } from "@/components/status/BreakerStateBadge";
 import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
 import { Empty } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
+import { ListPage } from "@/components/templates/ListPage";
 import { useDaemonClient } from "@/auth/DaemonClientProvider";
 import { locators } from "@/locators";
 import type { BudgetVM } from "./budget-vm";
@@ -21,6 +22,9 @@ import type { BudgetVM } from "./budget-vm";
 interface BudgetsProps {
   budgets: BudgetVM[];
   onOverrideSuccess?: () => void | Promise<void>;
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
+  refreshError?: { message: string };
 }
 
 type OverrideResult =
@@ -28,7 +32,7 @@ type OverrideResult =
   | { kind: "success" }
   | { kind: "error"; message: string };
 
-export function Budgets({ budgets, onOverrideSuccess }: BudgetsProps) {
+export function Budgets({ budgets, onOverrideSuccess, fetchedAt, onRefresh, refreshError }: BudgetsProps) {
   const client = useDaemonClient();
   const [overrideResult, setOverrideResult] = useState<OverrideResult>({
     kind: "idle",
@@ -52,17 +56,14 @@ export function Budgets({ budgets, onOverrideSuccess }: BudgetsProps) {
     }
   }
 
-  // B5: replace raw <div> with the vendored <Empty> primitive
-  if (budgets.length === 0) {
-    return (
-      <Empty data-testid={locators.budgets.ledger.empty}>
-        No budgets found.
-      </Empty>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-4">
+    <ListPage title="Budgets" fetchedAt={fetchedAt} onRefresh={onRefresh} refreshError={refreshError}>
+      {budgets.length === 0 ? (
+        <Empty data-testid={locators.budgets.ledger.empty}>
+          No budgets found.
+        </Empty>
+      ) : (
+        <div className="flex flex-col gap-4">
       {overrideResult.kind === "success" && (
         <div
           data-testid={locators.budgets.override.successState}
@@ -163,6 +164,8 @@ export function Budgets({ budgets, onOverrideSuccess }: BudgetsProps) {
           </tbody>
         </table>
       </div>
-    </div>
+        </div>
+      )}
+    </ListPage>
   );
 }

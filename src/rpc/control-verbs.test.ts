@@ -202,6 +202,7 @@ Unit tests.
 const RP_FEAT_ID   = "feat-replan-001";
 const RP_TASK_A_ID = "task-rp-a";
 const RP_TASK_B_ID = "task-rp-b";
+const RP_TASK_C_ID = "task-rp-c";
 const RP_ACTOR     = "ulrich";
 
 const RP_EPIC_MD = `---
@@ -268,6 +269,32 @@ Nothing.
 Unit tests.
 `;
 
+/** Task B v2 — a second edited task, preserving the request edit order. */
+const RP_TASK_B_MD_V2 = `---
+id: ${RP_TASK_B_ID}
+workflow: tdd@1
+repo: rp-repo
+ticket_system: jira
+ticket: RP-2
+---
+
+## Prerequisites
+
+Updated prerequisites for task B after replan.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Nothing.
+
+## Tests
+
+Unit tests.
+`;
+
 /**
  * Task A broken — missing required ## Outputs and ## Tests sections.
  * Causes shapeLint to throw during compile, exercising the rollback path.
@@ -296,6 +323,32 @@ workflow: tdd@1
 repo: rp-repo
 ticket_system: jira
 ticket: RP-2
+---
+
+## Prerequisites
+
+None.
+
+## Inputs
+
+Nothing.
+
+## Outputs
+
+Nothing.
+
+## Tests
+
+Unit tests.
+`;
+
+/** Task C — valid and unedited in the replan response-order test. */
+const RP_TASK_C_MD = `---
+id: ${RP_TASK_C_ID}
+workflow: tdd@1
+repo: rp-repo
+ticket_system: jira
+ticket: RP-3
 ---
 
 ## Prerequisites
@@ -513,9 +566,10 @@ describe("src/rpc/control-verbs.ts", () => {
       rpTmpDir = await mkdtemp(join(tmpdir(), "ctl-replan-"));
       rpFeatureDir = join(rpTmpDir, RP_FEAT_ID);
 
-      // Create feature directory structure: two parallel stories with one task each.
+      // Create feature directory structure: three parallel stories with one task each.
       await mkdir(join(rpFeatureDir, "001-s1"), { recursive: true });
       await mkdir(join(rpFeatureDir, "002-s2"), { recursive: true });
+      await mkdir(join(rpFeatureDir, "003-s3"), { recursive: true });
 
       await writeFile(join(rpFeatureDir, "epic.md"), RP_EPIC_MD, "utf8");
       await writeFile(join(rpFeatureDir, "RUNBOOK.md"), "# Runbook\n", "utf8");
@@ -523,6 +577,8 @@ describe("src/rpc/control-verbs.ts", () => {
       await writeFile(join(rpFeatureDir, "001-s1", "001-task-a.md"), RP_TASK_A_MD, "utf8");
       await writeFile(join(rpFeatureDir, "002-s2", "INDEX.md"), "# Story 2\n", "utf8");
       await writeFile(join(rpFeatureDir, "002-s2", "001-task-b.md"), RP_TASK_B_MD, "utf8");
+      await writeFile(join(rpFeatureDir, "003-s3", "INDEX.md"), "# Story 3\n", "utf8");
+      await writeFile(join(rpFeatureDir, "003-s3", "001-task-c.md"), RP_TASK_C_MD, "utf8");
 
       // Open store and initialise schema; compile creates plan tables.
       rpStore = openStore(join(rpTmpDir, "test.db"), { busyTimeout: 1000 });
@@ -541,6 +597,10 @@ describe("src/rpc/control-verbs.ts", () => {
         "INSERT INTO scheduler_task (node_id, feature_id, status, exit_gate_passed, max_attempts) VALUES (?, ?, ?, ?, ?)",
         RP_TASK_B_ID, RP_FEAT_ID, "pending", 1, 3,
       );
+      rpStore.run(
+        "INSERT INTO scheduler_task (node_id, feature_id, status, exit_gate_passed, max_attempts) VALUES (?, ?, ?, ?, ?)",
+        RP_TASK_C_ID, RP_FEAT_ID, "pending", 1, 3,
+      );
     });
 
     after(async () => {
@@ -548,7 +608,7 @@ describe("src/rpc/control-verbs.ts", () => {
       await rm(rpTmpDir, { recursive: true, force: true });
     });
 
-    test("approveReplan — applies edit set, mints G+1, re-opens only the affected task gate", async () => {
+    test("approveReplan — applies edit set, mints G+1, and returns edited task ids in edit order", async () => {
       const deps: ControlVerbsDeps = {
         store: rpStore,
         featureDirFn: (_id: string) => rpFeatureDir,
@@ -556,11 +616,19 @@ describe("src/rpc/control-verbs.ts", () => {
       const diff: ReplanDiff = {
         featureId: RP_FEAT_ID,
         baseGeneration: 1,
-        edits: [{ path: "001-s1/001-task-a.md", newContent: RP_TASK_A_MD_V2 }],
+        edits: [
+          { path: "001-s1/001-task-a.md", newContent: RP_TASK_A_MD_V2 },
+          { path: "002-s2/001-task-b.md", newContent: RP_TASK_B_MD_V2 },
+        ],
       };
 
       const result = await approveReplan(diff, RP_ACTOR, deps);
       assert.equal(result.generation, 2, "approveReplan must mint G+1=2");
+      assert.deepEqual(
+        result.reopenedTaskIds,
+        [RP_TASK_A_ID, RP_TASK_B_ID],
+        "approveReplan must return only edited task ids in request edit order",
+      );
 
       // plan_generation must have a G=2 row.
       const genRow = rpStore.get<{ max_gen: number }>(
@@ -581,12 +649,24 @@ describe("src/rpc/control-verbs.ts", () => {
         "edited task's exit_gate_passed must be re-opened (reset to 0)",
       );
 
-      // Unaffected task (parallel story, file not edited): gate stays closed (1).
-      const unaffectedRow = rpStore.get<{ exit_gate_passed: number }>(
+      // Second affected task (its file was edited): exit gate is also re-opened.
+      const secondAffectedRow = rpStore.get<{ exit_gate_passed: number }>(
         "SELECT exit_gate_passed FROM scheduler_task WHERE node_id = ?",
         RP_TASK_B_ID,
       );
-      assert.ok(unaffectedRow !== undefined, "scheduler_task row for task-b must exist");
+      assert.ok(secondAffectedRow !== undefined, "scheduler_task row for task-b must exist");
+      assert.equal(
+        secondAffectedRow.exit_gate_passed,
+        0,
+        "edited task-b exit_gate_passed must be re-opened (reset to 0)",
+      );
+
+      // Unaffected task (parallel story, file not edited): gate stays closed (1).
+      const unaffectedRow = rpStore.get<{ exit_gate_passed: number }>(
+        "SELECT exit_gate_passed FROM scheduler_task WHERE node_id = ?",
+        RP_TASK_C_ID,
+      );
+      assert.ok(unaffectedRow !== undefined, "scheduler_task row for task-c must exist");
       assert.equal(
         unaffectedRow.exit_gate_passed,
         1,

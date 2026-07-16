@@ -40,7 +40,7 @@
 
 import { describe, test, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { openStore } from "../foundations/sqlite-store.ts";
@@ -49,12 +49,39 @@ import { applyCompiledPlanMigration } from "../compiler/compile.ts";
 import { appendTimelineEvent } from "../metrics/task-timeline.ts";
 import { JsonlLog } from "../foundations/jsonl.ts";
 import { createStatusServer } from "./status-server.ts";
+import {
+  getPendingReplanProposal,
+  recordReplanProposal,
+} from "../replan/proposal.ts";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { createClient } from "@connectrpc/connect";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { DaemonService } from "../generated/kanthord/v1/daemon_pb.js";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { StatusServer } from "./status-server.ts";
+
+type PendingReplanProposal = {
+  proposalId: string;
+  featureId: string;
+  baseGeneration: bigint;
+  baseCompileHash: string;
+  createdAt: bigint;
+  edits: Array<{ path: string; newContent: string }>;
+  displayFiles: Array<{
+    path: string;
+    lines: Array<{ kind: string; content: string }>;
+  }>;
+};
+
+type PendingReplanClient = {
+  getPendingReplanProposal(request: { featureId: string }): Promise<{
+    proposal: PendingReplanProposal | undefined;
+  }>;
+  approveReplan(request: { proposalId: string; actor: string }): Promise<{
+    newGeneration: bigint;
+    reopenedTaskIds: string[];
+  }>;
+};
 
 // ---------------------------------------------------------------------------
 // Golden fixture constants (Story-named Mocks)
@@ -76,6 +103,24 @@ const INBOX_ID = "wire1-inbox-001";
 const DAEMON_VERSION = "wire1-test-0.1.0";
 const BUDGET_CEILING = 20.0;
 const VERB_REGISTRY = [{ verb: "merge_pr", tier: "approval-required" }];
+const PUBLIC_CONFIGURATION = {
+  diffEscalationPolicy: "escalate_all_diffs",
+  brokerDeclarations: [
+    {
+      verb: "github.create_pr",
+      tier: "auto_with_audit",
+      timeoutMs: 120_000,
+      idempotencyWindowMs: 3_600_000,
+      retryMax: 5,
+      retryBackoff: "exponential",
+      pollIntervalMs: 10_000,
+      terminalStates: ["done", "failed", "escalation_needed"],
+      requestsPerMinute: 60,
+      observedStateCanRegress: true,
+      pendingExpiryMs: 300_000,
+    },
+  ],
+};
 const SLOT_REGISTRY = [
   {
     name: "slot-alpha",
@@ -216,6 +261,7 @@ describe("src/daemon/control-plane-server.ts — WIRE-1 serve-wiring + D1 auth",
       featureDataRoot: tmpDir,
       nowMs: 1_000_000,
       verbRegistry: VERB_REGISTRY,
+      publicConfiguration: PUBLIC_CONFIGURATION,
       slotRegistry: SLOT_REGISTRY,
       getBudgetCeiling: (_taskId: string) => BUDGET_CEILING,
       daemonVersion: DAEMON_VERSION,
@@ -359,6 +405,28 @@ describe("src/daemon/control-plane-server.ts — WIRE-1 serve-wiring + D1 auth",
     assert.equal(res.version, DAEMON_VERSION, "version must come from injected daemonVersion");
     assert.equal(res.uptimeSeconds, 99n, "uptimeSeconds must come from injected uptimeFn");
     assert.equal(res.lastPing?.present, false, "lastPing.present=false (Epic 029 not active)");
+  });
+
+  test("getPublicConfiguration — handler routes the typed safe YAML configuration without a path or credential", async () => {
+    const client = makeClient(srvHost, srvPort);
+    const result = await client.getPublicConfiguration({});
+    assert.equal(result.diffEscalationPolicy, PUBLIC_CONFIGURATION.diffEscalationPolicy);
+    assert.equal(result.brokerDeclarations.length, 1);
+    const declaration = result.brokerDeclarations[0];
+    assert.ok(declaration !== undefined, "expected the allowlisted broker declaration");
+    assert.equal(declaration.verb, "github.create_pr");
+    assert.equal(declaration.tier, "auto_with_audit");
+    assert.equal(declaration.timeoutMs, 120_000n);
+    assert.equal(declaration.idempotencyWindowMs, 3_600_000n);
+    assert.equal(declaration.retryMax, 5);
+    assert.equal(declaration.retryBackoff, "exponential");
+    assert.equal(declaration.pollIntervalMs, 10_000n);
+    assert.deepEqual(declaration.terminalStates, ["done", "failed", "escalation_needed"]);
+    assert.equal(declaration.requestsPerMinute, 60);
+    assert.equal(declaration.observedStateCanRegress, true);
+    assert.equal(declaration.pendingExpiryMs, 300_000n);
+    assert.equal("configPath" in result, false, "public response must not disclose a configuration path");
+    assert.equal("credentials" in result, false, "public response must not disclose credentials");
   });
 
   // ─── getTaskTimeline ─────────────────────────────────────────────────────
@@ -593,6 +661,8 @@ describe("src/daemon/control-plane-server.ts — WIRE-2 N1/N2/N3/N4/N5 field pop
   const W2_DIFF_ID = "wire2-inbox-diff-001"; // diff evidence → structured DiffEvidence
   const W2_TEXT_ID = "wire2-inbox-text-001"; // text evidence → Evidence{type:"text",text}
   const W2_APPR_ID = "wire2-inbox-appr-001"; // approval; evidence.op_id → brokerOpId (N3)
+  const W2_APPR_DETAILS_ID = "wire2-inbox-appr-details-001";
+  const W2_ESC_PAYLOAD_SUMMARY_ID = "wire2-inbox-esc-payload-summary-001";
 
   // Broker op for N5
   const W2_OP_RECON = "op_W2SERVER0001";
@@ -664,6 +734,28 @@ describe("src/daemon/control-plane-server.ts — WIRE-2 N1/N2/N3/N4/N5 field pop
       "INSERT INTO inbox_items (id, kind, status, created_at, evidence) VALUES (?, ?, ?, ?, ?)",
       W2_APPR_ID, "approval", "open", 2_000_003,
       JSON.stringify({ op_id: "op_W2APPR001", task_id: W2_TASK_A }),
+    );
+    // Approval evidence is shaped by createApprovalItem: its verb and desired
+    // effect must populate the item without requiring text evidence.
+    w2Store.run(
+      "INSERT INTO inbox_items (id, kind, status, created_at, evidence) VALUES (?, ?, ?, ?, ?)",
+      W2_APPR_DETAILS_ID, "approval", "open", 2_000_004,
+      JSON.stringify({
+        op_id: "op_W2APPRDETAILS001",
+        verb: "github.merge",
+        desired_effect: "acme/kanthord#42",
+      }),
+    );
+    // Escalation evidence is shaped by createEscalationItem, which records a
+    // human-safe payload summary rather than a pre-built text evidence field.
+    w2Store.run(
+      "INSERT INTO inbox_items (id, kind, status, created_at, evidence) VALUES (?, ?, ?, ?, ?)",
+      W2_ESC_PAYLOAD_SUMMARY_ID, "escalation", "open", 2_000_005,
+      JSON.stringify({
+        task_id: W2_TASK_A,
+        reason: "scope-violation",
+        payload_summary: "blocked src/forbidden/secret.ts",
+      }),
     );
 
     // ── budget_ledger (N4 — 2 tasks) ─────────────────────────────────────────
@@ -827,6 +919,34 @@ describe("src/daemon/control-plane-server.ts — WIRE-2 N1/N2/N3/N4/N5 field pop
     );
   });
 
+  test("getInboxItem — approval evidence maps verb and desired effect without text fallback", async () => {
+    const client = makeClient(w2Host, w2Port);
+    const res = await client.getInboxItem({ id: W2_APPR_DETAILS_ID });
+    assert.ok(res.item !== undefined, "expected approval item in getInboxItem response");
+    assert.equal(
+      res.item.type,
+      "github.merge",
+      "approval type must come from evidence.verb without text evidence",
+    );
+    assert.equal(
+      res.item.summary,
+      "acme/kanthord#42",
+      "approval summary must come from evidence.desired_effect without text evidence",
+    );
+  });
+
+  test("getInboxItem — createEscalationItem payload_summary becomes text evidence", async () => {
+    const client = makeClient(w2Host, w2Port);
+    const res = await client.getInboxItem({ id: W2_ESC_PAYLOAD_SUMMARY_ID });
+    assert.ok(res.item !== undefined, "expected escalation item in getInboxItem response");
+    assert.ok(
+      res.item.evidence !== undefined,
+      "payload_summary evidence must be present so the UI can render ring-1 context",
+    );
+    assert.equal(res.item.evidence.type, "text");
+    assert.equal(res.item.evidence.text, "blocked src/forbidden/secret.ts");
+  });
+
   // ── N4 — ListBudgets multi-task (characterization — intentional first-run PASS) ──
   //
   // The listBudgets handler already correctly iterates all budget_ledger rows and
@@ -971,6 +1091,144 @@ describe("src/daemon/control-plane-server.ts — getInboxItem error-path regress
       caught?.code,
       Code.NotFound,
       `ES4: expected Code.NotFound; got ${caught !== undefined ? caught.code : "no error thrown"}`,
+    );
+  });
+});
+
+describe("src/daemon/control-plane-server.ts — durable pending replan proposals", () => {
+  const FEATURE_ID = "pending-replan-feature";
+  const PROPOSAL_ID = "pending-replan-proposal";
+  const TASK_ID = "pending-replan-task";
+  const TASK_PATH = "001-plan/001-task.md";
+  const ORIGINAL_TASK = `---
+id: pending-replan-task
+workflow: tdd@1
+repo: backend
+ticket_system: jira
+ticket: JIRA-900
+---
+
+## Prerequisites
+
+The original plan is present.
+
+## Inputs
+
+The pending proposal.
+
+## Outputs
+
+The approved plan.
+
+## Tests
+
+Original task content.
+`;
+  const STORED_TASK = ORIGINAL_TASK.replace("Original task content.", "Stored proposal content.");
+  const PENDING_PROPOSAL = {
+    proposalId: PROPOSAL_ID,
+    featureId: FEATURE_ID,
+    baseGeneration: 0,
+    baseCompileHash: "pending-replan-base-hash",
+    createdAt: 1_721_000_000_000,
+    edits: [{ path: TASK_PATH, newContent: STORED_TASK }],
+    displayFiles: [{
+      path: TASK_PATH,
+      lines: [
+        { kind: "del", content: "Original task content." },
+        { kind: "add", content: "Stored proposal content." },
+      ],
+    }],
+  };
+
+  let tempDir = "";
+  let replanStore: Store;
+  let replanServer: StatusServer;
+  let host = "";
+  let port = 0;
+
+  before(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "pending-replan-server-"));
+    replanStore = openStore(join(tempDir, "replan.db"), { busyTimeout: 1_000 });
+    initSchema(replanStore);
+    applyCompiledPlanMigration(replanStore);
+    await mkdir(join(tempDir, FEATURE_ID, "001-plan"), { recursive: true });
+    await writeFile(join(tempDir, FEATURE_ID, "epic.md"), `---
+id: ${FEATURE_ID}
+repo: backend
+ticket_system: jira
+ticket: JIRA-899
+---
+
+## Acceptance
+
+The pending replan is approved.
+`);
+    await writeFile(join(tempDir, FEATURE_ID, "RUNBOOK.md"), "# Runbook\n");
+    await writeFile(join(tempDir, FEATURE_ID, "001-plan", "INDEX.md"), "# Plan\n");
+    await writeFile(join(tempDir, FEATURE_ID, TASK_PATH), ORIGINAL_TASK);
+    recordReplanProposal(replanStore, PENDING_PROPOSAL);
+    replanServer = createStatusServer({
+      store: replanStore,
+      port: 0,
+      bind: "127.0.0.1",
+      featureDirFn: (featureId: string) => join(tempDir, featureId),
+    } as Parameters<typeof createStatusServer>[0]);
+    const address = await replanServer.start();
+    host = address.host;
+    port = address.port;
+  });
+
+  after(async () => {
+    await replanServer.stop();
+    replanStore.close();
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  test("getPendingReplanProposal returns the server-stored pending proposal", async () => {
+    const client = makeClient(host, port) as unknown as PendingReplanClient;
+
+    const result = await client.getPendingReplanProposal({ featureId: FEATURE_ID });
+
+    assert.ok(result.proposal !== undefined, "expected the stored pending proposal");
+    assert.equal(result.proposal.proposalId, PROPOSAL_ID);
+    assert.equal(result.proposal.featureId, FEATURE_ID);
+    assert.equal(result.proposal.baseGeneration, 0n);
+    assert.equal(result.proposal.baseCompileHash, "pending-replan-base-hash");
+    assert.equal(result.proposal.createdAt, 1_721_000_000_000n);
+    assert.deepEqual(
+      result.proposal.edits.map(({ path, newContent }) => ({ path, newContent })),
+      PENDING_PROPOSAL.edits,
+    );
+    assert.deepEqual(
+      result.proposal.displayFiles.map(({ path, lines }) => ({
+        path,
+        lines: lines.map(({ kind, content }) => ({ kind, content })),
+      })),
+      PENDING_PROPOSAL.displayFiles,
+    );
+  });
+
+  test("approveReplan consumes the server-stored edit and approves only after it succeeds", async () => {
+    const client = makeClient(host, port) as unknown as PendingReplanClient;
+
+    const response = await client.approveReplan({ proposalId: PROPOSAL_ID, actor: "operator@kanthord" });
+
+    assert.deepEqual(
+      response.reopenedTaskIds,
+      [TASK_ID],
+      "Connect approval response must forward the reopened task ids rather than an empty list",
+    );
+
+    assert.equal(
+      await getPendingReplanProposal(replanStore, FEATURE_ID),
+      undefined,
+      "a successful server-side application must remove the proposal from pending reads",
+    );
+    assert.equal(
+      await readFile(join(tempDir, FEATURE_ID, TASK_PATH), "utf8"),
+      STORED_TASK,
+      "the approved file content must come from the stored proposal, not a client edit payload",
     );
   });
 });

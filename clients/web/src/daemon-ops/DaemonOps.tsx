@@ -4,6 +4,8 @@ import { OpsPage } from "@/components/templates/OpsPage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useDaemonClient } from "@/auth/DaemonClientProvider";
+import { Configuration } from "@/daemon-ops/Configuration";
+import type { PublicConfiguration } from "@/daemon-ops/Configuration";
 import { locators } from "@/locators";
 
 export interface VerifyReportVM {
@@ -30,22 +32,43 @@ export interface DaemonOpsProps {
   loading?: boolean;
   error?: { message: string };
   status?: DaemonStatusData;
+  configuration?: PublicConfiguration;
   onVerifySuccess?: () => void | Promise<void>;
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
+  refreshError?: { message: string };
 }
 
 export function DaemonOps(props: DaemonOpsProps = {}) {
   if (props.loading) return <DataStates loading />;
   if (props.error !== undefined) return <DataStates error={props.error} />;
   if (props.status === undefined) return <DataStates error={{ message: "Daemon status is unavailable." }} />;
-  return <DaemonOpsContent status={props.status} onVerifySuccess={props.onVerifySuccess} />;
+  return (
+    <DaemonOpsContent
+      status={props.status}
+      configuration={props.configuration}
+      onVerifySuccess={props.onVerifySuccess}
+      fetchedAt={props.fetchedAt}
+      onRefresh={props.onRefresh}
+      refreshError={props.refreshError}
+    />
+  );
 }
 
 function DaemonOpsContent({
   status,
+  configuration,
   onVerifySuccess,
+  fetchedAt,
+  onRefresh,
+  refreshError,
 }: {
   status: DaemonStatusData;
+  configuration?: PublicConfiguration;
   onVerifySuccess?: () => void | Promise<void>;
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
+  refreshError?: { message: string };
 }) {
   const client = useDaemonClient();
   const [verifyReport, setVerifyReport] = useState<VerifyReportVM | null>(null);
@@ -64,7 +87,7 @@ function DaemonOpsContent({
 
   const lastPing = status.lastPing;
   return (
-    <OpsPage>
+    <OpsPage fetchedAt={fetchedAt} onRefresh={onRefresh} refreshError={refreshError}>
       <Card data-testid={locators.daemonOps.healthCard}>
         <CardHeader><CardTitle>Dead-man health</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-2">
@@ -97,6 +120,7 @@ function DaemonOpsContent({
           )}
         </CardContent>
       </Card>
+      {configuration !== undefined && <Configuration configuration={configuration} />}
     </OpsPage>
   );
 }

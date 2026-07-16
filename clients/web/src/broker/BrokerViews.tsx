@@ -10,7 +10,10 @@ type BrokerVerb = Awaited<ReturnType<DaemonClient["listBrokerVerbs"]>>["verbs"][
 export interface BrokerOpsViewProps {
   loading?: boolean;
   error?: { message: string };
+  refreshError?: { message: string };
   operations?: readonly BrokerOp[];
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
 }
 
 export interface BrokerVerbsViewProps {
@@ -20,7 +23,7 @@ export interface BrokerVerbsViewProps {
 }
 
 export function BrokerOpsView(props: BrokerOpsViewProps = {}) {
-  const { loading, error, operations = [] } = props;
+  const { loading, error, refreshError, operations = [], fetchedAt, onRefresh } = props;
   const inFlightOps = operations.filter((op) => !op.expiring && op.state === "in_flight");
   const pendingOps = operations.filter((op) => !op.expiring && op.state === "pending");
   const expiringOps = operations.filter((op) => op.expiring);
@@ -31,7 +34,7 @@ export function BrokerOpsView(props: BrokerOpsViewProps = {}) {
   ] as const;
 
   return (
-    <ListPage title="Broker Operations" loading={loading} error={error}>
+    <ListPage title="Broker Operations" loading={loading} error={error} refreshError={refreshError} fetchedAt={fetchedAt} onRefresh={onRefresh}>
       {!loading && error === undefined && (operations.length === 0 ? (
         <Empty data-testid={locators.broker.ops.empty}>No broker operations.</Empty>
       ) : (

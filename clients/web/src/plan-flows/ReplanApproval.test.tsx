@@ -25,7 +25,7 @@
  *     are not in clients/web/src/locators.ts
  *   - locators.diffPane.root is not in locators.ts (also needed for T3 DiffPane test)
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConnectError, Code } from "@connectrpc/connect";
@@ -63,6 +63,19 @@ const APPROVE_RESPONSE = {
   reopenedTaskIds: ["task-003", "task-004"],
 };
 
+const PENDING_PROPOSAL = {
+  proposalId: "replan-proposal-ui",
+  featureId: "feat-001",
+  baseGeneration: BASE_GENERATION,
+  baseCompileHash: "ui-base-hash",
+  createdAt: 1_721_000_000_000n,
+  edits: [{ path: "stories/S2.md", newContent: "Revised approach for story" }],
+  displayFiles: DIFF_FILES.map((file) => ({
+    path: file.path,
+    lines: file.lines.map((line) => ({ kind: line.type, content: line.content })),
+  })),
+};
+
 function makeApproveClient(callLog: string[]): DaemonClient {
   return {
     approveReplan: async () => {
@@ -80,6 +93,14 @@ function makeConflictApproveClient(callLog: string[]): DaemonClient {
         "base generation mismatch: expected 4, current is 6",
         Code.Aborted
       );
+    },
+  } as unknown as DaemonClient;
+}
+
+function makeFailedApproveClient(error: Error): DaemonClient {
+  return {
+    approveReplan: async () => {
+      throw error;
     },
   } as unknown as DaemonClient;
 }
@@ -161,6 +182,25 @@ describe("ReplanApproval — re-planning diff approval flow (Story 002 T3)", () 
   });
 
   describe("approve invokes approveReplan and renders re-opened gates", () => {
+    it("invokes onSuccess exactly once after a successful approval", async () => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeApproveClient([])}>
+          <ReplanApproval
+            featureId="feat-001"
+            actor="operator@kanthord"
+            baseGeneration={BASE_GENERATION}
+            files={DIFF_FILES}
+            onSuccess={onSuccess}
+          />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.replan.approve));
+      await screen.findByTestId(locators.planFlows.replan.reopenedTasks);
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
     it("renders the re-opened tasks section after approve", async () => {
       const user = userEvent.setup();
       const callLog: string[] = [];
@@ -240,7 +280,51 @@ describe("ReplanApproval — re-planning diff approval flow (Story 002 T3)", () 
     });
   });
 
+  describe("server-stored pending proposal", () => {
+    it("renders the live diff and base generation, then approves with only proposalId and actor", async () => {
+      const user = userEvent.setup();
+      const requests: unknown[] = [];
+      const client = {
+        approveReplan: async (request: { proposalId: string; actor: string }) => {
+          requests.push(request);
+          return APPROVE_RESPONSE;
+        },
+      } as unknown as DaemonClient;
+
+      render(
+        <DaemonClientProvider client={client}>
+          <ReplanApproval proposal={PENDING_PROPOSAL} actor="operator@kanthord" />
+        </DaemonClientProvider>,
+      );
+
+      expect(screen.getByTestId(locators.diffPane.root)).toHaveTextContent("Revised approach for story");
+      expect(screen.getByTestId(locators.planFlows.replan.baseGeneration)).toHaveTextContent("4");
+      await user.click(screen.getByTestId(locators.planFlows.replan.approve));
+      await screen.findByTestId(locators.planFlows.replan.reopenedTasks);
+      expect(requests).toEqual([{ proposalId: PENDING_PROPOSAL.proposalId, actor: "operator@kanthord" }]);
+    });
+  });
+
   describe("base-generation-mismatch CONFLICT fixture (Code.Aborted)", () => {
+    it("does not invoke onSuccess when approval reports a generation conflict", async () => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeConflictApproveClient([])}>
+          <ReplanApproval
+            featureId="feat-001"
+            actor="operator@kanthord"
+            baseGeneration={BASE_GENERATION}
+            files={DIFF_FILES}
+            onSuccess={onSuccess}
+          />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.replan.approve));
+      await screen.findByTestId(locators.planFlows.replan.conflict);
+      expect(onSuccess).not.toHaveBeenCalled();
+    });
     it("renders the typed conflict element on generation mismatch", async () => {
       const user = userEvent.setup();
       const callLog: string[] = [];
@@ -318,6 +402,33 @@ describe("ReplanApproval — re-planning diff approval flow (Story 002 T3)", () 
       await screen.findByTestId(locators.planFlows.replan.conflict);
       // Exactly one attempt, no retry or double-apply
       expect(callLog).toEqual(["approveReplan"]);
+    });
+  });
+
+  describe("generic approval failures", () => {
+    it.each([
+      new ConnectError("service failure", Code.Internal),
+      new Error("transport failure"),
+    ])("renders an inline destructive alert and does not invoke onSuccess for %p", async (error) => {
+      const user = userEvent.setup();
+      const onSuccess = vi.fn();
+      render(
+        <DaemonClientProvider client={makeFailedApproveClient(error)}>
+          <ReplanApproval
+            featureId="feat-001"
+            actor="operator@kanthord"
+            baseGeneration={BASE_GENERATION}
+            files={DIFF_FILES}
+            onSuccess={onSuccess}
+          />
+        </DaemonClientProvider>
+      );
+
+      await user.click(screen.getByTestId(locators.planFlows.replan.approve));
+      const failure = await screen.findByTestId(locators.planFlows.replan.error);
+      expect(failure).toHaveAttribute("role", "alert");
+      expect(failure).toHaveClass("text-destructive");
+      expect(onSuccess).not.toHaveBeenCalled();
     });
   });
 });

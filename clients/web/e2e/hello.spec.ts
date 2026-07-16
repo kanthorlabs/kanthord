@@ -1,11 +1,16 @@
 import { test, expect } from "@playwright/test";
 import { locators } from "../src/locators.ts";
 
-// SU7 bootstrap E2E: the dashboard loads over TLS (the preflight serves the
-// self-signed SU5 cert) and renders the token-styled hello-world primitive.
-// Proves browser-over-TLS + the design path end to end.
-test("dashboard loads over TLS and renders the hello-world banner", async ({ page }) => {
+// Bootstrap smoke: the production bundle reaches the live AppShell over TLS.
+test("dashboard loads over TLS inside the app shell", async ({ page }, testInfo) => {
   await page.goto("/");
-  await expect(page.getByTestId(locators.helloBanner.title)).toHaveText("kanthord control plane");
-  await expect(page.getByTestId(locators.helloBanner.action)).toBeVisible();
+  if (testInfo.project.name === "iphone-13") {
+    await expect(page.getByTestId(locators.appShell.mobileToggle)).toBeVisible();
+    await page.getByTestId(locators.appShell.mobileToggle).click();
+    await expect(page.getByTestId(locators.appShell.navItem("features"))).toBeVisible();
+  } else {
+    await expect(page.getByTestId(locators.appShell.nav)).toBeVisible();
+  }
+  await expect(page.getByTestId(locators.appShell.content)).toBeVisible();
+  await expect(page.getByTestId(locators.features.list.table)).toBeVisible();
 });

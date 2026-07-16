@@ -16,48 +16,69 @@ import { useState } from "react";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { useDaemonClient } from "@/auth/DaemonClientProvider";
 import { DiffPane } from "@/components/DiffPane";
-import type { DiffFile } from "@/components/DiffPane";
+import type { DiffFile, DiffLine } from "@/components/DiffPane";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import type { ReplanProposal } from "@/gen/kanthord/v1/daemon_pb.ts";
 import { locators } from "@/locators";
 
-interface ReplanApprovalProps {
+type ReplanApprovalProps = ({
+  proposal: PendingReplanProposal;
+  actor: string;
+} | {
   featureId: string;
   actor: string;
   baseGeneration: bigint;
   files: DiffFile[];
-}
+}) & {
+  onSuccess?: () => void | Promise<void>;
+};
 
 type State =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "approved"; reopenedTaskIds: string[] }
-  | { kind: "conflict"; message: string };
+  | { kind: "conflict"; message: string }
+  | { kind: "error"; message: string };
 
 export function ReplanApproval({
-  featureId,
   actor,
-  baseGeneration,
-  files,
+  onSuccess,
+  ...props
 }: ReplanApprovalProps) {
   const client = useDaemonClient();
   const [state, setState] = useState<State>({ kind: "idle" });
+  let baseGeneration: bigint;
+  let files: DiffFile[];
+  if ("proposal" in props) {
+    baseGeneration = props.proposal.baseGeneration;
+    files = props.proposal.displayFiles.map((file) => ({
+      path: file.path,
+      lines: file.lines.map((line) => ({ type: diffLineType(line.kind), content: line.content })),
+    }));
+  } else {
+    baseGeneration = props.baseGeneration;
+    files = props.files;
+  }
 
   async function handleApprove() {
     setState({ kind: "loading" });
     try {
-      const result = await client.approveReplan({
-        featureId,
-        baseGeneration,
-        actor,
-        edits: [],
-      });
+      const result = "proposal" in props
+        ? await client.approveReplan({ proposalId: props.proposal.proposalId, actor })
+        : await client.approveReplan({
+          featureId: props.featureId,
+          baseGeneration,
+          actor,
+          edits: [],
+        });
       setState({ kind: "approved", reopenedTaskIds: result.reopenedTaskIds });
+      await onSuccess?.();
     } catch (err) {
       if (err instanceof ConnectError && err.code === Code.Aborted) {
         setState({ kind: "conflict", message: err.message });
       } else {
-        throw err;
+        setState({ kind: "error", message: err instanceof Error ? err.message : String(err) });
       }
     }
   }
@@ -80,7 +101,7 @@ export function ReplanApproval({
         <Button
           data-testid={locators.planFlows.replan.approve}
           onClick={handleApprove}
-          disabled={state.kind === "loading"}
+          disabled={state.kind === "loading" || state.kind === "approved"}
         >
           Approve Replan
         </Button>
@@ -110,6 +131,21 @@ export function ReplanApproval({
           {state.message}
         </div>
       )}
+
+      {state.kind === "error" && (
+        <Alert variant="destructive" data-testid={locators.planFlows.replan.error}>
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
+}
+
+type PendingReplanProposal = Omit<ReplanProposal, "$typeName" | "edits" | "displayFiles"> & {
+  edits: Array<{ path: string; newContent: string }>;
+  displayFiles: Array<{ path: string; lines: Array<{ kind: string; content: string }> }>;
+};
+
+function diffLineType(kind: string): DiffLine["type"] {
+  return kind === "add" || kind === "del" || kind === "ctx" ? kind : "ctx";
 }

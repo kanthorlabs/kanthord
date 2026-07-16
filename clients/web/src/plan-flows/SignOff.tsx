@@ -17,6 +17,7 @@ import { locators } from "@/locators";
 interface SignOffProps {
   featureId: string;
   actor: string;
+  onSuccess?: () => void | Promise<void>;
 }
 
 type State =
@@ -25,7 +26,7 @@ type State =
   | { kind: "valid"; generation: bigint }
   | { kind: "invalid"; diagnostics: string[] };
 
-export function SignOff({ featureId, actor }: SignOffProps) {
+export function SignOff({ featureId, actor, onSuccess }: SignOffProps) {
   const client = useDaemonClient();
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -34,6 +35,7 @@ export function SignOff({ featureId, actor }: SignOffProps) {
     const result = await client.signOffPlan({ featureId, actor });
     if (result.valid) {
       setState({ kind: "valid", generation: result.generation });
+      await onSuccess?.();
     } else {
       setState({ kind: "invalid", diagnostics: result.diagnostics });
     }

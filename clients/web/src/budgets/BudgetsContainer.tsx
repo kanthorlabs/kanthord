@@ -8,7 +8,7 @@ import type { BudgetVM } from "@/budgets/budget-vm";
 type BudgetsState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "data"; budgets: BudgetVM[] };
+  | { status: "data"; budgets: BudgetVM[]; fetchedAt: Date; refreshError?: { message: string } };
 
 export function BudgetsContainer() {
   const client = useDaemonClient();
@@ -21,11 +21,13 @@ export function BudgetsContainer() {
     try {
       const result = await client.listBudgets({});
       if (version === requestVersion.current) {
-        setState({ status: "data", budgets: toBudgetsVM(result) });
+        setState({ status: "data", budgets: toBudgetsVM(result), fetchedAt: new Date() });
       }
     } catch (reason: unknown) {
       if (version === requestVersion.current) {
-        setState({ status: "error", message: String(reason) });
+        setState((current) => current.status === "data"
+          ? { ...current, refreshError: { message: String(reason) } }
+          : { status: "error", message: String(reason) });
       }
     }
   }, [client]);
@@ -39,5 +41,5 @@ export function BudgetsContainer() {
 
   if (state.status === "loading") return <DataStates loading />;
   if (state.status === "error") return <DataStates error={{ message: state.message }} />;
-  return <Budgets budgets={state.budgets} onOverrideSuccess={() => load(false)} />;
+  return <Budgets budgets={state.budgets} fetchedAt={state.fetchedAt} refreshError={state.refreshError} onRefresh={() => load(false)} onOverrideSuccess={() => load(false)} />;
 }

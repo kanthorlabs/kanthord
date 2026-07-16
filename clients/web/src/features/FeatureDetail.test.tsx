@@ -36,6 +36,19 @@ const GOLDEN_FEATURE = {
   journalView: "## Journal\n2026-07-15 - session started",
 };
 
+const PENDING_REPLAN = {
+  proposalId: "replan-proposal-detail",
+  featureId: GOLDEN_FEATURE.featureId,
+  baseGeneration: 4n,
+  baseCompileHash: "detail-base-hash",
+  createdAt: 1_721_000_000_000n,
+  edits: [{ path: "stories/001-task.md", newContent: "revised task" }],
+  displayFiles: [{
+    path: "stories/001-task.md",
+    lines: [{ kind: "add", content: "revised task" }],
+  }],
+};
+
 function summaryClient(): DaemonClient {
   return {
     getFeatureSummary: async () => ({
@@ -146,6 +159,28 @@ describe("FeatureDetail — drill-down surface (Story 001 T2)", () => {
       const journalView = screen.getByTestId(locators.features.detail.journalView);
       expect(journalView).toHaveTextContent("Journal");
       expect(journalView).toHaveTextContent("2026-07-15");
+    });
+  });
+
+  describe("Controls tab", () => {
+    it("mounts sign-off, task halt, and the pending replan approval for the selected feature", async () => {
+      const user = userEvent.setup();
+      render(
+        <DaemonClientProvider client={summaryClient()}>
+          <FeatureDetail
+            featureId={GOLDEN_FEATURE.featureId}
+            data={GOLDEN_FEATURE as never}
+            pendingReplanProposal={PENDING_REPLAN}
+            actor="operator@kanthord"
+          />
+        </DaemonClientProvider>,
+      );
+
+      await user.click(screen.getByTestId(locators.detailPage.tabTrigger("controls")));
+
+      expect(screen.getByTestId(locators.planFlows.signOff.trigger)).toBeInTheDocument();
+      expect(screen.getByTestId(locators.planFlows.halt.trigger)).toBeInTheDocument();
+      expect(screen.getByTestId(locators.planFlows.replan.baseGeneration)).toHaveTextContent("4");
     });
   });
 

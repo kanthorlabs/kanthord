@@ -45,7 +45,10 @@ import { locators } from "@/locators";
 export interface InboxProps {
   loading?: boolean;
   error?: { message: string };
+  refreshError?: { message: string };
   items?: InboxItemVM[];
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,7 +56,7 @@ export interface InboxProps {
 // ---------------------------------------------------------------------------
 
 export function Inbox(props: InboxProps = {}) {
-  const { loading, error, items = [] } = props;
+  const { loading, error, refreshError, items = [], fetchedAt, onRefresh } = props;
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
   // Derived: sort + filter (computed from data state)
@@ -108,6 +111,9 @@ export function Inbox(props: InboxProps = {}) {
       toolbar={typeFilterUI}
       loading={loading}
       error={error}
+      refreshError={refreshError}
+      fetchedAt={fetchedAt}
+      onRefresh={onRefresh}
     >
       {!loading && error === undefined &&
         (filteredItems.length === 0 ? (

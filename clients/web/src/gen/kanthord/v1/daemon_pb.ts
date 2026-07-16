@@ -27,7 +27,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file kanthord/v1/daemon.proto.
  */
 export const file_kanthord_v1_daemon: GenFile = /*@__PURE__*/
-  fileDesc("ChhrYW50aG9yZC92MS9kYWVtb24ucHJvdG8SC2thbnRob3JkLnYxIhIKEEdldFN0YXR1c1JlcXVlc3QiRwoKVGFza1N0YXR1cxIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIIlsKDUZlYXR1cmVTdGF0dXMSEgoKZmVhdHVyZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSJgoFdGFza3MYAyADKAsyFy5rYW50aG9yZC52MS5UYXNrU3RhdHVzImoKEUdldFN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSLAoIZmVhdHVyZXMYAyADKAsyGi5rYW50aG9yZC52MS5GZWF0dXJlU3RhdHVzIvoBCglJbmJveEl0ZW0SCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRISCgpmZWF0dXJlX2lkGAMgASgJEg8KB3N1bW1hcnkYBCABKAkSDAoEdHlwZRgFIAEoCRIQCghzZXZlcml0eRgGIAEoCRIaChJzdWdnZXN0ZWRfY2F0ZWdvcnkYByABKAkSDgoGc3RhdHVzGAggASgJEhIKCmV4cGlyZXNfYXQYCSABKAMSDwoHZXhwaXJlZBgKIAEoCBInCghldmlkZW5jZRgLIAEoCzIVLmthbnRob3JkLnYxLkV2aWRlbmNlEhQKDGJyb2tlcl9vcF9pZBgMIAEoCSJPCghFdmlkZW5jZRIMCgR0eXBlGAEgASgJEgwKBHRleHQYAiABKAkSJwoEZGlmZhgDIAEoCzIZLmthbnRob3JkLnYxLkRpZmZFdmlkZW5jZSI0CgxEaWZmRXZpZGVuY2USJAoFZmlsZXMYASADKAsyFS5rYW50aG9yZC52MS5EaWZmRmlsZSI+CghEaWZmRmlsZRIMCgRwYXRoGAEgASgJEiQKBWxpbmVzGAIgAygLMhUua2FudGhvcmQudjEuRGlmZkxpbmUiKQoIRGlmZkxpbmUSDAoEa2luZBgBIAEoCRIPCgdjb250ZW50GAIgASgJIhcKFUxpc3RJbmJveEl0ZW1zUmVxdWVzdCI/ChZMaXN0SW5ib3hJdGVtc1Jlc3BvbnNlEiUKBWl0ZW1zGAEgAygLMhYua2FudGhvcmQudjEuSW5ib3hJdGVtIiEKE0dldEluYm94SXRlbVJlcXVlc3QSCgoCaWQYASABKAkiPAoUR2V0SW5ib3hJdGVtUmVzcG9uc2USJAoEaXRlbRgBIAEoCzIWLmthbnRob3JkLnYxLkluYm94SXRlbSJWChpSZXNwb25kVG9Fc2NhbGF0aW9uUmVxdWVzdBIKCgJpZBgBIAEoCRIQCghyZXNwb25zZRgCIAEoCRIaChJjb25maXJtZWRfY2F0ZWdvcnkYAyABKAkiLQobUmVzcG9uZFRvRXNjYWxhdGlvblJlc3BvbnNlEg4KBnN0YXR1cxgBIAEoCSJjChhSZXNwb25kVG9BcHByb3ZhbFJlcXVlc3QSCgoCaWQYASABKAkSDwoHYXBwcm92ZRgCIAEoCBIOCgZyZWFzb24YAyABKAkSGgoSY29uZmlybWVkX2NhdGVnb3J5GAQgASgJIisKGVJlc3BvbmRUb0FwcHJvdmFsUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJImsKDkZlYXR1cmVTdW1tYXJ5EhIKCmZlYXR1cmVfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXBoYXNlGAMgASgJEhgKEHByb2dyZXNzX3N1bW1hcnkYBCABKAkSDAoEbmFtZRgFIAEoCSIVChNMaXN0RmVhdHVyZXNSZXF1ZXN0IkUKFExpc3RGZWF0dXJlc1Jlc3BvbnNlEi0KCGZlYXR1cmVzGAEgAygLMhsua2FudGhvcmQudjEuRmVhdHVyZVN1bW1hcnkiWAoKVGFza0RldGFpbBIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIEg8KB2F0dGVtcHQYBCABKAMiVwoLU3RvcnlEZXRhaWwSEAoIc3RvcnlfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEiYKBXRhc2tzGAMgAygLMhcua2FudGhvcmQudjEuVGFza0RldGFpbCJpCgtEYWdQcm9ncmVzcxITCgt0b3RhbF9ub2RlcxgBIAEoAxIXCg9zYXRpc2ZpZWRfbm9kZXMYAiABKAMSEwoLdG90YWxfZWRnZXMYAyABKAMSFwoPc2F0aXNmaWVkX2VkZ2VzGAQgASgDIicKEUdldEZlYXR1cmVSZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAki+AEKEkdldEZlYXR1cmVSZXNwb25zZRISCgpmZWF0dXJlX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgVwaGFzZRgDIAEoCRIpCgdzdG9yaWVzGAQgAygLMhgua2FudGhvcmQudjEuU3RvcnlEZXRhaWwSJQoDZGFnGAUgASgLMhgua2FudGhvcmQudjEuRGFnUHJvZ3Jlc3MSMwoNaW5fZmxpZ2h0X29wcxgGIAMoCzIcLmthbnRob3JkLnYxLkJyb2tlck9wZXJhdGlvbhISCgpzdGF0ZV92aWV3GAcgASgJEhQKDGpvdXJuYWxfdmlldxgIIAEoCSIuChhHZXRGZWF0dXJlU3VtbWFyeVJlcXVlc3QSEgoKZmVhdHVyZV9pZBgBIAEoCSKLAQoYSW50ZXJhY3Rpb25UeXBlQnJlYWtkb3duEhAKCGFwcHJvdmFsGAEgASgNEhUKDWNsYXJpZmljYXRpb24YAiABKA0SEgoKY29ycmVjdGlvbhgDIAEoDRIOCgZyZXdvcmsYBCABKA0SEAoIdGFrZW92ZXIYBSABKA0SEAoIZXh0ZXJuYWwYBiABKA0ipwEKGUdldEZlYXR1cmVTdW1tYXJ5UmVzcG9uc2USEgoKZmVhdHVyZV9pZBgBIAEoCRIQCghoZWFkbGluZRgCIAEoDRJAChFieV9jb25maXJtZWRfdHlwZRgDIAEoCzIlLmthbnRob3JkLnYxLkludGVyYWN0aW9uVHlwZUJyZWFrZG93bhIQCghleGNsdWRlZBgEIAEoDRIQCghuZXRfY29zdBgFIAEoASKrAQoPQnJva2VyT3BlcmF0aW9uEg0KBW9wX2lkGAEgASgJEgwKBHZlcmIYAiABKAkSDQoFc3RhdGUYAyABKAkSEwoLY29ycmVsYXRpb24YBCABKAkSEgoKZmVhdHVyZV9pZBgFIAEoCRISCgpleHBpcmVzX2F0GAYgASgDEhAKCGV4cGlyaW5nGAcgASgIEh0KFXJlY29uY2lsaWF0aW9uX3N0YXR1cxgIIAEoCSIdChtMaXN0QnJva2VyT3BlcmF0aW9uc1JlcXVlc3QiUAocTGlzdEJyb2tlck9wZXJhdGlvbnNSZXNwb25zZRIwCgpvcGVyYXRpb25zGAEgAygLMhwua2FudGhvcmQudjEuQnJva2VyT3BlcmF0aW9uIiwKDkJyb2tlclZlcmJJbmZvEgwKBHZlcmIYASABKAkSDAoEdGllchgCIAEoCSIYChZMaXN0QnJva2VyVmVyYnNSZXF1ZXN0IkUKF0xpc3RCcm9rZXJWZXJic1Jlc3BvbnNlEioKBXZlcmJzGAEgAygLMhsua2FudGhvcmQudjEuQnJva2VyVmVyYkluZm8iZgoIU2xvdEluZm8SDAoEbmFtZRgBIAEoCRIMCgRyZXBvGAIgASgJEhAKCHN0cmF0ZWd5GAMgASgJEhMKC2hlbGRfbGVhc2VzGAQgAygJEhcKD2FjdGl2ZV9zZXNzaW9ucxgFIAMoCSISChBMaXN0U2xvdHNSZXF1ZXN0IjkKEUxpc3RTbG90c1Jlc3BvbnNlEiQKBXNsb3RzGAEgAygLMhUua2FudGhvcmQudjEuU2xvdEluZm8iVAoSQnVkZ2V0T3ZlcnJpZGVJbmZvEg8KB3ByZXNlbnQYASABKAgSDgoGYW1vdW50GAIgASgBEg4KBnJlYXNvbhgDIAEoCRINCgVhY3RvchgEIAEoCSIjChBHZXRCdWRnZXRSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkijgEKEUdldEJ1ZGdldFJlc3BvbnNlEg8KB3Rhc2tfaWQYASABKAkSDQoFc3BlbnQYAiABKAESDwoHY2VpbGluZxgDIAEoARIVCg1icmVha2VyX3N0YXRlGAQgASgJEjEKCG92ZXJyaWRlGAUgASgLMh8ua2FudGhvcmQudjEuQnVkZ2V0T3ZlcnJpZGVJbmZvIhQKEkxpc3RCdWRnZXRzUmVxdWVzdCJGChNMaXN0QnVkZ2V0c1Jlc3BvbnNlEi8KB2J1ZGdldHMYASADKAsyHi5rYW50aG9yZC52MS5HZXRCdWRnZXRSZXNwb25zZSJICgtEZWFkTWFuUGluZxIPCgdwcmVzZW50GAEgASgIEg8KB3NlbnRfYXQYAiABKAMSFwoPdGFza3NfcHJvY2Vzc2VkGAMgASgDIlUKDFZlcmlmeVJlcG9ydBIPCgdwcmVzZW50GAEgASgIEg8KB291dGNvbWUYAiABKAkSDgoGcmFuX2F0GAMgASgDEhMKC3JlcG9ydF9qc29uGAQgASgJIhgKFkdldERhZW1vblN0YXR1c1JlcXVlc3QinwEKF0dldERhZW1vblN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSKwoJbGFzdF9waW5nGAMgASgLMhgua2FudGhvcmQudjEuRGVhZE1hblBpbmcSLgoLbGFzdF92ZXJpZnkYBCABKAsyGS5rYW50aG9yZC52MS5WZXJpZnlSZXBvcnQiFgoUVHJpZ2dlclZlcmlmeVJlcXVlc3QiQgoVVHJpZ2dlclZlcmlmeVJlc3BvbnNlEikKBnJlcG9ydBgBIAEoCzIZLmthbnRob3JkLnYxLlZlcmlmeVJlcG9ydCKIAQoNVGltZWxpbmVFdmVudBISCgpldmVudF90eXBlGAEgASgJEgoKAmF0GAIgASgDEh8KF29ic2VydmVkX2ZhaWx1cmVfc2lnbmFsGAMgASgJEhIKCmFjY291bnRfaWQYBCABKAkSDQoFbW9kZWwYBSABKAkSEwoLZGV0YWlsX2pzb24YBiABKAkiOgoWR2V0VGFza1RpbWVsaW5lUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg8KB2F0dGVtcHQYAiABKAMiRQoXR2V0VGFza1RpbWVsaW5lUmVzcG9uc2USKgoGZXZlbnRzGAEgAygLMhoua2FudGhvcmQudjEuVGltZWxpbmVFdmVudCIwCh1TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJIkQKDFNlc3Npb25FdmVudBISCgpldmVudF90eXBlGAEgASgJEgoKAmF0GAIgASgDEhQKDHBheWxvYWRfanNvbhgDIAEoCSJKCh5TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVzcG9uc2USKAoFZXZlbnQYASABKAsyGS5rYW50aG9yZC52MS5TZXNzaW9uRXZlbnQiNwoSU2lnbk9mZlBsYW5SZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAkSDQoFYWN0b3IYAiABKAkiTQoTU2lnbk9mZlBsYW5SZXNwb25zZRINCgV2YWxpZBgBIAEoCBITCgtkaWFnbm9zdGljcxgCIAMoCRISCgpnZW5lcmF0aW9uGAMgASgDIjEKD0hhbHRUYXNrUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg0KBWFjdG9yGAIgASgJIiIKEEhhbHRUYXNrUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIjcKEkhhbHRGZWF0dXJlUmVxdWVzdBISCgpmZWF0dXJlX2lkGAEgASgJEg0KBWFjdG9yGAIgASgJIiUKE0hhbHRGZWF0dXJlUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIi0KCEZpbGVFZGl0EgwKBHBhdGgYASABKAkSEwoLbmV3X2NvbnRlbnQYAiABKAkieAoUQXBwcm92ZVJlcGxhblJlcXVlc3QSEgoKZmVhdHVyZV9pZBgBIAEoCRIXCg9iYXNlX2dlbmVyYXRpb24YAiABKAMSJAoFZWRpdHMYAyADKAsyFS5rYW50aG9yZC52MS5GaWxlRWRpdBINCgVhY3RvchgEIAEoCSJKChVBcHByb3ZlUmVwbGFuUmVzcG9uc2USFgoObmV3X2dlbmVyYXRpb24YASABKAMSGQoRcmVvcGVuZWRfdGFza19pZHMYAiADKAkiVwoVT3ZlcnJpZGVCdWRnZXRSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkSDgoGYW1vdW50GAIgASgBEg4KBnJlYXNvbhgDIAEoCRINCgVhY3RvchgEIAEoCSItChZPdmVycmlkZUJ1ZGdldFJlc3BvbnNlEhMKC25ld19jZWlsaW5nGAEgASgBMr8PCg1EYWVtb25TZXJ2aWNlEkoKCUdldFN0YXR1cxIdLmthbnRob3JkLnYxLkdldFN0YXR1c1JlcXVlc3QaHi5rYW50aG9yZC52MS5HZXRTdGF0dXNSZXNwb25zZRJZCg5MaXN0SW5ib3hJdGVtcxIiLmthbnRob3JkLnYxLkxpc3RJbmJveEl0ZW1zUmVxdWVzdBojLmthbnRob3JkLnYxLkxpc3RJbmJveEl0ZW1zUmVzcG9uc2USaAoTUmVzcG9uZFRvRXNjYWxhdGlvbhInLmthbnRob3JkLnYxLlJlc3BvbmRUb0VzY2FsYXRpb25SZXF1ZXN0Gigua2FudGhvcmQudjEuUmVzcG9uZFRvRXNjYWxhdGlvblJlc3BvbnNlEmIKEVJlc3BvbmRUb0FwcHJvdmFsEiUua2FudGhvcmQudjEuUmVzcG9uZFRvQXBwcm92YWxSZXF1ZXN0GiYua2FudGhvcmQudjEuUmVzcG9uZFRvQXBwcm92YWxSZXNwb25zZRJTCgxMaXN0RmVhdHVyZXMSIC5rYW50aG9yZC52MS5MaXN0RmVhdHVyZXNSZXF1ZXN0GiEua2FudGhvcmQudjEuTGlzdEZlYXR1cmVzUmVzcG9uc2USTQoKR2V0RmVhdHVyZRIeLmthbnRob3JkLnYxLkdldEZlYXR1cmVSZXF1ZXN0Gh8ua2FudGhvcmQudjEuR2V0RmVhdHVyZVJlc3BvbnNlEmIKEUdldEZlYXR1cmVTdW1tYXJ5EiUua2FudGhvcmQudjEuR2V0RmVhdHVyZVN1bW1hcnlSZXF1ZXN0GiYua2FudGhvcmQudjEuR2V0RmVhdHVyZVN1bW1hcnlSZXNwb25zZRJrChRMaXN0QnJva2VyT3BlcmF0aW9ucxIoLmthbnRob3JkLnYxLkxpc3RCcm9rZXJPcGVyYXRpb25zUmVxdWVzdBopLmthbnRob3JkLnYxLkxpc3RCcm9rZXJPcGVyYXRpb25zUmVzcG9uc2USXAoPTGlzdEJyb2tlclZlcmJzEiMua2FudGhvcmQudjEuTGlzdEJyb2tlclZlcmJzUmVxdWVzdBokLmthbnRob3JkLnYxLkxpc3RCcm9rZXJWZXJic1Jlc3BvbnNlEkoKCUxpc3RTbG90cxIdLmthbnRob3JkLnYxLkxpc3RTbG90c1JlcXVlc3QaHi5rYW50aG9yZC52MS5MaXN0U2xvdHNSZXNwb25zZRJKCglHZXRCdWRnZXQSHS5rYW50aG9yZC52MS5HZXRCdWRnZXRSZXF1ZXN0Gh4ua2FudGhvcmQudjEuR2V0QnVkZ2V0UmVzcG9uc2USUAoLTGlzdEJ1ZGdldHMSHy5rYW50aG9yZC52MS5MaXN0QnVkZ2V0c1JlcXVlc3QaIC5rYW50aG9yZC52MS5MaXN0QnVkZ2V0c1Jlc3BvbnNlElMKDEdldEluYm94SXRlbRIgLmthbnRob3JkLnYxLkdldEluYm94SXRlbVJlcXVlc3QaIS5rYW50aG9yZC52MS5HZXRJbmJveEl0ZW1SZXNwb25zZRJcCg9HZXREYWVtb25TdGF0dXMSIy5rYW50aG9yZC52MS5HZXREYWVtb25TdGF0dXNSZXF1ZXN0GiQua2FudGhvcmQudjEuR2V0RGFlbW9uU3RhdHVzUmVzcG9uc2USXAoPR2V0VGFza1RpbWVsaW5lEiMua2FudGhvcmQudjEuR2V0VGFza1RpbWVsaW5lUmVxdWVzdBokLmthbnRob3JkLnYxLkdldFRhc2tUaW1lbGluZVJlc3BvbnNlEnMKFlN1YnNjcmliZVNlc3Npb25FdmVudHMSKi5rYW50aG9yZC52MS5TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVxdWVzdBorLmthbnRob3JkLnYxLlN1YnNjcmliZVNlc3Npb25FdmVudHNSZXNwb25zZTABElYKDVRyaWdnZXJWZXJpZnkSIS5rYW50aG9yZC52MS5UcmlnZ2VyVmVyaWZ5UmVxdWVzdBoiLmthbnRob3JkLnYxLlRyaWdnZXJWZXJpZnlSZXNwb25zZRJQCgtTaWduT2ZmUGxhbhIfLmthbnRob3JkLnYxLlNpZ25PZmZQbGFuUmVxdWVzdBogLmthbnRob3JkLnYxLlNpZ25PZmZQbGFuUmVzcG9uc2USRwoISGFsdFRhc2sSHC5rYW50aG9yZC52MS5IYWx0VGFza1JlcXVlc3QaHS5rYW50aG9yZC52MS5IYWx0VGFza1Jlc3BvbnNlElAKC0hhbHRGZWF0dXJlEh8ua2FudGhvcmQudjEuSGFsdEZlYXR1cmVSZXF1ZXN0GiAua2FudGhvcmQudjEuSGFsdEZlYXR1cmVSZXNwb25zZRJWCg1BcHByb3ZlUmVwbGFuEiEua2FudGhvcmQudjEuQXBwcm92ZVJlcGxhblJlcXVlc3QaIi5rYW50aG9yZC52MS5BcHByb3ZlUmVwbGFuUmVzcG9uc2USWQoOT3ZlcnJpZGVCdWRnZXQSIi5rYW50aG9yZC52MS5PdmVycmlkZUJ1ZGdldFJlcXVlc3QaIy5rYW50aG9yZC52MS5PdmVycmlkZUJ1ZGdldFJlc3BvbnNlYgZwcm90bzM");
+  fileDesc("ChhrYW50aG9yZC92MS9kYWVtb24ucHJvdG8SC2thbnRob3JkLnYxIhIKEEdldFN0YXR1c1JlcXVlc3QiRwoKVGFza1N0YXR1cxIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIIlsKDUZlYXR1cmVTdGF0dXMSEgoKZmVhdHVyZV9pZBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSJgoFdGFza3MYAyADKAsyFy5rYW50aG9yZC52MS5UYXNrU3RhdHVzImoKEUdldFN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSLAoIZmVhdHVyZXMYAyADKAsyGi5rYW50aG9yZC52MS5GZWF0dXJlU3RhdHVzIvoBCglJbmJveEl0ZW0SCgoCaWQYASABKAkSDAoEa2luZBgCIAEoCRISCgpmZWF0dXJlX2lkGAMgASgJEg8KB3N1bW1hcnkYBCABKAkSDAoEdHlwZRgFIAEoCRIQCghzZXZlcml0eRgGIAEoCRIaChJzdWdnZXN0ZWRfY2F0ZWdvcnkYByABKAkSDgoGc3RhdHVzGAggASgJEhIKCmV4cGlyZXNfYXQYCSABKAMSDwoHZXhwaXJlZBgKIAEoCBInCghldmlkZW5jZRgLIAEoCzIVLmthbnRob3JkLnYxLkV2aWRlbmNlEhQKDGJyb2tlcl9vcF9pZBgMIAEoCSJPCghFdmlkZW5jZRIMCgR0eXBlGAEgASgJEgwKBHRleHQYAiABKAkSJwoEZGlmZhgDIAEoCzIZLmthbnRob3JkLnYxLkRpZmZFdmlkZW5jZSI0CgxEaWZmRXZpZGVuY2USJAoFZmlsZXMYASADKAsyFS5rYW50aG9yZC52MS5EaWZmRmlsZSI+CghEaWZmRmlsZRIMCgRwYXRoGAEgASgJEiQKBWxpbmVzGAIgAygLMhUua2FudGhvcmQudjEuRGlmZkxpbmUiKQoIRGlmZkxpbmUSDAoEa2luZBgBIAEoCRIPCgdjb250ZW50GAIgASgJIhcKFUxpc3RJbmJveEl0ZW1zUmVxdWVzdCI/ChZMaXN0SW5ib3hJdGVtc1Jlc3BvbnNlEiUKBWl0ZW1zGAEgAygLMhYua2FudGhvcmQudjEuSW5ib3hJdGVtIiEKE0dldEluYm94SXRlbVJlcXVlc3QSCgoCaWQYASABKAkiPAoUR2V0SW5ib3hJdGVtUmVzcG9uc2USJAoEaXRlbRgBIAEoCzIWLmthbnRob3JkLnYxLkluYm94SXRlbSJWChpSZXNwb25kVG9Fc2NhbGF0aW9uUmVxdWVzdBIKCgJpZBgBIAEoCRIQCghyZXNwb25zZRgCIAEoCRIaChJjb25maXJtZWRfY2F0ZWdvcnkYAyABKAkiLQobUmVzcG9uZFRvRXNjYWxhdGlvblJlc3BvbnNlEg4KBnN0YXR1cxgBIAEoCSJjChhSZXNwb25kVG9BcHByb3ZhbFJlcXVlc3QSCgoCaWQYASABKAkSDwoHYXBwcm92ZRgCIAEoCBIOCgZyZWFzb24YAyABKAkSGgoSY29uZmlybWVkX2NhdGVnb3J5GAQgASgJIisKGVJlc3BvbmRUb0FwcHJvdmFsUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJImsKDkZlYXR1cmVTdW1tYXJ5EhIKCmZlYXR1cmVfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEg0KBXBoYXNlGAMgASgJEhgKEHByb2dyZXNzX3N1bW1hcnkYBCABKAkSDAoEbmFtZRgFIAEoCSIVChNMaXN0RmVhdHVyZXNSZXF1ZXN0IkUKFExpc3RGZWF0dXJlc1Jlc3BvbnNlEi0KCGZlYXR1cmVzGAEgAygLMhsua2FudGhvcmQudjEuRmVhdHVyZVN1bW1hcnkiWAoKVGFza0RldGFpbBIPCgd0YXNrX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRIYChBleGl0X2dhdGVfcGFzc2VkGAMgASgIEg8KB2F0dGVtcHQYBCABKAMiVwoLU3RvcnlEZXRhaWwSEAoIc3RvcnlfaWQYASABKAkSDgoGc3RhdHVzGAIgASgJEiYKBXRhc2tzGAMgAygLMhcua2FudGhvcmQudjEuVGFza0RldGFpbCJpCgtEYWdQcm9ncmVzcxITCgt0b3RhbF9ub2RlcxgBIAEoAxIXCg9zYXRpc2ZpZWRfbm9kZXMYAiABKAMSEwoLdG90YWxfZWRnZXMYAyABKAMSFwoPc2F0aXNmaWVkX2VkZ2VzGAQgASgDIicKEUdldEZlYXR1cmVSZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAki+AEKEkdldEZlYXR1cmVSZXNwb25zZRISCgpmZWF0dXJlX2lkGAEgASgJEg4KBnN0YXR1cxgCIAEoCRINCgVwaGFzZRgDIAEoCRIpCgdzdG9yaWVzGAQgAygLMhgua2FudGhvcmQudjEuU3RvcnlEZXRhaWwSJQoDZGFnGAUgASgLMhgua2FudGhvcmQudjEuRGFnUHJvZ3Jlc3MSMwoNaW5fZmxpZ2h0X29wcxgGIAMoCzIcLmthbnRob3JkLnYxLkJyb2tlck9wZXJhdGlvbhISCgpzdGF0ZV92aWV3GAcgASgJEhQKDGpvdXJuYWxfdmlldxgIIAEoCSI1Ch9HZXRQZW5kaW5nUmVwbGFuUHJvcG9zYWxSZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAki1QEKDlJlcGxhblByb3Bvc2FsEhMKC3Byb3Bvc2FsX2lkGAEgASgJEhIKCmZlYXR1cmVfaWQYAiABKAkSFwoPYmFzZV9nZW5lcmF0aW9uGAMgASgDEhkKEWJhc2VfY29tcGlsZV9oYXNoGAQgASgJEhIKCmNyZWF0ZWRfYXQYBSABKAMSJAoFZWRpdHMYBiADKAsyFS5rYW50aG9yZC52MS5GaWxlRWRpdBIsCg1kaXNwbGF5X2ZpbGVzGAcgAygLMhUua2FudGhvcmQudjEuRGlmZkZpbGUiUQogR2V0UGVuZGluZ1JlcGxhblByb3Bvc2FsUmVzcG9uc2USLQoIcHJvcG9zYWwYASABKAsyGy5rYW50aG9yZC52MS5SZXBsYW5Qcm9wb3NhbCIuChhHZXRGZWF0dXJlU3VtbWFyeVJlcXVlc3QSEgoKZmVhdHVyZV9pZBgBIAEoCSKLAQoYSW50ZXJhY3Rpb25UeXBlQnJlYWtkb3duEhAKCGFwcHJvdmFsGAEgASgNEhUKDWNsYXJpZmljYXRpb24YAiABKA0SEgoKY29ycmVjdGlvbhgDIAEoDRIOCgZyZXdvcmsYBCABKA0SEAoIdGFrZW92ZXIYBSABKA0SEAoIZXh0ZXJuYWwYBiABKA0ipwEKGUdldEZlYXR1cmVTdW1tYXJ5UmVzcG9uc2USEgoKZmVhdHVyZV9pZBgBIAEoCRIQCghoZWFkbGluZRgCIAEoDRJAChFieV9jb25maXJtZWRfdHlwZRgDIAEoCzIlLmthbnRob3JkLnYxLkludGVyYWN0aW9uVHlwZUJyZWFrZG93bhIQCghleGNsdWRlZBgEIAEoDRIQCghuZXRfY29zdBgFIAEoASKrAQoPQnJva2VyT3BlcmF0aW9uEg0KBW9wX2lkGAEgASgJEgwKBHZlcmIYAiABKAkSDQoFc3RhdGUYAyABKAkSEwoLY29ycmVsYXRpb24YBCABKAkSEgoKZmVhdHVyZV9pZBgFIAEoCRISCgpleHBpcmVzX2F0GAYgASgDEhAKCGV4cGlyaW5nGAcgASgIEh0KFXJlY29uY2lsaWF0aW9uX3N0YXR1cxgIIAEoCSIdChtMaXN0QnJva2VyT3BlcmF0aW9uc1JlcXVlc3QiUAocTGlzdEJyb2tlck9wZXJhdGlvbnNSZXNwb25zZRIwCgpvcGVyYXRpb25zGAEgAygLMhwua2FudGhvcmQudjEuQnJva2VyT3BlcmF0aW9uIiwKDkJyb2tlclZlcmJJbmZvEgwKBHZlcmIYASABKAkSDAoEdGllchgCIAEoCSIYChZMaXN0QnJva2VyVmVyYnNSZXF1ZXN0IkUKF0xpc3RCcm9rZXJWZXJic1Jlc3BvbnNlEioKBXZlcmJzGAEgAygLMhsua2FudGhvcmQudjEuQnJva2VyVmVyYkluZm8iZgoIU2xvdEluZm8SDAoEbmFtZRgBIAEoCRIMCgRyZXBvGAIgASgJEhAKCHN0cmF0ZWd5GAMgASgJEhMKC2hlbGRfbGVhc2VzGAQgAygJEhcKD2FjdGl2ZV9zZXNzaW9ucxgFIAMoCSISChBMaXN0U2xvdHNSZXF1ZXN0IjkKEUxpc3RTbG90c1Jlc3BvbnNlEiQKBXNsb3RzGAEgAygLMhUua2FudGhvcmQudjEuU2xvdEluZm8iVAoSQnVkZ2V0T3ZlcnJpZGVJbmZvEg8KB3ByZXNlbnQYASABKAgSDgoGYW1vdW50GAIgASgBEg4KBnJlYXNvbhgDIAEoCRINCgVhY3RvchgEIAEoCSIjChBHZXRCdWRnZXRSZXF1ZXN0Eg8KB3Rhc2tfaWQYASABKAkijgEKEUdldEJ1ZGdldFJlc3BvbnNlEg8KB3Rhc2tfaWQYASABKAkSDQoFc3BlbnQYAiABKAESDwoHY2VpbGluZxgDIAEoARIVCg1icmVha2VyX3N0YXRlGAQgASgJEjEKCG92ZXJyaWRlGAUgASgLMh8ua2FudGhvcmQudjEuQnVkZ2V0T3ZlcnJpZGVJbmZvIhQKEkxpc3RCdWRnZXRzUmVxdWVzdCJGChNMaXN0QnVkZ2V0c1Jlc3BvbnNlEi8KB2J1ZGdldHMYASADKAsyHi5rYW50aG9yZC52MS5HZXRCdWRnZXRSZXNwb25zZSJICgtEZWFkTWFuUGluZxIPCgdwcmVzZW50GAEgASgIEg8KB3NlbnRfYXQYAiABKAMSFwoPdGFza3NfcHJvY2Vzc2VkGAMgASgDIlUKDFZlcmlmeVJlcG9ydBIPCgdwcmVzZW50GAEgASgIEg8KB291dGNvbWUYAiABKAkSDgoGcmFuX2F0GAMgASgDEhMKC3JlcG9ydF9qc29uGAQgASgJIhgKFkdldERhZW1vblN0YXR1c1JlcXVlc3QinwEKF0dldERhZW1vblN0YXR1c1Jlc3BvbnNlEg8KB3ZlcnNpb24YASABKAkSFgoOdXB0aW1lX3NlY29uZHMYAiABKAMSKwoJbGFzdF9waW5nGAMgASgLMhgua2FudGhvcmQudjEuRGVhZE1hblBpbmcSLgoLbGFzdF92ZXJpZnkYBCABKAsyGS5rYW50aG9yZC52MS5WZXJpZnlSZXBvcnQiHwodR2V0UHVibGljQ29uZmlndXJhdGlvblJlcXVlc3QioQIKF1B1YmxpY0Jyb2tlckRlY2xhcmF0aW9uEgwKBHZlcmIYASABKAkSDAoEdGllchgCIAEoCRISCgp0aW1lb3V0X21zGAMgASgDEh0KFWlkZW1wb3RlbmN5X3dpbmRvd19tcxgEIAEoAxIRCglyZXRyeV9tYXgYBSABKA0SFQoNcmV0cnlfYmFja29mZhgGIAEoCRIYChBwb2xsX2ludGVydmFsX21zGAcgASgDEhcKD3Rlcm1pbmFsX3N0YXRlcxgIIAMoCRIbChNyZXF1ZXN0c19wZXJfbWludXRlGAkgASgNEiIKGm9ic2VydmVkX3N0YXRlX2Nhbl9yZWdyZXNzGAogASgIEhkKEXBlbmRpbmdfZXhwaXJ5X21zGAsgASgDIoMBCh5HZXRQdWJsaWNDb25maWd1cmF0aW9uUmVzcG9uc2USHgoWZGlmZl9lc2NhbGF0aW9uX3BvbGljeRgBIAEoCRJBChNicm9rZXJfZGVjbGFyYXRpb25zGAIgAygLMiQua2FudGhvcmQudjEuUHVibGljQnJva2VyRGVjbGFyYXRpb24iFgoUVHJpZ2dlclZlcmlmeVJlcXVlc3QiQgoVVHJpZ2dlclZlcmlmeVJlc3BvbnNlEikKBnJlcG9ydBgBIAEoCzIZLmthbnRob3JkLnYxLlZlcmlmeVJlcG9ydCKIAQoNVGltZWxpbmVFdmVudBISCgpldmVudF90eXBlGAEgASgJEgoKAmF0GAIgASgDEh8KF29ic2VydmVkX2ZhaWx1cmVfc2lnbmFsGAMgASgJEhIKCmFjY291bnRfaWQYBCABKAkSDQoFbW9kZWwYBSABKAkSEwoLZGV0YWlsX2pzb24YBiABKAkiOgoWR2V0VGFza1RpbWVsaW5lUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg8KB2F0dGVtcHQYAiABKAMiRQoXR2V0VGFza1RpbWVsaW5lUmVzcG9uc2USKgoGZXZlbnRzGAEgAygLMhoua2FudGhvcmQudjEuVGltZWxpbmVFdmVudCIwCh1TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJIkQKDFNlc3Npb25FdmVudBISCgpldmVudF90eXBlGAEgASgJEgoKAmF0GAIgASgDEhQKDHBheWxvYWRfanNvbhgDIAEoCSJKCh5TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVzcG9uc2USKAoFZXZlbnQYASABKAsyGS5rYW50aG9yZC52MS5TZXNzaW9uRXZlbnQiNwoSU2lnbk9mZlBsYW5SZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAkSDQoFYWN0b3IYAiABKAkiTQoTU2lnbk9mZlBsYW5SZXNwb25zZRINCgV2YWxpZBgBIAEoCBITCgtkaWFnbm9zdGljcxgCIAMoCRISCgpnZW5lcmF0aW9uGAMgASgDIjEKD0hhbHRUYXNrUmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg0KBWFjdG9yGAIgASgJIiIKEEhhbHRUYXNrUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIjcKEkhhbHRGZWF0dXJlUmVxdWVzdBISCgpmZWF0dXJlX2lkGAEgASgJEg0KBWFjdG9yGAIgASgJIiUKE0hhbHRGZWF0dXJlUmVzcG9uc2USDgoGc3RhdHVzGAEgASgJIi0KCEZpbGVFZGl0EgwKBHBhdGgYASABKAkSEwoLbmV3X2NvbnRlbnQYAiABKAkijQEKFEFwcHJvdmVSZXBsYW5SZXF1ZXN0EhIKCmZlYXR1cmVfaWQYASABKAkSFwoPYmFzZV9nZW5lcmF0aW9uGAIgASgDEiQKBWVkaXRzGAMgAygLMhUua2FudGhvcmQudjEuRmlsZUVkaXQSDQoFYWN0b3IYBCABKAkSEwoLcHJvcG9zYWxfaWQYBSABKAkiSgoVQXBwcm92ZVJlcGxhblJlc3BvbnNlEhYKDm5ld19nZW5lcmF0aW9uGAEgASgDEhkKEXJlb3BlbmVkX3Rhc2tfaWRzGAIgAygJIlcKFU92ZXJyaWRlQnVkZ2V0UmVxdWVzdBIPCgd0YXNrX2lkGAEgASgJEg4KBmFtb3VudBgCIAEoARIOCgZyZWFzb24YAyABKAkSDQoFYWN0b3IYBCABKAkiLQoWT3ZlcnJpZGVCdWRnZXRSZXNwb25zZRITCgtuZXdfY2VpbGluZxgBIAEoATKrEQoNRGFlbW9uU2VydmljZRJKCglHZXRTdGF0dXMSHS5rYW50aG9yZC52MS5HZXRTdGF0dXNSZXF1ZXN0Gh4ua2FudGhvcmQudjEuR2V0U3RhdHVzUmVzcG9uc2USWQoOTGlzdEluYm94SXRlbXMSIi5rYW50aG9yZC52MS5MaXN0SW5ib3hJdGVtc1JlcXVlc3QaIy5rYW50aG9yZC52MS5MaXN0SW5ib3hJdGVtc1Jlc3BvbnNlEmgKE1Jlc3BvbmRUb0VzY2FsYXRpb24SJy5rYW50aG9yZC52MS5SZXNwb25kVG9Fc2NhbGF0aW9uUmVxdWVzdBooLmthbnRob3JkLnYxLlJlc3BvbmRUb0VzY2FsYXRpb25SZXNwb25zZRJiChFSZXNwb25kVG9BcHByb3ZhbBIlLmthbnRob3JkLnYxLlJlc3BvbmRUb0FwcHJvdmFsUmVxdWVzdBomLmthbnRob3JkLnYxLlJlc3BvbmRUb0FwcHJvdmFsUmVzcG9uc2USUwoMTGlzdEZlYXR1cmVzEiAua2FudGhvcmQudjEuTGlzdEZlYXR1cmVzUmVxdWVzdBohLmthbnRob3JkLnYxLkxpc3RGZWF0dXJlc1Jlc3BvbnNlEk0KCkdldEZlYXR1cmUSHi5rYW50aG9yZC52MS5HZXRGZWF0dXJlUmVxdWVzdBofLmthbnRob3JkLnYxLkdldEZlYXR1cmVSZXNwb25zZRJiChFHZXRGZWF0dXJlU3VtbWFyeRIlLmthbnRob3JkLnYxLkdldEZlYXR1cmVTdW1tYXJ5UmVxdWVzdBomLmthbnRob3JkLnYxLkdldEZlYXR1cmVTdW1tYXJ5UmVzcG9uc2USdwoYR2V0UGVuZGluZ1JlcGxhblByb3Bvc2FsEiwua2FudGhvcmQudjEuR2V0UGVuZGluZ1JlcGxhblByb3Bvc2FsUmVxdWVzdBotLmthbnRob3JkLnYxLkdldFBlbmRpbmdSZXBsYW5Qcm9wb3NhbFJlc3BvbnNlEmsKFExpc3RCcm9rZXJPcGVyYXRpb25zEigua2FudGhvcmQudjEuTGlzdEJyb2tlck9wZXJhdGlvbnNSZXF1ZXN0Gikua2FudGhvcmQudjEuTGlzdEJyb2tlck9wZXJhdGlvbnNSZXNwb25zZRJcCg9MaXN0QnJva2VyVmVyYnMSIy5rYW50aG9yZC52MS5MaXN0QnJva2VyVmVyYnNSZXF1ZXN0GiQua2FudGhvcmQudjEuTGlzdEJyb2tlclZlcmJzUmVzcG9uc2USSgoJTGlzdFNsb3RzEh0ua2FudGhvcmQudjEuTGlzdFNsb3RzUmVxdWVzdBoeLmthbnRob3JkLnYxLkxpc3RTbG90c1Jlc3BvbnNlEkoKCUdldEJ1ZGdldBIdLmthbnRob3JkLnYxLkdldEJ1ZGdldFJlcXVlc3QaHi5rYW50aG9yZC52MS5HZXRCdWRnZXRSZXNwb25zZRJQCgtMaXN0QnVkZ2V0cxIfLmthbnRob3JkLnYxLkxpc3RCdWRnZXRzUmVxdWVzdBogLmthbnRob3JkLnYxLkxpc3RCdWRnZXRzUmVzcG9uc2USUwoMR2V0SW5ib3hJdGVtEiAua2FudGhvcmQudjEuR2V0SW5ib3hJdGVtUmVxdWVzdBohLmthbnRob3JkLnYxLkdldEluYm94SXRlbVJlc3BvbnNlElwKD0dldERhZW1vblN0YXR1cxIjLmthbnRob3JkLnYxLkdldERhZW1vblN0YXR1c1JlcXVlc3QaJC5rYW50aG9yZC52MS5HZXREYWVtb25TdGF0dXNSZXNwb25zZRJxChZHZXRQdWJsaWNDb25maWd1cmF0aW9uEioua2FudGhvcmQudjEuR2V0UHVibGljQ29uZmlndXJhdGlvblJlcXVlc3QaKy5rYW50aG9yZC52MS5HZXRQdWJsaWNDb25maWd1cmF0aW9uUmVzcG9uc2USXAoPR2V0VGFza1RpbWVsaW5lEiMua2FudGhvcmQudjEuR2V0VGFza1RpbWVsaW5lUmVxdWVzdBokLmthbnRob3JkLnYxLkdldFRhc2tUaW1lbGluZVJlc3BvbnNlEnMKFlN1YnNjcmliZVNlc3Npb25FdmVudHMSKi5rYW50aG9yZC52MS5TdWJzY3JpYmVTZXNzaW9uRXZlbnRzUmVxdWVzdBorLmthbnRob3JkLnYxLlN1YnNjcmliZVNlc3Npb25FdmVudHNSZXNwb25zZTABElYKDVRyaWdnZXJWZXJpZnkSIS5rYW50aG9yZC52MS5UcmlnZ2VyVmVyaWZ5UmVxdWVzdBoiLmthbnRob3JkLnYxLlRyaWdnZXJWZXJpZnlSZXNwb25zZRJQCgtTaWduT2ZmUGxhbhIfLmthbnRob3JkLnYxLlNpZ25PZmZQbGFuUmVxdWVzdBogLmthbnRob3JkLnYxLlNpZ25PZmZQbGFuUmVzcG9uc2USRwoISGFsdFRhc2sSHC5rYW50aG9yZC52MS5IYWx0VGFza1JlcXVlc3QaHS5rYW50aG9yZC52MS5IYWx0VGFza1Jlc3BvbnNlElAKC0hhbHRGZWF0dXJlEh8ua2FudGhvcmQudjEuSGFsdEZlYXR1cmVSZXF1ZXN0GiAua2FudGhvcmQudjEuSGFsdEZlYXR1cmVSZXNwb25zZRJWCg1BcHByb3ZlUmVwbGFuEiEua2FudGhvcmQudjEuQXBwcm92ZVJlcGxhblJlcXVlc3QaIi5rYW50aG9yZC52MS5BcHByb3ZlUmVwbGFuUmVzcG9uc2USWQoOT3ZlcnJpZGVCdWRnZXQSIi5rYW50aG9yZC52MS5PdmVycmlkZUJ1ZGdldFJlcXVlc3QaIy5rYW50aG9yZC52MS5PdmVycmlkZUJ1ZGdldFJlc3BvbnNlYgZwcm90bzM");
 
 /**
  * @generated from message kanthord.v1.GetStatusRequest
@@ -763,6 +763,87 @@ export const GetFeatureResponseSchema: GenMessage<GetFeatureResponse> = /*@__PUR
   messageDesc(file_kanthord_v1_daemon, 24);
 
 /**
+ * @generated from message kanthord.v1.GetPendingReplanProposalRequest
+ */
+export type GetPendingReplanProposalRequest = Message<"kanthord.v1.GetPendingReplanProposalRequest"> & {
+  /**
+   * @generated from field: string feature_id = 1;
+   */
+  featureId: string;
+};
+
+/**
+ * Describes the message kanthord.v1.GetPendingReplanProposalRequest.
+ * Use `create(GetPendingReplanProposalRequestSchema)` to create a new message.
+ */
+export const GetPendingReplanProposalRequestSchema: GenMessage<GetPendingReplanProposalRequest> = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 25);
+
+/**
+ * @generated from message kanthord.v1.ReplanProposal
+ */
+export type ReplanProposal = Message<"kanthord.v1.ReplanProposal"> & {
+  /**
+   * @generated from field: string proposal_id = 1;
+   */
+  proposalId: string;
+
+  /**
+   * @generated from field: string feature_id = 2;
+   */
+  featureId: string;
+
+  /**
+   * @generated from field: int64 base_generation = 3;
+   */
+  baseGeneration: bigint;
+
+  /**
+   * @generated from field: string base_compile_hash = 4;
+   */
+  baseCompileHash: string;
+
+  /**
+   * @generated from field: int64 created_at = 5;
+   */
+  createdAt: bigint;
+
+  /**
+   * @generated from field: repeated kanthord.v1.FileEdit edits = 6;
+   */
+  edits: FileEdit[];
+
+  /**
+   * @generated from field: repeated kanthord.v1.DiffFile display_files = 7;
+   */
+  displayFiles: DiffFile[];
+};
+
+/**
+ * Describes the message kanthord.v1.ReplanProposal.
+ * Use `create(ReplanProposalSchema)` to create a new message.
+ */
+export const ReplanProposalSchema: GenMessage<ReplanProposal> = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 26);
+
+/**
+ * @generated from message kanthord.v1.GetPendingReplanProposalResponse
+ */
+export type GetPendingReplanProposalResponse = Message<"kanthord.v1.GetPendingReplanProposalResponse"> & {
+  /**
+   * @generated from field: kanthord.v1.ReplanProposal proposal = 1;
+   */
+  proposal?: ReplanProposal | undefined;
+};
+
+/**
+ * Describes the message kanthord.v1.GetPendingReplanProposalResponse.
+ * Use `create(GetPendingReplanProposalResponseSchema)` to create a new message.
+ */
+export const GetPendingReplanProposalResponseSchema: GenMessage<GetPendingReplanProposalResponse> = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 27);
+
+/**
  * --- features.summary (Epic 029 Story 002) ---
  *
  * @generated from message kanthord.v1.GetFeatureSummaryRequest
@@ -779,7 +860,7 @@ export type GetFeatureSummaryRequest = Message<"kanthord.v1.GetFeatureSummaryReq
  * Use `create(GetFeatureSummaryRequestSchema)` to create a new message.
  */
 export const GetFeatureSummaryRequestSchema: GenMessage<GetFeatureSummaryRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 25);
+  messageDesc(file_kanthord_v1_daemon, 28);
 
 /**
  * @generated from message kanthord.v1.InteractionTypeBreakdown
@@ -821,7 +902,7 @@ export type InteractionTypeBreakdown = Message<"kanthord.v1.InteractionTypeBreak
  * Use `create(InteractionTypeBreakdownSchema)` to create a new message.
  */
 export const InteractionTypeBreakdownSchema: GenMessage<InteractionTypeBreakdown> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 26);
+  messageDesc(file_kanthord_v1_daemon, 29);
 
 /**
  * @generated from message kanthord.v1.GetFeatureSummaryResponse
@@ -864,7 +945,7 @@ export type GetFeatureSummaryResponse = Message<"kanthord.v1.GetFeatureSummaryRe
  * Use `create(GetFeatureSummaryResponseSchema)` to create a new message.
  */
 export const GetFeatureSummaryResponseSchema: GenMessage<GetFeatureSummaryResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 27);
+  messageDesc(file_kanthord_v1_daemon, 30);
 
 /**
  * --- broker.operations ---
@@ -927,7 +1008,7 @@ export type BrokerOperation = Message<"kanthord.v1.BrokerOperation"> & {
  * Use `create(BrokerOperationSchema)` to create a new message.
  */
 export const BrokerOperationSchema: GenMessage<BrokerOperation> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 28);
+  messageDesc(file_kanthord_v1_daemon, 31);
 
 /**
  * @generated from message kanthord.v1.ListBrokerOperationsRequest
@@ -940,7 +1021,7 @@ export type ListBrokerOperationsRequest = Message<"kanthord.v1.ListBrokerOperati
  * Use `create(ListBrokerOperationsRequestSchema)` to create a new message.
  */
 export const ListBrokerOperationsRequestSchema: GenMessage<ListBrokerOperationsRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 29);
+  messageDesc(file_kanthord_v1_daemon, 32);
 
 /**
  * @generated from message kanthord.v1.ListBrokerOperationsResponse
@@ -957,7 +1038,7 @@ export type ListBrokerOperationsResponse = Message<"kanthord.v1.ListBrokerOperat
  * Use `create(ListBrokerOperationsResponseSchema)` to create a new message.
  */
 export const ListBrokerOperationsResponseSchema: GenMessage<ListBrokerOperationsResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 30);
+  messageDesc(file_kanthord_v1_daemon, 33);
 
 /**
  * --- broker.verbs (read-only registry view; no write method) ---
@@ -983,7 +1064,7 @@ export type BrokerVerbInfo = Message<"kanthord.v1.BrokerVerbInfo"> & {
  * Use `create(BrokerVerbInfoSchema)` to create a new message.
  */
 export const BrokerVerbInfoSchema: GenMessage<BrokerVerbInfo> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 31);
+  messageDesc(file_kanthord_v1_daemon, 34);
 
 /**
  * @generated from message kanthord.v1.ListBrokerVerbsRequest
@@ -996,7 +1077,7 @@ export type ListBrokerVerbsRequest = Message<"kanthord.v1.ListBrokerVerbsRequest
  * Use `create(ListBrokerVerbsRequestSchema)` to create a new message.
  */
 export const ListBrokerVerbsRequestSchema: GenMessage<ListBrokerVerbsRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 32);
+  messageDesc(file_kanthord_v1_daemon, 35);
 
 /**
  * @generated from message kanthord.v1.ListBrokerVerbsResponse
@@ -1013,7 +1094,7 @@ export type ListBrokerVerbsResponse = Message<"kanthord.v1.ListBrokerVerbsRespon
  * Use `create(ListBrokerVerbsResponseSchema)` to create a new message.
  */
 export const ListBrokerVerbsResponseSchema: GenMessage<ListBrokerVerbsResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 33);
+  messageDesc(file_kanthord_v1_daemon, 36);
 
 /**
  * --- slots.list ---
@@ -1052,7 +1133,7 @@ export type SlotInfo = Message<"kanthord.v1.SlotInfo"> & {
  * Use `create(SlotInfoSchema)` to create a new message.
  */
 export const SlotInfoSchema: GenMessage<SlotInfo> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 34);
+  messageDesc(file_kanthord_v1_daemon, 37);
 
 /**
  * @generated from message kanthord.v1.ListSlotsRequest
@@ -1065,7 +1146,7 @@ export type ListSlotsRequest = Message<"kanthord.v1.ListSlotsRequest"> & {
  * Use `create(ListSlotsRequestSchema)` to create a new message.
  */
 export const ListSlotsRequestSchema: GenMessage<ListSlotsRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 35);
+  messageDesc(file_kanthord_v1_daemon, 38);
 
 /**
  * @generated from message kanthord.v1.ListSlotsResponse
@@ -1082,7 +1163,7 @@ export type ListSlotsResponse = Message<"kanthord.v1.ListSlotsResponse"> & {
  * Use `create(ListSlotsResponseSchema)` to create a new message.
  */
 export const ListSlotsResponseSchema: GenMessage<ListSlotsResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 36);
+  messageDesc(file_kanthord_v1_daemon, 39);
 
 /**
  * --- budgets.get ---
@@ -1116,7 +1197,7 @@ export type BudgetOverrideInfo = Message<"kanthord.v1.BudgetOverrideInfo"> & {
  * Use `create(BudgetOverrideInfoSchema)` to create a new message.
  */
 export const BudgetOverrideInfoSchema: GenMessage<BudgetOverrideInfo> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 37);
+  messageDesc(file_kanthord_v1_daemon, 40);
 
 /**
  * @generated from message kanthord.v1.GetBudgetRequest
@@ -1133,7 +1214,7 @@ export type GetBudgetRequest = Message<"kanthord.v1.GetBudgetRequest"> & {
  * Use `create(GetBudgetRequestSchema)` to create a new message.
  */
 export const GetBudgetRequestSchema: GenMessage<GetBudgetRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 38);
+  messageDesc(file_kanthord_v1_daemon, 41);
 
 /**
  * @generated from message kanthord.v1.GetBudgetResponse
@@ -1174,7 +1255,7 @@ export type GetBudgetResponse = Message<"kanthord.v1.GetBudgetResponse"> & {
  * Use `create(GetBudgetResponseSchema)` to create a new message.
  */
 export const GetBudgetResponseSchema: GenMessage<GetBudgetResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 39);
+  messageDesc(file_kanthord_v1_daemon, 42);
 
 /**
  * --- budgets.list (Epic 027 N4 — per-task ledger rows for every tracked task) ---
@@ -1189,7 +1270,7 @@ export type ListBudgetsRequest = Message<"kanthord.v1.ListBudgetsRequest"> & {
  * Use `create(ListBudgetsRequestSchema)` to create a new message.
  */
 export const ListBudgetsRequestSchema: GenMessage<ListBudgetsRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 40);
+  messageDesc(file_kanthord_v1_daemon, 43);
 
 /**
  * @generated from message kanthord.v1.ListBudgetsResponse
@@ -1206,7 +1287,7 @@ export type ListBudgetsResponse = Message<"kanthord.v1.ListBudgetsResponse"> & {
  * Use `create(ListBudgetsResponseSchema)` to create a new message.
  */
 export const ListBudgetsResponseSchema: GenMessage<ListBudgetsResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 41);
+  messageDesc(file_kanthord_v1_daemon, 44);
 
 /**
  * --- daemon.status ---
@@ -1237,7 +1318,7 @@ export type DeadManPing = Message<"kanthord.v1.DeadManPing"> & {
  * Use `create(DeadManPingSchema)` to create a new message.
  */
 export const DeadManPingSchema: GenMessage<DeadManPing> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 42);
+  messageDesc(file_kanthord_v1_daemon, 45);
 
 /**
  * @generated from message kanthord.v1.VerifyReport
@@ -1273,7 +1354,7 @@ export type VerifyReport = Message<"kanthord.v1.VerifyReport"> & {
  * Use `create(VerifyReportSchema)` to create a new message.
  */
 export const VerifyReportSchema: GenMessage<VerifyReport> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 43);
+  messageDesc(file_kanthord_v1_daemon, 46);
 
 /**
  * @generated from message kanthord.v1.GetDaemonStatusRequest
@@ -1286,7 +1367,7 @@ export type GetDaemonStatusRequest = Message<"kanthord.v1.GetDaemonStatusRequest
  * Use `create(GetDaemonStatusRequestSchema)` to create a new message.
  */
 export const GetDaemonStatusRequestSchema: GenMessage<GetDaemonStatusRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 44);
+  messageDesc(file_kanthord_v1_daemon, 47);
 
 /**
  * @generated from message kanthord.v1.GetDaemonStatusResponse
@@ -1318,7 +1399,109 @@ export type GetDaemonStatusResponse = Message<"kanthord.v1.GetDaemonStatusRespon
  * Use `create(GetDaemonStatusResponseSchema)` to create a new message.
  */
 export const GetDaemonStatusResponseSchema: GenMessage<GetDaemonStatusResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 45);
+  messageDesc(file_kanthord_v1_daemon, 48);
+
+/**
+ * @generated from message kanthord.v1.GetPublicConfigurationRequest
+ */
+export type GetPublicConfigurationRequest = Message<"kanthord.v1.GetPublicConfigurationRequest"> & {
+};
+
+/**
+ * Describes the message kanthord.v1.GetPublicConfigurationRequest.
+ * Use `create(GetPublicConfigurationRequestSchema)` to create a new message.
+ */
+export const GetPublicConfigurationRequestSchema: GenMessage<GetPublicConfigurationRequest> = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 49);
+
+/**
+ * @generated from message kanthord.v1.PublicBrokerDeclaration
+ */
+export type PublicBrokerDeclaration = Message<"kanthord.v1.PublicBrokerDeclaration"> & {
+  /**
+   * @generated from field: string verb = 1;
+   */
+  verb: string;
+
+  /**
+   * @generated from field: string tier = 2;
+   */
+  tier: string;
+
+  /**
+   * @generated from field: int64 timeout_ms = 3;
+   */
+  timeoutMs: bigint;
+
+  /**
+   * @generated from field: int64 idempotency_window_ms = 4;
+   */
+  idempotencyWindowMs: bigint;
+
+  /**
+   * @generated from field: uint32 retry_max = 5;
+   */
+  retryMax: number;
+
+  /**
+   * @generated from field: string retry_backoff = 6;
+   */
+  retryBackoff: string;
+
+  /**
+   * @generated from field: int64 poll_interval_ms = 7;
+   */
+  pollIntervalMs: bigint;
+
+  /**
+   * @generated from field: repeated string terminal_states = 8;
+   */
+  terminalStates: string[];
+
+  /**
+   * @generated from field: uint32 requests_per_minute = 9;
+   */
+  requestsPerMinute: number;
+
+  /**
+   * @generated from field: bool observed_state_can_regress = 10;
+   */
+  observedStateCanRegress: boolean;
+
+  /**
+   * @generated from field: int64 pending_expiry_ms = 11;
+   */
+  pendingExpiryMs: bigint;
+};
+
+/**
+ * Describes the message kanthord.v1.PublicBrokerDeclaration.
+ * Use `create(PublicBrokerDeclarationSchema)` to create a new message.
+ */
+export const PublicBrokerDeclarationSchema: GenMessage<PublicBrokerDeclaration> = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 50);
+
+/**
+ * @generated from message kanthord.v1.GetPublicConfigurationResponse
+ */
+export type GetPublicConfigurationResponse = Message<"kanthord.v1.GetPublicConfigurationResponse"> & {
+  /**
+   * @generated from field: string diff_escalation_policy = 1;
+   */
+  diffEscalationPolicy: string;
+
+  /**
+   * @generated from field: repeated kanthord.v1.PublicBrokerDeclaration broker_declarations = 2;
+   */
+  brokerDeclarations: PublicBrokerDeclaration[];
+};
+
+/**
+ * Describes the message kanthord.v1.GetPublicConfigurationResponse.
+ * Use `create(GetPublicConfigurationResponseSchema)` to create a new message.
+ */
+export const GetPublicConfigurationResponseSchema: GenMessage<GetPublicConfigurationResponse> = /*@__PURE__*/
+  messageDesc(file_kanthord_v1_daemon, 51);
 
 /**
  * --- daemon.verify (single declared write among reads) ---
@@ -1333,7 +1516,7 @@ export type TriggerVerifyRequest = Message<"kanthord.v1.TriggerVerifyRequest"> &
  * Use `create(TriggerVerifyRequestSchema)` to create a new message.
  */
 export const TriggerVerifyRequestSchema: GenMessage<TriggerVerifyRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 46);
+  messageDesc(file_kanthord_v1_daemon, 52);
 
 /**
  * @generated from message kanthord.v1.TriggerVerifyResponse
@@ -1350,7 +1533,7 @@ export type TriggerVerifyResponse = Message<"kanthord.v1.TriggerVerifyResponse">
  * Use `create(TriggerVerifyResponseSchema)` to create a new message.
  */
 export const TriggerVerifyResponseSchema: GenMessage<TriggerVerifyResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 47);
+  messageDesc(file_kanthord_v1_daemon, 53);
 
 /**
  * --- audit.taskTimeline ---
@@ -1402,7 +1585,7 @@ export type TimelineEvent = Message<"kanthord.v1.TimelineEvent"> & {
  * Use `create(TimelineEventSchema)` to create a new message.
  */
 export const TimelineEventSchema: GenMessage<TimelineEvent> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 48);
+  messageDesc(file_kanthord_v1_daemon, 54);
 
 /**
  * @generated from message kanthord.v1.GetTaskTimelineRequest
@@ -1424,7 +1607,7 @@ export type GetTaskTimelineRequest = Message<"kanthord.v1.GetTaskTimelineRequest
  * Use `create(GetTaskTimelineRequestSchema)` to create a new message.
  */
 export const GetTaskTimelineRequestSchema: GenMessage<GetTaskTimelineRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 49);
+  messageDesc(file_kanthord_v1_daemon, 55);
 
 /**
  * @generated from message kanthord.v1.GetTaskTimelineResponse
@@ -1441,7 +1624,7 @@ export type GetTaskTimelineResponse = Message<"kanthord.v1.GetTaskTimelineRespon
  * Use `create(GetTaskTimelineResponseSchema)` to create a new message.
  */
 export const GetTaskTimelineResponseSchema: GenMessage<GetTaskTimelineResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 50);
+  messageDesc(file_kanthord_v1_daemon, 56);
 
 /**
  * --- audit session-event stream (server streaming) ---
@@ -1460,7 +1643,7 @@ export type SubscribeSessionEventsRequest = Message<"kanthord.v1.SubscribeSessio
  * Use `create(SubscribeSessionEventsRequestSchema)` to create a new message.
  */
 export const SubscribeSessionEventsRequestSchema: GenMessage<SubscribeSessionEventsRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 51);
+  messageDesc(file_kanthord_v1_daemon, 57);
 
 /**
  * @generated from message kanthord.v1.SessionEvent
@@ -1489,7 +1672,7 @@ export type SessionEvent = Message<"kanthord.v1.SessionEvent"> & {
  * Use `create(SessionEventSchema)` to create a new message.
  */
 export const SessionEventSchema: GenMessage<SessionEvent> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 52);
+  messageDesc(file_kanthord_v1_daemon, 58);
 
 /**
  * One streamed session event (wrapper satisfies the RPC response-name rule).
@@ -1508,7 +1691,7 @@ export type SubscribeSessionEventsResponse = Message<"kanthord.v1.SubscribeSessi
  * Use `create(SubscribeSessionEventsResponseSchema)` to create a new message.
  */
 export const SubscribeSessionEventsResponseSchema: GenMessage<SubscribeSessionEventsResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 53);
+  messageDesc(file_kanthord_v1_daemon, 59);
 
 /**
  * --- plan.signOff ---
@@ -1534,7 +1717,7 @@ export type SignOffPlanRequest = Message<"kanthord.v1.SignOffPlanRequest"> & {
  * Use `create(SignOffPlanRequestSchema)` to create a new message.
  */
 export const SignOffPlanRequestSchema: GenMessage<SignOffPlanRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 54);
+  messageDesc(file_kanthord_v1_daemon, 60);
 
 /**
  * @generated from message kanthord.v1.SignOffPlanResponse
@@ -1565,7 +1748,7 @@ export type SignOffPlanResponse = Message<"kanthord.v1.SignOffPlanResponse"> & {
  * Use `create(SignOffPlanResponseSchema)` to create a new message.
  */
 export const SignOffPlanResponseSchema: GenMessage<SignOffPlanResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 55);
+  messageDesc(file_kanthord_v1_daemon, 61);
 
 /**
  * --- task.halt / feature.halt ---
@@ -1589,7 +1772,7 @@ export type HaltTaskRequest = Message<"kanthord.v1.HaltTaskRequest"> & {
  * Use `create(HaltTaskRequestSchema)` to create a new message.
  */
 export const HaltTaskRequestSchema: GenMessage<HaltTaskRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 56);
+  messageDesc(file_kanthord_v1_daemon, 62);
 
 /**
  * @generated from message kanthord.v1.HaltTaskResponse
@@ -1606,7 +1789,7 @@ export type HaltTaskResponse = Message<"kanthord.v1.HaltTaskResponse"> & {
  * Use `create(HaltTaskResponseSchema)` to create a new message.
  */
 export const HaltTaskResponseSchema: GenMessage<HaltTaskResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 57);
+  messageDesc(file_kanthord_v1_daemon, 63);
 
 /**
  * @generated from message kanthord.v1.HaltFeatureRequest
@@ -1628,7 +1811,7 @@ export type HaltFeatureRequest = Message<"kanthord.v1.HaltFeatureRequest"> & {
  * Use `create(HaltFeatureRequestSchema)` to create a new message.
  */
 export const HaltFeatureRequestSchema: GenMessage<HaltFeatureRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 58);
+  messageDesc(file_kanthord_v1_daemon, 64);
 
 /**
  * @generated from message kanthord.v1.HaltFeatureResponse
@@ -1645,7 +1828,7 @@ export type HaltFeatureResponse = Message<"kanthord.v1.HaltFeatureResponse"> & {
  * Use `create(HaltFeatureResponseSchema)` to create a new message.
  */
 export const HaltFeatureResponseSchema: GenMessage<HaltFeatureResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 59);
+  messageDesc(file_kanthord_v1_daemon, 65);
 
 /**
  * --- plan.approveReplan ---
@@ -1673,7 +1856,7 @@ export type FileEdit = Message<"kanthord.v1.FileEdit"> & {
  * Use `create(FileEditSchema)` to create a new message.
  */
 export const FileEditSchema: GenMessage<FileEdit> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 60);
+  messageDesc(file_kanthord_v1_daemon, 66);
 
 /**
  * @generated from message kanthord.v1.ApproveReplanRequest
@@ -1700,6 +1883,14 @@ export type ApproveReplanRequest = Message<"kanthord.v1.ApproveReplanRequest"> &
    * @generated from field: string actor = 4;
    */
   actor: string;
+
+  /**
+   * Durable approval path. When present, the server consumes the stored edit
+   * set instead of trusting caller-supplied file contents.
+   *
+   * @generated from field: string proposal_id = 5;
+   */
+  proposalId: string;
 };
 
 /**
@@ -1707,7 +1898,7 @@ export type ApproveReplanRequest = Message<"kanthord.v1.ApproveReplanRequest"> &
  * Use `create(ApproveReplanRequestSchema)` to create a new message.
  */
 export const ApproveReplanRequestSchema: GenMessage<ApproveReplanRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 61);
+  messageDesc(file_kanthord_v1_daemon, 67);
 
 /**
  * @generated from message kanthord.v1.ApproveReplanResponse
@@ -1733,7 +1924,7 @@ export type ApproveReplanResponse = Message<"kanthord.v1.ApproveReplanResponse">
  * Use `create(ApproveReplanResponseSchema)` to create a new message.
  */
 export const ApproveReplanResponseSchema: GenMessage<ApproveReplanResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 62);
+  messageDesc(file_kanthord_v1_daemon, 68);
 
 /**
  * --- budget.override ---
@@ -1769,7 +1960,7 @@ export type OverrideBudgetRequest = Message<"kanthord.v1.OverrideBudgetRequest">
  * Use `create(OverrideBudgetRequestSchema)` to create a new message.
  */
 export const OverrideBudgetRequestSchema: GenMessage<OverrideBudgetRequest> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 63);
+  messageDesc(file_kanthord_v1_daemon, 69);
 
 /**
  * @generated from message kanthord.v1.OverrideBudgetResponse
@@ -1788,7 +1979,7 @@ export type OverrideBudgetResponse = Message<"kanthord.v1.OverrideBudgetResponse
  * Use `create(OverrideBudgetResponseSchema)` to create a new message.
  */
 export const OverrideBudgetResponseSchema: GenMessage<OverrideBudgetResponse> = /*@__PURE__*/
-  messageDesc(file_kanthord_v1_daemon, 64);
+  messageDesc(file_kanthord_v1_daemon, 70);
 
 /**
  * @generated from service kanthord.v1.DaemonService
@@ -1871,6 +2062,16 @@ export const DaemonService: GenService<{
     output: typeof GetFeatureSummaryResponseSchema;
   },
   /**
+   * plan.replan.pending — durable authored-file proposal awaiting human review.
+   *
+   * @generated from rpc kanthord.v1.DaemonService.GetPendingReplanProposal
+   */
+  getPendingReplanProposal: {
+    methodKind: "unary";
+    input: typeof GetPendingReplanProposalRequestSchema;
+    output: typeof GetPendingReplanProposalResponseSchema;
+  },
+  /**
    * broker.operations — in-flight / pending / expiring ops with state + correlation.
    *
    * @generated from rpc kanthord.v1.DaemonService.ListBrokerOperations
@@ -1940,6 +2141,16 @@ export const DaemonService: GenService<{
     methodKind: "unary";
     input: typeof GetDaemonStatusRequestSchema;
     output: typeof GetDaemonStatusResponseSchema;
+  },
+  /**
+   * config.public — typed allowlisted operational configuration; no raw files.
+   *
+   * @generated from rpc kanthord.v1.DaemonService.GetPublicConfiguration
+   */
+  getPublicConfiguration: {
+    methodKind: "unary";
+    input: typeof GetPublicConfigurationRequestSchema;
+    output: typeof GetPublicConfigurationResponseSchema;
   },
   /**
    * audit.taskTimeline — a task's ordered timeline (Epic 019.5 queryTaskTimeline).

@@ -5,6 +5,11 @@ IMAGE    := kanthord-dev
 CONTAINER:= kanthord-dev
 DATA_DIR := $(CURDIR)/.data
 PORT     := 7777
+WEB_PORT ?= 5173
+SLOT     ?= /data/kanthord-auth/slots/kanthord-verify.yaml
+ACCOUNT  ?= codex
+MODEL    ?= gpt-5.4-mini
+DASHBOARD_COMPOSE := podman compose -f compose.web.yaml
 
 # Rootless Podman: --userns=keep-id maps the container user to your host uid so
 # files written into .data/ are owned by you and keep their 0600/0700 perms.
@@ -16,7 +21,8 @@ RUN_FLAGS := --userns=keep-id \
 .DEFAULT_GOAL := help
 
 .PHONY: help machine-up machine-down machine-status data build up down restart \
-	logs shell ps reset verify clean compose-up compose-down compose-logs
+	logs shell ps reset verify clean compose-up compose-down compose-logs \
+	dashboard-up dashboard-down dashboard-logs dashboard-ps
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -86,3 +92,18 @@ compose-down: ## Stop the compose stack (keeps the .data/ bind, removes the sock
 
 compose-logs: ## Follow logs from both compose services
 	podman-compose logs -f
+
+# --- Real Core + Vite dashboard ----------------------------------------------
+dashboard-up: data ## Build and start real Core + web UI (http://127.0.0.1:5173)
+	KANTHORD_SLOT="$(SLOT)" KANTHORD_ACCOUNT="$(ACCOUNT)" KANTHORD_MODEL="$(MODEL)" \
+		WEB_PORT="$(WEB_PORT)" $(DASHBOARD_COMPOSE) up -d --build
+	@echo "dashboard: http://127.0.0.1:$(WEB_PORT)"
+
+dashboard-down: ## Stop and remove the real Core + web UI stack
+	$(DASHBOARD_COMPOSE) down
+
+dashboard-logs: ## Follow real Core + web UI logs
+	$(DASHBOARD_COMPOSE) logs -f
+
+dashboard-ps: ## Show real Core + web UI service status
+	$(DASHBOARD_COMPOSE) ps

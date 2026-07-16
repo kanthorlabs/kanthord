@@ -15,6 +15,11 @@ export const locators = {
     empty: "data-states-empty",
     error: "data-states-error",
   },
+  pageFreshness: {
+    updated: "page-freshness-updated",
+    refresh: "page-freshness-refresh",
+    spinner: "page-freshness-spinner",
+  },
   // Story 000 T2 — AppShell nav + layout regions (DESIGN §6, §8)
   appShell: {
     nav: "app-shell-nav",
@@ -41,6 +46,7 @@ export const locators = {
       row: "features-list-row",
       empty: "features-list-empty",
       table: "features-list-table",
+      link: (featureId: string) => `features-list-link-${featureId}`,
     },
     // Story 001 T2 — feature drill-down surface
     detail: {
@@ -149,6 +155,10 @@ export const locators = {
     verifyOutcome: "daemon-ops-verify-outcome",
     // B3 — inline error element when triggerVerify rejects
     verifyError: "daemon-ops-verify-error",
+    configurationCard: "daemon-ops-configuration-card",
+    configurationYaml: "daemon-ops-configuration-yaml",
+    configurationReadOnly: "daemon-ops-configuration-read-only",
+    configurationGitDiscipline: "daemon-ops-configuration-git-discipline",
   },
   metrics: {
     featureSummary: {
@@ -230,6 +240,7 @@ export const locators = {
       approve: "plan-flows-replan-approve",
       reopenedTasks: "plan-flows-replan-reopened-tasks",
       conflict: "plan-flows-replan-conflict",
+      error: "plan-flows-replan-error",
     },
   },
 } as const;

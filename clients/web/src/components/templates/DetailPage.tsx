@@ -17,6 +17,8 @@ import {
   TabsTrigger,
   TabsContent,
 } from "@/components/ui/tabs";
+import { PageFreshness } from "@/components/PageFreshness";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { locators } from "@/locators";
 
 export interface BreadcrumbItem {
@@ -34,30 +36,42 @@ export interface DetailPageProps {
   breadcrumb: BreadcrumbItem[];
   tabs: TabDef[];
   defaultTab: string;
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
+  refreshError?: { message: string };
 }
 
-export function DetailPage({ breadcrumb, tabs, defaultTab }: DetailPageProps) {
+export function DetailPage({ breadcrumb, tabs, defaultTab, fetchedAt, onRefresh, refreshError }: DetailPageProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* Breadcrumb slot — DESIGN §8 locator on the container */}
-      <nav
-        data-testid={locators.detailPage.breadcrumb}
-        aria-label="breadcrumb"
-        className="flex items-center gap-1 text-sm text-muted-foreground"
-      >
-        {breadcrumb.map((item, i) => (
-          <span key={item.label} className="flex items-center gap-1">
-            {i > 0 && <span aria-hidden="true">/</span>}
-            {item.href !== undefined ? (
-              <a href={item.href} className="hover:text-foreground">
-                {item.label}
-              </a>
-            ) : (
-              <span className="text-foreground">{item.label}</span>
-            )}
-          </span>
-        ))}
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <nav
+          data-testid={locators.detailPage.breadcrumb}
+          aria-label="breadcrumb"
+          className="flex items-center gap-1 text-sm text-muted-foreground"
+        >
+          {breadcrumb.map((item, i) => (
+            <span key={item.label} className="flex items-center gap-1">
+              {i > 0 && <span aria-hidden="true">/</span>}
+              {item.href !== undefined ? (
+                <a href={item.href} className="hover:text-foreground">
+                  {item.label}
+                </a>
+              ) : (
+                <span className="text-foreground">{item.label}</span>
+              )}
+            </span>
+          ))}
+        </nav>
+        {fetchedAt !== undefined && onRefresh !== undefined && (
+          <PageFreshness fetchedAt={fetchedAt} onRefresh={onRefresh} />
+        )}
+      </div>
+
+      {refreshError !== undefined && (
+        <Alert variant="destructive"><AlertDescription>{refreshError.message}</AlertDescription></Alert>
+      )}
 
       {/* Tabs — DESIGN §8: trigger + panel each carry a locator */}
       <Tabs defaultValue={defaultTab}>

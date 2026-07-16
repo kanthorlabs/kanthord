@@ -66,6 +66,38 @@ const APPROVAL_ITEM = {
   expired: false,
 };
 
+const PENDING_REPLAN_PROPOSAL = {
+  proposalId: "replan-proposal-container",
+  featureId: FEATURE.featureId,
+  baseGeneration: 8n,
+  baseCompileHash: "container-base-hash",
+  createdAt: 1_721_000_000_000n,
+  edits: [{ path: "001-plan/001-task.md", newContent: "container revised task" }],
+  displayFiles: [{
+    path: "001-plan/001-task.md",
+    lines: [{ kind: "add", content: "container revised task" }],
+  }],
+};
+
+const PUBLIC_CONFIGURATION = {
+  diffEscalationPolicy: "escalate_all_diffs",
+  brokerDeclarations: [
+    {
+      verb: "github.create_pr",
+      tier: "auto_with_audit",
+      timeoutMs: 120_000,
+      idempotencyWindowMs: 3_600_000,
+      retryMax: 5,
+      retryBackoff: "exponential",
+      pollIntervalMs: 10_000,
+      terminalStates: ["done", "failed", "escalation_needed"],
+      requestsPerMinute: 60,
+      observedStateCanRegress: true,
+      pendingExpiryMs: 300_000,
+    },
+  ],
+};
+
 function safeClient(overrides: Record<string, unknown> = {}): DaemonClient {
   return {
     listFeatures: async () => ({ features: [] }),
@@ -109,7 +141,170 @@ function renderWithClient(client: DaemonClient, child: ReactNode) {
   );
 }
 
+function deferred<T>() {
+  let resolve: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve: (value: T) => resolve(value) };
+}
+
 describe("route fetch containers — daemon reads and view-model adaptation", () => {
+  it("FeatureList records completion after a successful read and refreshes without hiding current content", async () => {
+    const user = userEvent.setup();
+    const secondRead = deferred<{ features: Array<typeof FEATURE> }>();
+    let reads = 0;
+    const client = safeClient({
+      listFeatures: async () => {
+        reads += 1;
+        return reads === 1 ? { features: [FEATURE] } : secondRead.promise;
+      },
+    });
+
+    renderWithClient(client, <MemoryRouter><FeatureListContainer /></MemoryRouter>);
+
+    expect(await screen.findByTestId(locators.features.list.row)).toHaveTextContent(FEATURE.featureId);
+    expect(screen.getByTestId(locators.pageFreshness.updated)).toBeInTheDocument();
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByTestId(locators.features.list.row)).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
+  it("FeatureDetail refreshes getFeature without hiding the current feature", async () => {
+    const user = userEvent.setup();
+    const secondRead = deferred<typeof FEATURE_DETAIL>();
+    let reads = 0;
+    const client = safeClient({
+      getFeature: async () => {
+        reads += 1;
+        return reads === 1 ? FEATURE_DETAIL : secondRead.promise;
+      },
+    });
+
+    renderWithClient(client, <MemoryRouter initialEntries={[`/features/${FEATURE.featureId}`]}><Routes><Route path="/features/:featureId" element={<FeatureDetailContainer />} /></Routes></MemoryRouter>);
+
+    await screen.findByTestId(locators.features.detail.taskRow("task-container"));
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByTestId(locators.features.detail.taskRow("task-container"))).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
+  it("Inbox refreshes listInboxItems without hiding the current inbox", async () => {
+    const user = userEvent.setup();
+    const secondRead = deferred<{ items: Array<typeof APPROVAL_ITEM> }>();
+    let reads = 0;
+    const client = safeClient({
+      listInboxItems: async () => {
+        reads += 1;
+        return reads === 1 ? { items: [APPROVAL_ITEM] } : secondRead.promise;
+      },
+    });
+
+    renderWithClient(client, <InboxContainer />);
+
+    await screen.findByTestId(locators.inbox.list.row);
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByTestId(locators.inbox.list.row)).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
+  it("Broker refreshes both daemon reads without hiding either current view", async () => {
+    const user = userEvent.setup();
+    const operations = [{ opId: "fresh-op", state: "in_flight", correlation: "fresh", verb: "github.commit", expiring: false }];
+    const verbs = [{ verb: "github.commit", tier: "approval" }];
+    const secondOperations = deferred<{ operations: typeof operations }>();
+    const secondVerbs = deferred<{ verbs: typeof verbs }>();
+    let operationReads = 0;
+    let verbReads = 0;
+    const client = safeClient({
+      listBrokerOperations: async () => {
+        operationReads += 1;
+        return operationReads === 1 ? { operations } : secondOperations.promise;
+      },
+      listBrokerVerbs: async () => {
+        verbReads += 1;
+        return verbReads === 1 ? { verbs } : secondVerbs.promise;
+      },
+    });
+
+    renderWithClient(client, <BrokerContainer />);
+
+    await screen.findByTestId(locators.broker.ops.row);
+    await screen.findByTestId(locators.broker.verbs.row);
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(operationReads).toBe(2));
+    await waitFor(() => expect(verbReads).toBe(2));
+    expect(screen.getByTestId(locators.broker.ops.row)).toBeInTheDocument();
+    expect(screen.getByTestId(locators.broker.verbs.row)).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
+  it("RepoSlots refreshes listSlots without hiding the current slots", async () => {
+    const user = userEvent.setup();
+    const slots = [{ name: "fresh-slot", repo: "org/fresh", strategy: "single", heldLeases: [], activeSessions: [] }];
+    const secondRead = deferred<{ slots: typeof slots }>();
+    let reads = 0;
+    const client = safeClient({
+      listSlots: async () => {
+        reads += 1;
+        return reads === 1 ? { slots } : secondRead.promise;
+      },
+    });
+
+    renderWithClient(client, <RepoSlotsContainer />);
+
+    await screen.findByTestId(locators.slots.row);
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByTestId(locators.slots.row)).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
+  it("Budgets refreshes listBudgets without hiding the current ledger", async () => {
+    const user = userEvent.setup();
+    const budgets = [{ taskId: "fresh-budget", spent: 11, ceiling: 20, breakerState: "closed", override: undefined }];
+    const secondRead = deferred<{ budgets: typeof budgets }>();
+    let reads = 0;
+    const client = safeClient({
+      listBudgets: async () => {
+        reads += 1;
+        return reads === 1 ? { budgets } : secondRead.promise;
+      },
+    });
+
+    renderWithClient(client, <BudgetsContainer />);
+
+    await screen.findByTestId(locators.budgets.ledger.row);
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByTestId(locators.budgets.ledger.row)).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
+  it("DaemonOps refreshes getDaemonStatus without hiding the current status", async () => {
+    const user = userEvent.setup();
+    const status = { version: "fresh", uptimeSeconds: 0n, lastPing: { present: true, sentAt: 1n, tasksProcessed: 3n } };
+    const secondRead = deferred<typeof status>();
+    let reads = 0;
+    const client = safeClient({
+      getDaemonStatus: async () => {
+        reads += 1;
+        return reads === 1 ? status : secondRead.promise;
+      },
+    });
+
+    renderWithClient(client, <DaemonOpsContainer />);
+
+    await screen.findByTestId(locators.daemonOps.healthCard);
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+    await waitFor(() => expect(reads).toBe(2));
+    expect(screen.getByTestId(locators.daemonOps.healthCard)).toBeInTheDocument();
+    expect(screen.queryByTestId(locators.dataStates.loading)).not.toBeInTheDocument();
+  });
+
   it("FeatureListContainer reads listFeatures and supplies the feature list view", async () => {
     const client = safeClient({ listFeatures: async () => ({ features: [FEATURE] }) });
 
@@ -146,6 +341,33 @@ describe("route fetch containers — daemon reads and view-model adaptation", ()
     expect(
       await screen.findByTestId(locators.features.detail.taskRow("task-container")),
     ).toBeInTheDocument();
+    expect(requestedFeatureId).toBe(FEATURE.featureId);
+  });
+
+  it("FeatureDetailContainer reads a pending replan and mounts its controls tab", async () => {
+    const user = userEvent.setup();
+    let requestedFeatureId: string | undefined;
+    const client = safeClient({
+      getPendingReplanProposal: async (request: { featureId: string }) => {
+        requestedFeatureId = request.featureId;
+        return { proposal: PENDING_REPLAN_PROPOSAL };
+      },
+    });
+
+    renderWithClient(
+      client,
+      <MemoryRouter initialEntries={[`/features/${FEATURE.featureId}`]}>
+        <Routes>
+          <Route path="/features/:featureId" element={<FeatureDetailContainer />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByTestId(locators.features.detail.taskRow("task-container"));
+    await user.click(screen.getByTestId(locators.detailPage.tabTrigger("controls")));
+    expect(screen.getByTestId(locators.planFlows.signOff.trigger)).toBeInTheDocument();
+    expect(screen.getByTestId(locators.planFlows.halt.trigger)).toBeInTheDocument();
+    expect(screen.getByTestId(locators.planFlows.replan.baseGeneration)).toHaveTextContent("8");
     expect(requestedFeatureId).toBe(FEATURE.featureId);
   });
 
@@ -261,18 +483,30 @@ describe("route fetch containers — daemon reads and view-model adaptation", ()
   });
 
   it("DaemonOpsContainer reads daemon status and supplies the operations view", async () => {
+    let daemonStatusReads = 0;
+    let publicConfigurationReads = 0;
     const client = safeClient({
-      getDaemonStatus: async () => ({
-        version: "test",
-        uptimeSeconds: 0n,
-        lastPing: { present: true, sentAt: 1n, tasksProcessed: 3n },
-      }),
+      getDaemonStatus: async () => {
+        daemonStatusReads += 1;
+        return {
+          version: "test",
+          uptimeSeconds: 0n,
+          lastPing: { present: true, sentAt: 1n, tasksProcessed: 3n },
+        };
+      },
+      getPublicConfiguration: async () => {
+        publicConfigurationReads += 1;
+        return PUBLIC_CONFIGURATION;
+      },
     });
 
     renderWithClient(client, <DaemonOpsContainer />);
 
     expect(await screen.findByTestId(locators.daemonOps.healthCard)).toBeInTheDocument();
     expect(screen.getByTestId(locators.daemonOps.tasksProcessed)).toHaveTextContent("3");
+    expect(await screen.findByTestId(locators.daemonOps.configurationCard)).toBeInTheDocument();
+    expect(daemonStatusReads).toBe(1);
+    expect(publicConfigurationReads).toBe(1);
   });
 
   it("InboxItemContainer reloads the open inbox after an escalation response and navigates to the deterministic next item", async () => {

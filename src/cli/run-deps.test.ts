@@ -24,11 +24,48 @@ import type { Model } from "@earendil-works/pi-ai";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
 import type { PatternRegistry } from "../ring1/secret-scan.ts";
+import type { PublicConfiguration } from "../rpc/read-surfaces.ts";
 import { mkdtemp, writeFile, chmod, rm, readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { IdentityLoadError } from "../git/keyring.ts";
+
+test(
+  "public configuration authority — buildRealDeps passes injected publicConfiguration to the status server factory without starting a listener",
+  () => {
+    const publicConfiguration: PublicConfiguration = {
+      diffEscalationPolicy: "escalate_all_diffs",
+      brokerDeclarations: [],
+    };
+    let capturedOptions: unknown;
+    const store = openStore(":memory:", { busyTimeout: 1000 });
+
+    const deps = buildRealDeps({
+      store,
+      featureDir: "/tmp/run-deps-public-configuration",
+      publicConfiguration,
+      statusServerFactory: (options) => {
+        capturedOptions = options;
+        return {
+          async start() {
+            return { host: "127.0.0.1", port: 0 };
+          },
+          async stop() {},
+        };
+      },
+    });
+
+    deps.statusServerFactory({ store });
+
+    assert.ok(capturedOptions !== undefined, "the injected status server factory must be called");
+    assert.strictEqual(
+      (capturedOptions as { publicConfiguration?: PublicConfiguration }).publicConfiguration,
+      publicConfiguration,
+      "the loaded public configuration must be passed unchanged to createStatusServer options",
+    );
+  },
+);
 
 // ---------------------------------------------------------------------------
 // RB1 — piSurface.spawnAgent uses makeAgentOpts

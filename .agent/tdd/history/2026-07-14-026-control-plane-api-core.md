@@ -1356,3 +1356,83 @@ IMPLEMENTATION_READY_FOR_REVIEW:
 END: TEST-ENGINEER
 
 HUMAN_REVIEW: PASS
+## SOFTWARE-ENGINEER — 026-control-plane-api · public configuration
+
+**Cycle.** GREEN+REFACTOR for `src/rpc/read-surfaces.test.ts`, `src/daemon/control-plane-server.test.ts`, `clients/web/src/daemon-ops/Configuration.test.tsx`, and `clients/web/src/app/RouteContainers.test.tsx`.
+**Files changed.**
+- `src/rpc/read-surfaces.ts` (edited) — typed public-configuration allowlist projection
+- `src/daemon/status-server.ts` (edited) — injected public-configuration RPC handler
+- `clients/web/src/daemon-ops/Configuration.tsx` (new) — normalized read-only YAML card
+- `clients/web/src/daemon-ops/DaemonOps.tsx` (edited) — mounts configuration under Ops
+- `clients/web/src/daemon-ops/DaemonOpsContainer.tsx` (edited) — reads configuration separately from daemon status
+- `clients/web/src/locators.ts` (edited) — configuration locator registry entries
+**Seam (GREEN).** The server copies the injected configuration through an explicit declaration-field allowlist and maps its generated int64 output; Ops renders the resulting values as deterministic YAML.
+**Refactor.** none.
+**Identifiers assigned.**
+- `locators.daemonOps.configurationCard` = `"daemon-ops-configuration-card"` → configuration card root
+- `locators.daemonOps.configurationYaml` = `"daemon-ops-configuration-yaml"` → YAML `pre`
+- `locators.daemonOps.configurationReadOnly` = `"daemon-ops-configuration-read-only"` → read-only marker
+- `locators.daemonOps.configurationGitDiscipline` = `"daemon-ops-configuration-git-discipline"` → Git-discipline note
+**Build check.**
+- `npm run typecheck`: exit 0 · log: `.agent/tdd/typecheck-public-configuration.log`
+- `npm run typecheck:web`: exit 2 · log: `.agent/tdd/typecheck-web-public-configuration.log` · separate missing `PageFreshness` surface and locators
+- `npm run build:web`: exit 2 · log: `.agent/tdd/build-web-public-configuration.log` · stopped by the same separate `PageFreshness` TypeScript errors
+
+OPEN: The separately RED PageFreshness work blocks the web typecheck and bundle; it was not implemented.
+
+ATTEMPT-FAILED: direct-public-configuration — separate PageFreshness RED prevents web handoff artifacts.
+
+END: SOFTWARE-ENGINEER
+## SOFTWARE-ENGINEER — web dashboard · page freshness
+
+**Cycle.** GREEN+REFACTOR for `clients/web/src/components/PageFreshness.test.tsx`, template freshness tests, and `clients/web/src/app/RouteContainers.test.tsx` refresh cases.
+**Files changed.**
+- `clients/web/src/components/PageFreshness.tsx` (new) — local fetch timestamp and pending refresh control.
+- `clients/web/src/locators.ts` (edited) — page freshness registry values.
+- `clients/web/src/components/templates/{ListPage,DetailPage,OpsPage}.tsx` (edited) — optional freshness and refresh-error header slots.
+- `clients/web/src/{features,inbox,broker,slots,budgets,daemon-ops}/**` (edited) — timestamped, cancellation-safe page reads and refresh callbacks.
+**Seam (GREEN).** Each container preserves loaded data during a manual read, updates `fetchedAt` after its owned reads complete successfully, and renders read failures inline without polling.
+**Refactor.** Kept the existing request-version cancellation pattern while using one read function for initial loads and manual refreshes.
+**Identifiers assigned.**
+- `locators.pageFreshness.updated` = `"page-freshness-updated"` → fetch-time label in `PageFreshness.tsx`
+- `locators.pageFreshness.refresh` = `"page-freshness-refresh"` → vendored refresh Button in `PageFreshness.tsx`
+**Build check.**
+- web typecheck: exit 0 · log: `.agent/tdd/typecheck-page-freshness.log`
+- web build: exit 0 · log: `.agent/tdd/build-page-freshness.log`
+**Assumptions.**
+- VERIFIED: the dashboard's page freshness requirement calls for client-local `Updated HH:MM` and no polling (DESIGN §6–§7).
+
+END: SOFTWARE-ENGINEER
+## TEST-ENGINEER — 026-control-plane-api · public configuration authority
+
+**Cycle.** RED for Task `direct-public-configuration-authority` (`src/config/public-configuration.test.ts`, `src/cli/run-deps.test.ts`).
+**Test written.**
+- file: `src/config/public-configuration.test.ts` (new) — suite: `src/config/public-configuration.ts` — methods: `public configuration authority loads the fixed diff policy and every git-owned broker declaration`, `public configuration authority projects only the typed public allowlist`
+- file: `src/cli/run-deps.test.ts` (edited) — suite: `src/cli/run-deps.ts` — method: `public configuration authority — buildRealDeps passes injected publicConfiguration to the status server factory without starting a listener`
+- asserts: the loader exposes `escalate_all_diffs`, all checked-in broker verbs, and the exact public `github.create_pr` declaration while projecting no private field; the live dependency factory passes the injected public configuration to its status-server factory without opening a listener.
+**RED proof.**
+- command: `npm test -- --test-name-pattern="public configuration authority"`
+- exit: 1 — failure: `Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/Users/tuanatelsa/Projects/kanthorlabs/kanthord/src/config/public-configuration.ts' imported from /Users/tuanatelsa/Projects/kanthorlabs/kanthord/src/config/public-configuration.test.ts`
+- independent RED: `AssertionError [ERR_ASSERTION]: the injected status server factory must be called`
+**Open to Software Engineer.**
+- `src/config/public-configuration.ts`: `loadPublicConfiguration(): Promise<PublicConfiguration>`.
+- `buildRealDeps` options and resulting status-server factory: accept `publicConfiguration` and an injectable status-server factory; factory options carry that `PublicConfiguration` value.
+
+END: TEST-ENGINEER
+## SOFTWARE-ENGINEER — 026-control-plane-api · public configuration authority
+
+**Cycle.** GREEN+REFACTOR for `src/config/public-configuration.test.ts`, `src/cli/run-deps.test.ts`.
+**Files changed.**
+- `config/public-configuration.yaml` (new) — fixed public diff escalation policy
+- `src/config/public-configuration.ts` (new) — `loadPublicConfiguration()`
+- `src/cli/run-deps.ts` (edited) — public-configuration and status-server constructor seams
+- `src/cli/bootstrap-live-run.ts` (edited) — live configuration load and injection
+**Seam (GREEN).** The loader reads the fixed policy and checked-in verb registry, maps only the public declaration fields in sorted verb order, and the live dependency wrapper passes that value plus its interaction log to the selected status-server factory.
+**Refactor.** none.
+**Build check.**
+- core typecheck: exit 0 · log: `.agent/tdd/typecheck-public-configuration-authority.log`
+- core production handoff: `VERIFY: PASS` · log: `.agent/tdd/verify-handoff-public-configuration-authority.log`
+**Assumptions.**
+- VERIFIED: `loadVerbRegistry()` consumes the checked-in `broker/verbs` YAML declarations; the public mapper copies only its declared response fields.
+
+END: SOFTWARE-ENGINEER

@@ -1,0 +1,14 @@
+# Docker Compose may use a Docker-compatible external provider, which reads
+# .dockerignore rather than Podman's .containerignore.
+.data/
+.git/
+node_modules/
+**/node_modules/
+.agent/
+*.log
+clients/web/dist/
+clients/web/test-results/
+clients/web/playwright-report/
+.env
+.env.*
+!.env.example

@@ -45,6 +45,20 @@ const TWO_TAB_FIXTURE = {
 };
 
 describe("DetailPage — DESIGN §6 template (breadcrumb + tabs)", () => {
+  it("accepts fetchedAt and onRefresh and renders the shared freshness control", async () => {
+    const user = userEvent.setup();
+    render(
+      <DetailPage
+        {...TWO_TAB_FIXTURE}
+        fetchedAt={new Date("2026-07-15T14:05:00")}
+        onRefresh={async () => {}}
+      />,
+    );
+
+    expect(screen.getByTestId(locators.pageFreshness.updated)).toHaveTextContent("Updated 14:05");
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+  });
+
   describe("breadcrumb slot", () => {
     it("renders the breadcrumb container", () => {
       render(<DetailPage {...TWO_TAB_FIXTURE} />);

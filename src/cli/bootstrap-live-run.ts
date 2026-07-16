@@ -26,6 +26,7 @@ import { buildRealDeps } from "./run-deps.ts";
 import type { BuildRealDepsOpts } from "./run-deps.ts";
 import type { RunDaemonDeps } from "../daemon/run-loop.ts";
 import { loadCommitterIdentity } from "../config/committer-identity.ts";
+import { loadPublicConfiguration } from "../config/public-configuration.ts";
 import { UserReviewRouter } from "../review/review-router.ts";
 import type { RepoSlot, RunGitFn } from "../slots/repo-slot.ts";
 import type { VerbRegistryEntry, AsyncVerbAdapter } from "../broker/registry.ts";
@@ -155,6 +156,7 @@ export async function bootstrapLiveRun(
   //    repo: parse owner/name slug from the full HTTPS clone URL so
   //    makeCreatePrAdapter receives the correct slug (not the full URL).
   const patternRegistry: PatternRegistry = { version: "1.0", patterns: [] };
+  const publicConfiguration = await loadPublicConfiguration();
   const realDeps = await buildRealDeps({
     store,
     featureDir,
@@ -166,6 +168,7 @@ export async function bootstrapLiveRun(
     identityFile,
     repo: repoUrlToSlug(slot.repo),
     patternRegistry,
+    publicConfiguration,
   });
 
   // 6. commitsAhead: count commits on a branch vs base in the local checkout

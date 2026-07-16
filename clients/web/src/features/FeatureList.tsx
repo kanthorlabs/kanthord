@@ -27,6 +27,7 @@ import { locators } from "@/locators";
 
 interface Feature {
   featureId: string;
+  name: string;
   status: string;
   phase: string;
   progressSummary: string;
@@ -35,16 +36,22 @@ interface Feature {
 export interface FeatureListProps {
   loading?: boolean;
   error?: { message: string };
+  refreshError?: { message: string };
   features?: readonly Feature[];
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
 }
 
-export function FeatureList({ loading, error, features }: FeatureListProps = {}) {
+export function FeatureList({ loading, error, refreshError, features, fetchedAt, onRefresh }: FeatureListProps = {}) {
   const resolvedFeatures = features ?? [];
   return (
     <ListPage
       title="Features"
       loading={loading}
       error={error}
+      refreshError={refreshError}
+      fetchedAt={fetchedAt}
+      onRefresh={onRefresh}
     >
       {!loading && error === undefined &&
         (resolvedFeatures.length === 0 ? (
@@ -56,6 +63,7 @@ export function FeatureList({ loading, error, features }: FeatureListProps = {})
             <TableHeader>
               <TableRow>
                 <TableHead>ID</TableHead>
+                <TableHead>Name</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Phase</TableHead>
                 <TableHead>Progress</TableHead>
@@ -68,10 +76,14 @@ export function FeatureList({ loading, error, features }: FeatureListProps = {})
                   data-testid={locators.features.list.row}
                 >
                   <TableCell>
-                    <Link to={ROUTES.featureDetailPath(feature.featureId)}>
+                    <Link
+                      to={ROUTES.featureDetailPath(feature.featureId)}
+                      data-testid={locators.features.list.link(feature.featureId)}
+                    >
                       {feature.featureId}
                     </Link>
                   </TableCell>
+                  <TableCell>{feature.name}</TableCell>
                   <TableCell>
                     <FeatureStatusBadge status={feature.status} />
                   </TableCell>

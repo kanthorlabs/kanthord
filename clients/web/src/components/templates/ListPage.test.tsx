@@ -7,10 +7,26 @@
  */
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ListPage } from "@/components/templates/ListPage";
 import { locators } from "@/locators";
 
 describe("ListPage template (DESIGN §6 + §7)", () => {
+  it("accepts fetchedAt and onRefresh and renders the shared freshness control", async () => {
+    const user = userEvent.setup();
+    const onRefresh = async () => {};
+    render(
+      <ListPage
+        title="Features"
+        fetchedAt={new Date("2026-07-15T14:05:00")}
+        onRefresh={onRefresh}
+      />,
+    );
+
+    expect(screen.getByTestId(locators.pageFreshness.updated)).toHaveTextContent("Updated 14:05");
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+  });
+
   // --- Slot rendering ---
 
   describe("title / toolbar / content slots", () => {

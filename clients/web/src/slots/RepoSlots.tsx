@@ -24,16 +24,22 @@ type SlotInfo = Awaited<ReturnType<DaemonClient["listSlots"]>>["slots"][number];
 export interface RepoSlotsProps {
   loading?: boolean;
   error?: { message: string };
+  refreshError?: { message: string };
   slots?: readonly SlotInfo[];
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
 }
 
 export function RepoSlots(props: RepoSlotsProps = {}) {
-  const { loading, error, slots = [] } = props;
+  const { loading, error, refreshError, slots = [], fetchedAt, onRefresh } = props;
   return (
     <ListPage
       title="Repo Slots"
       loading={loading}
       error={error}
+      refreshError={refreshError}
+      fetchedAt={fetchedAt}
+      onRefresh={onRefresh}
     >
       {!loading && error === undefined &&
         (slots.length === 0 ? (

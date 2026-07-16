@@ -5,3 +5,6 @@
 node_modules/
 .agent/
 *.log
+.env
+.env.*
+!.env.example

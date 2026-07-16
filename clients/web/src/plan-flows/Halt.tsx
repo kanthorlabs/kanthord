@@ -20,6 +20,7 @@ import { locators } from "@/locators";
 interface HaltProps {
   taskId: string;
   actor: string;
+  onSuccess?: () => void | Promise<void>;
 }
 
 type State =
@@ -28,7 +29,7 @@ type State =
   | { kind: "success"; status: string }
   | { kind: "conflict"; message: string };
 
-export function Halt({ taskId, actor }: HaltProps) {
+export function Halt({ taskId, actor, onSuccess }: HaltProps) {
   const client = useDaemonClient();
   const [state, setState] = useState<State>({ kind: "idle" });
 
@@ -37,6 +38,7 @@ export function Halt({ taskId, actor }: HaltProps) {
     try {
       const result = await client.haltTask({ taskId, actor });
       setState({ kind: "success", status: result.status });
+      await onSuccess?.();
     } catch (err) {
       if (err instanceof ConnectError && err.code === Code.AlreadyExists) {
         setState({ kind: "conflict", message: err.message });

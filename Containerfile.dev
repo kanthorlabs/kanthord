@@ -41,6 +41,8 @@ RUN npm ci
 # Source (type-stripped at runtime; no build step).
 COPY tsconfig.json ./
 COPY src ./src
+COPY broker ./broker
+COPY config ./config
 
 # Provider account (KANTHORD_DATA) lives under the shared /data mount so the
 # host-registered `codex` account is visible in the container. The git identity

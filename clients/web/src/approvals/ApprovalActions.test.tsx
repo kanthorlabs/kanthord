@@ -153,9 +153,13 @@ describe("ApprovalActions — approval-tier verb actions (Story 004 T1)", () => 
       await user.click(screen.getByTestId(locators.approvals.approveTrigger));
       await user.click(screen.getByTestId(locators.confirmDialog.confirm));
       await waitFor(() => expect(callLog).toHaveLength(1));
-      const call = callLog[0] as { method: string; args: { approve: boolean } };
+      const call = callLog[0] as {
+        method: string;
+        args: { approve: boolean; confirmedCategory: string };
+      };
       expect(call.method).toBe("respondToApproval");
       expect(call.args.approve).toBe(true);
+      expect(call.args.confirmedCategory).toBe("approval");
     });
 
     it("confirming calls respondToApproval with the VM id", async () => {

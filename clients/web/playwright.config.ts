@@ -14,6 +14,20 @@ export default defineConfig({
   use: {
     baseURL: process.env.WEB_E2E_BASE_URL ?? "http://127.0.0.1:4173",
     colorScheme: "light",
+    httpCredentials: process.env.WEB_E2E_USERNAME && process.env.WEB_E2E_PASSWORD
+      ? {
+          username: process.env.WEB_E2E_USERNAME,
+          password: process.env.WEB_E2E_PASSWORD,
+          send: "always",
+        }
+      : undefined,
+    extraHTTPHeaders: process.env.WEB_E2E_USERNAME && process.env.WEB_E2E_PASSWORD
+      ? {
+          authorization: `Basic ${Buffer.from(
+            `${process.env.WEB_E2E_USERNAME}:${process.env.WEB_E2E_PASSWORD}`,
+          ).toString("base64")}`,
+        }
+      : undefined,
     // The preflight (scripts/web-e2e-preflight.mjs) serves the self-signed SU5
     // cert, so the browser must accept it — same posture as the VPN-only daemon.
     ignoreHTTPSErrors: true,

@@ -27,6 +27,7 @@ import type { AgentAdapterOpts } from "../agent/pi-agent-adapter.ts";
 import { PI_DEFAULT_ALLOWED_MANIFEST } from "../agent/pi-tools.ts";
 import { createStatusServer } from "../daemon/status-server.ts";
 import type { PiSurface, RunDaemonDeps, StatusServerFactory } from "../daemon/run-loop.ts";
+import type { PublicConfiguration } from "../rpc/read-surfaces.ts";
 import type { Clock } from "../foundations/clock.ts";
 import type { Store } from "../foundations/sqlite-store.ts";
 import type { Logger } from "../daemon/boot.ts";
@@ -119,6 +120,10 @@ export interface BuildRealDepsOpts {
    * instead of `featureDir` (which may not exist yet at preflight time).
    */
   checkoutDir?: string;
+  /** Checked-in public configuration projected by the status server. */
+  publicConfiguration?: PublicConfiguration;
+  /** Injectable status-server constructor for direct dependency assembly. */
+  statusServerFactory?: typeof createStatusServer;
 }
 
 async function loadIdentityFileOrEnv(name: string, file: string): Promise<string> {
@@ -222,7 +227,20 @@ export function buildRealDeps(
 export function buildRealDeps(
   opts: BuildRealDepsOpts,
 ): (RunDaemonDeps & { toolGuidance: Record<string, string> }) | Promise<RunDaemonDeps & { identityToken: string; toolGuidance: Record<string, string>; verbAdapters?: Record<string, { entry: VerbRegistryEntry; adapter: AsyncVerbAdapter }> }> {
-  const { store, featureDir, agentFactory, providerModel, providerStreamFn, identity, identityFile, repo, patternRegistry, accountId } = opts;
+  const {
+    store,
+    featureDir,
+    agentFactory,
+    providerModel,
+    providerStreamFn,
+    identity,
+    identityFile,
+    repo,
+    patternRegistry,
+    accountId,
+    publicConfiguration,
+    statusServerFactory: configuredStatusServerFactory,
+  } = opts;
 
   const clock: Clock = {
     now(): number {
@@ -239,8 +257,9 @@ export function buildRealDeps(
   const logger: Logger = createRecordLogger();
 
   const interactionLog = new JsonlLog(join(featureDir, "interactions.jsonl"));
+  const statusServerConstructor = configuredStatusServerFactory ?? createStatusServer;
   const statusServerFactory: StatusServerFactory = (statusOpts) =>
-    createStatusServer({ ...statusOpts, interactionLog });
+    statusServerConstructor({ ...statusOpts, interactionLog, publicConfiguration });
 
   const piSurface: PiSurface = {
     spawnAgent(rawOpts: unknown): {

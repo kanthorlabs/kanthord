@@ -44,10 +44,15 @@ import {
   listSlots,
   getBudget,
   getDaemonStatus,
+  getPublicConfiguration,
   triggerVerify,
   getTaskTimeline,
 } from "../rpc/read-surfaces.ts";
-import type { ReadSurfacesDeps, ExtendedReadSurfacesDeps } from "../rpc/read-surfaces.ts";
+import type {
+  ReadSurfacesDeps,
+  ExtendedReadSurfacesDeps,
+  PublicConfiguration,
+} from "../rpc/read-surfaces.ts";
 import {
   signOffPlan,
   haltTask,
@@ -67,6 +72,11 @@ import type { ControlVerbsDeps, BudgetOverrideDeps, ReplanDiff } from "../rpc/co
 import { checkCredentials, AUTH_FAILURE_TABLE } from "../rpc/auth.ts";
 import { newId } from "../foundations/id.ts";
 import { log, errMessage } from "../foundations/log.ts";
+import {
+  getPendingReplanProposal,
+  getPendingReplanProposalById,
+  markReplanProposalApproved,
+} from "../replan/proposal.ts";
 
 type SchedulerStatusRow = {
   node_id: string;
@@ -110,6 +120,7 @@ export function createStatusServer(opts: {
   featureDataRoot?: string;
   nowMs?: number;
   verbRegistry?: Array<{ verb: string; tier: string; pending_expiry_ms?: number }>;
+  publicConfiguration?: PublicConfiguration;
   slotRegistry?: Array<{
     name: string;
     repo: string;
@@ -157,6 +168,7 @@ export function createStatusServer(opts: {
         featureDataRoot: opts.featureDataRoot ?? "",
         nowMs: opts.nowMs ?? Date.now(),
         verbRegistry: opts.verbRegistry ?? [],
+        publicConfiguration: opts.publicConfiguration,
         slotRegistry: opts.slotRegistry ?? [],
         getBudgetCeiling: opts.getBudgetCeiling ?? (() => 0),
         daemonVersion: opts.daemonVersion ?? version,
@@ -221,6 +233,10 @@ export function createStatusServer(opts: {
                 const evidence = item.evidence;
                 const taskId = typeof evidence["task_id"] === "string" ? evidence["task_id"] : "";
                 const reason = typeof evidence["reason"] === "string" ? evidence["reason"] : "";
+                const verb = typeof evidence["verb"] === "string" ? evidence["verb"] : "";
+                const desiredEffect = typeof evidence["desired_effect"] === "string"
+                  ? evidence["desired_effect"]
+                  : "";
                 // N2: featureId via scheduler_task lookup; suggestedCategory via SIGNAL_MAP
                 const featureId = featureIdForTask(opts.store, taskId);
                 const suggestedCategory = SIGNAL_MAP[reason] ?? "";
@@ -228,14 +244,15 @@ export function createStatusServer(opts: {
                   id: item.id,
                   kind: item.kind,
                   featureId,
-                  summary: "",
-                  type: reason,
+                  summary: item.kind === "approval" ? desiredEffect : "",
+                  type: item.kind === "approval" ? verb : reason,
                   severity: "",
                   suggestedCategory,
                   status: item.status,
                   expiresAt: 0n,
                   expired: false,
                   brokerOpId: "",
+                  evidence: inboxEvidence(evidence, item.kind),
                 };
               });
               return { items };
@@ -465,6 +482,31 @@ export function createStatusServer(opts: {
               };
             },
 
+            getPendingReplanProposal(req) {
+              const proposal = getPendingReplanProposal(opts.store, req.featureId);
+              if (proposal === undefined) return { proposal: undefined };
+              return {
+                proposal: {
+                  proposalId: proposal.proposalId,
+                  featureId: proposal.featureId,
+                  baseGeneration: BigInt(proposal.baseGeneration),
+                  baseCompileHash: proposal.baseCompileHash,
+                  createdAt: BigInt(proposal.createdAt),
+                  edits: proposal.edits.map((edit) => ({
+                    path: edit.path,
+                    newContent: edit.newContent,
+                  })),
+                  displayFiles: proposal.displayFiles.map((file) => ({
+                    path: file.path,
+                    lines: file.lines.map((line) => ({
+                      kind: line.kind,
+                      content: line.content,
+                    })),
+                  })),
+                },
+              };
+            },
+
             async getFeatureSummary(req) {
               return getFeatureSummary(req.featureId, {
                 interactionLog: opts.interactionLog ?? { readAll: async () => [] },
@@ -560,6 +602,26 @@ export function createStatusServer(opts: {
               };
             },
 
+            getPublicConfiguration() {
+              const result = getPublicConfiguration(baseDeps);
+              return {
+                diffEscalationPolicy: result.diffEscalationPolicy,
+                brokerDeclarations: result.brokerDeclarations.map((declaration) => ({
+                  verb: declaration.verb,
+                  tier: declaration.tier,
+                  timeoutMs: BigInt(declaration.timeoutMs),
+                  idempotencyWindowMs: BigInt(declaration.idempotencyWindowMs),
+                  retryMax: declaration.retryMax,
+                  retryBackoff: declaration.retryBackoff,
+                  pollIntervalMs: BigInt(declaration.pollIntervalMs),
+                  terminalStates: declaration.terminalStates,
+                  requestsPerMinute: declaration.requestsPerMinute,
+                  observedStateCanRegress: declaration.observedStateCanRegress,
+                  pendingExpiryMs: BigInt(declaration.pendingExpiryMs ?? 0),
+                })),
+              };
+            },
+
             getTaskTimeline(req) {
               // req.attempt is accepted by the handler but not yet forwarded to
               // queryTaskTimeline — the 019.5 seam has no attempt filter yet.
@@ -631,23 +693,50 @@ export function createStatusServer(opts: {
             },
 
             async approveReplan(req) {
-              const diff: ReplanDiff = {
-                featureId: req.featureId,
-                baseGeneration: Number(req.baseGeneration),
-                edits: req.edits.map((e) => ({
-                  path: e.path,
-                  newContent: e.newContent,
-                })),
-              };
-              let result: { generation: number };
+              let diff: ReplanDiff;
+              let proposalId: string | undefined;
+              if (req.proposalId !== "") {
+                const proposal = getPendingReplanProposalById(opts.store, req.proposalId);
+                if (proposal === undefined) {
+                  throw new ConnectError(
+                    `pending replan proposal not found: ${req.proposalId}`,
+                    Code.NotFound,
+                  );
+                }
+                if (req.featureId !== "" && req.featureId !== proposal.featureId) {
+                  throw new ConnectError(
+                    `replan proposal ${req.proposalId} does not belong to feature ${req.featureId}`,
+                    Code.InvalidArgument,
+                  );
+                }
+                diff = {
+                  featureId: proposal.featureId,
+                  baseGeneration: proposal.baseGeneration,
+                  edits: proposal.edits,
+                };
+                proposalId = proposal.proposalId;
+              } else {
+                diff = {
+                  featureId: req.featureId,
+                  baseGeneration: Number(req.baseGeneration),
+                  edits: req.edits.map((e) => ({
+                    path: e.path,
+                    newContent: e.newContent,
+                  })),
+                };
+              }
+              let result: { generation: number; reopenedTaskIds: string[] };
               try {
                 result = await approveReplan(diff, req.actor, cvDeps);
               } catch (err) {
                 throw mapControlError(err);
               }
+              if (proposalId !== undefined) {
+                markReplanProposalApproved(opts.store, proposalId, Date.now());
+              }
               return {
                 newGeneration: BigInt(result.generation),
-                reopenedTaskIds: [],
+                reopenedTaskIds: result.reopenedTaskIds,
               };
             },
 
@@ -709,6 +798,10 @@ export function createStatusServer(opts: {
 
               const taskId = typeof evidenceData["task_id"] === "string" ? evidenceData["task_id"] : "";
               const reason = typeof evidenceData["reason"] === "string" ? evidenceData["reason"] : "";
+              const verb = typeof evidenceData["verb"] === "string" ? evidenceData["verb"] : "";
+              const desiredEffect = typeof evidenceData["desired_effect"] === "string"
+                ? evidenceData["desired_effect"]
+                : "";
               // N2: featureId via scheduler_task; suggestedCategory via SIGNAL_MAP
               const featureId = featureIdForTask(opts.store, taskId);
               const suggestedCategory = SIGNAL_MAP[reason] ?? "";
@@ -717,53 +810,7 @@ export function createStatusServer(opts: {
                 ? evidenceData["op_id"]
                 : "";
 
-              // N2: build Evidence oneof — diff or text; absent for other types
-              const evType = typeof evidenceData["type"] === "string" ? evidenceData["type"] : "";
-              type EvidenceInit = {
-                type: string;
-                text: string;
-                diff?: {
-                  files: Array<{ path: string; lines: Array<{ kind: string; content: string }> }>;
-                };
-              };
-              let evidenceField: EvidenceInit | undefined;
-
-              if (evType === "diff") {
-                const rawFiles = Array.isArray(evidenceData["files"])
-                  ? (evidenceData["files"] as unknown[])
-                  : [];
-                evidenceField = {
-                  type: "diff",
-                  text: "",
-                  diff: {
-                    files: rawFiles.map((f) => {
-                      const file = typeof f === "object" && f !== null
-                        ? (f as Record<string, unknown>)
-                        : {};
-                      const rawLines = Array.isArray(file["lines"])
-                        ? (file["lines"] as unknown[])
-                        : [];
-                      return {
-                        path: typeof file["path"] === "string" ? file["path"] : "",
-                        lines: rawLines.map((l) => {
-                          const line = typeof l === "object" && l !== null
-                            ? (l as Record<string, unknown>)
-                            : {};
-                          return {
-                            kind: typeof line["kind"] === "string" ? line["kind"] : "",
-                            content: typeof line["content"] === "string" ? line["content"] : "",
-                          };
-                        }),
-                      };
-                    }),
-                  },
-                };
-              } else if (evType === "text") {
-                evidenceField = {
-                  type: "text",
-                  text: typeof evidenceData["text"] === "string" ? evidenceData["text"] : "",
-                };
-              }
+              const evidenceField = inboxEvidence(evidenceData, row.kind);
 
               return {
                 item: {
@@ -771,8 +818,8 @@ export function createStatusServer(opts: {
                   kind: row.kind,
                   status: row.status,
                   featureId,
-                  summary: "",
-                  type: reason,
+                  summary: row.kind === "approval" ? desiredEffect : "",
+                  type: row.kind === "approval" ? verb : reason,
                   severity: "",
                   suggestedCategory,
                   expiresAt: 0n,
@@ -897,6 +944,62 @@ function requireInteractionCapture(log: JsonlLog | undefined): JsonlLog {
     );
   }
   return log;
+}
+
+type EvidenceInit = {
+  type: string;
+  text: string;
+  diff?: {
+    files: Array<{ path: string; lines: Array<{ kind: string; content: string }> }>;
+  };
+};
+
+function inboxEvidence(
+  evidence: Record<string, unknown>,
+  itemKind: string,
+): EvidenceInit | undefined {
+  const evidenceType = typeof evidence["type"] === "string" ? evidence["type"] : "";
+  if (evidenceType === "diff") {
+    const rawFiles = Array.isArray(evidence["files"])
+      ? (evidence["files"] as unknown[])
+      : [];
+    return {
+      type: "diff",
+      text: "",
+      diff: {
+        files: rawFiles.map((f) => {
+          const file = typeof f === "object" && f !== null
+            ? (f as Record<string, unknown>)
+            : {};
+          const rawLines = Array.isArray(file["lines"])
+            ? (file["lines"] as unknown[])
+            : [];
+          return {
+            path: typeof file["path"] === "string" ? file["path"] : "",
+            lines: rawLines.map((l) => {
+              const line = typeof l === "object" && l !== null
+                ? (l as Record<string, unknown>)
+                : {};
+              return {
+                kind: typeof line["kind"] === "string" ? line["kind"] : "",
+                content: typeof line["content"] === "string" ? line["content"] : "",
+              };
+            }),
+          };
+        }),
+      },
+    };
+  }
+  if (evidenceType === "text") {
+    return {
+      type: "text",
+      text: typeof evidence["text"] === "string" ? evidence["text"] : "",
+    };
+  }
+  if (itemKind === "escalation" && typeof evidence["payload_summary"] === "string") {
+    return { type: "text", text: evidence["payload_summary"] };
+  }
+  return undefined;
 }
 
 function persistResponseIntent(

@@ -247,6 +247,29 @@ describe("Respond — inline classification confirm + Next-open-item (Story 003 
       await waitFor(() => expect(callLog).toHaveLength(1));
       expect(callLog[0]).toBe("respondToEscalation");
     });
+
+    it("clicking Accept sends resume with the suggested confirmedCategory", async () => {
+      const user = userEvent.setup();
+      const calls: Array<{ response: string; confirmedCategory: string }> = [];
+      const client = {
+        respondToEscalation: async (request: {
+          response: string;
+          confirmedCategory: string;
+        }) => {
+          calls.push(request);
+          return { status: "resolved" };
+        },
+      } as unknown as DaemonClient;
+
+      renderRespond(ESCALATION_ITEM, client);
+      await user.click(screen.getByTestId(locators.inbox.respond.acceptButton));
+
+      await waitFor(() => expect(calls).toHaveLength(1));
+      expect(calls[0]).toMatchObject({
+        response: "resume",
+        confirmedCategory: "correction",
+      });
+    });
   });
 
   describe("Accept path — approval kind invokes respondToApproval", () => {

@@ -21,7 +21,27 @@ export interface ReadSurfacesDeps {
   featureDataRoot: string;
   nowMs: number;
   verbRegistry: Array<{ verb: string; tier: string; pending_expiry_ms?: number }>;
+  publicConfiguration?: PublicConfiguration;
   logger?: LeafLogger;
+}
+
+export interface PublicBrokerDeclaration {
+  verb: string;
+  tier: string;
+  timeoutMs: number;
+  idempotencyWindowMs: number;
+  retryMax: number;
+  retryBackoff: string;
+  pollIntervalMs: number;
+  terminalStates: string[];
+  requestsPerMinute: number;
+  observedStateCanRegress: boolean;
+  pendingExpiryMs?: number;
+}
+
+export interface PublicConfiguration {
+  diffEscalationPolicy: "escalate_all_diffs";
+  brokerDeclarations: PublicBrokerDeclaration[];
 }
 
 /** Extended deps for Task T2 surfaces (slots, budgets, daemon-ops). */
@@ -338,6 +358,36 @@ export function listBrokerVerbs(deps: ReadSurfacesDeps): {
 } {
   return {
     verbs: deps.verbRegistry.map((v) => ({ verb: v.verb, tier: v.tier })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// getPublicConfiguration — typed public allowlist; zero writes
+// ---------------------------------------------------------------------------
+
+export function getPublicConfiguration(deps: ReadSurfacesDeps): PublicConfiguration {
+  const configuration = deps.publicConfiguration ?? {
+    diffEscalationPolicy: "escalate_all_diffs",
+    brokerDeclarations: [],
+  };
+
+  return {
+    diffEscalationPolicy: configuration.diffEscalationPolicy,
+    brokerDeclarations: configuration.brokerDeclarations.map((declaration) => ({
+      verb: declaration.verb,
+      tier: declaration.tier,
+      timeoutMs: declaration.timeoutMs,
+      idempotencyWindowMs: declaration.idempotencyWindowMs,
+      retryMax: declaration.retryMax,
+      retryBackoff: declaration.retryBackoff,
+      pollIntervalMs: declaration.pollIntervalMs,
+      terminalStates: [...declaration.terminalStates],
+      requestsPerMinute: declaration.requestsPerMinute,
+      observedStateCanRegress: declaration.observedStateCanRegress,
+      ...(declaration.pendingExpiryMs === undefined
+        ? {}
+        : { pendingExpiryMs: declaration.pendingExpiryMs }),
+    })),
   };
 }
 

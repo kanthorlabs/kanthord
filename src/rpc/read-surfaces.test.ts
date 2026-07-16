@@ -32,6 +32,7 @@ import {
   getDaemonStatus,
   triggerVerify,
   getTaskTimeline,
+  getPublicConfiguration,
   type ReadSurfacesDeps,
 } from "./read-surfaces.ts";
 import type { LeafLogger } from "../foundations/log.ts";
@@ -139,6 +140,46 @@ interface ReadSurfacesDepsT2 extends ReadSurfacesDeps {
   uptimeFn: () => number;
   verifyFn: () => Promise<{ outcome: string; reportJson: string }>;
 }
+
+interface PublicConfiguration {
+  diffEscalationPolicy: "escalate_all_diffs";
+  brokerDeclarations: Array<{
+    verb: string;
+    tier: string;
+    timeoutMs: number;
+    idempotencyWindowMs: number;
+    retryMax: number;
+    retryBackoff: string;
+    pollIntervalMs: number;
+    terminalStates: string[];
+    requestsPerMinute: number;
+    observedStateCanRegress: boolean;
+    pendingExpiryMs?: number;
+  }>;
+}
+
+interface PublicConfigurationDeps extends ReadSurfacesDeps {
+  publicConfiguration: PublicConfiguration;
+}
+
+const PUBLIC_CONFIGURATION: PublicConfiguration = {
+  diffEscalationPolicy: "escalate_all_diffs",
+  brokerDeclarations: [
+    {
+      verb: "github.create_pr",
+      tier: "auto_with_audit",
+      timeoutMs: 120_000,
+      idempotencyWindowMs: 3_600_000,
+      retryMax: 5,
+      retryBackoff: "exponential",
+      pollIntervalMs: 10_000,
+      terminalStates: ["done", "failed", "escalation_needed"],
+      requestsPerMinute: 60,
+      observedStateCanRegress: true,
+      pendingExpiryMs: 300_000,
+    },
+  ],
+};
 
 // ---------------------------------------------------------------------------
 // Fixture helpers
@@ -269,6 +310,39 @@ describe("src/rpc/read-surfaces.ts", () => {
       DaemonService.methods.some((method) => method.localName === "getFeatureSummary"),
       "DaemonService must expose GetFeatureSummary as the getFeatureSummary read method",
     );
+  });
+
+  test("getPublicConfiguration returns only typed allowlisted YAML configuration and DaemonService exposes no config write, path, or file method", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rs-public-config-"));
+    try {
+      const { deps } = await makeDeps(dir);
+      const unsafeConfig = {
+        ...PUBLIC_CONFIGURATION,
+        configPath: "/private/kanthord.yaml",
+        credentials: [{ username: "operator", password: "not-public" }],
+      };
+      const publicDeps: PublicConfigurationDeps = {
+        ...deps,
+        publicConfiguration: unsafeConfig,
+      };
+
+      assert.deepEqual(
+        getPublicConfiguration(publicDeps),
+        PUBLIC_CONFIGURATION,
+        "the public configuration response must expose only the typed safe allowlist",
+      );
+
+      const configurationMethods = DaemonService.methods
+        .map((method) => method.localName)
+        .filter((name) => name.toLowerCase().includes("config"));
+      assert.deepEqual(
+        configurationMethods,
+        ["getPublicConfiguration"],
+        "DaemonService must expose only getPublicConfiguration: no config write, path, or file method",
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   // -------------------------------------------------------------------------

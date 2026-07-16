@@ -12,7 +12,13 @@ export function DaemonOpsContainer() {
     const version = ++requestVersion.current;
     if (showLoading) setState({ loading: true });
     try {
-      const result = await client.getDaemonStatus({});
+      const getPublicConfiguration = client.getPublicConfiguration;
+      const [result, configuration] = await Promise.all([
+        client.getDaemonStatus({}),
+        typeof getPublicConfiguration === "function"
+          ? getPublicConfiguration({})
+          : Promise.resolve(undefined),
+      ]);
       if (version === requestVersion.current) {
         setState({
           status: {
@@ -21,11 +27,15 @@ export function DaemonOpsContainer() {
             lastPing: result.lastPing,
             lastVerify: result.lastVerify,
           },
+          configuration,
+          fetchedAt: new Date(),
         });
       }
     } catch (reason: unknown) {
       if (version === requestVersion.current) {
-        setState({ error: { message: String(reason) } });
+        setState((current) => current.status === undefined
+          ? { error: { message: String(reason) } }
+          : { ...current, refreshError: { message: String(reason) } });
       }
     }
   }, [client]);
@@ -37,5 +47,5 @@ export function DaemonOpsContainer() {
     };
   }, [load]);
 
-  return <DaemonOps {...state} onVerifySuccess={() => load(false)} />;
+  return <DaemonOps {...state} onRefresh={() => load(false)} onVerifySuccess={() => load(false)} />;
 }

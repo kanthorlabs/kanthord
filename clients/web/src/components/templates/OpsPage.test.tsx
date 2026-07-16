@@ -18,10 +18,26 @@
  */
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { OpsPage } from "@/components/templates/OpsPage";
 import { locators } from "@/locators";
 
 describe("OpsPage template — DESIGN §6 card-grid (Story 006 T2)", () => {
+  it("accepts fetchedAt and onRefresh and renders the shared freshness control", async () => {
+    const user = userEvent.setup();
+    render(
+      <OpsPage
+        fetchedAt={new Date("2026-07-15T14:05:00")}
+        onRefresh={async () => {}}
+      >
+        <div data-testid={locators.opsPage.card}>card</div>
+      </OpsPage>,
+    );
+
+    expect(screen.getByTestId(locators.pageFreshness.updated)).toHaveTextContent("Updated 14:05");
+    await user.click(screen.getByTestId(locators.pageFreshness.refresh));
+  });
+
   it("renders the root card-grid container", () => {
     render(
       <OpsPage>

@@ -94,7 +94,7 @@ export function Respond({ item, openItems, onSuccess }: RespondProps) {
       } else {
         await client.respondToEscalation({
           id: item.id,
-          response: "",
+          response: "resume",
           confirmedCategory,
         });
       }

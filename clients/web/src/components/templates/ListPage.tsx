@@ -6,6 +6,8 @@
  */
 import type { ReactNode } from "react";
 import { DataStates } from "@/components/DataStates";
+import { PageFreshness } from "@/components/PageFreshness";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { locators } from "@/locators";
 
 interface ListPageProps {
@@ -19,6 +21,9 @@ interface ListPageProps {
   empty?: { message: string };
   /** Error state (DESIGN §7 destructive-variant Alert). */
   error?: { message: string };
+  refreshError?: { message: string };
+  fetchedAt?: Date;
+  onRefresh?: () => Promise<void>;
   /** Page body — only rendered when no state is active. */
   children?: ReactNode;
 }
@@ -29,6 +34,9 @@ export function ListPage({
   loading,
   empty,
   error,
+  refreshError,
+  fetchedAt,
+  onRefresh,
   children,
 }: ListPageProps) {
   const isStateActive = (loading === true) || empty !== undefined || error !== undefined;
@@ -36,11 +44,16 @@ export function ListPage({
   return (
     <div className="flex flex-col gap-4">
       {/* Title slot */}
-      <div
-        data-testid={locators.listPage.title}
-        className="text-foreground text-xl font-semibold"
-      >
-        {title}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div
+          data-testid={locators.listPage.title}
+          className="text-foreground text-xl font-semibold"
+        >
+          {title}
+        </div>
+        {fetchedAt !== undefined && onRefresh !== undefined && (
+          <PageFreshness fetchedAt={fetchedAt} onRefresh={onRefresh} />
+        )}
       </div>
 
       {/* Toolbar slot — only rendered when toolbar is supplied */}
@@ -48,6 +61,10 @@ export function ListPage({
         <div data-testid={locators.listPage.toolbar} className="flex items-center gap-2">
           {toolbar}
         </div>
+      )}
+
+      {refreshError !== undefined && (
+        <Alert variant="destructive"><AlertDescription>{refreshError.message}</AlertDescription></Alert>
       )}
 
       {/* Content area: state slots XOR children */}

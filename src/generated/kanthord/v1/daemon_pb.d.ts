@@ -736,6 +736,84 @@ export declare type GetFeatureResponse = Message<"kanthord.v1.GetFeatureResponse
 export declare const GetFeatureResponseSchema: GenMessage<GetFeatureResponse>;
 
 /**
+ * @generated from message kanthord.v1.GetPendingReplanProposalRequest
+ */
+export declare type GetPendingReplanProposalRequest = Message<"kanthord.v1.GetPendingReplanProposalRequest"> & {
+  /**
+   * @generated from field: string feature_id = 1;
+   */
+  featureId: string;
+};
+
+/**
+ * Describes the message kanthord.v1.GetPendingReplanProposalRequest.
+ * Use `create(GetPendingReplanProposalRequestSchema)` to create a new message.
+ */
+export declare const GetPendingReplanProposalRequestSchema: GenMessage<GetPendingReplanProposalRequest>;
+
+/**
+ * @generated from message kanthord.v1.ReplanProposal
+ */
+export declare type ReplanProposal = Message<"kanthord.v1.ReplanProposal"> & {
+  /**
+   * @generated from field: string proposal_id = 1;
+   */
+  proposalId: string;
+
+  /**
+   * @generated from field: string feature_id = 2;
+   */
+  featureId: string;
+
+  /**
+   * @generated from field: int64 base_generation = 3;
+   */
+  baseGeneration: bigint;
+
+  /**
+   * @generated from field: string base_compile_hash = 4;
+   */
+  baseCompileHash: string;
+
+  /**
+   * @generated from field: int64 created_at = 5;
+   */
+  createdAt: bigint;
+
+  /**
+   * @generated from field: repeated kanthord.v1.FileEdit edits = 6;
+   */
+  edits: FileEdit[];
+
+  /**
+   * @generated from field: repeated kanthord.v1.DiffFile display_files = 7;
+   */
+  displayFiles: DiffFile[];
+};
+
+/**
+ * Describes the message kanthord.v1.ReplanProposal.
+ * Use `create(ReplanProposalSchema)` to create a new message.
+ */
+export declare const ReplanProposalSchema: GenMessage<ReplanProposal>;
+
+/**
+ * @generated from message kanthord.v1.GetPendingReplanProposalResponse
+ */
+export declare type GetPendingReplanProposalResponse = Message<"kanthord.v1.GetPendingReplanProposalResponse"> & {
+  /**
+   * @generated from field: kanthord.v1.ReplanProposal proposal = 1;
+   */
+  proposal?: ReplanProposal | undefined;
+};
+
+/**
+ * Describes the message kanthord.v1.GetPendingReplanProposalResponse.
+ * Use `create(GetPendingReplanProposalResponseSchema)` to create a new message.
+ */
+export declare const GetPendingReplanProposalResponseSchema: GenMessage<GetPendingReplanProposalResponse>;
+
+/**
  * --- features.summary (Epic 029 Story 002) ---
  *
  * @generated from message kanthord.v1.GetFeatureSummaryRequest
@@ -1273,6 +1351,105 @@ export declare type GetDaemonStatusResponse = Message<"kanthord.v1.GetDaemonStat
 export declare const GetDaemonStatusResponseSchema: GenMessage<GetDaemonStatusResponse>;
 
 /**
+ * @generated from message kanthord.v1.GetPublicConfigurationRequest
+ */
+export declare type GetPublicConfigurationRequest = Message<"kanthord.v1.GetPublicConfigurationRequest"> & {
+};
+
+/**
+ * Describes the message kanthord.v1.GetPublicConfigurationRequest.
+ * Use `create(GetPublicConfigurationRequestSchema)` to create a new message.
+ */
+export declare const GetPublicConfigurationRequestSchema: GenMessage<GetPublicConfigurationRequest>;
+
+/**
+ * @generated from message kanthord.v1.PublicBrokerDeclaration
+ */
+export declare type PublicBrokerDeclaration = Message<"kanthord.v1.PublicBrokerDeclaration"> & {
+  /**
+   * @generated from field: string verb = 1;
+   */
+  verb: string;
+
+  /**
+   * @generated from field: string tier = 2;
+   */
+  tier: string;
+
+  /**
+   * @generated from field: int64 timeout_ms = 3;
+   */
+  timeoutMs: bigint;
+
+  /**
+   * @generated from field: int64 idempotency_window_ms = 4;
+   */
+  idempotencyWindowMs: bigint;
+
+  /**
+   * @generated from field: uint32 retry_max = 5;
+   */
+  retryMax: number;
+
+  /**
+   * @generated from field: string retry_backoff = 6;
+   */
+  retryBackoff: string;
+
+  /**
+   * @generated from field: int64 poll_interval_ms = 7;
+   */
+  pollIntervalMs: bigint;
+
+  /**
+   * @generated from field: repeated string terminal_states = 8;
+   */
+  terminalStates: string[];
+
+  /**
+   * @generated from field: uint32 requests_per_minute = 9;
+   */
+  requestsPerMinute: number;
+
+  /**
+   * @generated from field: bool observed_state_can_regress = 10;
+   */
+  observedStateCanRegress: boolean;
+
+  /**
+   * @generated from field: int64 pending_expiry_ms = 11;
+   */
+  pendingExpiryMs: bigint;
+};
+
+/**
+ * Describes the message kanthord.v1.PublicBrokerDeclaration.
+ * Use `create(PublicBrokerDeclarationSchema)` to create a new message.
+ */
+export declare const PublicBrokerDeclarationSchema: GenMessage<PublicBrokerDeclaration>;
+
+/**
+ * @generated from message kanthord.v1.GetPublicConfigurationResponse
+ */
+export declare type GetPublicConfigurationResponse = Message<"kanthord.v1.GetPublicConfigurationResponse"> & {
+  /**
+   * @generated from field: string diff_escalation_policy = 1;
+   */
+  diffEscalationPolicy: string;
+
+  /**
+   * @generated from field: repeated kanthord.v1.PublicBrokerDeclaration broker_declarations = 2;
+   */
+  brokerDeclarations: PublicBrokerDeclaration[];
+};
+
+/**
+ * Describes the message kanthord.v1.GetPublicConfigurationResponse.
+ * Use `create(GetPublicConfigurationResponseSchema)` to create a new message.
+ */
+export declare const GetPublicConfigurationResponseSchema: GenMessage<GetPublicConfigurationResponse>;
+
+/**
  * --- daemon.verify (single declared write among reads) ---
  *
  * @generated from message kanthord.v1.TriggerVerifyRequest
@@ -1637,6 +1814,14 @@ export declare type ApproveReplanRequest = Message<"kanthord.v1.ApproveReplanReq
    * @generated from field: string actor = 4;
    */
   actor: string;
+
+  /**
+   * Durable approval path. When present, the server consumes the stored edit
+   * set instead of trusting caller-supplied file contents.
+   *
+   * @generated from field: string proposal_id = 5;
+   */
+  proposalId: string;
 };
 
 /**
@@ -1804,6 +1989,16 @@ export declare const DaemonService: GenService<{
     output: typeof GetFeatureSummaryResponseSchema;
   },
   /**
+   * plan.replan.pending — durable authored-file proposal awaiting human review.
+   *
+   * @generated from rpc kanthord.v1.DaemonService.GetPendingReplanProposal
+   */
+  getPendingReplanProposal: {
+    methodKind: "unary";
+    input: typeof GetPendingReplanProposalRequestSchema;
+    output: typeof GetPendingReplanProposalResponseSchema;
+  },
+  /**
    * broker.operations — in-flight / pending / expiring ops with state + correlation.
    *
    * @generated from rpc kanthord.v1.DaemonService.ListBrokerOperations
@@ -1873,6 +2068,16 @@ export declare const DaemonService: GenService<{
     methodKind: "unary";
     input: typeof GetDaemonStatusRequestSchema;
     output: typeof GetDaemonStatusResponseSchema;
+  },
+  /**
+   * config.public — typed allowlisted operational configuration; no raw files.
+   *
+   * @generated from rpc kanthord.v1.DaemonService.GetPublicConfiguration
+   */
+  getPublicConfiguration: {
+    methodKind: "unary";
+    input: typeof GetPublicConfigurationRequestSchema;
+    output: typeof GetPublicConfigurationResponseSchema;
   },
   /**
    * audit.taskTimeline — a task's ordered timeline (Epic 019.5 queryTaskTimeline).

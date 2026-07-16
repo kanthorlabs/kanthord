@@ -19,6 +19,7 @@ import { initTaskTimelineSchema } from "../metrics/task-timeline.ts";
 import { initModelCallLogSchema } from "../metrics/model-call-log.ts";
 import { initInteractionCaptureSchema } from "../metrics/interaction-capture.ts";
 import { initExternalTrackingSchema } from "./external-tracking-schema.ts";
+import { initReplanProposalSchema } from "../replan/proposal.ts";
 
 export function initSchema(store: Store): void {
   initBrokerSchema(store);
@@ -30,4 +31,5 @@ export function initSchema(store: Store): void {
   initModelCallLogSchema(store);
   initInteractionCaptureSchema(store);
   initExternalTrackingSchema(store);
+  initReplanProposalSchema(store);
 }
