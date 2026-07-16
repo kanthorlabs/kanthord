@@ -40,6 +40,8 @@ REPO=$(node src/main.ts create repository --project "$PROJECT" \
   --name sandbox --organization kanthorlabs --branch main --path "$SANDBOX")
 TASK=$(node src/main.ts create task --objective "$OBJECTIVE" \
   --title "add a title line to README" \
+  --instructions "Edit README.md at the repo root: add a top-level markdown H1 title line." \
+  --ac "README.md begins with a level-1 markdown heading" \
   --context repository=$REPO --context ai_provider=$AIPROV --context credential=$CRED)
 
 node src/main.ts daemon run --until-idle; echo "exit=$?"   # exit=0
@@ -58,6 +60,8 @@ node src/main.ts events --after 0   # task.started → agent.started →
 # instructs it to escalate; it parks for human confirmation.
 TASK2=$(node src/main.ts create task --objective "$OBJECTIVE" \
   --title "add a second line to README, then call escalate to request human review of your change" \
+  --instructions "Add a second line to README.md, then call the escalate tool to request human review of your change." \
+  --ac "README.md has a second line" \
   --context repository=$REPO --context ai_provider=$AIPROV --context credential=$CRED)
 node src/main.ts daemon run --until-idle; echo "exit=$?"   # exit=0 +
                                     # "1 task(s) awaiting confirmation"
@@ -72,6 +76,8 @@ BADCRED=$(node src/main.ts create credential --project "$PROJECT" \
   --name wrong-provider --provider anthropic --value bogus)
 TASK3=$(node src/main.ts create task --objective "$OBJECTIVE" \
   --title "this fails" \
+  --instructions "Any change; this task is expected to fail on a provider-mismatched credential." \
+  --ac "n/a" \
   --context repository=$REPO --context ai_provider=$AIPROV --context credential=$BADCRED)
 node src/main.ts daemon run --until-idle; echo "exit=$?"   # exit=1
 node src/main.ts get task --id "$TASK3"                    # failed,
@@ -103,6 +109,13 @@ node src/main.ts get task --id "$TASK3"                    # failed,
 - **Workspace preparation.** Repository + Filesystem resources → a per-task
   workspace: clone or copy the repo, create branch `kanthord/<task-id>`,
   hand the agent that directory; workspace paths recorded on the task.
+- **Task specification + prompt construction (D5).** `Task` gains required
+  `instructions` + `ac`; a pure renderer turns the spec into the user prompt.
+  A kanthord-owned, profile-neutral `InstructionLoader` (`src/instruction/`)
+  reads the target repo's `AGENTS.md`/`CLAUDE.md` at the workspace root and
+  the runner passes them into the profile, which places them in the system
+  prompt — one loader the future native role agents reuse. Loader security
+  hardening is a separate later epic.
 - **Result capture.** Agent outcome → commit on the task branch **in the
   task workspace clone** → TaskResult (workspace path, branch name, commit
   sha, summary) persisted and printed by `get task`; the workspace is kept
@@ -113,7 +126,7 @@ node src/main.ts get task --id "$TASK3"                    # failed,
   a turn/step budget exceeded → task fails with a named error and an event;
   the daemon survives and moves on.
 
-(Amended 2026-07-16 — Ulrich's D2/D3 rulings, debate-reviewed, expanded the
+(Amended 2026-07-16 — Ulrich's D2/D3/D5 rulings, debate-reviewed, expanded the
 epic during story authoring: `Task.agent` ships as a required versioned ref
 (`generic@1`) resolved by a re-keyed `AgentRunnerResolver`, with
 adapter-private pi profiles; **the Generic agent does its work with the SDK

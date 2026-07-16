@@ -91,7 +91,10 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   `Task.agent` ships as a required versioned ref; the resolver is re-keyed
   `Map<AgentRef, AgentRunner>` (`generic@1` → pi, `fake@1` → FakeRunner);
   `daemon run --runner` is removed — selection is per-task; EPIC 005 tests
-  address the fake runner as `--agent fake@1`. Escalated tasks
+  address the fake runner as `--agent fake@1`. `create task` also gains
+  required `--instructions`/`--ac` (EPIC 006 S02) — this epic's title-only
+  `create task` is valid at its own epoch but superseded from EPIC 006 on.
+  Escalated tasks
   (`awaiting_confirmation`) are not claimable, recovery never touches
   them, and `daemon run` prints an end-of-run "N task(s) awaiting
   confirmation" line; escalated ≠ failed for the exit code. See

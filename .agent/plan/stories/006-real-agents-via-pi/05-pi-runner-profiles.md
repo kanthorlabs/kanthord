@@ -5,10 +5,26 @@ Epic: `.agent/plan/epics/006-real-agents-via-pi.md`
 ## Goal
 
 The real `AgentRunner`: resolve context resources, fail fast on
-credentials, prepare the workspace, and run one shared pi `Agent` loop
-parameterized by an adapter-private `PiAgentProfile` (D2). The resolver is
-re-keyed by agent ref; `generic@1` (pi) and `fake@1` (EPIC 005 FakeRunner)
-are registered in the composition root.
+credentials, prepare the workspace, load the target repo's instruction files,
+render the task specification into the user prompt, and run one shared pi
+`Agent` loop parameterized by an adapter-private `PiAgentProfile` (D2). The
+resolver is re-keyed by agent ref; `generic@1` (pi) and `fake@1` (EPIC 005
+FakeRunner) are registered in the composition root.
+
+**Prompt construction (Ulrich, 2026-07-16, debate-reviewed).** Two seams:
+- **User prompt** = a pure, vendor-neutral renderer over the Task spec
+  (`title` + `instructions` + `ac`); the runner appends the retry-feedback
+  block. Task stays pure data — it never builds prompt strings.
+- **System prompt** = the profile (layer 1) + the target repo's instruction
+  files (layer 2), loaded through a kanthord-owned, profile-neutral
+  `InstructionLoader` capability (`src/instruction/`). The runner loads once
+  and passes the neutral `Instruction[]` INTO the profile, which owns
+  placement — so a future kanthord-native role agent (TestEngineer /
+  SoftwareEngineer / ReviewerEngineer) reuses the SAME loader with its own
+  prompt representation. pi's own context auto-discovery stays OFF (one source
+  of truth). Security hardening of the loader (realpath/symlink enforcement,
+  size caps) is deferred to a dedicated later epic — this story locks only the
+  discovery SEMANTICS, not the enforcement code.
 
 **Binding goal (Ulrich, 2026-07-16): the Generic agent does its work with
 the SDK exposed by `@earendil-works/pi-coding-agent`.** `generic@1`'s
@@ -21,23 +37,57 @@ per the reuse-first rule and say so explicitly (grep evidence required).
 
 ## Acceptance Criteria
 
+- **`src/instruction/` capability (new — kanthord-owned, profile-neutral).**
+  - `src/instruction/port.ts`: `type Instruction = { path: string; content:
+    string }` (kanthord's own type — pi's `ContextFile` never leaks into this
+    port); `interface InstructionLoader { load(): Instruction[] }`; and the
+    pure policy constant `INSTRUCTION_CANDIDATES = ['AGENTS.md', 'CLAUDE.md']`
+    (array order = precedence order).
+  - `src/instruction/repo.ts`: `RepoInstructionLoader implements
+    InstructionLoader`, **ctor `(workspaceDir: string)`** (option A — the
+    source is bound at construction so the port's `load()` stays
+    source-agnostic); `load()` returns, in `INSTRUCTION_CANDIDATES` order, one
+    `Instruction` per candidate that exists as a regular file directly at the
+    workspace root, with `path` **workspace-relative** and `content` its text.
+    Locked discovery semantics: workspace-root only (NO ancestor walk — the
+    deliberate divergence from pi's `loadProjectContextFiles`); BOTH
+    `AGENTS.md` and `CLAUDE.md` load if both present (pi picks one; we do not);
+    missing candidate → skipped; unreadable candidate → skipped this epic
+    (a diagnostic channel is future); `*.local.md` is NOT a candidate
+    (gitignored, absent from a fresh clone — debate). No pi types imported.
+- `src/agent-runner/task-prompt.ts` (new, vendor-neutral, shared by any
+  runner): pure `renderTaskPrompt(task: Task): string` → the user prompt from
+  `title` + `instructions` + `ac` (fixed template; `ac` rendered as a list).
+  No pi types, no I/O. The pi runner appends the retry-feedback block AFTER
+  this (feedback is attempt-state the renderer does not own).
 - `src/agent-runner/pi-profile.ts` (adapter-private — pi types never enter
   `port.ts`): `PiAgentProfile { name: string; systemPrompt(input: { task:
-  Task; workspace: Workspace }): string; createTools(input: { workspace:
-  Workspace }): AgentTool[]; verify(evidence: OutcomeEvidence):
-  Promise<VerificationResult> }` (evidence/verify types land in story 06;
-  this story stubs `verify` for `generic@1` as accepted-when-changed).
-  `generic@1`: its `createTools` returns exactly
+  Task; workspace: Workspace; instructions: Instruction[] }): string;
+  createTools(input: { workspace: Workspace }): AgentTool[]; verify(evidence:
+  OutcomeEvidence): Promise<VerificationResult> }` (evidence/verify types land
+  in story 06; this story stubs `verify` for `generic@1` as
+  accepted-when-changed). The profile — NOT the runner — decides where the
+  loaded `instructions` go in its system-prompt string (debate B1: heterogeneous
+  runtimes need per-profile placement; the runner does not append a universal
+  block). `generic@1`: its `createTools` returns exactly
   `createCodingTools(workspace.dir)` from the
   `@earendil-works/pi-coding-agent` SDK (the binding goal above) — no
-  kanthord-authored tools; prompt states the workspace dir, the branch,
-  "complete the task; committing is optional; never push".
+  kanthord-authored tools; its `systemPrompt` states the workspace dir, the
+  branch, "complete the task; committing is optional; never push", and appends
+  the `instructions` under a `<project_context>` block. NOTE: pi's
+  `buildSystemPrompt` is NOT in the public `index` export (only under
+  `core/system-prompt`), so `generic@1` MIRRORS pi's `<project_context>`
+  wrapping rather than deep-importing it (reuse-first tier 2 — verify the
+  export surface at implementation before choosing import vs mirror).
 - `src/agent-runner/pi.ts` `PiAgentRunner implements AgentRunner`, ctor
   `{ sessions: ProviderSessionFactory; workspaces: WorkspaceManager;
+  newInstructionLoader: (workspaceDir: string) => InstructionLoader;
   getResource: (id: string) => Resource | undefined; profiles:
   Map<string, PiAgentProfile>; getPriorRejection: (taskId: string) =>
   { reason: string; summary?: string; proposalCommit?: string } |
-  undefined }` (emit/clock/maxTurns land in story 08;
+  undefined }` (`newInstructionLoader` is the per-task factory — workspaceDir
+  is known only after prepare; main.ts wires it to
+  `dir => new RepoInstructionLoader(dir)`; emit/clock/maxTurns land in story 08;
   `getPriorRejection` is wired to `TaskRepository.getTaskResult`'s
   rejection columns in main.ts).
   `run(task, context)` order:
@@ -55,15 +105,19 @@ per the reuse-first rule and say so explicitly (grep evidence required).
      `InvalidContextError`.
   5. `workspaces.prepare(task.id, source)` — WorkspacePreparationError →
      failed.
+  5b. `const instructions = newInstructionLoader(workspace.dir).load()` — the
+     target repo's instruction files (may be empty).
   6. pi `Agent`: `state.tools = profile.createTools(...)` **plus the
      runner-provided built-in `escalate` tool** (see below), session's
-     model/streamFn/getApiKey, `profile.systemPrompt(...)`,
-     `prompt(task.title + feedback block)`, `waitForIdle()`.
+     model/streamFn/getApiKey, `profile.systemPrompt({ task, workspace,
+     instructions })`, `prompt(renderTaskPrompt(task) + feedback block)`,
+     `waitForIdle()`. pi context auto-discovery stays disabled (the Agent loop
+     is driven directly; `instructions` is the only context source).
      **Retry feedback (D4 debate B3):** when `getPriorRejection(task.id)`
      returns a decision, the prompt gains a feedback block — "a previous
      attempt was escalated and the human rejected it: <reason>" (+ the
-     prior summary when present) — so a rejected-for-retry task never
-     re-runs blind.
+     prior summary when present) — appended AFTER `renderTaskPrompt(task)` so
+     a rejected-for-retry task never re-runs blind.
   7. result capture per story 06; any stream/run rejection → failed
      `<Name>: <message>`.
 - **The `escalate` tool (the ONLY escalation trigger — Ulrich,
@@ -81,6 +135,7 @@ per the reuse-first rule and say so explicitly (grep evidence required).
   resolver throws to named task failures — EPIC 005 locked path).
 - main.ts `buildDaemon`: `PiProviderSessionFactory`,
   `LocalWorkspaceManager(KANTHORD_WORKSPACE_ROOT ?? <db dir>/workspaces)`,
+  `newInstructionLoader = dir => new RepoInstructionLoader(dir)`,
   `PiAgentRunner` with the `generic@1` profile; runners map
   `{ 'generic@1': piRunner, 'fake@1': fakeRunner }`; the same map's keys
   back the `AgentCatalog` given to `CreateTask`. `daemon run --runner` is
@@ -102,13 +157,17 @@ per the reuse-first rule and say so explicitly (grep evidence required).
   `src/agent-runner/pi-profile.ts` imports its tools from
   `@earendil-works/pi-coding-agent` (no local tool implementations —
   reviewable by grep).
+- **Loader-boundary check:** `src/instruction/port.ts` and
+  `src/instruction/repo.ts` import NO pi package (grep-reviewable) — the
+  capability is vendor-neutral and does not depend on the agent runner.
 
 ### Task T1 — profiles + runner orchestration
 
 **Requires:** S02-T1; S03-T1/T2; S04-T1/T2; EPIC 005 S01-T1.
 
-**Input:** `src/agent-runner/pi-profile.ts`, `src/agent-runner/pi.ts`
-(new, + tests).
+**Input:** `src/instruction/port.ts`, `src/instruction/repo.ts`,
+`src/agent-runner/task-prompt.ts`, `src/agent-runner/pi-profile.ts`,
+`src/agent-runner/pi.ts` (new, + tests).
 
 **Action — RED:** hermetic tests with FakeSessionFactory + a fake
 WorkspaceManager + stub getResource: (a) happy path (`generic@1`, scripted
@@ -129,10 +188,22 @@ deep-equal the names of `createCodingTools(dir)` from
 `@earendil-works/pi-coding-agent`, plus `escalate`; (j) with a stubbed
 `getPriorRejection` returning a decision, the prompt recorded by the fake
 session contains the feedback block (reason + prior summary); without one,
-no feedback block. Fails today: modules absent.
+no feedback block; (k) **instruction loader semantics** (temp dirs, no pi):
+a workspace with both `AGENTS.md` + `CLAUDE.md` → `load()` returns both, in
+that order, `path` workspace-relative; only `CLAUDE.md` → one entry; neither →
+`[]`; a nested `sub/AGENTS.md` is NOT returned (workspace-root only, no
+ancestor/descendant walk); (l) **renderer** `renderTaskPrompt(task)` includes
+`title`, `instructions`, and each `ac` line, and is pure (no pi import, no
+I/O); (m) **profile placement**: the system prompt recorded by the fake
+session contains the loaded instruction content under a `<project_context>`
+block, and a synthetic profile that ignores `instructions` produces a prompt
+WITHOUT it (proving the profile — not the runner — owns placement). Fails
+today: modules absent.
 
-**Action — GREEN:** implement profile interface, `generic@1`, and runner
-steps 1–7.
+**Action — GREEN:** implement the `InstructionLoader` port +
+`RepoInstructionLoader`, `renderTaskPrompt`, the profile interface,
+`generic@1`, and runner steps 1–7 (including step 5b + the new
+`systemPrompt`/`prompt` wiring).
 
 **Action — REFACTOR:** none.
 
@@ -151,8 +222,9 @@ hermetic scripted runs.
 **Action — RED:** resolver tests: (a) `for(task{agent:'generic@1'})` →
 the registered runner; (b) `for(task{agent:'ghost@9'})` → throws
 `RunnerNotResolvableError` carrying taskId + `'ghost@9'`. Wiring tests
-(temp DB): (c) a `fake@1` task runs through the EPIC 005 FakeRunner
-end to end (`daemon run --until-idle`, no `--runner` flag); (d)
+(temp DB): (c) a `fake@1` task (created with the now-required
+`--instructions`/`--ac`) runs through the EPIC 005 FakeRunner end to end
+(`daemon run --until-idle`, no `--runner` flag); (d)
 `daemon run --runner fake` → exit 1 `error: unknown flag --runner`
 (superseded); (e) the AgentCatalog wired into `create task` accepts
 exactly the registered refs. Fails today: re-key absent.

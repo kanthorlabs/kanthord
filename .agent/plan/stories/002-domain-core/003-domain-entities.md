@@ -20,7 +20,7 @@ formats like the graph YAML must use them exactly):
 | `Project` | `id`, `name: string` | this story |
 | `Initiative` | `id`, `projectId: string`, `name: string` | this story |
 | `Objective` | `id`, `initiativeId: string`, `name: string` | this story |
-| `Task` | `id`, `objectiveId: string`, `title: string`, `status: TaskStatus`, `dependencies: string[]` (task ids), `agent: string` (versioned ref, e.g. `generic@1` — EPIC 006) | this story + EPIC 006 S02 |
+| `Task` | `id`, `objectiveId: string`, `title: string`, `status: TaskStatus`, `dependencies: string[]` (task ids), `agent: string` (versioned ref, e.g. `generic@1` — EPIC 006), `instructions: string` + `ac: string[]` (task specification, both REQUIRED — EPIC 006 S02) | this story + EPIC 006 S02 |
 | `Resource` union | base `{ id, type, name }` + vendor fields per variant | story 002 |
 | `Event` | `id`, `type: EventType`, `taskId: string` | story 006 |
 
@@ -49,6 +49,7 @@ task.failed`.
 |---|---|
 | `Agent` entity (`AgentType`, name) — without `execute()` | superseded by EPIC 006 D2 (Ulrich, 2026-07-16): no Agent entity — `Task.agent` is a versioned ref resolved by `AgentRunnerResolver`; role behavior lives in adapter-private profiles |
 | `Task.agent` (assigned agent) | SHIPPED in EPIC 006 S02 (was EPIC 005/006) |
+| `Task.instructions` / `Task.ac` (task specification: prose body + acceptance-criteria list) | SHIPPED in EPIC 006 S02 (Ulrich, 2026-07-16, debate-reviewed): both REQUIRED non-empty pure data (`newTask` throws a named validation error on empty, like `agent`); the runner renders them into the user prompt. No `approach` field, no `spec` blob (debate: over-structuring). Consequence: `title`-only task creation is NO LONGER valid from EPIC 006 on — migration 5 backfills pre-006 rows; the CLI `--instructions`/`--ac` flags become required. `ac` is carried + prompted this epic; wiring it into `verify()` is future |
 | `Task.context` / `TaskContext` (Project Resource bindings) | EPIC 005 |
 | `Task` workflow field (`tdd@1`, `pr@1`) | shape-only per this epic's non-goals; semantics later |
 | `TaskResult` | EPIC 005 (extended by EPIC 006: completed fields + `escalated` variant) |

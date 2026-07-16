@@ -1,16 +1,36 @@
-# Story 02 — Domain & storage groundwork (Task.agent, status, events, migration 5)
+# Story 02 — Domain & storage groundwork (Task.agent + spec, status, events, migration 5)
 
 Epic: `.agent/plan/epics/006-real-agents-via-pi.md`
 
 ## Goal
 
 Every domain/storage contract the rest of the epic builds on lands here in
-one slice: `Task.agent` (versioned ref), the `awaiting_confirmation` status
-+ edges, the six new event literals, migration 5, the `TaskRepository`
-extensions, and create-time agent-ref validation through the `AgentCatalog`
-port. (No acceptance-policy field: escalation is solely the agent's
-decision — Ulrich, 2026-07-16; the trigger is the `escalate` tool,
-story 05.)
+one slice: `Task.agent` (versioned ref), the task-specification fields
+(`instructions`, `ac`), the `awaiting_confirmation` status + edges, the six
+new event literals, migration 5, the `TaskRepository` extensions, and
+create-time agent-ref validation through the `AgentCatalog` port. (No
+acceptance-policy field: escalation is solely the agent's decision — Ulrich,
+2026-07-16; the trigger is the `escalate` tool, story 05.)
+
+Task specification (Ulrich, 2026-07-16, debate-reviewed): a task needs more
+than a `title` for a real agent. `instructions: string` (prose body — the
+"how", including any advisory "files likely to touch" hints) and
+`ac: string[]` (acceptance criteria) are added as REQUIRED pure data. No
+`approach` field and no single `spec` blob (debate: over-structuring / issue
+tracker). Both are carried + rendered into the user prompt (story 05); `ac`
+is NOT yet an input to `verify()` — that wiring is future.
+
+**Consequence — title-only task creation is superseded here (Ulrich,
+2026-07-16):** `newTask` now requires non-empty `instructions` and a non-empty
+`ac`, and the CLI `--instructions`/`--ac` flags become required. This
+**supersedes** the title-only `create task` used by EPIC 005 — the same kind
+of cross-epic supersession as EPIC 006 removing `daemon run --runner`: EPIC
+005's Proof was valid at its own epoch (these fields did not exist yet) and is
+NOT retro-edited; from this story on, every task-creating command — including
+the `fake@1` tasks in EPIC 006's own Proof and story-10 smoke — passes
+`--instructions`/`--ac`. Migration 5's NOT NULL DEFAULTs (below) cover any
+pre-006 rows; validation is enforced only in `newTask` (creation), so the
+repository reconstructs old rows without re-validating.
 
 ## Acceptance Criteria
 
@@ -18,6 +38,10 @@ story 05.)
   S003/S004/S006, annotated there):
   - `Task` gains `agent: string` (required non-empty — `newTask` throws a
     named validation error on empty; NO default in the domain).
+  - `Task` gains `instructions: string` and `ac: string[]` (both REQUIRED;
+    `newTask` throws a named validation error on empty `instructions` or empty
+    `ac` — same rule as `agent`). Reconstruction from storage does NOT
+    re-validate (pre-006 backfilled rows may hold placeholders).
   - `TASK_STATUSES` gains `awaiting_confirmation` and `discarded`
     (terminal); `transitionTask` legal edges gain exactly:
     `running→awaiting_confirmation`, `awaiting_confirmation→completed`
@@ -34,6 +58,11 @@ story 05.)
   maintainer sub-task):
   - `tasks.agent TEXT NOT NULL DEFAULT 'generic@1'` (backfill for rows from
     earlier epics),
+  - `tasks.instructions TEXT NOT NULL DEFAULT ''` and `tasks.ac TEXT NOT NULL
+    DEFAULT '[]'` (`ac` JSON-encoded string array — same idiom as
+    `dependencies`). The NOT NULL DEFAULTs backfill pre-006 rows; the domain
+    non-empty rule lives in `newTask`, not the DB, so backfilled placeholders
+    round-trip without error,
   - `task_results(task_id TEXT PRIMARY KEY REFERENCES tasks(id), workspace
     TEXT, branch TEXT, base_commit TEXT, proposal_commit TEXT, commit_sha
     TEXT, summary TEXT, reason TEXT, rejection_resolution TEXT,
@@ -49,8 +78,14 @@ story 05.)
   `{ has(ref: string): boolean }`.
 - `CreateTask` gains an `agent?` input: unknown agent ref (per the injected
   `AgentCatalog`) → `UnknownAgentError { agent }`, exit 1 one line.
+- `CreateTask` gains required `instructions` and `ac` inputs, passed straight
+  to `newTask` (which enforces non-empty).
 - CLI `create task` gains `[--agent <ref>]` (defaults to `generic@1` at the
   CLI boundary — D2 debate: the default is CLI sugar, not domain).
+- CLI `create task` gains REQUIRED `--instructions <text>` and repeatable
+  REQUIRED `--ac <text>` (each `--ac` appends one criterion → `string[]`; at
+  least one required). Missing either → exit 1 one-line error. Supersedes
+  EPIC 004 S05 (annotated there).
 
 ## Constraints
 
@@ -70,8 +105,10 @@ story 05.)
 **Input:** `src/domain/task.ts`, `src/domain/event.ts` (+ existing tests).
 
 **Action — RED:** tests: (a) `newTask({ objectiveId, title, agent:
-'generic@1' })` carries the agent; empty/missing `agent` throws the named
-validation error; (b) `transitionTask` allows the four new edges and still
+'generic@1', instructions: 'do X', ac: ['builds'] })` carries agent +
+instructions + ac; empty/missing `agent`, empty/missing `instructions`, and
+empty/missing `ac` each throw the named validation error; (b) `transitionTask`
+allows the four new edges and still
 rejects `pending→awaiting_confirmation`, `awaiting_confirmation→running`,
 `awaiting_confirmation→failed`, `discarded→pending`, `discarded→running`,
 `failed→discarded`; (c) `EVENT_TYPES` deep-equals the fourteen literals
@@ -95,10 +132,11 @@ status machine, the full event vocabulary.
 **Input:** the ordered migration list module,
 `src/storage/port.ts`, `src/storage/sqlite/task-repository.ts` (+ tests).
 
-**Action — RED:** temp-DB tests: (a) `db migrate` creates the `agent`
-column + `task_results`; a pre-migration task row reads back with
-`agent 'generic@1'` (default applied); (b) save/get round-trips `agent`,
-and a task saved with status `discarded` round-trips; (c) `saveTaskResult`
+**Action — RED:** temp-DB tests: (a) `db migrate` creates the `agent`,
+`instructions`, `ac` columns + `task_results`; a pre-migration task row reads
+back with `agent 'generic@1'`, `instructions ''`, `ac []` (defaults applied);
+(b) save/get round-trips `agent`, `instructions`, `ac` (JSON array), and a
+task saved with status `discarded` round-trips; (c) `saveTaskResult`
 + `getTaskResult` round-trip all ten columns (including NULL
 `proposal_commit` and the rejection pair); upsert overwrites. Fails today:
 DDL/methods absent.
@@ -119,10 +157,12 @@ DDL/methods absent.
 `src/app/task/create-task.ts`, `src/apps/cli/task.ts` (+ tests).
 
 **Action — RED:** hermetic tests with a fake catalog `{ has: ref => ref ===
-'generic@1' }`: (a) `create task … --agent generic@1` → ULID, persisted
-agent; (b) omitted `--agent` → persisted `generic@1` (CLI default); (c)
-`--agent nope@1` → exit 1 `error: unknown agent: nope@1`. Fails today:
-inputs absent.
+'generic@1' }`: (a) `create task … --agent generic@1 --instructions "do X"
+--ac "builds"` → ULID, persisted agent + instructions + ac `['builds']`; (b)
+omitted `--agent` → persisted `generic@1` (CLI default); (c) `--agent nope@1`
+→ exit 1 `error: unknown agent: nope@1`; (d) two `--ac` flags → `ac` has both,
+in order; (e) missing `--instructions` or missing `--ac` → exit 1 one-line
+error. Fails today: inputs absent.
 
 **Action — GREEN:** extend `CreateTask` (catalog check) + the CLI handler
 flag.

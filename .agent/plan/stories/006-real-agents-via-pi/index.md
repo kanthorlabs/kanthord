@@ -87,6 +87,41 @@ file; one use case per file (verb-first), per `AGENTS.md`.
 - **`AgentCatalog` port** (`has(ref): boolean`): `CreateTask` validates the
   agent ref at creation; execution still handles a missing ref.
 
+### Task specification & prompt construction (D5, debate-reviewed 2026-07-16)
+
+- **`Task` gains `instructions: string` + `ac: string[]`, both REQUIRED**
+  (Ulrich, 2026-07-16). A `title` alone cannot describe real work: `instructions`
+  is the prose "how" (advisory "files likely to touch" hints live here);
+  `ac` is the acceptance-criteria list. No `approach` field and no single
+  `spec` blob (debate: over-structuring). Consequence: **title-only task
+  creation ends at EPIC 006 S02** — `newTask` enforces non-empty, migration 5
+  backfills pre-006 rows (`instructions ''`, `ac '[]'`; reconstruction never
+  re-validates), and the CLI `--instructions`/`--ac` flags are required. `ac`
+  is carried + prompted this epic; feeding it into `verify()` is future.
+- **User prompt = a pure vendor-neutral renderer** (`renderTaskPrompt(task)` in
+  `src/agent-runner/task-prompt.ts`) over `title` + `instructions` + `ac`; the
+  runner appends the retry-feedback block. Task stays pure data — it never
+  builds prompt strings (import-direction rule).
+- **System prompt = profile (layer 1) + target-repo instruction files
+  (layer 2).** A kanthord-owned, **profile-neutral** `InstructionLoader`
+  capability (`src/instruction/`) loads the layer-2 files; the runner passes
+  the neutral `Instruction[]` INTO `profile.systemPrompt(...)`, and the
+  **profile owns placement** (debate B1 — heterogeneous runtimes; the runner
+  does not append a universal block). This is the ONE loader future
+  kanthord-native role agents (TestEngineer / SoftwareEngineer /
+  ReviewerEngineer) reuse — `generic@1` uses pi's `createCodingTools` SDK but
+  NOT pi's context discovery, so loading cannot live in the pi path.
+- **Loader semantics locked here (not enforcement):** port returns kanthord's
+  own `Instruction = { path; content }` (never pi's `ContextFile`); adapter
+  `RepoInstructionLoader(workspaceDir)` reads candidates `['AGENTS.md',
+  'CLAUDE.md']` (both if present, that order) as regular files at the
+  **workspace root only** — no ancestor walk (deliberate divergence from pi's
+  `loadProjectContextFiles`), no `*.local.md`, `path` workspace-relative,
+  missing/unreadable skipped. pi's `buildSystemPrompt` is not a public export,
+  so `generic@1` MIRRORS pi's `<project_context>` wrapping (reuse-first tier
+  2). Security hardening (realpath/symlink enforcement, size caps) is a
+  dedicated later epic — see non-goals.
+
 ### Verification & escalation (D3, two debate rounds)
 
 - **Runner owns evidence; profiles own judgment.**
@@ -241,13 +276,18 @@ file; one use case per file (verb-first), per `AGENTS.md`.
 
 ```
 migration 5 (S02):    tasks.agent TEXT NOT NULL DEFAULT 'generic@1'
+                      tasks.instructions TEXT NOT NULL DEFAULT ''
+                      tasks.ac TEXT NOT NULL DEFAULT '[]'   # JSON array
                       task_results(task_id PK/FK, workspace, branch, base_commit,
                                    proposal_commit, commit_sha, summary, reason,
                                    rejection_resolution, rejection_reason)
-TaskRepository (S02): agent round-trip on save/get
+TaskRepository (S02): agent + instructions + ac round-trip on save/get
                       saveTaskResult(taskId, result) -> void      # upsert
                       getTaskResult(taskId) -> TaskResult row | undefined
 AgentCatalog (S02):   has(ref: string) -> boolean                 # create-time validation
+InstructionLoader     load() -> Instruction[]   # port, src/instruction/port.ts
+  (S05):              RepoInstructionLoader(workspaceDir)          # src/instruction/repo.ts
+renderTaskPrompt(S05):(task) -> string          # pure, src/agent-runner/task-prompt.ts
 WorkspaceManager(S03):prepare(taskId, source: Repository | Filesystem)
                         -> Promise<Workspace { dir; branch; baseCommit }>
 workspace fns (S07):  promoteProposal(dir, taskId, proposalCommit) -> void
@@ -257,14 +297,19 @@ ListTasks (S07):      gains a --status filter
 ## Cross-epic amendments (annotated "superseded by EPIC 006", never silent)
 
 - EPIC 002 S002 — Repository / Credential / AIProvider variant fields.
-- EPIC 002 S003 — `Task.agent` in the canonical model; deferral table
-  updated.
+- EPIC 002 S003 — `Task.agent` + `Task.instructions`/`Task.ac` in the
+  canonical model; deferral table updated.
 - EPIC 002 S004 — transition table: `awaiting_confirmation` + 3 edges.
 - EPIC 002 S006 — EVENT_TYPES + 6 literals.
 - EPIC 004 S04 — resource flag tables (`credential --value`,
   `repository --organization --branch [--path]`, `ai-provider [--base-url]`).
+- EPIC 004 S05 — `create task` gains required `--instructions` / `--ac`
+  (repeatable); title-only creation superseded.
 - EPIC 005 index + S01 — resolver re-keyed by agent ref; `--runner`
-  superseded; TaskResult third variant; daemon-semantics notes.
+  superseded; TaskResult third variant; daemon-semantics notes. Also: EPIC
+  005's title-only `create task` is superseded by required `--instructions`/
+  `--ac` (EPIC 006 S02) — same supersession model as `--runner`; EPIC 005's
+  Proof stays valid at its own epoch and is not retro-edited.
 - EPIC 006 epic file — Proof rewritten (gpt-5.5 catalog fix, `get task
   --id`, credential + escalation phases, exact failure-path commands).
 
@@ -280,4 +325,14 @@ loop, later epic); no `failed→discarded` edge (abandoning a plain failed
 task is a sibling feature, not the rejection flow); no un-discard/re-open;
 no cascade-discard; no third rejection resolution yet (the enum is the
 extension point); initiative-completion rules for discarded/blocked tasks
-deferred to the epic that adds initiative progress.
+deferred to the epic that adds initiative progress. **No instruction-loader
+security hardening** — the loader locks discovery SEMANTICS (workspace-root
+only, candidate set, ordering) but NOT enforcement (realpath/symlink-escape
+checks, byte/token caps, provenance audit); a malicious cloned repo can still
+steer the agent via its own tools. Enforcement + the ring-1 `beforeToolCall`
+guard are a dedicated later security epic (Ulrich, 2026-07-16). **No second
+`InstructionLoader` source** — only `RepoInstructionLoader` (target repo)
+ships; global/initiative-level instruction sources and a multi-source
+aggregator are future (the port is the extension point). **No `*.local.md`
+discovery** (gitignored, absent from a fresh clone). **No `ac`→`verify()`
+wiring** — `ac` is carried + prompted only this epic.
