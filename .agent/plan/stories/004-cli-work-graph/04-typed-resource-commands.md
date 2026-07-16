@@ -12,11 +12,18 @@ ULID is the sole stdout.
 ## Acceptance Criteria
 
 - Per-type flags (verbatim field names; all also take `--project --name`):
-  - `create repository`  → `--organization --branch`
-  - `create credential`  → `--provider --secret-ref`
+  - `create repository`  → `--organization --branch [--path]` (path
+    defaulted + normalized — EPIC 006 S01)
+  - `create credential`  → `--provider --value`
   - `create notification`→ `--provider` (slack|telegram) `--destination`
-  - `create ai-provider` → `--provider --model`
+  - `create ai-provider` → `--provider --model [--base-url]`
   - `create filesystem`  → `--path`
+
+  (Superseded by EPIC 006 D0/D1 — Ulrich, 2026-07-16, debate-reviewed.
+  Originally: `create repository --organization --branch`,
+  `create credential --provider --secret-ref`,
+  `create ai-provider --provider --model`. See
+  `.agent/plan/stories/006-real-agents-via-pi/01-resource-contracts.md`.)
 - One use case `app/resource/add-resource.ts` (`AddResource`) taking a
   discriminated input; builds the matching domain Resource variant (EPIC 002
   guards); verifies `--project` via `resolveKind`

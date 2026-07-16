@@ -75,7 +75,10 @@ file; one use case per file (verb-first), per `AGENTS.md`.
 - **`TaskResult` (port, this epic):**
   `{ outcome: 'completed'; summary?: string } | { outcome: 'failed'; reason: string }`.
   EPIC 006 extends the `completed` variant (workspace, branch, commit
-  sha); the union tag is stable.
+  sha); the union tag is stable. (Superseded by EPIC 006 D3 — Ulrich,
+  2026-07-16, debate-reviewed: a third variant
+  `{ outcome: 'escalated'; … }` carries the frozen-proposal escalation
+  flow; see `.agent/plan/stories/006-real-agents-via-pi/06-verification-results.md`.)
 - **Runner selection (B3, resolved — the epic bullet was amended).** The
   resolver is `AgentRunnerResolver.for(task, context): AgentRunner`.
   `Task.agent` stays deferred to EPIC 006 (EPIC 002 canonical-model
@@ -84,6 +87,16 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   → the task fails with that named reason; no `ai_provider` binding → the
   configured default runner (`fake`). The seam takes `(task, context)` so
   adding `Task.agent` in EPIC 006 changes no port.
+  (Superseded by EPIC 006 D2 — Ulrich, 2026-07-16, debate-reviewed:
+  `Task.agent` ships as a required versioned ref; the resolver is re-keyed
+  `Map<AgentRef, AgentRunner>` (`generic@1` → pi, `fake@1` → FakeRunner);
+  `daemon run --runner` is removed — selection is per-task; EPIC 005 tests
+  address the fake runner as `--agent fake@1`. Escalated tasks
+  (`awaiting_confirmation`) are not claimable, recovery never touches
+  them, and `daemon run` prints an end-of-run "N task(s) awaiting
+  confirmation" line; escalated ≠ failed for the exit code. See
+  `.agent/plan/stories/006-real-agents-via-pi/05-pi-runner-profiles.md`
+  and `07-escalation.md`.)
 - **Event payload:** `events.payload` TEXT (nullable, JSON); domain
   `Event.payload?: Record<string, string>`; `task.failed` carries
   `{ reason: <error name + message> }`. No other event carries a payload

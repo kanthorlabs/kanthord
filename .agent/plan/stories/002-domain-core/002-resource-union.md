@@ -15,11 +15,19 @@ reference; this story implements the Resource branch).
   `ai_provider`, `filesystem`; `ResourceType` is the union of those literals.
 - `Resource` is a discriminated union on `type`. Base fields
   `{ id, type, name }` plus the vendor fields per variant:
-  - `Repository`: `organization: string`, `branch: string`
-  - `Credential`: `provider: string`, `secretRef: string`
+  - `Repository`: `organization: string`, `branch: string`, `path: string`
+  - `Credential`: `provider: string`, `value: string`
   - `Notification`: `provider: 'slack' | 'telegram'`, `destination: string`
-  - `AIProvider`: `provider: string`, `model: string`
+  - `AIProvider`: `provider: string`, `model: string`, `baseUrl?: string`
   - `Filesystem`: `path: string`
+
+  (Superseded by EPIC 006 D0/D1 — Ulrich, 2026-07-16, debate-reviewed.
+  Originally: `Repository { organization, branch }` — gained `path`, the
+  repo's local home; `Credential { provider, secretRef }` — `secretRef`
+  (env-var name) replaced by `value` (the stored secret: API key or OAuth
+  JSON), because OAuth tokens force storage; `AIProvider { provider,
+  model }` — gained `baseUrl?` for OpenAI-compatible endpoints. See
+  `.agent/plan/stories/006-real-agents-via-pi/01-resource-contracts.md`.)
 - One guard per variant (`isRepository(r)`, …) that narrows and returns true
   only for its own variant. No constructors — instances are built by later
   epics' use cases.

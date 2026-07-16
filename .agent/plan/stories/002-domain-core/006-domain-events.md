@@ -10,9 +10,15 @@ domain. Storage and delivery stay out (EPIC 003/005).
 ## Acceptance Criteria
 
 - `EVENT_TYPES` lists exactly: `task.created`, `task.ready`, `task.started`,
-  `task.completed`, `task.failed`, `task.dependencies_changed`; `EventType` is
-  their union. (`task.dependencies_changed` is the insert/re-arrange audit
-  event emitted by EPIC 004 when a task's dependencies are mutated.)
+  `task.completed`, `task.failed`, `task.dependencies_changed`,
+  `task.escalated`, `task.approved`, `task.rejected`, `task.discarded`,
+  `task.blocked`, `agent.started`, `agent.progress`, `agent.finished`;
+  `EventType` is their union. (`task.dependencies_changed` is the
+  insert/re-arrange audit event emitted by EPIC 004 when a task's
+  dependencies are mutated. The last eight literals were appended by
+  EPIC 006 — Ulrich, 2026-07-16, debate-reviewed: escalation/rejection
+  lifecycle + agent progress; see
+  `.agent/plan/stories/006-real-agents-via-pi/02-domain-storage-groundwork.md`.)
 - `newEvent(type, { taskId })` → `{ id: <ULID>, type, taskId }`.
 - Successive events have strictly increasing ids (ULID ordering — the
   pull-feed cursor of EPIC 003 depends on it). No `timestamp` field (the ULID

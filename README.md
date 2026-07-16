@@ -197,7 +197,7 @@ interface Repository extends Resource {
 interface Credential extends Resource {
   type: ResourceType.Credential;
   provider: string;
-  secretRef: string;
+  value: string;
 }
 interface Notification extends Resource {
   type: ResourceType.Notification;

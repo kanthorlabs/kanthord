@@ -20,11 +20,14 @@ formats like the graph YAML must use them exactly):
 | `Project` | `id`, `name: string` | this story |
 | `Initiative` | `id`, `projectId: string`, `name: string` | this story |
 | `Objective` | `id`, `initiativeId: string`, `name: string` | this story |
-| `Task` | `id`, `objectiveId: string`, `title: string`, `status: TaskStatus`, `dependencies: string[]` (task ids) | this story |
+| `Task` | `id`, `objectiveId: string`, `title: string`, `status: TaskStatus`, `dependencies: string[]` (task ids), `agent: string` (versioned ref, e.g. `generic@1` — EPIC 006) | this story + EPIC 006 S02 |
 | `Resource` union | base `{ id, type, name }` + vendor fields per variant | story 002 |
 | `Event` | `id`, `type: EventType`, `taskId: string` | story 006 |
 
-`TaskStatus` = `pending | running | completed | failed`.
+`TaskStatus` = `pending | running | completed | failed |
+awaiting_confirmation | discarded` (the last two appended by EPIC 006
+D3/D4 — Ulrich, 2026-07-16, debate-reviewed: escalation parking + terminal
+abandonment; originally four statuses).
 `EventType` = `task.created | task.ready | task.started | task.completed |
 task.failed`.
 
@@ -44,11 +47,11 @@ task.failed`.
 
 | Sketch item | Owner |
 |---|---|
-| `Agent` entity (`AgentType`, name) — without `execute()` | EPIC 005/006 |
-| `Task.agent` (assigned agent) | EPIC 005/006 |
+| `Agent` entity (`AgentType`, name) — without `execute()` | superseded by EPIC 006 D2 (Ulrich, 2026-07-16): no Agent entity — `Task.agent` is a versioned ref resolved by `AgentRunnerResolver`; role behavior lives in adapter-private profiles |
+| `Task.agent` (assigned agent) | SHIPPED in EPIC 006 S02 (was EPIC 005/006) |
 | `Task.context` / `TaskContext` (Project Resource bindings) | EPIC 005 |
 | `Task` workflow field (`tdd@1`, `pr@1`) | shape-only per this epic's non-goals; semantics later |
-| `TaskResult` | EPIC 005 |
+| `TaskResult` | EPIC 005 (extended by EPIC 006: completed fields + `escalated` variant) |
 
 ## Acceptance Criteria
 

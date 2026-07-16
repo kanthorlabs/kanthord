@@ -32,6 +32,14 @@ that is both the `--runner fake` implementation and the test double.
     provider behind the same port — index B3, resolved);
   - otherwise → `defaultRunner`.
 
+  (Superseded by EPIC 006 D2 — Ulrich, 2026-07-16, debate-reviewed: the
+  resolver is re-keyed by `Task.agent` — constructor
+  `{ runners: Map<string, AgentRunner> }`, unknown ref → throw
+  `RunnerNotResolvableError { taskId, agent }`; the ai_provider-binding
+  branch and `defaultRunner` are removed by EPIC 006 S05-T2. Build this
+  story as written — EPIC 006 refactors it behind the unchanged
+  `AgentRunnerResolver` port.)
+
 ## Constraints
 
 - New capability directory `src/agent-runner/` per `AGENTS.md`; the port

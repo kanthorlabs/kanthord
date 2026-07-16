@@ -14,11 +14,21 @@ task. Dependencies are task-level only.
 
 - Transition table (locked): `pending→running`, `running→completed`,
   `running→failed`, `failed→pending` (retry), `running→pending` (crash
-  recovery). Nothing else. (Amended for EPIC 005 — confirmed by Ulrich,
+  recovery), `running→awaiting_confirmation` (escalation),
+  `awaiting_confirmation→completed` (approve),
+  `awaiting_confirmation→pending` (reject-to-retry),
+  `awaiting_confirmation→discarded` (reject-to-discard; `discarded` is
+  terminal). Nothing else. (Amended for EPIC 005 — confirmed by Ulrich,
   2026-07-16, replacing the earlier `failed→running` retry edge: EPIC 005
-  locks "claimable = pending", so everything that runs again is first reset
-  to `pending` and enters execution through the single `pending→running`
-  edge.)
+  locks "claimable = pending", so everything that runs again is first
+  reset to `pending` and enters execution through the single
+  `pending→running` edge. Amended again for EPIC 006 D3/D4 — Ulrich,
+  2026-07-16, debate-reviewed: the `awaiting_confirmation` status + the
+  terminal `discarded` status carry the escalation/rejection flow; an
+  earlier same-day `awaiting_confirmation→failed` reject edge was replaced
+  — a review decision is not an execution failure; claimable stays
+  "pending only", crash recovery never touches `awaiting_confirmation`.
+  See `.agent/plan/stories/006-real-agents-via-pi/07-escalation.md`.)
 - `transitionTask(task, to)` returns a **new** task with the new status; the
   input task is not mutated.
 - Any pair outside the table throws `IllegalTransitionError` carrying

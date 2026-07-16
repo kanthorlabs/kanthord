@@ -1,0 +1,134 @@
+# Story 02 — Domain & storage groundwork (Task.agent, status, events, migration 5)
+
+Epic: `.agent/plan/epics/006-real-agents-via-pi.md`
+
+## Goal
+
+Every domain/storage contract the rest of the epic builds on lands here in
+one slice: `Task.agent` (versioned ref), the `awaiting_confirmation` status
++ edges, the six new event literals, migration 5, the `TaskRepository`
+extensions, and create-time agent-ref validation through the `AgentCatalog`
+port. (No acceptance-policy field: escalation is solely the agent's
+decision — Ulrich, 2026-07-16; the trigger is the `escalate` tool,
+story 05.)
+
+## Acceptance Criteria
+
+- Domain (`src/domain/task.ts`, `src/domain/event.ts` — supersedes EPIC 002
+  S003/S004/S006, annotated there):
+  - `Task` gains `agent: string` (required non-empty — `newTask` throws a
+    named validation error on empty; NO default in the domain).
+  - `TASK_STATUSES` gains `awaiting_confirmation` and `discarded`
+    (terminal); `transitionTask` legal edges gain exactly:
+    `running→awaiting_confirmation`, `awaiting_confirmation→completed`
+    (approve), `awaiting_confirmation→pending` (reject-to-retry — D4: a
+    review decision is not an execution failure, so no path through
+    `failed`), `awaiting_confirmation→discarded` (reject-to-discard).
+    `discarded` has NO outgoing edges. Everything else still throws
+    `IllegalTransitionError`.
+  - `EVENT_TYPES` gains exactly (in this order, appended): `task.escalated`,
+    `task.approved`, `task.rejected`, `task.discarded`, `task.blocked`,
+    `agent.started`, `agent.progress`, `agent.finished`.
+- Migration 5 (appended to the ordered migration list — same lane caveat as
+  EPIC 004 S05: if the lane denies the list append, split it as a
+  maintainer sub-task):
+  - `tasks.agent TEXT NOT NULL DEFAULT 'generic@1'` (backfill for rows from
+    earlier epics),
+  - `task_results(task_id TEXT PRIMARY KEY REFERENCES tasks(id), workspace
+    TEXT, branch TEXT, base_commit TEXT, proposal_commit TEXT, commit_sha
+    TEXT, summary TEXT, reason TEXT, rejection_resolution TEXT,
+    rejection_reason TEXT)` (`reason` = the agent's escalation reason;
+    `proposal_commit` NULL for no-change escalations;
+    `rejection_resolution`/`rejection_reason` = the human's durable
+    rejection decision — D4 idempotency + next-attempt feedback). If the
+    EPIC 003 `tasks.status` column carries a CHECK constraint, migration 5
+    extends it with the two new statuses.
+- `TaskRepository`: `agent` round-trip on save/get;
+  `saveTaskResult(taskId, row)` (upsert) / `getTaskResult(taskId)`.
+- `AgentCatalog` port in `src/agent-runner/port.ts`:
+  `{ has(ref: string): boolean }`.
+- `CreateTask` gains an `agent?` input: unknown agent ref (per the injected
+  `AgentCatalog`) → `UnknownAgentError { agent }`, exit 1 one line.
+- CLI `create task` gains `[--agent <ref>]` (defaults to `generic@1` at the
+  CLI boundary — D2 debate: the default is CLI sugar, not domain).
+
+## Constraints
+
+- Domain stays pure — the catalog is consulted by the use case, never the
+  domain.
+- `task_results` rows are written only by `RunNextTask` tx2 / `ApproveTask`
+  (stories 06/07) — this story only provides the table + repo methods.
+
+## Verification Gate
+
+- `npm run typecheck` exits 0; `npm test` green.
+
+### Task T1 — domain amendments
+
+**Requires:** EPIC 002 S003-T2, S004-T1, S006-T1.
+
+**Input:** `src/domain/task.ts`, `src/domain/event.ts` (+ existing tests).
+
+**Action — RED:** tests: (a) `newTask({ objectiveId, title, agent:
+'generic@1' })` carries the agent; empty/missing `agent` throws the named
+validation error; (b) `transitionTask` allows the four new edges and still
+rejects `pending→awaiting_confirmation`, `awaiting_confirmation→running`,
+`awaiting_confirmation→failed`, `discarded→pending`, `discarded→running`,
+`failed→discarded`; (c) `EVENT_TYPES` deep-equals the fourteen literals
+(six old + eight new, in order); `newEvent('task.discarded', { taskId })`
+and `newEvent('task.blocked', { taskId })` are constructible. Fails today:
+fields/edges/literals absent.
+
+**Action — GREEN:** implement per the AC.
+
+**Action — REFACTOR:** none.
+
+**Output:** the amended domain: agent-carrying tasks, the confirmation
+status machine, the full event vocabulary.
+
+**Verify:** `npm test` green; `npm run typecheck` exit 0.
+
+### Task T2 — migration 5 + TaskRepository extensions
+
+**Requires:** T1; EPIC 003 (migration runner); EPIC 005 S02.
+
+**Input:** the ordered migration list module,
+`src/storage/port.ts`, `src/storage/sqlite/task-repository.ts` (+ tests).
+
+**Action — RED:** temp-DB tests: (a) `db migrate` creates the `agent`
+column + `task_results`; a pre-migration task row reads back with
+`agent 'generic@1'` (default applied); (b) save/get round-trips `agent`,
+and a task saved with status `discarded` round-trips; (c) `saveTaskResult`
++ `getTaskResult` round-trip all ten columns (including NULL
+`proposal_commit` and the rejection pair); upsert overwrites. Fails today:
+DDL/methods absent.
+
+**Action — GREEN:** append migration 5; extend the repo + port.
+
+**Action — REFACTOR:** none.
+
+**Output:** the epic's storage surface on a temp DB.
+
+**Verify:** `npm test` green; `npm run typecheck` exit 0.
+
+### Task T3 — AgentCatalog + CreateTask/CLI
+
+**Requires:** T2; EPIC 004 S05-T2/T3.
+
+**Input:** `src/agent-runner/port.ts` (extend),
+`src/app/task/create-task.ts`, `src/apps/cli/task.ts` (+ tests).
+
+**Action — RED:** hermetic tests with a fake catalog `{ has: ref => ref ===
+'generic@1' }`: (a) `create task … --agent generic@1` → ULID, persisted
+agent; (b) omitted `--agent` → persisted `generic@1` (CLI default); (c)
+`--agent nope@1` → exit 1 `error: unknown agent: nope@1`. Fails today:
+inputs absent.
+
+**Action — GREEN:** extend `CreateTask` (catalog check) + the CLI handler
+flag.
+
+**Action — REFACTOR:** none.
+
+**Output:** agent-addressed task creation.
+
+**Verify:** `npm test` green; `npm run typecheck` exit 0.
