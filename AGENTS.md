@@ -16,6 +16,41 @@ repositories, and pull progress/notifications — with the human stepping in
 only where a human is required. Every slice of work should move toward this;
 prefer the path that makes the CLI usable on a real feature sooner.
 
+## Planning — goal-based epics
+
+Work is planned as **EPICs only**, authored one at a time under
+`.agent/plan/epics/<NNN>-<slug>.md`. Stories exist inside the epic as a
+bullet list; they are expanded into detailed Story/Task files
+(`.agent/plan/stories/<epic-slug>/`) in a planning session **when the epic
+starts** — that expansion is what `/work` consumes.
+
+Epic template:
+
+```
+# EPIC <NNN> — <name>
+## Goal               (one paragraph: what capability exists after this epic)
+## Verification Gate  (the epic's runnable output — two parts:)
+Gates:  <hermetic commands /work runs, e.g. npm run typecheck && npm test>
+Proof:  <one real command against the real program, and what it must show>
+## Stories            (bullet list, each one output-relevant)
+## Non-goals          (what this epic deliberately skips)
+```
+
+Binding rules:
+
+- **An epic without a program-level `Proof:` command is not a valid epic.**
+  Tests prove the units; the Proof proves the wiring. "Done" = gates green
+  **and** the Proof shown working.
+- **A `Proof:` is an exact, copy-paste-runnable command block** — concrete
+  values, `export`ed env vars, captured ids — never a prose description
+  (debate finding: a proof that needs interpretation is not a proof).
+- **Integration is not a phase.** The walking skeleton (EPIC 001) wires
+  CLI → use case → port → adapter → SQLite end to end first; every later
+  epic extends a running program and must keep it runnable.
+- An epic that mostly edits lane-forbidden files (toolchain, configs,
+  `scripts/`, `package.json`) is a **maintainer epic**: executed directly by
+  the human + assistant in normal sessions, not dispatched through `/work`.
+
 ## Architecture
 
 Hexagonal (Ports & Adapters) with light DDD, as a single modular monolith.
