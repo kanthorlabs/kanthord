@@ -1,18 +1,15 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
 
 import type { StatusStore } from "../port.ts";
-import { migrate, type Migration } from "./migrate.ts";
 
-/** `node:sqlite` adapter for `StatusStore`. Opens WAL and migrates on open. */
+/** `node:sqlite` adapter for `StatusStore`. Accepts an already-open handle. */
 export class SqliteStatusStore implements StatusStore {
   readonly path: string;
   readonly #db: DatabaseSync;
 
-  constructor(path: string, migrations: readonly Migration[]) {
+  constructor(db: DatabaseSync, path: string) {
+    this.#db = db;
     this.path = path;
-    this.#db = new DatabaseSync(path);
-    this.#db.exec("PRAGMA journal_mode = WAL");
-    migrate(this.#db, migrations);
   }
 
   schemaVersion(): number {
@@ -29,11 +26,18 @@ export class SqliteStatusStore implements StatusStore {
     return row.journal_mode;
   }
 
-  taskCount(): number {
-    const row = this.#db.prepare("SELECT count(*) AS n FROM tasks").get() as {
-      n: number;
-    };
-    return row.n;
+  tables(): Array<{ name: string; rows: number }> {
+    const rows = this.#db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+      )
+      .all() as Array<{ name: string }>;
+    return rows.map((r) => {
+      const countRow = this.#db
+        .prepare(`SELECT count(*) AS rows FROM "${r.name}"`)
+        .get() as { rows: number };
+      return { name: r.name, rows: countRow.rows };
+    });
   }
 
   close(): void {

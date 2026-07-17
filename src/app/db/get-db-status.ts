@@ -1,27 +1,27 @@
 import type { StatusStore } from "../../storage/port.ts";
 
-/** The four fields the `status` command reports. */
-export interface Status {
+/** Shape returned by GetDbStatus.execute(). */
+export interface DbStatus {
   dbPath: string;
   schemaVersion: number;
   journalMode: string;
-  taskCount: number;
+  tables: Array<{ name: string; rows: number }>;
 }
 
 /** Query use case: read the store's health and shape it for the CLI. */
-export class GetStatus {
+export class GetDbStatus {
   readonly #store: StatusStore;
 
   constructor(store: StatusStore) {
     this.#store = store;
   }
 
-  execute(): Status {
+  async execute(): Promise<DbStatus> {
     return {
       dbPath: this.#store.path,
       schemaVersion: this.#store.schemaVersion(),
       journalMode: this.#store.journalMode(),
-      taskCount: this.#store.taskCount(),
+      tables: this.#store.tables(),
     };
   }
 }

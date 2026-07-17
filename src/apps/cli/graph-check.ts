@@ -1,13 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
 
-import { CheckGraph } from "../../app/graph/check-graph.ts";
 import {
+  CheckGraph,
   CycleError,
   DuplicateTaskError,
   UnknownDependencyError,
   type ReadinessEntry,
-} from "../../domain/graph.ts";
+} from "../../app/graph/check-graph.ts";
 
 interface TaskRow {
   id: string;

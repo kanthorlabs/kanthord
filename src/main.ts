@@ -1,20 +1,23 @@
 // Composition root — the ONLY file that imports concrete adapters and wires
 // them to use cases and the CLI.
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-
-import { GetStatus } from "./app/status/get-status.ts";
 import { buildProgram } from "./apps/cli/index.ts";
-import { MIGRATIONS } from "./storage/sqlite/migrations.ts";
+import { openDatabase } from "./storage/sqlite/open.ts";
 import { SqliteStatusStore } from "./storage/sqlite/sqlite-status-store.ts";
+import { SqliteMigrator } from "./storage/sqlite/sqlite-migrator.ts";
+import { MIGRATIONS } from "./storage/sqlite/migrations.ts";
+import { MigrateDb } from "./app/db/migrate-db.ts";
+import { GetDbStatus } from "./app/db/get-db-status.ts";
 
 const dbPath = process.env.KANTHORD_DB ?? ".data/kanthord.db";
-// A clean checkout has no .data/ — create the parent so SQLite can open.
-mkdirSync(dirname(dbPath), { recursive: true });
+const db = openDatabase(dbPath);
 
-const store = new SqliteStatusStore(dbPath, MIGRATIONS);
+const migrator = new SqliteMigrator(db, MIGRATIONS);
+const store = new SqliteStatusStore(db, dbPath);
+const migrateDb = new MigrateDb(migrator);
+const getDbStatus = new GetDbStatus(store);
+
 try {
-  const program = buildProgram({ getStatus: new GetStatus(store) });
+  const program = buildProgram({ migrateDb, getDbStatus });
   await program.parseAsync(process.argv);
 } finally {
   store.close();

@@ -4,6 +4,15 @@ import {
   type ReadinessEntry,
 } from "../../domain/graph.ts";
 
+// Republish the use case's contract (result type + the errors it can throw)
+// so driving adapters depend on app/, not domain/ internals (AGENTS.md).
+export {
+  CycleError,
+  DuplicateTaskError,
+  UnknownDependencyError,
+  type ReadinessEntry,
+} from "../../domain/graph.ts";
+
 export class CheckGraph {
   execute(input: {
     tasks: Array<{ id: string; dependencies?: string[] }>;
