@@ -30,7 +30,7 @@ Epic template:
 # EPIC <NNN> — <name>
 ## Goal               (one paragraph: what capability exists after this epic)
 ## Verification Gate  (the epic's runnable output — two parts:)
-Gates:  <hermetic commands /work runs, e.g. npm run typecheck && npm test>
+Gates:  <hermetic commands /work runs — default `npm run verify` (typecheck + test + verify:handoff + lint + db status)>
 Proof:  <one real command against the real program, and what it must show>
 ## Stories            (bullet list, each one output-relevant)
 ## Non-goals          (what this epic deliberately skips)

@@ -22,9 +22,9 @@ authored with Claude Code be executed by the pi agents from EPIC 006.
 
 ## Verification Gate
 
-Gates:  `npm run typecheck && npm test`
-Proof:  (fresh EPIC 004/006-style setup; the markdown edits below are scripted
-        so the block is copy-paste-runnable, no manual editor step.)
+Gates: `npm run verify`
+Proof: (fresh EPIC 004/006-style setup; the markdown edits below are scripted
+so the block is copy-paste-runnable, no manual editor step.)
 
 ```bash
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
@@ -189,53 +189,52 @@ list was attempted early. Each MUST be decided before `/work` gets Story/Task
 files — authoring on top of an unsettled answer bakes in a guess.
 
 - `B1 - prematurity - Do not expand stories until EPIC 006 has shipped and its
-  surfaces are re-verified.` Every task's `Requires` points at an EPIC 004/005/006
+surfaces are re-verified.` Every task's `Requires` points at an EPIC 004/005/006
   surface (repo methods, task columns, event types, CLI table, UnitOfWork). Audit
-  the *actual* mutation / transaction / event / CLI surfaces first, then author.
+  the _actual_ mutation / transaction / event / CLI surfaces first, then author.
 - `B2 - authoring-mutations-are-a-separate-domain-decision - Whether the domain
-  gains guarded pending-only setters (setInstructions / setAc / setAgent, mirroring
-  setDependencies) is a domain lifecycle+audit decision, not an import detail.`
+gains guarded pending-only setters (setInstructions / setAc / setAgent, mirroring
+setDependencies) is a domain lifecycle+audit decision, not an import detail.`
   Decide it in EPIC 006 or a standalone domain amendment BEFORE 007 expansion.
   Alternative to weigh: import is create-only for authoring fields (no domain
   change; simpler; re-import cannot edit an existing task's spec).
 - `B3 - complete the mutation model - If update-import is in scope, it must cover
-  EVERY locked field (title, instructions, ac, agent, dependencies, context) plus
-  initiative/objective name updates.` A partial set makes the projection unfaithful.
+EVERY locked field (title, instructions, ac, agent, dependencies, context) plus
+initiative/objective name updates.` A partial set makes the projection unfaithful.
 - `B4 - fix the revision protocol concretely - Choose ONE and specify it fully:
-  a per-initiative counter bumped inside every graph-mutation transaction, OR a
-  canonical content hash with fixed field set + ordering.` `max(updatedAt)` is
+a per-initiative counter bumped inside every graph-mutation transaction, OR a
+canonical content hash with fixed field set + ordering.` `max(updatedAt)` is
   rejected (misses same-timestamp writes and dependency/context-table changes).
   A successful import must rewrite `.kanthord-export.json` with the fresh value.
   Likely needs a schema migration (append to the ordered list when 007 ships —
   same lane caveat as EPIC 004 S05).
 - `B5 - define the import target + modes - Split create-graph vs apply-proposal
-  explicitly.` `initiative.md` with no `id` → create-graph under a pre-existing
+explicitly.` `initiative.md` with no `id` → create-graph under a pre-existing
   `project` (ULID; import NEVER creates a project); with an `id` → apply-proposal
   to that initiative; an `id` from a different initiative → `CrossInitiativeError`.
   State behavior for unknown objective/task ids in an "existing" package.
-- `B6 - decide ref namespacing - `ref` is package-scoped, not file-local (cross-file
-  `depends-on` must resolve).` Fix: two namespaces (objective refs, task refs), each
+- `B6 - decide ref namespacing - `ref`is package-scoped, not file-local (cross-file`depends-on` must resolve).` Fix: two namespaces (objective refs, task refs), each
   unique within the package; a ULID-looking value = an existing node, else a ref;
   duplicate ref in a namespace → named error.
 - `B7 - carry source provenance - Parsed entries need an adapter-supplied
-  `sourcePath` so import errors can cite the offending file` — the transport DTO,
+`sourcePath` so import errors can cite the offending file` — the transport DTO,
   not the domain, holds it.
 - `B8 - keep the codec in the driving adapter - Parsing/serialization live in the
-  CLI adapter; use cases take/return a transport-neutral GraphPackage DTO and NEVER
-  import the codec` (AGENTS.md import-direction rule; a `src/graph-md/` capability
+CLI adapter; use cases take/return a transport-neutral GraphPackage DTO and NEVER
+import the codec` (AGENTS.md import-direction rule; a `src/graph-md/` capability
   that a use case imports is wrong).
 - `B9 - assert byte-stable round-trip, not just semantic - Canonical serialization
-  (fixed frontmatter key order, LF, `- [ ] ` checklist, trailing newline); the
-  regression anchor is `serialize(parse(bytes)) === bytes` and a stable
-  export→import→export`, not `deepEquals`.
+(fixed frontmatter key order, LF, `- [ ] `checklist, trailing newline); the
+regression anchor is`serialize(parse(bytes)) === bytes` and a stable
+export→import→export`, not `deepEquals`.
 - `B10 - prove rollback on real SQLite - At least one integration test must fail
-  LATE (after early writes) and assert full rollback` — fakes cannot prove atomicity
+LATE (after early writes) and assert full rollback` — fakes cannot prove atomicity
   of the one-UnitOfWork claim.
 - `B11 - cover the structural edge cases - objectives with no tasks, initiative with
-  no objectives, renamed files, renamed/duplicate refs, moved task files, changed
-  objective ownership, omitted objective files, title changes` — each needs a
+no objectives, renamed files, renamed/duplicate refs, moved task files, changed
+objective ownership, omitted objective files, title changes` — each needs a
   defined behavior + test before authoring.
 - `S1 - prefer vertical-slice e2e assertions - Each slice carries its own failing
-  end-to-end assertion; a final task only consolidates the runnable Proof command`
+end-to-end assertion; a final task only consolidates the runnable Proof command`
   (better than a single consolidation-only smoke story, though that matches current
   repo precedent).

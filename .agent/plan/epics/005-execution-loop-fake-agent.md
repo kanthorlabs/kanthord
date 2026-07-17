@@ -11,9 +11,9 @@ runner, nothing else).
 
 ## Verification Gate
 
-Gates:  `npm run typecheck && npm test`
-Proof:  (continues in the EPIC 004 Proof shell — same exported `KANTHORD_DB`,
-        same captured `$INITIATIVE`/`$TASK_DEPLOY` ids)
+Gates: `npm run verify`
+Proof: (continues in the EPIC 004 Proof shell — same exported `KANTHORD_DB`,
+same captured `$INITIATIVE`/`$TASK_DEPLOY` ids)
 
 ```bash
 node src/main.ts daemon run --runner fake --until-idle
@@ -41,7 +41,7 @@ node src/main.ts list task --initiative "$INITIATIVE"
 ## Stories
 
 - **AgentRunner port + resolver.** `agent-runner/port.ts` (`run(task, context)
-  → result`) and the resolver — the seam EPIC 006 fills with pi. **Runner
+→ result`) and the resolver — the seam EPIC 006 fills with pi. **Runner
   selection contract (debate finding — Agent is not a Resource):** the
   resolver selects by the **AIProvider resource** bound in the task's
   Context; a task with no AIProvider binding gets the configured default
