@@ -12,6 +12,7 @@ resolver is re-keyed by agent ref; `generic@1` (pi) and `fake@1` (EPIC 005
 FakeRunner) are registered in the composition root.
 
 **Prompt construction (Ulrich, 2026-07-16, debate-reviewed).** Two seams:
+
 - **User prompt** = a pure, vendor-neutral renderer over the Task spec
   (`title` + `instructions` + `ac`); the runner appends the retry-feedback
   block. Task stays pure data — it never builds prompt strings.
@@ -39,12 +40,12 @@ per the reuse-first rule and say so explicitly (grep evidence required).
 
 - **`src/instruction/` capability (new — kanthord-owned, profile-neutral).**
   - `src/instruction/port.ts`: `type Instruction = { path: string; content:
-    string }` (kanthord's own type — pi's `ContextFile` never leaks into this
+string }` (kanthord's own type — pi's `ContextFile` never leaks into this
     port); `interface InstructionLoader { load(): Instruction[] }`; and the
     pure policy constant `INSTRUCTION_CANDIDATES = ['AGENTS.md', 'CLAUDE.md']`
     (array order = precedence order).
   - `src/instruction/repo.ts`: `RepoInstructionLoader implements
-    InstructionLoader`, **ctor `(workspaceDir: string)`** (option A — the
+InstructionLoader`, **ctor `(workspaceDir: string)`** (option A — the
     source is bound at construction so the port's `load()` stays
     source-agnostic); `load()` returns, in `INSTRUCTION_CANDIDATES` order, one
     `Instruction` per candidate that exists as a regular file directly at the
@@ -57,14 +58,17 @@ per the reuse-first rule and say so explicitly (grep evidence required).
     (gitignored, absent from a fresh clone — debate). No pi types imported.
 - `src/agent-runner/task-prompt.ts` (new, vendor-neutral, shared by any
   runner): pure `renderTaskPrompt(task: Task): string` → the user prompt from
-  `title` + `instructions` + `ac` (fixed template; `ac` rendered as a list).
-  No pi types, no I/O. The pi runner appends the retry-feedback block AFTER
-  this (feedback is attempt-state the renderer does not own).
+  `title` + `instructions` + `ac` (fixed template; `ac` rendered as a list),
+  plus a `## Verification` section listing `task.verification` when present
+  (D6 — the agent sees exactly how its work will be checked; the runner
+  executes those commands after an accepted verdict, story 06). No pi types,
+  no I/O. The pi runner appends the retry-feedback block AFTER this (feedback
+  is attempt-state the renderer does not own).
 - `src/agent-runner/pi-profile.ts` (adapter-private — pi types never enter
   `port.ts`): `PiAgentProfile { name: string; systemPrompt(input: { task:
-  Task; workspace: Workspace; instructions: Instruction[] }): string;
-  createTools(input: { workspace: Workspace }): AgentTool[]; verify(evidence:
-  OutcomeEvidence): Promise<VerificationResult> }` (evidence/verify types land
+Task; workspace: Workspace; instructions: Instruction[] }): string;
+createTools(input: { workspace: Workspace }): AgentTool[]; verify(evidence:
+OutcomeEvidence): Promise<VerificationResult> }` (evidence/verify types land
   in story 06; this story stubs `verify` for `generic@1` as
   accepted-when-changed). The profile — NOT the runner — decides where the
   loaded `instructions` go in its system-prompt string (debate B1: heterogeneous
@@ -81,11 +85,11 @@ per the reuse-first rule and say so explicitly (grep evidence required).
   export surface at implementation before choosing import vs mirror).
 - `src/agent-runner/pi.ts` `PiAgentRunner implements AgentRunner`, ctor
   `{ sessions: ProviderSessionFactory; workspaces: WorkspaceManager;
-  newInstructionLoader: (workspaceDir: string) => InstructionLoader;
-  getResource: (id: string) => Resource | undefined; profiles:
-  Map<string, PiAgentProfile>; getPriorRejection: (taskId: string) =>
-  { reason: string; summary?: string; proposalCommit?: string } |
-  undefined }` (`newInstructionLoader` is the per-task factory — workspaceDir
+newInstructionLoader: (workspaceDir: string) => InstructionLoader;
+getResource: (id: string) => Resource | undefined; profiles:
+Map<string, PiAgentProfile>; getPriorRejection: (taskId: string) =>
+{ reason: string; summary?: string; proposalCommit?: string } |
+undefined }` (`newInstructionLoader` is the per-task factory — workspaceDir
   is known only after prepare; main.ts wires it to
   `dir => new RepoInstructionLoader(dir)`; emit/clock/maxTurns land in story 08;
   `getPriorRejection` is wired to `TaskRepository.getTaskResult`'s
@@ -97,7 +101,7 @@ per the reuse-first rule and say so explicitly (grep evidence required).
   2. `ai_provider` binding → `getResource` → must be AIProvider else failed
      `InvalidContextError`; `credential` binding required → must be
      Credential else failed `CredentialError: task has no credential
-     context`.
+context`.
   3. `sessions.for(aiProvider, credential)` — CredentialError /
      UnknownModelError → failed; workspace never prepared (fail fast).
   4. workspace source: exactly one of `repository`/`filesystem`; none →
@@ -105,12 +109,12 @@ per the reuse-first rule and say so explicitly (grep evidence required).
      `InvalidContextError`.
   5. `workspaces.prepare(task.id, source)` — WorkspacePreparationError →
      failed.
-  5b. `const instructions = newInstructionLoader(workspace.dir).load()` — the
+     5b. `const instructions = newInstructionLoader(workspace.dir).load()` — the
      target repo's instruction files (may be empty).
   6. pi `Agent`: `state.tools = profile.createTools(...)` **plus the
      runner-provided built-in `escalate` tool** (see below), session's
      model/streamFn/getApiKey, `profile.systemPrompt({ task, workspace,
-     instructions })`, `prompt(renderTaskPrompt(task) + feedback block)`,
+instructions })`, `prompt(renderTaskPrompt(task) + feedback block)`,
      `waitForIdle()`. pi context auto-discovery stays disabled (the Agent loop
      is driven directly; `instructions` is the only context source).
      **Retry feedback (D4 debate B3):** when `getPriorRejection(task.id)`
@@ -193,8 +197,9 @@ a workspace with both `AGENTS.md` + `CLAUDE.md` → `load()` returns both, in
 that order, `path` workspace-relative; only `CLAUDE.md` → one entry; neither →
 `[]`; a nested `sub/AGENTS.md` is NOT returned (workspace-root only, no
 ancestor/descendant walk); (l) **renderer** `renderTaskPrompt(task)` includes
-`title`, `instructions`, and each `ac` line, and is pure (no pi import, no
-I/O); (m) **profile placement**: the system prompt recorded by the fake
+`title`, `instructions`, and each `ac` line; a task with `verification` set
+gains a `## Verification` section listing each command, and one without it
+has NO such section; pure (no pi import, no I/O); (m) **profile placement**: the system prompt recorded by the fake
 session contains the loaded instruction content under a `<project_context>`
 block, and a synthetic profile that ignores `instructions` produces a prompt
 WITHOUT it (proving the profile — not the runner — owns placement). Fails

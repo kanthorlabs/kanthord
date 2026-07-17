@@ -12,16 +12,26 @@ on the task branch; results persist and print. (The escalated path's
 status/approve half is story 07 — this story produces the `escalated`
 TaskResult and the proposal commit.)
 
+D6 extension (Ulrich, 2026-07-17, debate-reviewed): when the task carries
+`verification: string[]`, the runner EXECUTES those commands in the
+workspace after an accepted verdict and before finalize — a real gate, not
+a prompt suggestion (debate: prompt-only verification is a false gate; the
+task could complete while its checks fail). The captured results are the
+task's **evidence** (`task_results.evidence`) — proof the work is correct,
+never human-authored. Runner-executed task-authored commands are an
+arbitrary-command surface accepted under the epic's existing trust-boundary
+non-goal; EPIC 009 adds the controls.
+
 ## Acceptance Criteria
 
 - `src/agent-runner/verification.ts` (adapter-level):
   - `OutcomeEvidence = { baseCommit: string; finalDiff: { files: string[];
-    hasChanges: boolean }; finalResponse: string }` — computed by the
+hasChanges: boolean }; finalResponse: string }` — computed by the
     runner from the workspace: diff vs `baseCommit` INCLUDING untracked
     files; `finalResponse` = last assistant text (truncated 500 chars).
   - `VerificationResult = { verdict: 'accepted'; evidence: string }
-    | { verdict: 'rejected'; code: 'NO_CHANGES' | 'UNEXPECTED_CHANGES' |
-    'MISSING_RESPONSE'; message: string }`.
+| { verdict: 'rejected'; code: 'NO_CHANGES' | 'UNEXPECTED_CHANGES' |
+'MISSING_RESPONSE'; message: string }`.
 - `generic@1.verify`: `hasChanges === true` → accepted; else rejected
   `NO_CHANGES`.
 - Runner sequence after the run ends (extends story 05 step 7):
@@ -31,28 +41,50 @@ TaskResult and the proposal commit.)
      (kanthord identity, untracked included; the task branch itself stays
      at `baseCommit`; skipped when `hasChanges` is false — no-change
      escalation, `proposalCommit` undefined) → escalated `{ reason,
-     summary, workspace, branch, baseCommit, proposalCommit? }`;
+summary, workspace, branch, baseCommit, proposalCommit? }`;
   3. otherwise `profile.verify(evidence)`: `rejected` → failed
      (`reason = '<code>: <message>'`);
-  4. `accepted` → **finalize**: commit-if-dirty on `kanthord/<task-id>`
-     (kanthord identity, message `kanthord: <task title>`; an
-     agent-made commit means a clean tree → no-op) → completed
-     `{ summary: evidence.finalResponse, workspace, branch, commitSha }`;
-  5. any git failure during evidence/finalize/proposal →
+  4. `accepted` + `task.verification` present → **run verification (D6)**:
+     execute each command sequentially via `sh -c <command>` with
+     cwd = workspace dir (`node:child_process`, no new dependency),
+     capturing `{ command, exitCode, output }` (stdout+stderr merged,
+     truncated 10 000 chars) into the evidence array; per-command timeout
+     300 s (timeout/spawn error → exitCode -1). First non-zero exit → stop,
+     failed `VerificationFailedError: <command> (exit <code>)` — no
+     finalize commit, no task_results.evidence persistence for the failed
+     run (the reason carries the failing command; retry re-runs everything).
+     `VerificationFailedError` is a RUNNER failure name, not a new
+     profile-verdict code — command execution is runner-owned, judgment
+     stays profile-owned (D3). Escalated runs never reach this step
+     (escalate short-circuits at 2). No `verification` on the task → skip;
+  5. all passed (or none) → **finalize**: commit-if-dirty on
+     `kanthord/<task-id>` (kanthord identity, message `kanthord: <task
+title>`; an agent-made commit means a clean tree → no-op) → completed
+     `{ summary: evidence.finalResponse, workspace, branch, commitSha,
+evidence?: VerificationEvidence[] }`;
+  6. any git failure during evidence/finalize/proposal →
      failed `ResultCaptureError: <git stderr>`.
+- `VerificationEvidence = { command: string; exitCode: number; output:
+string }` (in `src/agent-runner/verification.ts`) — distinct from the D3
+  `OutcomeEvidence` (runner-computed structural facts): `verification` is
+  the task-authored HOW-to-check input, `evidence` is its captured output.
 - `src/agent-runner/port.ts` TaskResult union (second annotated
   supersession of the EPIC 005 lock):
   `{ outcome: 'completed'; summary?: string; workspace?: string; branch?:
-  string; commitSha?: string } | { outcome: 'failed'; reason: string } |
-  { outcome: 'escalated'; reason: string; summary: string; workspace:
-  string; branch: string; baseCommit: string; proposalCommit?: string }`.
+string; commitSha?: string; evidence?: VerificationEvidence[] } |
+{ outcome: 'failed'; reason: string } |
+{ outcome: 'escalated'; reason: string; summary: string; workspace:
+string; branch: string; baseCommit: string; proposalCommit?: string }`.
   FakeRunner untouched.
-- `RunNextTask` tx2 persists a `task_results` row for `completed` (the
-  escalated branch is story 07).
+- `RunNextTask` tx2 persists a `task_results` row for `completed`,
+  including the `evidence` column (JSON array; NULL when the task had no
+  `verification`) — the escalated branch is story 07.
 - `get task --id`: a task with a result gains its key/value lines
   (`workspace/branch/commit_sha/summary`, plus `proposal_commit` when
-  present); `--json` gains a `result` object; a task without a result
-  prints exactly as before.
+  present, plus one `evidence` line per verification command —
+  `<command> → exit <code>` — when evidence exists); `--json` gains a
+  `result` object carrying the full evidence array (with outputs); a task
+  without a result prints exactly as before.
 
 ## Constraints
 
@@ -86,8 +118,15 @@ spying profile proves it), `proposalCommit` exists on
 the task branch still points at `baseCommit`, the result carries the
 reason; (e) scripted session calls `escalate` BEFORE any change →
 escalated with `proposalCommit` undefined (no-change escalation); (f)
-`.git` removed by the scripted session → failed `ResultCaptureError:`.
-Fails today: verification absent.
+`.git` removed by the scripted session → failed `ResultCaptureError:`; (g)
+D6: a task with `verification: ['sh -c "exit 0"', 'echo ok']` → completed,
+result `evidence` has two entries in order with exit 0 and captured output;
+(h) `verification: ['exit 7']` → failed `VerificationFailedError:` naming
+the command and exit 7, NO finalize commit (branch still at the agent's
+last state), later commands not executed; (i) an escalating session with
+`verification` set → escalated, the commands were NEVER executed (probe
+file untouched); (j) no `verification` → completed with `evidence`
+undefined (unchanged behavior). Fails today: verification absent.
 
 **Action — GREEN:** implement evidence computation, verdict precedence,
 finalize, proposal commit, and the port union extension.
@@ -107,10 +146,13 @@ evidence.
 `src/apps/cli/task.ts` (+ tests).
 
 **Action — RED:** temp-DB tests: (a) a fake runner returning the extended
-completed result → tx2 writes the `task_results` row (crash before tx2 →
-no row); (b) `get task --id` on it prints the four result lines; `--json`
-carries `result`; (c) a result-less task prints exactly as before. Fails
-today: persistence/printing absent.
+completed result (with an evidence array) → tx2 writes the `task_results`
+row including the `evidence` JSON (crash before tx2 → no row); (b)
+`get task --id` on it prints the four result lines plus one
+`<command> → exit <code>` line per evidence entry; `--json` carries
+`result` with the full evidence array; (c) a result-less task prints
+exactly as before, and a completed result without evidence prints no
+evidence lines. Fails today: persistence/printing absent.
 
 **Action — GREEN:** extend tx2 + query + formatter.
 

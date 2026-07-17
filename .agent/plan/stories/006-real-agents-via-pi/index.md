@@ -44,7 +44,7 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   endpoints; absent means the provider's default endpoint from pi-ai's
   catalog.
 - **Repository (D1):** `{ organization: string; branch: string;
-  path: string }` + base `name`. The remote URL is constructed, never
+path: string }` + base `name`. The remote URL is constructed, never
   stored: `https://github.com/<organization>/<name>.git` (GitHub + https
   only this epic). `path` is the repo's **local home** — the destination of
   the remote clone AND the source of every task-workspace clone. Default
@@ -75,7 +75,7 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   (annotated in EPIC 005's docs; smoke tests use `--agent fake@1`).
 - **`PiAgentProfile` is pi-adapter-private** (vendor types never enter a
   core port): `{ name; systemPrompt(input); createTools(input);
-  verify(evidence) }` — data + pure functions parameterizing ONE shared pi
+verify(evidence) }` — data + pure functions parameterizing ONE shared pi
   Agent loop. Model/credential choice stays with the AIProvider/Credential
   resources, never the profile.
 - **Binding goal (Ulrich, 2026-07-16): the Generic agent does its work
@@ -114,7 +114,7 @@ file; one use case per file (verb-first), per `AGENTS.md`.
 - **Loader semantics locked here (not enforcement):** port returns kanthord's
   own `Instruction = { path; content }` (never pi's `ContextFile`); adapter
   `RepoInstructionLoader(workspaceDir)` reads candidates `['AGENTS.md',
-  'CLAUDE.md']` (both if present, that order) as regular files at the
+'CLAUDE.md']` (both if present, that order) as regular files at the
   **workspace root only** — no ancestor walk (deliberate divergence from pi's
   `loadProjectContextFiles`), no `*.local.md`, `path` workspace-relative,
   missing/unreadable skipped. pi's `buildSystemPrompt` is not a public export,
@@ -122,16 +122,51 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   2). Security hardening (realpath/symlink enforcement, size caps) is a
   dedicated later epic — see non-goals.
 
+### Task verification & evidence (D6, debate-reviewed 2026-07-17)
+
+- **`Task` gains `verification?: string[]`, OPTIONAL** (Ulrich, 2026-07-17):
+  exact shell commands that verify the work. Input/output split resolves the
+  `OutcomeEvidence` naming question: `verification` = task-authored HOW to
+  check; `evidence` = the runner-captured results
+  (`{ command, exitCode, output }[]`, `task_results.evidence`), never
+  human-authored.
+- **Only Task carries it — Objective/Initiative get NO verification field**
+  (Ulrich's ruling, overriding a debate suggestion): verification usually
+  succeeds only after all work is done, so Objective/Initiative-level
+  verification is an explicitly added **Verification Task** at the end of the
+  Objective/Initiative — an ordinary task whose `instructions`/`verification`
+  carry the gate, depending on its sibling tasks. Known limitation (debate
+  B4): its dependency list is a snapshot — a task inserted later is not
+  covered; the EPIC 004 re-arrange tooling is the manual fix. No CLI
+  dependency sugar yet (`--verify-objective` deferred; convention first).
+- **The runner EXECUTES the commands — a real gate (debate B3):** after an
+  accepted profile verdict and before finalize, each command runs via
+  `sh -c` in the workspace; first non-zero exit → failed
+  `VerificationFailedError: <command> (exit <code>)`, no finalize. A runner
+  failure name, NOT a new profile-verdict code (command execution is
+  runner-owned; judgment stays profile-owned — D3). Escalation
+  short-circuits it; `retry task` re-runs it like any failed task.
+  Prompt-only verification was rejected as a false gate. The
+  arbitrary-command surface rides the epic's existing trust-boundary
+  non-goal; EPIC 009 adds the controls.
+- **The agent sees the commands:** `renderTaskPrompt` gains a
+  `## Verification` section when the field is present, so the agent can
+  self-check before finishing.
+- **Evidence surfaces:** persisted on completed runs
+  (`task_results.evidence`, NULL when no `verification`), printed by
+  `get task --id` (`<command> → exit <code>` lines; full outputs in
+  `--json`).
+
 ### Verification & escalation (D3, two debate rounds)
 
 - **Runner owns evidence; profiles own judgment.**
   `OutcomeEvidence = { baseCommit; finalDiff: { files; hasChanges /* vs
-  base, incl. untracked */ }; finalResponse }` — normalized by the runner;
+base, incl. untracked */ }; finalResponse }` — normalized by the runner;
   `verify(evidence): Promise<VerificationResult>` (async now so future
   command-running verifiers don't churn the contract).
 - **Two-valued verdict:**
   `{ verdict: 'accepted'; evidence } | { verdict: 'rejected'; code:
-  'NO_CHANGES' | 'UNEXPECTED_CHANGES' | 'MISSING_RESPONSE'; message }` —
+'NO_CHANGES' | 'UNEXPECTED_CHANGES' | 'MISSING_RESPONSE'; message }` —
   structured codes, never parsed strings; the runner maps codes to the
   EPIC 005 `reason` string at the boundary.
 - **Escalation is solely the agent's decision (Ulrich, 2026-07-16 —
@@ -154,7 +189,7 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   `kanthord/proposal/<task-id>` (kanthord git identity, untracked files
   included; skipped when there are no changes) and returns the third
   TaskResult variant `{ outcome: 'escalated'; reason; proposalCommit?;
-  baseCommit; summary; workspace; branch }`. Approval promotes; it never
+baseCommit; summary; workspace; branch }`. Approval promotes; it never
   creates content ("the agent is barred from acceptance, not the runner
   from snapshotting").
 - **`awaiting_confirmation` status** with edges
@@ -181,7 +216,7 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   One `RejectTask` use case, one DB transaction, structured decision
   persisted (`task_results.rejection_resolution` + `rejection_reason`) +
   `task.rejected { code: 'REJECTED_BY_ACTOR', resolution, message, actor,
-  proposalCommit? }`:
+proposalCommit? }`:
   - **`retry`** — direct edge `awaiting_confirmation→pending`, **no
     `task.failed`** (debate B1: a review decision is not an execution
     failure — emitting failure would poison audit/metrics/retry-limits;
@@ -251,12 +286,12 @@ file; one use case per file (verb-first), per `AGENTS.md`.
   WorkspaceUnresolvableError, WorkspacePreparationError,
   ResultCaptureError, BudgetExceededError, verification `rejected` codes,
   and any provider stream rejection → `{ outcome: 'failed', reason:
-  '<Name>: <message>' }`. Unknown throws stay safe via EPIC 005's
+'<Name>: <message>' }`. Unknown throws stay safe via EPIC 005's
   rejected-promise rule.
 - **Context requirements for a pi task:** `ai_provider` + `credential`
   (matching `provider` values) + exactly one of `repository`/`filesystem`.
 - **Events:** `agent.started {workspace}`, `agent.progress {tool, summary ≤
-  200}` throttled to one per 5000 ms per run (first immediate; injected
+200}` throttled to one per 5000 ms per run (first immediate; injected
   clock), `agent.finished {outcome}`; emitted via injected
   `emit(taskId, type, payload)` wired to `EventFeed.append` in main.ts
   (synchronous — order holds; the runner never imports storage).
@@ -278,10 +313,12 @@ file; one use case per file (verb-first), per `AGENTS.md`.
 migration 5 (S02):    tasks.agent TEXT NOT NULL DEFAULT 'generic@1'
                       tasks.instructions TEXT NOT NULL DEFAULT ''
                       tasks.ac TEXT NOT NULL DEFAULT '[]'   # JSON array
+                      tasks.verification TEXT               # nullable JSON array (D6)
                       task_results(task_id PK/FK, workspace, branch, base_commit,
                                    proposal_commit, commit_sha, summary, reason,
-                                   rejection_resolution, rejection_reason)
-TaskRepository (S02): agent + instructions + ac round-trip on save/get
+                                   rejection_resolution, rejection_reason,
+                                   evidence)                # nullable JSON (D6)
+TaskRepository (S02): agent + instructions + ac + verification round-trip on save/get
                       saveTaskResult(taskId, result) -> void      # upsert
                       getTaskResult(taskId) -> TaskResult row | undefined
 AgentCatalog (S02):   has(ref: string) -> boolean                 # create-time validation
@@ -311,7 +348,7 @@ ListTasks (S07):      gains a --status filter
   `--ac` (EPIC 006 S02) — same supersession model as `--runner`; EPIC 005's
   Proof stays valid at its own epoch and is not retro-edited.
 - EPIC 006 epic file — Proof rewritten (gpt-5.5 catalog fix, `get task
-  --id`, credential + escalation phases, exact failure-path commands).
+--id`, credential + escalation phases, exact failure-path commands).
 
 ## Non-goals (from the epic + debates)
 
@@ -335,4 +372,9 @@ guard are a dedicated later security epic (Ulrich, 2026-07-16). **No second
 ships; global/initiative-level instruction sources and a multi-source
 aggregator are future (the port is the extension point). **No `*.local.md`
 discovery** (gitignored, absent from a fresh clone). **No `ac`→`verify()`
-wiring** — `ac` is carried + prompted only this epic.
+wiring** — `ac` is carried + prompted only this epic. **No verification
+fields on Objective/Initiative** (Ulrich, 2026-07-17 — an explicit
+Verification Task at the end is the mechanism); **no `--verify-objective`
+/`--verify-initiative` dependency sugar** (convention first; sugar is EPIC
+008 territory); **no verification-command sandboxing/timeout policy beyond
+the fixed 300 s per command** (EPIC 009).

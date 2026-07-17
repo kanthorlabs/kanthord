@@ -12,20 +12,20 @@ miniature.
 
 ## Verification Gate
 
-Gates:  `npm run typecheck && npm test`   (hermetic — pi adapter tested
-        against a faked model session; no network in tests. The suite
-        includes the SDK-goal check: `generic@1`'s tool set deep-equals
-        `createCodingTools()` from the `@earendil-works/pi-coding-agent`
-        SDK, plus the runner's `escalate` built-in — Ulrich, 2026-07-16.)
-Proof:  (fresh EPIC 004-style setup shell; `SANDBOX` is a local throwaway
-        git repo used as the repository's pre-seeded local home; the
-        credential value is a real key. Proof rewritten 2026-07-16 —
-        debate-reviewed with Ulrich: gpt-5.6 is not in the installed pi-ai
-        0.80.3 catalog (gpt-5.5 is the highest), credentials are Credential
-        resources with stored values (D0), repositories carry
-        organization + local-home path (D1), `get task` takes `--id`, the
-        failure path is exact commands, and an escalation phase exercises
-        D3.)
+Gates: `npm run verify` (hermetic — pi adapter tested
+against a faked model session; no network in tests. The suite
+includes the SDK-goal check: `generic@1`'s tool set deep-equals
+`createCodingTools()` from the `@earendil-works/pi-coding-agent`
+SDK, plus the runner's `escalate` built-in — Ulrich, 2026-07-16.)
+Proof: (fresh EPIC 004-style setup shell; `SANDBOX` is a local throwaway
+git repo used as the repository's pre-seeded local home; the
+credential value is a real key. Proof rewritten 2026-07-16 —
+debate-reviewed with Ulrich: gpt-5.6 is not in the installed pi-ai
+0.80.3 catalog (gpt-5.5 is the highest), credentials are Credential
+resources with stored values (D0), repositories carry
+organization + local-home path (D1), `get task` takes `--id`, the
+failure path is exact commands, and an escalation phase exercises
+D3.)
 
 ```bash
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
@@ -42,12 +42,14 @@ TASK=$(node src/main.ts create task --objective "$OBJECTIVE" \
   --title "add a title line to README" \
   --instructions "Edit README.md at the repo root: add a top-level markdown H1 title line." \
   --ac "README.md begins with a level-1 markdown heading" \
+  --verification "head -1 README.md | grep -q '^# '" \
   --context repository=$REPO --context ai_provider=$AIPROV --context credential=$CRED)
 
 node src/main.ts daemon run --until-idle; echo "exit=$?"   # exit=0
 node src/main.ts get task --id "$TASK"
 # prints completed + the TaskResult: workspace path, branch
-# kanthord/<task-id>, commit sha, summary.
+# kanthord/<task-id>, commit sha, summary, and the D6 evidence line:
+# head -1 README.md | grep -q '^# ' → exit 0
 git -C "<printed workspace path>" log --oneline -1
 # shows the agent's commit on branch kanthord/<task-id> — the commit lives
 # in the task WORKSPACE clone, not the sandbox home (debate finding);
@@ -116,6 +118,13 @@ node src/main.ts get task --id "$TASK3"                    # failed,
   the runner passes them into the profile, which places them in the system
   prompt — one loader the future native role agents reuse. Loader security
   hardening is a separate later epic.
+- **Task verification & evidence (D6).** `Task` gains OPTIONAL
+  `verification: string[]` (exact check commands); after an accepted verdict
+  the runner executes them in the workspace — first non-zero exit fails the
+  task (`VerificationFailedError`), captured results persist as
+  `task_results.evidence` and print via `get task`. Only Task carries the
+  field: Objective/Initiative-level gates are an explicitly appended
+  Verification Task (Ulrich, 2026-07-17). Command sandboxing is EPIC 009.
 - **Result capture.** Agent outcome → commit on the task branch **in the
   task workspace clone** → TaskResult (workspace path, branch name, commit
   sha, summary) persisted and printed by `get task`; the workspace is kept
@@ -126,8 +135,8 @@ node src/main.ts get task --id "$TASK3"                    # failed,
   a turn/step budget exceeded → task fails with a named error and an event;
   the daemon survives and moves on.
 
-(Amended 2026-07-16 — Ulrich's D2/D3/D5 rulings, debate-reviewed, expanded the
-epic during story authoring: `Task.agent` ships as a required versioned ref
+(Amended 2026-07-16/17 — Ulrich's D2/D3/D5/D6 rulings, debate-reviewed,
+expanded the epic during story authoring: `Task.agent` ships as a required versioned ref
 (`generic@1`) resolved by a re-keyed `AgentRunnerResolver`, with
 adapter-private pi profiles; **the Generic agent does its work with the SDK
 exposed by `@earendil-works/pi-coding-agent`** (`createCodingTools` — a
