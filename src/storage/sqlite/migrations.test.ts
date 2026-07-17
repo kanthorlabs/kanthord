@@ -61,9 +61,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 2 and creates exactly the eight core tables", () => {
+test("migrates to version 3 and creates exactly the nine core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 2);
+    assert.equal(userVersion(db), 3);
     assert.deepEqual(userTables(db), [
       "events",
       "initiatives",
@@ -71,6 +71,7 @@ test("migrates to version 2 and creates exactly the eight core tables", () => {
       "objectives",
       "projects",
       "resources",
+      "task_context",
       "task_dependencies",
       "tasks",
     ]);
@@ -232,7 +233,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 2);
+    assert.equal(second.version, 3);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();

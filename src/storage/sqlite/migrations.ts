@@ -69,4 +69,17 @@ CREATE TABLE events (
 );
 `),
   },
+  {
+    version: 3,
+    name: "task-context",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE task_context (
+  task_id     TEXT NOT NULL REFERENCES tasks(id),
+  type        TEXT NOT NULL,
+  resource_id TEXT NOT NULL,
+  PRIMARY KEY (task_id, type)
+)
+`),
+  },
 ];

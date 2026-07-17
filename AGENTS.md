@@ -75,7 +75,8 @@ src/
 ├── apps/              # driving adapters; thin, no business logic
 │   ├── cli/           # CLI app
 │   └── http/          # HTTP server app (REST); grpc/ or ws/ sit beside these later
-└── main.ts            # composition root: the only place that wires adapters
+├── composition.ts     # composition root: the only module that wires adapters
+└── main.ts            # process entrypoint: reads argv/env, calls composition + dispatch, does I/O
 ```
 
 ### Import direction (the load-bearing rule)
@@ -84,7 +85,11 @@ src/
 - `app/` imports `domain/` and `*/port.ts` only — use `import type` for ports.
   Never import an adapter (`slack.ts`, `sqlite/`) from a use case.
 - `port.ts` never imports its sibling adapters; adapters import their `port.ts`.
-- Only `main.ts` imports concrete adapters, to do the wiring.
+- Only the composition root imports concrete adapters, to do the wiring. The
+  root is `composition.ts` (the `buildDeps` factory — the single module that
+  imports adapters) plus the thin `main.ts` entrypoint that calls it; splitting
+  the factory out of `main.ts` lets tests build the real dependency bundle
+  without the process entrypoint's side effects.
 - Apps parse input, call a use case, format output — nothing else.
 
 ### Ports
@@ -118,8 +123,9 @@ src/
 
 ### Wiring
 
-- Explicit construction in `main.ts`, grouped into per-feature factories
-  (`buildTaskUseCases(deps)`) when it grows. No DI container.
+- Explicit construction in the composition root (`composition.ts`'s
+  `buildDeps`), grouped into per-feature factories (`buildTaskUseCases(deps)`)
+  when it grows. No DI container.
 - Apps register routes/commands in explicit, grep-able tables mapping to
   use cases. No glob-based auto-registration.
 

@@ -1,7 +1,14 @@
 import type { Entity } from "./entity.ts";
 import { newId } from "./entity.ts";
 
-export const TASK_STATUSES = ["pending", "running", "completed", "failed", "awaiting_confirmation", "discarded"] as const;
+export const TASK_STATUSES = [
+  "pending",
+  "running",
+  "completed",
+  "failed",
+  "awaiting_confirmation",
+  "discarded",
+] as const;
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
@@ -70,9 +77,14 @@ export class DependenciesLockedError extends Error {
   }
 }
 
-export function setDependencies(task: Task, dependencies: string[]): Task {
+/** Throws `DependenciesLockedError` unless the task's edges may still be edited. */
+export function assertDependenciesEditable(task: Task): void {
   if (task.status !== "pending") {
     throw new DependenciesLockedError(task.id, task.status);
   }
+}
+
+export function setDependencies(task: Task, dependencies: string[]): Task {
+  assertDependenciesEditable(task);
   return { ...task, dependencies: [...dependencies] };
 }

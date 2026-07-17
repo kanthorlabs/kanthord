@@ -32,6 +32,20 @@ class StubTaskRepository implements TaskRepository {
   listByInitiative(_initiativeId: string): Task[] {
     return [...this.tasks];
   }
+
+  saveTaskContext(_taskId: string, _context: Record<string, string>): void {}
+
+  getTaskContext(_taskId: string): Record<string, string> {
+    return {};
+  }
+
+  addDependency(_taskId: string, _dependsOn: string): void {}
+
+  removeDependency(_taskId: string, _dependsOn: string): void {}
+
+  listTasksByObjective(_objectiveId: string): Task[] {
+    return [];
+  }
 }
 
 test("CheckStoredGraph.execute returns ready/blocked report for a diamond graph with mixed statuses", async () => {

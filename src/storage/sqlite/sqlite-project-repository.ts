@@ -14,7 +14,9 @@ export class SqliteProjectRepository implements ProjectRepository {
 
   save(project: Project): void {
     this.#db
-      .prepare("INSERT INTO projects (id, name) VALUES (?, ?)")
+      .prepare(
+        "INSERT INTO projects (id, name) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name",
+      )
       .run(project.id, project.name);
   }
 
@@ -52,5 +54,37 @@ export class SqliteProjectRepository implements ProjectRepository {
       const extra = JSON.parse(r.attributes) as Record<string, unknown>;
       return { id: r.id, type: r.type, name: r.name, ...extra } as Resource;
     });
+  }
+
+  getResource(id: string): Resource | undefined {
+    const row = this.#db
+      .prepare("SELECT id, type, name, attributes FROM resources WHERE id = ?")
+      .get(id) as
+      | { id: string; type: string; name: string; attributes: string }
+      | undefined;
+    if (row === undefined) return undefined;
+    const extra = JSON.parse(row.attributes) as Record<string, unknown>;
+    return { id: row.id, type: row.type, name: row.name, ...extra } as Resource;
+  }
+
+  listProjects(): Project[] {
+    const rows = this.#db
+      .prepare("SELECT id, name FROM projects ORDER BY id ASC")
+      .all() as Array<{ id: string; name: string }>;
+    return rows.map((r) => ({ id: r.id, name: r.name }));
+  }
+
+  resolveProjectByName(name: string): string[] {
+    const rows = this.#db
+      .prepare("SELECT id FROM projects WHERE name = ?")
+      .all(name) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
+  }
+
+  resolveResourceByName(projectId: string, name: string): string[] {
+    const rows = this.#db
+      .prepare("SELECT id FROM resources WHERE projectId = ? AND name = ?")
+      .all(projectId, name) as Array<{ id: string }>;
+    return rows.map((r) => r.id);
   }
 }

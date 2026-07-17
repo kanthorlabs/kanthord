@@ -14,6 +14,16 @@ export interface Migrator {
   migrate(): MigrationReport;
 }
 
+/**
+ * Runs a unit of work atomically. The adapter wraps `work` in a real
+ * transaction so a use case that performs several writes (e.g. an edge plus its
+ * event) either commits all of them or none. `work` is synchronous because the
+ * only backing store, `node:sqlite`, is synchronous.
+ */
+export interface Transactor {
+  run<T>(work: () => T): T;
+}
+
 /** Read-only view of the store's health, owned by the core (no vendor name). */
 export interface StatusStore {
   /** Filesystem path of the backing database. */
@@ -33,7 +43,11 @@ export interface ProjectRepository {
   save(project: Project): void;
   get(id: string): Project | undefined;
   addResource(projectId: string, resource: Resource): void;
+  getResource(id: string): Resource | undefined;
   listResources(projectId: string): Resource[];
+  listProjects(): Project[];
+  resolveProjectByName(name: string): string[];
+  resolveResourceByName(projectId: string, name: string): string[];
 }
 
 /** Repository for the Initiative aggregate (initiatives + their objectives). */
@@ -41,7 +55,11 @@ export interface InitiativeRepository {
   save(initiative: Initiative): void;
   get(id: string): Initiative | undefined;
   saveObjective(objective: Objective): void;
+  getObjective(id: string): Objective | undefined;
   listObjectives(initiativeId: string): Objective[];
+  listInitiatives(projectId: string): Initiative[];
+  resolveInitiativeByName(projectId: string, name: string): string[];
+  resolveObjectiveByName(initiativeId: string, name: string): string[];
 }
 
 /** Repository for the Task aggregate (tasks + their dependency edges). */
@@ -50,4 +68,16 @@ export interface TaskRepository {
   saveAll(tasks: Task[]): void;
   get(id: string): Task | undefined;
   listByInitiative(initiativeId: string): Task[];
+  listTasksByObjective(objectiveId: string): Task[];
+  saveTaskContext(taskId: string, context: Record<string, string>): void;
+  getTaskContext(taskId: string): Record<string, string>;
+  addDependency(taskId: string, dependsOn: string): void;
+  removeDependency(taskId: string, dependsOn: string): void;
+}
+
+/** Resolves a raw id to the aggregate kind it belongs to. */
+export interface ReferenceResolver {
+  resolveKind(
+    id: string,
+  ): "project" | "resource" | "initiative" | "objective" | "task" | undefined;
 }

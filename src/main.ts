@@ -1,24 +1,16 @@
 // Composition root — the ONLY file that imports concrete adapters and wires
 // them to use cases and the CLI.
-import { buildProgram } from "./apps/cli/index.ts";
-import { openDatabase } from "./storage/sqlite/open.ts";
-import { SqliteStatusStore } from "./storage/sqlite/sqlite-status-store.ts";
-import { SqliteMigrator } from "./storage/sqlite/sqlite-migrator.ts";
-import { MIGRATIONS } from "./storage/sqlite/migrations.ts";
-import { MigrateDb } from "./app/db/migrate-db.ts";
-import { GetDbStatus } from "./app/db/get-db-status.ts";
+import { dispatch } from "./apps/cli/router.ts";
+import { buildDeps } from "./composition.ts";
 
 const dbPath = process.env.KANTHORD_DB ?? ".data/kanthord.db";
-const db = openDatabase(dbPath);
+const deps = buildDeps(dbPath);
 
-const migrator = new SqliteMigrator(db, MIGRATIONS);
-const store = new SqliteStatusStore(db, dbPath);
-const migrateDb = new MigrateDb(migrator);
-const getDbStatus = new GetDbStatus(store);
-
-try {
-  const program = buildProgram({ migrateDb, getDbStatus });
-  await program.parseAsync(process.argv);
-} finally {
-  store.close();
+const result = await dispatch(process.argv.slice(2), deps);
+for (const line of result.stdout) {
+  process.stdout.write(line + "\n");
 }
+for (const line of result.stderr) {
+  process.stderr.write(line + "\n");
+}
+process.exitCode = result.exitCode;

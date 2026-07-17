@@ -51,7 +51,7 @@ test("SqliteProjectRepository get returns undefined for unknown id", () => {
   assert.equal(repo.get("nonexistent-id"), undefined);
 });
 
-test("SqliteProjectRepository duplicate save throws", () => {
+test("SqliteProjectRepository duplicate save (same id + same name) is a no-op upsert", () => {
   const { db, dir } = makeTempDb();
   after(() => {
     db.close();
@@ -61,7 +61,9 @@ test("SqliteProjectRepository duplicate save throws", () => {
   const repo = new SqliteProjectRepository(db);
   const project: Project = { id: newId(), name: "Dupe Project" };
   repo.save(project);
-  assert.throws(() => repo.save(project));
+  // upsert semantics: re-saving identical data must not throw
+  assert.doesNotThrow(() => repo.save(project));
+  assert.deepEqual(repo.get(project.id), project);
 });
 
 test("SqliteProjectRepository addResource + listResources round-trips repository variant", () => {
@@ -206,4 +208,183 @@ test("SqliteProjectRepository addResource with unknown projectId throws", () => 
     path: "/workspace/orphan",
   };
   assert.throws(() => repo.addResource("nonexistent-project-id", resource));
+});
+
+test("SqliteProjectRepository resolveProjectByName returns [id] for a unique name", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const project = { id: newId(), name: "unique-project" };
+  repo.save(project);
+  const ids = repo.resolveProjectByName("unique-project");
+  assert.deepEqual(ids, [project.id]);
+});
+
+test("SqliteProjectRepository resolveProjectByName returns [] for an unknown name", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const ids = repo.resolveProjectByName("no-such-project");
+  assert.deepEqual(ids, []);
+});
+
+test("SqliteProjectRepository getResource returns the resource for a known id", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const project: Project = { id: newId(), name: "P-getResource" };
+  repo.save(project);
+
+  const resource: Filesystem = {
+    id: newId(),
+    type: "filesystem",
+    name: "workspace",
+    path: "/workspace",
+  };
+  repo.addResource(project.id, resource);
+
+  const loaded = repo.getResource(resource.id);
+  assert.deepEqual(loaded, resource);
+});
+
+test("SqliteProjectRepository getResource returns undefined for unknown id", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  assert.equal(repo.getResource("no-such-resource"), undefined);
+});
+
+test("SqliteProjectRepository resolveResourceByName returns [id] for matching name in project scope", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const project: Project = { id: newId(), name: "P-resolveResource" };
+  repo.save(project);
+
+  const resource: Credential = {
+    id: newId(),
+    type: "credential",
+    name: "gh-token",
+    provider: "github",
+    value: "secret",
+  };
+  repo.addResource(project.id, resource);
+
+  const ids = repo.resolveResourceByName(project.id, "gh-token");
+  assert.deepEqual(ids, [resource.id]);
+});
+
+test("SqliteProjectRepository resolveResourceByName returns [] for unknown name", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const project: Project = { id: newId(), name: "P-resolveResourceEmpty" };
+  repo.save(project);
+
+  const ids = repo.resolveResourceByName(project.id, "no-such-resource");
+  assert.deepEqual(ids, []);
+});
+
+test("SqliteProjectRepository listProjects returns all saved projects", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const p1 = { id: newId(), name: "Alpha" };
+  const p2 = { id: newId(), name: "Beta" };
+  repo.save(p1);
+  repo.save(p2);
+
+  const projects = repo.listProjects();
+  assert.equal(projects.length, 2);
+  const ids = projects.map((p) => p.id).sort();
+  assert.deepEqual(ids, [p1.id, p2.id].sort());
+});
+
+test("SqliteProjectRepository listProjects returns [] when no projects exist", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  assert.deepEqual(repo.listProjects(), []);
+});
+
+// B2 regression: rename must update an existing row, not insert a duplicate
+test("SqliteProjectRepository save with same id and new name updates the name (rename)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const project: Project = { id: newId(), name: "Original Name" };
+  repo.save(project);
+  repo.save({ id: project.id, name: "Renamed Project" });
+  const loaded = repo.get(project.id);
+  assert.equal(loaded?.name, "Renamed Project");
+});
+
+test("SqliteProjectRepository resolveResourceByName scopes by projectId — same name in two projects returns correct result", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const p1: Project = { id: newId(), name: "Project-A" };
+  const p2: Project = { id: newId(), name: "Project-B" };
+  repo.save(p1);
+  repo.save(p2);
+
+  const r1: Filesystem = {
+    id: newId(),
+    type: "filesystem",
+    name: "shared-name",
+    path: "/workspace/a",
+  };
+  const r2: Filesystem = {
+    id: newId(),
+    type: "filesystem",
+    name: "shared-name",
+    path: "/workspace/b",
+  };
+  repo.addResource(p1.id, r1);
+  repo.addResource(p2.id, r2);
+
+  const idsP1 = repo.resolveResourceByName(p1.id, "shared-name");
+  const idsP2 = repo.resolveResourceByName(p2.id, "shared-name");
+  assert.deepEqual(idsP1, [r1.id]);
+  assert.deepEqual(idsP2, [r2.id]);
 });

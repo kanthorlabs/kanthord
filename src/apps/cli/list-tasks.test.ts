@@ -1,0 +1,106 @@
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { runListTasks } from "./list-tasks.ts";
+import type { TaskRepository } from "../../storage/port.ts";
+import type { Task } from "../../domain/task.ts";
+
+const INITIATIVE_ID = "01JWZYQR00000000000000000A";
+const TASK_API_ID = "01JWZYQR00000000000000000B";
+const TASK_DEPLOY_ID = "01JWZYQR00000000000000000C";
+
+const API_TASK: Task = {
+  id: TASK_API_ID,
+  objectiveId: "01JWZYQR00000000000000000D",
+  title: "implement api",
+  status: "pending",
+  dependencies: [],
+};
+
+const DEPLOY_TASK: Task = {
+  id: TASK_DEPLOY_ID,
+  objectiveId: "01JWZYQR00000000000000000D",
+  title: "deploy",
+  status: "pending",
+  dependencies: [TASK_API_ID],
+};
+
+class FakeTaskRepository implements TaskRepository {
+  save(_task: Task): void {}
+  saveAll(_tasks: Task[]): void {}
+  get(_id: string): Task | undefined {
+    return undefined;
+  }
+  listByInitiative(_initiativeId: string): Task[] {
+    return [API_TASK, DEPLOY_TASK];
+  }
+  listTasksByObjective(_objectiveId: string): Task[] {
+    return [];
+  }
+  saveTaskContext(_taskId: string, _context: Record<string, string>): void {}
+  getTaskContext(_taskId: string): Record<string, string> {
+    return {};
+  }
+  addDependency(_taskId: string, _dependsOn: string): void {}
+  removeDependency(_taskId: string, _dependsOn: string): void {}
+}
+
+describe("runListTasks", () => {
+  test("default output shows ready/blocked with dependency titles on stdout", async () => {
+    const deps = { taskRepository: new FakeTaskRepository() };
+    const args: Record<string, unknown> = { initiative: INITIATIVE_ID };
+    const result = await runListTasks(args, deps);
+    assert.equal(result.exitCode, 0);
+    // Stdout must be non-empty (human table)
+    assert.ok(result.stdout.length > 0, "stdout must have at least one line");
+    const out = result.stdout.join("\n");
+    // "implement api" row must appear as ready
+    assert.ok(
+      out.includes("implement api") && out.includes("ready"),
+      `stdout should contain "implement api" and "ready": ${out}`,
+    );
+    // "deploy" row must appear as blocked with dependency title (not id)
+    assert.ok(
+      out.includes("deploy") &&
+        out.includes("blocked") &&
+        out.includes("implement api"),
+      `stdout should contain "deploy", "blocked", and "implement api": ${out}`,
+    );
+    // The dep ID must NOT appear verbatim (titles, not ids, in default output)
+    assert.ok(
+      !out.includes(TASK_API_ID),
+      `stdout must not contain raw dep id ${TASK_API_ID} in default mode: ${out}`,
+    );
+  });
+
+  test("--json output shows JSON array with dep ids on stdout", async () => {
+    const deps = { taskRepository: new FakeTaskRepository() };
+    const args: Record<string, unknown> = {
+      initiative: INITIATIVE_ID,
+      json: true,
+    };
+    const result = await runListTasks(args, deps);
+    assert.equal(result.exitCode, 0);
+    assert.equal(
+      result.stdout.length,
+      1,
+      "JSON output must be exactly one stdout line",
+    );
+    const parsed = JSON.parse(result.stdout[0]!) as Array<{
+      id: string;
+      title: string;
+      status: string;
+      state: string;
+      waiting: string[];
+    }>;
+    assert.ok(Array.isArray(parsed), "stdout must parse to an array");
+    assert.equal(parsed.length, 2);
+    const apiRow = parsed.find((r) => r.id === TASK_API_ID);
+    const deployRow = parsed.find((r) => r.id === TASK_DEPLOY_ID);
+    assert.ok(apiRow, "API task must be in JSON output");
+    assert.ok(deployRow, "deploy task must be in JSON output");
+    assert.equal(apiRow!.state, "ready");
+    assert.equal(deployRow!.state, "blocked");
+    // JSON waiting must contain dep IDs (not titles)
+    assert.deepEqual(deployRow!.waiting, [TASK_API_ID]);
+  });
+});
