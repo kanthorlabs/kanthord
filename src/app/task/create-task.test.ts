@@ -65,6 +65,12 @@ class FakeInitiativeRepository implements InitiativeRepository {
   listInitiatives(_projectId: string) {
     return [];
   }
+
+  setPaused(_id: string, _paused: boolean): void {}
+
+  listAllInitiatives(): Array<{ id: string; paused: boolean }> {
+    return [];
+  }
 }
 
 class FakeTaskRepository implements TaskRepository {
@@ -101,6 +107,10 @@ class FakeTaskRepository implements TaskRepository {
 
   listTasksByObjective(_objectiveId: string): Task[] {
     return [];
+  }
+
+  getInitiativeId(_taskId: string): string | undefined {
+    return undefined;
   }
 }
 

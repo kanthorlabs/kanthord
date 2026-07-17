@@ -91,4 +91,17 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
       .all(initiativeId, name) as Array<{ id: string }>;
     return rows.map((r) => r.id);
   }
+
+  setPaused(id: string, paused: boolean): void {
+    this.#db
+      .prepare("UPDATE initiatives SET paused = ? WHERE id = ?")
+      .run(paused ? 1 : 0, id);
+  }
+
+  listAllInitiatives(): Array<{ id: string; paused: boolean }> {
+    const rows = this.#db
+      .prepare("SELECT id, paused FROM initiatives")
+      .all() as Array<{ id: string; paused: number }>;
+    return rows.map((r) => ({ id: r.id, paused: r.paused === 1 }));
+  }
 }

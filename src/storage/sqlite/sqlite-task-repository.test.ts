@@ -10,6 +10,7 @@ import { MIGRATIONS } from "./migrations.ts";
 import { SqliteProjectRepository } from "./sqlite-project-repository.ts";
 import { SqliteInitiativeRepository } from "./sqlite-initiative-repository.ts";
 import { SqliteTaskRepository } from "./sqlite-task-repository.ts";
+import { SqliteUnitOfWork } from "./sqlite-unit-of-work.ts";
 import { newId } from "../../domain/entity.ts";
 import type { Task } from "../../domain/task.ts";
 
@@ -92,7 +93,7 @@ test("SqliteTaskRepository get returns undefined for unknown id", () => {
   assert.equal(repo.get("nonexistent-id"), undefined);
 });
 
-test("SqliteTaskRepository save is transactional — dependency on missing task throws and leaves no tasks row", () => {
+test("SqliteTaskRepository save with nonexistent dep throws FK error and leaves the task row persisted", () => {
   const { db, dir } = makeTempDb();
   after(() => {
     db.close();
@@ -110,9 +111,13 @@ test("SqliteTaskRepository save is transactional — dependency on missing task 
     dependencies: ["nonexistent-dep-id"],
   };
 
-  assert.throws(() => repo.save(task));
-  // Transaction rolled back: no tasks row persisted
-  assert.equal(repo.get(task.id), undefined);
+  // FK violation is not suppressed by INSERT OR IGNORE in SQLite
+  assert.throws(() => repo.save(task), /constraint/i);
+  // task row was upserted before the dep INSERT failed (save has no own transaction)
+  const loaded = repo.get(task.id);
+  assert.ok(loaded, "task row must exist after the partial save");
+  // bad dep was not recorded
+  assert.deepEqual(loaded!.dependencies, []);
 });
 
 test("SqliteTaskRepository saveAll succeeds when second task depends on first regardless of array order", () => {
@@ -528,4 +533,78 @@ test("SqliteTaskRepository removeDependency for a missing edge is a no-op", () =
   const loaded = repo.get(task.id);
   assert.ok(loaded !== undefined);
   assert.deepEqual(loaded.dependencies, []);
+});
+
+// ---------------------------------------------------------------------------
+// S02-T4: getInitiativeId
+// ---------------------------------------------------------------------------
+
+test("SqliteTaskRepository getInitiativeId returns the owning initiative", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { initiativeId, objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Task",
+    status: "pending",
+    dependencies: [],
+  };
+  repo.save(task);
+
+  const result = repo.getInitiativeId(task.id);
+  assert.equal(result, initiativeId);
+});
+
+test("SqliteTaskRepository getInitiativeId returns undefined for unknown task id", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteTaskRepository(db);
+  const result = repo.getInitiativeId("nonexistent-id");
+  assert.equal(result, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// S2 regression: saveTaskContext must join the caller's ambient UnitOfWork
+// ---------------------------------------------------------------------------
+
+test("SqliteTaskRepository saveTaskContext inside UnitOfWork.transaction does not start a nested transaction", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+  const uow = new SqliteUnitOfWork(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "ctx task",
+    status: "pending",
+    dependencies: [],
+  };
+  repo.save(task);
+
+  // saveTaskContext must NOT issue its own BEGIN; it must participate in the
+  // ambient transaction already opened by UnitOfWork.transaction.
+  // If saveTaskContext issues its own BEGIN it will throw at the SQLite level
+  // because a transaction is already active.
+  assert.doesNotThrow(() => {
+    uow.transaction(() => {
+      repo.saveTaskContext(task.id, { repository: "r1" });
+    });
+  }, "saveTaskContext must not throw when called inside an ambient UnitOfWork.transaction");
 });

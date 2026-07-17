@@ -23,12 +23,20 @@ export interface Event {
   id: string;
   type: EventType;
   taskId: string;
+  payload?: Record<string, string>;
 }
 
-export function newEvent(type: EventType, input: { taskId: string }): Event {
-  return {
+export function newEvent(
+  type: EventType,
+  input: { taskId: string; payload?: Record<string, string> },
+): Event {
+  const event: Event = {
     id: newId(),
     type,
     taskId: input.taskId,
   };
+  if (input.payload !== undefined) {
+    event.payload = input.payload;
+  }
+  return event;
 }

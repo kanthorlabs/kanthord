@@ -1,6 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { runCreateInitiative, runRenameInitiative } from "./initiative.ts";
+import {
+  runCreateInitiative,
+  runRenameInitiative,
+  runPauseInitiative,
+  runResumeInitiative,
+} from "./initiative.ts";
 import type {
   InitiativeRepository,
   ReferenceResolver,
@@ -8,10 +13,13 @@ import type {
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
+import { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
+import { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
   readonly #objectives: Map<string, Objective> = new Map();
+  readonly #paused: Map<string, boolean> = new Map();
 
   save(initiative: Initiative): void {
     this.#initiatives.set(initiative.id, { ...initiative });
@@ -49,6 +57,17 @@ class FakeInitiativeRepository implements InitiativeRepository {
 
   listInitiatives(_projectId: string) {
     return [];
+  }
+
+  setPaused(id: string, paused: boolean): void {
+    this.#paused.set(id, paused);
+  }
+
+  listAllInitiatives(): Array<{ id: string; paused: boolean }> {
+    return [...this.#initiatives.keys()].map((id) => ({
+      id,
+      paused: this.#paused.get(id) ?? false,
+    }));
   }
 }
 
@@ -140,6 +159,92 @@ describe("runRenameInitiative handler", () => {
     const result = await runRenameInitiative(
       { id: "no-such-id", name: "whatever" },
       new RenameInitiative(repo),
+    );
+    assert.equal(result.exitCode, 1);
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+describe("runPauseInitiative handler", () => {
+  test("runPauseInitiative returns exitCode 0 and stderr 'initiative paused: <id>' on success", async () => {
+    const repo = new FakeInitiativeRepository();
+    const resolver = new MockReferenceResolver("initiative");
+    // seed the initiative so get() returns it
+    const createResult = await runCreateInitiative(
+      { project: "proj-x", name: "to-pause" },
+      new CreateInitiative(repo, new MockReferenceResolver("project")),
+    );
+    const id = createResult.stdout[0]!;
+    const result = await runPauseInitiative(
+      { id },
+      new PauseInitiative(repo, resolver),
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 0);
+    assert.ok(
+      result.stderr[0]?.includes(`initiative paused: ${id}`),
+      `expected 'initiative paused: ${id}', got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("runPauseInitiative returns exitCode 1 with error line for unknown id", async () => {
+    const repo = new FakeInitiativeRepository();
+    const result = await runPauseInitiative(
+      { id: "no-such-id" },
+      new PauseInitiative(repo, new MockReferenceResolver(undefined)),
+    );
+    assert.equal(result.exitCode, 1);
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("runPauseInitiative returns exitCode 1 with error line for wrong-type id", async () => {
+    const repo = new FakeInitiativeRepository();
+    const result = await runPauseInitiative(
+      { id: "task-id" },
+      new PauseInitiative(repo, new MockReferenceResolver("task")),
+    );
+    assert.equal(result.exitCode, 1);
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+describe("runResumeInitiative handler", () => {
+  test("runResumeInitiative returns exitCode 0 and stderr 'initiative resumed: <id>' on success", async () => {
+    const repo = new FakeInitiativeRepository();
+    const resolver = new MockReferenceResolver("initiative");
+    const createResult = await runCreateInitiative(
+      { project: "proj-y", name: "to-resume" },
+      new CreateInitiative(repo, new MockReferenceResolver("project")),
+    );
+    const id = createResult.stdout[0]!;
+    // first pause, then resume
+    await runPauseInitiative({ id }, new PauseInitiative(repo, resolver));
+    const result = await runResumeInitiative(
+      { id },
+      new ResumeInitiative(repo, resolver),
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 0);
+    assert.ok(
+      result.stderr[0]?.includes(`initiative resumed: ${id}`),
+      `expected 'initiative resumed: ${id}', got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("runResumeInitiative returns exitCode 1 with error line for unknown id", async () => {
+    const repo = new FakeInitiativeRepository();
+    const result = await runResumeInitiative(
+      { id: "no-such-id" },
+      new ResumeInitiative(repo, new MockReferenceResolver(undefined)),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(

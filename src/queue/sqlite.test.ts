@@ -272,6 +272,166 @@ test(
   },
 );
 
+// ---------------------------------------------------------------------------
+// S02-T4: JobQueue extensions
+// ---------------------------------------------------------------------------
+
+function seedTaskWithInitiative(db: ReturnType<typeof openDatabase>): {
+  taskId: string;
+  initiativeId: string;
+} {
+  const projectRepo = new SqliteProjectRepository(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+  const taskRepo = new SqliteTaskRepository(db);
+
+  const projectId = newId();
+  const initiativeId = newId();
+  const objectiveId = newId();
+  const taskId = newId();
+
+  projectRepo.save({ id: projectId, name: "Proj" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.saveObjective({ id: objectiveId, initiativeId, name: "Obj" });
+  taskRepo.save({
+    id: taskId,
+    objectiveId,
+    title: "Task",
+    status: "pending",
+    dependencies: [],
+  });
+
+  return { taskId, initiativeId };
+}
+
+test("finish(jobId, 'completed') sets job status to completed", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  queue.finish(claimed.id, "completed");
+
+  const row = db
+    .prepare("SELECT status FROM jobs WHERE id = ?")
+    .get(claimed.id) as { status: string } | undefined;
+  assert.ok(row !== undefined);
+  assert.equal(row.status, "completed");
+});
+
+test("finish(jobId, 'failed') sets job status to failed", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  queue.finish(claimed.id, "failed");
+
+  const row = db
+    .prepare("SELECT status FROM jobs WHERE id = ?")
+    .get(claimed.id) as { status: string } | undefined;
+  assert.ok(row !== undefined);
+  assert.equal(row.status, "failed");
+});
+
+test("discard(jobId) deletes the job row", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  queue.discard(claimed.id);
+
+  const row = db.prepare("SELECT id FROM jobs WHERE id = ?").get(claimed.id) as
+    { id: string } | undefined;
+  assert.equal(row, undefined);
+});
+
+test("listRunningJobs returns exactly the running jobs", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId1 = seedTask(db);
+  const taskId2 = seedTask(db);
+  const taskId3 = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+
+  queue.enqueue(taskId1);
+  queue.enqueue(taskId2);
+  queue.enqueue(taskId3);
+
+  const claimed1 = queue.claim();
+  const claimed2 = queue.claim();
+  assert.ok(claimed1 !== undefined);
+  assert.ok(claimed2 !== undefined);
+
+  // taskId3 still queued — should not appear
+  const running = queue.listRunningJobs();
+  assert.equal(running.length, 2);
+  const runningIds = running.map((j) => j.id).sort();
+  assert.deepEqual(runningIds, [claimed1.id, claimed2.id].sort());
+});
+
+test("claim skips queued job for paused initiative; claimable after resume", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { taskId: pausedTaskId, initiativeId } = seedTaskWithInitiative(db);
+  const activeTaskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+
+  queue.enqueue(pausedTaskId);
+  queue.enqueue(activeTaskId);
+
+  // Pause the first initiative via raw SQL
+  db.prepare("UPDATE initiatives SET paused = 1 WHERE id = ?").run(
+    initiativeId,
+  );
+
+  // claim should skip the paused initiative's task and return the active one
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined, "should claim the active task");
+  assert.equal(claimed.taskId, activeTaskId);
+
+  // queue is now exhausted of claimable jobs (paused task remains queued)
+  const second = queue.claim();
+  assert.equal(second, undefined);
+
+  // resume and now the formerly-paused task is claimable
+  db.prepare("UPDATE initiatives SET paused = 0 WHERE id = ?").run(
+    initiativeId,
+  );
+  const resumed = queue.claim();
+  assert.ok(resumed !== undefined, "should claim after resume");
+  assert.equal(resumed.taskId, pausedTaskId);
+});
+
 test(
   "batch sweep: two workers together claim exactly the full set",
   { timeout: 30000 },

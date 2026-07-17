@@ -1,4 +1,5 @@
 import type { CreateTask } from "../../app/task/create-task.ts";
+import type { RetryTask } from "../../app/task/retry-task.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 
 export async function runCreateTask(
@@ -59,6 +60,19 @@ export async function runCreateTask(
       context,
     });
     return { exitCode: 0, stdout: [id], stderr: [`task created: ${title}`] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runRetryTask(
+  args: Record<string, unknown>,
+  retryTask: RetryTask,
+): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const id = args["id"] as string;
+  try {
+    await retryTask.execute({ taskId: id });
+    return { exitCode: 0, stdout: [], stderr: [`task re-queued: ${id}`] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
   }

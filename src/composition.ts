@@ -20,6 +20,8 @@ import { FindProject } from "./app/project/find-project.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
 import { RenameInitiative } from "./app/initiative/rename-initiative.ts";
 import { FindInitiative } from "./app/initiative/find-initiative.ts";
+import { PauseInitiative } from "./app/initiative/pause-initiative.ts";
+import { ResumeInitiative } from "./app/initiative/resume-initiative.ts";
 import { CreateObjective } from "./app/objective/create-objective.ts";
 import { RenameObjective } from "./app/objective/rename-objective.ts";
 import { FindObjective } from "./app/objective/find-objective.ts";
@@ -29,6 +31,16 @@ import { CreateTask } from "./app/task/create-task.ts";
 import { AddDependency } from "./app/task/add-dependency.ts";
 import { RemoveDependency } from "./app/task/remove-dependency.ts";
 import { ListTasks } from "./app/task/list-tasks.ts";
+import { RetryTask } from "./app/task/retry-task.ts";
+import { SqliteJobQueue } from "./queue/sqlite.ts";
+import { SqliteUnitOfWork } from "./storage/sqlite/sqlite-unit-of-work.ts";
+import { FakeRunner } from "./agent-runner/fake.ts";
+import { RegistryRunnerResolver } from "./agent-runner/resolver.ts";
+import { EnqueueReadyTasks } from "./app/task/enqueue-ready-tasks.ts";
+import { RecoverInterruptedTasks } from "./app/task/recover-interrupted-tasks.ts";
+import { RunNextTask } from "./app/task/run-next-task.ts";
+import { RunDaemon } from "./app/task/run-daemon.ts";
+import { ListEvents } from "./app/task/list-events.ts";
 
 /**
  * Wire all concrete adapters and return the `RouterDeps` bundle.
@@ -46,6 +58,8 @@ export function buildDeps(dbPath: string): RouterDeps {
   const referenceResolver = new SqliteReferenceResolver(db);
   const events = new SqliteEventFeed(db);
   const transactor = new SqliteTransactor(db);
+  const jobQueue = new SqliteJobQueue(db);
+  const unitOfWork = new SqliteUnitOfWork(db);
 
   const createProject = new CreateProject(projectRepository);
   const renameProject = new RenameProject(projectRepository);
@@ -57,6 +71,14 @@ export function buildDeps(dbPath: string): RouterDeps {
   );
   const renameInitiative = new RenameInitiative(initiativeRepository);
   const findInitiative = new FindInitiative(initiativeRepository);
+  const pauseInitiative = new PauseInitiative(
+    initiativeRepository,
+    referenceResolver,
+  );
+  const resumeInitiative = new ResumeInitiative(
+    initiativeRepository,
+    referenceResolver,
+  );
   const createObjective = new CreateObjective(
     initiativeRepository,
     referenceResolver,
@@ -86,6 +108,45 @@ export function buildDeps(dbPath: string): RouterDeps {
     transactor,
   );
   const listTasks = new ListTasks(taskRepository);
+  const listEvents = new ListEvents(events);
+  const retryTask = new RetryTask(
+    taskRepository,
+    jobQueue,
+    events,
+    unitOfWork,
+    referenceResolver,
+  );
+
+  function buildDaemon(failTaskIds: string[]): RunDaemon {
+    const fakeRunner = new FakeRunner({ failTaskIds });
+    const resolver = new RegistryRunnerResolver({ defaultRunner: fakeRunner });
+    const enqueueReady = new EnqueueReadyTasks(
+      initiativeRepository,
+      taskRepository,
+      jobQueue,
+      events,
+      unitOfWork,
+    );
+    const recover = new RecoverInterruptedTasks(
+      jobQueue,
+      taskRepository,
+      events,
+      unitOfWork,
+    );
+    const runNext = new RunNextTask(
+      jobQueue,
+      taskRepository,
+      events,
+      unitOfWork,
+      resolver,
+    );
+    return new RunDaemon({
+      recover,
+      enqueueReady,
+      runNext,
+      sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+    });
+  }
 
   return {
     migrateDb,
@@ -97,6 +158,8 @@ export function buildDeps(dbPath: string): RouterDeps {
     createInitiative,
     renameInitiative,
     findInitiative,
+    pauseInitiative,
+    resumeInitiative,
     createObjective,
     renameObjective,
     findObjective,
@@ -106,5 +169,8 @@ export function buildDeps(dbPath: string): RouterDeps {
     addDependency,
     removeDependency,
     listTasks,
+    retryTask,
+    buildDaemon,
+    listEvents,
   };
 }

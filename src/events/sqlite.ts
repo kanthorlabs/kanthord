@@ -10,9 +10,13 @@ export class SqliteEventFeed implements EventFeed {
   }
 
   append(event: Event): void {
+    const payload =
+      event.payload !== undefined ? JSON.stringify(event.payload) : null;
     this.#db
-      .prepare("INSERT INTO events(id, type, taskId) VALUES(?, ?, ?)")
-      .run(event.id, event.type, event.taskId);
+      .prepare(
+        "INSERT INTO events(id, type, taskId, payload) VALUES(?, ?, ?, ?)",
+      )
+      .run(event.id, event.type, event.taskId, payload);
   }
 
   readAfter(cursor: string, limit?: number): Event[] {
@@ -24,18 +28,25 @@ export class SqliteEventFeed implements EventFeed {
 
     const rows = this.#db
       .prepare(
-        "SELECT id, type, taskId FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
+        "SELECT id, type, taskId, payload FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
       )
       .all(cursor, effectiveLimit) as Array<{
       id: string;
       type: string;
       taskId: string;
+      payload: string | null;
     }>;
 
-    return rows.map((r) => ({
-      id: r.id,
-      type: r.type as Event["type"],
-      taskId: r.taskId,
-    }));
+    return rows.map((r) => {
+      const event: Event = {
+        id: r.id,
+        type: r.type as Event["type"],
+        taskId: r.taskId,
+      };
+      if (r.payload !== null) {
+        event.payload = JSON.parse(r.payload) as Record<string, string>;
+      }
+      return event;
+    });
   }
 }

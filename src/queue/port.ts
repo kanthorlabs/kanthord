@@ -25,7 +25,23 @@ export interface JobQueue {
 
   /**
    * Atomically claim the oldest queued job, updating its status to `running`.
+   * Skips jobs whose owning initiative is paused.
    * Returns the claimed job, or `undefined` when the queue is empty.
    */
   claim(): ClaimedJob | undefined;
+
+  /**
+   * Set the final status of a running job to `completed` or `failed`.
+   */
+  finish(jobId: string, outcome: "completed" | "failed"): void;
+
+  /**
+   * Delete a job row entirely (used to discard a stale queued job).
+   */
+  discard(jobId: string): void;
+
+  /**
+   * Return all jobs currently in `running` status.
+   */
+  listRunningJobs(): ClaimedJob[];
 }

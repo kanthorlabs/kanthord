@@ -20,23 +20,17 @@ export class SqliteTaskRepository implements TaskRepository {
   }
 
   save(task: Task): void {
-    this.#db.exec("BEGIN");
-    try {
-      this.#db
-        .prepare(
-          "INSERT INTO tasks (id, objectiveId, title, status) VALUES (?, ?, ?, ?)",
-        )
-        .run(task.id, task.objectiveId, task.title, task.status);
-      const insertDep = this.#db.prepare(
-        "INSERT INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
-      );
-      for (const [i, dep] of task.dependencies.entries()) {
-        insertDep.run(task.id, dep, i);
-      }
-      this.#db.exec("COMMIT");
-    } catch (err) {
-      this.#db.exec("ROLLBACK");
-      throw err;
+    this.#db
+      .prepare(
+        "INSERT INTO tasks (id, objectiveId, title, status) VALUES (?, ?, ?, ?)" +
+          " ON CONFLICT(id) DO UPDATE SET status = excluded.status",
+      )
+      .run(task.id, task.objectiveId, task.title, task.status);
+    const insertDep = this.#db.prepare(
+      "INSERT OR IGNORE INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
+    );
+    for (const [i, dep] of task.dependencies.entries()) {
+      insertDep.run(task.id, dep, i);
     }
   }
 
@@ -87,15 +81,8 @@ export class SqliteTaskRepository implements TaskRepository {
     const upsert = this.#db.prepare(
       "INSERT INTO task_context (task_id, type, resource_id) VALUES (?, ?, ?) ON CONFLICT (task_id, type) DO UPDATE SET resource_id = excluded.resource_id",
     );
-    this.#db.exec("BEGIN");
-    try {
-      for (const [type, resourceId] of Object.entries(context)) {
-        upsert.run(taskId, type, resourceId);
-      }
-      this.#db.exec("COMMIT");
-    } catch (err) {
-      this.#db.exec("ROLLBACK");
-      throw err;
+    for (const [type, resourceId] of Object.entries(context)) {
+      upsert.run(taskId, type, resourceId);
     }
   }
 
@@ -154,6 +141,16 @@ export class SqliteTaskRepository implements TaskRepository {
         dependencies: deps.map((d) => d.dependency),
       };
     });
+  }
+
+  getInitiativeId(taskId: string): string | undefined {
+    type Row = { initiativeId: string };
+    const row = this.#db
+      .prepare(
+        "SELECT o.initiativeId FROM tasks t JOIN objectives o ON t.objectiveId = o.id WHERE t.id = ?",
+      )
+      .get(taskId) as Row | undefined;
+    return row?.initiativeId;
   }
 
   listByInitiative(initiativeId: string): Task[] {

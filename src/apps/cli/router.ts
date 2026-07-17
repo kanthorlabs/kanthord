@@ -10,6 +10,8 @@ import type { FindProject } from "../../app/project/find-project.ts";
 import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
 import type { FindInitiative } from "../../app/initiative/find-initiative.ts";
+import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
+import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
 import type { CreateObjective } from "../../app/objective/create-objective.ts";
 import type { RenameObjective } from "../../app/objective/rename-objective.ts";
 import type { FindObjective } from "../../app/objective/find-objective.ts";
@@ -19,10 +21,18 @@ import type { CreateTask } from "../../app/task/create-task.ts";
 import type { AddDependency } from "../../app/task/add-dependency.ts";
 import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
+import type { RetryTask } from "../../app/task/retry-task.ts";
+import type { RunDaemon } from "../../app/task/run-daemon.ts";
+import type { ListEvents } from "../../app/task/list-events.ts";
 import { runGraphCheck } from "./graph-check.ts";
 import { runDbMigrate, runDbStatus } from "./db.ts";
 import { runCreateProject, runRenameProject } from "./project.ts";
-import { runCreateInitiative, runRenameInitiative } from "./initiative.ts";
+import {
+  runCreateInitiative,
+  runRenameInitiative,
+  runPauseInitiative,
+  runResumeInitiative,
+} from "./initiative.ts";
 import { runCreateObjective, runRenameObjective } from "./objective.ts";
 import {
   runCreateRepository,
@@ -31,9 +41,11 @@ import {
   runCreateAiProvider,
   runCreateFilesystem,
 } from "./resource.ts";
-import { runCreateTask } from "./task.ts";
+import { runCreateTask, runRetryTask } from "./task.ts";
+import { runDaemon } from "./daemon.ts";
 import { runAddDependency, runRemoveDependency } from "./dependency.ts";
 import { runListTasks } from "./list-tasks.ts";
+import { runEvents } from "./events.ts";
 import { runGetProject } from "./get.ts";
 import {
   runFindProject,
@@ -53,6 +65,8 @@ export interface RouterDeps {
   createInitiative: CreateInitiative;
   renameInitiative: RenameInitiative;
   findInitiative: FindInitiative;
+  pauseInitiative: PauseInitiative;
+  resumeInitiative: ResumeInitiative;
   createObjective: CreateObjective;
   renameObjective: RenameObjective;
   findObjective: FindObjective;
@@ -62,6 +76,9 @@ export interface RouterDeps {
   addDependency: AddDependency;
   removeDependency: RemoveDependency;
   listTasks: ListTasks;
+  retryTask: RetryTask;
+  buildDaemon: (failTaskIds: string[]) => RunDaemon;
+  listEvents: ListEvents;
 }
 
 /** Shape of each command entry in the COMMANDS table. */
@@ -152,6 +169,26 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
     async handler(args, deps) {
       return runRenameInitiative(args, deps.renameInitiative);
+    },
+  },
+
+  "pause initiative": {
+    usage: "usage: pause initiative --id <id>",
+    parse: {
+      id: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runPauseInitiative(args, deps.pauseInitiative);
+    },
+  },
+
+  "resume initiative": {
+    usage: "usage: resume initiative --id <id>",
+    parse: {
+      id: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runResumeInitiative(args, deps.resumeInitiative);
     },
   },
 
@@ -284,6 +321,30 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
   },
 
+  "retry task": {
+    usage: "usage: retry task --id <id>",
+    parse: {
+      id: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runRetryTask(args, deps.retryTask);
+    },
+  },
+
+  "daemon run": {
+    usage:
+      "usage: daemon run [--runner fake] [--fail <id>]... [--until-idle] [--poll-interval <ms>]",
+    parse: {
+      runner: { type: "string" },
+      fail: { type: "string", multiple: true },
+      "until-idle": { type: "boolean" },
+      "poll-interval": { type: "string" },
+    },
+    async handler(args, deps) {
+      return runDaemon(args, deps.buildDaemon);
+    },
+  },
+
   "list task": {
     usage: "usage: list task --initiative <id> [--json]",
     parse: {
@@ -292,6 +353,33 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
     async handler(args, deps) {
       return runListTasks(args, deps.listTasks);
+    },
+  },
+
+  events: {
+    usage:
+      "usage: events --after <cursor> [--limit n] [--json] [--follow] [--poll-interval ms]",
+    parse: {
+      after: { type: "string" },
+      limit: { type: "string" },
+      json: { type: "boolean" },
+      follow: { type: "boolean" },
+      "poll-interval": { type: "string" },
+    },
+    async handler(args, deps) {
+      const ac = new AbortController();
+      const onSigint = () => ac.abort();
+      process.once("SIGINT", onSigint);
+      try {
+        return await runEvents(
+          args,
+          deps.listEvents,
+          (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+          ac.signal,
+        );
+      } finally {
+        process.removeListener("SIGINT", onSigint);
+      }
     },
   },
 
@@ -362,9 +450,19 @@ export async function dispatch(
   const verb = argv[0] ?? "";
   const obj = argv[1] ?? "";
   const key = `${verb} ${obj}`;
-  const rest = argv.slice(2);
 
-  const entry = COMMANDS[key];
+  let entry = COMMANDS[key];
+  let rest = argv.slice(2);
+
+  // Single-word command: the "object" slot contains a flag or is absent.
+  // Try looking up by verb alone and consume from argv[1] onward.
+  if (entry === undefined && (obj === "" || obj.startsWith("-"))) {
+    const singleEntry = COMMANDS[verb];
+    if (singleEntry !== undefined) {
+      entry = singleEntry;
+      rest = argv.slice(1);
+    }
+  }
 
   // Unknown command
   if (entry === undefined) {

@@ -61,9 +61,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 3 and creates exactly the nine core tables", () => {
+test("migrates to version 4 and creates exactly the nine core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 3);
+    assert.equal(userVersion(db), 4);
     assert.deepEqual(userTables(db), [
       "events",
       "initiatives",
@@ -94,6 +94,7 @@ test("schema columns match locked DDL for all eight tables", () => {
       "id",
       "projectId",
       "name",
+      "paused",
     ]);
     assert.deepEqual(columnNames(db, "objectives"), [
       "id",
@@ -112,7 +113,12 @@ test("schema columns match locked DDL for all eight tables", () => {
       "position",
     ]);
     assert.deepEqual(columnNames(db, "jobs"), ["id", "taskId", "status"]);
-    assert.deepEqual(columnNames(db, "events"), ["id", "type", "taskId"]);
+    assert.deepEqual(columnNames(db, "events"), [
+      "id",
+      "type",
+      "taskId",
+      "payload",
+    ]);
   });
 });
 
@@ -233,10 +239,42 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 3);
+    assert.equal(second.version, 4);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── (h) migration 4 — paused CHECK constraint ────────────────────────────────
+
+test("initiatives.paused CHECK constraint rejects value 2", () => {
+  withMigratedDb((db) => {
+    db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+      "proj-p",
+      "P",
+    );
+
+    // paused = 0 must be accepted
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO initiatives(id, projectId, name, paused) VALUES (?, ?, ?, ?)",
+      ).run("init-ok", "proj-p", "I", 0);
+    }, "paused = 0 should be accepted");
+
+    // paused = 1 must be accepted
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO initiatives(id, projectId, name, paused) VALUES (?, ?, ?, ?)",
+      ).run("init-ok2", "proj-p", "I2", 1);
+    }, "paused = 1 should be accepted");
+
+    // paused = 2 must be rejected
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiatives(id, projectId, name, paused) VALUES (?, ?, ?, ?)",
+      ).run("init-bad", "proj-p", "I3", 2);
+    }, "paused = 2 should be rejected by CHECK constraint");
+  });
 });

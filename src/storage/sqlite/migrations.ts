@@ -82,4 +82,13 @@ CREATE TABLE task_context (
 )
 `),
   },
+  {
+    version: 4,
+    name: "execution-loop",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE events ADD COLUMN payload TEXT;
+ALTER TABLE initiatives ADD COLUMN paused INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1))
+`),
+  },
 ];

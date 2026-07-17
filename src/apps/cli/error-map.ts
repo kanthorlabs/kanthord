@@ -6,6 +6,7 @@ import {
   CycleError,
   DependenciesLockedError,
 } from "../../app/errors.ts";
+import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -25,7 +26,8 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof AmbiguousNameError ||
     err instanceof MissingFlagError ||
     err instanceof CycleError ||
-    err instanceof DependenciesLockedError
+    err instanceof DependenciesLockedError ||
+    err instanceof TaskNotRetryableError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

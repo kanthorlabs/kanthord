@@ -351,6 +351,102 @@ test("SqliteInitiativeRepository save with same id and new name updates the name
   assert.equal(loaded?.name, "Renamed Initiative");
 });
 
+test("SqliteInitiativeRepository setPaused sets paused to true and listAllInitiatives reflects the flag", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-paused" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "Pausable" });
+
+  // before: not paused
+  const before = repo.listAllInitiatives();
+  const beforeEntry = before.find((i) => i.id === initiativeId);
+  assert.equal(
+    beforeEntry?.paused,
+    false,
+    "new initiative must start unpaused",
+  );
+
+  repo.setPaused(initiativeId, true);
+  const after_ = repo.listAllInitiatives();
+  const afterEntry = after_.find((i) => i.id === initiativeId);
+  assert.equal(
+    afterEntry?.paused,
+    true,
+    "initiative must be paused after setPaused(id, true)",
+  );
+});
+
+test("SqliteInitiativeRepository setPaused(id, false) clears the paused flag", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-resume" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "Resumable" });
+
+  repo.setPaused(initiativeId, true);
+  repo.setPaused(initiativeId, false);
+  const rows = repo.listAllInitiatives();
+  const entry = rows.find((i) => i.id === initiativeId);
+  assert.equal(
+    entry?.paused,
+    false,
+    "initiative must be unpaused after setPaused(id, false)",
+  );
+});
+
+test("SqliteInitiativeRepository listAllInitiatives returns initiatives across multiple projects", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const proj1 = newId();
+  const proj2 = newId();
+  projectRepo.save({ id: proj1, name: "PA" });
+  projectRepo.save({ id: proj2, name: "PB" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const init1 = newId();
+  const init2 = newId();
+  repo.save({ id: init1, projectId: proj1, name: "IA" });
+  repo.save({ id: init2, projectId: proj2, name: "IB" });
+
+  const all = repo.listAllInitiatives();
+  const ids = all.map((i) => i.id);
+  assert.ok(
+    ids.includes(init1),
+    "listAllInitiatives must include initiative from project 1",
+  );
+  assert.ok(
+    ids.includes(init2),
+    "listAllInitiatives must include initiative from project 2",
+  );
+  // each entry has an id and a paused flag
+  for (const entry of all) {
+    assert.equal(typeof entry.id, "string");
+    assert.equal(typeof entry.paused, "boolean");
+  }
+});
+
 // B2 regression: objective rename must update the existing row, not insert a duplicate
 test("SqliteInitiativeRepository saveObjective with same id and new name updates the name (rename)", () => {
   const { db, dir } = makeTempDb();

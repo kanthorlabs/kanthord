@@ -1,6 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { runCreateTask } from "./task.ts";
+import { runCreateTask, runRetryTask } from "./task.ts";
+import { RetryTask, TaskNotRetryableError } from "../../app/task/retry-task.ts";
+import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { EventFeed } from "../../events/port.ts";
+import type { UnitOfWork } from "../../storage/port.ts";
+import type { Event } from "../../domain/event.ts";
 import type {
   TaskRepository,
   InitiativeRepository,
@@ -65,6 +70,12 @@ class FakeInitiativeRepository implements InitiativeRepository {
   listInitiatives(_projectId: string) {
     return [];
   }
+
+  setPaused(_id: string, _paused: boolean): void {}
+
+  listAllInitiatives(): Array<{ id: string; paused: boolean }> {
+    return [];
+  }
 }
 
 class FakeTaskRepository implements TaskRepository {
@@ -92,6 +103,9 @@ class FakeTaskRepository implements TaskRepository {
   removeDependency(_taskId: string, _dependsOn: string): void {}
   listTasksByObjective(_objectiveId: string): Task[] {
     return [];
+  }
+  getInitiativeId(_taskId: string): string | undefined {
+    return undefined;
   }
 }
 
@@ -278,6 +292,140 @@ describe("runCreateTask", () => {
       1,
       "exactly one error line (no stack trace)",
     );
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRetryTask handler tests — local fakes for RetryTask collaborators
+// ---------------------------------------------------------------------------
+
+// Narrow interfaces required by RetryTask
+interface RetryTaskStore {
+  get(id: string): Task | undefined;
+  save(task: Task): void;
+}
+
+interface RetryKindResolver {
+  resolveKind(id: string): string | undefined;
+}
+
+class SimpleRetryTaskStore implements RetryTaskStore {
+  readonly #tasks: Map<string, Task>;
+
+  constructor(tasks: Task[]) {
+    this.#tasks = new Map(tasks.map((t) => [t.id, t]));
+  }
+
+  get(id: string): Task | undefined {
+    return this.#tasks.get(id);
+  }
+
+  save(task: Task): void {
+    this.#tasks.set(task.id, task);
+  }
+}
+
+class NoopJobQueue implements JobQueue {
+  enqueue(_taskId: string): boolean {
+    return true;
+  }
+  claim(): ClaimedJob | undefined {
+    return undefined;
+  }
+  finish(_jobId: string, _outcome: "completed" | "failed"): void {}
+  discard(_jobId: string): void {}
+  listRunningJobs(): ClaimedJob[] {
+    return [];
+  }
+}
+
+class NoopEventFeed implements EventFeed {
+  append(_event: Event): void {}
+  readAfter(_cursor: string, _limit?: number): Event[] {
+    return [];
+  }
+}
+
+class PassthroughUoW implements UnitOfWork {
+  transaction<T>(fn: () => T): T {
+    return fn();
+  }
+}
+
+class FixedKindResolver implements RetryKindResolver {
+  readonly #kind: string | undefined;
+  constructor(kind: string | undefined) {
+    this.#kind = kind;
+  }
+  resolveKind(_id: string): string | undefined {
+    return this.#kind;
+  }
+}
+
+const RETRY_TASK_ID = "01JZZZZZZZZZZZZZZZZZZZTS99";
+const RETRY_OBJ_ID = "01JZZZZZZZZZZZZZZZZZZZOBJ8";
+
+function makeRetryHandlerTask(status: Task["status"]): Task {
+  return {
+    id: RETRY_TASK_ID,
+    objectiveId: RETRY_OBJ_ID,
+    title: "handler test task",
+    status,
+    dependencies: [],
+  };
+}
+
+describe("runRetryTask handler", () => {
+  test("runRetryTask returns exitCode 0 and stderr 'task re-queued: <id>' on success", async () => {
+    const store = new SimpleRetryTaskStore([makeRetryHandlerTask("failed")]);
+    const uc = new RetryTask(
+      store,
+      new NoopJobQueue(),
+      new NoopEventFeed(),
+      new PassthroughUoW(),
+      new FixedKindResolver("task"),
+    );
+    const result = await runRetryTask({ id: RETRY_TASK_ID }, uc);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 0);
+    assert.ok(
+      result.stderr[0]?.includes(`task re-queued: ${RETRY_TASK_ID}`),
+      `expected 'task re-queued: ${RETRY_TASK_ID}', got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("runRetryTask returns exitCode 1 with error line for non-failed task", async () => {
+    const store = new SimpleRetryTaskStore([makeRetryHandlerTask("pending")]);
+    const uc = new RetryTask(
+      store,
+      new NoopJobQueue(),
+      new NoopEventFeed(),
+      new PassthroughUoW(),
+      new FixedKindResolver("task"),
+    );
+    const result = await runRetryTask({ id: RETRY_TASK_ID }, uc);
+    assert.equal(result.exitCode, 1);
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("runRetryTask returns exitCode 1 with error line for unknown id", async () => {
+    const store = new SimpleRetryTaskStore([]);
+    const uc = new RetryTask(
+      store,
+      new NoopJobQueue(),
+      new NoopEventFeed(),
+      new PassthroughUoW(),
+      new FixedKindResolver(undefined),
+    );
+    const result = await runRetryTask({ id: "no-such" }, uc);
+    assert.equal(result.exitCode, 1);
     assert.ok(
       result.stderr[0]!.startsWith("error:"),
       `expected 'error:' prefix, got: ${result.stderr[0]}`,

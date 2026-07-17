@@ -35,6 +35,10 @@ class FakeTaskRepository implements TaskRepository {
   listTasksByObjective(_objectiveId: string): Task[] {
     return [];
   }
+
+  getInitiativeId(_taskId: string): string | undefined {
+    return undefined;
+  }
 }
 
 test("StoreGraph.execute stores two tasks, remaps dep label to ULID, returns in input order", async () => {

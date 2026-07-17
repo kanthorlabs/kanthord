@@ -29,6 +29,9 @@ export async function runListTasks(
     const titleById = new Map(rows.map((r) => [r.id, r.title]));
 
     const lines = rows.map((r) => {
+      if (r.status !== "pending") {
+        return `${r.title}  ${r.status}`;
+      }
       const waitingTitles = r.waiting.map(
         (depId) => titleById.get(depId) ?? depId,
       );

@@ -190,3 +190,57 @@ test("limit 1.5 throws RangeError", () => {
     cleanup();
   }
 });
+
+// ── payload round-trip (migration 4) ─────────────────────────────────────────
+
+test("append with payload round-trips payload as JSON through readAfter", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const ev = newEvent("task.failed", { taskId, payload: { reason: "boom" } });
+    feed.append(ev);
+
+    const results = feed.readAfter("0");
+    assert.equal(results.length, 1);
+    assert.deepEqual(results[0]?.payload, { reason: "boom" });
+  } finally {
+    cleanup();
+  }
+});
+
+test("append without payload reads back without payload key", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    // Verify migration 4 ran: events table must have the payload column.
+    const cols = db.prepare("pragma table_info(events)").all() as Array<{
+      name: string;
+    }>;
+    const hasPayloadCol = cols.some((c) => c.name === "payload");
+    assert.equal(
+      hasPayloadCol,
+      true,
+      "events.payload column must exist (migration 4)",
+    );
+
+    const feed = new SqliteEventFeed(db);
+    const evWithPayload = newEvent("task.failed", {
+      taskId,
+      payload: { reason: "boom" },
+    });
+    const evNoPayload = newEvent("task.ready", { taskId });
+    feed.append(evWithPayload);
+    feed.append(evNoPayload);
+
+    const results = feed.readAfter("0");
+    assert.equal(results.length, 2);
+    // first event has payload
+    assert.deepEqual(results[0]?.payload, { reason: "boom" });
+    // second event has no payload key
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(results[1], "payload"),
+      false,
+    );
+  } finally {
+    cleanup();
+  }
+});

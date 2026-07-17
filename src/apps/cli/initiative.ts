@@ -1,5 +1,7 @@
 import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
+import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
+import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
 import { toResult } from "./error-map.ts";
 
 export async function runCreateInitiative(
@@ -30,6 +32,34 @@ export async function runRenameInitiative(
   try {
     await renameInitiative.execute({ id, name });
     return { exitCode: 0, stdout: [], stderr: [] };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export async function runPauseInitiative(
+  args: Record<string, unknown>,
+  useCase: PauseInitiative,
+): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const id = args["id"] as string;
+  try {
+    await useCase.execute({ initiativeId: id });
+    return { exitCode: 0, stdout: [], stderr: [`initiative paused: ${id}`] };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export async function runResumeInitiative(
+  args: Record<string, unknown>,
+  useCase: ResumeInitiative,
+): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const id = args["id"] as string;
+  try {
+    await useCase.execute({ initiativeId: id });
+    return { exitCode: 0, stdout: [], stderr: [`initiative resumed: ${id}`] };
   } catch (err) {
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };

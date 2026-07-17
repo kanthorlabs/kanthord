@@ -24,6 +24,15 @@ export interface Transactor {
   run<T>(work: () => T): T;
 }
 
+/**
+ * Wraps a synchronous function in a database transaction. On success the
+ * transaction is committed; on error it is rolled back and the error
+ * re-thrown. Nested calls are rejected with an error matching `/nested/i`.
+ */
+export interface UnitOfWork {
+  transaction<T>(fn: () => T): T;
+}
+
 /** Read-only view of the store's health, owned by the core (no vendor name). */
 export interface StatusStore {
   /** Filesystem path of the backing database. */
@@ -60,6 +69,8 @@ export interface InitiativeRepository {
   listInitiatives(projectId: string): Initiative[];
   resolveInitiativeByName(projectId: string, name: string): string[];
   resolveObjectiveByName(initiativeId: string, name: string): string[];
+  setPaused(id: string, paused: boolean): void;
+  listAllInitiatives(): Array<{ id: string; paused: boolean }>;
 }
 
 /** Repository for the Task aggregate (tasks + their dependency edges). */
@@ -73,6 +84,7 @@ export interface TaskRepository {
   getTaskContext(taskId: string): Record<string, string>;
   addDependency(taskId: string, dependsOn: string): void;
   removeDependency(taskId: string, dependsOn: string): void;
+  getInitiativeId(taskId: string): string | undefined;
 }
 
 /** Resolves a raw id to the aggregate kind it belongs to. */

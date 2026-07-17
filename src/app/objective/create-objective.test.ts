@@ -58,6 +58,12 @@ class FakeInitiativeRepository implements InitiativeRepository {
   listInitiatives(_projectId: string) {
     return [];
   }
+
+  setPaused(_id: string, _paused: boolean): void {}
+
+  listAllInitiatives(): Array<{ id: string; paused: boolean }> {
+    return [];
+  }
 }
 
 type KindResult =

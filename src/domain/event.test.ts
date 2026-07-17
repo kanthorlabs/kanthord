@@ -43,3 +43,15 @@ test("newEvent with task.dependencies_changed is constructible", () => {
   assert.equal(ev.type, "task.dependencies_changed");
   assert.match(ev.id, ULID_RE);
 });
+
+test("newEvent with payload passes payload through", () => {
+  const taskId = "task-fail-1";
+  const payload = { reason: "x" };
+  const ev = newEvent("task.failed", { taskId, payload });
+  assert.deepEqual(ev.payload, { reason: "x" });
+});
+
+test("newEvent without payload has no payload key", () => {
+  const ev = newEvent("task.ready", { taskId: "task-ready-1" });
+  assert.equal(Object.prototype.hasOwnProperty.call(ev, "payload"), false);
+});
