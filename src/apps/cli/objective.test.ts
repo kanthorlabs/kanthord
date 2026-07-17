@@ -6,6 +6,8 @@ import type {
   ReferenceResolver,
 } from "../../storage/port.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
+import { CreateObjective } from "../../app/objective/create-objective.ts";
+import { RenameObjective } from "../../app/objective/rename-objective.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
@@ -33,7 +35,7 @@ class FakeInitiativeRepository implements InitiativeRepository {
     );
   }
 
-  resolveInitiativeByName(projectId: string, name: string): string[] {
+  resolveInitiativeByName(_projectId: string, _name: string): string[] {
     return [];
   }
 
@@ -71,7 +73,7 @@ describe("runCreateObjective handler", () => {
     const resolver = new MockReferenceResolver("initiative");
     const result = await runCreateObjective(
       { initiative: "init-1", name: "backend" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateObjective(repo, resolver),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -91,7 +93,7 @@ describe("runCreateObjective handler", () => {
     const resolver = new MockReferenceResolver(undefined);
     const result = await runCreateObjective(
       { initiative: "no-such", name: "backend" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateObjective(repo, resolver),
     );
     assert.equal(result.exitCode, 1);
     assert.equal(result.stdout.length, 0);
@@ -106,7 +108,7 @@ describe("runCreateObjective handler", () => {
     const resolver = new MockReferenceResolver("project");
     const result = await runCreateObjective(
       { initiative: "proj-1", name: "backend" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateObjective(repo, resolver),
     );
     assert.equal(result.exitCode, 1);
     assert.equal(result.stdout.length, 0);
@@ -123,12 +125,12 @@ describe("runRenameObjective handler", () => {
     const resolver = new MockReferenceResolver("initiative");
     const createResult = await runCreateObjective(
       { initiative: "init-1", name: "original" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateObjective(repo, resolver),
     );
     const id = createResult.stdout[0]!;
     const result = await runRenameObjective(
       { id, name: "renamed" },
-      { initiativeRepository: repo },
+      new RenameObjective(repo),
     );
     assert.equal(result.exitCode, 0);
   });
@@ -137,7 +139,7 @@ describe("runRenameObjective handler", () => {
     const repo = new FakeInitiativeRepository();
     const result = await runRenameObjective(
       { id: "no-such-id", name: "whatever" },
-      { initiativeRepository: repo },
+      new RenameObjective(repo),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(

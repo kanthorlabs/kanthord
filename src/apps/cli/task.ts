@@ -1,22 +1,9 @@
-import type {
-  TaskRepository,
-  InitiativeRepository,
-  ProjectRepository,
-  ReferenceResolver,
-} from "../../storage/port.ts";
-import { CreateTask } from "../../app/task/create-task.ts";
+import type { CreateTask } from "../../app/task/create-task.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
-
-export interface CreateTaskDeps {
-  taskRepository: TaskRepository;
-  initiativeRepository: InitiativeRepository;
-  projectRepository: ProjectRepository;
-  referenceResolver: ReferenceResolver;
-}
 
 export async function runCreateTask(
   args: Record<string, unknown>,
-  deps: CreateTaskDeps,
+  createTask: CreateTask,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const objectiveId = args["objective"];
   if (typeof objectiveId !== "string" || objectiveId === "") {
@@ -65,13 +52,7 @@ export async function runCreateTask(
   }
 
   try {
-    const useCase = new CreateTask(
-      deps.taskRepository,
-      deps.initiativeRepository,
-      deps.projectRepository,
-      deps.referenceResolver,
-    );
-    const id = await useCase.execute({
+    const id = await createTask.execute({
       objectiveId,
       title,
       dependencies,

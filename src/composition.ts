@@ -13,6 +13,22 @@ import { SqliteTaskRepository } from "./storage/sqlite/sqlite-task-repository.ts
 import { SqliteReferenceResolver } from "./storage/sqlite/reference-resolver.ts";
 import { SqliteTransactor } from "./storage/sqlite/sqlite-transactor.ts";
 import { SqliteEventFeed } from "./events/sqlite.ts";
+import { CreateProject } from "./app/project/create-project.ts";
+import { RenameProject } from "./app/project/rename-project.ts";
+import { GetProject } from "./app/project/get-project.ts";
+import { FindProject } from "./app/project/find-project.ts";
+import { CreateInitiative } from "./app/initiative/create-initiative.ts";
+import { RenameInitiative } from "./app/initiative/rename-initiative.ts";
+import { FindInitiative } from "./app/initiative/find-initiative.ts";
+import { CreateObjective } from "./app/objective/create-objective.ts";
+import { RenameObjective } from "./app/objective/rename-objective.ts";
+import { FindObjective } from "./app/objective/find-objective.ts";
+import { AddResource } from "./app/resource/add-resource.ts";
+import { FindResource } from "./app/resource/find-resource.ts";
+import { CreateTask } from "./app/task/create-task.ts";
+import { AddDependency } from "./app/task/add-dependency.ts";
+import { RemoveDependency } from "./app/task/remove-dependency.ts";
+import { ListTasks } from "./app/task/list-tasks.ts";
 
 /**
  * Wire all concrete adapters and return the `RouterDeps` bundle.
@@ -30,14 +46,65 @@ export function buildDeps(dbPath: string): RouterDeps {
   const referenceResolver = new SqliteReferenceResolver(db);
   const events = new SqliteEventFeed(db);
   const transactor = new SqliteTransactor(db);
-  return {
-    migrateDb,
-    getDbStatus,
-    projectRepository,
+
+  const createProject = new CreateProject(projectRepository);
+  const renameProject = new RenameProject(projectRepository);
+  const getProject = new GetProject(projectRepository);
+  const findProject = new FindProject(projectRepository);
+  const createInitiative = new CreateInitiative(
     initiativeRepository,
+    referenceResolver,
+  );
+  const renameInitiative = new RenameInitiative(initiativeRepository);
+  const findInitiative = new FindInitiative(initiativeRepository);
+  const createObjective = new CreateObjective(
+    initiativeRepository,
+    referenceResolver,
+  );
+  const renameObjective = new RenameObjective(initiativeRepository);
+  const findObjective = new FindObjective(initiativeRepository);
+  const addResource = new AddResource(projectRepository, referenceResolver);
+  const findResource = new FindResource(projectRepository);
+  const createTask = new CreateTask(
     taskRepository,
+    initiativeRepository,
+    projectRepository,
+    referenceResolver,
+  );
+  const addDependency = new AddDependency(
+    taskRepository,
+    initiativeRepository,
     referenceResolver,
     events,
     transactor,
+  );
+  const removeDependency = new RemoveDependency(
+    taskRepository,
+    initiativeRepository,
+    referenceResolver,
+    events,
+    transactor,
+  );
+  const listTasks = new ListTasks(taskRepository);
+
+  return {
+    migrateDb,
+    getDbStatus,
+    createProject,
+    renameProject,
+    getProject,
+    findProject,
+    createInitiative,
+    renameInitiative,
+    findInitiative,
+    createObjective,
+    renameObjective,
+    findObjective,
+    addResource,
+    findResource,
+    createTask,
+    addDependency,
+    removeDependency,
+    listTasks,
   };
 }

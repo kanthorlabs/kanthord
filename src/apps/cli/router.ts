@@ -3,14 +3,22 @@ import type { ParseArgsConfig } from "node:util";
 
 import type { MigrateDb } from "../../app/db/migrate-db.ts";
 import type { GetDbStatus } from "../../app/db/get-db-status.ts";
-import type {
-  ProjectRepository,
-  InitiativeRepository,
-  TaskRepository,
-  ReferenceResolver,
-  Transactor,
-} from "../../storage/port.ts";
-import type { EventFeed } from "../../events/port.ts";
+import type { CreateProject } from "../../app/project/create-project.ts";
+import type { RenameProject } from "../../app/project/rename-project.ts";
+import type { GetProject } from "../../app/project/get-project.ts";
+import type { FindProject } from "../../app/project/find-project.ts";
+import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
+import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
+import type { FindInitiative } from "../../app/initiative/find-initiative.ts";
+import type { CreateObjective } from "../../app/objective/create-objective.ts";
+import type { RenameObjective } from "../../app/objective/rename-objective.ts";
+import type { FindObjective } from "../../app/objective/find-objective.ts";
+import type { AddResource } from "../../app/resource/add-resource.ts";
+import type { FindResource } from "../../app/resource/find-resource.ts";
+import type { CreateTask } from "../../app/task/create-task.ts";
+import type { AddDependency } from "../../app/task/add-dependency.ts";
+import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
+import type { ListTasks } from "../../app/task/list-tasks.ts";
 import { runGraphCheck } from "./graph-check.ts";
 import { runDbMigrate, runDbStatus } from "./db.ts";
 import { runCreateProject, runRenameProject } from "./project.ts";
@@ -38,12 +46,22 @@ import {
 export interface RouterDeps {
   migrateDb: MigrateDb;
   getDbStatus: GetDbStatus;
-  projectRepository: ProjectRepository;
-  initiativeRepository: InitiativeRepository;
-  taskRepository: TaskRepository;
-  referenceResolver: ReferenceResolver;
-  events: EventFeed;
-  transactor: Transactor;
+  createProject: CreateProject;
+  renameProject: RenameProject;
+  getProject: GetProject;
+  findProject: FindProject;
+  createInitiative: CreateInitiative;
+  renameInitiative: RenameInitiative;
+  findInitiative: FindInitiative;
+  createObjective: CreateObjective;
+  renameObjective: RenameObjective;
+  findObjective: FindObjective;
+  addResource: AddResource;
+  findResource: FindResource;
+  createTask: CreateTask;
+  addDependency: AddDependency;
+  removeDependency: RemoveDependency;
+  listTasks: ListTasks;
 }
 
 /** Shape of each command entry in the COMMANDS table. */
@@ -100,7 +118,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateProject(args, deps);
+      return runCreateProject(args, deps.createProject);
     },
   },
 
@@ -111,7 +129,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runRenameProject(args, deps);
+      return runRenameProject(args, deps.renameProject);
     },
   },
 
@@ -122,10 +140,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateInitiative(args, {
-        initiativeRepository: deps.initiativeRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateInitiative(args, deps.createInitiative);
     },
   },
 
@@ -136,9 +151,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runRenameInitiative(args, {
-        initiativeRepository: deps.initiativeRepository,
-      });
+      return runRenameInitiative(args, deps.renameInitiative);
     },
   },
 
@@ -149,10 +162,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateObjective(args, {
-        initiativeRepository: deps.initiativeRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateObjective(args, deps.createObjective);
     },
   },
 
@@ -163,9 +173,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runRenameObjective(args, {
-        initiativeRepository: deps.initiativeRepository,
-      });
+      return runRenameObjective(args, deps.renameObjective);
     },
   },
 
@@ -180,10 +188,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       path: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateRepository(args, {
-        projectRepository: deps.projectRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateRepository(args, deps.addResource);
     },
   },
 
@@ -197,10 +202,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       value: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateCredential(args, {
-        projectRepository: deps.projectRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateCredential(args, deps.addResource);
     },
   },
 
@@ -214,10 +216,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       destination: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateNotification(args, {
-        projectRepository: deps.projectRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateNotification(args, deps.addResource);
     },
   },
 
@@ -232,10 +231,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       "base-url": { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateAiProvider(args, {
-        projectRepository: deps.projectRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateAiProvider(args, deps.addResource);
     },
   },
 
@@ -248,10 +244,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       path: { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateFilesystem(args, {
-        projectRepository: deps.projectRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateFilesystem(args, deps.addResource);
     },
   },
 
@@ -265,12 +258,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       context: { type: "string", multiple: true },
     },
     async handler(args, deps) {
-      return runCreateTask(args, {
-        taskRepository: deps.taskRepository,
-        initiativeRepository: deps.initiativeRepository,
-        projectRepository: deps.projectRepository,
-        referenceResolver: deps.referenceResolver,
-      });
+      return runCreateTask(args, deps.createTask);
     },
   },
 
@@ -281,13 +269,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       "depends-on": { type: "string" },
     },
     async handler(args, deps) {
-      return runAddDependency(args, {
-        taskRepository: deps.taskRepository,
-        initiativeRepository: deps.initiativeRepository,
-        referenceResolver: deps.referenceResolver,
-        events: deps.events,
-        transactor: deps.transactor,
-      });
+      return runAddDependency(args, deps.addDependency);
     },
   },
 
@@ -298,13 +280,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       "depends-on": { type: "string" },
     },
     async handler(args, deps) {
-      return runRemoveDependency(args, {
-        taskRepository: deps.taskRepository,
-        initiativeRepository: deps.initiativeRepository,
-        referenceResolver: deps.referenceResolver,
-        events: deps.events,
-        transactor: deps.transactor,
-      });
+      return runRemoveDependency(args, deps.removeDependency);
     },
   },
 
@@ -315,7 +291,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       json: { type: "boolean" },
     },
     async handler(args, deps) {
-      return runListTasks(args, { taskRepository: deps.taskRepository });
+      return runListTasks(args, deps.listTasks);
     },
   },
 
@@ -326,7 +302,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       json: { type: "boolean" },
     },
     async handler(args, deps) {
-      return runGetProject(args, { projectRepository: deps.projectRepository });
+      return runGetProject(args, deps.getProject);
     },
   },
 
@@ -336,9 +312,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runFindProject(args, {
-        projectRepository: deps.projectRepository,
-      });
+      return runFindProject(args, deps.findProject);
     },
   },
 
@@ -349,9 +323,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runFindInitiative(args, {
-        initiativeRepository: deps.initiativeRepository,
-      });
+      return runFindInitiative(args, deps.findInitiative);
     },
   },
 
@@ -362,9 +334,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runFindObjective(args, {
-        initiativeRepository: deps.initiativeRepository,
-      });
+      return runFindObjective(args, deps.findObjective);
     },
   },
 
@@ -375,9 +345,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
     },
     async handler(args, deps) {
-      return runFindResource(args, {
-        projectRepository: deps.projectRepository,
-      });
+      return runFindResource(args, deps.findResource);
     },
   },
 };

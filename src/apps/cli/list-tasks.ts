@@ -1,11 +1,6 @@
-import type { TaskRepository } from "../../storage/port.ts";
-import { ListTasks } from "../../app/task/list-tasks.ts";
+import type { ListTasks } from "../../app/task/list-tasks.ts";
 import { toResult } from "./error-map.ts";
 import { formatTaskLine } from "./format.ts";
-
-interface ListTasksDeps {
-  taskRepository: TaskRepository;
-}
 
 interface HandlerResult {
   exitCode: number;
@@ -15,14 +10,12 @@ interface HandlerResult {
 
 export async function runListTasks(
   args: Record<string, unknown>,
-  deps: ListTasksDeps,
+  listTasks: ListTasks,
 ): Promise<HandlerResult> {
   const initiativeId = args["initiative"] as string;
 
   try {
-    const rows = await new ListTasks(deps.taskRepository).execute({
-      initiativeId,
-    });
+    const rows = await listTasks.execute({ initiativeId });
 
     if (args["json"]) {
       return {

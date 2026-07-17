@@ -1,14 +1,5 @@
-import type {
-  ProjectRepository,
-  ReferenceResolver,
-} from "../../storage/port.ts";
-import { AddResource } from "../../app/resource/add-resource.ts";
+import type { AddResource } from "../../app/resource/add-resource.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
-
-export interface ResourceDeps {
-  projectRepository: ProjectRepository;
-  referenceResolver: ReferenceResolver;
-}
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
@@ -22,7 +13,7 @@ function requireFlag(args: Record<string, unknown>, flag: string): string {
 
 export async function runCreateRepository(
   args: Record<string, unknown>,
-  deps: ResourceDeps,
+  addResource: AddResource,
 ): Promise<HandlerResult> {
   try {
     const projectId = requireFlag(args, "project");
@@ -30,8 +21,7 @@ export async function runCreateRepository(
     const organization = requireFlag(args, "organization");
     const branch = requireFlag(args, "branch");
     const path = typeof args["path"] === "string" ? args["path"] : "";
-    const uc = new AddResource(deps.projectRepository, deps.referenceResolver);
-    const id = await uc.execute({
+    const id = await addResource.execute({
       type: "repository",
       projectId,
       name,
@@ -52,15 +42,14 @@ export async function runCreateRepository(
 
 export async function runCreateCredential(
   args: Record<string, unknown>,
-  deps: ResourceDeps,
+  addResource: AddResource,
 ): Promise<HandlerResult> {
   try {
     const projectId = requireFlag(args, "project");
     const name = requireFlag(args, "name");
     const provider = requireFlag(args, "provider");
     const value = requireFlag(args, "value");
-    const uc = new AddResource(deps.projectRepository, deps.referenceResolver);
-    const id = await uc.execute({
+    const id = await addResource.execute({
       type: "credential",
       projectId,
       name,
@@ -80,7 +69,7 @@ export async function runCreateCredential(
 
 export async function runCreateNotification(
   args: Record<string, unknown>,
-  deps: ResourceDeps,
+  addResource: AddResource,
 ): Promise<HandlerResult> {
   try {
     const projectId = requireFlag(args, "project");
@@ -96,8 +85,7 @@ export async function runCreateNotification(
         ],
       };
     }
-    const uc = new AddResource(deps.projectRepository, deps.referenceResolver);
-    const id = await uc.execute({
+    const id = await addResource.execute({
       type: "notification",
       projectId,
       name,
@@ -117,7 +105,7 @@ export async function runCreateNotification(
 
 export async function runCreateAiProvider(
   args: Record<string, unknown>,
-  deps: ResourceDeps,
+  addResource: AddResource,
 ): Promise<HandlerResult> {
   try {
     const projectId = requireFlag(args, "project");
@@ -126,8 +114,7 @@ export async function runCreateAiProvider(
     const model = requireFlag(args, "model");
     const baseUrl =
       typeof args["base-url"] === "string" ? args["base-url"] : undefined;
-    const uc = new AddResource(deps.projectRepository, deps.referenceResolver);
-    const id = await uc.execute({
+    const id = await addResource.execute({
       type: "ai_provider",
       projectId,
       name,
@@ -148,14 +135,13 @@ export async function runCreateAiProvider(
 
 export async function runCreateFilesystem(
   args: Record<string, unknown>,
-  deps: ResourceDeps,
+  addResource: AddResource,
 ): Promise<HandlerResult> {
   try {
     const projectId = requireFlag(args, "project");
     const name = requireFlag(args, "name");
     const path = requireFlag(args, "path");
-    const uc = new AddResource(deps.projectRepository, deps.referenceResolver);
-    const id = await uc.execute({
+    const id = await addResource.execute({
       type: "filesystem",
       projectId,
       name,

@@ -1,32 +1,15 @@
-import type {
-  InitiativeRepository,
-  ReferenceResolver,
-} from "../../storage/port.ts";
-import { CreateInitiative } from "../../app/initiative/create-initiative.ts";
-import { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
+import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
+import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
 import { toResult } from "./error-map.ts";
-
-export interface InitiativeDeps {
-  initiativeRepository: InitiativeRepository;
-  referenceResolver: ReferenceResolver;
-}
-
-export interface RenameInitiativeDeps {
-  initiativeRepository: InitiativeRepository;
-}
 
 export async function runCreateInitiative(
   args: Record<string, unknown>,
-  deps: InitiativeDeps,
+  createInitiative: CreateInitiative,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const projectId = args["project"] as string;
   const name = args["name"] as string;
-  const uc = new CreateInitiative(
-    deps.initiativeRepository,
-    deps.referenceResolver,
-  );
   try {
-    const id = await uc.execute({ projectId, name });
+    const id = await createInitiative.execute({ projectId, name });
     return {
       exitCode: 0,
       stdout: [id],
@@ -40,13 +23,12 @@ export async function runCreateInitiative(
 
 export async function runRenameInitiative(
   args: Record<string, unknown>,
-  deps: RenameInitiativeDeps,
+  renameInitiative: RenameInitiative,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const id = args["id"] as string;
   const name = args["name"] as string;
-  const uc = new RenameInitiative(deps.initiativeRepository);
   try {
-    await uc.execute({ id, name });
+    await renameInitiative.execute({ id, name });
     return { exitCode: 0, stdout: [], stderr: [] };
   } catch (err) {
     const mapped = toResult(err);

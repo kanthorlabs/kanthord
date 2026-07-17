@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { runListTasks } from "./list-tasks.ts";
 import type { TaskRepository } from "../../storage/port.ts";
 import type { Task } from "../../domain/task.ts";
+import { ListTasks } from "../../app/task/list-tasks.ts";
 
 const INITIATIVE_ID = "01JWZYQR00000000000000000A";
 const TASK_API_ID = "01JWZYQR00000000000000000B";
@@ -46,9 +47,11 @@ class FakeTaskRepository implements TaskRepository {
 
 describe("runListTasks", () => {
   test("default output shows ready/blocked with dependency titles on stdout", async () => {
-    const deps = { taskRepository: new FakeTaskRepository() };
     const args: Record<string, unknown> = { initiative: INITIATIVE_ID };
-    const result = await runListTasks(args, deps);
+    const result = await runListTasks(
+      args,
+      new ListTasks(new FakeTaskRepository()),
+    );
     assert.equal(result.exitCode, 0);
     // Stdout must be non-empty (human table)
     assert.ok(result.stdout.length > 0, "stdout must have at least one line");
@@ -73,12 +76,14 @@ describe("runListTasks", () => {
   });
 
   test("--json output shows JSON array with dep ids on stdout", async () => {
-    const deps = { taskRepository: new FakeTaskRepository() };
     const args: Record<string, unknown> = {
       initiative: INITIATIVE_ID,
       json: true,
     };
-    const result = await runListTasks(args, deps);
+    const result = await runListTasks(
+      args,
+      new ListTasks(new FakeTaskRepository()),
+    );
     assert.equal(result.exitCode, 0);
     assert.equal(
       result.stdout.length,

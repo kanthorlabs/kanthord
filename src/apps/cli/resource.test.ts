@@ -13,6 +13,7 @@ import type {
 } from "../../storage/port.ts";
 import type { Resource } from "../../domain/resource.ts";
 import type { Project } from "../../domain/project.ts";
+import { AddResource } from "../../app/resource/add-resource.ts";
 
 // --- Fake ProjectRepository ---
 class FakeProjectRepository implements ProjectRepository {
@@ -54,14 +55,11 @@ class FakeReferenceResolver implements ReferenceResolver {
 
 const PROJECT_ID = "01HZZZZZZZZZZZZZZZZZZZZZPA";
 
-function makeDeps(): {
-  projectRepository: FakeProjectRepository;
-  referenceResolver: FakeReferenceResolver;
-} {
-  return {
-    projectRepository: new FakeProjectRepository(),
-    referenceResolver: new FakeReferenceResolver(),
-  };
+function makeAddResource(): AddResource {
+  return new AddResource(
+    new FakeProjectRepository(),
+    new FakeReferenceResolver(),
+  );
 }
 
 describe("runCreateRepository", () => {
@@ -73,7 +71,7 @@ describe("runCreateRepository", () => {
         organization: "acme",
         branch: "main",
       },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -86,7 +84,7 @@ describe("runCreateRepository", () => {
   test("runCreateRepository missing --organization returns exit 1 with missing flag error", async () => {
     const result = await runCreateRepository(
       { project: PROJECT_ID, name: "backend", branch: "main" },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(
@@ -109,7 +107,7 @@ describe("runCreateCredential", () => {
         provider: "github",
         value: "secret",
       },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -121,7 +119,7 @@ describe("runCreateCredential", () => {
   test("runCreateCredential missing --value returns exit 1 with missing flag error", async () => {
     const result = await runCreateCredential(
       { project: PROJECT_ID, name: "my-token", provider: "github" },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(
@@ -144,7 +142,7 @@ describe("runCreateNotification", () => {
         provider: "slack",
         destination: "#eng",
       },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -156,7 +154,7 @@ describe("runCreateNotification", () => {
   test("runCreateNotification missing --destination returns exit 1 with missing flag error", async () => {
     const result = await runCreateNotification(
       { project: PROJECT_ID, name: "alerts", provider: "slack" },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(
@@ -177,7 +175,7 @@ describe("runCreateNotification", () => {
         provider: "discord",
         destination: "#eng",
       },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(result.stderr.length === 1, "exactly one error line");
@@ -197,7 +195,7 @@ describe("runCreateAiProvider", () => {
         provider: "anthropic",
         model: "claude-3",
       },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -209,7 +207,7 @@ describe("runCreateAiProvider", () => {
   test("runCreateAiProvider missing --model returns exit 1 with missing flag error", async () => {
     const result = await runCreateAiProvider(
       { project: PROJECT_ID, name: "claude", provider: "anthropic" },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(
@@ -227,7 +225,7 @@ describe("runCreateFilesystem", () => {
   test("runCreateFilesystem valid flags returns exitCode 0 with ULID in stdout", async () => {
     const result = await runCreateFilesystem(
       { project: PROJECT_ID, name: "workspace", path: "/work" },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -239,7 +237,7 @@ describe("runCreateFilesystem", () => {
   test("runCreateFilesystem missing --path returns exit 1 with missing flag error", async () => {
     const result = await runCreateFilesystem(
       { project: PROJECT_ID, name: "workspace" },
-      makeDeps(),
+      makeAddResource(),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(

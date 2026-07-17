@@ -10,6 +10,8 @@ import type { EventFeed } from "../../events/port.ts";
 import type { Task } from "../../domain/task.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import type { Event } from "../../domain/event.ts";
+import { AddDependency } from "../../app/task/add-dependency.ts";
+import { RemoveDependency } from "../../app/task/remove-dependency.ts";
 
 // --- Fakes ---
 
@@ -132,7 +134,7 @@ const OBJ_ID = "01JZZZZZZZZZZZZZZZZZZZOBJ0";
 const INIT_ID = "01JZZZZZZZZZZZZZZZZZZZINI0";
 const PROJ_ID = "01JZZZZZZZZZZZZZZZZZZZPRJ0";
 
-function buildDeps() {
+function buildFakes() {
   const referenceResolver = new FakeReferenceResolver({
     [TASK_A]: "task",
     [TASK_B]: "task",
@@ -160,15 +162,15 @@ function buildDeps() {
 
 describe("runAddDependency", () => {
   test("runAddDependency valid flags returns exitCode 0 with success message on stderr", async () => {
-    const deps = buildDeps();
-    deps.taskRepository.save({
+    const f = buildFakes();
+    f.taskRepository.save({
       id: TASK_A,
       objectiveId: OBJ_ID,
       title: "A",
       status: "pending",
       dependencies: [],
     });
-    deps.taskRepository.save({
+    f.taskRepository.save({
       id: TASK_B,
       objectiveId: OBJ_ID,
       title: "B",
@@ -178,7 +180,13 @@ describe("runAddDependency", () => {
 
     const result = await runAddDependency(
       { task: TASK_A, "depends-on": TASK_B },
-      deps,
+      new AddDependency(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.referenceResolver,
+        f.events,
+        f.transactor,
+      ),
     );
 
     assert.equal(result.exitCode, 0);
@@ -191,16 +199,16 @@ describe("runAddDependency", () => {
   });
 
   test("runAddDependency cycle-closing edge returns exit 1 with one error line on stderr", async () => {
-    const deps = buildDeps();
+    const f = buildFakes();
     // A depends on B; adding B → A closes a cycle
-    deps.taskRepository.save({
+    f.taskRepository.save({
       id: TASK_A,
       objectiveId: OBJ_ID,
       title: "A",
       status: "pending",
       dependencies: [TASK_B],
     });
-    deps.taskRepository.save({
+    f.taskRepository.save({
       id: TASK_B,
       objectiveId: OBJ_ID,
       title: "B",
@@ -210,7 +218,13 @@ describe("runAddDependency", () => {
 
     const result = await runAddDependency(
       { task: TASK_B, "depends-on": TASK_A },
-      deps,
+      new AddDependency(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.referenceResolver,
+        f.events,
+        f.transactor,
+      ),
     );
 
     assert.equal(result.exitCode, 1);
@@ -226,15 +240,15 @@ describe("runAddDependency", () => {
   });
 
   test("runAddDependency non-pending task returns exit 1 with one error line on stderr", async () => {
-    const deps = buildDeps();
-    deps.taskRepository.save({
+    const f = buildFakes();
+    f.taskRepository.save({
       id: TASK_A,
       objectiveId: OBJ_ID,
       title: "A",
       status: "completed",
       dependencies: [],
     });
-    deps.taskRepository.save({
+    f.taskRepository.save({
       id: TASK_B,
       objectiveId: OBJ_ID,
       title: "B",
@@ -244,7 +258,13 @@ describe("runAddDependency", () => {
 
     const result = await runAddDependency(
       { task: TASK_A, "depends-on": TASK_B },
-      deps,
+      new AddDependency(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.referenceResolver,
+        f.events,
+        f.transactor,
+      ),
     );
 
     assert.equal(result.exitCode, 1);
@@ -262,16 +282,16 @@ describe("runAddDependency", () => {
 
 describe("runRemoveDependency", () => {
   test("runRemoveDependency non-existent edge returns exit 0 no-op", async () => {
-    const deps = buildDeps();
+    const f = buildFakes();
     // TASK_A does not depend on TASK_B
-    deps.taskRepository.save({
+    f.taskRepository.save({
       id: TASK_A,
       objectiveId: OBJ_ID,
       title: "A",
       status: "pending",
       dependencies: [],
     });
-    deps.taskRepository.save({
+    f.taskRepository.save({
       id: TASK_B,
       objectiveId: OBJ_ID,
       title: "B",
@@ -281,7 +301,13 @@ describe("runRemoveDependency", () => {
 
     const result = await runRemoveDependency(
       { task: TASK_A, "depends-on": TASK_B },
-      deps,
+      new RemoveDependency(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.referenceResolver,
+        f.events,
+        f.transactor,
+      ),
     );
 
     assert.equal(result.exitCode, 0);

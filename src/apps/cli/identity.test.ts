@@ -32,6 +32,15 @@ import type {
   TaskRepository,
   ReferenceResolver,
 } from "../../storage/port.ts";
+import { CreateProject } from "../../app/project/create-project.ts";
+import { CreateInitiative } from "../../app/initiative/create-initiative.ts";
+import { CreateObjective } from "../../app/objective/create-objective.ts";
+import { AddResource } from "../../app/resource/add-resource.ts";
+import { CreateTask } from "../../app/task/create-task.ts";
+import { FindProject } from "../../app/project/find-project.ts";
+import { FindInitiative } from "../../app/initiative/find-initiative.ts";
+import { FindObjective } from "../../app/objective/find-objective.ts";
+import { FindResource } from "../../app/resource/find-resource.ts";
 
 /** Strict Crockford base-32 ULID: 26 chars, no I / L / O / U. */
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -137,7 +146,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateProject(
         { name: "demo" },
-        { projectRepository: fakeProjectRepoCreate },
+        new CreateProject(fakeProjectRepoCreate),
       ),
   },
   {
@@ -145,10 +154,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateInitiative(
         { project: PROJECT_SCOPE, name: "oauth" },
-        {
-          initiativeRepository: fakeInitiativeRepoCreate,
-          referenceResolver: resolverForProject,
-        },
+        new CreateInitiative(fakeInitiativeRepoCreate, resolverForProject),
       ),
   },
   {
@@ -156,10 +162,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateObjective(
         { initiative: INITIATIVE_SCOPE, name: "backend" },
-        {
-          initiativeRepository: fakeInitiativeRepoCreate,
-          referenceResolver: resolverForInitiative,
-        },
+        new CreateObjective(fakeInitiativeRepoCreate, resolverForInitiative),
       ),
   },
   {
@@ -172,10 +175,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           organization: "acme",
           branch: "main",
         },
-        {
-          projectRepository: fakeProjectRepoCreate,
-          referenceResolver: resolverForProject,
-        },
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -188,10 +188,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "github",
           value: "secret",
         },
-        {
-          projectRepository: fakeProjectRepoCreate,
-          referenceResolver: resolverForProject,
-        },
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -204,10 +201,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "slack",
           destination: "#ops",
         },
-        {
-          projectRepository: fakeProjectRepoCreate,
-          referenceResolver: resolverForProject,
-        },
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -220,10 +214,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "anthropic",
           model: "claude-3",
         },
-        {
-          projectRepository: fakeProjectRepoCreate,
-          referenceResolver: resolverForProject,
-        },
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -231,10 +222,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateFilesystem(
         { project: PROJECT_SCOPE, name: "src", path: "/code" },
-        {
-          projectRepository: fakeProjectRepoCreate,
-          referenceResolver: resolverForProject,
-        },
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -242,28 +230,25 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateTask(
         { objective: OBJECTIVE_SCOPE, title: "implement api" },
-        {
-          taskRepository: fakeTaskRepo,
-          initiativeRepository: fakeInitiativeRepoForTask,
-          projectRepository: fakeProjectRepoForTask,
-          referenceResolver: resolverForObjective,
-        },
+        new CreateTask(
+          fakeTaskRepo,
+          fakeInitiativeRepoForTask,
+          fakeProjectRepoForTask,
+          resolverForObjective,
+        ),
       ),
   },
   {
     label: "find project",
     fn: () =>
-      runFindProject(
-        { name: "demo" },
-        { projectRepository: fakeProjectRepoFind },
-      ),
+      runFindProject({ name: "demo" }, new FindProject(fakeProjectRepoFind)),
   },
   {
     label: "find initiative",
     fn: () =>
       runFindInitiative(
         { project: PROJECT_SCOPE, name: "oauth" },
-        { initiativeRepository: fakeInitiativeRepoFind },
+        new FindInitiative(fakeInitiativeRepoFind),
       ),
   },
   {
@@ -271,7 +256,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runFindObjective(
         { initiative: INITIATIVE_SCOPE, name: "backend" },
-        { initiativeRepository: fakeInitiativeRepoFind },
+        new FindObjective(fakeInitiativeRepoFind),
       ),
   },
   {
@@ -279,7 +264,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runFindResource(
         { project: PROJECT_SCOPE, name: "api" },
-        { projectRepository: fakeProjectRepoFind },
+        new FindResource(fakeProjectRepoFind),
       ),
   },
 ];

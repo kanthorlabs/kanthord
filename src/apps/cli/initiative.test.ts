@@ -5,11 +5,9 @@ import type {
   InitiativeRepository,
   ReferenceResolver,
 } from "../../storage/port.ts";
-import {
-  UnknownReferenceError,
-  WrongTypeReferenceError,
-} from "../../app/errors.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
+import { CreateInitiative } from "../../app/initiative/create-initiative.ts";
+import { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
@@ -45,7 +43,7 @@ class FakeInitiativeRepository implements InitiativeRepository {
     return ids;
   }
 
-  resolveObjectiveByName(initiativeId: string, name: string): string[] {
+  resolveObjectiveByName(_initiativeId: string, _name: string): string[] {
     return [];
   }
 
@@ -75,7 +73,7 @@ describe("runCreateInitiative handler", () => {
     const resolver = new MockReferenceResolver("project");
     const result = await runCreateInitiative(
       { project: "proj-1", name: "oauth" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateInitiative(repo, resolver),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -95,7 +93,7 @@ describe("runCreateInitiative handler", () => {
     const resolver = new MockReferenceResolver(undefined);
     const result = await runCreateInitiative(
       { project: "no-such", name: "oauth" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateInitiative(repo, resolver),
     );
     assert.equal(result.exitCode, 1);
     assert.equal(result.stdout.length, 0);
@@ -110,7 +108,7 @@ describe("runCreateInitiative handler", () => {
     const resolver = new MockReferenceResolver("initiative");
     const result = await runCreateInitiative(
       { project: "init-1", name: "oauth" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateInitiative(repo, resolver),
     );
     assert.equal(result.exitCode, 1);
     assert.equal(result.stdout.length, 0);
@@ -127,12 +125,12 @@ describe("runRenameInitiative handler", () => {
     const resolver = new MockReferenceResolver("project");
     const createResult = await runCreateInitiative(
       { project: "proj-1", name: "original" },
-      { initiativeRepository: repo, referenceResolver: resolver },
+      new CreateInitiative(repo, resolver),
     );
     const id = createResult.stdout[0]!;
     const result = await runRenameInitiative(
       { id, name: "renamed" },
-      { initiativeRepository: repo },
+      new RenameInitiative(repo),
     );
     assert.equal(result.exitCode, 0);
   });
@@ -141,7 +139,7 @@ describe("runRenameInitiative handler", () => {
     const repo = new FakeInitiativeRepository();
     const result = await runRenameInitiative(
       { id: "no-such-id", name: "whatever" },
-      { initiativeRepository: repo },
+      new RenameInitiative(repo),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(

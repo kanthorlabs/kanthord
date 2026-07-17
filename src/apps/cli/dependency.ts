@@ -1,25 +1,10 @@
-import type {
-  TaskRepository,
-  InitiativeRepository,
-  ReferenceResolver,
-  Transactor,
-} from "../../storage/port.ts";
-import type { EventFeed } from "../../events/port.ts";
-import { AddDependency } from "../../app/task/add-dependency.ts";
-import { RemoveDependency } from "../../app/task/remove-dependency.ts";
+import type { AddDependency } from "../../app/task/add-dependency.ts";
+import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
-
-export interface DependencyDeps {
-  taskRepository: TaskRepository;
-  initiativeRepository: InitiativeRepository;
-  referenceResolver: ReferenceResolver;
-  events: EventFeed;
-  transactor: Transactor;
-}
 
 export async function runAddDependency(
   args: Record<string, unknown>,
-  deps: DependencyDeps,
+  addDependency: AddDependency,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const taskId = args["task"];
   if (typeof taskId !== "string" || taskId === "") {
@@ -34,14 +19,7 @@ export async function runAddDependency(
   }
 
   try {
-    const useCase = new AddDependency(
-      deps.taskRepository,
-      deps.initiativeRepository,
-      deps.referenceResolver,
-      deps.events,
-      deps.transactor,
-    );
-    await useCase.execute({ taskId, dependsOn });
+    await addDependency.execute({ taskId, dependsOn });
     return {
       exitCode: 0,
       stdout: [],
@@ -54,7 +32,7 @@ export async function runAddDependency(
 
 export async function runRemoveDependency(
   args: Record<string, unknown>,
-  deps: DependencyDeps,
+  removeDependency: RemoveDependency,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const taskId = args["task"];
   if (typeof taskId !== "string" || taskId === "") {
@@ -69,14 +47,7 @@ export async function runRemoveDependency(
   }
 
   try {
-    const useCase = new RemoveDependency(
-      deps.taskRepository,
-      deps.initiativeRepository,
-      deps.referenceResolver,
-      deps.events,
-      deps.transactor,
-    );
-    await useCase.execute({ taskId, dependsOn });
+    await removeDependency.execute({ taskId, dependsOn });
     return { exitCode: 0, stdout: [], stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };

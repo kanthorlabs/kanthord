@@ -16,14 +16,22 @@ test("buildDeps returns a RouterDeps bundle with all registered capabilities", (
     );
     assert.ok("migrateDb" in deps, "deps.migrateDb present");
     assert.ok("getDbStatus" in deps, "deps.getDbStatus present");
-    assert.ok("projectRepository" in deps, "deps.projectRepository present");
-    assert.ok(
-      "initiativeRepository" in deps,
-      "deps.initiativeRepository present",
-    );
-    assert.ok("taskRepository" in deps, "deps.taskRepository present");
-    assert.ok("referenceResolver" in deps, "deps.referenceResolver present");
-    assert.ok("events" in deps, "deps.events present");
+    assert.ok("createProject" in deps, "deps.createProject present");
+    assert.ok("renameProject" in deps, "deps.renameProject present");
+    assert.ok("getProject" in deps, "deps.getProject present");
+    assert.ok("findProject" in deps, "deps.findProject present");
+    assert.ok("createInitiative" in deps, "deps.createInitiative present");
+    assert.ok("renameInitiative" in deps, "deps.renameInitiative present");
+    assert.ok("findInitiative" in deps, "deps.findInitiative present");
+    assert.ok("createObjective" in deps, "deps.createObjective present");
+    assert.ok("renameObjective" in deps, "deps.renameObjective present");
+    assert.ok("findObjective" in deps, "deps.findObjective present");
+    assert.ok("addResource" in deps, "deps.addResource present");
+    assert.ok("findResource" in deps, "deps.findResource present");
+    assert.ok("createTask" in deps, "deps.createTask present");
+    assert.ok("addDependency" in deps, "deps.addDependency present");
+    assert.ok("removeDependency" in deps, "deps.removeDependency present");
+    assert.ok("listTasks" in deps, "deps.listTasks present");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

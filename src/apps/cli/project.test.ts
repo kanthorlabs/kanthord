@@ -2,8 +2,9 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { runCreateProject, runRenameProject } from "./project.ts";
 import type { ProjectRepository } from "../../storage/port.ts";
-import { DuplicateNameError, UnknownReferenceError } from "../../app/errors.ts";
 import type { Project } from "../../domain/project.ts";
+import { CreateProject } from "../../app/project/create-project.ts";
+import { RenameProject } from "../../app/project/rename-project.ts";
 
 // --- Minimal fake ProjectRepository that returns a fixed id on save ---
 class MockProjectRepository implements ProjectRepository {
@@ -58,7 +59,7 @@ describe("runCreateProject handler", () => {
     const repo = new MockProjectRepository("unused");
     const result = await runCreateProject(
       { name: "demo" },
-      { projectRepository: repo },
+      new CreateProject(repo),
     );
     assert.equal(result.exitCode, 0);
     assert.ok(
@@ -75,13 +76,11 @@ describe("runCreateProject handler", () => {
 
   test("runCreateProject returns exitCode 1 with error line on DuplicateNameError", async () => {
     const repo = new MockProjectRepository("unused");
+    const uc = new CreateProject(repo);
     // create once first
-    await runCreateProject({ name: "clash" }, { projectRepository: repo });
+    await runCreateProject({ name: "clash" }, uc);
     // second call should get a duplicate
-    const result = await runCreateProject(
-      { name: "clash" },
-      { projectRepository: repo },
-    );
+    const result = await runCreateProject({ name: "clash" }, uc);
     assert.equal(result.exitCode, 1);
     assert.equal(result.stdout.length, 0);
     assert.ok(result.stderr.length === 1);
@@ -98,12 +97,12 @@ describe("runRenameProject handler", () => {
     // create a project first
     const createResult = await runCreateProject(
       { name: "original" },
-      { projectRepository: repo },
+      new CreateProject(repo),
     );
     const id = createResult.stdout[0]!;
     const result = await runRenameProject(
       { id, name: "renamed" },
-      { projectRepository: repo },
+      new RenameProject(repo),
     );
     assert.equal(result.exitCode, 0);
   });
@@ -112,7 +111,7 @@ describe("runRenameProject handler", () => {
     const repo = new MockProjectRepository("unused");
     const result = await runRenameProject(
       { id: "no-such-id", name: "whatever" },
-      { projectRepository: repo },
+      new RenameProject(repo),
     );
     assert.equal(result.exitCode, 1);
     assert.ok(

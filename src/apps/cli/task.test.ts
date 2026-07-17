@@ -11,6 +11,7 @@ import type { Task } from "../../domain/task.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import type { Project } from "../../domain/project.ts";
 import type { Resource } from "../../domain/resource.ts";
+import { CreateTask } from "../../app/task/create-task.ts";
 
 // --- Test fixture IDs (valid ULIDs) ---
 const OBJ_ID = "01JZZZZZZZZZZZZZZZZZZZOBJ0";
@@ -129,7 +130,7 @@ class FakeProjectRepository implements ProjectRepository {
   }
 }
 
-function buildDeps(): {
+function buildFakes(): {
   taskRepository: FakeTaskRepository;
   initiativeRepository: FakeInitiativeRepository;
   projectRepository: FakeProjectRepository;
@@ -171,9 +172,15 @@ function buildDeps(): {
 
 describe("runCreateTask", () => {
   test("runCreateTask valid flags returns exitCode 0 with ULID in stdout", async () => {
+    const f = buildFakes();
     const result = await runCreateTask(
       { objective: OBJ_ID, title: "implement api" },
-      buildDeps(),
+      new CreateTask(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.projectRepository,
+        f.referenceResolver,
+      ),
     );
     assert.equal(result.exitCode, 0);
     assert.equal(
@@ -185,13 +192,19 @@ describe("runCreateTask", () => {
   });
 
   test("runCreateTask repeatable --depends-on parses into dep id array", async () => {
+    const f = buildFakes();
     const result = await runCreateTask(
       {
         objective: OBJ_ID,
         title: "deploy",
         "depends-on": [DEP_ID1, DEP_ID2],
       },
-      buildDeps(),
+      new CreateTask(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.projectRepository,
+        f.referenceResolver,
+      ),
     );
     assert.equal(
       result.exitCode,
@@ -202,13 +215,19 @@ describe("runCreateTask", () => {
   });
 
   test("runCreateTask repeatable --context parses into type-to-id map", async () => {
+    const f = buildFakes();
     const result = await runCreateTask(
       {
         objective: OBJ_ID,
         title: "work",
         context: [`repository=${RES_ID}`],
       },
-      buildDeps(),
+      new CreateTask(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.projectRepository,
+        f.referenceResolver,
+      ),
     );
     assert.equal(
       result.exitCode,
@@ -219,13 +238,19 @@ describe("runCreateTask", () => {
   });
 
   test("runCreateTask --context missing = returns exit 1 with parse error", async () => {
+    const f = buildFakes();
     const result = await runCreateTask(
       {
         objective: OBJ_ID,
         title: "work",
         context: ["credential"],
       },
-      buildDeps(),
+      new CreateTask(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.projectRepository,
+        f.referenceResolver,
+      ),
     );
     assert.equal(result.exitCode, 1);
     assert.equal(result.stderr.length, 1, "exactly one error line");
@@ -236,11 +261,16 @@ describe("runCreateTask", () => {
   });
 
   test("runCreateTask bad reference returns exit 1 one-line error on stderr", async () => {
-    const deps = buildDeps();
+    const f = buildFakes();
     const badResolver = new FakeReferenceResolver({}); // unknown objective
     const result = await runCreateTask(
       { objective: "no-such-objective", title: "x" },
-      { ...deps, referenceResolver: badResolver },
+      new CreateTask(
+        f.taskRepository,
+        f.initiativeRepository,
+        f.projectRepository,
+        badResolver,
+      ),
     );
     assert.equal(result.exitCode, 1);
     assert.equal(

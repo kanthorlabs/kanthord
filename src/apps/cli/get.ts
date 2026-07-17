@@ -1,10 +1,5 @@
-import type { ProjectRepository } from "../../storage/port.ts";
-import { UnknownReferenceError } from "../../app/errors.ts";
+import type { GetProject } from "../../app/project/get-project.ts";
 import { toResult } from "./error-map.ts";
-
-interface ProjectDeps {
-  projectRepository: ProjectRepository;
-}
 
 interface HandlerResult {
   exitCode: number;
@@ -14,15 +9,12 @@ interface HandlerResult {
 
 export async function runGetProject(
   args: Record<string, unknown>,
-  deps: ProjectDeps,
+  getProject: GetProject,
 ): Promise<HandlerResult> {
   const id = args["id"] as string;
 
   try {
-    const project = deps.projectRepository.get(id);
-    if (project === undefined) {
-      throw new UnknownReferenceError("project", id);
-    }
+    const project = await getProject.execute({ id });
 
     if (args["json"]) {
       return { exitCode: 0, stdout: [JSON.stringify(project)], stderr: [] };
