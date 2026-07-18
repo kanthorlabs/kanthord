@@ -87,6 +87,24 @@ export interface TaskRepository {
   getInitiativeId(taskId: string): string | undefined;
 }
 
+/**
+ * One row in the `task_results` table. All columns except the keying `taskId`
+ * (passed as a parameter to `saveTaskResult` / `getTaskResult`) are nullable.
+ * `evidence` is a JSON array of verification-command results when present.
+ */
+export interface TaskResultRow {
+  workspace: string | null;
+  branch: string | null;
+  baseCommit: string | null;
+  proposalCommit: string | null;
+  commitSha: string | null;
+  summary: string | null;
+  reason: string | null;
+  rejectionResolution: string | null;
+  rejectionReason: string | null;
+  evidence: Array<{ command: string; exitCode: number; output: string }> | null;
+}
+
 /** Resolves a raw id to the aggregate kind it belongs to. */
 export interface ReferenceResolver {
   resolveKind(

@@ -6,18 +6,29 @@ import type {
 } from "./port.ts";
 import { RunnerNotResolvableError } from "./port.ts";
 
-export class RegistryRunnerResolver implements AgentRunnerResolver {
-  readonly #defaultRunner: AgentRunner;
+type ResolverOptions =
+  { runners: Map<string, AgentRunner> } | { defaultRunner: AgentRunner };
 
-  constructor({ defaultRunner }: { defaultRunner: AgentRunner }) {
-    this.#defaultRunner = defaultRunner;
+export class RegistryRunnerResolver implements AgentRunnerResolver {
+  readonly #runners: Map<string, AgentRunner>;
+  readonly #defaultRunner: AgentRunner | undefined;
+
+  constructor(opts: ResolverOptions) {
+    if ("runners" in opts) {
+      this.#runners = opts.runners;
+      this.#defaultRunner = undefined;
+    } else {
+      this.#runners = new Map();
+      this.#defaultRunner = opts.defaultRunner;
+    }
   }
 
-  for(task: Task, context: TaskContextBinding[]): AgentRunner {
-    const aiBinding = context.find((b) => b.type === "ai_provider");
-    if (aiBinding !== undefined) {
-      throw new RunnerNotResolvableError(task.id, aiBinding.resourceId);
+  for(task: Task, _context: TaskContextBinding[]): AgentRunner {
+    const ref = task.agent ?? "";
+    const runner = this.#runners.get(ref) ?? this.#defaultRunner;
+    if (runner === undefined) {
+      throw new RunnerNotResolvableError(task.id, ref);
     }
-    return this.#defaultRunner;
+    return runner;
   }
 }

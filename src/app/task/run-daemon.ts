@@ -8,7 +8,10 @@
 
 type RunNextResult =
   | { outcome: "idle" }
-  | { outcome: "skipped" | "completed" | "failed"; taskId: string };
+  | {
+      outcome: "skipped" | "completed" | "failed" | "escalated";
+      taskId: string;
+    };
 
 interface Recover {
   execute(): string[];
@@ -44,12 +47,13 @@ export class RunDaemon {
   async execute(options: {
     untilIdle: boolean;
     pollIntervalMs?: number;
-  }): Promise<{ exitCode: 0 | 1 }> {
+  }): Promise<{ exitCode: 0 | 1; escalatedCount: number }> {
     let hasFailed = false;
+    let escalatedCount = 0;
 
     // Step 1: recover interrupted tasks exactly once at startup.
     // Skip everything if stop() was already called before execute().
-    if (this.#stopped) return { exitCode: 0 };
+    if (this.#stopped) return { exitCode: 0, escalatedCount: 0 };
     this.#deps.recover.execute();
 
     // Main loop.
@@ -76,6 +80,9 @@ export class RunDaemon {
       if (runResult.outcome === "failed") {
         hasFailed = true;
       }
+      if (runResult.outcome === "escalated") {
+        escalatedCount += 1;
+      }
 
       // Honour stop() — always checked after runNext finishes (never mid-task).
       if (this.#stopped) break;
@@ -95,7 +102,7 @@ export class RunDaemon {
       }
     }
 
-    return { exitCode: hasFailed ? 1 : 0 };
+    return { exitCode: hasFailed ? 1 : 0, escalatedCount };
   }
 }
 

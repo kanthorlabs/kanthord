@@ -18,7 +18,10 @@ export class ListTasks {
     this.#taskRepo = taskRepo;
   }
 
-  async execute(input: { initiativeId: string }): Promise<TaskRow[]> {
+  async execute(input: {
+    initiativeId: string;
+    status?: TaskStatus;
+  }): Promise<TaskRow[]> {
     const tasks = this.#taskRepo.listByInitiative(input.initiativeId);
 
     if (tasks.length === 0) {
@@ -35,7 +38,7 @@ export class ListTasks {
 
     const readinessMap = new Map(readiness(nodes).map((r) => [r.id, r]));
 
-    return tasks.map((t) => {
+    const rows = tasks.map((t) => {
       const r = readinessMap.get(t.id);
       return {
         id: t.id,
@@ -45,5 +48,10 @@ export class ListTasks {
         waiting: r?.waiting ?? [],
       };
     });
+
+    if (input.status !== undefined) {
+      return rows.filter((row) => row.status === input.status);
+    }
+    return rows;
   }
 }

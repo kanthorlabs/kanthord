@@ -17,20 +17,56 @@ export interface Task extends Entity {
   title: string;
   status: TaskStatus;
   dependencies: string[];
+  agent?: string;
+  instructions?: string;
+  ac?: string[];
+  verification?: string[];
+}
+
+export class InvalidTaskFieldError extends Error {
+  readonly field: string;
+
+  constructor(field: string) {
+    super(`Invalid task field: ${field}`);
+    this.name = "InvalidTaskFieldError";
+    this.field = field;
+  }
 }
 
 export function newTask(input: {
   objectiveId: string;
   title: string;
   dependencies?: string[];
+  agent?: string;
+  instructions?: string;
+  ac?: string[];
+  verification?: string[];
 }): Task {
-  return {
+  if (input.agent !== undefined && input.agent === "")
+    throw new InvalidTaskFieldError("agent");
+  if (input.instructions !== undefined && input.instructions === "")
+    throw new InvalidTaskFieldError("instructions");
+  if (input.ac !== undefined && input.ac.length === 0)
+    throw new InvalidTaskFieldError("ac");
+  if (input.verification !== undefined) {
+    for (const cmd of input.verification) {
+      if (!cmd) throw new InvalidTaskFieldError("verification");
+    }
+  }
+
+  const task: Task = {
     id: newId(),
     objectiveId: input.objectiveId,
     title: input.title,
     status: "pending",
     dependencies: input.dependencies ?? [],
   };
+  if (input.agent !== undefined) task.agent = input.agent;
+  if (input.instructions !== undefined) task.instructions = input.instructions;
+  if (input.ac !== undefined) task.ac = [...input.ac];
+  if (input.verification !== undefined)
+    task.verification = [...input.verification];
+  return task;
 }
 
 const LEGAL_TRANSITIONS: ReadonlySet<string> = new Set([

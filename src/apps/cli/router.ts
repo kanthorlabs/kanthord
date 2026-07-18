@@ -22,8 +22,12 @@ import type { AddDependency } from "../../app/task/add-dependency.ts";
 import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
 import type { RetryTask } from "../../app/task/retry-task.ts";
+import type { GetTask } from "../../app/task/get-task.ts";
+import type { ApproveTask } from "../../app/task/approve-task.ts";
+import type { RejectTask } from "../../app/task/reject-task.ts";
 import type { RunDaemon } from "../../app/task/run-daemon.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
+import type { ImportResources } from "../../app/resource/import-resources.ts";
 import { runGraphCheck } from "./graph-check.ts";
 import { runDbMigrate, runDbStatus } from "./db.ts";
 import { runCreateProject, runRenameProject } from "./project.ts";
@@ -41,7 +45,13 @@ import {
   runCreateAiProvider,
   runCreateFilesystem,
 } from "./resource.ts";
-import { runCreateTask, runRetryTask } from "./task.ts";
+import {
+  runCreateTask,
+  runRetryTask,
+  runGetTask,
+  runApproveTask,
+  runRejectTask,
+} from "./task.ts";
 import { runDaemon } from "./daemon.ts";
 import { runAddDependency, runRemoveDependency } from "./dependency.ts";
 import { runListTasks } from "./list-tasks.ts";
@@ -53,6 +63,9 @@ import {
   runFindObjective,
   runFindResource,
 } from "./find.ts";
+import { runImportResource } from "./import.ts";
+import { runLogin } from "./login.ts";
+import type { LoginDeps } from "./login.ts";
 
 /** Composition-root bundle injected by main.ts; extended by later Tasks. */
 export interface RouterDeps {
@@ -77,8 +90,13 @@ export interface RouterDeps {
   removeDependency: RemoveDependency;
   listTasks: ListTasks;
   retryTask: RetryTask;
+  getTask: GetTask;
+  approveTask: ApproveTask;
+  rejectTask: RejectTask;
   buildDaemon: (failTaskIds: string[]) => RunDaemon;
   listEvents: ListEvents;
+  importResources: ImportResources;
+  login: LoginDeps;
 }
 
 /** Shape of each command entry in the COMMANDS table. */
@@ -287,10 +305,14 @@ export const COMMANDS: Record<string, CommandEntry> = {
 
   "create task": {
     usage:
-      "usage: create task --objective <id> --title <title> [--depends-on <id>]... [--context type=<resource-id>]...",
+      "usage: create task --objective <id> --title <title> --instructions <text> --ac <criterion>... [--agent <ref>] [--verification <cmd>]... [--depends-on <id>]... [--context type=<resource-id>]...",
     parse: {
       objective: { type: "string" },
       title: { type: "string" },
+      instructions: { type: "string" },
+      ac: { type: "string", multiple: true },
+      agent: { type: "string" },
+      verification: { type: "string", multiple: true },
       "depends-on": { type: "string", multiple: true },
       context: { type: "string", multiple: true },
     },
@@ -331,11 +353,44 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
   },
 
+  "approve task": {
+    usage: "usage: approve task --id <id>",
+    parse: {
+      id: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runApproveTask(args, deps.approveTask);
+    },
+  },
+
+  "reject task": {
+    usage:
+      "usage: reject task --id <id> --resolution <retry|discard> [--reason <text>]",
+    parse: {
+      id: { type: "string" },
+      resolution: { type: "string" },
+      reason: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runRejectTask(args, deps.rejectTask);
+    },
+  },
+
+  "get task": {
+    usage: "usage: get task --id <id> [--json]",
+    parse: {
+      id: { type: "string" },
+      json: { type: "boolean" },
+    },
+    async handler(args, deps) {
+      return runGetTask(args, deps.getTask);
+    },
+  },
+
   "daemon run": {
     usage:
-      "usage: daemon run [--runner fake] [--fail <id>]... [--until-idle] [--poll-interval <ms>]",
+      "usage: daemon run [--fail <id>]... [--until-idle] [--poll-interval <ms>]",
     parse: {
-      runner: { type: "string" },
       fail: { type: "string", multiple: true },
       "until-idle": { type: "boolean" },
       "poll-interval": { type: "string" },
@@ -346,9 +401,10 @@ export const COMMANDS: Record<string, CommandEntry> = {
   },
 
   "list task": {
-    usage: "usage: list task --initiative <id> [--json]",
+    usage: "usage: list task --initiative <id> [--status <status>] [--json]",
     parse: {
       initiative: { type: "string" },
+      status: { type: "string" },
       json: { type: "boolean" },
     },
     async handler(args, deps) {
@@ -434,6 +490,28 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
     async handler(args, deps) {
       return runFindResource(args, deps.findResource);
+    },
+  },
+
+  "import resource": {
+    usage: "usage: import resource --path <file>",
+    parse: {
+      path: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runImportResource(args, deps.importResources);
+    },
+  },
+
+  login: {
+    usage: "usage: login --provider <provider> --project <id> --name <name>",
+    parse: {
+      provider: { type: "string" },
+      project: { type: "string" },
+      name: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runLogin(args["provider"] as string, args, deps.login);
     },
   },
 };

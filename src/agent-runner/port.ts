@@ -1,8 +1,41 @@
 import type { Task } from "../domain/task.ts";
+import type { VerificationEvidence } from "./verification.ts";
+
+export type { VerificationEvidence };
+
+export interface AgentCatalog {
+  has(ref: string): boolean;
+}
+
+export class UnknownAgentError extends Error {
+  readonly agent: string;
+
+  constructor(agent: string) {
+    super(`unknown agent: ${agent}`);
+    this.name = "UnknownAgentError";
+    this.agent = agent;
+  }
+}
 
 export type TaskResult =
-  | { outcome: "completed"; summary?: string }
-  | { outcome: "failed"; reason: string };
+  | {
+      outcome: "completed";
+      summary?: string;
+      workspace?: string;
+      branch?: string;
+      commitSha?: string;
+      evidence?: VerificationEvidence[];
+    }
+  | { outcome: "failed"; reason: string }
+  | {
+      outcome: "escalated";
+      reason: string;
+      summary: string;
+      workspace: string;
+      branch: string;
+      baseCommit: string;
+      proposalCommit?: string;
+    };
 
 export interface TaskContextBinding {
   type: string;
@@ -19,14 +52,12 @@ export interface AgentRunnerResolver {
 
 export class RunnerNotResolvableError extends Error {
   readonly taskId: string;
-  readonly resourceId: string;
+  readonly agent: string;
 
-  constructor(taskId: string, resourceId: string) {
-    super(
-      `No runner resolvable for task ${taskId} with resource ${resourceId}`,
-    );
+  constructor(taskId: string, agent: string) {
+    super(`No runner resolvable for task ${taskId} with agent ${agent}`);
     this.name = "RunnerNotResolvableError";
     this.taskId = taskId;
-    this.resourceId = resourceId;
+    this.agent = agent;
   }
 }

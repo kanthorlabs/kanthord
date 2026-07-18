@@ -99,3 +99,33 @@ test("dispatch db status --help exits 0 with usage text on stdout", async () => 
   );
   assert.deepEqual(result.stderr, []);
 });
+
+// ---------------------------------------------------------------------------
+// B3 regression — `login` command not registered in COMMANDS
+// ---------------------------------------------------------------------------
+//
+// `runLogin` exists and is unit-green (src/apps/cli/login.test.ts),
+// but `COMMANDS` has no "login" entry, so `dispatch(["login", "--help"])`
+// follows the single-word fallback (obj="--help" starts with "-"), looks up
+// COMMANDS["login"], finds nothing, and returns exit 1 "unknown command".
+//
+// After the fix: COMMANDS["login"] exists → --help → exit 0 with usage text.
+
+test("(B3 regression) dispatch login --help exits 0 with usage text (login must be in COMMANDS)", async () => {
+  const result = await dispatch(["login", "--help"], fakeDeps);
+  // Currently exits 1: COMMANDS["login"] is absent, dispatch returns
+  // "error: unknown command: login --help".
+  assert.equal(
+    result.exitCode,
+    0,
+    `login must be registered in COMMANDS — got exitCode=${result.exitCode}, stderr=${JSON.stringify(result.stderr)}`,
+  );
+  assert.ok(
+    result.stdout.length > 0,
+    `login --help must print usage text on stdout, got stdout=${JSON.stringify(result.stdout)}`,
+  );
+  assert.ok(
+    !result.stderr.some((l) => l.includes("unknown command")),
+    `login must not return an 'unknown command' error, got stderr=${JSON.stringify(result.stderr)}`,
+  );
+});

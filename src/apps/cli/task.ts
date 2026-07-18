@@ -1,6 +1,11 @@
 import type { CreateTask } from "../../app/task/create-task.ts";
 import type { RetryTask } from "../../app/task/retry-task.ts";
+import type { GetTask } from "../../app/task/get-task.ts";
+import type { ApproveTask } from "../../app/task/approve-task.ts";
+import type { RejectTask } from "../../app/task/reject-task.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
+
+type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
 export async function runCreateTask(
   args: Record<string, unknown>,
@@ -16,6 +21,41 @@ export async function runCreateTask(
   if (typeof title !== "string" || title === "") {
     const err = new MissingFlagError("--title");
     return { ...toResult(err), stdout: [] };
+  }
+
+  // Validate --instructions
+  const instructions = args["instructions"];
+  if (typeof instructions !== "string" || instructions === "") {
+    const err = new MissingFlagError("--instructions");
+    return { ...toResult(err), stdout: [] };
+  }
+
+  // Validate --ac
+  const rawAc = args["ac"];
+  if (
+    rawAc === undefined ||
+    rawAc === null ||
+    (Array.isArray(rawAc) && (rawAc as string[]).length === 0)
+  ) {
+    const err = new MissingFlagError("--ac");
+    return { ...toResult(err), stdout: [] };
+  }
+  const ac: string[] = Array.isArray(rawAc)
+    ? (rawAc as string[])
+    : [rawAc as string];
+
+  // Normalize --agent: absent defaults to generic@1
+  const rawAgent = args["agent"];
+  const agent: string =
+    typeof rawAgent === "string" && rawAgent !== "" ? rawAgent : "generic@1";
+
+  // Normalize --verification: string → [string], array → string[], absent → undefined
+  const rawVerification = args["verification"];
+  let verification: string[] | undefined;
+  if (rawVerification !== undefined) {
+    verification = Array.isArray(rawVerification)
+      ? (rawVerification as string[])
+      : [rawVerification as string];
   }
 
   // Normalize --depends-on: may be a string, string[], or absent
@@ -56,6 +96,10 @@ export async function runCreateTask(
     const id = await createTask.execute({
       objectiveId,
       title,
+      agent,
+      instructions,
+      ac,
+      verification,
       dependencies,
       context,
     });
@@ -68,11 +112,107 @@ export async function runCreateTask(
 export async function runRetryTask(
   args: Record<string, unknown>,
   retryTask: RetryTask,
-): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+): Promise<HandlerResult> {
   const id = args["id"] as string;
   try {
     await retryTask.execute({ taskId: id });
     return { exitCode: 0, stdout: [], stderr: [`task re-queued: ${id}`] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runApproveTask(
+  args: Record<string, unknown>,
+  approveTask: ApproveTask,
+): Promise<HandlerResult> {
+  const id = args["id"];
+  if (typeof id !== "string" || id === "") {
+    return { ...toResult(new MissingFlagError("--id")), stdout: [] };
+  }
+  try {
+    await approveTask.execute({ taskId: id });
+    return { exitCode: 0, stdout: [id], stderr: [] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runRejectTask(
+  args: Record<string, unknown>,
+  rejectTask: RejectTask,
+): Promise<HandlerResult> {
+  const id = args["id"];
+  if (typeof id !== "string" || id === "") {
+    return { ...toResult(new MissingFlagError("--id")), stdout: [] };
+  }
+  const rawResolution = args["resolution"];
+  if (typeof rawResolution !== "string" || rawResolution === "") {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: missing required flag --resolution"],
+    };
+  }
+  if (rawResolution !== "retry" && rawResolution !== "discard") {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: [
+        `error: invalid --resolution value "${rawResolution}": must be "retry" or "discard"`,
+      ],
+    };
+  }
+  const resolution = rawResolution as "retry" | "discard";
+  const reason =
+    typeof args["reason"] === "string" ? args["reason"] : undefined;
+  try {
+    await rejectTask.execute({ taskId: id, resolution, reason });
+    return { exitCode: 0, stdout: [id], stderr: [] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runGetTask(
+  args: Record<string, unknown>,
+  getTask: GetTask,
+): Promise<HandlerResult> {
+  const id = args["id"] as string;
+  try {
+    const output = await getTask.execute({ id });
+    const useJson = args["json"] === true;
+
+    if (useJson) {
+      return {
+        exitCode: 0,
+        stdout: [JSON.stringify(output)],
+        stderr: [],
+      };
+    }
+
+    const lines: string[] = [
+      `id: ${output.id}`,
+      `title: ${output.title}`,
+      `status: ${output.status}`,
+      `agent: ${output.agent ?? ""}`,
+    ];
+
+    if (output.result !== undefined) {
+      const r = output.result;
+      if (r.workspace !== null) lines.push(`workspace: ${r.workspace}`);
+      if (r.branch !== null) lines.push(`branch: ${r.branch}`);
+      if (r.commitSha !== null) lines.push(`commit_sha: ${r.commitSha}`);
+      if (r.summary !== null) lines.push(`summary: ${r.summary}`);
+
+      if (r.evidence !== null && r.evidence !== undefined) {
+        for (const entry of r.evidence) {
+          lines.push(`${entry.command} → exit ${entry.exitCode}`);
+        }
+      }
+    }
+
+    return { exitCode: 0, stdout: lines, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
   }

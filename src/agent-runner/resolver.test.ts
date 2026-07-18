@@ -4,53 +4,52 @@ import { RegistryRunnerResolver } from "./resolver.ts";
 import { FakeRunner } from "./fake.ts";
 import { RunnerNotResolvableError } from "./port.ts";
 import type { Task } from "../domain/task.ts";
-import type { TaskContextBinding } from "./port.ts";
 
-const stubTask = (id: string): Task => ({
+const stubTask = (id: string, agent: string = "generic@1"): Task => ({
   id,
   objectiveId: "obj-1",
   title: "stub task",
   status: "pending",
   dependencies: [],
+  agent,
 });
 
 describe("src/agent-runner/resolver.ts", () => {
-  it("for(task, []) returns the default runner when no bindings", () => {
-    const defaultRunner = new FakeRunner({});
-    const resolver = new RegistryRunnerResolver({ defaultRunner });
-    const task = stubTask("t-1");
+  // (a) for(task{agent:'generic@1'}) → the registered runner
+  it("for(task{agent:'generic@1'}) returns the registered generic@1 runner", () => {
+    const runner1 = new FakeRunner({});
+    const runner2 = new FakeRunner({});
+    const resolver = new RegistryRunnerResolver({
+      runners: new Map([
+        ["generic@1", runner1],
+        ["fake@1", runner2],
+      ]),
+    });
 
-    const runner = resolver.for(task, []);
+    const result = resolver.for(stubTask("t-1", "generic@1"), []);
 
-    assert.equal(runner, defaultRunner);
+    assert.equal(result, runner1, "returns the generic@1 runner, not fake@1");
+    assert.notEqual(result, runner2);
   });
 
-  it("for(task, [repository binding]) returns the default runner", () => {
-    const defaultRunner = new FakeRunner({});
-    const resolver = new RegistryRunnerResolver({ defaultRunner });
-    const task = stubTask("t-2");
-    const context: TaskContextBinding[] = [
-      { type: "repository", resourceId: "repo-abc" },
-    ];
-
-    const runner = resolver.for(task, context);
-
-    assert.equal(runner, defaultRunner);
-  });
-
-  it("for(task, [ai_provider binding]) throws RunnerNotResolvableError with taskId and resourceId", () => {
-    const defaultRunner = new FakeRunner({});
-    const resolver = new RegistryRunnerResolver({ defaultRunner });
-    const task = stubTask("t-3");
-    const resourceId = "provider-xyz";
-    const context: TaskContextBinding[] = [{ type: "ai_provider", resourceId }];
+  // (b) for(task{agent:'ghost@9'}) → throws RunnerNotResolvableError { taskId, agent }
+  it("for(task{agent:'ghost@9'}) throws RunnerNotResolvableError carrying taskId and agent ref", () => {
+    const resolver = new RegistryRunnerResolver({
+      runners: new Map([["generic@1", new FakeRunner({})]]),
+    });
+    const task = stubTask("t-2", "ghost@9");
 
     assert.throws(
-      () => resolver.for(task, context),
+      () => resolver.for(task, []),
       (err: unknown) => {
         assert.ok(err instanceof RunnerNotResolvableError);
         assert.equal(err.taskId, task.id);
-        assert.equal(err.resourceId, resourceId);
+        // After re-key the error carries `agent`, not `resourceId`
+        assert.equal(
+          (err as unknown as { agent: string }).agent,
+          "ghost@9",
+          "error.agent is the unregistered agent ref",
+        );
         return true;
       },
     );

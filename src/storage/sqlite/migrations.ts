@@ -91,4 +91,54 @@ ALTER TABLE events ADD COLUMN payload TEXT;
 ALTER TABLE initiatives ADD COLUMN paused INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1))
 `),
   },
+  {
+    version: 5,
+    name: "epic-006-task-spec-and-results",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE tasks_new (
+  id           TEXT PRIMARY KEY,
+  objectiveId  TEXT NOT NULL REFERENCES objectives(id),
+  title        TEXT NOT NULL,
+  status       TEXT NOT NULL CHECK (status IN (
+                 'pending','running','completed','failed',
+                 'awaiting_confirmation','discarded')),
+  agent        TEXT NOT NULL DEFAULT 'generic@1',
+  instructions TEXT NOT NULL DEFAULT '',
+  ac           TEXT NOT NULL DEFAULT '[]',
+  verification TEXT
+);
+INSERT INTO tasks_new (id, objectiveId, title, status)
+  SELECT id, objectiveId, title, status FROM tasks;
+DROP TABLE tasks;
+ALTER TABLE tasks_new RENAME TO tasks;
+CREATE TABLE events_new (
+  id      TEXT PRIMARY KEY,
+  type    TEXT NOT NULL CHECK (type IN (
+            'task.created','task.ready','task.started','task.completed',
+            'task.failed','task.dependencies_changed',
+            'task.escalated','task.approved','task.rejected','task.discarded',
+            'task.blocked','agent.started','agent.progress','agent.finished'
+          )),
+  taskId  TEXT NOT NULL REFERENCES tasks(id),
+  payload TEXT
+);
+INSERT INTO events_new SELECT * FROM events;
+DROP TABLE events;
+ALTER TABLE events_new RENAME TO events;
+CREATE TABLE task_results (
+  task_id              TEXT PRIMARY KEY REFERENCES tasks(id),
+  workspace            TEXT,
+  branch               TEXT,
+  base_commit          TEXT,
+  proposal_commit      TEXT,
+  commit_sha           TEXT,
+  summary              TEXT,
+  reason               TEXT,
+  rejection_resolution TEXT,
+  rejection_reason     TEXT,
+  evidence             TEXT
+);
+`),
+  },
 ];

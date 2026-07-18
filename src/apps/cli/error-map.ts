@@ -5,8 +5,14 @@ import {
   AmbiguousNameError,
   CycleError,
   DependenciesLockedError,
+  UnknownAgentError,
+  TaskNotAwaitingConfirmationError,
+  ProposalWorkspaceMissingError,
 } from "../../app/errors.ts";
 import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
+import { ProposalMissingError } from "../../app/task/approve-task.ts";
+import { RejectionConflictError } from "../../app/task/reject-task.ts";
+import { ImportValidationError } from "../../app/resource/import-resources.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -27,7 +33,13 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof MissingFlagError ||
     err instanceof CycleError ||
     err instanceof DependenciesLockedError ||
-    err instanceof TaskNotRetryableError
+    err instanceof TaskNotRetryableError ||
+    err instanceof UnknownAgentError ||
+    err instanceof TaskNotAwaitingConfirmationError ||
+    err instanceof ProposalWorkspaceMissingError ||
+    err instanceof ProposalMissingError ||
+    err instanceof RejectionConflictError ||
+    err instanceof ImportValidationError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

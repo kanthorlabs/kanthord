@@ -3,6 +3,38 @@
 // `apps/` importing `app/` rather than reaching into `domain/` directly.
 export { CycleError } from "../domain/graph.ts";
 export { DependenciesLockedError } from "../domain/task.ts";
+export type { TaskStatus } from "../domain/task.ts";
+// Agent errors are owned by the agent-runner port; re-exported here so
+// `apps/` (which may not import adapter ports directly) can reference them.
+export { UnknownAgentError } from "../agent-runner/port.ts";
+
+import type { TaskStatus } from "../domain/task.ts";
+
+export class TaskNotAwaitingConfirmationError extends Error {
+  readonly taskId: string;
+  readonly status: TaskStatus;
+
+  constructor(taskId: string, status: TaskStatus) {
+    super(
+      `task ${taskId} is not awaiting confirmation; current status: ${status}`,
+    );
+    this.name = "TaskNotAwaitingConfirmationError";
+    this.taskId = taskId;
+    this.status = status;
+  }
+}
+
+export class ProposalWorkspaceMissingError extends Error {
+  readonly taskId: string;
+
+  constructor(taskId: string) {
+    super(
+      `DB integrity error: task ${taskId} has proposalCommit set but workspace is missing`,
+    );
+    this.name = "ProposalWorkspaceMissingError";
+    this.taskId = taskId;
+  }
+}
 
 export class UnknownReferenceError extends Error {
   readonly kind: string;

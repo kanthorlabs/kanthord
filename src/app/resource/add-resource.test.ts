@@ -118,6 +118,56 @@ describe("AddResource", () => {
     assert.equal(saved.name, "backend");
   });
 
+  test("AddResource repository with empty path defaults to ~/.kanthord/repos/<org>/<name> as absolute", async () => {
+    const repo = new FakeProjectRepository();
+    const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
+    const uc = new AddResource(repo, resolver);
+    const id = await uc.execute({
+      type: "repository",
+      projectId: PROJECT_ID,
+      name: "sandbox",
+      organization: "kanthorlabs",
+      branch: "main",
+      path: "",
+    });
+    const saved = repo.getResource(id);
+    assert.ok(saved !== undefined);
+    assert.equal(saved.type, "repository");
+    if (saved.type === "repository") {
+      assert.ok(
+        saved.path.startsWith("/"),
+        `expected absolute path, got: ${saved.path}`,
+      );
+      assert.ok(
+        saved.path.endsWith("/.kanthord/repos/kanthorlabs/sandbox"),
+        `expected path ending in /.kanthord/repos/kanthorlabs/sandbox, got: ${saved.path}`,
+      );
+    }
+  });
+
+  test("AddResource repository with relative path expands to absolute", async () => {
+    const repo = new FakeProjectRepository();
+    const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
+    const uc = new AddResource(repo, resolver);
+    const id = await uc.execute({
+      type: "repository",
+      projectId: PROJECT_ID,
+      name: "myrepo",
+      organization: "acme",
+      branch: "main",
+      path: "./x",
+    });
+    const saved = repo.getResource(id);
+    assert.ok(saved !== undefined);
+    assert.equal(saved.type, "repository");
+    if (saved.type === "repository") {
+      assert.ok(
+        saved.path.startsWith("/"),
+        `expected absolute path, got: ${saved.path}`,
+      );
+    }
+  });
+
   test("AddResource credential variant returns ULID and persists", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });

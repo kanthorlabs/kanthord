@@ -1,4 +1,5 @@
 import type { ListTasks } from "../../app/task/list-tasks.ts";
+import type { TaskStatus } from "../../app/errors.ts";
 import { toResult } from "./error-map.ts";
 import { formatTaskLine } from "./format.ts";
 
@@ -13,9 +14,10 @@ export async function runListTasks(
   listTasks: ListTasks,
 ): Promise<HandlerResult> {
   const initiativeId = args["initiative"] as string;
+  const status = args["status"] as TaskStatus | undefined;
 
   try {
-    const rows = await listTasks.execute({ initiativeId });
+    const rows = await listTasks.execute({ initiativeId, status });
 
     if (args["json"]) {
       return {

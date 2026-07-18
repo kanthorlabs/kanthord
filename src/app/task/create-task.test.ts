@@ -12,8 +12,20 @@ import type { Task } from "../../domain/task.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import type { Resource } from "../../domain/resource.ts";
 import type { Project } from "../../domain/project.ts";
+import { UnknownAgentError } from "../../agent-runner/port.ts";
+import type { AgentCatalog } from "../../agent-runner/port.ts";
 
 // --- Fakes ---
+
+class FakeAgentCatalog implements AgentCatalog {
+  readonly #allowed: Set<string>;
+  constructor(allowed: string[]) {
+    this.#allowed = new Set(allowed);
+  }
+  has(ref: string): boolean {
+    return this.#allowed.has(ref);
+  }
+}
 
 type KindResult =
   "project" | "resource" | "initiative" | "objective" | "task" | undefined;
@@ -184,13 +196,21 @@ function buildDeps() {
   const taskRepo = new FakeTaskRepository();
   const projectRepo = new FakeProjectRepository();
   projectRepo.save({ id: PROJ_ID, name: "demo" });
-  return { resolver, initiativeRepo, taskRepo, projectRepo };
+  const agentCatalog = new FakeAgentCatalog(["generic@1"]);
+  return { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog };
 }
 
 describe("CreateTask", () => {
   test("CreateTask create with no deps/context returns pending task ULID", async () => {
-    const { resolver, initiativeRepo, taskRepo, projectRepo } = buildDeps();
-    const uc = new CreateTask(taskRepo, initiativeRepo, projectRepo, resolver);
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
     const id = await uc.execute({
       objectiveId: OBJ_ID,
       title: "implement api",
@@ -208,9 +228,15 @@ describe("CreateTask", () => {
   });
 
   test("CreateTask unknown objective throws UnknownReferenceError", async () => {
-    const { initiativeRepo, taskRepo, projectRepo } = buildDeps();
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
     const resolver = new FakeReferenceResolver({}); // OBJ_ID unknown
-    const uc = new CreateTask(taskRepo, initiativeRepo, projectRepo, resolver);
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
     await assert.rejects(
       () => uc.execute({ objectiveId: "no-such", title: "x" }),
       (err: unknown) => {
@@ -222,9 +248,15 @@ describe("CreateTask", () => {
   });
 
   test("CreateTask task id as objective throws WrongTypeReferenceError", async () => {
-    const { initiativeRepo, taskRepo, projectRepo } = buildDeps();
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
     const resolver = new FakeReferenceResolver({ [TASK_ID]: "task" });
-    const uc = new CreateTask(taskRepo, initiativeRepo, projectRepo, resolver);
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
     await assert.rejects(
       () => uc.execute({ objectiveId: TASK_ID, title: "x" }),
       (err: unknown) => {
@@ -237,8 +269,15 @@ describe("CreateTask", () => {
   });
 
   test("CreateTask unknown depends-on id throws UnknownReferenceError kind task", async () => {
-    const { resolver, initiativeRepo, taskRepo, projectRepo } = buildDeps();
-    const uc = new CreateTask(taskRepo, initiativeRepo, projectRepo, resolver);
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
     await assert.rejects(
       () =>
         uc.execute({
@@ -255,7 +294,7 @@ describe("CreateTask", () => {
   });
 
   test("CreateTask context credential resource that is repository type throws WrongTypeReferenceError", async () => {
-    const { initiativeRepo, taskRepo, projectRepo } = buildDeps();
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
     // RES_REPO_ID resolves as "resource" but its actual type is "repository"
     const resolver = new FakeReferenceResolver({
       [OBJ_ID]: "objective",
@@ -269,7 +308,13 @@ describe("CreateTask", () => {
       branch: "main",
       path: "",
     });
-    const uc = new CreateTask(taskRepo, initiativeRepo, projectRepo, resolver);
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
     await assert.rejects(
       () =>
         uc.execute({
@@ -286,7 +331,7 @@ describe("CreateTask", () => {
   });
 
   test("CreateTask context resource from another project throws UnknownReferenceError", async () => {
-    const { initiativeRepo, taskRepo, projectRepo } = buildDeps();
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
     const OTHER_PROJ = "01JZZZZZZZZZZZZZZZZZZZOP0C";
     // RES_OTHER_PROJ is a valid resource but belongs to OTHER_PROJ, not PROJ_ID
     const resolver = new FakeReferenceResolver({
@@ -300,7 +345,13 @@ describe("CreateTask", () => {
       provider: "github",
       value: "secret",
     });
-    const uc = new CreateTask(taskRepo, initiativeRepo, projectRepo, resolver);
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
     await assert.rejects(
       () =>
         uc.execute({
@@ -310,6 +361,57 @@ describe("CreateTask", () => {
         }),
       (err: unknown) => {
         assert.ok(err instanceof UnknownReferenceError);
+        return true;
+      },
+    );
+  });
+
+  test("CreateTask with agent instructions ac persists all three fields", async () => {
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
+    const id = await uc.execute({
+      objectiveId: OBJ_ID,
+      title: "implement api",
+      agent: "generic@1",
+      instructions: "do X carefully",
+      ac: ["builds", "tests pass"],
+    });
+    const saved = taskRepo.get(id);
+    assert.ok(saved !== undefined);
+    assert.equal(saved.agent, "generic@1");
+    assert.equal(saved.instructions, "do X carefully");
+    assert.deepEqual(saved.ac, ["builds", "tests pass"]);
+  });
+
+  test("CreateTask with unknown agent ref throws UnknownAgentError", async () => {
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () =>
+        uc.execute({
+          objectiveId: OBJ_ID,
+          title: "x",
+          agent: "nope@1",
+          instructions: "do X",
+          ac: ["done"],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof UnknownAgentError);
+        assert.equal(err.agent, "nope@1");
         return true;
       },
     );

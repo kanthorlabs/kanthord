@@ -4,10 +4,11 @@ import { readiness } from "../../domain/graph.ts";
 import { newEvent } from "../../domain/event.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
-import type { UnitOfWork } from "../../storage/port.ts";
+import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
 import type {
   AgentRunnerResolver,
   TaskContextBinding,
+  TaskResult,
 } from "../../agent-runner/port.ts";
 
 // Narrow structural interface — avoids cascading stub changes on TaskRepository.
@@ -17,11 +18,15 @@ interface TaskStore {
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
   getTaskContext(taskId: string): Record<string, string>;
+  saveTaskResult(taskId: string, row: TaskResultRow): void;
 }
 
 type RunResult =
   | { outcome: "idle" }
-  | { outcome: "skipped" | "completed" | "failed"; taskId: string };
+  | {
+      outcome: "skipped" | "completed" | "failed" | "escalated";
+      taskId: string;
+    };
 
 type Tx1Outcome =
   | { done: true }
@@ -98,13 +103,18 @@ export class RunNextTask {
 
     // Between tx1 and tx2: resolve runner and await the run.
     let failReason: string | null = null;
-    let succeeded = false;
+    let completedResult:
+      Extract<TaskResult, { outcome: "completed" }> | undefined;
+    let escalatedResult:
+      Extract<TaskResult, { outcome: "escalated" }> | undefined;
 
     try {
       const runner = this.#resolver.for(runningTask, contextBindings);
       const result = await runner.run(runningTask, contextBindings);
       if (result.outcome === "completed") {
-        succeeded = true;
+        completedResult = result;
+      } else if (result.outcome === "escalated") {
+        escalatedResult = result;
       } else {
         failReason = result.reason;
       }
@@ -115,11 +125,25 @@ export class RunNextTask {
 
     // tx2: persist the outcome.
     this.#uow.transaction(() => {
-      if (succeeded) {
+      if (completedResult !== undefined) {
         const completedTask = transitionTask(runningTask, "completed");
         this.#store.save(completedTask);
         this.#queue.finish(jobId, "completed");
         this.#feed.append(newEvent("task.completed", { taskId }));
+
+        // Persist the task result row so `get task` can display it.
+        this.#store.saveTaskResult(taskId, {
+          workspace: completedResult.workspace ?? null,
+          branch: completedResult.branch ?? null,
+          baseCommit: null,
+          proposalCommit: null,
+          commitSha: completedResult.commitSha ?? null,
+          summary: completedResult.summary ?? null,
+          reason: null,
+          rejectionResolution: null,
+          rejectionReason: null,
+          evidence: completedResult.evidence ?? null,
+        });
 
         // Re-scan the initiative for newly-ready tasks.
         const refreshed = initiativeId
@@ -133,6 +157,34 @@ export class RunNextTask {
             }
           }
         }
+      } else if (escalatedResult !== undefined) {
+        const escalatedTask = transitionTask(
+          runningTask,
+          "awaiting_confirmation",
+        );
+        this.#store.save(escalatedTask);
+        this.#queue.finish(jobId, "completed");
+        const payload: Record<string, string> = {
+          reason: escalatedResult.reason,
+          baseCommit: escalatedResult.baseCommit,
+          summary: escalatedResult.summary,
+        };
+        if (escalatedResult.proposalCommit !== undefined) {
+          payload["proposalCommit"] = escalatedResult.proposalCommit;
+        }
+        this.#feed.append(newEvent("task.escalated", { taskId, payload }));
+        this.#store.saveTaskResult(taskId, {
+          workspace: escalatedResult.workspace,
+          branch: escalatedResult.branch,
+          baseCommit: escalatedResult.baseCommit,
+          proposalCommit: escalatedResult.proposalCommit ?? null,
+          commitSha: null,
+          summary: escalatedResult.summary,
+          reason: escalatedResult.reason,
+          rejectionResolution: null,
+          rejectionReason: null,
+          evidence: null,
+        });
       } else {
         const reason = failReason ?? "unknown failure";
         const failedTask = transitionTask(runningTask, "failed");
@@ -144,8 +196,8 @@ export class RunNextTask {
       }
     });
 
-    return succeeded
-      ? { outcome: "completed", taskId }
-      : { outcome: "failed", taskId };
+    if (completedResult !== undefined) return { outcome: "completed", taskId };
+    if (escalatedResult !== undefined) return { outcome: "escalated", taskId };
+    return { outcome: "failed", taskId };
   }
 }

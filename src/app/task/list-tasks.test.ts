@@ -150,4 +150,54 @@ describe("ListTasks", () => {
     assert.equal(rows[0]!.state, "ready");
     assert.deepEqual(rows[0]!.waiting, []);
   });
+
+  // Story 07 T2 (i) — status filter
+  test("ListTasks with status filter returns only awaiting_confirmation tasks (i)", async () => {
+    const TASK_AWAIT = "01JZZZZZZZZZZZZZZZZZZTSKAW1";
+    const TASK_DONE = "01JZZZZZZZZZZZZZZZZZZTSKAW2";
+    const taskRepo = new FakeTaskRepository();
+    taskRepo.seed({
+      id: TASK_AWAIT,
+      objectiveId: OBJ_ID,
+      title: "escalated task",
+      status: "awaiting_confirmation",
+      dependencies: [],
+    });
+    taskRepo.seed({
+      id: TASK_DONE,
+      objectiveId: OBJ_ID,
+      title: "completed task",
+      status: "completed",
+      dependencies: [],
+    });
+    taskRepo.seed({
+      id: TASK_API,
+      objectiveId: OBJ_ID,
+      title: "pending task",
+      status: "pending",
+      dependencies: [],
+    });
+
+    const useCase = new ListTasks(taskRepo);
+    const rows = await useCase.execute({
+      initiativeId: INIT_ID,
+      status: "awaiting_confirmation",
+    });
+
+    assert.equal(
+      rows.length,
+      1,
+      "filter must return only awaiting_confirmation tasks",
+    );
+    assert.equal(
+      rows[0]!.id,
+      TASK_AWAIT,
+      "must return the awaiting_confirmation task",
+    );
+    assert.equal(
+      rows[0]!.status,
+      "awaiting_confirmation",
+      "returned task must have correct status",
+    );
+  });
 });

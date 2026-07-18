@@ -4,6 +4,8 @@ import type {
   ProjectRepository,
   ReferenceResolver,
 } from "../../storage/port.ts";
+import type { AgentCatalog } from "../../agent-runner/port.ts";
+import { UnknownAgentError } from "../../agent-runner/port.ts";
 import { newTask } from "../../domain/task.ts";
 import { UnknownReferenceError, WrongTypeReferenceError } from "../errors.ts";
 
@@ -12,17 +14,20 @@ export class CreateTask {
   readonly #initiativeRepo: InitiativeRepository;
   readonly #projectRepo: ProjectRepository;
   readonly #resolver: ReferenceResolver;
+  readonly #agentCatalog: AgentCatalog | undefined;
 
   constructor(
     taskRepo: TaskRepository,
     initiativeRepo: InitiativeRepository,
     projectRepo: ProjectRepository,
     resolver: ReferenceResolver,
+    agentCatalog?: AgentCatalog,
   ) {
     this.#taskRepo = taskRepo;
     this.#initiativeRepo = initiativeRepo;
     this.#projectRepo = projectRepo;
     this.#resolver = resolver;
+    this.#agentCatalog = agentCatalog;
   }
 
   async execute(input: {
@@ -30,6 +35,10 @@ export class CreateTask {
     title: string;
     dependencies?: string[];
     context?: Record<string, string>;
+    agent?: string;
+    instructions?: string;
+    ac?: string[];
+    verification?: string[];
   }): Promise<string> {
     // 1. Validate objectiveId kind
     const objKind = this.#resolver.resolveKind(input.objectiveId);
@@ -84,11 +93,21 @@ export class CreateTask {
       }
     }
 
-    // 5. Persist task and optional context
+    // 5. Validate agent ref against catalog (when catalog is provided)
+    const agentRef = input.agent ?? "generic@1";
+    if (this.#agentCatalog !== undefined && !this.#agentCatalog.has(agentRef)) {
+      throw new UnknownAgentError(agentRef);
+    }
+
+    // 6. Persist task and optional context
     const task = newTask({
       objectiveId: input.objectiveId,
       title: input.title,
       dependencies: input.dependencies,
+      agent: agentRef,
+      instructions: input.instructions ?? input.title,
+      ac: input.ac ?? [input.title],
+      verification: input.verification,
     });
     this.#taskRepo.save(task);
     if (input.context !== undefined && Object.keys(input.context).length > 0) {

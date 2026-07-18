@@ -6,16 +6,6 @@ export async function runDaemon(
   args: Record<string, unknown>,
   buildDaemon: DaemonFactory,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
-  // Validate --runner
-  const runner = (args["runner"] as string | undefined) ?? "fake";
-  if (runner !== "fake") {
-    return {
-      exitCode: 1,
-      stdout: [],
-      stderr: [`error: unknown runner: ${runner}`],
-    };
-  }
-
   // Validate --poll-interval (must be a positive integer string when provided)
   const pollIntervalRaw = args["poll-interval"] as string | undefined;
   let pollIntervalMs: number | undefined;
@@ -51,7 +41,11 @@ export async function runDaemon(
   process.on("SIGINT", sigintHandler);
   try {
     const result = await daemon.execute({ untilIdle, pollIntervalMs });
-    return { exitCode: result.exitCode, stdout: [], stderr: [] };
+    const stderr: string[] =
+      result.escalatedCount > 0
+        ? [`${result.escalatedCount} task(s) awaiting confirmation`]
+        : [];
+    return { exitCode: result.exitCode, stdout: [], stderr };
   } finally {
     process.removeListener("SIGINT", sigintHandler);
   }

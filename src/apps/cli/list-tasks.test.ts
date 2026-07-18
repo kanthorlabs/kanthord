@@ -1,6 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { runListTasks } from "./list-tasks.ts";
+import { dispatch } from "./router.ts";
+import type { RouterDeps } from "./router.ts";
 import type { TaskRepository } from "../../storage/port.ts";
 import type { Task } from "../../domain/task.ts";
 import { ListTasks } from "../../app/task/list-tasks.ts";
@@ -47,6 +49,95 @@ class FakeTaskRepository implements TaskRepository {
     return undefined;
   }
 }
+
+// ---------------------------------------------------------------------------
+// B1 regression — `list task --status` end-to-end wiring through dispatch
+// ---------------------------------------------------------------------------
+//
+// Two problems prevent end-to-end status filtering:
+//   1. The "list task" COMMANDS entry in router.ts has no `status` parse option
+//      → parseArgs strict mode rejects --status → exit 1 before handler is called.
+//   2. runListTasks never reads args["status"] and never forwards it to
+//      listTasks.execute(), so even if the flag were parsed it would be ignored.
+//
+// This test dispatches through the real router path.
+
+const AWAITING_TASK: Task = {
+  id: "01JWZYQR00000000000000000E",
+  objectiveId: "01JWZYQR00000000000000000D",
+  title: "task awaiting human",
+  status: "awaiting_confirmation",
+  dependencies: [],
+};
+
+const PENDING_TASK: Task = {
+  id: "01JWZYQR00000000000000000F",
+  objectiveId: "01JWZYQR00000000000000000D",
+  title: "pending work item",
+  status: "pending",
+  dependencies: [],
+};
+
+const INITIATIVE_ID_B1 = "01JWZYQR00000000000000000G";
+
+class FakeTaskRepositoryB1 implements TaskRepository {
+  save(_task: Task): void {}
+  saveAll(_tasks: Task[]): void {}
+  get(_id: string): Task | undefined {
+    return undefined;
+  }
+  listByInitiative(_initiativeId: string): Task[] {
+    return [AWAITING_TASK, PENDING_TASK];
+  }
+  listTasksByObjective(_objectiveId: string): Task[] {
+    return [];
+  }
+  saveTaskContext(_taskId: string, _context: Record<string, string>): void {}
+  getTaskContext(_taskId: string): Record<string, string> {
+    return {};
+  }
+  addDependency(_taskId: string, _dependsOn: string): void {}
+  removeDependency(_taskId: string, _dependsOn: string): void {}
+  getInitiativeId(_taskId: string): string | undefined {
+    return undefined;
+  }
+}
+
+test("(B1 regression) dispatch list task --status awaiting_confirmation exits 0 and returns only matching tasks", async () => {
+  const deps = {
+    listTasks: new ListTasks(new FakeTaskRepositoryB1()),
+  } as unknown as RouterDeps;
+
+  const result = await dispatch(
+    [
+      "list",
+      "task",
+      "--initiative",
+      INITIATIVE_ID_B1,
+      "--status",
+      "awaiting_confirmation",
+    ],
+    deps,
+  );
+
+  // Currently exits 1: "list task" parse options lack `status`, so parseArgs
+  // strict mode rejects --status as an unknown flag.
+  assert.equal(
+    result.exitCode,
+    0,
+    `dispatch must exit 0 for list task --status, got exitCode=${result.exitCode}, stderr=${JSON.stringify(result.stderr)}`,
+  );
+
+  const out = result.stdout.join("\n");
+  assert.ok(
+    out.includes("task awaiting human"),
+    `stdout must include the awaiting_confirmation task title, got: ${out}`,
+  );
+  assert.ok(
+    !out.includes("pending work item"),
+    `stdout must NOT include the pending task (status filter must work), got: ${out}`,
+  );
+});
 
 describe("runListTasks", () => {
   test("default output shows ready/blocked with dependency titles on stdout", async () => {

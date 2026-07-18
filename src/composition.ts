@@ -1,5 +1,6 @@
 // Composition factory — extracted from main.ts so tests can instantiate deps
 // without launching a process. Only this file (and main.ts) import concrete adapters.
+import { dirname, join } from "node:path";
 import type { RouterDeps } from "./apps/cli/router.ts";
 import { openDatabase } from "./storage/sqlite/open.ts";
 import { SqliteStatusStore } from "./storage/sqlite/sqlite-status-store.ts";
@@ -13,6 +14,7 @@ import { SqliteTaskRepository } from "./storage/sqlite/sqlite-task-repository.ts
 import { SqliteReferenceResolver } from "./storage/sqlite/reference-resolver.ts";
 import { SqliteTransactor } from "./storage/sqlite/sqlite-transactor.ts";
 import { SqliteEventFeed } from "./events/sqlite.ts";
+import { newEvent } from "./domain/event.ts";
 import { CreateProject } from "./app/project/create-project.ts";
 import { RenameProject } from "./app/project/rename-project.ts";
 import { GetProject } from "./app/project/get-project.ts";
@@ -27,6 +29,7 @@ import { RenameObjective } from "./app/objective/rename-objective.ts";
 import { FindObjective } from "./app/objective/find-objective.ts";
 import { AddResource } from "./app/resource/add-resource.ts";
 import { FindResource } from "./app/resource/find-resource.ts";
+import { ImportResources } from "./app/resource/import-resources.ts";
 import { CreateTask } from "./app/task/create-task.ts";
 import { AddDependency } from "./app/task/add-dependency.ts";
 import { RemoveDependency } from "./app/task/remove-dependency.ts";
@@ -34,19 +37,36 @@ import { ListTasks } from "./app/task/list-tasks.ts";
 import { RetryTask } from "./app/task/retry-task.ts";
 import { SqliteJobQueue } from "./queue/sqlite.ts";
 import { SqliteUnitOfWork } from "./storage/sqlite/sqlite-unit-of-work.ts";
+import type { AgentRunner } from "./agent-runner/port.ts";
 import { FakeRunner } from "./agent-runner/fake.ts";
+import { PiAgentRunner } from "./agent-runner/pi.ts";
+import {
+  PiProviderSessionFactory,
+  type ProviderSessionFactory,
+} from "./agent-runner/pi-session.ts";
+import { genericProfile } from "./agent-runner/pi-profile.ts";
 import { RegistryRunnerResolver } from "./agent-runner/resolver.ts";
+import { LocalWorkspaceManager } from "./workspace/local.ts";
+import { RepoInstructionLoader } from "./instruction/repo.ts";
 import { EnqueueReadyTasks } from "./app/task/enqueue-ready-tasks.ts";
 import { RecoverInterruptedTasks } from "./app/task/recover-interrupted-tasks.ts";
 import { RunNextTask } from "./app/task/run-next-task.ts";
 import { RunDaemon } from "./app/task/run-daemon.ts";
 import { ListEvents } from "./app/task/list-events.ts";
+import { GetTask } from "./app/task/get-task.ts";
+import { ApproveTask } from "./app/task/approve-task.ts";
+import { RejectTask } from "./app/task/reject-task.ts";
+import { promoteProposal } from "./workspace/local.ts";
+import { getOAuthProvider } from "@earendil-works/pi-ai/oauth";
 
 /**
  * Wire all concrete adapters and return the `RouterDeps` bundle.
  * Called once at program start (and by integration tests).
  */
-export function buildDeps(dbPath: string): RouterDeps {
+export function buildDeps(
+  dbPath: string,
+  opts?: { maxTurns?: number; sessionFactory?: ProviderSessionFactory },
+): RouterDeps {
   const db = openDatabase(dbPath);
   const migrator = new SqliteMigrator(db, MIGRATIONS);
   const store = new SqliteStatusStore(db, dbPath);
@@ -87,11 +107,20 @@ export function buildDeps(dbPath: string): RouterDeps {
   const findObjective = new FindObjective(initiativeRepository);
   const addResource = new AddResource(projectRepository, referenceResolver);
   const findResource = new FindResource(projectRepository);
+  const importResources = new ImportResources(
+    projectRepository,
+    referenceResolver,
+    unitOfWork,
+  );
+  const agentCatalog = {
+    has: (ref: string) => ref === "generic@1" || ref === "fake@1",
+  };
   const createTask = new CreateTask(
     taskRepository,
     initiativeRepository,
     projectRepository,
     referenceResolver,
+    agentCatalog,
   );
   const addDependency = new AddDependency(
     taskRepository,
@@ -109,6 +138,20 @@ export function buildDeps(dbPath: string): RouterDeps {
   );
   const listTasks = new ListTasks(taskRepository);
   const listEvents = new ListEvents(events);
+  const getTask = new GetTask(taskRepository, taskRepository);
+  const approveTask = new ApproveTask(
+    taskRepository,
+    jobQueue,
+    events,
+    unitOfWork,
+    promoteProposal,
+  );
+  const rejectTask = new RejectTask(
+    taskRepository,
+    jobQueue,
+    events,
+    unitOfWork,
+  );
   const retryTask = new RetryTask(
     taskRepository,
     jobQueue,
@@ -119,7 +162,52 @@ export function buildDeps(dbPath: string): RouterDeps {
 
   function buildDaemon(failTaskIds: string[]): RunDaemon {
     const fakeRunner = new FakeRunner({ failTaskIds });
-    const resolver = new RegistryRunnerResolver({ defaultRunner: fakeRunner });
+
+    // Save updated credential value (for OAuth refresh) directly into the resources table.
+    const saveCredentialValue = (credentialId: string, value: string): void => {
+      const existing = projectRepository.getResource(credentialId);
+      if (!existing) return;
+      const { id: _id, type: _type, name: _name, ...attrs } = existing;
+      const newAttrs = JSON.stringify({ ...attrs, value });
+      db.prepare("UPDATE resources SET attributes = ? WHERE id = ?").run(
+        newAttrs,
+        credentialId,
+      );
+    };
+
+    const workspaceRoot =
+      process.env["KANTHORD_WORKSPACE_ROOT"] ??
+      join(dirname(dbPath), "workspaces");
+
+    const sessions =
+      opts?.sessionFactory ??
+      new PiProviderSessionFactory({ saveCredentialValue });
+    const workspaces = new LocalWorkspaceManager({ root: workspaceRoot });
+    const piRunner = new PiAgentRunner({
+      sessions,
+      workspaces,
+      newInstructionLoader: (dir) => new RepoInstructionLoader(dir),
+      getResource: (id) => projectRepository.getResource(id),
+      profiles: new Map([["generic@1", genericProfile]]),
+      maxTurns: opts?.maxTurns,
+      emit: (taskId, type, payload) =>
+        events.append(newEvent(type, { taskId, payload })),
+      getPriorRejection: (taskId) => {
+        const result = taskRepository.getTaskResult(taskId);
+        if (!result?.rejectionReason) return undefined;
+        return {
+          reason: result.rejectionReason,
+          summary: result.summary ?? undefined,
+          proposalCommit: result.proposalCommit ?? undefined,
+        };
+      },
+    });
+
+    const runners = new Map<string, AgentRunner>([
+      ["generic@1", piRunner],
+      ["fake@1", fakeRunner],
+    ]);
+    const resolver = new RegistryRunnerResolver({ runners });
     const enqueueReady = new EnqueueReadyTasks(
       initiativeRepository,
       taskRepository,
@@ -148,6 +236,23 @@ export function buildDeps(dbPath: string): RouterDeps {
     });
   }
 
+  const login = {
+    getProvider: (id: string) => getOAuthProvider(id),
+    saveCredential: async (opts: {
+      projectId: string;
+      name: string;
+      provider: string;
+      value: string;
+    }) =>
+      addResource.execute({
+        type: "credential",
+        projectId: opts.projectId,
+        name: opts.name,
+        provider: opts.provider,
+        value: opts.value,
+      }),
+  };
+
   return {
     migrateDb,
     getDbStatus,
@@ -170,7 +275,12 @@ export function buildDeps(dbPath: string): RouterDeps {
     removeDependency,
     listTasks,
     retryTask,
+    getTask,
+    approveTask,
+    rejectTask,
     buildDaemon,
     listEvents,
+    importResources,
+    login,
   };
 }

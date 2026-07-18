@@ -1,0 +1,296 @@
+/**
+ * Story 06 T2 — runGetTask CLI handler
+ *
+ * Unit tests for `runGetTask`: output formatting for completed tasks with/without
+ * evidence, result-less tasks, JSON mode, and error path.
+ */
+
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+import { runGetTask } from "./task.ts";
+import { GetTask } from "../../app/task/get-task.ts";
+import type { Task } from "../../domain/task.ts";
+import type { TaskResultRow } from "../../storage/port.ts";
+
+// ---------------------------------------------------------------------------
+// Shared result type so r.stdout is known to be string[] even before the
+// seam exists (runGetTask is `any` until task.ts exports it).
+// ---------------------------------------------------------------------------
+
+type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
+
+// ---------------------------------------------------------------------------
+// Fakes
+// ---------------------------------------------------------------------------
+
+const TASK_ID = "01JZZZZZZZZZZZZZZZZZZZGSK1";
+
+const COMPLETED_TASK: Task = {
+  id: TASK_ID,
+  objectiveId: "01JZZZZZZZZZZZZZZZZZZZOBJ1",
+  title: "add a title line to README",
+  status: "completed",
+  dependencies: [],
+  agent: "generic@1",
+  instructions: "Edit README.md",
+  ac: ["README.md begins with H1"],
+};
+
+const RESULT_WITH_EVIDENCE: TaskResultRow = {
+  workspace: "/ws/task-001",
+  branch: "kanthord/task-001",
+  baseCommit: "base123",
+  proposalCommit: null,
+  commitSha: "deadbeef",
+  summary: "agent added the heading",
+  reason: null,
+  rejectionResolution: null,
+  rejectionReason: null,
+  evidence: [
+    { command: "npm test", exitCode: 0, output: "all passed" },
+    { command: "npm run lint", exitCode: 0, output: "clean" },
+  ],
+};
+
+const RESULT_NO_EVIDENCE: TaskResultRow = {
+  workspace: "/ws/task-002",
+  branch: "kanthord/task-002",
+  baseCommit: "base456",
+  proposalCommit: null,
+  commitSha: "cafebabe",
+  summary: "done",
+  reason: null,
+  rejectionResolution: null,
+  rejectionReason: null,
+  evidence: null,
+};
+
+interface FakeTaskSource {
+  get(id: string): Task | undefined;
+}
+interface FakeResultSource {
+  getTaskResult(taskId: string): TaskResultRow | undefined;
+}
+
+class MemTaskSource implements FakeTaskSource {
+  readonly #tasks: Map<string, Task>;
+  constructor(tasks: Task[]) {
+    this.#tasks = new Map(tasks.map((t) => [t.id, t]));
+  }
+  get(id: string): Task | undefined {
+    return this.#tasks.get(id);
+  }
+}
+
+class MemResultSource implements FakeResultSource {
+  readonly #results: Map<string, TaskResultRow>;
+  constructor(results: Map<string, TaskResultRow>) {
+    this.#results = results;
+  }
+  getTaskResult(taskId: string): TaskResultRow | undefined {
+    return this.#results.get(taskId);
+  }
+}
+
+function makeGetTask(
+  task: Task | undefined,
+  result: TaskResultRow | undefined,
+): GetTask {
+  const tasks = new MemTaskSource(task !== undefined ? [task] : []);
+  const results = new MemResultSource(
+    task !== undefined && result !== undefined
+      ? new Map([[task.id, result]])
+      : new Map(),
+  );
+  return new GetTask(tasks, results);
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe("runGetTask", () => {
+  test("runGetTask with result prints id, title, status, agent, workspace, branch, commit_sha, summary lines", async () => {
+    const getTask = makeGetTask(COMPLETED_TASK, RESULT_WITH_EVIDENCE);
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0, "exit 0 on success");
+
+    const stdout = r.stdout;
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("id:")),
+      "stdout must have id: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("title:")),
+      "stdout must have title: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("status:")),
+      "stdout must have status: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("agent:")),
+      "stdout must have agent: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("workspace:")),
+      "stdout must have workspace: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("branch:")),
+      "stdout must have branch: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("commit_sha:")),
+      "stdout must have commit_sha: line",
+    );
+    assert.ok(
+      stdout.some((l: string) => l.startsWith("summary:")),
+      "stdout must have summary: line",
+    );
+
+    // Values must match the result.
+    assert.ok(
+      stdout.some(
+        (l: string) => l === `workspace: ${RESULT_WITH_EVIDENCE.workspace!}`,
+      ),
+      "workspace value must match",
+    );
+    assert.ok(
+      stdout.some(
+        (l: string) => l === `commit_sha: ${RESULT_WITH_EVIDENCE.commitSha!}`,
+      ),
+      "commit_sha value must match",
+    );
+  });
+
+  test("runGetTask with evidence appends one command → exit code line per evidence entry", async () => {
+    const getTask = makeGetTask(COMPLETED_TASK, RESULT_WITH_EVIDENCE);
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+
+    // Evidence entries: "npm test → exit 0" and "npm run lint → exit 0"
+    assert.ok(
+      r.stdout.some((l: string) => l === "npm test → exit 0"),
+      `expected 'npm test → exit 0' in stdout; got: ${JSON.stringify(r.stdout)}`,
+    );
+    assert.ok(
+      r.stdout.some((l: string) => l === "npm run lint → exit 0"),
+      "expected 'npm run lint → exit 0' in stdout",
+    );
+  });
+
+  test("runGetTask --json carries result object with full evidence array including outputs", async () => {
+    const getTask = makeGetTask(COMPLETED_TASK, RESULT_WITH_EVIDENCE);
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, json: true },
+      getTask,
+    );
+
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.stdout.length, 1, "--json must produce one stdout line");
+
+    const parsed = JSON.parse(r.stdout[0]!) as {
+      id: string;
+      title: string;
+      status: string;
+      agent: string;
+      result: {
+        workspace: string;
+        branch: string;
+        commitSha: string;
+        summary: string;
+        evidence: Array<{ command: string; exitCode: number; output: string }>;
+      };
+    };
+
+    assert.equal(parsed.id, TASK_ID);
+    assert.equal(parsed.status, "completed");
+    assert.ok(parsed.result !== undefined, "result must be in JSON");
+    assert.equal(parsed.result.commitSha, "deadbeef");
+    assert.ok(Array.isArray(parsed.result.evidence), "evidence must be array");
+    assert.equal(parsed.result.evidence.length, 2);
+    assert.equal(
+      parsed.result.evidence[0]!.output,
+      "all passed",
+      "full output included",
+    );
+  });
+
+  test("runGetTask result-less task prints id, title, status, agent but no workspace or branch lines", async () => {
+    const getTask = makeGetTask(COMPLETED_TASK, undefined);
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      r.stdout.some((l: string) => l.startsWith("id:")),
+      "id: line present",
+    );
+    assert.ok(
+      r.stdout.some((l: string) => l.startsWith("title:")),
+      "title: line present",
+    );
+    assert.ok(
+      r.stdout.some((l: string) => l.startsWith("status:")),
+      "status: line present",
+    );
+    assert.ok(
+      r.stdout.some((l: string) => l.startsWith("agent:")),
+      "agent: line present",
+    );
+
+    assert.ok(
+      !r.stdout.some((l: string) => l.startsWith("workspace:")),
+      "no workspace: line for result-less task",
+    );
+    assert.ok(
+      !r.stdout.some((l: string) => l.startsWith("commit_sha:")),
+      "no commit_sha: line for result-less task",
+    );
+  });
+
+  test("runGetTask completed result without evidence prints no evidence lines", async () => {
+    const getTask = makeGetTask(COMPLETED_TASK, RESULT_NO_EVIDENCE);
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+
+    // workspace/branch/commit_sha/summary lines must be present.
+    assert.ok(
+      r.stdout.some((l: string) => l.startsWith("workspace:")),
+      "workspace: line present",
+    );
+    assert.ok(
+      r.stdout.some((l: string) => l.startsWith("commit_sha:")),
+      "commit_sha: line present",
+    );
+
+    // No evidence-style lines (format: "<command> → exit <code>").
+    const evidenceLines = r.stdout.filter((l: string) =>
+      l.includes(" → exit "),
+    );
+    assert.equal(
+      evidenceLines.length,
+      0,
+      `no evidence lines expected; found: ${JSON.stringify(evidenceLines)}`,
+    );
+  });
+
+  test("runGetTask unknown id returns exit 1 with one error line starting error:", async () => {
+    const getTask = makeGetTask(undefined, undefined);
+    const r: HandlerResult = await runGetTask(
+      { id: "01JZZZZZZZZZZZZZZZZZZZUNK1" },
+      getTask,
+    );
+
+    assert.equal(r.exitCode, 1, "exit 1 for unknown id");
+    assert.equal(r.stderr.length, 1, "exactly one stderr line");
+    assert.ok(
+      r.stderr[0]!.startsWith("error:"),
+      `stderr must start with 'error:': ${r.stderr[0]}`,
+    );
+    assert.deepEqual(r.stdout, [], "stdout empty on error");
+  });
+});

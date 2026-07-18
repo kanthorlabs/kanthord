@@ -229,7 +229,12 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     label: "create task",
     fn: () =>
       runCreateTask(
-        { objective: OBJECTIVE_SCOPE, title: "implement api" },
+        {
+          objective: OBJECTIVE_SCOPE,
+          title: "implement api",
+          instructions: "Implement the API",
+          ac: "API implemented",
+        },
         new CreateTask(
           fakeTaskRepo,
           fakeInitiativeRepoForTask,

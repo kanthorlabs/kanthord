@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { resolve, join, isAbsolute } from "node:path";
 import type {
   ProjectRepository,
   ReferenceResolver,
@@ -83,13 +85,27 @@ export class AddResource {
     let resource: Resource;
 
     if (input.type === "repository") {
+      let repoPath: string;
+      if (input.path === "") {
+        repoPath = join(
+          homedir(),
+          ".kanthord",
+          "repos",
+          input.organization,
+          input.name,
+        );
+      } else if (!isAbsolute(input.path)) {
+        repoPath = resolve(input.path);
+      } else {
+        repoPath = input.path;
+      }
       resource = {
         id,
         type: "repository",
         name: input.name,
         organization: input.organization,
         branch: input.branch,
-        path: input.path,
+        path: repoPath,
       };
     } else if (input.type === "credential") {
       resource = {

@@ -61,9 +61,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 4 and creates exactly the nine core tables", () => {
+test("migrates to version 5 and creates exactly ten core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 4);
+    assert.equal(userVersion(db), 5);
     assert.deepEqual(userTables(db), [
       "events",
       "initiatives",
@@ -73,6 +73,7 @@ test("migrates to version 4 and creates exactly the nine core tables", () => {
       "resources",
       "task_context",
       "task_dependencies",
+      "task_results",
       "tasks",
     ]);
   });
@@ -80,7 +81,7 @@ test("migrates to version 4 and creates exactly the nine core tables", () => {
 
 // ── (b) columns per table ────────────────────────────────────────────────────
 
-test("schema columns match locked DDL for all eight tables", () => {
+test("schema columns match locked DDL for all ten tables", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "projects"), ["id", "name"]);
     assert.deepEqual(columnNames(db, "resources"), [
@@ -106,6 +107,10 @@ test("schema columns match locked DDL for all eight tables", () => {
       "objectiveId",
       "title",
       "status",
+      "agent",
+      "instructions",
+      "ac",
+      "verification",
     ]);
     assert.deepEqual(columnNames(db, "task_dependencies"), [
       "taskId",
@@ -118,6 +123,24 @@ test("schema columns match locked DDL for all eight tables", () => {
       "type",
       "taskId",
       "payload",
+    ]);
+    assert.deepEqual(columnNames(db, "task_context"), [
+      "task_id",
+      "type",
+      "resource_id",
+    ]);
+    assert.deepEqual(columnNames(db, "task_results"), [
+      "task_id",
+      "workspace",
+      "branch",
+      "base_commit",
+      "proposal_commit",
+      "commit_sha",
+      "summary",
+      "reason",
+      "rejection_resolution",
+      "rejection_reason",
+      "evidence",
     ]);
   });
 });
@@ -239,7 +262,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 4);
+    assert.equal(second.version, 5);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -276,5 +299,55 @@ test("initiatives.paused CHECK constraint rejects value 2", () => {
         "INSERT INTO initiatives(id, projectId, name, paused) VALUES (?, ?, ?, ?)",
       ).run("init-bad", "proj-p", "I3", 2);
     }, "paused = 2 should be rejected by CHECK constraint");
+  });
+});
+
+// ── (i) migration 5 — new task statuses ─────────────────────────────────────
+
+test("migration 5 allows awaiting_confirmation and discarded as task statuses", () => {
+  withMigratedDb((db) => {
+    const { objectiveId } = insertChain(db);
+
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO tasks(id, objectiveId, title, status) VALUES (?, ?, ?, ?)",
+      ).run("t-awc", objectiveId, "T-AWC", "awaiting_confirmation");
+    }, "awaiting_confirmation must be a valid status after migration 5");
+
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO tasks(id, objectiveId, title, status) VALUES (?, ?, ?, ?)",
+      ).run("t-disc", objectiveId, "T-DISC", "discarded");
+    }, "discarded must be a valid status after migration 5");
+  });
+});
+
+// ── (j) migration 5 — pre-existing row defaults ──────────────────────────────
+
+test("migration 5 pre-existing task row reads back with agent generic@1, instructions empty, ac empty array, verification null", () => {
+  withMigratedDb((db) => {
+    const { objectiveId } = insertChain(db);
+
+    // insert a task using only the pre-migration-5 columns (no agent/instructions/ac/verification supplied)
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, status) VALUES (?, ?, ?, ?)",
+    ).run("task-pre5", objectiveId, "Old task", "pending");
+
+    type Pre5Row = {
+      agent: string;
+      instructions: string;
+      ac: string;
+      verification: string | null;
+    };
+    const row = db
+      .prepare(
+        "SELECT agent, instructions, ac, verification FROM tasks WHERE id = ?",
+      )
+      .get("task-pre5") as Pre5Row;
+
+    assert.equal(row.agent, "generic@1");
+    assert.equal(row.instructions, "");
+    assert.equal(row.ac, "[]");
+    assert.equal(row.verification, null);
   });
 });

@@ -9,7 +9,7 @@ import { dispatch } from "./router.ts";
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 /**
- * Sets up a fresh migrated DB with one ready task.
+ * Sets up a fresh migrated DB with one ready task (agent: fake@1).
  * Returns deps, INITIATIVE id, and TASK_ID.
  */
 async function setupReadyTask(dbPath: string) {
@@ -38,7 +38,20 @@ async function setupReadyTask(dbPath: string) {
   assert.match(OBJECTIVE, ULID_RE);
 
   const r4 = await dispatch(
-    ["create", "task", "--objective", OBJECTIVE, "--title", "ready task"],
+    [
+      "create",
+      "task",
+      "--objective",
+      OBJECTIVE,
+      "--title",
+      "ready task",
+      "--instructions",
+      "Complete the ready task",
+      "--ac",
+      "task is done",
+      "--agent",
+      "fake@1",
+    ],
     deps,
   );
   assert.equal(r4.exitCode, 0, "create task");
@@ -48,15 +61,13 @@ async function setupReadyTask(dbPath: string) {
   return { deps, INITIATIVE, TASK_ID };
 }
 
-test("daemon run --runner fake --until-idle: exits 0 and task is completed", async () => {
+// (c) fake@1 task runs end to end via daemon run --until-idle (no --runner flag)
+test("daemon run --until-idle: fake@1 task exits 0 and task is completed", async () => {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-daemon-a-"));
   try {
     const { deps, INITIATIVE } = await setupReadyTask(join(dir, "kanthord.db"));
 
-    const result = await dispatch(
-      ["daemon", "run", "--runner", "fake", "--until-idle"],
-      deps,
-    );
+    const result = await dispatch(["daemon", "run", "--until-idle"], deps);
     assert.equal(result.exitCode, 0, "daemon run exits 0");
 
     const list = await dispatch(
@@ -73,22 +84,30 @@ test("daemon run --runner fake --until-idle: exits 0 and task is completed", asy
   }
 });
 
-test("daemon run --runner nope: exits 1 with 'error: unknown runner: nope'", async () => {
+// (d) daemon run --runner fake → exit 1 (--runner flag removed / superseded)
+test("daemon run --runner fake: exits 1 (--runner flag removed in T2)", async () => {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-daemon-b-"));
   try {
     const deps = buildDeps(join(dir, "kanthord.db"));
     await dispatch(["db", "migrate"], deps);
 
     const result = await dispatch(
-      ["daemon", "run", "--runner", "nope", "--until-idle"],
+      ["daemon", "run", "--runner", "fake", "--until-idle"],
       deps,
     );
-    assert.equal(result.exitCode, 1, "exits 1 for unknown runner");
-    assert.equal(result.stderr.length, 1, "exactly one stderr line");
     assert.equal(
-      result.stderr[0],
-      "error: unknown runner: nope",
-      "exact error message for unknown runner",
+      result.exitCode,
+      1,
+      "exits 1 when --runner flag is used (flag removed)",
+    );
+    assert.ok(result.stderr.length > 0, "at least one stderr line");
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      "error line starts with 'error:'",
+    );
+    assert.ok(
+      result.stderr[0]!.toLowerCase().includes("runner"),
+      `error mentions 'runner', got: "${result.stderr[0]}"`,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -103,7 +122,7 @@ test("daemon run --fail <id>: scripted task fails, exits 1", async () => {
     );
 
     const result = await dispatch(
-      ["daemon", "run", "--runner", "fake", "--fail", TASK_ID, "--until-idle"],
+      ["daemon", "run", "--fail", TASK_ID, "--until-idle"],
       deps,
     );
     assert.equal(result.exitCode, 1, "exits 1 when a task fails");
@@ -130,15 +149,7 @@ test("daemon run --poll-interval abc: exits 1 with a validation error (not 'unkn
     await dispatch(["db", "migrate"], deps);
 
     const result = await dispatch(
-      [
-        "daemon",
-        "run",
-        "--runner",
-        "fake",
-        "--poll-interval",
-        "abc",
-        "--until-idle",
-      ],
+      ["daemon", "run", "--poll-interval", "abc", "--until-idle"],
       deps,
     );
     assert.equal(result.exitCode, 1, "exits 1 for invalid poll-interval");
@@ -150,6 +161,83 @@ test("daemon run --poll-interval abc: exits 1 with a validation error (not 'unkn
     assert.ok(
       !result.stderr[0]!.includes("unknown command"),
       "poll-interval validation error should not say 'unknown command' (command must be registered)",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// (e) AgentCatalog wired into create task accepts exactly the registered refs
+test("create task --agent fake@1: exits 0; --agent ghost@9: exits 1 (catalog guards)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-daemon-e-"));
+  try {
+    const deps = buildDeps(join(dir, "kanthord.db"));
+    await dispatch(["db", "migrate"], deps);
+
+    const r1 = await dispatch(["create", "project", "--name", "demo"], deps);
+    assert.equal(r1.exitCode, 0, "create project");
+    const PROJECT = r1.stdout[0]!;
+
+    const r2 = await dispatch(
+      ["create", "initiative", "--project", PROJECT, "--name", "test-init"],
+      deps,
+    );
+    assert.equal(r2.exitCode, 0, "create initiative");
+    const INITIATIVE = r2.stdout[0]!;
+
+    const r3 = await dispatch(
+      ["create", "objective", "--initiative", INITIATIVE, "--name", "test-obj"],
+      deps,
+    );
+    assert.equal(r3.exitCode, 0, "create objective");
+    const OBJECTIVE = r3.stdout[0]!;
+
+    // fake@1 should be accepted (registered in catalog after T2)
+    const rFake = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "fake task",
+        "--instructions",
+        "run fake",
+        "--ac",
+        "fake done",
+        "--agent",
+        "fake@1",
+      ],
+      deps,
+    );
+    assert.equal(
+      rFake.exitCode,
+      0,
+      "create task --agent fake@1 should succeed",
+    );
+
+    // ghost@9 should be rejected (not registered)
+    const rGhost = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "ghost task",
+        "--instructions",
+        "run ghost",
+        "--ac",
+        "ghost done",
+        "--agent",
+        "ghost@9",
+      ],
+      deps,
+    );
+    assert.equal(rGhost.exitCode, 1, "create task --agent ghost@9 should fail");
+    assert.ok(
+      rGhost.stderr.join("").includes("ghost@9"),
+      "error mentions the unregistered agent ref",
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

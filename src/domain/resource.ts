@@ -1,4 +1,5 @@
 import type { Entity } from "./entity.ts";
+import { newId } from "./entity.ts";
 
 export const RESOURCE_TYPES = [
   "repository",
@@ -47,11 +48,7 @@ export interface Filesystem extends Entity {
 }
 
 export type Resource =
-  | Repository
-  | Credential
-  | Notification
-  | AIProvider
-  | Filesystem;
+  Repository | Credential | Notification | AIProvider | Filesystem;
 
 export function isRepository(r: Resource): r is Repository {
   return r.type === "repository";
@@ -71,4 +68,84 @@ export function isAIProvider(r: Resource): r is AIProvider {
 
 export function isFilesystem(r: Resource): r is Filesystem {
   return r.type === "filesystem";
+}
+
+export class ResourceValidationError extends Error {
+  readonly field: string;
+  constructor(field: string) {
+    super(`Resource is missing required field: ${field}`);
+    this.name = "ResourceValidationError";
+    this.field = field;
+  }
+}
+
+export class UnknownResourceTypeError extends Error {
+  readonly resourceType: string;
+  constructor(resourceType: string) {
+    super(`Unknown resource type: ${resourceType}`);
+    this.name = "UnknownResourceTypeError";
+    this.resourceType = resourceType;
+  }
+}
+
+function requireString(input: Record<string, unknown>, field: string): string {
+  const v = input[field];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new ResourceValidationError(field);
+  }
+  return v;
+}
+
+export function buildResource(input: Record<string, unknown>): Resource {
+  const type = input["type"];
+  const id = newId();
+
+  if (type === "repository") {
+    const name = requireString(input, "name");
+    const organization = requireString(input, "organization");
+    const branch = requireString(input, "branch");
+    const path = requireString(input, "path");
+    return { id, type: "repository", name, organization, branch, path };
+  }
+
+  if (type === "credential") {
+    const name = requireString(input, "name");
+    const provider = requireString(input, "provider");
+    const value = requireString(input, "value");
+    return { id, type: "credential", name, provider, value };
+  }
+
+  if (type === "notification") {
+    const name = requireString(input, "name");
+    const provider = requireString(input, "provider") as "slack" | "telegram";
+    const destination = requireString(input, "destination");
+    return { id, type: "notification", name, provider, destination };
+  }
+
+  if (type === "ai_provider") {
+    const name = requireString(input, "name");
+    const provider = requireString(input, "provider");
+    const model = requireString(input, "model");
+    const baseUrlRaw = input["baseUrl"];
+    const baseUrl =
+      typeof baseUrlRaw === "string" && baseUrlRaw.length > 0
+        ? baseUrlRaw
+        : undefined;
+    return {
+      id,
+      type: "ai_provider",
+      name,
+      provider,
+      model,
+      ...(baseUrl !== undefined ? { baseUrl } : {}),
+    };
+  }
+
+  if (type === "filesystem") {
+    const name = requireString(input, "name");
+    const path = requireString(input, "path");
+    return { id, type: "filesystem", name, path };
+  }
+
+  throw new UnknownResourceTypeError(String(type));
 }

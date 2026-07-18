@@ -71,7 +71,20 @@ async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
 
   // implement api (no deps initially)
   const r5 = await dispatch(
-    ["create", "task", "--objective", OBJECTIVE, "--title", "implement api"],
+    [
+      "create",
+      "task",
+      "--objective",
+      OBJECTIVE,
+      "--title",
+      "implement api",
+      "--instructions",
+      "Implement the API",
+      "--ac",
+      "API implemented",
+      "--agent",
+      "fake@1",
+    ],
     deps,
   );
   assert.equal(r5.exitCode, 0);
@@ -89,6 +102,12 @@ async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
       "deploy",
       "--depends-on",
       TASK_API,
+      "--instructions",
+      "Deploy the service",
+      "--ac",
+      "Service deployed",
+      "--agent",
+      "fake@1",
     ],
     deps,
   );
@@ -98,7 +117,20 @@ async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
 
   // spike auth (no deps)
   const r7 = await dispatch(
-    ["create", "task", "--objective", OBJECTIVE, "--title", "spike auth"],
+    [
+      "create",
+      "task",
+      "--objective",
+      OBJECTIVE,
+      "--title",
+      "spike auth",
+      "--instructions",
+      "Spike the auth approach",
+      "--ac",
+      "Auth spiked",
+      "--agent",
+      "fake@1",
+    ],
     deps,
   );
   assert.equal(r7.exitCode, 0);
@@ -128,10 +160,7 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
       await runEpic004Setup(deps);
 
     // ── Phase 1: daemon run until-idle ──────────────────────────────────────
-    const d1 = await dispatch(
-      ["daemon", "run", "--runner", "fake", "--until-idle"],
-      deps,
-    );
+    const d1 = await dispatch(["daemon", "run", "--until-idle"], deps);
     assert.equal(d1.exitCode, 0, "phase 1: daemon exits 0");
 
     // All three tasks completed.
@@ -215,17 +244,27 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     const eventCountBefore = evLines.length;
 
     const newTaskR = await dispatch(
-      ["create", "task", "--objective", OBJECTIVE, "--title", "add tests"],
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "add tests",
+        "--instructions",
+        "Add tests for the feature",
+        "--ac",
+        "Tests added",
+        "--agent",
+        "fake@1",
+      ],
       deps,
     );
     assert.equal(newTaskR.exitCode, 0, "create new task exits 0");
     const TASK_MORE = newTaskR.stdout[0]!;
     assert.match(TASK_MORE, ULID_RE);
 
-    const d2 = await dispatch(
-      ["daemon", "run", "--runner", "fake", "--until-idle"],
-      deps,
-    );
+    const d2 = await dispatch(["daemon", "run", "--until-idle"], deps);
     assert.equal(d2.exitCode, 0, "phase 2: daemon exits 0");
 
     // Only the new task ran: event count grew by exactly 3 (ready + started + completed).
@@ -270,15 +309,7 @@ test("daemon smoke — phase 3 (fresh DB): --fail deploy exits non-zero; task.fa
 
     // daemon run with --fail $TASK_DEPLOY
     const d = await dispatch(
-      [
-        "daemon",
-        "run",
-        "--runner",
-        "fake",
-        "--fail",
-        TASK_DEPLOY,
-        "--until-idle",
-      ],
+      ["daemon", "run", "--fail", TASK_DEPLOY, "--until-idle"],
       deps,
     );
     assert.notEqual(

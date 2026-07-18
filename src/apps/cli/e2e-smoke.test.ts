@@ -83,7 +83,18 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
 
     // -- create task: implement api --
     const r5 = await dispatch(
-      ["create", "task", "--objective", OBJECTIVE, "--title", "implement api"],
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "implement api",
+        "--instructions",
+        "Implement the API",
+        "--ac",
+        "API implemented",
+      ],
       deps,
     );
     assert.equal(r5.exitCode, 0, "create task (api) exits 0");
@@ -106,6 +117,10 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
         "deploy",
         "--depends-on",
         TASK_API,
+        "--instructions",
+        "Deploy the service",
+        "--ac",
+        "Service deployed",
       ],
       deps,
     );
@@ -139,7 +154,18 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
 
     // -- create task: spike auth --
     const r8 = await dispatch(
-      ["create", "task", "--objective", OBJECTIVE, "--title", "spike auth"],
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "spike auth",
+        "--instructions",
+        "Spike the auth approach",
+        "--ac",
+        "Auth spiked",
+      ],
       deps,
     );
     assert.equal(r8.exitCode, 0, "create task (spike auth) exits 0");
@@ -200,7 +226,18 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
 
     // -- wrong-type reference: create task --objective <task-id> → WrongTypeReferenceError, exit 1 --
     const r12 = await dispatch(
-      ["create", "task", "--objective", TASK_API, "--title", "bad parent"],
+      [
+        "create",
+        "task",
+        "--objective",
+        TASK_API,
+        "--title",
+        "bad parent",
+        "--instructions",
+        "some instructions",
+        "--ac",
+        "some criterion",
+      ],
       deps,
     );
     assert.equal(r12.exitCode, 1, "wrong-type objective exits 1");

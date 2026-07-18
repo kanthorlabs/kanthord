@@ -55,6 +55,9 @@ test("SqliteTaskRepository save then get round-trips task with two dependencies 
     title: "Dep One",
     status: "pending",
     dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   const dep2: Task = {
     id: newId(),
@@ -62,6 +65,9 @@ test("SqliteTaskRepository save then get round-trips task with two dependencies 
     title: "Dep Two",
     status: "pending",
     dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   repo.save(dep1);
   repo.save(dep2);
@@ -72,6 +78,9 @@ test("SqliteTaskRepository save then get round-trips task with two dependencies 
     title: "Main Task",
     status: "pending",
     dependencies: [dep1.id, dep2.id],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   repo.save(task);
 
@@ -136,6 +145,9 @@ test("SqliteTaskRepository saveAll succeeds when second task depends on first re
     title: "Task A",
     status: "pending",
     dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   const taskB: Task = {
     id: newId(),
@@ -143,6 +155,9 @@ test("SqliteTaskRepository saveAll succeeds when second task depends on first re
     title: "Task B (depends on A)",
     status: "pending",
     dependencies: [taskA.id],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
 
   // Insert B before A in the array — saveAll must insert all task rows first
@@ -212,6 +227,9 @@ test("SqliteTaskRepository listByInitiative returns tasks across two objectives 
     title: "X",
     status: "pending",
     dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   // Task in obj2, depends on taskX
   const taskY: Task = {
@@ -220,6 +238,9 @@ test("SqliteTaskRepository listByInitiative returns tasks across two objectives 
     title: "Y",
     status: "pending",
     dependencies: [taskX.id],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
 
   repo.save(taskX);
@@ -476,6 +497,9 @@ test("SqliteTaskRepository listTasksByObjective returns tasks for the objective 
     title: "Dep Task",
     status: "pending",
     dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   const main: Task = {
     id: newId(),
@@ -483,6 +507,9 @@ test("SqliteTaskRepository listTasksByObjective returns tasks for the objective 
     title: "Main Task",
     status: "pending",
     dependencies: [dep.id],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
   };
   repo.save(dep);
   repo.save(main);
@@ -607,4 +634,227 @@ test("SqliteTaskRepository saveTaskContext inside UnitOfWork.transaction does no
       repo.saveTaskContext(task.id, { repository: "r1" });
     });
   }, "saveTaskContext must not throw when called inside an ambient UnitOfWork.transaction");
+});
+
+// ---------------------------------------------------------------------------
+// S02-T2: migration 5 — agent/instructions/ac/verification round-trip,
+//         discarded status, saveTaskResult / getTaskResult
+// ---------------------------------------------------------------------------
+
+/** Flat task-result row shape written/read by SaveTaskResult / getTaskResult */
+interface TaskResultRow {
+  workspace: string | null;
+  branch: string | null;
+  baseCommit: string | null;
+  proposalCommit: string | null;
+  commitSha: string | null;
+  summary: string | null;
+  reason: string | null;
+  rejectionResolution: string | null;
+  rejectionReason: string | null;
+  evidence: Array<{ command: string; exitCode: number; output: string }> | null;
+}
+
+test("SqliteTaskRepository save/get round-trips agent with non-default value, instructions, ac, and verification", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Agent task",
+    status: "pending",
+    dependencies: [],
+    agent: "custom@2",
+    instructions: "do the thing",
+    ac: ["criterion one", "criterion two"],
+    verification: ["npm test", "npm run lint"],
+  };
+  repo.save(task);
+
+  const loaded = repo.get(task.id);
+  assert.deepEqual(loaded, task);
+});
+
+test("SqliteTaskRepository save/get without verification leaves verification absent", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "No-verify task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "do something",
+    ac: ["builds"],
+  };
+  repo.save(task);
+
+  const loaded = repo.get(task.id);
+  assert.deepEqual(loaded, task);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(loaded, "verification"),
+    false,
+  );
+});
+
+test("SqliteTaskRepository save/get with status discarded round-trips", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Discarded task",
+    status: "discarded",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "was discarded",
+    ac: ["n/a"],
+  };
+  repo.save(task);
+
+  const loaded = repo.get(task.id);
+  assert.ok(loaded !== undefined, "discarded task must be retrievable");
+  assert.equal(loaded.status, "discarded");
+});
+
+test("SqliteTaskRepository saveTaskResult and getTaskResult round-trip all eleven columns", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Result task",
+    status: "completed",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "do work",
+    ac: ["builds"],
+  };
+  repo.save(task);
+
+  const row: TaskResultRow = {
+    workspace: "/tmp/ws/123",
+    branch: "kanthord/task-123",
+    baseCommit: "abc123",
+    proposalCommit: null,
+    commitSha: "def456",
+    summary: "did the work",
+    reason: null,
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: [{ command: "npm test", exitCode: 0, output: "ok" }],
+  };
+
+  const r = repo as unknown as {
+    saveTaskResult(taskId: string, row: TaskResultRow): void;
+    getTaskResult(taskId: string): TaskResultRow | undefined;
+  };
+
+  r.saveTaskResult(task.id, row);
+  const loaded = r.getTaskResult(task.id);
+  assert.deepEqual(loaded, row);
+});
+
+test("SqliteTaskRepository saveTaskResult upsert overwrites previous result", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Upsert task",
+    status: "completed",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "run it",
+    ac: ["done"],
+  };
+  repo.save(task);
+
+  const r = repo as unknown as {
+    saveTaskResult(taskId: string, row: TaskResultRow): void;
+    getTaskResult(taskId: string): TaskResultRow | undefined;
+  };
+
+  const first: TaskResultRow = {
+    workspace: "/tmp/ws/first",
+    branch: "kanthord/t",
+    baseCommit: "aaa",
+    proposalCommit: null,
+    commitSha: "bbb",
+    summary: "first run",
+    reason: null,
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+  r.saveTaskResult(task.id, first);
+
+  const second: TaskResultRow = {
+    workspace: "/tmp/ws/second",
+    branch: "kanthord/t",
+    baseCommit: "aaa",
+    proposalCommit: "ccc",
+    commitSha: null,
+    summary: "second run",
+    reason: "need human review",
+    rejectionResolution: "retry",
+    rejectionReason: "not quite",
+    evidence: null,
+  };
+  r.saveTaskResult(task.id, second);
+
+  const loaded = r.getTaskResult(task.id);
+  assert.deepEqual(loaded, second);
+});
+
+test("SqliteTaskRepository getTaskResult returns undefined for unknown task", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteTaskRepository(db);
+  const r = repo as unknown as {
+    getTaskResult(taskId: string): TaskResultRow | undefined;
+  };
+
+  const result = r.getTaskResult("nonexistent-task-id");
+  assert.equal(result, undefined);
 });

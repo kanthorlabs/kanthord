@@ -8,6 +8,10 @@ export interface TaskInput {
   id: string;
   title?: string;
   dependencies?: string[];
+  agent?: string;
+  instructions?: string;
+  ac?: string[];
+  verification?: string[];
 }
 
 export interface StoreGraphInput {
@@ -38,10 +42,15 @@ export class StoreGraph {
     // Step 3: create Tasks via newTask (title defaults to label id, no deps yet)
     const labelToTask = new Map<string, Task>();
     const tasks: Task[] = taskInputs.map((t) => {
+      const label = t.title ?? t.id;
       const task = newTask({
         objectiveId,
-        title: t.title ?? t.id,
+        title: label,
         dependencies: [],
+        agent: t.agent ?? "generic@1",
+        instructions: t.instructions ?? label,
+        ac: t.ac ?? [label],
+        verification: t.verification,
       });
       labelToTask.set(t.id, task);
       return task;

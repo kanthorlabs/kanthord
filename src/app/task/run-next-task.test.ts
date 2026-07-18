@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { RunNextTask } from "./run-next-task.ts";
 import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
-import type { UnitOfWork } from "../../storage/port.ts";
+import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
 import type { Task } from "../../domain/task.ts";
 import type {
@@ -24,6 +24,7 @@ interface TaskStore {
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
   getTaskContext(taskId: string): Record<string, string>;
+  saveTaskResult(taskId: string, row: TaskResultRow): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +66,10 @@ class SimpleTaskStore implements TaskStore {
 
   getTaskContext(taskId: string): Record<string, string> {
     return this.#contexts.get(taskId) ?? {};
+  }
+
+  saveTaskResult(_taskId: string, _row: TaskResultRow): void {
+    // no-op stub for pre-emptive cascade guard (Story 06 T2)
   }
 }
 
