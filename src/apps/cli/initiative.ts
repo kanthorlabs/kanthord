@@ -2,6 +2,7 @@ import type { CreateInitiative } from "../../app/initiative/create-initiative.ts
 import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
 import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
 import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
+import type { ListInitiatives } from "../../app/initiative/list-initiatives.ts";
 import { toResult } from "./error-map.ts";
 
 export async function runCreateInitiative(
@@ -64,4 +65,20 @@ export async function runResumeInitiative(
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };
   }
+}
+
+export function runListInitiatives(
+  args: Record<string, unknown>,
+  listInitiatives: ListInitiatives,
+): { exitCode: number; stdout: string[]; stderr: string[] } {
+  const projectId = args["project"] as string;
+  const rows = listInitiatives.execute({ projectId });
+  if (args["json"]) {
+    return { exitCode: 0, stdout: [JSON.stringify(rows)], stderr: [] };
+  }
+  return {
+    exitCode: 0,
+    stdout: rows.map((r) => `${r.id}  ${r.name}`),
+    stderr: [],
+  };
 }

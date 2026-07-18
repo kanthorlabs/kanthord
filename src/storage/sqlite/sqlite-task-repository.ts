@@ -1,7 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import type { TaskRepository, TaskResultRow } from "../port.ts";
+import type { TaskRepository, TaskResultRow, CasResult } from "../port.ts";
 import type { Task, TaskStatus } from "../../domain/task.ts";
+import { canonicalTask, sha256Hex } from "./node-sha.ts";
 
 type TaskRow = {
   id: string;
@@ -23,17 +24,78 @@ export class SqliteTaskRepository implements TaskRepository {
     this.#db = db;
   }
 
+  /** Compute sha256 token from a task's aggregate fields. */
+  #computeTaskSha(task: {
+    title: string;
+    instructions?: string;
+    ac?: string[];
+    agent?: string;
+    verification?: string[];
+    dependencies: string[];
+    objectiveId: string;
+    status: TaskStatus;
+  }): string {
+    return sha256Hex(
+      canonicalTask({
+        title: task.title,
+        instructions: task.instructions ?? "",
+        ac: task.ac ?? [],
+        agent: task.agent ?? "generic@1",
+        verification: task.verification,
+        dependencies: task.dependencies,
+        objectiveId: task.objectiveId,
+        status: task.status,
+      }),
+    );
+  }
+
+  /**
+   * Re-read current task fields + dependencies from DB, recompute the sha256
+   * token, and stamp it onto the tasks row. Used after dep-table mutations.
+   */
+  #stampSha(taskId: string): void {
+    const row = this.#db
+      .prepare(
+        "SELECT objectiveId, title, status, agent, instructions, ac, verification FROM tasks WHERE id = ?",
+      )
+      .get(taskId) as TaskRow | undefined;
+    if (row === undefined) return;
+    const deps = this.#db
+      .prepare(
+        "SELECT dependency FROM task_dependencies WHERE taskId = ? ORDER BY position ASC",
+      )
+      .all(taskId) as DepRow[];
+    const sha = this.#computeTaskSha({
+      title: row.title,
+      instructions: row.instructions,
+      ac: row.ac !== undefined ? (JSON.parse(row.ac) as string[]) : [],
+      agent: row.agent,
+      verification:
+        row.verification != null
+          ? (JSON.parse(row.verification) as string[])
+          : undefined,
+      dependencies: deps.map((d) => d.dependency),
+      objectiveId: row.objectiveId,
+      status: row.status,
+    });
+    this.#db
+      .prepare("UPDATE tasks SET sha256 = ? WHERE id = ?")
+      .run(sha, taskId);
+  }
+
   save(task: Task): void {
+    const sha = this.#computeTaskSha(task);
     this.#db
       .prepare(
-        "INSERT INTO tasks (id, objectiveId, title, status, agent, instructions, ac, verification)" +
-          " VALUES (?, ?, ?, ?, ?, ?, ?, ?)" +
+        "INSERT INTO tasks (id, objectiveId, title, status, agent, instructions, ac, verification, sha256)" +
+          " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
           " ON CONFLICT(id) DO UPDATE SET" +
           " status = excluded.status," +
           " agent = excluded.agent," +
           " instructions = excluded.instructions," +
           " ac = excluded.ac," +
-          " verification = excluded.verification",
+          " verification = excluded.verification," +
+          " sha256 = excluded.sha256",
       )
       .run(
         task.id,
@@ -46,6 +108,7 @@ export class SqliteTaskRepository implements TaskRepository {
         task.verification !== undefined
           ? JSON.stringify(task.verification)
           : null,
+        sha,
       );
     const insertDep = this.#db.prepare(
       "INSERT OR IGNORE INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
@@ -56,13 +119,14 @@ export class SqliteTaskRepository implements TaskRepository {
   }
 
   saveAll(tasks: Task[]): void {
-    this.#db.exec("BEGIN");
+    this.#db.exec("SAVEPOINT saveAll");
     try {
       const insertTask = this.#db.prepare(
-        "INSERT INTO tasks (id, objectiveId, title, status, agent, instructions, ac, verification)" +
-          " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (id, objectiveId, title, status, agent, instructions, ac, verification, sha256)" +
+          " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
       );
       for (const task of tasks) {
+        const sha = this.#computeTaskSha(task);
         insertTask.run(
           task.id,
           task.objectiveId,
@@ -74,6 +138,7 @@ export class SqliteTaskRepository implements TaskRepository {
           task.verification !== undefined
             ? JSON.stringify(task.verification)
             : null,
+          sha,
         );
       }
       const insertDep = this.#db.prepare(
@@ -84,9 +149,10 @@ export class SqliteTaskRepository implements TaskRepository {
           insertDep.run(task.id, dep, i);
         }
       }
-      this.#db.exec("COMMIT");
+      this.#db.exec("RELEASE SAVEPOINT saveAll");
     } catch (err) {
-      this.#db.exec("ROLLBACK");
+      this.#db.exec("ROLLBACK TO SAVEPOINT saveAll");
+      this.#db.exec("RELEASE SAVEPOINT saveAll");
       throw err;
     }
   }
@@ -153,6 +219,7 @@ export class SqliteTaskRepository implements TaskRepository {
         "INSERT INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
       )
       .run(taskId, dependsOn, nextPos);
+    this.#stampSha(taskId);
   }
 
   removeDependency(taskId: string, dependsOn: string): void {
@@ -161,6 +228,7 @@ export class SqliteTaskRepository implements TaskRepository {
         "DELETE FROM task_dependencies WHERE taskId = ? AND dependency = ?",
       )
       .run(taskId, dependsOn);
+    this.#stampSha(taskId);
   }
 
   listTasksByObjective(objectiveId: string): Task[] {
@@ -200,6 +268,14 @@ export class SqliteTaskRepository implements TaskRepository {
     return row?.initiativeId;
   }
 
+  getSha256(id: string): string | undefined {
+    type Row = { sha256: string };
+    const row = this.#db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get(id) as Row | undefined;
+    return row?.sha256;
+  }
+
   listByInitiative(initiativeId: string): Task[] {
     const rows = this.#db
       .prepare(
@@ -229,6 +305,111 @@ export class SqliteTaskRepository implements TaskRepository {
           : {}),
       };
     });
+  }
+
+  /**
+   * Conditionally update a task's spec + dependency list.
+   * Returns `applied` with a fresh sha on success, or `conflict` with the
+   * current stored sha when `expectedSha` does not match.
+   */
+  compareAndApply(
+    id: string,
+    expectedSha: string,
+    spec: {
+      title: string;
+      instructions: string;
+      ac: string[];
+      agent: string;
+      verification: string[] | null;
+      dependencies: string[];
+    },
+  ): CasResult {
+    type ShaRow = { sha256: string };
+    const shaRow = this.#db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    const currentSha = shaRow?.sha256 ?? "";
+    if (currentSha !== expectedSha) {
+      return { status: "conflict", currentSha };
+    }
+    this.#db
+      .prepare(
+        "UPDATE tasks SET title = ?, instructions = ?, ac = ?, agent = ?, verification = ? WHERE id = ?",
+      )
+      .run(
+        spec.title,
+        spec.instructions,
+        JSON.stringify(spec.ac),
+        spec.agent,
+        spec.verification !== null ? JSON.stringify(spec.verification) : null,
+        id,
+      );
+    this.#db.prepare("DELETE FROM task_dependencies WHERE taskId = ?").run(id);
+    const insertDep = this.#db.prepare(
+      "INSERT INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
+    );
+    for (const [i, dep] of spec.dependencies.entries()) {
+      insertDep.run(id, dep, i);
+    }
+    this.#stampSha(id);
+    const freshRow = this.#db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    return { status: "applied", freshSha: freshRow?.sha256 ?? "" };
+  }
+
+  /**
+   * Conditionally move a task to a different objective.
+   * Returns `applied` with the updated sha, or `conflict` if the sha has
+   * drifted since the caller last read it.
+   */
+  conditionalReparent(
+    id: string,
+    expectedSha: string,
+    objectiveId: string,
+  ): CasResult {
+    type ShaRow = { sha256: string };
+    const shaRow = this.#db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    const currentSha = shaRow?.sha256 ?? "";
+    if (currentSha !== expectedSha) {
+      return { status: "conflict", currentSha };
+    }
+    this.#db
+      .prepare("UPDATE tasks SET objectiveId = ? WHERE id = ?")
+      .run(objectiveId, id);
+    this.#stampSha(id);
+    const freshRow = this.#db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    return { status: "applied", freshSha: freshRow?.sha256 ?? "" };
+  }
+
+  /**
+   * Conditionally delete a task (and cascade its graph_import_map row via FK).
+   * Returns `applied` if the sha matched and the row was deleted, or `conflict`
+   * if the sha has drifted.
+   */
+  conditionalDeleteTask(id: string, expectedSha: string): CasResult {
+    type ShaRow = { sha256: string };
+    const shaRow = this.#db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    const currentSha = shaRow?.sha256 ?? "";
+    if (currentSha !== expectedSha) {
+      return { status: "conflict", currentSha };
+    }
+    this.#db.prepare("DELETE FROM task_dependencies WHERE taskId = ?").run(id);
+    this.#db
+      .prepare("DELETE FROM task_dependencies WHERE dependency = ?")
+      .run(id);
+    this.#db.prepare("DELETE FROM events WHERE taskId = ?").run(id);
+    this.#db.prepare("DELETE FROM jobs WHERE taskId = ?").run(id);
+    this.#db.prepare("DELETE FROM task_context WHERE task_id = ?").run(id);
+    this.#db.prepare("DELETE FROM task_results WHERE task_id = ?").run(id);
+    this.#db.prepare("DELETE FROM tasks WHERE id = ?").run(id);
+    return { status: "applied", freshSha: "" };
   }
 
   saveTaskResult(taskId: string, row: TaskResultRow): void {

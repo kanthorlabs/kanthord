@@ -13,6 +13,13 @@ import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
 import { ProposalMissingError } from "../../app/task/approve-task.ts";
 import { RejectionConflictError } from "../../app/task/reject-task.ts";
 import { ImportValidationError } from "../../app/resource/import-resources.ts";
+import {
+  CrossInitiativeError,
+  UnknownNodeError,
+  DuplicateRefError,
+  CreateModeIdError,
+  DriftConflictError,
+} from "../../app/graph/import-errors.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -39,7 +46,12 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof ProposalWorkspaceMissingError ||
     err instanceof ProposalMissingError ||
     err instanceof RejectionConflictError ||
-    err instanceof ImportValidationError
+    err instanceof ImportValidationError ||
+    err instanceof CrossInitiativeError ||
+    err instanceof UnknownNodeError ||
+    err instanceof DuplicateRefError ||
+    err instanceof CreateModeIdError ||
+    err instanceof DriftConflictError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

@@ -92,6 +92,23 @@ class FakeInitiativeRepository implements InitiativeRepository {
   listAllInitiatives(): Array<{ id: string; paused: boolean }> {
     return [];
   }
+
+  getSha256(_id: string): string | undefined {
+    return undefined;
+  }
+  conditionalRenameInitiative(
+    _id: string,
+    _expectedSha: string,
+    _name: string,
+  ) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalRenameObjective(_id: string, _expectedSha: string, _name: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalDeleteObjective(_id: string, _expectedSha: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
 }
 
 class FakeTaskRepository implements TaskRepository {
@@ -122,6 +139,30 @@ class FakeTaskRepository implements TaskRepository {
   }
   getInitiativeId(_taskId: string): string | undefined {
     return undefined;
+  }
+
+  getSha256(_id: string): string | undefined {
+    return undefined;
+  }
+  compareAndApply(
+    _id: string,
+    _expectedSha: string,
+    _spec: {
+      title: string;
+      instructions: string;
+      ac: string[];
+      agent: string;
+      verification: string[] | null;
+      dependencies: string[];
+    },
+  ) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalReparent(_id: string, _expectedSha: string, _objectiveId: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalDeleteTask(_id: string, _expectedSha: string) {
+    return { status: "applied" as const, freshSha: "" };
   }
 }
 

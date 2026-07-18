@@ -20,6 +20,11 @@ case "$path" in
   .agent/tdd/*) exit 0 ;;
 esac
 
+# Both roles may write committed format/spec docs under docs/.
+case "$path" in
+  docs/*) exit 0 ;;
+esac
+
 case "$role" in
   test-engineer)
     case "$path" in

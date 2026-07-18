@@ -15,9 +15,10 @@ export async function runListTasks(
 ): Promise<HandlerResult> {
   const initiativeId = args["initiative"] as string;
   const status = args["status"] as TaskStatus | undefined;
+  const objectiveId = args["objective"] as string | undefined;
 
   try {
-    const rows = await listTasks.execute({ initiativeId, status });
+    const rows = await listTasks.execute({ initiativeId, status, objectiveId });
 
     if (args["json"]) {
       return {

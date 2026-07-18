@@ -8,8 +8,11 @@ import {
   setDependencies,
   DependenciesLockedError,
   InvalidTaskFieldError,
+  TaskSpecLockedError,
+  applyTaskSpec,
+  reparentTask,
 } from "./task.ts";
-import type { TaskStatus } from "./task.ts";
+import type { TaskStatus, TaskSpecPatch } from "./task.ts";
 
 // Base required inputs for newTask (Story 02 — agent/instructions/ac required)
 const BASE = {
@@ -533,6 +536,220 @@ test("newTask with verification containing empty-string item throws InvalidTaskF
     (err) => {
       assert.ok(err instanceof InvalidTaskFieldError);
       assert.equal((err as InvalidTaskFieldError).field, "verification");
+      return true;
+    },
+  );
+});
+
+// Story 007 S01 T1 — single-line/non-empty rule (B12/B17)
+
+test("newTask with multi-line title throws InvalidTaskFieldError(title)", () => {
+  assert.throws(
+    () =>
+      newTask({
+        objectiveId: "obj-1",
+        title: "line one\nline two",
+        agent: "generic@1",
+        instructions: "do X",
+        ac: ["builds"],
+      }),
+    (err) => {
+      assert.ok(err instanceof InvalidTaskFieldError);
+      assert.equal((err as InvalidTaskFieldError).field, "title");
+      return true;
+    },
+  );
+});
+
+test("newTask with whitespace-only title throws InvalidTaskFieldError(title)", () => {
+  assert.throws(
+    () =>
+      newTask({
+        objectiveId: "obj-1",
+        title: "   ",
+        agent: "generic@1",
+        instructions: "do X",
+        ac: ["builds"],
+      }),
+    (err) => {
+      assert.ok(err instanceof InvalidTaskFieldError);
+      assert.equal((err as InvalidTaskFieldError).field, "title");
+      return true;
+    },
+  );
+});
+
+test("newTask with multi-line ac item throws InvalidTaskFieldError(ac)", () => {
+  assert.throws(
+    () =>
+      newTask({
+        objectiveId: "obj-1",
+        title: "t",
+        agent: "generic@1",
+        instructions: "do X",
+        ac: ["valid item", "bad\nitem"],
+      }),
+    (err) => {
+      assert.ok(err instanceof InvalidTaskFieldError);
+      assert.equal((err as InvalidTaskFieldError).field, "ac");
+      return true;
+    },
+  );
+});
+
+test("newTask with multi-line verification item throws InvalidTaskFieldError(verification)", () => {
+  assert.throws(
+    () =>
+      newTask({
+        objectiveId: "obj-1",
+        title: "t",
+        agent: "generic@1",
+        instructions: "do X",
+        ac: ["builds"],
+        verification: ["npm test\necho oops"],
+      }),
+    (err) => {
+      assert.ok(err instanceof InvalidTaskFieldError);
+      assert.equal((err as InvalidTaskFieldError).field, "verification");
+      return true;
+    },
+  );
+});
+
+test("newTask with multi-line instructions is accepted (instructions stays multi-line)", () => {
+  const task = newTask({
+    objectiveId: "obj-1",
+    title: "t",
+    agent: "generic@1",
+    instructions: "step one\nstep two",
+    ac: ["builds"],
+  });
+  assert.equal(task.instructions, "step one\nstep two");
+});
+
+// Story 01 — T2: applyTaskSpec PATCH semantics + TaskSpecLockedError
+
+test("applyTaskSpec on a running task throws TaskSpecLockedError", () => {
+  const pending = newTask({ ...BASE });
+  const running = transitionTask(pending, "running");
+  const patch: TaskSpecPatch = { title: "New title" };
+  assert.throws(
+    () => applyTaskSpec(running, patch),
+    (err) => {
+      assert.ok(err instanceof TaskSpecLockedError);
+      assert.equal((err as TaskSpecLockedError).taskId, running.id);
+      assert.equal((err as TaskSpecLockedError).status, "running");
+      return true;
+    },
+  );
+});
+
+test("applyTaskSpec on a failed task throws TaskSpecLockedError", () => {
+  const pending = newTask({ ...BASE });
+  const running = transitionTask(pending, "running");
+  const failed = transitionTask(running, "failed");
+  const patch: TaskSpecPatch = { title: "New title" };
+  assert.throws(
+    () => applyTaskSpec(failed, patch),
+    (err) => {
+      assert.ok(err instanceof TaskSpecLockedError);
+      assert.equal((err as TaskSpecLockedError).taskId, failed.id);
+      assert.equal((err as TaskSpecLockedError).status, "failed");
+      return true;
+    },
+  );
+});
+
+test("applyTaskSpec with absent key leaves field byte-identical", () => {
+  const task = newTask({
+    ...BASE,
+    title: "Original",
+    instructions: "original instructions",
+    ac: ["original ac"],
+  });
+  const patch: TaskSpecPatch = {};
+  const result = applyTaskSpec(task, patch);
+  assert.equal(result.title, "Original");
+  assert.equal(result.instructions, "original instructions");
+  assert.deepEqual(result.ac, ["original ac"]);
+  assert.equal(result.agent, "generic@1");
+});
+
+test("applyTaskSpec with present title replaces it", () => {
+  const task = newTask({ ...BASE, title: "Old title" });
+  const result = applyTaskSpec(task, { title: "New title" });
+  assert.equal(result.title, "New title");
+});
+
+test("applyTaskSpec with present ac replaces the whole list", () => {
+  const task = newTask({ ...BASE, ac: ["old criterion"] });
+  const result = applyTaskSpec(task, {
+    ac: ["new criterion one", "new criterion two"],
+  });
+  assert.deepEqual(result.ac, ["new criterion one", "new criterion two"]);
+});
+
+test("applyTaskSpec with present ac containing a multi-line item throws InvalidTaskFieldError", () => {
+  const task = newTask({ ...BASE });
+  assert.throws(
+    () => applyTaskSpec(task, { ac: ["good item", "bad\nitem"] }),
+    (err) => {
+      assert.ok(err instanceof InvalidTaskFieldError);
+      assert.equal((err as InvalidTaskFieldError).field, "ac");
+      return true;
+    },
+  );
+});
+
+test("applyTaskSpec with verification null clears the field", () => {
+  const task = newTask({ ...BASE, verification: ["npm test"] });
+  const result = applyTaskSpec(task, { verification: null });
+  assert.equal(result.verification, undefined);
+});
+
+test("applyTaskSpec with verification empty array clears the field", () => {
+  const task = newTask({ ...BASE, verification: ["npm test"] });
+  const result = applyTaskSpec(task, { verification: [] });
+  assert.equal(result.verification, undefined);
+});
+
+test("applyTaskSpec with present non-empty verification replaces it", () => {
+  const task = newTask({ ...BASE, verification: ["npm test"] });
+  const result = applyTaskSpec(task, { verification: ["npm run verify"] });
+  assert.deepEqual(result.verification, ["npm run verify"]);
+});
+
+test("applyTaskSpec returns a NEW object and does not mutate the input task", () => {
+  const task = newTask({ ...BASE, title: "Original" });
+  const original = { ...task };
+  const result = applyTaskSpec(task, { title: "Changed" });
+  assert.notEqual(result, task); // new object
+  assert.equal(task.title, original.title); // input not mutated
+  assert.equal(result.title, "Changed");
+});
+
+// Story 01 — T3: reparentTask (pending-only)
+test("reparentTask on a pending task returns a new task with the new objectiveId", () => {
+  const task = newTask({ ...BASE, objectiveId: "OBJ1" });
+  const result = reparentTask(task, "OBJ2");
+  assert.equal(result.objectiveId, "OBJ2");
+  assert.notEqual(result, task); // new object
+  assert.equal(task.objectiveId, "OBJ1"); // input not mutated
+  // all other fields unchanged
+  assert.equal(result.id, task.id);
+  assert.equal(result.title, task.title);
+  assert.equal(result.status, task.status);
+  assert.deepEqual(result.dependencies, task.dependencies);
+});
+
+test("reparentTask on a running task throws TaskSpecLockedError", () => {
+  const task = transitionTask(newTask({ ...BASE }), "running");
+  assert.throws(
+    () => reparentTask(task, "OBJ2"),
+    (err: unknown) => {
+      assert.ok(err instanceof TaskSpecLockedError);
+      assert.equal(err.taskId, task.id);
+      assert.equal(err.status, "running");
       return true;
     },
   );

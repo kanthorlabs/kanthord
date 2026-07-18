@@ -1,5 +1,6 @@
 import type { CreateObjective } from "../../app/objective/create-objective.ts";
 import type { RenameObjective } from "../../app/objective/rename-objective.ts";
+import type { ListObjectives } from "../../app/objective/list-objectives.ts";
 import { toResult } from "./error-map.ts";
 
 export async function runCreateObjective(
@@ -34,4 +35,20 @@ export async function runRenameObjective(
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };
   }
+}
+
+export function runListObjectives(
+  args: Record<string, unknown>,
+  listObjectives: ListObjectives,
+): { exitCode: number; stdout: string[]; stderr: string[] } {
+  const initiativeId = args["initiative"] as string;
+  const rows = listObjectives.execute({ initiativeId });
+  if (args["json"]) {
+    return { exitCode: 0, stdout: [JSON.stringify(rows)], stderr: [] };
+  }
+  return {
+    exitCode: 0,
+    stdout: rows.map((r) => `${r.id}  ${r.name}`),
+    stderr: [],
+  };
 }

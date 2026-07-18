@@ -21,6 +21,7 @@ export class ListTasks {
   async execute(input: {
     initiativeId: string;
     status?: TaskStatus;
+    objectiveId?: string;
   }): Promise<TaskRow[]> {
     const tasks = this.#taskRepo.listByInitiative(input.initiativeId);
 
@@ -38,7 +39,13 @@ export class ListTasks {
 
     const readinessMap = new Map(readiness(nodes).map((r) => [r.id, r]));
 
-    const rows = tasks.map((t) => {
+    // Filter by objective when requested; validate against the full initiative graph first.
+    const scopedTasks =
+      input.objectiveId !== undefined
+        ? tasks.filter((t) => t.objectiveId === input.objectiveId)
+        : tasks;
+
+    const rows = scopedTasks.map((t) => {
       const r = readinessMap.get(t.id);
       return {
         id: t.id,

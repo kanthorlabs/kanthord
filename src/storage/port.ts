@@ -71,6 +71,22 @@ export interface InitiativeRepository {
   resolveObjectiveByName(initiativeId: string, name: string): string[];
   setPaused(id: string, paused: boolean): void;
   listAllInitiatives(): Array<{ id: string; paused: boolean }>;
+  /** Returns the stored sha256 token for an initiative or objective row, or undefined if not found. */
+  getSha256(id: string): string | undefined;
+  /** Conditionally rename an initiative when its sha matches the expected value. */
+  conditionalRenameInitiative(
+    id: string,
+    expectedSha: string,
+    name: string,
+  ): CasResult;
+  /** Conditionally rename an objective when its sha matches the expected value. */
+  conditionalRenameObjective(
+    id: string,
+    expectedSha: string,
+    name: string,
+  ): CasResult;
+  /** Conditionally delete an objective when its sha matches the expected value. */
+  conditionalDeleteObjective(id: string, expectedSha: string): CasResult;
 }
 
 /** Repository for the Task aggregate (tasks + their dependency edges). */
@@ -85,6 +101,29 @@ export interface TaskRepository {
   addDependency(taskId: string, dependsOn: string): void;
   removeDependency(taskId: string, dependsOn: string): void;
   getInitiativeId(taskId: string): string | undefined;
+  /** Returns the stored sha256 token for a task row, or undefined if not found. */
+  getSha256(id: string): string | undefined;
+  /** Conditionally update a task's spec fields when its sha matches the expected value. */
+  compareAndApply(
+    id: string,
+    expectedSha: string,
+    spec: {
+      title: string;
+      instructions: string;
+      ac: string[];
+      agent: string;
+      verification: string[] | null;
+      dependencies: string[];
+    },
+  ): CasResult;
+  /** Conditionally move a task to a different objective when its sha matches. */
+  conditionalReparent(
+    id: string,
+    expectedSha: string,
+    objectiveId: string,
+  ): CasResult;
+  /** Conditionally delete a task when its sha matches the expected value. */
+  conditionalDeleteTask(id: string, expectedSha: string): CasResult;
 }
 
 /**
@@ -110,4 +149,43 @@ export interface ReferenceResolver {
   resolveKind(
     id: string,
   ): "project" | "resource" | "initiative" | "objective" | "task" | undefined;
+}
+
+/**
+ * Result of a conditional-write (CAS) operation on a repository row.
+ * `applied` carries the freshly-computed sha256 after the write;
+ * `conflict` carries the sha256 that was actually in the row.
+ */
+export type CasResult =
+  | { status: "applied"; freshSha: string }
+  | { status: "conflict"; currentSha: string };
+
+/**
+ * Durable ref→id idempotency store backed by the `graph_import_map` table
+ * (migration 6). Used by `import graph --create` (reserve) and
+ * `import graph --apply` (lookup) to guarantee a re-applied package never
+ * duplicates a node that was already created in a previous run.
+ */
+export interface GraphImportMap {
+  /**
+   * Record that `ref` under `(packageId, kind)` resolves to `nodeId` and was
+   * created with `creationSha`. Throws on a duplicate `(packageId, kind, ref)`.
+   */
+  reserve(
+    packageId: string,
+    kind: string,
+    ref: string,
+    nodeId: string,
+    creationSha: string,
+  ): void;
+
+  /**
+   * Return the `{nodeId, creationSha}` recorded for `(packageId, kind, ref)`,
+   * or `undefined` if no such row exists.
+   */
+  lookup(
+    packageId: string,
+    kind: string,
+    ref: string,
+  ): { nodeId: string; creationSha: string } | undefined;
 }

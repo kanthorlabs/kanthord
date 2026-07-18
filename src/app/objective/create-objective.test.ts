@@ -64,6 +64,23 @@ class FakeInitiativeRepository implements InitiativeRepository {
   listAllInitiatives(): Array<{ id: string; paused: boolean }> {
     return [];
   }
+
+  getSha256(_id: string): string | undefined {
+    return undefined;
+  }
+  conditionalRenameInitiative(
+    _id: string,
+    _expectedSha: string,
+    _name: string,
+  ) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalRenameObjective(_id: string, _expectedSha: string, _name: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalDeleteObjective(_id: string, _expectedSha: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
 }
 
 type KindResult =

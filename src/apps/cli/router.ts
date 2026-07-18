@@ -28,6 +28,11 @@ import type { RejectTask } from "../../app/task/reject-task.ts";
 import type { RunDaemon } from "../../app/task/run-daemon.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
 import type { ImportResources } from "../../app/resource/import-resources.ts";
+import type { ExportInitiative } from "../../app/graph/export-initiative.ts";
+import type { CreateGraph } from "../../app/graph/create-graph.ts";
+import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
+import type { ListInitiatives } from "../../app/initiative/list-initiatives.ts";
+import type { ListObjectives } from "../../app/objective/list-objectives.ts";
 import { runGraphCheck } from "./graph-check.ts";
 import { runDbMigrate, runDbStatus } from "./db.ts";
 import { runCreateProject, runRenameProject } from "./project.ts";
@@ -36,8 +41,13 @@ import {
   runRenameInitiative,
   runPauseInitiative,
   runResumeInitiative,
+  runListInitiatives,
 } from "./initiative.ts";
-import { runCreateObjective, runRenameObjective } from "./objective.ts";
+import {
+  runCreateObjective,
+  runRenameObjective,
+  runListObjectives,
+} from "./objective.ts";
 import {
   runCreateRepository,
   runCreateCredential,
@@ -64,6 +74,8 @@ import {
   runFindResource,
 } from "./find.ts";
 import { runImportResource } from "./import.ts";
+import { runExportInitiative } from "./export.ts";
+import { runImportGraph } from "./import-graph.ts";
 import { runLogin } from "./login.ts";
 import type { LoginDeps } from "./login.ts";
 
@@ -96,13 +108,25 @@ export interface RouterDeps {
   buildDaemon: (failTaskIds: string[]) => RunDaemon;
   listEvents: ListEvents;
   importResources: ImportResources;
+  exportInitiative: ExportInitiative;
+  createGraph: CreateGraph;
+  applyGraph: ApplyGraph;
+  listInitiatives: ListInitiatives;
+  listObjectives: ListObjectives;
   login: LoginDeps;
+  newId: () => string;
 }
 
 /** Shape of each command entry in the COMMANDS table. */
 interface CommandEntry {
   usage: string;
   parse: ParseArgsConfig["options"];
+  /**
+   * When set, the first positional argument (e.g. `import graph <dir>`) is
+   * accepted and promoted to this named flag when the flag is not already
+   * supplied.  Keeps flag-based invocations working unchanged.
+   */
+  positional?: string;
   handler(
     args: Record<string, unknown>,
     deps: RouterDeps,
@@ -401,14 +425,38 @@ export const COMMANDS: Record<string, CommandEntry> = {
   },
 
   "list task": {
-    usage: "usage: list task --initiative <id> [--status <status>] [--json]",
+    usage:
+      "usage: list task --initiative <id> [--objective <id>] [--status <status>] [--json]",
     parse: {
       initiative: { type: "string" },
+      objective: { type: "string" },
       status: { type: "string" },
       json: { type: "boolean" },
     },
     async handler(args, deps) {
       return runListTasks(args, deps.listTasks);
+    },
+  },
+
+  "list initiative": {
+    usage: "usage: list initiative --project <id> [--json]",
+    parse: {
+      project: { type: "string" },
+      json: { type: "boolean" },
+    },
+    handler(args, deps) {
+      return Promise.resolve(runListInitiatives(args, deps.listInitiatives));
+    },
+  },
+
+  "list objective": {
+    usage: "usage: list objective --initiative <id> [--json]",
+    parse: {
+      initiative: { type: "string" },
+      json: { type: "boolean" },
+    },
+    handler(args, deps) {
+      return Promise.resolve(runListObjectives(args, deps.listObjectives));
     },
   },
 
@@ -503,6 +551,58 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
   },
 
+  "import graph": {
+    usage:
+      "usage: import graph <dir> [--create --project <id>] [--apply --initiative <id>] [--dry-run] [--delete-missing [--confirm-delete]]",
+    positional: "dir",
+    parse: {
+      dir: { type: "string" },
+      create: { type: "boolean" },
+      apply: { type: "boolean" },
+      "dry-run": { type: "boolean" },
+      "delete-missing": { type: "boolean" },
+      "confirm-delete": { type: "boolean" },
+      project: { type: "string" },
+      initiative: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runImportGraph(
+        {
+          dir: (args["dir"] as string | undefined) ?? ".",
+          create: (args["create"] as boolean | undefined) ?? false,
+          apply: (args["apply"] as boolean | undefined) ?? false,
+          dryRun: (args["dry-run"] as boolean | undefined) ?? false,
+          deleteMissing:
+            (args["delete-missing"] as boolean | undefined) ?? false,
+          confirmDelete:
+            (args["confirm-delete"] as boolean | undefined) ?? false,
+          project: args["project"] as string | undefined,
+          initiative: args["initiative"] as string | undefined,
+        },
+        {
+          createGraph: deps.createGraph,
+          applyGraph: deps.applyGraph,
+          newId: deps.newId,
+        },
+      );
+    },
+  },
+
+  "export initiative": {
+    usage: "usage: export initiative <id> --out <dir>",
+    positional: "id",
+    parse: {
+      id: { type: "string" },
+      out: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runExportInitiative(
+        { id: args["id"] as string, out: args["out"] as string | undefined },
+        deps.exportInitiative,
+      );
+    },
+  },
+
   login: {
     usage: "usage: login --provider <provider> --project <id> --name <name>",
     parse: {
@@ -563,14 +663,16 @@ export async function dispatch(
     };
   }
 
-  // Parse remaining flags in strict mode
+  // Parse remaining flags in strict mode.
+  // Commands that declare `positional` accept one leading positional arg.
+  const allowPositionals = entry.positional !== undefined;
   let parsed: ReturnType<typeof parseArgs>;
   try {
     parsed = parseArgs({
       args: rest,
       options: entry.parse,
       strict: true,
-      allowPositionals: false,
+      allowPositionals,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -581,5 +683,15 @@ export async function dispatch(
     };
   }
 
-  return entry.handler(parsed.values as Record<string, unknown>, deps);
+  // Promote the first positional to the declared named flag when not already set.
+  let values = parsed.values as Record<string, unknown>;
+  if (
+    entry.positional !== undefined &&
+    parsed.positionals.length > 0 &&
+    values[entry.positional] === undefined
+  ) {
+    values = { ...values, [entry.positional]: parsed.positionals[0] };
+  }
+
+  return entry.handler(values, deps);
 }

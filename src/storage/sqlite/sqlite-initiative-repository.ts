@@ -1,7 +1,12 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import type { InitiativeRepository } from "../port.ts";
+import type { InitiativeRepository, CasResult } from "../port.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
+import {
+  sha256Hex,
+  canonicalInitiative,
+  canonicalObjective,
+} from "./node-sha.ts";
 
 /** `node:sqlite` adapter for the `InitiativeRepository` port. */
 export class SqliteInitiativeRepository implements InitiativeRepository {
@@ -12,11 +17,17 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
   }
 
   save(initiative: Initiative): void {
+    const sha256 = sha256Hex(
+      canonicalInitiative({
+        name: initiative.name,
+        projectId: initiative.projectId,
+      }),
+    );
     this.#db
       .prepare(
-        "INSERT INTO initiatives (id, projectId, name) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name",
+        "INSERT INTO initiatives (id, projectId, name, sha256) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256",
       )
-      .run(initiative.id, initiative.projectId, initiative.name);
+      .run(initiative.id, initiative.projectId, initiative.name, sha256);
   }
 
   get(id: string): Initiative | undefined {
@@ -28,11 +39,17 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
   }
 
   saveObjective(objective: Objective): void {
+    const sha256 = sha256Hex(
+      canonicalObjective({
+        name: objective.name,
+        initiativeId: objective.initiativeId,
+      }),
+    );
     this.#db
       .prepare(
-        "INSERT INTO objectives (id, initiativeId, name) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name",
+        "INSERT INTO objectives (id, initiativeId, name, sha256) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256",
       )
-      .run(objective.id, objective.initiativeId, objective.name);
+      .run(objective.id, objective.initiativeId, objective.name, sha256);
   }
 
   getObjective(id: string): Objective | undefined {
@@ -103,5 +120,99 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
       .prepare("SELECT id, paused FROM initiatives")
       .all() as Array<{ id: string; paused: number }>;
     return rows.map((r) => ({ id: r.id, paused: r.paused === 1 }));
+  }
+
+  getSha256(id: string): string | undefined {
+    type Row = { sha256: string };
+    // Check initiatives first, then objectives
+    const initRow = this.#db
+      .prepare("SELECT sha256 FROM initiatives WHERE id = ?")
+      .get(id) as Row | undefined;
+    if (initRow !== undefined) return initRow.sha256;
+    const objRow = this.#db
+      .prepare("SELECT sha256 FROM objectives WHERE id = ?")
+      .get(id) as Row | undefined;
+    return objRow?.sha256;
+  }
+
+  /**
+   * Conditionally rename an initiative.
+   * Returns `applied` with a fresh sha on success, or `conflict` with the
+   * current stored sha when `expectedSha` does not match.
+   */
+  conditionalRenameInitiative(
+    id: string,
+    expectedSha: string,
+    name: string,
+  ): CasResult {
+    type ShaRow = { sha256: string; projectId: string };
+    const row = this.#db
+      .prepare("SELECT sha256, projectId FROM initiatives WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    const currentSha = row?.sha256 ?? "";
+    if (currentSha !== expectedSha) {
+      return { status: "conflict", currentSha };
+    }
+    const freshSha = sha256Hex(
+      canonicalInitiative({ name, projectId: row!.projectId }),
+    );
+    this.#db
+      .prepare("UPDATE initiatives SET name = ?, sha256 = ? WHERE id = ?")
+      .run(name, freshSha, id);
+    return { status: "applied", freshSha };
+  }
+
+  /**
+   * Conditionally rename an objective.
+   * Returns `applied` with a fresh sha on success, or `conflict` with the
+   * current stored sha when `expectedSha` does not match.
+   */
+  conditionalRenameObjective(
+    id: string,
+    expectedSha: string,
+    name: string,
+  ): CasResult {
+    type ShaRow = { sha256: string; initiativeId: string };
+    const row = this.#db
+      .prepare("SELECT sha256, initiativeId FROM objectives WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    const currentSha = row?.sha256 ?? "";
+    if (currentSha !== expectedSha) {
+      return { status: "conflict", currentSha };
+    }
+    const freshSha = sha256Hex(
+      canonicalObjective({ name, initiativeId: row!.initiativeId }),
+    );
+    this.#db
+      .prepare("UPDATE objectives SET name = ?, sha256 = ? WHERE id = ?")
+      .run(name, freshSha, id);
+    return { status: "applied", freshSha };
+  }
+
+  /**
+   * Conditionally delete an empty objective.
+   * Returns `applied` on success (empty + sha match), or a non-applied result
+   * when the objective is non-empty or the sha is stale.
+   */
+  conditionalDeleteObjective(id: string, expectedSha: string): CasResult {
+    type ShaRow = { sha256: string };
+    type CountRow = { count: number };
+    const shaRow = this.#db
+      .prepare("SELECT sha256 FROM objectives WHERE id = ?")
+      .get(id) as ShaRow | undefined;
+    const currentSha = shaRow?.sha256 ?? "";
+    if (currentSha !== expectedSha) {
+      return { status: "conflict", currentSha };
+    }
+    const countRow = this.#db
+      .prepare("SELECT COUNT(*) AS count FROM tasks WHERE objectiveId = ?")
+      .get(id) as CountRow | undefined;
+    const taskCount = countRow?.count ?? 0;
+    if (taskCount > 0) {
+      // Non-empty: cannot delete — return a non-applied signal
+      return { status: "conflict", currentSha: "" };
+    }
+    this.#db.prepare("DELETE FROM objectives WHERE id = ?").run(id);
+    return { status: "applied", freshSha: "" };
   }
 }

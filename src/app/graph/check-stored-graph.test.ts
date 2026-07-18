@@ -50,6 +50,30 @@ class StubTaskRepository implements TaskRepository {
   getInitiativeId(_taskId: string): string | undefined {
     return undefined;
   }
+
+  getSha256(_id: string): string | undefined {
+    return undefined;
+  }
+  compareAndApply(
+    _id: string,
+    _expectedSha: string,
+    _spec: {
+      title: string;
+      instructions: string;
+      ac: string[];
+      agent: string;
+      verification: string[] | null;
+      dependencies: string[];
+    },
+  ) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalReparent(_id: string, _expectedSha: string, _objectiveId: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
+  conditionalDeleteTask(_id: string, _expectedSha: string) {
+    return { status: "applied" as const, freshSha: "" };
+  }
 }
 
 test("CheckStoredGraph.execute returns ready/blocked report for a diamond graph with mixed statuses", async () => {

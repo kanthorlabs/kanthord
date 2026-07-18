@@ -9,8 +9,16 @@ import { migrate } from "./migrate.ts";
 import { MIGRATIONS } from "./migrations.ts";
 import { SqliteProjectRepository } from "./sqlite-project-repository.ts";
 import { SqliteInitiativeRepository } from "./sqlite-initiative-repository.ts";
+import { SqliteTaskRepository } from "./sqlite-task-repository.ts";
+import {
+  sha256Hex,
+  canonicalInitiative,
+  canonicalObjective,
+} from "./node-sha.ts";
 import { newId } from "../../domain/entity.ts";
+import { newTask } from "../../domain/task.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
+import type { CasResult } from "../port.ts";
 
 function makeTempDb() {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-init-repo-test-"));
@@ -476,4 +484,351 @@ test("SqliteInitiativeRepository saveObjective with same id and new name updates
   });
   const loaded = repo.getObjective(objective.id);
   assert.equal(loaded?.name, "Renamed Objective");
+});
+
+// ---------------------------------------------------------------------------
+// S02-T4: write-hook stamps sha256 on initiative and objective mutation paths
+// ---------------------------------------------------------------------------
+
+type InitShaRow = { sha256: string };
+
+function readInitiativeSha(
+  db: ReturnType<typeof openDatabase>,
+  id: string,
+): string {
+  const row = db
+    .prepare("SELECT sha256 FROM initiatives WHERE id = ?")
+    .get(id) as InitShaRow | undefined;
+  if (row === undefined) throw new Error(`initiative ${id} not found`);
+  return row.sha256;
+}
+
+function readObjectiveSha(
+  db: ReturnType<typeof openDatabase>,
+  id: string,
+): string {
+  const row = db
+    .prepare("SELECT sha256 FROM objectives WHERE id = ?")
+    .get(id) as InitShaRow | undefined;
+  if (row === undefined) throw new Error(`objective ${id} not found`);
+  return row.sha256;
+}
+
+test("save(initiative) stamps sha256Hex(canonicalInitiative({name, projectId}))", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-sha-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiative: Initiative = {
+    id: newId(),
+    projectId,
+    name: "Sha Initiative",
+  };
+  repo.save(initiative);
+
+  const expected = sha256Hex(
+    canonicalInitiative({ name: initiative.name, projectId }),
+  );
+  assert.equal(readInitiativeSha(db, initiative.id), expected);
+});
+
+test("saveObjective stamps sha256Hex(canonicalObjective({name, initiativeId}))", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-sha-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-sha-obj" });
+
+  const objective: Objective = {
+    id: newId(),
+    initiativeId,
+    name: "Sha Objective",
+  };
+  repo.saveObjective(objective);
+
+  const expected = sha256Hex(
+    canonicalObjective({ name: objective.name, initiativeId }),
+  );
+  assert.equal(readObjectiveSha(db, objective.id), expected);
+});
+
+test("re-saving initiative with a changed name bumps the sha256 token", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-bump-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiative: Initiative = {
+    id: newId(),
+    projectId,
+    name: "Before Rename",
+  };
+  repo.save(initiative);
+  const shaBeforeRename = readInitiativeSha(db, initiative.id);
+
+  repo.save({ ...initiative, name: "After Rename" });
+  const shaAfterRename = readInitiativeSha(db, initiative.id);
+
+  assert.notEqual(shaAfterRename, shaBeforeRename);
+  const expectedAfter = sha256Hex(
+    canonicalInitiative({ name: "After Rename", projectId }),
+  );
+  assert.equal(shaAfterRename, expectedAfter);
+});
+
+// ---------------------------------------------------------------------------
+// S06-T2: CAS ops — conditionalRenameInitiative / conditionalRenameObjective /
+//          conditionalDeleteObjective
+// ---------------------------------------------------------------------------
+
+test("conditionalRenameInitiative applies name change and returns applied with fresh sha", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-cas-rename-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "Original Name" });
+  const originalSha = readInitiativeSha(db, initiativeId);
+
+  const result: CasResult = repo.conditionalRenameInitiative(
+    initiativeId,
+    originalSha,
+    "New Name",
+  );
+
+  assert.equal(result.status, "applied");
+  assert.ok("freshSha" in result, "applied result must carry freshSha");
+  assert.notEqual(
+    (result as { status: "applied"; freshSha: string }).freshSha,
+    originalSha,
+    "freshSha must differ from originalSha after rename",
+  );
+  const expectedFreshSha = sha256Hex(
+    canonicalInitiative({ name: "New Name", projectId }),
+  );
+  assert.equal(
+    (result as { status: "applied"; freshSha: string }).freshSha,
+    expectedFreshSha,
+    "freshSha must equal recomputed canonical hash of new name",
+  );
+  assert.equal(repo.get(initiativeId)?.name, "New Name");
+});
+
+test("conditionalRenameInitiative returns conflict and leaves name unchanged on stale sha", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-cas-conflict-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "Original Name" });
+  const realSha = readInitiativeSha(db, initiativeId);
+
+  const result: CasResult = repo.conditionalRenameInitiative(
+    initiativeId,
+    "stale-sha-that-does-not-match",
+    "New Name",
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.ok("currentSha" in result, "conflict result must carry currentSha");
+  assert.equal(
+    (result as { status: "conflict"; currentSha: string }).currentSha,
+    realSha,
+    "currentSha must equal the real stored sha",
+  );
+  assert.equal(
+    repo.get(initiativeId)?.name,
+    "Original Name",
+    "name must be unchanged on conflict",
+  );
+});
+
+test("conditionalRenameObjective applies name change and returns applied with fresh sha", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-cas-rename-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-cas-rename-obj" });
+  const objectiveId = newId();
+  repo.saveObjective({ id: objectiveId, initiativeId, name: "Original Obj" });
+  const originalSha = readObjectiveSha(db, objectiveId);
+
+  const result: CasResult = repo.conditionalRenameObjective(
+    objectiveId,
+    originalSha,
+    "New Obj Name",
+  );
+
+  assert.equal(result.status, "applied");
+  assert.ok("freshSha" in result, "applied result must carry freshSha");
+  assert.notEqual(
+    (result as { status: "applied"; freshSha: string }).freshSha,
+    originalSha,
+    "freshSha must differ from originalSha after rename",
+  );
+  const expectedFreshSha = sha256Hex(
+    canonicalObjective({ name: "New Obj Name", initiativeId }),
+  );
+  assert.equal(
+    (result as { status: "applied"; freshSha: string }).freshSha,
+    expectedFreshSha,
+    "freshSha must equal recomputed canonical hash of new name",
+  );
+  assert.equal(repo.getObjective(objectiveId)?.name, "New Obj Name");
+});
+
+test("conditionalRenameObjective returns conflict and leaves name unchanged on stale sha", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-cas-conflict-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-cas-conflict-obj" });
+  const objectiveId = newId();
+  repo.saveObjective({ id: objectiveId, initiativeId, name: "Original Obj" });
+  const realSha = readObjectiveSha(db, objectiveId);
+
+  const result: CasResult = repo.conditionalRenameObjective(
+    objectiveId,
+    "stale-sha-that-does-not-match",
+    "New Obj Name",
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.ok("currentSha" in result, "conflict result must carry currentSha");
+  assert.equal(
+    (result as { status: "conflict"; currentSha: string }).currentSha,
+    realSha,
+    "currentSha must equal the real stored sha",
+  );
+  assert.equal(
+    repo.getObjective(objectiveId)?.name,
+    "Original Obj",
+    "name must be unchanged on conflict",
+  );
+});
+
+test("conditionalDeleteObjective deletes empty objective on sha match", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-cas-del-empty-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-cas-del-empty-obj" });
+  const objectiveId = newId();
+  repo.saveObjective({
+    id: objectiveId,
+    initiativeId,
+    name: "Empty Objective",
+  });
+  const sha = readObjectiveSha(db, objectiveId);
+
+  const result: CasResult = repo.conditionalDeleteObjective(objectiveId, sha);
+
+  // Status is "applied"; the row must be gone
+  assert.equal(result.status, "applied");
+  assert.equal(
+    repo.getObjective(objectiveId),
+    undefined,
+    "objective must be deleted after conditionalDeleteObjective on match",
+  );
+});
+
+test("conditionalDeleteObjective returns non-applied result for non-empty objective and leaves it intact", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-cas-del-nonempty-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-cas-del-nonempty-obj" });
+  const objectiveId = newId();
+  repo.saveObjective({
+    id: objectiveId,
+    initiativeId,
+    name: "Non-empty Objective",
+  });
+  const sha = readObjectiveSha(db, objectiveId);
+
+  // Create a task referencing this objective so it is non-empty
+  const taskRepo = new SqliteTaskRepository(db);
+  const task = newTask({ objectiveId, title: "A task" });
+  taskRepo.save(task);
+
+  // Attempt to delete the non-empty objective
+  const result = repo.conditionalDeleteObjective(objectiveId, sha);
+
+  // Must NOT be "applied" — exact shape pinned by Story 08
+  assert.notEqual(
+    result.status,
+    "applied",
+    "non-empty objective must not be deleted",
+  );
+  assert.ok(
+    repo.getObjective(objectiveId) !== undefined,
+    "objective row must still exist after failed non-empty delete",
+  );
 });

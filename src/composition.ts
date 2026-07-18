@@ -56,6 +56,14 @@ import { ListEvents } from "./app/task/list-events.ts";
 import { GetTask } from "./app/task/get-task.ts";
 import { ApproveTask } from "./app/task/approve-task.ts";
 import { RejectTask } from "./app/task/reject-task.ts";
+import { ExportInitiative } from "./app/graph/export-initiative.ts";
+import { CreateGraph } from "./app/graph/create-graph.ts";
+import { ApplyGraph } from "./app/graph/apply-graph.ts";
+import { ListInitiatives } from "./app/initiative/list-initiatives.ts";
+import { ListObjectives } from "./app/objective/list-objectives.ts";
+import { StoreGraph } from "./app/graph/store-graph.ts";
+import { SqliteGraphImportMap } from "./storage/sqlite/sqlite-graph-import-map.ts";
+import { newId } from "./domain/entity.ts";
 import { promoteProposal } from "./workspace/local.ts";
 import { getOAuthProvider } from "@earendil-works/pi-ai/oauth";
 
@@ -137,6 +145,31 @@ export function buildDeps(
     transactor,
   );
   const listTasks = new ListTasks(taskRepository);
+  const listInitiatives = new ListInitiatives(initiativeRepository);
+  const listObjectives = new ListObjectives(initiativeRepository);
+  const exportInitiative = new ExportInitiative({
+    tasks: taskRepository,
+    initiatives: initiativeRepository,
+  });
+  const importMap = new SqliteGraphImportMap(db);
+  const storeGraph = new StoreGraph(taskRepository);
+  const createGraph = new CreateGraph({
+    initiatives: initiativeRepository,
+    tasks: taskRepository,
+    storeGraph,
+    projects: projectRepository,
+    importMap,
+    uow: unitOfWork,
+    newId,
+  });
+  const applyGraph = new ApplyGraph({
+    initiatives: initiativeRepository,
+    tasks: taskRepository,
+    storeGraph,
+    importMap,
+    uow: unitOfWork,
+    newId,
+  });
   const listEvents = new ListEvents(events);
   const getTask = new GetTask(taskRepository, taskRepository);
   const approveTask = new ApproveTask(
@@ -281,6 +314,12 @@ export function buildDeps(
     buildDaemon,
     listEvents,
     importResources,
+    exportInitiative,
+    createGraph,
+    applyGraph,
+    listInitiatives,
+    listObjectives,
     login,
+    newId,
   };
 }

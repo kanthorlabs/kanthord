@@ -10,9 +10,12 @@ import { MIGRATIONS } from "./migrations.ts";
 import { SqliteProjectRepository } from "./sqlite-project-repository.ts";
 import { SqliteInitiativeRepository } from "./sqlite-initiative-repository.ts";
 import { SqliteTaskRepository } from "./sqlite-task-repository.ts";
+import { SqliteGraphImportMap } from "./sqlite-graph-import-map.ts";
 import { SqliteUnitOfWork } from "./sqlite-unit-of-work.ts";
+import { sha256Hex, canonicalTask } from "./node-sha.ts";
 import { newId } from "../../domain/entity.ts";
 import type { Task } from "../../domain/task.ts";
+import type { CasResult } from "../port.ts";
 
 function makeTempDb() {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-task-repo-test-"));
@@ -857,4 +860,584 @@ test("SqliteTaskRepository getTaskResult returns undefined for unknown task", ()
 
   const result = r.getTaskResult("nonexistent-task-id");
   assert.equal(result, undefined);
+});
+
+// ---------------------------------------------------------------------------
+// S02-T3: write-hook stamps sha256 on every task mutation path
+// ---------------------------------------------------------------------------
+
+type ShaRow = { sha256: string };
+
+function readSha(db: ReturnType<typeof openDatabase>, taskId: string): string {
+  const row = db
+    .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+    .get(taskId) as ShaRow | undefined;
+  if (row === undefined) throw new Error(`task ${taskId} not found`);
+  return row.sha256;
+}
+
+test("save stamps sha256 equal to sha256Hex(canonicalTask(...))", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Hook task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "do it",
+    ac: ["criterion one"],
+  };
+  repo.save(task);
+
+  const expected = sha256Hex(
+    canonicalTask({
+      title: task.title,
+      instructions: task.instructions ?? "",
+      ac: task.ac ?? [],
+      agent: task.agent ?? "generic@1",
+      verification: task.verification,
+      dependencies: task.dependencies,
+      objectiveId: task.objectiveId,
+      status: task.status,
+    }),
+  );
+  assert.equal(readSha(db, task.id), expected);
+});
+
+test("saveAll stamps sha256 on each row", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const taskA: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Batch A",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "step A",
+    ac: ["done A"],
+  };
+  const taskB: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Batch B",
+    status: "pending",
+    dependencies: [taskA.id],
+    agent: "generic@1",
+    instructions: "step B",
+    ac: ["done B"],
+  };
+
+  repo.saveAll([taskA, taskB]);
+
+  const expectedA = sha256Hex(
+    canonicalTask({
+      title: taskA.title,
+      instructions: taskA.instructions ?? "",
+      ac: taskA.ac ?? [],
+      agent: taskA.agent ?? "generic@1",
+      verification: taskA.verification,
+      dependencies: taskA.dependencies,
+      objectiveId: taskA.objectiveId,
+      status: taskA.status,
+    }),
+  );
+  const expectedB = sha256Hex(
+    canonicalTask({
+      title: taskB.title,
+      instructions: taskB.instructions ?? "",
+      ac: taskB.ac ?? [],
+      agent: taskB.agent ?? "generic@1",
+      verification: taskB.verification,
+      dependencies: taskB.dependencies,
+      objectiveId: taskB.objectiveId,
+      status: taskB.status,
+    }),
+  );
+  assert.equal(readSha(db, taskA.id), expectedA);
+  assert.equal(readSha(db, taskB.id), expectedB);
+});
+
+test("addDependency bumps sha256 to a different value matching the recomputed aggregate", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const dep: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Dep",
+    status: "pending",
+    dependencies: [],
+  };
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "run",
+    ac: ["ok"],
+  };
+  repo.save(dep);
+  repo.save(task);
+
+  const shaBeforeAdd = readSha(db, task.id);
+  repo.addDependency(task.id, dep.id);
+  const shaAfterAdd = readSha(db, task.id);
+
+  // must be different from before
+  assert.notEqual(shaAfterAdd, shaBeforeAdd);
+
+  // must equal sha of aggregate with new dep
+  const expectedAfterAdd = sha256Hex(
+    canonicalTask({
+      title: task.title,
+      instructions: task.instructions ?? "",
+      ac: task.ac ?? [],
+      agent: task.agent ?? "generic@1",
+      verification: task.verification,
+      dependencies: [dep.id],
+      objectiveId: task.objectiveId,
+      status: task.status,
+    }),
+  );
+  assert.equal(shaAfterAdd, expectedAfterAdd);
+});
+
+test("removeDependency bumps sha256 back after removing the dependency", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const dep: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Dep",
+    status: "pending",
+    dependencies: [],
+  };
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Task with dep",
+    status: "pending",
+    dependencies: [dep.id],
+    agent: "generic@1",
+    instructions: "run",
+    ac: ["ok"],
+  };
+  repo.save(dep);
+  repo.save(task);
+
+  const shaWithDep = readSha(db, task.id);
+  repo.removeDependency(task.id, dep.id);
+  const shaWithoutDep = readSha(db, task.id);
+
+  // must be different after removal
+  assert.notEqual(shaWithoutDep, shaWithDep);
+
+  // must equal sha of aggregate without dep
+  const expectedWithoutDep = sha256Hex(
+    canonicalTask({
+      title: task.title,
+      instructions: task.instructions ?? "",
+      ac: task.ac ?? [],
+      agent: task.agent ?? "generic@1",
+      verification: task.verification,
+      dependencies: [],
+      objectiveId: task.objectiveId,
+      status: task.status,
+    }),
+  );
+  assert.equal(shaWithoutDep, expectedWithoutDep);
+});
+
+test("save after status transition produces a different sha256 than the pending token", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Status task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "transition me",
+    ac: ["lands"],
+  };
+  repo.save(task);
+  const shaPending = readSha(db, task.id);
+
+  const runningTask: Task = { ...task, status: "running" };
+  repo.save(runningTask);
+  const shaRunning = readSha(db, task.id);
+
+  assert.notEqual(shaRunning, shaPending);
+
+  const expectedRunning = sha256Hex(
+    canonicalTask({
+      title: runningTask.title,
+      instructions: runningTask.instructions ?? "",
+      ac: runningTask.ac ?? [],
+      agent: runningTask.agent ?? "generic@1",
+      verification: runningTask.verification,
+      dependencies: runningTask.dependencies,
+      objectiveId: runningTask.objectiveId,
+      status: runningTask.status,
+    }),
+  );
+  assert.equal(shaRunning, expectedRunning);
+});
+
+// ---------------------------------------------------------------------------
+// Story 06 T1 — task CAS ops (compareAndApply / conditionalReparent / conditionalDeleteTask)
+// ---------------------------------------------------------------------------
+
+test("compareAndApply with matching sha applies new spec+deps and returns applied with fresh sha", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Original title",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "original instructions",
+    ac: ["original ac"],
+  };
+  repo.save(task);
+  const originalSha = readSha(db, task.id);
+
+  const result: CasResult = repo.compareAndApply(task.id, originalSha, {
+    title: "Updated title",
+    instructions: "updated instructions",
+    ac: ["updated ac"],
+    agent: "generic@1",
+    verification: null,
+    dependencies: [],
+  });
+
+  assert.equal(result.status, "applied");
+  assert.ok("freshSha" in result);
+  assert.notEqual(
+    (result as { status: "applied"; freshSha: string }).freshSha,
+    originalSha,
+  );
+
+  const updated = repo.get(task.id);
+  assert.equal(updated?.title, "Updated title");
+  assert.equal(updated?.instructions, "updated instructions");
+  assert.deepEqual(updated?.ac, ["updated ac"]);
+});
+
+test("compareAndApply with stale sha returns conflict+currentSha and row is unchanged", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Unchanged title",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "unchanged",
+    ac: ["ac item"],
+  };
+  repo.save(task);
+  const realSha = readSha(db, task.id);
+
+  const result: CasResult = repo.compareAndApply(
+    task.id,
+    "staleSha00000000000000000000000000000000000000000000000000000000",
+    {
+      title: "Should not apply",
+      instructions: "should not apply",
+      ac: [],
+      agent: "generic@1",
+      verification: null,
+      dependencies: [],
+    },
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.ok("currentSha" in result);
+  assert.equal(
+    (result as { status: "conflict"; currentSha: string }).currentSha,
+    realSha,
+  );
+
+  const unchanged = repo.get(task.id);
+  assert.equal(unchanged?.title, "Unchanged title");
+});
+
+test("compareAndApply replacing deps makes fresh sha equal recomputed aggregate (SET semantics)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const dep1: Task = {
+    id: newId(),
+    objectiveId,
+    title: "D1",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  const dep2: Task = {
+    id: newId(),
+    objectiveId,
+    title: "D2",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(dep1);
+  repo.save(dep2);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Dep task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "with deps",
+    ac: ["ac"],
+  };
+  repo.save(task);
+  const sha0 = readSha(db, task.id);
+
+  // Apply with deps in REVERSED order — CAS result sha must equal SET-sorted recompute
+  const result: CasResult = repo.compareAndApply(task.id, sha0, {
+    title: "Dep task",
+    instructions: "with deps",
+    ac: ["ac"],
+    agent: "generic@1",
+    verification: null,
+    dependencies: [dep2.id, dep1.id], // intentionally reversed
+  });
+
+  assert.equal(result.status, "applied");
+  const freshSha = (result as { status: "applied"; freshSha: string }).freshSha;
+
+  const sortedDeps = [dep2.id, dep1.id].sort();
+  const expected = sha256Hex(
+    canonicalTask({
+      title: "Dep task",
+      instructions: "with deps",
+      ac: ["ac"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: sortedDeps,
+      objectiveId,
+      status: "pending",
+    }),
+  );
+  assert.equal(freshSha, expected);
+});
+
+test("conditionalReparent moves objectiveId on a match", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { initiativeId, objectiveId } = seedHierarchy(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+  const obj2Id = newId();
+  initRepo.saveObjective({ id: obj2Id, initiativeId, name: "ObjB" });
+
+  const repo = new SqliteTaskRepository(db);
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "T",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(task);
+  const sha = readSha(db, task.id);
+
+  const result: CasResult = repo.conditionalReparent(task.id, sha, obj2Id);
+
+  assert.equal(result.status, "applied");
+  const moved = repo.get(task.id);
+  assert.equal(moved?.objectiveId, obj2Id);
+});
+
+test("conditionalReparent conflicts on a stale sha and leaves objectiveId unchanged", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { initiativeId, objectiveId } = seedHierarchy(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+  const obj2Id = newId();
+  initRepo.saveObjective({ id: obj2Id, initiativeId, name: "ObjB" });
+
+  const repo = new SqliteTaskRepository(db);
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "T2",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(task);
+  const realSha = readSha(db, task.id);
+
+  const result: CasResult = repo.conditionalReparent(
+    task.id,
+    "stalesha0000000000000000000000000000000000000000000000000000000",
+    obj2Id,
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(
+    (result as { status: "conflict"; currentSha: string }).currentSha,
+    realSha,
+  );
+  const unchanged = repo.get(task.id);
+  assert.equal(unchanged?.objectiveId, objectiveId);
+});
+
+test("conditionalDeleteTask deletes on match and graph_import_map cascades", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+  const importMap = new SqliteGraphImportMap(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Delete me",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(task);
+  const sha = readSha(db, task.id);
+
+  // seed an import-map row for this task
+  importMap.reserve("pkg1", "task", "my-ref", task.id, sha);
+
+  const result: CasResult = repo.conditionalDeleteTask(task.id, sha);
+
+  assert.equal(result.status, "applied");
+  assert.equal(repo.get(task.id), undefined);
+
+  // cascade: the graph_import_map row should be gone
+  const mapRow = importMap.lookup("pkg1", "task", "my-ref");
+  assert.equal(mapRow, undefined);
+});
+
+test("conditionalDeleteTask conflicts on stale sha and row is kept", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Keep me",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(task);
+  const realSha = readSha(db, task.id);
+
+  const result: CasResult = repo.conditionalDeleteTask(
+    task.id,
+    "stale_sha_000000000000000000000000000000000000000000000000000000000",
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(
+    (result as { status: "conflict"; currentSha: string }).currentSha,
+    realSha,
+  );
+  assert.notEqual(repo.get(task.id), undefined);
 });

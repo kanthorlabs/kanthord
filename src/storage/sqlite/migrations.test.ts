@@ -61,11 +61,12 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 5 and creates exactly ten core tables", () => {
+test("migrates to version 6 and creates exactly eleven core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 5);
+    assert.equal(userVersion(db), 6);
     assert.deepEqual(userTables(db), [
       "events",
+      "graph_import_map",
       "initiatives",
       "jobs",
       "objectives",
@@ -81,7 +82,7 @@ test("migrates to version 5 and creates exactly ten core tables", () => {
 
 // ── (b) columns per table ────────────────────────────────────────────────────
 
-test("schema columns match locked DDL for all ten tables", () => {
+test("schema columns match locked DDL for all eleven tables", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "projects"), ["id", "name"]);
     assert.deepEqual(columnNames(db, "resources"), [
@@ -96,11 +97,13 @@ test("schema columns match locked DDL for all ten tables", () => {
       "projectId",
       "name",
       "paused",
+      "sha256",
     ]);
     assert.deepEqual(columnNames(db, "objectives"), [
       "id",
       "initiativeId",
       "name",
+      "sha256",
     ]);
     assert.deepEqual(columnNames(db, "tasks"), [
       "id",
@@ -111,6 +114,7 @@ test("schema columns match locked DDL for all ten tables", () => {
       "instructions",
       "ac",
       "verification",
+      "sha256",
     ]);
     assert.deepEqual(columnNames(db, "task_dependencies"), [
       "taskId",
@@ -141,6 +145,14 @@ test("schema columns match locked DDL for all ten tables", () => {
       "rejection_resolution",
       "rejection_reason",
       "evidence",
+    ]);
+    assert.deepEqual(columnNames(db, "graph_import_map"), [
+      "package_id",
+      "kind",
+      "ref",
+      "objective_id",
+      "task_id",
+      "creation_sha",
     ]);
   });
 });
@@ -262,7 +274,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 5);
+    assert.equal(second.version, 6);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -349,5 +361,77 @@ test("migration 5 pre-existing task row reads back with agent generic@1, instruc
     assert.equal(row.instructions, "");
     assert.equal(row.ac, "[]");
     assert.equal(row.verification, null);
+  });
+});
+
+// ── (k) migration 6 — graph_import_map exactly-one CHECK ────────────────────
+
+test("migration 6 graph_import_map accepts a valid task row and rejects both-ids or neither-ids (exactly-one CHECK)", () => {
+  withMigratedDb((db) => {
+    const { objectiveId, taskId } = insertChain(db);
+    // a valid row (task_id only) must succeed — proves the table exists
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("pkg-a", "task", "my-task", null, taskId, "sha-ok");
+    }, "a valid task row should be accepted");
+    // a valid row (objective_id only) must succeed
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("pkg-a", "objective", "my-obj", objectiveId, null, "sha-ok2");
+    }, "a valid objective row should be accepted");
+    // inserting both foreign keys must fail the exactly-one CHECK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("pkg-b", "objective", "backend", objectiveId, taskId, "sha-x");
+    }, "inserting both objective_id and task_id should be rejected by exactly-one CHECK");
+    // inserting neither foreign key must fail the exactly-one CHECK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("pkg-c", "objective", "backend2", null, null, "sha-y");
+    }, "inserting neither objective_id nor task_id should be rejected by exactly-one CHECK");
+  });
+});
+
+test("migration 6 graph_import_map UNIQUE(package_id, kind, ref) rejects duplicate", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("pkg-1", "task", "my-task", null, taskId, "sha-1");
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("pkg-1", "task", "my-task", null, taskId, "sha-2");
+    }, "duplicate (package_id, kind, ref) should be rejected by UNIQUE constraint");
+  });
+});
+
+test("migration 6 deleting a task cascades its graph_import_map row", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, task_id, creation_sha) VALUES (?, ?, ?, ?, ?, ?)",
+    ).run("pkg-1", "task", "my-task", null, taskId, "sha-1");
+
+    // verify the row exists before deletion
+    const before = db
+      .prepare("SELECT COUNT(*) as cnt FROM graph_import_map WHERE task_id = ?")
+      .get(taskId) as { cnt: number };
+    assert.equal(before.cnt, 1, "row should exist before task deletion");
+
+    db.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
+
+    const after = db
+      .prepare("SELECT COUNT(*) as cnt FROM graph_import_map WHERE task_id = ?")
+      .get(taskId) as { cnt: number };
+    assert.equal(
+      after.cnt,
+      0,
+      "row should be deleted by CASCADE after task deletion",
+    );
   });
 });

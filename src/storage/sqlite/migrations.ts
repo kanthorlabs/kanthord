@@ -141,4 +141,24 @@ CREATE TABLE task_results (
 );
 `),
   },
+  {
+    version: 6,
+    name: "epic-007-sha256-and-idempotency",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE initiatives ADD COLUMN sha256 TEXT NOT NULL DEFAULT '';
+ALTER TABLE objectives  ADD COLUMN sha256 TEXT NOT NULL DEFAULT '';
+ALTER TABLE tasks       ADD COLUMN sha256 TEXT NOT NULL DEFAULT '';
+CREATE TABLE graph_import_map (
+  package_id   TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('objective','task')),
+  ref          TEXT NOT NULL,
+  objective_id TEXT REFERENCES objectives(id) ON DELETE CASCADE,
+  task_id      TEXT REFERENCES tasks(id)      ON DELETE CASCADE,
+  creation_sha TEXT NOT NULL,
+  UNIQUE(package_id, kind, ref),
+  CHECK ((objective_id IS NOT NULL) <> (task_id IS NOT NULL))
+);
+`),
+  },
 ];
