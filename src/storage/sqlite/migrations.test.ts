@@ -61,36 +61,49 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 6 and creates exactly eleven core tables", () => {
+test("migrates to version 7 and creates exactly sixteen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 6);
+    assert.equal(userVersion(db), 7);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
       "initiatives",
       "jobs",
+      "landing_candidates",
+      "landing_integrations",
       "objectives",
+      "observability_refs",
       "projects",
+      "repo_locks",
       "resources",
       "task_context",
       "task_dependencies",
       "task_results",
       "tasks",
+      "workspace_cached_policies",
     ]);
   });
 });
 
 // ── (b) columns per table ────────────────────────────────────────────────────
 
-test("schema columns match locked DDL for all eleven tables", () => {
+test("schema columns match locked DDL for all sixteen tables", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "projects"), ["id", "name"]);
+    assert.deepEqual(columnNames(db, "observability_refs"), [
+      "kind",
+      "entity_id",
+      "ref",
+    ]);
     assert.deepEqual(columnNames(db, "resources"), [
       "id",
       "projectId",
       "type",
       "name",
       "attributes",
+      "remoteUrl",
+      "authKind",
+      "authCredentialId",
     ]);
     assert.deepEqual(columnNames(db, "initiatives"), [
       "id",
@@ -153,6 +166,35 @@ test("schema columns match locked DDL for all eleven tables", () => {
       "objective_id",
       "task_id",
       "creation_sha",
+    ]);
+    assert.deepEqual(columnNames(db, "landing_candidates"), [
+      "id",
+      "task_id",
+      "repo_id",
+      "base_sha",
+      "candidate_sha",
+      "ref",
+      "target",
+      "state",
+    ]);
+    assert.deepEqual(columnNames(db, "landing_integrations"), [
+      "candidate_id",
+      "outcome",
+      "canonical_sha",
+      "merge_commit",
+      "conflict_files",
+    ]);
+    assert.deepEqual(columnNames(db, "repo_locks"), [
+      "repo_id",
+      "branch",
+      "pid",
+      "locked_at",
+    ]);
+    assert.deepEqual(columnNames(db, "workspace_cached_policies"), [
+      "repo_id",
+      "last_fetched_origin_sha",
+      "fetch_time",
+      "base_sha",
     ]);
   });
 });
@@ -274,7 +316,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 6);
+    assert.equal(second.version, 7);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -410,6 +452,98 @@ test("migration 6 graph_import_map UNIQUE(package_id, kind, ref) rejects duplica
   });
 });
 
+// ── (l) migration 7 — resources table column additions ──────────────────────
+
+test("migration 7 adds remoteUrl authKind authCredentialId columns to resources", () => {
+  withMigratedDb((db) => {
+    const cols = columnNames(db, "resources");
+    assert.ok(
+      cols.includes("remoteUrl"),
+      "resources must have remoteUrl after migration 7",
+    );
+    assert.ok(
+      cols.includes("authKind"),
+      "resources must have authKind after migration 7",
+    );
+    assert.ok(
+      cols.includes("authCredentialId"),
+      "resources must have authCredentialId after migration 7",
+    );
+  });
+});
+
+test("migration 7 data step derives remoteUrl from organization in attributes for existing repository rows", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m7-data-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring the database up to version 6 only (pre-migration-7 state).
+    // MIGRATIONS.slice(0, 6) is always [v1..v6] regardless of how many later
+    // migrations are added; validateSequence accepts this as a contiguous 1..6.
+    migrate(db, MIGRATIONS.slice(0, 6));
+    db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+      "proj-1",
+      "P",
+    );
+    // Insert a repository resource with the legacy attributes JSON that contains
+    // 'organization' (the shape that existed before T1/T2 removed the field).
+    db.prepare(
+      "INSERT INTO resources(id, projectId, type, name, attributes) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      "res-1",
+      "proj-1",
+      "repository",
+      "myrepo",
+      JSON.stringify({ organization: "acme", branch: "main", path: "/repo" }),
+    );
+    // Apply migration 7 (the T3 data step). Today this is a no-op (only 6
+    // migrations exist) so the SELECT below will throw "no such column" → RED.
+    migrate(db, MIGRATIONS);
+    type Row = { remoteUrl: string | null; authKind: string | null };
+    const row = db
+      .prepare("SELECT remoteUrl, authKind FROM resources WHERE id = ?")
+      .get("res-1") as Row | undefined;
+    assert.ok(row !== undefined, "resource row exists after migration 7");
+    assert.equal(
+      row.remoteUrl,
+      "https://github.com/acme/myrepo.git",
+      "remoteUrl derived from organization 'acme' and name 'myrepo'",
+    );
+    assert.equal(row.authKind, "ambient", "authKind defaults to ambient");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (m) migration 7 — events table recreated with task.verification in CHECK ──
+
+test("migration 7 events table allows task.verification type", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.doesNotThrow(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-verif-1",
+        "task.verification",
+        taskId,
+      );
+    }, "task.verification must be a valid event type after migration 7");
+  });
+});
+
+test("migration 7 events table rejects task.unknown type with CHECK violation", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.throws(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-bad-1",
+        "task.unknown",
+        taskId,
+      );
+    }, "task.unknown must be rejected by the events.type CHECK constraint");
+  });
+});
+
 test("migration 6 deleting a task cascades its graph_import_map row", () => {
   withMigratedDb((db) => {
     const { taskId } = insertChain(db);
@@ -433,5 +567,100 @@ test("migration 6 deleting a task cascades its graph_import_map row", () => {
       0,
       "row should be deleted by CASCADE after task deletion",
     );
+  });
+});
+
+// ── (n) migration 7 — landing tables ─────────────────────────────────────────
+
+test("migration 7 landing_candidates state CHECK rejects values outside pending|landed|conflict", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+
+    // 'pending' must be accepted (the default)
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO landing_candidates(id, task_id, repo_id, base_sha, candidate_sha, ref, target, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cand-ok-1",
+        taskId,
+        "repo-1",
+        "base-sha",
+        "cand-sha",
+        "kanthord/task-1",
+        "main",
+        "pending",
+      );
+    }, "state=pending must be accepted");
+
+    // 'landed' must be accepted
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO landing_candidates(id, task_id, repo_id, base_sha, candidate_sha, ref, target, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cand-ok-2",
+        taskId,
+        "repo-1",
+        "base-sha",
+        "cand-sha-2",
+        "kanthord/task-2",
+        "main",
+        "landed",
+      );
+    }, "state=landed must be accepted");
+
+    // 'conflict' must be accepted
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO landing_candidates(id, task_id, repo_id, base_sha, candidate_sha, ref, target, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cand-ok-3",
+        taskId,
+        "repo-1",
+        "base-sha",
+        "cand-sha-3",
+        "kanthord/task-3",
+        "main",
+        "conflict",
+      );
+    }, "state=conflict must be accepted");
+
+    // 'invalid' must be rejected by CHECK constraint
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO landing_candidates(id, task_id, repo_id, base_sha, candidate_sha, ref, target, state) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cand-bad",
+        taskId,
+        "repo-1",
+        "base-sha",
+        "cand-sha-bad",
+        "kanthord/task-bad",
+        "main",
+        "invalid",
+      );
+    }, "state=invalid must be rejected by the CHECK constraint");
+  });
+});
+
+// ── (o) migration 7 — workspace_cached_policies table (Story 12 T2) ──────────
+
+test("migration 7 creates workspace_cached_policies with repo_id PRIMARY KEY", () => {
+  withMigratedDb((db) => {
+    assert.deepEqual(
+      columnNames(db, "workspace_cached_policies"),
+      ["repo_id", "last_fetched_origin_sha", "fetch_time", "base_sha"],
+      "workspace_cached_policies must have four columns",
+    );
+
+    // repo_id is PRIMARY KEY — inserting the same repo_id twice is rejected
+    db.prepare(
+      "INSERT INTO workspace_cached_policies(repo_id, last_fetched_origin_sha, fetch_time, base_sha) VALUES (?, ?, ?, ?)",
+    ).run("r1", "abc123", "2026-07-19T00:00:00Z", "def456");
+
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO workspace_cached_policies(repo_id, last_fetched_origin_sha, fetch_time, base_sha) VALUES (?, ?, ?, ?)",
+      ).run("r1", "aaa000", "2026-07-19T01:00:00Z", "bbb111");
+    }, "repo_id PRIMARY KEY must reject duplicate insert");
   });
 });

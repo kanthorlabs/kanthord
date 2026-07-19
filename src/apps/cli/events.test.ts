@@ -141,6 +141,74 @@ test("events --follow with injected sleep: two polls with an append between prin
   assert.ok(result.stderr[2]!.includes("C3"));
 });
 
+// (A3) Display throttle: human mode throttles agent.progress per taskId; json emits all
+
+test("(A3 display throttle) human mode: 3 consecutive agent.progress for same taskId produce 1 stderr line", async () => {
+  const prog1: Event = {
+    id: "P1",
+    type: "agent.progress",
+    taskId: "T1",
+    payload: { tool: "read", summary: "read /a" },
+  };
+  const prog2: Event = {
+    id: "P2",
+    type: "agent.progress",
+    taskId: "T1",
+    payload: { tool: "read", summary: "read /b" },
+  };
+  const prog3: Event = {
+    id: "P3",
+    type: "agent.progress",
+    taskId: "T1",
+    payload: { tool: "read", summary: "read /c" },
+  };
+  const feed = new FakeListEvents([prog1, prog2, prog3]);
+
+  const result = await runEvents({ after: "0" }, feed, noopSleep, neverAbort);
+  assert.equal(result.exitCode, 0);
+  assert.equal(
+    result.stderr.length,
+    1,
+    `human mode: only first agent.progress for taskId shown within 5 s window; got ${result.stderr.length}`,
+  );
+  assert.ok(result.stderr[0]!.includes("P1"), "first event id in output");
+});
+
+test("(A3 display throttle) json mode: 3 consecutive agent.progress for same taskId all emit to stdout", async () => {
+  const prog1: Event = {
+    id: "P1",
+    type: "agent.progress",
+    taskId: "T1",
+    payload: { tool: "read", summary: "read /a" },
+  };
+  const prog2: Event = {
+    id: "P2",
+    type: "agent.progress",
+    taskId: "T1",
+    payload: { tool: "read", summary: "read /b" },
+  };
+  const prog3: Event = {
+    id: "P3",
+    type: "agent.progress",
+    taskId: "T1",
+    payload: { tool: "read", summary: "read /c" },
+  };
+  const feed = new FakeListEvents([prog1, prog2, prog3]);
+
+  const result = await runEvents(
+    { after: "0", json: true },
+    feed,
+    noopSleep,
+    neverAbort,
+  );
+  assert.equal(result.exitCode, 0);
+  assert.equal(
+    result.stdout.length,
+    3,
+    `json mode: all agent.progress events emitted regardless of display throttle; got ${result.stdout.length}`,
+  );
+});
+
 test("events --limit 0 exits 1 with a one-line error", async () => {
   const feed = new FakeListEvents([E1]);
 

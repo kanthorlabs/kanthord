@@ -17,6 +17,12 @@ import type { RenameObjective } from "../../app/objective/rename-objective.ts";
 import type { FindObjective } from "../../app/objective/find-objective.ts";
 import type { AddResource } from "../../app/resource/add-resource.ts";
 import type { FindResource } from "../../app/resource/find-resource.ts";
+import type { GetResource } from "../../app/resource/get-resource.ts";
+import type { UpdateAiProvider } from "../../app/resource/update-ai-provider.ts";
+import type { UpdateCredential } from "../../app/resource/update-credential.ts";
+import type { UpdateRepository } from "../../app/resource/update-repository.ts";
+import type { UpdateNotification } from "../../app/resource/update-notification.ts";
+import type { UpdateFilesystem } from "../../app/resource/update-filesystem.ts";
 import type { CreateTask } from "../../app/task/create-task.ts";
 import type { AddDependency } from "../../app/task/add-dependency.ts";
 import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
@@ -54,6 +60,12 @@ import {
   runCreateNotification,
   runCreateAiProvider,
   runCreateFilesystem,
+  runGetResource,
+  runUpdateAiProvider,
+  runUpdateCredential,
+  runUpdateRepository,
+  runUpdateNotification,
+  runUpdateFilesystem,
 } from "./resource.ts";
 import {
   runCreateTask,
@@ -63,6 +75,13 @@ import {
   runRejectTask,
 } from "./task.ts";
 import { runDaemon } from "./daemon.ts";
+
+// Minimal structural Logger — avoids apps/ importing an adapter port directly.
+interface Logger {
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
+}
 import { runAddDependency, runRemoveDependency } from "./dependency.ts";
 import { runListTasks } from "./list-tasks.ts";
 import { runEvents } from "./events.ts";
@@ -80,6 +99,10 @@ import { runLogin } from "./login.ts";
 import type { LoginDeps } from "./login.ts";
 import { runGetModels } from "./models.ts";
 import type { ListModels } from "./models.ts";
+import type { DiagnosticsExport } from "../../app/observability/diagnostics-export.ts";
+import { runDiagnosticsExport } from "./diagnostics.ts";
+import type { RepositoryLanding } from "../../app/errors.ts";
+import { runRepoLand } from "./repo.ts";
 
 /** Composition-root bundle injected by main.ts; extended by later Tasks. */
 export interface RouterDeps {
@@ -99,6 +122,12 @@ export interface RouterDeps {
   findObjective: FindObjective;
   addResource: AddResource;
   findResource: FindResource;
+  getResource: GetResource;
+  updateAiProvider: UpdateAiProvider;
+  updateCredential: UpdateCredential;
+  updateRepository: UpdateRepository;
+  updateNotification: UpdateNotification;
+  updateFilesystem: UpdateFilesystem;
   createTask: CreateTask;
   addDependency: AddDependency;
   removeDependency: RemoveDependency;
@@ -107,7 +136,8 @@ export interface RouterDeps {
   getTask: GetTask;
   approveTask: ApproveTask;
   rejectTask: RejectTask;
-  buildDaemon: (failTaskIds: string[]) => RunDaemon;
+  buildDaemon: (failTaskIds: string[], logger?: Logger) => RunDaemon;
+  logger: Logger;
   listEvents: ListEvents;
   importResources: ImportResources;
   exportInitiative: ExportInitiative;
@@ -117,6 +147,9 @@ export interface RouterDeps {
   listObjectives: ListObjectives;
   login: LoginDeps;
   listModels: ListModels;
+  diagnosticsExport: DiagnosticsExport;
+  repoLanding: RepositoryLanding;
+  resolveHomeDir: (repoId: string) => string;
   newId: () => string;
 }
 
@@ -261,12 +294,14 @@ export const COMMANDS: Record<string, CommandEntry> = {
 
   "create repository": {
     usage:
-      "usage: create repository --project <id> --name <name> --organization <org> --branch <branch>",
+      "usage: create repository --project <id> --name <name> --remote-url <url> --branch <branch> [--auth ambient|https-token|ssh-agent] [--credential <id>] [--path <path>]",
     parse: {
       project: { type: "string" },
       name: { type: "string" },
-      organization: { type: "string" },
+      "remote-url": { type: "string" },
       branch: { type: "string" },
+      auth: { type: "string" },
+      credential: { type: "string" },
       path: { type: "string" },
     },
     async handler(args, deps) {
@@ -276,15 +311,21 @@ export const COMMANDS: Record<string, CommandEntry> = {
 
   "create credential": {
     usage:
-      "usage: create credential --project <id> --name <name> --provider <provider> --value <value>",
+      "usage: create credential --project <id> --name <name> --provider <provider> --value-file <path|-> [--value-timeout <duration>]",
     parse: {
       project: { type: "string" },
       name: { type: "string" },
       provider: { type: "string" },
-      value: { type: "string" },
+      "value-file": { type: "string" },
+      "value-timeout": { type: "string" },
     },
     async handler(args, deps) {
-      return runCreateCredential(args, deps.addResource);
+      return runCreateCredential(args, deps.addResource, {
+        tty: process.stdin.isTTY
+          ? (process.stdin as unknown as NodeJS.ReadStream)
+          : undefined,
+        stdin: process.stdin as unknown as NodeJS.ReadableStream,
+      });
     },
   },
 
@@ -310,7 +351,6 @@ export const COMMANDS: Record<string, CommandEntry> = {
       name: { type: "string" },
       provider: { type: "string" },
       model: { type: "string" },
-      "base-url": { type: "string" },
       effort: { type: "string" },
     },
     async handler(args, deps) {
@@ -405,10 +445,11 @@ export const COMMANDS: Record<string, CommandEntry> = {
   },
 
   "get task": {
-    usage: "usage: get task --id <id> [--json]",
+    usage: "usage: get task --id <id> [--json] [--result]",
     parse: {
       id: { type: "string" },
       json: { type: "boolean" },
+      result: { type: "boolean" },
     },
     async handler(args, deps) {
       return runGetTask(args, deps.getTask);
@@ -424,7 +465,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
       "poll-interval": { type: "string" },
     },
     async handler(args, deps) {
-      return runDaemon(args, deps.buildDaemon);
+      return runDaemon(args, deps.buildDaemon, deps.logger);
     },
   },
 
@@ -545,6 +586,92 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
   },
 
+  "get resource": {
+    usage: "usage: get resource --id <id> [--json]",
+    parse: {
+      id: { type: "string" },
+      json: { type: "boolean" },
+    },
+    async handler(args, deps) {
+      return runGetResource(args, deps.getResource);
+    },
+  },
+
+  "update ai-provider": {
+    usage:
+      "usage: update ai-provider --id <id> [--name <name>] [--model <model>] [--effort <effort>] [--clear-effort] [--clear-base-url]",
+    parse: {
+      id: { type: "string" },
+      name: { type: "string" },
+      model: { type: "string" },
+      effort: { type: "string" },
+      "clear-effort": { type: "boolean" },
+      "clear-base-url": { type: "boolean" },
+    },
+    async handler(args, deps) {
+      return runUpdateAiProvider(args, deps.updateAiProvider);
+    },
+  },
+
+  "update credential": {
+    usage:
+      "usage: update credential --id <id> [--name <name>] [--value-file <path|->] [--value-timeout <duration>]",
+    parse: {
+      id: { type: "string" },
+      name: { type: "string" },
+      "value-file": { type: "string" },
+      "value-timeout": { type: "string" },
+    },
+    async handler(args, deps) {
+      return runUpdateCredential(args, deps.updateCredential, {
+        tty: process.stdin.isTTY
+          ? (process.stdin as unknown as NodeJS.ReadStream)
+          : undefined,
+        stdin: process.stdin as unknown as NodeJS.ReadableStream,
+      });
+    },
+  },
+
+  "update repository": {
+    usage:
+      "usage: update repository --id <id> [--name <name>] [--branch <branch>] [--remote-url <url>] [--reclone]",
+    parse: {
+      id: { type: "string" },
+      name: { type: "string" },
+      branch: { type: "string" },
+      "remote-url": { type: "string" },
+      reclone: { type: "boolean" },
+    },
+    async handler(args, deps) {
+      return runUpdateRepository(args, deps.updateRepository);
+    },
+  },
+
+  "update notification": {
+    usage:
+      "usage: update notification --id <id> [--name <name>] [--destination <dest>]",
+    parse: {
+      id: { type: "string" },
+      name: { type: "string" },
+      destination: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runUpdateNotification(args, deps.updateNotification);
+    },
+  },
+
+  "update filesystem": {
+    usage: "usage: update filesystem --id <id> [--name <name>] [--path <path>]",
+    parse: {
+      id: { type: "string" },
+      name: { type: "string" },
+      path: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runUpdateFilesystem(args, deps.updateFilesystem);
+    },
+  },
+
   "import resource": {
     usage: "usage: import resource --path <file>",
     parse: {
@@ -557,7 +684,7 @@ export const COMMANDS: Record<string, CommandEntry> = {
 
   "import graph": {
     usage:
-      "usage: import graph <dir> [--create --project <id>] [--apply --initiative <id>] [--dry-run] [--delete-missing [--confirm-delete]]",
+      "usage: import graph <dir> [--create --project <id>] [--apply --initiative <id>] [--dry-run] [--delete-missing [--confirm-delete]] [--bind alias=<id>]...",
     positional: "dir",
     parse: {
       dir: { type: "string" },
@@ -568,8 +695,22 @@ export const COMMANDS: Record<string, CommandEntry> = {
       "confirm-delete": { type: "boolean" },
       project: { type: "string" },
       initiative: { type: "string" },
+      bind: { type: "string", multiple: true },
     },
     async handler(args, deps) {
+      // Parse --bind alias=value pairs into a Record<string, string>
+      const bindRaw = args["bind"] as string[] | undefined;
+      const bind: Record<string, string> | undefined = bindRaw
+        ? Object.fromEntries(
+            bindRaw.map((entry) => {
+              const eq = entry.indexOf("=");
+              return eq === -1
+                ? [entry, ""]
+                : [entry.slice(0, eq), entry.slice(eq + 1)];
+            }),
+          )
+        : undefined;
+
       return runImportGraph(
         {
           dir: (args["dir"] as string | undefined) ?? ".",
@@ -582,11 +723,27 @@ export const COMMANDS: Record<string, CommandEntry> = {
             (args["confirm-delete"] as boolean | undefined) ?? false,
           project: args["project"] as string | undefined,
           initiative: args["initiative"] as string | undefined,
+          bind,
         },
         {
           createGraph: deps.createGraph,
           applyGraph: deps.applyGraph,
           newId: deps.newId,
+          getResource: async (id: string) => {
+            try {
+              return deps.getResource.execute(id);
+            } catch {
+              return undefined;
+            }
+          },
+          findResourcesByName: async (projectId: string, name: string) => {
+            try {
+              const id = await deps.findResource.execute({ projectId, name });
+              return [{ id }];
+            } catch {
+              return [];
+            }
+          },
         },
       );
     },
@@ -630,6 +787,34 @@ export const COMMANDS: Record<string, CommandEntry> = {
     },
     handler(args, deps) {
       return Promise.resolve(runGetModels(args, deps.listModels));
+    },
+  },
+
+  "diagnostics export": {
+    usage:
+      "usage: diagnostics export --initiative <id> --out <path> [--task <id>] [--debug]",
+    parse: {
+      initiative: { type: "string" },
+      task: { type: "string" },
+      out: { type: "string" },
+      debug: { type: "boolean" },
+    },
+    async handler(args, deps) {
+      return runDiagnosticsExport(args, deps.diagnosticsExport);
+    },
+  },
+
+  "repo land": {
+    usage:
+      "usage: repo land --repository <id> --workspace <dir> --base <branch> --candidate <sha>",
+    parse: {
+      repository: { type: "string" },
+      workspace: { type: "string" },
+      base: { type: "string" },
+      candidate: { type: "string" },
+    },
+    async handler(args, deps) {
+      return runRepoLand(args, deps.repoLanding, deps.resolveHomeDir);
     },
   },
 };

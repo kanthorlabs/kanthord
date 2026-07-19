@@ -230,9 +230,10 @@ function buildFakes(): {
     id: RES_ID,
     type: "repository",
     name: "backend",
-    organization: "acme",
+    remoteUrl: "https://github.com/acme/backend.git",
     branch: "main",
     path: "",
+    auth: { kind: "ambient" },
   });
   const agentCatalog = new FakeAgentCatalog(["generic@1"]);
   return {

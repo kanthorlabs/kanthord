@@ -130,6 +130,9 @@ async function runSetup(
   const AIPROV = ap.stdout[0]!;
   assert.match(AIPROV, ULID_RE);
 
+  // D4: --value is removed; write value to a temp file and use --value-file
+  const credValueFile = join(sandboxDir, ".credential-value");
+  await writeFile(credValueFile, credentialValue, { encoding: "utf8" });
   const cr = await dispatch(
     [
       "create",
@@ -140,8 +143,8 @@ async function runSetup(
       "openai-key",
       "--provider",
       "openai",
-      "--value",
-      credentialValue,
+      "--value-file",
+      credValueFile,
     ],
     deps,
   );
@@ -157,8 +160,8 @@ async function runSetup(
       PROJECT,
       "--name",
       "sandbox",
-      "--organization",
-      "kanthorlabs",
+      "--remote-url",
+      "https://github.com/kanthorlabs/sandbox.git",
       "--branch",
       "main",
       "--path",
@@ -891,6 +894,9 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
     );
 
     // Create a credential with provider="anthropic" (mismatches ai_provider's "openai")
+    // D4: --value is removed; write value to a temp file and use --value-file
+    const badCredValueFile = join(sandboxDir, ".bad-credential-value");
+    await writeFile(badCredValueFile, BAD_CRED_VALUE, { encoding: "utf8" });
     const badCr = await dispatch(
       [
         "create",
@@ -901,8 +907,8 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
         "wrong-provider",
         "--provider",
         "anthropic",
-        "--value",
-        BAD_CRED_VALUE,
+        "--value-file",
+        badCredValueFile,
       ],
       deps,
     );

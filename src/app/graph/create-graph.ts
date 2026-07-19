@@ -28,6 +28,8 @@ import {
 import { CreateModeIdError } from "./import-errors.ts";
 export { CreateModeIdError };
 
+import { resolveTaskContext } from "./binding-resolver.ts";
+
 // ---------------------------------------------------------------------------
 // DTOs (locked contracts)
 // ---------------------------------------------------------------------------
@@ -36,6 +38,7 @@ export interface CreateGraphInput {
   pkg: GraphPackage; // must have NO persisted ids anywhere
   projectId: string; // must exist; import never creates it
   packageId: string; // ULID minted by the CLI at --create
+  bindings?: Record<string, string>; // C1: CLI --bind alias→id map (alias → concrete resource id)
 }
 
 export interface CreateGraphResult {
@@ -158,6 +161,28 @@ export class CreateGraph {
         return { ...validated, id: taskRefToId.get(t.ref)! };
       });
       this.#deps.tasks.saveAll(createdTasks);
+
+      // --- C1: saveTaskContext for each task when bindings are provided ---
+      if (
+        input.bindings !== undefined &&
+        input.pkg.initiative.bindings !== undefined
+      ) {
+        const initiativeBindings = input.pkg.initiative.bindings;
+        const bindMap = input.bindings;
+        const objByRef = new Map(input.pkg.objectives.map((o) => [o.ref, o]));
+        for (let i = 0; i < input.pkg.tasks.length; i++) {
+          const pkgTask = input.pkg.tasks[i]!;
+          const task = createdTasks[i]!;
+          const pkgObj = objByRef.get(pkgTask.objectiveRef);
+          const resolvedContext = resolveTaskContext(
+            initiativeBindings,
+            pkgObj?.context,
+            pkgTask.context,
+            bindMap,
+          );
+          this.#deps.tasks.saveTaskContext(task.id, resolvedContext);
+        }
+      }
 
       // --- Build result maps + reserve idempotency rows ---
       const nodes: Record<string, string> = {};

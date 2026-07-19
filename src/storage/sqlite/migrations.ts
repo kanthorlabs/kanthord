@@ -161,4 +161,72 @@ CREATE TABLE graph_import_map (
 );
 `),
   },
+  {
+    version: 7,
+    name: "epic-007.1-e2e-hardening",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE resources ADD COLUMN remoteUrl TEXT;
+ALTER TABLE resources ADD COLUMN authKind TEXT DEFAULT 'ambient';
+ALTER TABLE resources ADD COLUMN authCredentialId TEXT;
+UPDATE resources
+  SET remoteUrl = 'https://github.com/' ||
+                  json_extract(attributes, '$.organization') ||
+                  '/' || name || '.git',
+      authKind  = 'ambient'
+  WHERE type = 'repository';
+CREATE TABLE events_new2 (
+  id      TEXT PRIMARY KEY,
+  type    TEXT NOT NULL CHECK (type IN (
+            'task.created','task.ready','task.started','task.completed',
+            'task.failed','task.dependencies_changed',
+            'task.escalated','task.approved','task.rejected','task.discarded',
+            'task.blocked','agent.started','agent.progress','agent.finished',
+            'task.verification'
+          )),
+  taskId  TEXT NOT NULL REFERENCES tasks(id),
+  payload TEXT
+);
+INSERT INTO events_new2 SELECT * FROM events;
+DROP TABLE events;
+ALTER TABLE events_new2 RENAME TO events;
+CREATE TABLE observability_refs (
+  kind      TEXT NOT NULL CHECK (kind IN ('task','initiative','session')),
+  entity_id TEXT NOT NULL,
+  ref       TEXT NOT NULL,
+  PRIMARY KEY (kind, entity_id)
+);
+CREATE TABLE landing_candidates (
+  id            TEXT PRIMARY KEY,
+  task_id       TEXT REFERENCES tasks(id),
+  repo_id       TEXT NOT NULL,
+  base_sha      TEXT NOT NULL,
+  candidate_sha TEXT NOT NULL,
+  ref           TEXT NOT NULL,
+  target        TEXT NOT NULL,
+  state         TEXT NOT NULL DEFAULT 'pending'
+                CHECK (state IN ('pending','landed','conflict'))
+);
+CREATE TABLE landing_integrations (
+  candidate_id   TEXT PRIMARY KEY REFERENCES landing_candidates(id),
+  outcome        TEXT NOT NULL CHECK (outcome IN ('fast-forward','merge','conflict')),
+  canonical_sha  TEXT NOT NULL,
+  merge_commit   TEXT,
+  conflict_files TEXT
+);
+CREATE TABLE repo_locks (
+  repo_id   TEXT NOT NULL,
+  branch    TEXT NOT NULL,
+  pid       INTEGER NOT NULL,
+  locked_at TEXT NOT NULL,
+  PRIMARY KEY (repo_id, branch)
+);
+CREATE TABLE workspace_cached_policies (
+  repo_id                TEXT PRIMARY KEY,
+  last_fetched_origin_sha TEXT NOT NULL,
+  fetch_time             TEXT NOT NULL,
+  base_sha               TEXT NOT NULL
+);
+`),
+  },
 ];

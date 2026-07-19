@@ -72,9 +72,10 @@ function makeRepo(path: string): Repository {
     id: "repo-001",
     type: "repository",
     name: "sandbox",
-    organization: "kanthorlabs",
+    remoteUrl: "https://github.com/kanthorlabs/sandbox.git",
     branch: "main",
     path,
+    auth: { kind: "ambient" },
   };
 }
 
@@ -130,14 +131,20 @@ function makeRunner(opts: {
   profile?: PiAgentProfile;
 }): PiAgentRunner {
   const profile = opts.profile ?? genericProfile;
+  // Redirect the clone source to the local seed dir using file:// URL so
+  // LocalWorkspaceManager.prepareFromRepository uses a hermetic local clone
+  // instead of a real (non-existent) GitHub remote.
+  const repoWithLocalUrl: Repository = {
+    ...opts.repo,
+    remoteUrl: `file://${opts.seedDir}`,
+  };
   return new PiAgentRunner({
     sessions: makeSessionFactory(opts.turns),
     workspaces: new LocalWorkspaceManager({
       root: opts.wsRoot,
-      buildRemoteUrl: () => opts.seedDir,
     }),
     newInstructionLoader: () => ({ load: () => [] }),
-    getResource: makeGetResource(opts.repo),
+    getResource: makeGetResource(repoWithLocalUrl),
     profiles: new Map([["generic@1", profile]]) as unknown as any,
     getPriorRejection: () => undefined,
   });

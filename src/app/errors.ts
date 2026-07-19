@@ -4,9 +4,18 @@
 export { CycleError } from "../domain/graph.ts";
 export { DependenciesLockedError } from "../domain/task.ts";
 export type { TaskStatus } from "../domain/task.ts";
+// EmbeddedCredentialError lives in domain; re-exported here so apps/ can
+// catch it without importing domain directly.
+export { EmbeddedCredentialError } from "../domain/resource.ts";
 // Agent errors are owned by the agent-runner port; re-exported here so
 // `apps/` (which may not import adapter ports directly) can reference them.
 export { UnknownAgentError } from "../agent-runner/port.ts";
+// Model-catalog error — re-exported so apps/ can catch it via app/ only.
+export { UnknownModelError } from "../model-catalog/port.ts";
+// Landing types and errors — re-exported so apps/ can reference them without
+// importing the landing port directly.
+export type { RepositoryLanding, LandingCandidate } from "../landing/port.ts";
+export { LandingConflictError } from "../landing/port.ts";
 
 import type { TaskStatus } from "../domain/task.ts";
 

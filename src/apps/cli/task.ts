@@ -179,9 +179,20 @@ export async function runGetTask(
   getTask: GetTask,
 ): Promise<HandlerResult> {
   const id = args["id"] as string;
+  const useResult = args["result"] === true;
+  const useJson = args["json"] === true;
+
+  // mutual exclusion guard
+  if (useResult && useJson) {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: --result and --json are mutually exclusive"],
+    };
+  }
+
   try {
     const output = await getTask.execute({ id });
-    const useJson = args["json"] === true;
 
     if (useJson) {
       return {
@@ -189,6 +200,32 @@ export async function runGetTask(
         stdout: [JSON.stringify(output)],
         stderr: [],
       };
+    }
+
+    if (useResult) {
+      if (output.result === undefined) {
+        return {
+          exitCode: 1,
+          stdout: [],
+          stderr: [`error: task ${id} has no result yet`],
+        };
+      }
+      const r = output.result;
+      const lines: string[] = [
+        `Summary: ${r.summary ?? ""}`,
+        `Commit:  ${r.commitSha ?? ""}`,
+        `Files:   ${r.workspace ?? ""}`,
+        "--- Verification ---",
+      ];
+      if (r.evidence !== null && r.evidence !== undefined) {
+        for (const entry of r.evidence) {
+          lines.push(`$ ${entry.command}   exit ${entry.exitCode}`);
+          if (entry.output) {
+            lines.push(entry.output.slice(0, 500));
+          }
+        }
+      }
+      return { exitCode: 0, stdout: lines, stderr: [] };
     }
 
     const lines: string[] = [

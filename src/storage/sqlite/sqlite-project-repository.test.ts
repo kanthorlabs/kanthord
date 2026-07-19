@@ -81,9 +81,10 @@ test("SqliteProjectRepository addResource + listResources round-trips repository
     id: newId(),
     type: "repository",
     name: "my-repo",
-    organization: "acme",
+    remoteUrl: "https://github.com/acme/my-repo.git",
     branch: "main",
     path: "/workspace/my-repo",
+    auth: { kind: "ambient" },
   };
   repo.addResource(project.id, resource);
 
@@ -203,9 +204,10 @@ test("SqliteProjectRepository addResource with unknown projectId throws", () => 
     id: newId(),
     type: "repository",
     name: "orphan-repo",
-    organization: "acme",
+    remoteUrl: "https://github.com/acme/orphan-repo.git",
     branch: "main",
     path: "/workspace/orphan",
+    auth: { kind: "ambient" },
   };
   assert.throws(() => repo.addResource("nonexistent-project-id", resource));
 });

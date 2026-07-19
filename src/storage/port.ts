@@ -2,6 +2,11 @@ import type { Project } from "../domain/project.ts";
 import type { Resource } from "../domain/resource.ts";
 import type { Initiative, Objective } from "../domain/initiative.ts";
 import type { Task } from "../domain/task.ts";
+import type {
+  ChangeCandidate,
+  CandidateState,
+  Integration,
+} from "../domain/landing.ts";
 
 /** Result returned by a migrator run. */
 export interface MigrationReport {
@@ -159,6 +164,15 @@ export interface ReferenceResolver {
 export type CasResult =
   | { status: "applied"; freshSha: string }
   | { status: "conflict"; currentSha: string };
+
+/** Repository for durable landing candidate metadata and integration records. */
+export interface LandingRepository {
+  saveCandidate(candidate: ChangeCandidate): void;
+  getCandidate(id: string): ChangeCandidate | undefined;
+  updateCandidateState(id: string, state: CandidateState): void;
+  saveIntegration(integration: Integration): void;
+  getIntegration(candidateId: string): Integration | undefined;
+}
 
 /**
  * Durable ref→id idempotency store backed by the `graph_import_map` table

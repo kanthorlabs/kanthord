@@ -1,10 +1,19 @@
 import type { RunDaemon } from "../../app/task/run-daemon.ts";
 
-type DaemonFactory = (failTaskIds: string[]) => RunDaemon;
+// Minimal structural Logger interface — avoids apps/ importing an adapter port.
+// The real Logger from logger/port.ts satisfies this by structural typing.
+interface Logger {
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
+}
+
+type DaemonFactory = (failTaskIds: string[], logger?: Logger) => RunDaemon;
 
 export async function runDaemon(
   args: Record<string, unknown>,
   buildDaemon: DaemonFactory,
+  logger?: Logger,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   // Validate --poll-interval (must be a positive integer string when provided)
   const pollIntervalRaw = args["poll-interval"] as string | undefined;
@@ -34,7 +43,7 @@ export async function runDaemon(
         ? (rawFail as string[])
         : [rawFail as string];
 
-  const daemon = buildDaemon(failTaskIds);
+  const daemon = buildDaemon(failTaskIds, logger);
 
   // Wire SIGINT → daemon.stop() so an in-flight task finishes cleanly.
   const sigintHandler = () => daemon.stop();

@@ -871,3 +871,398 @@ test("--dry-run missing: pending removed file vs non-pending not-exported shown 
     `at least one missing line must NOT say 'non-pending' (the pending-file case); lines: ${missingLines.join(", ")}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// Story 10 T2 (f) — manifest formatVersion 2 when package has bindings
+// ---------------------------------------------------------------------------
+
+async function makeBindingsAuthoredDir(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-t10t2-"));
+  await mkdir(join(dir, "api"), { recursive: true });
+
+  // Initiative with bindings declared in frontmatter (format-2 marker)
+  await writeFile(
+    join(dir, "todo.md"),
+    [
+      "---",
+      "kind: initiative",
+      "ref: todo",
+      "name: todo",
+      "bindings:",
+      "  source: repository",
+      "  model: ai_provider",
+      "---",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "api", "api.md"),
+    [
+      "---",
+      "kind: objective",
+      "ref: api",
+      "initiative: todo",
+      "name: api",
+      "context:",
+      "  source: source",
+      "  model: model",
+      "---",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "api", "impl.md"),
+    [
+      "---",
+      "kind: task",
+      "ref: impl",
+      "objective: api",
+      "title: implement api",
+      "agent: generic@1",
+      "---",
+      "# Instructions",
+      "Build 5 REST endpoints.",
+      "# Acceptance Criteria",
+      "- [ ] endpoints return correct status codes",
+      "",
+    ].join("\n"),
+  );
+
+  return dir;
+}
+
+test("(f) --create with initiative that has bindings writes manifest with formatVersion 2", async () => {
+  const dir = await makeBindingsAuthoredDir();
+  const fake = new FakeCreateGraph();
+  const T2_REPO_ID = "00000000000000000000000020";
+  const T2_AIP_ID = "00000000000000000000000021";
+  const t2Resources = new Map([
+    [T2_REPO_ID, { type: "repository" as const }],
+    [T2_AIP_ID, { type: "ai_provider" as const }],
+  ]);
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: T2_REPO_ID, model: T2_AIP_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async () => [],
+      getResource: async (id: string) => t2Resources.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `exit 0; stderr: ${result.stderr.join(" ")}`,
+  );
+
+  const raw = await readFile(join(dir, ".kanthord-export.json"), "utf8");
+  const manifest = JSON.parse(raw) as Record<string, unknown>;
+  assert.equal(
+    manifest["formatVersion"],
+    2,
+    `manifest.formatVersion must be 2 when package has bindings; got: ${manifest["formatVersion"]}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 10 T4 — --bind alias validation and resolution
+// ---------------------------------------------------------------------------
+
+// Resource IDs used in T4 tests
+const REPO_ID = "00000000000000000000000010";
+const AIP_ID = "00000000000000000000000011";
+const CRED_ID = "00000000000000000000000012";
+
+/** Package with all 3 binding aliases: source, model, model-auth */
+async function makeBindings3Dir(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-t10t4-"));
+  await mkdir(join(dir, "api"), { recursive: true });
+  await writeFile(
+    join(dir, "todo.md"),
+    [
+      "---",
+      "kind: initiative",
+      "ref: todo",
+      "name: todo",
+      "bindings:",
+      "  source: repository",
+      "  model: ai_provider",
+      "  model-auth: credential",
+      "---",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "api", "api.md"),
+    [
+      "---",
+      "kind: objective",
+      "ref: api",
+      "initiative: todo",
+      "name: api",
+      "context:",
+      "  source: source",
+      "  model: model",
+      "  model-auth: model-auth",
+      "---",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "api", "impl.md"),
+    [
+      "---",
+      "kind: task",
+      "ref: impl",
+      "objective: api",
+      "title: implement api",
+      "agent: generic@1",
+      "---",
+      "# Instructions",
+      "Build 5 REST endpoints.",
+      "# Acceptance Criteria",
+      "- [ ] endpoints return correct status codes",
+      "",
+    ].join("\n"),
+  );
+  return dir;
+}
+
+/** Known resource types for T4 — keyed by resource id */
+const T4_RESOURCES = new Map<string, { type: string; provider?: string }>([
+  [REPO_ID, { type: "repository" }],
+  [AIP_ID, { type: "ai_provider", provider: "openai-codex" }],
+  [CRED_ID, { type: "credential", provider: "openai-codex" }],
+]);
+
+test("T4(a): --bind missing model-auth alias → exitCode 1 and stderr mentions model-auth", async () => {
+  const dir = await makeBindings3Dir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: REPO_ID, model: AIP_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async (
+        _pid: string,
+        _name: string,
+        _type: string,
+      ) => [],
+      getResource: async (id: string) => T4_RESOURCES.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    1,
+    `expected exitCode 1 (model-auth unbound); got 0; stderr: ${result.stderr.join(" ")}`,
+  );
+  assert.ok(
+    result.stderr.some((l) => /model-auth/i.test(l)),
+    `stderr must mention 'model-auth'; got: ${result.stderr.join(" ")}`,
+  );
+});
+
+test("T4(b): all 3 --bind provided → exitCode 0 and createGraph receives bindings map", async () => {
+  const dir = await makeBindings3Dir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: REPO_ID, model: AIP_ID, "model-auth": CRED_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async (
+        _pid: string,
+        _name: string,
+        _type: string,
+      ) => [],
+      getResource: async (id: string) => T4_RESOURCES.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `expected exitCode 0 with all 3 binds; stderr: ${result.stderr.join(" ")}`,
+  );
+  assert.equal(fake.calls.length, 1, "createGraph.execute called once");
+  const call = fake.calls[0]!;
+  const callBindings: unknown = call.bindings;
+  assert.deepEqual(
+    callBindings as Record<string, string>,
+    { source: REPO_ID, model: AIP_ID, "model-auth": CRED_ID },
+    "createGraph.execute must receive resolved bindings map",
+  );
+});
+
+test("T4(c): --bind source=<name> → findResourcesByName resolves to id", async () => {
+  const dir = await makeBindings3Dir();
+  const fake = new FakeCreateGraph();
+  let findCalled = false;
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: "my-home-repo", model: AIP_ID, "model-auth": CRED_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async (
+        _pid: string,
+        _name: string,
+        _type: string,
+      ) => {
+        findCalled = true;
+        return [{ id: REPO_ID }];
+      },
+      getResource: async (id: string) => T4_RESOURCES.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `expected exitCode 0 after name→id resolution; stderr: ${result.stderr.join(" ")}`,
+  );
+  assert.ok(
+    findCalled,
+    "findResourcesByName must be called for name-style bind value",
+  );
+  const call = fake.calls[0]!;
+  const callBindingsC: unknown = call.bindings;
+  assert.equal(
+    (callBindingsC as Record<string, string> | undefined)?.["source"],
+    REPO_ID,
+    "resolved name→id must appear in bindings.source",
+  );
+});
+
+test("T4(d): --bind source=<name> with 0 matches → exitCode 1 mentioning alias and name", async () => {
+  const dir = await makeBindings3Dir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: "no-such-repo", model: AIP_ID, "model-auth": CRED_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async (
+        _pid: string,
+        _name: string,
+        _type: string,
+      ) => [],
+      getResource: async (id: string) => T4_RESOURCES.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    1,
+    `expected exitCode 1 (unknown name); got 0; stderr: ${result.stderr.join(" ")}`,
+  );
+  assert.ok(
+    result.stderr.some((l) => /source/i.test(l) || /no-such-repo/i.test(l)),
+    `stderr must mention the alias or name; got: ${result.stderr.join(" ")}`,
+  );
+});
+
+test("T4(e): --bind source=<name> with 2+ matches → exitCode 1 (ambiguous)", async () => {
+  const dir = await makeBindings3Dir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: "dup-name", model: AIP_ID, "model-auth": CRED_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async (
+        _pid: string,
+        _name: string,
+        _type: string,
+      ) => [{ id: "ID-A" }, { id: "ID-B" }],
+      getResource: async (id: string) => T4_RESOURCES.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    1,
+    `expected exitCode 1 (ambiguous name); got 0; stderr: ${result.stderr.join(" ")}`,
+  );
+  assert.ok(
+    result.stderr.some(
+      (l) => /ambiguous|multiple/i.test(l) || /dup-name/i.test(l),
+    ),
+    `stderr must mention ambiguity or the duplicate name; got: ${result.stderr.join(" ")}`,
+  );
+});
+
+test("T4(f): --bind source=<id> with wrong resource type → exitCode 1 (type mismatch)", async () => {
+  const dir = await makeBindings3Dir();
+  const fake = new FakeCreateGraph();
+
+  // CRED_ID has type "credential" but alias "source" expects "repository"
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      bind: { source: CRED_ID, model: AIP_ID, "model-auth": CRED_ID },
+    },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async (
+        _pid: string,
+        _name: string,
+        _type: string,
+      ) => [],
+      getResource: async (id: string) => T4_RESOURCES.get(id),
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    1,
+    `expected exitCode 1 (type mismatch for source alias); got 0; stderr: ${result.stderr.join(" ")}`,
+  );
+});

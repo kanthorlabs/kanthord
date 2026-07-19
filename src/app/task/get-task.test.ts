@@ -19,6 +19,11 @@ import type { TaskResultRow } from "../../storage/port.ts";
 
 const TASK_ID = "01JZZZZZZZZZZZZZZZZZZZGSK1";
 
+// NullContextSource: returns empty map — used in tests that don't inspect context
+const nullContextSource = {
+  getTaskContext: (_id: string): Record<string, string> => ({}),
+};
+
 const FAKE_TASK: Task = {
   id: TASK_ID,
   objectiveId: "01JZZZZZZZZZZZZZZZZZZZOBJ1",
@@ -80,7 +85,7 @@ class MemResultSource implements FakeResultSource {
 test("GetTask returns task data and task_results row for a known task with a result", async () => {
   const tasks = new MemTaskSource([FAKE_TASK]);
   const results = new MemResultSource(new Map([[TASK_ID, FAKE_RESULT]]));
-  const uc = new GetTask(tasks, results);
+  const uc = new GetTask(tasks, results, nullContextSource);
 
   const output = await uc.execute({ id: TASK_ID });
 
@@ -105,7 +110,7 @@ test("GetTask returns task data and task_results row for a known task with a res
 test("GetTask returns task data with undefined result for a task with no task_results row", async () => {
   const tasks = new MemTaskSource([FAKE_TASK]);
   const results = new MemResultSource(new Map()); // no result stored
-  const uc = new GetTask(tasks, results);
+  const uc = new GetTask(tasks, results, nullContextSource);
 
   const output = await uc.execute({ id: TASK_ID });
 
@@ -121,7 +126,7 @@ test("GetTask returns task data with undefined result for a task with no task_re
 test("GetTask throws UnknownReferenceError for an unknown task id", async () => {
   const tasks = new MemTaskSource([]); // empty store
   const results = new MemResultSource(new Map());
-  const uc = new GetTask(tasks, results);
+  const uc = new GetTask(tasks, results, nullContextSource);
 
   await assert.rejects(
     () => uc.execute({ id: "01JZZZZZZZZZZZZZZZZZZZUNK1" }),
@@ -158,7 +163,7 @@ test("GetTask returns dependencyStatus listing each dependency id and its status
 
   const tasks = new MemTaskSource([discardedDep, dependentTask]);
   const results = new MemResultSource(new Map());
-  const uc = new GetTask(tasks, results);
+  const uc = new GetTask(tasks, results, nullContextSource);
 
   const output = await uc.execute({ id: DEPENDENT_TASK_ID });
 
@@ -181,5 +186,46 @@ test("GetTask returns dependencyStatus listing each dependency id and its status
     output.dependencyStatus![0]!.status,
     "discarded",
     "dependency status must be 'discarded'",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 08 T1 — A5: GetTask loads task_context via ContextSource (3rd arg)
+// ---------------------------------------------------------------------------
+
+test("GetTask context: output.context equals the map returned by ContextSource when non-empty", async () => {
+  const ctxSource = {
+    getTaskContext: (_id: string): Record<string, string> => ({
+      repository: "REPO-1",
+      ai_provider: "AIP-1",
+    }),
+  };
+  const tasks = new MemTaskSource([FAKE_TASK]);
+  const results = new MemResultSource(new Map());
+  const uc = new GetTask(tasks, results, ctxSource);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.deepEqual(
+    output.context,
+    { repository: "REPO-1", ai_provider: "AIP-1" },
+    "context must deep-equal the map from ContextSource",
+  );
+});
+
+test("GetTask context: output.context is undefined when ContextSource returns empty map", async () => {
+  const emptyCtxSource = {
+    getTaskContext: (_id: string): Record<string, string> => ({}),
+  };
+  const tasks = new MemTaskSource([FAKE_TASK]);
+  const results = new MemResultSource(new Map());
+  const uc = new GetTask(tasks, results, emptyCtxSource);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.context,
+    undefined,
+    "context must be undefined when ContextSource returns empty map",
   );
 });

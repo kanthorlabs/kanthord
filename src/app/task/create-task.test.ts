@@ -345,9 +345,10 @@ describe("CreateTask", () => {
       id: RES_REPO_ID,
       type: "repository",
       name: "backend",
-      organization: "acme",
+      remoteUrl: "https://github.com/acme/backend.git",
       branch: "main",
       path: "",
+      auth: { kind: "ambient" },
     });
     const uc = new CreateTask(
       taskRepo,

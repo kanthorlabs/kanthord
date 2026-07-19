@@ -1,12 +1,24 @@
 import { test, describe, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
-import { WorkspacePreparationError } from "./port.ts";
-import type { Workspace } from "./port.ts";
+import {
+  WorkspacePreparationError,
+  DivergenceError,
+  FetchError,
+} from "./port.ts";
+import type { Workspace, CachedModePolicy } from "./port.ts";
 import { LocalWorkspaceManager } from "./local.ts";
 import type { Repository, Filesystem } from "../domain/resource.ts";
 
@@ -29,14 +41,21 @@ async function createSeedRepo(dir: string, branch = "main"): Promise<void> {
   await execFile("git", ["commit", "-m", "initial"], { cwd: dir });
 }
 
-function makeRepo(path: string, branch = "main"): Repository {
+// remoteUrl defaults to the GitHub stub — override for tests that need a real
+// local remote (pass `file://${seedDir}`).
+function makeRepo(
+  path: string,
+  branch = "main",
+  remoteUrl = "https://github.com/kanthorlabs/sandbox.git",
+): Repository {
   return {
     id: "repo-1",
     type: "repository",
     name: "sandbox",
-    organization: "kanthorlabs",
+    remoteUrl,
     branch,
     path,
+    auth: { kind: "ambient" },
   };
 }
 
@@ -68,11 +87,9 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     const wsRoot = join(tmpRoot, "workspaces-a");
     await mkdir(wsRoot, { recursive: true });
 
-    const repo = makeRepo(homePath);
-    const mgr = new LocalWorkspaceManager({
-      root: wsRoot,
-      buildRemoteUrl: () => seedDir,
-    });
+    // T4: remoteUrl is the file:// URL directly; no buildRemoteUrl override needed.
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
 
     const ws: Workspace = await mgr.prepare("t1", repo);
 
@@ -88,8 +105,8 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     );
     assert.equal(
       originOut.trim(),
-      seedDir,
-      "home origin must be the built URL",
+      `file://${seedDir}`,
+      "home origin must be repo.remoteUrl",
     );
 
     // no .tmp- leftovers inside wsRoot/homePath parent
@@ -122,14 +139,11 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     const wsRoot = join(tmpRoot, "workspaces-b");
     await mkdir(wsRoot, { recursive: true });
 
-    // Pre-seed the home by cloning the seed repo
-    await execFile("git", ["clone", seedDir, homePath]);
+    // T4: pre-seed via file:// so origin matches repo.remoteUrl
+    await execFile("git", ["clone", `file://${seedDir}`, homePath]);
 
-    const repo = makeRepo(homePath);
-    const mgr = new LocalWorkspaceManager({
-      root: wsRoot,
-      buildRemoteUrl: () => seedDir,
-    });
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
 
     const ws: Workspace = await mgr.prepare("t2", repo);
 
@@ -151,15 +165,13 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     const wsRoot = join(tmpRoot, "workspaces-c");
     await mkdir(wsRoot, { recursive: true });
 
-    // Clone from seed but build URL will return a different path
-    await execFile("git", ["clone", seedDir, homePath]);
-    const differentUrl = join(tmpRoot, "other-origin");
+    // T4: clone from file:// so origin = file://${seedDir}; repo.remoteUrl is the
+    // default github stub → mismatch without needing a separate differentUrl var.
+    await execFile("git", ["clone", `file://${seedDir}`, homePath]);
 
+    // repo.remoteUrl defaults to the github stub (not the seedDir file:// URL)
     const repo = makeRepo(homePath);
-    const mgr = new LocalWorkspaceManager({
-      root: wsRoot,
-      buildRemoteUrl: () => differentUrl,
-    });
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
 
     await assert.rejects(
       () => mgr.prepare("t3", repo),
@@ -169,11 +181,11 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
           "must be WorkspacePreparationError",
         );
         assert.ok(
-          err.message.includes(differentUrl),
+          err.message.includes("https://github.com/kanthorlabs/sandbox.git"),
           `message must include expected URL: ${err.message}`,
         );
         assert.ok(
-          err.message.includes(seedDir),
+          err.message.includes(`file://${seedDir}`),
           `message must include actual URL: ${err.message}`,
         );
         return true;
@@ -189,11 +201,9 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     // write a plain file so it is a non-git directory
     await writeFile(join(homePath, "not-a-git-repo.txt"), "plain");
 
-    const repo = makeRepo(homePath);
-    const mgr = new LocalWorkspaceManager({
-      root: wsRoot,
-      buildRemoteUrl: () => seedDir,
-    });
+    // T4: no buildRemoteUrl needed; the plain-dir check happens before any clone
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
 
     await assert.rejects(
       () => mgr.prepare("t4", repo),
@@ -212,12 +222,9 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     const wsRoot = join(tmpRoot, "workspaces-e");
     await mkdir(wsRoot, { recursive: true });
 
-    // repo branch 'nonexistent' does not exist in seed
-    const repo = makeRepo(homePath, "nonexistent");
-    const mgr = new LocalWorkspaceManager({
-      root: wsRoot,
-      buildRemoteUrl: () => seedDir,
-    });
+    // T4: file:// remote; 'nonexistent' branch does not exist in seed
+    const repo = makeRepo(homePath, "nonexistent", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
 
     await assert.rejects(
       () => mgr.prepare("t5", repo),
@@ -335,5 +342,472 @@ describe("LocalWorkspaceManager — filesystem source (T2)", () => {
         return true;
       },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T4 — secure git env: GIT_ASKPASS injection + env sanitization
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — T4 secure git env", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-ws-t4-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("D2 clean-git-env contract: GIT_CONFIG constant clears credential.helper= alongside GIT_TERMINAL_PROMPT=0", () => {
+    // D2 locked contract: every child git process must have credential.helper cleared
+    // (via -c credential.helper=) so that a user's global credential manager cannot
+    // intercept or override the GIT_ASKPASS token injection path.
+    // GIT_CONFIG is a module-level constant (not exported); assert via source scan —
+    // the smallest observable seam available per the dispatch contract.
+    const src = readFileSync(new URL("./local.ts", import.meta.url), {
+      encoding: "utf8",
+    });
+
+    assert.ok(
+      src.includes('"credential.helper="'),
+      'local.ts GIT_CONFIG must contain "-c", "credential.helper=" to clear any global credential helper (D2 contract)',
+    );
+
+    // Also verify GIT_TERMINAL_PROMPT=0 is enforced (both are required D2 items).
+    assert.ok(
+      src.includes("GIT_TERMINAL_PROMPT"),
+      "local.ts buildGitEnv must set GIT_TERMINAL_PROMPT=0 (D2 contract)",
+    );
+  });
+
+  test("S4 partial-write token-leak guard: buildGitEnv cleans both temp files in a catch block on write failure", () => {
+    // S4 regression guard: if writeFile(askpassFile) or any prior step throws,
+    // buildGitEnv must rmSync both tokenFile AND askpassFile before re-throwing —
+    // so no credential file outlives a failed buildGitEnv call.
+    // buildGitEnv is not exported; source scan is the smallest observable seam.
+    //
+    // S5 precision: the broad src.includes() scan would pass even if the S4 catch
+    // block were deleted, because the same rmSync calls also appear in the S1
+    // cleanup closure that follows the try/catch. Instead, extract specifically
+    // the catch-block region (from the unique "// Partial-write guard:" comment
+    // that opens the catch body to the first "throw err;" that closes it) and
+    // assert that BOTH rmSync calls appear within that region.
+    // Sensitivity: deleting the catch block (while keeping the cleanup closure)
+    // makes the "// Partial-write guard:" anchor disappear → first assert fails.
+    const src = readFileSync(new URL("./local.ts", import.meta.url), {
+      encoding: "utf8",
+    });
+
+    // Unique anchor: the comment the SE placed at the top of the catch body.
+    const CATCH_ANCHOR = "// Partial-write guard:";
+    const catchStart = src.indexOf(CATCH_ANCHOR);
+    assert.ok(
+      catchStart !== -1,
+      `local.ts must contain the '${CATCH_ANCHOR}' comment inside the buildGitEnv catch block (S4 contract) — deleting the catch block will fail this assertion`,
+    );
+
+    // The catch block terminates with 'throw err;' — find the first occurrence
+    // after the anchor (which is within the catch body, before the cleanup closure).
+    const THROW_MARKER = "throw err;";
+    const throwEnd = src.indexOf(THROW_MARKER, catchStart);
+    assert.ok(
+      throwEnd !== -1,
+      "local.ts buildGitEnv catch block must contain 'throw err;' after the partial-write guard comment (S4 contract)",
+    );
+
+    // Extract only the catch-block region; the cleanup closure (rmSync calls that
+    // follow the try/catch on the success path) is intentionally excluded.
+    const catchRegion = src.slice(catchStart, throwEnd + THROW_MARKER.length);
+
+    assert.ok(
+      catchRegion.includes("rmSync(tokenFile"),
+      "buildGitEnv catch block must rmSync(tokenFile, ...) before re-throwing (S4 contract)",
+    );
+    assert.ok(
+      catchRegion.includes("rmSync(askpassFile"),
+      "buildGitEnv catch block must rmSync(askpassFile, ...) before re-throwing (S4 contract)",
+    );
+  });
+
+  test("prepare strips GIT_TRACE from child git env (trace file absent after clone)", async () => {
+    const traceFile = join(tmpRoot, "git-trace-output.txt");
+    const homePath = join(tmpRoot, "home-t4-c");
+    const wsRoot = join(tmpRoot, "ws-t4-c");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo: Repository = {
+      id: "r-t4c",
+      type: "repository",
+      name: "test",
+      remoteUrl: `file://${seedDir}`,
+      branch: "main",
+      path: homePath,
+      auth: { kind: "ambient" },
+    };
+
+    // Inject GIT_TRACE so that — if inherited by the child process — git writes
+    // a trace file.  After T4, LocalWorkspaceManager must strip GIT_TRACE*
+    // from the child env so the file is never created.
+    const savedTrace = process.env["GIT_TRACE"];
+    process.env["GIT_TRACE"] = traceFile;
+    try {
+      const mgr = new LocalWorkspaceManager({ root: wsRoot });
+      await mgr.prepare("t4-trace", repo);
+    } finally {
+      if (savedTrace === undefined) {
+        delete process.env["GIT_TRACE"];
+      } else {
+        process.env["GIT_TRACE"] = savedTrace;
+      }
+    }
+
+    // If the env was inherited, git would have written to traceFile.
+    const traceCreated = await access(traceFile)
+      .then(() => true)
+      .catch(() => false);
+    assert.equal(
+      traceCreated,
+      false,
+      "GIT_TRACE must be stripped from child git env — trace file must not be created",
+    );
+  });
+
+  test("prepare with https-token auth accepts resolveCredential and token is absent from remote URL", async () => {
+    const TOKEN = "super-secret-token-abc999";
+    const homePath = join(tmpRoot, "home-t4-b");
+    const wsRoot = join(tmpRoot, "ws-t4-b");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo: Repository = {
+      id: "r-t4b",
+      type: "repository",
+      name: "test-https",
+      remoteUrl: `file://${seedDir}`,
+      branch: "main",
+      path: homePath,
+      auth: { kind: "https-token", credentialId: "cred-1" },
+    };
+
+    // LocalWorkspaceManager must accept a resolveCredential option so the
+    // token is retrieved without embedding it in the argv or remote URL.
+    // RED today (two reasons):
+    // 1. TypeScript: resolveCredential is not in LocalWorkspaceManagerOptions.
+    // 2. Runtime: resolveCredential is never called (option ignored) → spy fails.
+    let resolveCalledWith: string | undefined;
+    const mgr = new LocalWorkspaceManager({
+      root: wsRoot,
+      resolveCredential: async (id: string) => {
+        resolveCalledWith = id;
+        return TOKEN;
+      },
+    });
+    const ws = await mgr.prepare("t4-token", repo);
+    assert.ok(ws.baseCommit.length >= 7, "must return a valid workspace");
+
+    // resolveCredential must have been called with the credentialId from auth
+    assert.equal(
+      resolveCalledWith,
+      "cred-1",
+      "resolveCredential must be called with the auth.credentialId",
+    );
+
+    // The token must NOT appear embedded in the configured remote URL.
+    const { stdout: originUrl } = await execFile(
+      "git",
+      ["remote", "get-url", "origin"],
+      { cwd: homePath },
+    );
+    assert.ok(
+      !originUrl.includes(TOKEN),
+      "token must not be embedded in git remote URL",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T3 — Story 12 D5: fetch + CAS + clone at canonical SHA
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
+  // Clone from a file:// URL and configure git user in the clone so commits work.
+  async function cloneAndCfg(from: string, to: string): Promise<void> {
+    await execFile("git", ["clone", `file://${from}`, to]);
+    await execFile("git", ["config", "user.email", "test@localhost"], {
+      cwd: to,
+    });
+    await execFile("git", ["config", "user.name", "Test"], { cwd: to });
+  }
+
+  // Write a file, stage, commit, return new HEAD SHA.
+  async function addAndCommit(
+    dir: string,
+    file: string,
+    content: string,
+    msg: string,
+  ): Promise<string> {
+    await writeFile(join(dir, file), content);
+    await execFile("git", ["add", "-A"], { cwd: dir });
+    await execFile("git", ["commit", "-m", msg], { cwd: dir });
+    const { stdout } = await execFile("git", ["rev-parse", "HEAD"], {
+      cwd: dir,
+    });
+    return stdout.trim();
+  }
+
+  test("(a) home behind origin: ff-advances main, workspace baseCommit = new canonical SHA", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "kanthord-t3a-"));
+    try {
+      const lockDir = join(tmp, "locks");
+      await mkdir(lockDir, { recursive: true });
+      const wsRoot = join(tmp, "ws");
+      await mkdir(wsRoot, { recursive: true });
+
+      const originDir = join(tmp, "origin");
+      await createSeedRepo(originDir);
+
+      const homeDir = join(tmp, "home");
+      await cloneAndCfg(originDir, homeDir);
+
+      // advance origin → homeDir is behind by one commit
+      const c2Sha = await addAndCommit(originDir, "extra.txt", "extra", "c2");
+
+      const repo = makeRepo(homeDir, "main", `file://${originDir}`);
+      const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+
+      const ws = await mgr.prepare("task-a", repo);
+
+      // After ff-advance, home/main must be at c2Sha
+      const homeSha = await git(homeDir, "rev-parse", "main");
+      assert.equal(
+        homeSha,
+        c2Sha,
+        "home/main must ff-advance to origin/main SHA",
+      );
+      // Workspace baseCommit must be the canonical SHA (c2Sha), not the stale c1Sha
+      assert.equal(
+        ws.baseCommit,
+        c2Sha,
+        "workspace baseCommit must equal canonical SHA",
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("(b) home ahead of origin: keeps local main, workspace baseCommit = local SHA (characterization)", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "kanthord-t3b-"));
+    try {
+      const lockDir = join(tmp, "locks");
+      await mkdir(lockDir, { recursive: true });
+      const wsRoot = join(tmp, "ws");
+      await mkdir(wsRoot, { recursive: true });
+
+      const originDir = join(tmp, "origin");
+      await createSeedRepo(originDir);
+
+      const homeDir = join(tmp, "home");
+      await cloneAndCfg(originDir, homeDir);
+      // homeDir is AHEAD of origin (simulates a local landing)
+      const c2Sha = await addAndCommit(
+        homeDir,
+        "landed.txt",
+        "landed",
+        "local-landed",
+      );
+
+      const repo = makeRepo(homeDir, "main", `file://${originDir}`);
+      const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+
+      const ws = await mgr.prepare("task-b", repo);
+
+      // home/main must remain at c2Sha (ahead → keep local, no reset)
+      const homeSha = await git(homeDir, "rev-parse", "main");
+      assert.equal(
+        homeSha,
+        c2Sha,
+        "home/main must not change when already ahead",
+      );
+      assert.equal(
+        ws.baseCommit,
+        c2Sha,
+        "workspace baseCommit must be local SHA (ahead case)",
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("(c) diverged + no cached policy: prepare throws DivergenceError", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "kanthord-t3c-"));
+    try {
+      const lockDir = join(tmp, "locks");
+      await mkdir(lockDir, { recursive: true });
+      const wsRoot = join(tmp, "ws");
+      await mkdir(wsRoot, { recursive: true });
+
+      const originDir = join(tmp, "origin");
+      await createSeedRepo(originDir);
+
+      const homeDir = join(tmp, "home");
+      await cloneAndCfg(originDir, homeDir);
+
+      // diverge both sides from c1 (the shared base)
+      await addAndCommit(homeDir, "local.txt", "local", "home-only");
+      await addAndCommit(originDir, "remote.txt", "remote", "origin-only");
+
+      const repo = makeRepo(homeDir, "main", `file://${originDir}`);
+      const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+
+      await assert.rejects(
+        () => mgr.prepare("task-c", repo),
+        (err: unknown) => {
+          assert.ok(
+            err instanceof DivergenceError,
+            `must be DivergenceError; got: ${String(err)}`,
+          );
+          assert.equal(
+            err.repoId,
+            repo.id,
+            "DivergenceError must carry repoId",
+          );
+          return true;
+        },
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("(d) diverged + CachedModePolicy: prepare uses stored baseSHA, skips live fetch", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "kanthord-t3d-"));
+    try {
+      const lockDir = join(tmp, "locks");
+      await mkdir(lockDir, { recursive: true });
+      const wsRoot = join(tmp, "ws");
+      await mkdir(wsRoot, { recursive: true });
+
+      const originDir = join(tmp, "origin");
+      await createSeedRepo(originDir);
+      const c1Sha = await git(originDir, "rev-parse", "HEAD");
+
+      const homeDir = join(tmp, "home");
+      await cloneAndCfg(originDir, homeDir);
+
+      // diverge both sides
+      await addAndCommit(homeDir, "local.txt", "local", "home-only");
+      await addAndCommit(originDir, "remote.txt", "remote", "origin-only");
+
+      const cachedPolicy: CachedModePolicy = {
+        repoId: "repo-1",
+        lastFetchedOriginSHA: c1Sha,
+        fetchTime: new Date().toISOString(),
+        baseSHA: c1Sha,
+      };
+
+      const repo = makeRepo(homeDir, "main", `file://${originDir}`);
+      const mgr = new LocalWorkspaceManager({
+        root: wsRoot,
+        lockDir,
+        getCachedPolicy: async (_repoId: string) => cachedPolicy,
+      });
+
+      const ws = await mgr.prepare("task-d", repo);
+      // Workspace must be cloned at the cached baseSHA (c1Sha), not the diverged local HEAD
+      assert.equal(
+        ws.baseCommit,
+        c1Sha,
+        "workspace baseCommit must be cached baseSHA, not diverged local HEAD",
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("(e) fetch fails + no cached policy: prepare throws FetchError", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "kanthord-t3e-"));
+    try {
+      const lockDir = join(tmp, "locks");
+      await mkdir(lockDir, { recursive: true });
+      const wsRoot = join(tmp, "ws");
+      await mkdir(wsRoot, { recursive: true });
+
+      const originDir = join(tmp, "origin");
+      await createSeedRepo(originDir);
+
+      const homeDir = join(tmp, "home");
+      await cloneAndCfg(originDir, homeDir);
+
+      // Remove origin so any fetch attempt fails
+      await rm(originDir, { recursive: true, force: true });
+
+      const repo = makeRepo(homeDir, "main", `file://${originDir}`);
+      const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+
+      await assert.rejects(
+        () => mgr.prepare("task-e", repo),
+        (err: unknown) => {
+          assert.ok(
+            err instanceof FetchError,
+            `must be FetchError; got: ${String(err)}`,
+          );
+          assert.equal(err.repoId, repo.id, "FetchError must carry repoId");
+          return true;
+        },
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("(f) lock contention: concurrent prepares both get canonical SHA from fetched origin", async () => {
+    const tmp = await mkdtemp(join(tmpdir(), "kanthord-t3f-"));
+    try {
+      const lockDir = join(tmp, "locks");
+      await mkdir(lockDir, { recursive: true });
+      const wsRoot = join(tmp, "ws");
+      await mkdir(wsRoot, { recursive: true });
+
+      const originDir = join(tmp, "origin");
+      await createSeedRepo(originDir);
+
+      const homeDir = join(tmp, "home");
+      await cloneAndCfg(originDir, homeDir);
+
+      // advance origin → both concurrent prepares must see c2Sha after fetch
+      const c2Sha = await addAndCommit(originDir, "extra.txt", "extra", "c2");
+
+      const repo = makeRepo(homeDir, "main", `file://${originDir}`);
+      const mgr1 = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+      const mgr2 = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+
+      const [ws1, ws2] = await Promise.all([
+        mgr1.prepare("task-f1", repo),
+        mgr2.prepare("task-f2", repo),
+      ]);
+
+      assert.equal(
+        ws1.baseCommit,
+        c2Sha,
+        "ws1.baseCommit must equal canonical SHA from fetched origin",
+      );
+      assert.equal(
+        ws2.baseCommit,
+        c2Sha,
+        "ws2.baseCommit must equal canonical SHA from fetched origin",
+      );
+
+      // No stale lock files must remain after both prepares complete
+      const lockFiles = await readdir(lockDir);
+      assert.deepEqual(
+        lockFiles.filter((f) => f.endsWith(".lock")),
+        [],
+        "no stale .lock files must remain after both prepares complete",
+      );
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
   });
 });

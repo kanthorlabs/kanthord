@@ -10,6 +10,8 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { parseTask, parseGraphPackage, serializeNode } from "./graph-codec.ts";
+import { GRAPH_FORMAT_VERSION, GRAPH_FORMAT_VERSION_LEGACY } from "./format.ts";
+import type { PkgInitiative, PkgObjective, PkgTask } from "./graph-package.ts";
 
 // ---------------------------------------------------------------------------
 // parseTask — RF1 (single task, string → value)
@@ -254,5 +256,205 @@ describe("src/app/graph/graph-codec.ts — serializeNode", () => {
       original,
       "round-trip must be byte-identical",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 10 T2 — codec: parse and serialize bindings/context fields (round-trip)
+// ---------------------------------------------------------------------------
+
+describe("src/app/graph/graph-codec.ts — Story 10 T2: bindings/context codec round-trip", () => {
+  const INIT_WITH_BINDINGS_MD = [
+    "---",
+    "kind: initiative",
+    "ref: todo",
+    "name: Todo",
+    "bindings:",
+    "  source: repository",
+    "  model: ai_provider",
+    "---",
+    "",
+  ].join("\n");
+
+  const OBJ_WITH_CONTEXT_MD = [
+    "---",
+    "kind: objective",
+    "ref: api",
+    "initiative: todo",
+    "name: API",
+    "context:",
+    "  source: source",
+    "  model: model",
+    "---",
+    "",
+  ].join("\n");
+
+  const TASK_WITH_CONTEXT_MD = [
+    "---",
+    "kind: task",
+    "ref: impl",
+    "objective: api",
+    "title: implement api",
+    "agent: generic@1",
+    "context:",
+    "  model: model",
+    "---",
+    "# Instructions",
+    "Build endpoints.",
+    "# Acceptance Criteria",
+    "- [ ] endpoints work",
+    "",
+  ].join("\n");
+
+  const FORMAT1_INIT_MD = [
+    "---",
+    "kind: initiative",
+    "ref: legacy",
+    "name: Legacy",
+    "---",
+    "",
+  ].join("\n");
+
+  const FORMAT1_OBJ_MD = [
+    "---",
+    "kind: objective",
+    "ref: obj",
+    "initiative: legacy",
+    "name: Obj",
+    "---",
+    "",
+  ].join("\n");
+
+  test("(a) parseGraphPackage: initiative bindings field parsed from frontmatter", () => {
+    const pkg = parseGraphPackage([
+      { sourcePath: "todo.md", content: INIT_WITH_BINDINGS_MD },
+      { sourcePath: "api/api.md", content: OBJ_WITH_CONTEXT_MD },
+      { sourcePath: "api/impl.md", content: TASK_WITH_CONTEXT_MD },
+    ]);
+    assert.deepEqual(
+      pkg.initiative.bindings,
+      { source: "repository", model: "ai_provider" },
+      "initiative.bindings must equal parsed frontmatter bindings map",
+    );
+  });
+
+  test("(b) parseGraphPackage: objective context field parsed from frontmatter", () => {
+    const pkg = parseGraphPackage([
+      { sourcePath: "todo.md", content: INIT_WITH_BINDINGS_MD },
+      { sourcePath: "api/api.md", content: OBJ_WITH_CONTEXT_MD },
+      { sourcePath: "api/impl.md", content: TASK_WITH_CONTEXT_MD },
+    ]);
+    assert.deepEqual(
+      pkg.objectives[0]?.context,
+      { source: "source", model: "model" },
+      "objective.context must equal parsed frontmatter context map",
+    );
+  });
+
+  test("(c) parseGraphPackage: task context field parsed from frontmatter", () => {
+    const pkg = parseGraphPackage([
+      { sourcePath: "todo.md", content: INIT_WITH_BINDINGS_MD },
+      { sourcePath: "api/api.md", content: OBJ_WITH_CONTEXT_MD },
+      { sourcePath: "api/impl.md", content: TASK_WITH_CONTEXT_MD },
+    ]);
+    assert.deepEqual(
+      pkg.tasks[0]?.context,
+      { model: "model" },
+      "task.context must equal parsed frontmatter context map",
+    );
+  });
+
+  test("(d) serializeNode: initiative bindings round-trips back through parseGraphPackage without data loss", () => {
+    const initiative: PkgInitiative = {
+      ref: "todo",
+      name: "Todo",
+      sourcePath: "todo.md",
+      bindings: { source: "repository" },
+    };
+    const serialized = serializeNode(initiative);
+    assert.ok(
+      serialized.includes("bindings:"),
+      `serialized initiative must include 'bindings:' block; got:\n${serialized}`,
+    );
+    const reparsed = parseGraphPackage([
+      { sourcePath: "todo.md", content: serialized },
+    ]);
+    assert.deepEqual(
+      reparsed.initiative.bindings,
+      { source: "repository" },
+      "bindings must survive a serialize→parse round-trip without data loss",
+    );
+  });
+
+  test("(e) format-1 package: initiative.bindings and objective.context are undefined (no regression)", () => {
+    // Characterization: format-1 packages land without bindings/context — no regression.
+    const pkg = parseGraphPackage([
+      { sourcePath: "init.md", content: FORMAT1_INIT_MD },
+      { sourcePath: "obj/obj.md", content: FORMAT1_OBJ_MD },
+    ]);
+    assert.strictEqual(
+      pkg.initiative.bindings,
+      undefined,
+      "format-1 initiative must have bindings === undefined",
+    );
+    assert.strictEqual(
+      pkg.objectives[0]?.context,
+      undefined,
+      "format-1 objective must have context === undefined",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 10 T1 — GraphPackage DTO bindings/context fields + format version constants
+// ---------------------------------------------------------------------------
+
+describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + format version", () => {
+  test("GRAPH_FORMAT_VERSION === 2 (bumped for C1 bindings + context)", () => {
+    assert.strictEqual(GRAPH_FORMAT_VERSION, 2);
+  });
+
+  test("GRAPH_FORMAT_VERSION_LEGACY === 1 (format-1 packages still parseable)", () => {
+    assert.strictEqual(GRAPH_FORMAT_VERSION_LEGACY, 1);
+  });
+
+  test("PkgInitiative accepts bindings field (compile + runtime: field present on object)", () => {
+    // TS2353 fires today (bindings absent from PkgInitiative); GREEN once added.
+    const _a: PkgInitiative = {
+      ref: "test",
+      name: "Test",
+      sourcePath: "p.md",
+      bindings: { source: "repository" },
+    };
+    assert.deepEqual(_a.bindings, { source: "repository" });
+  });
+
+  test("PkgObjective accepts context field (compile + runtime: field present on object)", () => {
+    // TS2353 fires today (context absent from PkgObjective); GREEN once added.
+    const _b: PkgObjective = {
+      ref: "obj",
+      initiativeRef: "init",
+      name: "Obj",
+      sourcePath: "obj.md",
+      context: { source: "source" },
+    };
+    assert.deepEqual(_b.context, { source: "source" });
+  });
+
+  test("PkgTask accepts context field (compile + runtime: field present on object)", () => {
+    // TS2353 fires today (context absent from PkgTask); GREEN once added.
+    const _c: PkgTask = {
+      ref: "tsk",
+      objectiveRef: "obj",
+      title: "T",
+      instructions: "",
+      ac: [],
+      agent: "generic@1",
+      verification: undefined,
+      dependsOn: [],
+      sourcePath: "tsk.md",
+      context: { model: "model" },
+    };
+    assert.deepEqual(_c.context, { model: "model" });
   });
 });

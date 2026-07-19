@@ -161,7 +161,12 @@ function buildInitiative(
         ? id
         : "";
   const name = typeof fm["name"] === "string" ? (fm["name"] as string) : "";
-  return { id, ref, name, sourcePath };
+  const rawBindings = fm["bindings"];
+  const bindings =
+    typeof rawBindings === "object" && rawBindings !== null
+      ? (rawBindings as Record<string, string>)
+      : undefined;
+  return { id, ref, name, sourcePath, bindings };
 }
 
 function buildObjective(
@@ -178,7 +183,12 @@ function buildObjective(
   const name = typeof fm["name"] === "string" ? (fm["name"] as string) : "";
   const initiativeRef =
     typeof fm["initiative"] === "string" ? (fm["initiative"] as string) : "";
-  return { id, ref, initiativeRef, name, sourcePath };
+  const rawContext = fm["context"];
+  const context =
+    typeof rawContext === "object" && rawContext !== null
+      ? (rawContext as Record<string, string>)
+      : undefined;
+  return { id, ref, initiativeRef, name, sourcePath, context };
 }
 
 function buildTask(
@@ -221,6 +231,12 @@ function buildTask(
   const verificationLines = sections.get("verification");
   const verification = extractVerification(verificationLines);
 
+  const rawContext = fm["context"];
+  const context =
+    typeof rawContext === "object" && rawContext !== null
+      ? (rawContext as Record<string, string>)
+      : undefined;
+
   return {
     id,
     ref,
@@ -232,6 +248,7 @@ function buildTask(
     verification,
     dependsOn,
     sourcePath,
+    context,
   };
 }
 
@@ -348,9 +365,14 @@ function serializeInitiative(node: PkgInitiative): string {
     "kind: initiative",
     ...identityLines(node.id, node.ref),
     `name: ${node.name}`,
-    "---",
-    "",
   ];
+  if (node.bindings !== undefined && Object.keys(node.bindings).length > 0) {
+    lines.push("bindings:");
+    for (const [k, v] of Object.entries(node.bindings)) {
+      lines.push(`  ${k}: ${v}`);
+    }
+  }
+  lines.push("---", "");
   return lines.join("\n");
 }
 
@@ -361,9 +383,14 @@ function serializeObjective(node: PkgObjective): string {
     ...identityLines(node.id, node.ref),
     `initiative: ${yamlScalar(node.initiativeRef)}`,
     `name: ${node.name}`,
-    "---",
-    "",
   ];
+  if (node.context !== undefined && Object.keys(node.context).length > 0) {
+    lines.push("context:");
+    for (const [k, v] of Object.entries(node.context)) {
+      lines.push(`  ${k}: ${v}`);
+    }
+  }
+  lines.push("---", "");
   return lines.join("\n");
 }
 
@@ -380,6 +407,12 @@ function serializeTask(node: PkgTask): string {
   const sortedDeps = [...node.dependsOn].sort();
   if (sortedDeps.length > 0) {
     fmLines.push(`depends-on: [${sortedDeps.map(yamlScalar).join(", ")}]`);
+  }
+  if (node.context !== undefined && Object.keys(node.context).length > 0) {
+    fmLines.push("context:");
+    for (const [k, v] of Object.entries(node.context)) {
+      fmLines.push(`  ${k}: ${v}`);
+    }
   }
   fmLines.push("---");
 

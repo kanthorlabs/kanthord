@@ -10,6 +10,7 @@ import {
   buildResource,
   ResourceValidationError,
   UnknownResourceTypeError,
+  EmbeddedCredentialError,
 } from "./resource.ts";
 import type {
   Repository,
@@ -17,15 +18,17 @@ import type {
   Notification,
   AIProvider,
   Filesystem,
+  RepositoryAuth,
 } from "./resource.ts";
 
 const repo: Repository = {
   id: "01H000000000000000000000AA",
   type: "repository",
   name: "kanthord",
-  organization: "kanthorlabs",
+  remoteUrl: "https://github.com/kanthorlabs/kanthord.git",
   branch: "main",
   path: "/home/dev/kanthord",
+  auth: { kind: "ambient" },
 };
 
 const cred: Credential = {
@@ -132,10 +135,10 @@ test("guards narrow to vendor fields at compile time", () => {
   // Compile-time proof: after narrowing, vendor fields are readable.
   // If this file typechecks, the narrowing works.
   if (isRepository(repo)) {
-    const _org: string = repo.organization;
+    const _remoteUrl: string = repo.remoteUrl;
     const _branch: string = repo.branch;
     const _path: string = repo.path;
-    void _org;
+    void _remoteUrl;
     void _branch;
     void _path;
   }
@@ -170,16 +173,17 @@ test("buildResource repository: builds correct variant from valid input", () => 
   const r = buildResource({
     type: "repository",
     name: "kanthord",
-    organization: "kanthorlabs",
+    remoteUrl: "https://github.com/kanthorlabs/kanthord.git",
     branch: "main",
     path: "/home/dev/kanthord",
+    auth: { kind: "ambient" },
   });
   assert.equal(typeof r.id, "string", "id must be a non-empty string");
   assert.ok(r.id.length > 0, "id must be non-empty");
   assert.equal(r.type, "repository");
   assert.equal(r.name, "kanthord");
   if (!isRepository(r)) assert.fail("expected Repository variant");
-  assert.equal(r.organization, "kanthorlabs");
+  assert.equal(r.remoteUrl, "https://github.com/kanthorlabs/kanthord.git");
   assert.equal(r.branch, "main");
   assert.equal(r.path, "/home/dev/kanthord");
 });
@@ -330,4 +334,88 @@ test("buildResource unknown type: throws UnknownResourceTypeError naming the typ
       return true;
     },
   );
+});
+
+// Story 01 T1 — D2: RepositoryAuth union + EmbeddedCredentialError + new Repository shape
+
+test("EmbeddedCredentialError is thrown when remoteUrl has embedded userinfo", () => {
+  assert.throws(
+    () =>
+      buildResource({
+        type: "repository",
+        name: "test",
+        remoteUrl: "https://x-access-token:sk@github.com/o/r.git",
+        branch: "main",
+        path: "/repo",
+        auth: { kind: "ambient" },
+      }),
+    (err: unknown) =>
+      err instanceof EmbeddedCredentialError && err.field === "remoteUrl",
+  );
+});
+
+test("buildResource repository: accepts clean remoteUrl and returns Repository with remoteUrl + auth", () => {
+  const r = buildResource({
+    type: "repository",
+    name: "kanthord",
+    remoteUrl: "https://github.com/kanthorlabs/kanthord.git",
+    branch: "main",
+    path: "/repo",
+    auth: { kind: "ambient" },
+  });
+  assert.equal(r.type, "repository");
+  if (!isRepository(r)) assert.fail("expected Repository variant");
+  assert.equal(r.remoteUrl, "https://github.com/kanthorlabs/kanthord.git");
+  assert.deepEqual(r.auth, { kind: "ambient" });
+});
+
+test("RepositoryAuth https-token variant carries credentialId and round-trips through isRepository", () => {
+  const auth: RepositoryAuth = { kind: "https-token", credentialId: "cred-01" };
+  const r = buildResource({
+    type: "repository",
+    name: "secured",
+    remoteUrl: "https://github.com/o/r.git",
+    branch: "main",
+    path: "/repo",
+    auth,
+  });
+  if (!isRepository(r)) assert.fail("expected Repository variant");
+  assert.deepEqual(r.auth, { kind: "https-token", credentialId: "cred-01" });
+});
+
+test("RepositoryAuth ssh-agent variant round-trips through isRepository", () => {
+  const auth: RepositoryAuth = { kind: "ssh-agent" };
+  const r = buildResource({
+    type: "repository",
+    name: "ssh-repo",
+    remoteUrl: "git@github.com:o/r.git",
+    branch: "main",
+    path: "/repo",
+    auth,
+  });
+  if (!isRepository(r)) assert.fail("expected Repository variant");
+  assert.deepEqual(r.auth, { kind: "ssh-agent" });
+});
+
+test("Repository type has remoteUrl and auth; organization is absent (compile-time)", () => {
+  // Compile-time proof: a Repository assigned without organization must be valid.
+  // If organization were still present as required, this annotation would error.
+  // The @ts-expect-error below proves organization is NOT on the type:
+  // when the SE removes it, accessing r.organization is an error (suppressed);
+  // if the SE leaves organization in, the @ts-expect-error itself becomes an error.
+  const r: Repository = {
+    id: "01H000000000000000000000A9",
+    type: "repository",
+    name: "test",
+    remoteUrl: "https://github.com/o/r.git",
+    branch: "main",
+    path: "/repo",
+    auth: { kind: "ambient" },
+  };
+  assert.equal(r.remoteUrl, "https://github.com/o/r.git");
+  assert.deepEqual(r.auth, { kind: "ambient" });
+  // @ts-expect-error — organization must NOT exist on Repository after D2
+  const _org = r.organization;
+  void _org;
+  assert.ok(true, "Repository compiles without organization field");
 });

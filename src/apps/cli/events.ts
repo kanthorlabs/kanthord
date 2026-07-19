@@ -46,6 +46,9 @@ export async function runEvents(
   const stdout: string[] = [];
   const stderr: string[] = [];
   let cursor = after;
+  // Display-side throttle for agent.progress (human mode only): at most one
+  // line per taskId per 5 seconds; JSON mode always emits all events.
+  const lastProgressMs = new Map<string, number>();
 
   while (true) {
     if (signal.aborted) break;
@@ -68,6 +71,15 @@ export async function runEvents(
       if (json) {
         stdout.push(JSON.stringify(event));
       } else {
+        // Display throttle: for agent.progress, emit at most one line per
+        // taskId per 5 seconds (capture is un-throttled per A3).
+        if (event.type === "agent.progress") {
+          const last = lastProgressMs.get(event.taskId) ?? 0;
+          if (Date.now() - last < 5000) {
+            continue;
+          }
+          lastProgressMs.set(event.taskId, Date.now());
+        }
         let line = `${event.id} ${event.type} ${event.taskId}`;
         if (event.payload !== undefined) {
           line += ` ${JSON.stringify(event.payload)}`;

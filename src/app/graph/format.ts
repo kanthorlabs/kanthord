@@ -3,6 +3,16 @@
  * Imported by the graph codec (graph-codec.ts) so parse and serialize cannot drift.
  */
 
+/**
+ * Current graph package format version.
+ * Bumped to 2 for EPIC 007.1 C1: bindings + context fields now round-trip.
+ */
+export const GRAPH_FORMAT_VERSION = 2;
+
+/** Format version 1 (EPIC 007) — still parseable for backwards compatibility. */
+// TODO: remove this once we no longer need to support legacy format.
+export const GRAPH_FORMAT_VERSION_LEGACY = 1;
+
 /** Default agent when frontmatter `agent:` is absent. */
 export const DEFAULT_AGENT = "generic@1";
 

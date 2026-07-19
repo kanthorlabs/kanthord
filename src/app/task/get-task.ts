@@ -10,6 +10,10 @@ interface ResultSource {
   getTaskResult(taskId: string): TaskResultRow | undefined;
 }
 
+interface ContextSource {
+  getTaskContext(taskId: string): Record<string, string>;
+}
+
 export interface GetTaskOutput {
   id: string;
   title: string;
@@ -22,15 +26,22 @@ export interface GetTaskOutput {
   verification?: string[];
   result: TaskResultRow | undefined;
   dependencyStatus?: Array<{ id: string; status: string }>;
+  context?: Record<string, string>;
 }
 
 export class GetTask {
   readonly #tasks: TaskSource;
   readonly #results: ResultSource;
+  readonly #context: ContextSource;
 
-  constructor(tasks: TaskSource, results: ResultSource) {
+  constructor(
+    tasks: TaskSource,
+    results: ResultSource,
+    context: ContextSource,
+  ) {
     this.#tasks = tasks;
     this.#results = results;
+    this.#context = context;
   }
 
   async execute({ id }: { id: string }): Promise<GetTaskOutput> {
@@ -39,6 +50,7 @@ export class GetTask {
       throw new UnknownReferenceError("task", id);
     }
     const result = this.#results.getTaskResult(id);
+    const ctx = this.#context.getTaskContext(id);
 
     const dependencyStatus =
       task.dependencies.length > 0
@@ -64,6 +76,7 @@ export class GetTask {
         : {}),
       result,
       ...(dependencyStatus !== undefined ? { dependencyStatus } : {}),
+      ...(Object.keys(ctx).length > 0 ? { context: ctx } : {}),
     };
   }
 }

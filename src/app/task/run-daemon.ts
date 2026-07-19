@@ -6,6 +6,8 @@
  * exiting on idle (when untilIdle) or on stop().
  */
 
+import type { Logger } from "../../logger/port.ts";
+
 type RunNextResult =
   | { outcome: "idle" }
   | {
@@ -30,14 +32,17 @@ interface RunDaemonDeps {
   enqueueReady: EnqueueReady;
   runNext: RunNextTask;
   sleep: (ms: number) => Promise<void>;
+  logger: Logger;
 }
 
 export class RunDaemon {
   readonly #deps: RunDaemonDeps;
+  readonly #logger: Logger;
   #stopped = false;
 
   constructor(deps: RunDaemonDeps) {
     this.#deps = deps;
+    this.#logger = deps.logger;
   }
 
   stop(): void {
@@ -82,6 +87,11 @@ export class RunDaemon {
       }
       if (runResult.outcome === "escalated") {
         escalatedCount += 1;
+      }
+
+      // Log each non-idle outcome for observability (A1).
+      if (runResult.outcome !== "idle") {
+        this.#logger.info(`task ${runResult.taskId}: ${runResult.outcome}`);
       }
 
       // Honour stop() — always checked after runNext finishes (never mid-task).

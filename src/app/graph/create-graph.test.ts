@@ -25,6 +25,10 @@ import { StoreGraph } from "./store-graph.ts";
 // ---------------------------------------------------------------------------
 const PROJECT_ID = "00000000000000000000000099";
 const PACKAGE_ID = "00000000000000000000000000";
+// T4 resource ids
+const T4_REPO_ID = "00000000000000000000000010";
+const T4_AIP_ID = "00000000000000000000000011";
+const T4_CRED_ID = "00000000000000000000000012";
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -92,6 +96,10 @@ class FakeInitiativeRepository implements InitiativeRepository {
 
 class FakeTaskRepository implements TaskRepository {
   readonly saveAllCalls: Task[][] = [];
+  readonly saveTaskContextCalls: Array<{
+    taskId: string;
+    context: Record<string, string>;
+  }> = [];
 
   save(_task: Task): void {}
 
@@ -111,7 +119,9 @@ class FakeTaskRepository implements TaskRepository {
     return [];
   }
 
-  saveTaskContext(_taskId: string, _context: Record<string, string>): void {}
+  saveTaskContext(taskId: string, context: Record<string, string>): void {
+    this.saveTaskContextCalls.push({ taskId, context });
+  }
 
   getTaskContext(_taskId: string): Record<string, string> {
     return {};
@@ -495,5 +505,112 @@ test("CreateGraph throws CycleError for cyclic deps and saveAll is never called"
     tasks.saveAllCalls.length,
     0,
     "saveAll must never be called when a cycle is detected",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 10 T4 — CreateGraph wires bindings → saveTaskContext
+// ---------------------------------------------------------------------------
+
+/** Package with initiative bindings + objective context (format-2 shape). */
+function makeAuthoredPkgWithBindings(): GraphPackage {
+  return {
+    packageId: "",
+    formatVersion: 2,
+    initiative: {
+      ref: "todo",
+      name: "todo",
+      sourcePath: "todo.md",
+      bindings: {
+        source: "repository",
+        model: "ai_provider",
+        "model-auth": "credential",
+      },
+    },
+    objectives: [
+      {
+        ref: "api",
+        initiativeRef: "todo",
+        name: "api",
+        sourcePath: "api/api.md",
+        context: {
+          source: "source",
+          model: "model",
+          "model-auth": "model-auth",
+        },
+      },
+    ],
+    tasks: [
+      {
+        ref: "impl",
+        objectiveRef: "api",
+        title: "implement api",
+        instructions: "Build 5 REST endpoints.",
+        ac: ["endpoints return correct status codes"],
+        agent: "generic@1",
+        verification: undefined,
+        dependsOn: [],
+        sourcePath: "api/impl.md",
+      },
+    ],
+  };
+}
+
+test("T4(g): CreateGraph.execute with bindings calls saveTaskContext for each task", async () => {
+  const tasks = new FakeTaskRepository();
+  const deps = makeDeps({ tasks });
+  const uc = new CreateGraph(deps);
+
+  await uc.execute({
+    pkg: makeAuthoredPkgWithBindings(),
+    projectId: PROJECT_ID,
+    packageId: PACKAGE_ID,
+    bindings: {
+      source: T4_REPO_ID,
+      model: T4_AIP_ID,
+      "model-auth": T4_CRED_ID,
+    },
+  });
+
+  assert.equal(
+    tasks.saveTaskContextCalls.length,
+    1,
+    `saveTaskContext must be called once (one task); got ${tasks.saveTaskContextCalls.length}`,
+  );
+  const call = tasks.saveTaskContextCalls[0]!;
+  // Context is keyed by resource TYPE (not alias): resolveTaskContext maps alias→type
+  assert.equal(
+    call.context["repository"],
+    T4_REPO_ID,
+    "context.repository must be T4_REPO_ID",
+  );
+  assert.equal(
+    call.context["ai_provider"],
+    T4_AIP_ID,
+    "context.ai_provider must be T4_AIP_ID",
+  );
+  assert.equal(
+    call.context["credential"],
+    T4_CRED_ID,
+    "context.credential must be T4_CRED_ID",
+  );
+});
+
+test("T4(h): CreateGraph.execute with no bindings skips saveTaskContext entirely", async () => {
+  const tasks = new FakeTaskRepository();
+  const deps = makeDeps({ tasks });
+  const uc = new CreateGraph(deps);
+
+  await uc.execute({
+    pkg: makeAuthoredPkg(), // no initiative.bindings (format-1)
+    projectId: PROJECT_ID,
+    packageId: PACKAGE_ID,
+    // bindings: undefined (omitted)
+  });
+
+  assert.equal(
+    tasks.saveTaskContextCalls.length,
+    0,
+    "saveTaskContext must NOT be called when bindings is absent",
   );
 });

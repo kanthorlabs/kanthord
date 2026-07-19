@@ -120,3 +120,102 @@ export class DriftConflictError extends Error {
     this.actualSha = actualSha;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Story 10 C1 — binding alias errors
+// ---------------------------------------------------------------------------
+
+// A declared alias has no --bind mapping (and no fallback).
+export class UnboundAliasError extends Error {
+  readonly alias: string;
+
+  constructor(alias: string) {
+    super(`Alias "${alias}" has no --bind mapping.`);
+    this.name = "UnboundAliasError";
+    this.alias = alias;
+  }
+}
+
+// CLI-resolved --bind value matches more than one resource by name.
+export class AmbiguousBindingNameError extends Error {
+  readonly alias: string;
+  readonly bindingName: string; // the resource name from --bind alias=name
+  readonly count: number;
+
+  constructor(alias: string, name: string, count: number) {
+    super(
+      `Ambiguous binding for alias "${alias}": name "${name}" matches ${count} resources. Use a resource id.`,
+    );
+    this.name = "AmbiguousBindingNameError";
+    this.alias = alias;
+    this.bindingName = name;
+    this.count = count;
+  }
+}
+
+// CLI-resolved --bind value names a resource that does not exist in the project.
+export class UnknownBindingNameError extends Error {
+  readonly alias: string;
+  readonly bindingName: string; // the resource name from --bind alias=name
+
+  constructor(alias: string, name: string) {
+    super(
+      `Unknown binding for alias "${alias}": no resource named "${name}" found in the project.`,
+    );
+    this.name = "UnknownBindingNameError";
+    this.alias = alias;
+    this.bindingName = name;
+  }
+}
+
+// The resource id supplied for an alias has the wrong type.
+export class IncompatibleBindingTypeError extends Error {
+  readonly alias: string;
+  readonly expectedType: string;
+  readonly actualType: string;
+
+  constructor(alias: string, expectedType: string, actualType: string) {
+    super(
+      `Binding for alias "${alias}" expects type "${expectedType}" but got "${actualType}".`,
+    );
+    this.name = "IncompatibleBindingTypeError";
+    this.alias = alias;
+    this.expectedType = expectedType;
+    this.actualType = actualType;
+  }
+}
+
+// The provider and credential supplied are incompatible (provider mismatch).
+export class IncompatibleProviderCredentialError extends Error {
+  readonly aiProviderId: string;
+  readonly credentialId: string;
+
+  constructor(aiProviderId: string, credentialId: string) {
+    super(
+      `AI provider "${aiProviderId}" and credential "${credentialId}" have incompatible providers.`,
+    );
+    this.name = "IncompatibleProviderCredentialError";
+    this.aiProviderId = aiProviderId;
+    this.credentialId = credentialId;
+  }
+}
+
+// One or more tasks have an executor whose required binding set is not fully
+// satisfied by the resolved context. Collects ALL violations in one report.
+export class ExecutorBindingSetError extends Error {
+  readonly errors: Array<{ taskRef: string; agent: string; missing: string[] }>;
+
+  constructor(
+    errors: Array<{ taskRef: string; agent: string; missing: string[] }>,
+  ) {
+    const lines = errors
+      .map(
+        (e) =>
+          `  task "${e.taskRef}" (executor: ${e.agent}): missing binding(s): ${e.missing.join(", ")}`,
+      )
+      .join("\n");
+    super(`Executor binding validation failed:\n${lines}`);
+    this.name = "ExecutorBindingSetError";
+    this.errors = errors;
+  }
+}

@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EVENT_TYPES, newEvent } from "./event.ts";
+import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the fourteen literals in order", () => {
+test("EVENT_TYPES lists exactly the sixteen literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -17,10 +17,25 @@ test("EVENT_TYPES lists exactly the fourteen literals in order", () => {
     "task.rejected",
     "task.discarded",
     "task.blocked",
+    "task.conflict", // C2/D5 — landing conflict
     "agent.started",
     "agent.progress",
     "agent.finished",
+    "task.verification", // A4 — new
   ]);
+});
+
+test("EVENT_TYPES includes task.verification as a valid EventType", () => {
+  assert.ok(
+    (EVENT_TYPES as readonly string[]).includes("task.verification"),
+    "task.verification must be in EVENT_TYPES",
+  );
+});
+
+test("task.unknown is not assignable to EventType (compile guard)", () => {
+  // @ts-expect-error — "task.unknown" is not a valid EventType
+  const _bad: EventType = "task.unknown";
+  void _bad;
 });
 
 test("newEvent returns a ULID-format id, the type, and the taskId", () => {

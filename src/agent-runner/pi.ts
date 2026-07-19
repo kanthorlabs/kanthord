@@ -321,12 +321,22 @@ export class PiAgentRunner implements AgentRunner {
   }
 
   async run(task: Task, context: TaskContextBinding[]): Promise<TaskResult> {
-    const result = await this.#doRun(task, context);
-    this.#emit(task.id, "agent.finished", { outcome: result.outcome });
+    const turnCountRef = { current: 0 };
+    const result = await this.#doRun(task, context, turnCountRef);
+    this.#emit(task.id, "agent.finished", {
+      outcome: result.outcome,
+      turns: String(turnCountRef.current),
+      tokensIn: "0",
+      tokensOut: "0",
+    });
     return result;
   }
 
-  async #doRun(task: Task, context: TaskContextBinding[]): Promise<TaskResult> {
+  async #doRun(
+    task: Task,
+    context: TaskContextBinding[],
+    turnCountRef: { current: number },
+  ): Promise<TaskResult> {
     // 1. Profile lookup
     const profile = this.#profiles.get(task.agent ?? "");
     if (!profile) {
@@ -453,35 +463,29 @@ export class PiAgentRunner implements AgentRunner {
       agent.state.model = session.model;
       agent.state.tools = tools;
 
-      // Subscribe for throttled progress events on tool execution starts
-      let lastProgressAt: number | undefined;
+      // Subscribe for progress events on tool execution starts (un-throttled at capture)
       agent.subscribe((event) => {
         if (event.type === "tool_execution_start") {
-          const now = this.#clock();
-          if (lastProgressAt === undefined || now - lastProgressAt >= 5000) {
-            lastProgressAt = now;
-            const summary = buildSummary(
-              event.toolName,
-              event.args as Record<string, unknown>,
-              200,
-              redact,
-            );
-            this.#emit(task.id, "agent.progress", {
-              tool: event.toolName,
-              summary,
-            });
-          }
+          const summary = buildSummary(
+            event.toolName,
+            event.args as Record<string, unknown>,
+            200,
+            redact,
+          );
+          this.#emit(task.id, "agent.progress", {
+            tool: event.toolName,
+            summary,
+          });
         }
       });
 
       // Subscribe for turn budget enforcement
-      let turnCount = 0;
       let budgetExceeded = false;
       const maxTurns = this.#maxTurns;
       agent.subscribe((event) => {
         if (event.type === "turn_end") {
-          turnCount += 1;
-          if (turnCount >= maxTurns) {
+          turnCountRef.current += 1;
+          if (turnCountRef.current >= maxTurns) {
             budgetExceeded = true;
             agent.abort();
           }
@@ -561,7 +565,22 @@ export class PiAgentRunner implements AgentRunner {
       if (task.verification && task.verification.length > 0) {
         verificationEvidence = [];
         for (const cmd of task.verification) {
+          this.#emit(task.id, "task.verification", {
+            verifierKind: "cmd",
+            phase: "start",
+          });
+          const t0 = this.#clock();
           const ev = await runVerificationCmd(workspace.dir, cmd);
+          const t1 = this.#clock();
+          const timedOut = ev.exitCode === -1;
+          this.#emit(task.id, "task.verification", {
+            verifierKind: "cmd",
+            phase: "end",
+            exitClass:
+              ev.exitCode === 0 ? "pass" : timedOut ? "timeout" : "fail",
+            durationMs: String(t1 - t0),
+            timedOut: timedOut ? "true" : "false",
+          });
           verificationEvidence.push(ev);
           if (ev.exitCode !== 0) {
             return {

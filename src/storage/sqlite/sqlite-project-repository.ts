@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { ProjectRepository } from "../port.ts";
 import type { Project } from "../../domain/project.ts";
-import type { Resource } from "../../domain/resource.ts";
+import { isRepository, type Resource } from "../../domain/resource.ts";
 
 /** `node:sqlite` adapter for the `ProjectRepository` port. */
 export class SqliteProjectRepository implements ProjectRepository {
@@ -32,11 +32,42 @@ export class SqliteProjectRepository implements ProjectRepository {
     // Separate the fixed columns from the type-specific vendor fields.
     const { id, type, name, ...rest } = resource;
     const attributes = JSON.stringify(rest);
+
+    // Extract denormalized migration-7 columns for repository resources.
+    let remoteUrl: string | null = null;
+    let authKind: string | null = null;
+    let authCredentialId: string | null = null;
+    if (isRepository(resource)) {
+      remoteUrl = resource.remoteUrl;
+      authKind = resource.auth.kind;
+      authCredentialId =
+        resource.auth.kind === "https-token"
+          ? resource.auth.credentialId
+          : null;
+    }
+
     this.#db
       .prepare(
-        "INSERT INTO resources (id, projectId, type, name, attributes) VALUES (?, ?, ?, ?, ?)",
+        `INSERT INTO resources (id, projectId, type, name, attributes, remoteUrl, authKind, authCredentialId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           type = excluded.type,
+           name = excluded.name,
+           attributes = excluded.attributes,
+           remoteUrl = excluded.remoteUrl,
+           authKind = excluded.authKind,
+           authCredentialId = excluded.authCredentialId`,
       )
-      .run(id, projectId, type, name, attributes);
+      .run(
+        id,
+        projectId,
+        type,
+        name,
+        attributes,
+        remoteUrl,
+        authKind,
+        authCredentialId,
+      );
   }
 
   listResources(projectId: string): Resource[] {

@@ -5,6 +5,11 @@ import { newEvent } from "../../domain/event.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
+import type {
+  RepositoryLanding,
+  LandingCandidate,
+} from "../../landing/port.ts";
+import { LandingConflictError } from "../../landing/port.ts";
 import {
   UnknownReferenceError,
   TaskNotAwaitingConfirmationError,
@@ -31,6 +36,7 @@ interface ApproveTaskStore {
   saveTaskResult(taskId: string, row: TaskResultRow): void;
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
+  getTaskContext(taskId: string): Record<string, string>;
 }
 
 export class ApproveTask {
@@ -43,6 +49,7 @@ export class ApproveTask {
     taskId: string,
     proposalCommit: string,
   ) => Promise<void>;
+  readonly #landing: RepositoryLanding | undefined;
 
   constructor(
     store: ApproveTaskStore,
@@ -54,12 +61,14 @@ export class ApproveTask {
       taskId: string,
       proposalCommit: string,
     ) => Promise<void>,
+    landing?: RepositoryLanding,
   ) {
     this.#store = store;
     this.#queue = queue;
     this.#feed = feed;
     this.#uow = uow;
     this.#promote = promote;
+    this.#landing = landing;
   }
 
   async execute({ taskId }: { taskId: string }): Promise<void> {
@@ -97,13 +106,50 @@ export class ApproveTask {
       }
     }
 
+    // Landing step: if a RepositoryLanding port is wired and the task context
+    // has a repository binding, land the candidate commit onto the home repo.
+    const context = this.#store.getTaskContext(taskId);
+    let canonicalSHA: string | null = null;
+    if (
+      this.#landing !== undefined &&
+      context["repository"] !== undefined &&
+      result !== undefined &&
+      result.proposalCommit !== null
+    ) {
+      const candidate: LandingCandidate = {
+        id: `${taskId}-lc`,
+        taskId,
+        repoId: context["repository"],
+        baseSHA: result.baseCommit ?? "",
+        candidateSHA: result.proposalCommit,
+        ref: result.branch ?? "",
+        target: "main",
+        workspace: result.workspace ?? "",
+      };
+      const homeDir = result.workspace ?? "";
+      try {
+        const landResult = await this.#landing.land(homeDir, candidate);
+        canonicalSHA = landResult.canonicalSHA;
+      } catch (err) {
+        if (err instanceof LandingConflictError) {
+          this.#feed.append(newEvent("task.conflict", { taskId }));
+          return;
+        }
+        throw err;
+      }
+    }
+
     // Determine the final commitSha (null if no proposalCommit)
     const commitSha = result?.proposalCommit ?? null;
 
     this.#uow.transaction(() => {
-      // Persist the updated result row with commitSha set
+      // Persist the updated result row with commitSha (and canonicalSHA as baseCommit if landed)
       if (result !== undefined) {
-        this.#store.saveTaskResult(taskId, { ...result, commitSha });
+        const updatedResult: TaskResultRow =
+          canonicalSHA !== null
+            ? { ...result, commitSha, baseCommit: canonicalSHA }
+            : { ...result, commitSha };
+        this.#store.saveTaskResult(taskId, updatedResult);
       }
 
       const completedTask = transitionTask(task, "completed");

@@ -1,6 +1,7 @@
 // Composition factory — extracted from main.ts so tests can instantiate deps
 // without launching a process. Only this file (and main.ts) import concrete adapters.
 import { dirname, join } from "node:path";
+import { access } from "node:fs/promises";
 import type { RouterDeps } from "./apps/cli/router.ts";
 import { openDatabase } from "./storage/sqlite/open.ts";
 import { SqliteStatusStore } from "./storage/sqlite/sqlite-status-store.ts";
@@ -29,7 +30,13 @@ import { RenameObjective } from "./app/objective/rename-objective.ts";
 import { FindObjective } from "./app/objective/find-objective.ts";
 import { AddResource } from "./app/resource/add-resource.ts";
 import { FindResource } from "./app/resource/find-resource.ts";
+import { GetResource } from "./app/resource/get-resource.ts";
 import { ImportResources } from "./app/resource/import-resources.ts";
+import { UpdateAiProvider } from "./app/resource/update-ai-provider.ts";
+import { UpdateCredential } from "./app/resource/update-credential.ts";
+import { UpdateRepository } from "./app/resource/update-repository.ts";
+import { UpdateNotification } from "./app/resource/update-notification.ts";
+import { UpdateFilesystem } from "./app/resource/update-filesystem.ts";
 import { CreateTask } from "./app/task/create-task.ts";
 import { AddDependency } from "./app/task/add-dependency.ts";
 import { RemoveDependency } from "./app/task/remove-dependency.ts";
@@ -70,6 +77,17 @@ import { createInterface } from "node:readline/promises";
 import type { ModelInfo } from "./apps/cli/models.ts";
 import { PiOAuthLoginProvider } from "./oauth/pi.ts";
 import { LoginProvider } from "./app/auth/login-provider.ts";
+import type { ModelCatalog } from "./model-catalog/port.ts";
+import { PiModelCatalog } from "./model-catalog/pi.ts";
+import { StdoutLogger } from "./logger/stdout.ts";
+import { NullLogger } from "./logger/null.ts";
+import type { Logger } from "./logger/port.ts";
+import { DiagnosticsExport } from "./app/observability/diagnostics-export.ts";
+import { SqliteObservabilityRefs } from "./storage/sqlite/sqlite-observability-refs.ts";
+import { writeFile } from "node:fs/promises";
+import { GitRepositoryLanding } from "./landing/git.ts";
+import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
+import { isRepository } from "./domain/resource.ts";
 
 /**
  * Wire all concrete adapters and return the `RouterDeps` bundle.
@@ -117,8 +135,44 @@ export function buildDeps(
   );
   const renameObjective = new RenameObjective(initiativeRepository);
   const findObjective = new FindObjective(initiativeRepository);
-  const addResource = new AddResource(projectRepository, referenceResolver);
+  const listModels = (provider?: string): ModelInfo[] =>
+    builtinModels()
+      .getModels(provider)
+      .map((m) => ({
+        provider: m.provider,
+        id: m.id,
+        name: m.name,
+        reasoning: m.reasoning,
+        contextWindow: m.contextWindow,
+      }));
+  const modelCatalog: ModelCatalog = new PiModelCatalog(listModels);
+  const addResource = new AddResource(
+    projectRepository,
+    referenceResolver,
+    modelCatalog,
+  );
   const findResource = new FindResource(projectRepository);
+  const getResource = new GetResource(projectRepository);
+  const homePathExists = async (path: string): Promise<boolean> => {
+    if (!path) return false;
+    try {
+      await access(path);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const updateAiProvider = new UpdateAiProvider(
+    projectRepository,
+    modelCatalog,
+  );
+  const updateCredential = new UpdateCredential(projectRepository);
+  const updateRepository = new UpdateRepository(
+    projectRepository,
+    homePathExists,
+  );
+  const updateNotification = new UpdateNotification(projectRepository);
+  const updateFilesystem = new UpdateFilesystem(projectRepository);
   const importResources = new ImportResources(
     projectRepository,
     referenceResolver,
@@ -175,7 +229,7 @@ export function buildDeps(
     newId,
   });
   const listEvents = new ListEvents(events);
-  const getTask = new GetTask(taskRepository, taskRepository);
+  const getTask = new GetTask(taskRepository, taskRepository, taskRepository);
   const approveTask = new ApproveTask(
     taskRepository,
     jobQueue,
@@ -197,7 +251,8 @@ export function buildDeps(
     referenceResolver,
   );
 
-  function buildDaemon(failTaskIds: string[]): RunDaemon {
+  function buildDaemon(failTaskIds: string[], logger?: Logger): RunDaemon {
+    const effectiveLogger: Logger = logger ?? new NullLogger();
     const fakeRunner = new FakeRunner({ failTaskIds });
 
     // Save updated credential value (for OAuth refresh) directly into the resources table.
@@ -227,8 +282,19 @@ export function buildDeps(
       getResource: (id) => projectRepository.getResource(id),
       profiles: new Map([["generic@1", genericProfile]]),
       maxTurns: opts?.maxTurns,
-      emit: (taskId, type, payload) =>
-        events.append(newEvent(type, { taskId, payload })),
+      emit: (taskId, type, payload) => {
+        if (type === "agent.started") {
+          effectiveLogger.info(`task ${taskId}: agent started`);
+        } else if (type === "task.verification") {
+          const phase = (payload as Record<string, unknown>).phase;
+          if (phase === "start") {
+            effectiveLogger.info(`task ${taskId}: verification started`);
+          } else if (phase === "end") {
+            effectiveLogger.info(`task ${taskId}: verification ended`);
+          }
+        }
+        return events.append(newEvent(type, { taskId, payload }));
+      },
       getPriorRejection: (taskId) => {
         const result = taskRepository.getTaskResult(taskId);
         if (!result?.rejectionReason) return undefined;
@@ -270,8 +336,36 @@ export function buildDeps(
       enqueueReady,
       runNext,
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+      logger: effectiveLogger,
     });
   }
+
+  const observabilityRefs = new SqliteObservabilityRefs(db);
+  const diagnosticsExport = new DiagnosticsExport(
+    events,
+    taskRepository,
+    observabilityRefs,
+    async (path, data, opts) => {
+      await writeFile(path, data, { mode: opts.mode });
+    },
+  );
+
+  const landingRepository = new SqliteLandingRepository(db);
+  // Lock files live in the same directory as the database (always exists).
+  const lockDir = dirname(dbPath);
+  const repoLanding = new GitRepositoryLanding(lockDir, landingRepository, {
+    name: "kanthord",
+    email: "kanthord@localhost",
+  });
+  const resolveHomeDir = (repoId: string): string => {
+    const resource = projectRepository.getResource(repoId);
+    if (!resource || !isRepository(resource)) {
+      throw new Error(`no repository resource found for id: ${repoId}`);
+    }
+    return resource.path;
+  };
+
+  const logger = new StdoutLogger();
 
   const loginProvider = new LoginProvider({
     oauth: new PiOAuthLoginProvider(),
@@ -296,17 +390,6 @@ export function buildDeps(
     },
   };
 
-  const listModels = (provider?: string): ModelInfo[] =>
-    builtinModels()
-      .getModels(provider)
-      .map((m) => ({
-        provider: m.provider,
-        id: m.id,
-        name: m.name,
-        reasoning: m.reasoning,
-        contextWindow: m.contextWindow,
-      }));
-
   return {
     migrateDb,
     getDbStatus,
@@ -324,6 +407,12 @@ export function buildDeps(
     findObjective,
     addResource,
     findResource,
+    getResource,
+    updateAiProvider,
+    updateCredential,
+    updateRepository,
+    updateNotification,
+    updateFilesystem,
     createTask,
     addDependency,
     removeDependency,
@@ -333,6 +422,7 @@ export function buildDeps(
     approveTask,
     rejectTask,
     buildDaemon,
+    logger,
     listEvents,
     importResources,
     exportInitiative,
@@ -342,6 +432,9 @@ export function buildDeps(
     listObjectives,
     login,
     listModels,
+    diagnosticsExport,
+    repoLanding,
+    resolveHomeDir,
     newId,
   };
 }

@@ -110,9 +110,10 @@ const REPO: Repository = {
   id: "repo-001",
   type: "repository",
   name: "sandbox",
-  organization: "org",
+  remoteUrl: "https://github.com/org/sandbox.git",
   branch: "main",
   path: "/home/user/.kanthord/repos/org/sandbox",
+  auth: { kind: "ambient" },
 };
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -830,15 +831,11 @@ test("(a) happy run: emits agent.started, agent.progress, agent.finished in orde
   }
 });
 
-// (b) Throttle: 3 tool calls in window → 1 progress; 4th after 5000 ms window → 2nd progress
+// (b) Un-throttled capture: every tool call produces an agent.progress emission (no gate in pi.ts)
+// Pre-migrated from the old throttle test — after A3, pi.ts emits on every tool_execution_start.
 
-test("(b) throttle: 3 tool calls in window → 1 progress; 4th after window → 2nd progress total", async () => {
+test("(b) no capture-throttle: 4 tool calls (3 + 1 across turns) produce 4 agent.progress emissions", async () => {
   const emitted: EmitRecord08[] = [];
-  // Clock returns 0 for first 3 calls, 5001 for the 4th
-  const clockValues = [0, 0, 0, 5001];
-  let clockIdx = 0;
-  const fakeClock = () => clockValues[clockIdx++] ?? 5001;
-
   const turns: FakeTurn[] = [
     {
       toolCalls: [
@@ -850,6 +847,40 @@ test("(b) throttle: 3 tool calls in window → 1 progress; 4th after window → 
     { toolCalls: [{ name: "search_files", arguments: { path: "/d" } }] },
     { text: "done" },
   ];
+  // No clock injection needed — throttle is removed from pi.ts; emit fires on every tool call.
+  const runner = makeEmitRunner08(turns, emitted);
+
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+
+  const progressEvents = emitted.filter((e) => e.type === "agent.progress");
+  assert.equal(
+    progressEvents.length,
+    4,
+    `expected 4 agent.progress emissions (one per tool call, no capture throttle); got ${progressEvents.length}`,
+  );
+});
+
+// (A3) Un-throttled capture: 3 tool_execution_start events in 1000 ms → 3 agent.progress
+// Fails today: the 1-per-5s gate in pi.ts allows only 1.
+
+test("(A3) un-throttled: 3 tool_execution_start events within 1000 ms each produce an agent.progress emission", async () => {
+  const emitted: EmitRecord08[] = [];
+  // Clock advances 100 ms per call — all within the old 5000 ms window.
+  // After A3 the clock is not consulted; the test verifies all 3 are emitted.
+  const clockValues = [0, 100, 200];
+  let clockIdx = 0;
+  const fakeClock = () => clockValues[clockIdx++] ?? 300;
+
+  const turns: FakeTurn[] = [
+    {
+      toolCalls: [
+        { name: "search_files", arguments: { path: "/a" } },
+        { name: "search_files", arguments: { path: "/b" } },
+        { name: "search_files", arguments: { path: "/c" } },
+      ],
+    },
+    { text: "done" },
+  ];
   const runner = makeEmitRunner08(turns, emitted, fakeClock);
 
   await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
@@ -857,8 +888,8 @@ test("(b) throttle: 3 tool calls in window → 1 progress; 4th after window → 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.equal(
     progressEvents.length,
-    2,
-    `expected exactly 2 progress events (1 at t=0, 1 at t=5001); got ${progressEvents.length}`,
+    3,
+    `expected 3 agent.progress emissions (un-throttled capture, one per tool call); got ${progressEvents.length}`,
   );
 });
 
@@ -1154,5 +1185,173 @@ test("(a) turn budget: maxTurns=3, always tool-calling session → failed Budget
     finishedEvents[0]?.payload?.outcome,
     "failed",
     "agent.finished payload must carry outcome=failed",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 06 T3 — A4: task.verification events
+// ---------------------------------------------------------------------------
+
+// Passing verification command: emits start + end events with exitClass "pass"
+
+test("(T3) task.verification: exit-0 command emits start then end event with exitClass 'pass'", async () => {
+  const emitted: EmitRecord08[] = [];
+  const turns: FakeTurn[] = [{ text: "done" }];
+  const runner = makeEmitRunner08(turns, emitted);
+  const task = makeTask({ agent: "synthetic@1", verification: ["true"] });
+
+  await runner.run(task, makeContext());
+
+  const verifEvents = emitted.filter((e) => e.type === "task.verification");
+  assert.equal(
+    verifEvents.length,
+    2,
+    `expected 2 task.verification events (start + end); got ${verifEvents.length}: ${JSON.stringify(verifEvents)}`,
+  );
+  const startEv = verifEvents[0];
+  const endEv = verifEvents[1];
+  assert.ok(startEv !== undefined, "start event must exist");
+  assert.equal(
+    startEv.payload.phase,
+    "start",
+    "first task.verification event must have phase=start",
+  );
+  assert.equal(
+    startEv.payload.verifierKind,
+    "cmd",
+    "start event must have verifierKind=cmd",
+  );
+  assert.ok(endEv !== undefined, "end event must exist");
+  assert.equal(
+    endEv.payload.phase,
+    "end",
+    "second task.verification event must have phase=end",
+  );
+  assert.equal(
+    endEv.payload.exitClass,
+    "pass",
+    "exitClass must be 'pass' for a command that exits 0",
+  );
+  const durationMs = endEv.payload.durationMs;
+  assert.ok(durationMs !== undefined, "end event must carry durationMs field");
+  const durationNum = parseInt(durationMs ?? "", 10);
+  assert.ok(
+    Number.isInteger(durationNum) && durationNum >= 0,
+    `durationMs must be a non-negative integer string; got: '${durationMs}'`,
+  );
+  assert.equal(
+    endEv.payload.timedOut,
+    "false",
+    "timedOut must be 'false' for a normal exit",
+  );
+});
+
+// Failing verification command: still emits start + end, end has exitClass "fail"
+
+test("(T3) task.verification: exit-1 command emits end event with exitClass 'fail'", async () => {
+  const emitted: EmitRecord08[] = [];
+  const turns: FakeTurn[] = [{ text: "done" }];
+  const runner = makeEmitRunner08(turns, emitted);
+  const task = makeTask({ agent: "synthetic@1", verification: ["false"] });
+
+  // outcome will be "failed" because the verification command exits 1
+  const result = await runner.run(task, makeContext());
+
+  assert.equal(
+    result.outcome,
+    "failed",
+    "outcome must be failed when verification command exits non-zero",
+  );
+
+  const verifEvents = emitted.filter((e) => e.type === "task.verification");
+  assert.equal(
+    verifEvents.length,
+    2,
+    `expected 2 task.verification events even when command fails; got ${verifEvents.length}`,
+  );
+  const endEv = verifEvents[1];
+  assert.ok(endEv !== undefined, "end event must exist");
+  assert.equal(
+    endEv.payload.phase,
+    "end",
+    "second task.verification event must have phase=end",
+  );
+  assert.equal(
+    endEv.payload.exitClass,
+    "fail",
+    "exitClass must be 'fail' for a command that exits non-zero",
+  );
+  assert.equal(
+    endEv.payload.timedOut,
+    "false",
+    "timedOut must be 'false' for a normal non-zero exit",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 06 T4 — A6: turn/token fields in agent.finished
+// ---------------------------------------------------------------------------
+
+// A6: agent.finished payload carries turns, tokensIn, tokensOut
+// Fails today: payload has only { outcome }.
+
+test("(T4) A6: agent.finished payload carries turns, tokensIn, tokensOut", async () => {
+  const emitted: EmitRecord08[] = [];
+  // 2 scripted turns → 2 turn_end events → turns must be "2"
+  const turns: FakeTurn[] = [
+    { toolCalls: [{ name: "search_files", arguments: { path: "/src" } }] },
+    { text: "done" },
+  ];
+  const runner = makeEmitRunner08(turns, emitted);
+
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+
+  const finishedEvents = emitted.filter((e) => e.type === "agent.finished");
+  assert.equal(
+    finishedEvents.length,
+    1,
+    "exactly one agent.finished event must be emitted",
+  );
+  const payload = finishedEvents[0]?.payload;
+  assert.ok(payload !== undefined, "agent.finished event must have a payload");
+
+  // All four fields must be present
+  assert.ok(
+    "outcome" in payload,
+    "agent.finished payload must carry 'outcome'",
+  );
+  assert.ok("turns" in payload, "agent.finished payload must carry 'turns'");
+  assert.ok(
+    "tokensIn" in payload,
+    "agent.finished payload must carry 'tokensIn'",
+  );
+  assert.ok(
+    "tokensOut" in payload,
+    "agent.finished payload must carry 'tokensOut'",
+  );
+
+  // turns must equal number of turn_end events (2 scripted turns → 2 turn_end)
+  const turnsNum = parseInt(payload.turns ?? "", 10);
+  assert.ok(
+    Number.isInteger(turnsNum) && turnsNum > 0,
+    `turns must be a positive integer string; got: '${payload.turns}'`,
+  );
+  assert.equal(
+    turnsNum,
+    2,
+    `turns must equal the number of scripted turns (2); got: ${turnsNum}`,
+  );
+
+  // tokensIn and tokensOut must be integer strings (pi-agent-core AgentState
+  // has no usage field → implementation uses "0" as placeholder)
+  const tokensInNum = parseInt(payload.tokensIn ?? "", 10);
+  const tokensOutNum = parseInt(payload.tokensOut ?? "", 10);
+  assert.ok(
+    Number.isInteger(tokensInNum) && tokensInNum >= 0,
+    `tokensIn must be a non-negative integer string; got: '${payload.tokensIn}'`,
+  );
+  assert.ok(
+    Number.isInteger(tokensOutNum) && tokensOutNum >= 0,
+    `tokensOut must be a non-negative integer string; got: '${payload.tokensOut}'`,
   );
 });

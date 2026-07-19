@@ -11,10 +11,16 @@ import {
   parseGraphPackage,
   serializeNode,
 } from "../../app/graph/graph-codec.ts";
+import { GRAPH_FORMAT_VERSION } from "../../app/graph/format.ts";
 import type {
   CreateGraphInput,
   CreateGraphResult,
 } from "../../app/graph/create-graph.ts";
+import {
+  UnknownBindingNameError,
+  AmbiguousBindingNameError,
+  IncompatibleBindingTypeError,
+} from "../../app/graph/import-errors.ts";
 import type { ApplyGraphResult } from "../../app/graph/apply-graph.ts";
 import type {
   PkgInitiative,
@@ -51,6 +57,16 @@ export type ImportGraphDeps = {
   createGraph: CreateGraphUC;
   applyGraph?: ApplyGraphUC;
   newId: () => string;
+  /** C1: resolve a resource by name within a project (for --bind name-style values). */
+  findResourcesByName?: (
+    projectId: string,
+    name: string,
+    type: string,
+  ) => Promise<Array<{ id: string }>>;
+  /** C1: fetch a resource by id to verify its type. */
+  getResource?: (
+    id: string,
+  ) => Promise<{ type: string; provider?: string } | undefined>;
 };
 
 export type ImportGraphArgs = {
@@ -62,6 +78,8 @@ export type ImportGraphArgs = {
   confirmDelete?: boolean;
   project?: string;
   initiative?: string;
+  /** C1: --bind alias=value pairs from the CLI. */
+  bind?: Record<string, string>;
 };
 
 // ---------------------------------------------------------------------------
@@ -95,7 +113,15 @@ export async function runImportGraph(
   }
 
   if (args.create) {
-    return runCreate(args.dir, args.project!, deps.createGraph, deps.newId);
+    return runCreate(
+      args.dir,
+      args.project!,
+      deps.createGraph,
+      deps.newId,
+      args.bind,
+      deps.findResourcesByName,
+      deps.getResource,
+    );
   }
 
   if (args.apply) {
@@ -253,21 +279,104 @@ async function runApply(
 // --create mode
 // ---------------------------------------------------------------------------
 
+/** Returns true when a string is ULID-shaped (26 Crockford base32 chars). */
+function isUlidShaped(value: string): boolean {
+  return value.length === 26 && /^[0-9A-Za-z]{26}$/.test(value);
+}
+
 async function runCreate(
   dir: string,
   projectId: string,
   createGraph: CreateGraphUC,
   mintId: () => string,
+  bind: Record<string, string> | undefined,
+  findResourcesByName: ImportGraphDeps["findResourcesByName"] | undefined,
+  getResource: ImportGraphDeps["getResource"] | undefined,
 ): Promise<HandlerResult> {
   // 1. Read + parse the authored package directory
   const files = await readGraphPackageDir(dir);
   const pkg = parseGraphPackage(files);
 
-  // 2. Mint a stable packageId for this create session
+  // 2. C1 — resolve --bind aliases before the graph transaction
+  let resolvedBindings: Record<string, string> | undefined;
+  if (pkg.initiative.bindings !== undefined) {
+    const declaredAliases = Object.keys(pkg.initiative.bindings);
+    const errors: string[] = [];
+    const bindMap: Record<string, string> = {};
+
+    for (const alias of declaredAliases) {
+      const value = (bind ?? {})[alias];
+      if (value === undefined) {
+        errors.push(
+          `error: alias "${alias}" has no --bind mapping (missing --bind ${alias}=<id>)`,
+        );
+        continue;
+      }
+
+      const expectedType = pkg.initiative.bindings[alias]!;
+      let resolvedId: string;
+
+      if (isUlidShaped(value)) {
+        // ULID-shaped → treat as a direct resource id
+        resolvedId = value;
+      } else {
+        // Name-style → resolve via findResourcesByName
+        const matches = await (findResourcesByName ?? (async () => []))(
+          projectId,
+          value,
+          expectedType,
+        );
+        if (matches.length === 0) {
+          errors.push(new UnknownBindingNameError(alias, value).message);
+          continue;
+        }
+        if (matches.length > 1) {
+          errors.push(
+            new AmbiguousBindingNameError(alias, value, matches.length).message,
+          );
+          continue;
+        }
+        resolvedId = matches[0]!.id;
+      }
+
+      // Type validation via getResource
+      const resource = await (getResource ?? (async () => undefined))(
+        resolvedId,
+      );
+      if (resource === undefined) {
+        errors.push(
+          `error: alias "${alias}": resource "${resolvedId}" not found`,
+        );
+        continue;
+      }
+      if (resource.type !== expectedType) {
+        errors.push(
+          new IncompatibleBindingTypeError(alias, expectedType, resource.type)
+            .message,
+        );
+        continue;
+      }
+
+      bindMap[alias] = resolvedId;
+    }
+
+    if (errors.length > 0) {
+      return { exitCode: 1, stdout: [], stderr: errors };
+    }
+
+    resolvedBindings = bindMap;
+  }
+
+  // 3. Mint a stable packageId for this create session
   const packageId = mintId();
 
-  // 3. Call the use case — assigns ULIDs for every node
-  const result = await createGraph.execute({ pkg, projectId, packageId });
+  // 4. Call the use case — assigns ULIDs for every node
+  const result = await createGraph.execute({
+    pkg,
+    projectId,
+    packageId,
+    bindings: resolvedBindings,
+  });
 
   const { initiativeId } = result;
   const objectiveRefToId = result.refToId.objectives;
@@ -332,7 +441,8 @@ async function runCreate(
 
   const manifest = {
     packageId,
-    formatVersion: 1,
+    formatVersion:
+      pkg.initiative.bindings !== undefined ? GRAPH_FORMAT_VERSION : 1,
     digestAlgorithm: "sha256" as const,
     initiativeId,
     nodes: result.nodes,

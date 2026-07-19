@@ -9,6 +9,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { PassThrough } from "node:stream";
 import { runCreateProject } from "./project.ts";
 import { runCreateInitiative } from "./initiative.ts";
 import { runCreateObjective } from "./objective.ts";
@@ -36,6 +37,7 @@ import { CreateProject } from "../../app/project/create-project.ts";
 import { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import { CreateObjective } from "../../app/objective/create-objective.ts";
 import { AddResource } from "../../app/resource/add-resource.ts";
+import { FakeModelCatalog } from "../../model-catalog/fake.ts";
 import { CreateTask } from "../../app/task/create-task.ts";
 import { FindProject } from "../../app/project/find-project.ts";
 import { FindInitiative } from "../../app/initiative/find-initiative.ts";
@@ -172,24 +174,37 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
         {
           project: PROJECT_SCOPE,
           name: "api",
-          organization: "acme",
+          "remote-url": "https://github.com/acme/api.git",
           branch: "main",
         },
-        new AddResource(fakeProjectRepoCreate, resolverForProject),
+        new AddResource(
+          fakeProjectRepoCreate,
+          resolverForProject,
+          new FakeModelCatalog(),
+        ),
       ),
   },
   {
     label: "create credential",
-    fn: () =>
-      runCreateCredential(
+    fn: () => {
+      // D4: --value is removed; use --value-file - with injected stdin for hermetic testing
+      const stdinMock = new PassThrough();
+      stdinMock.end("secret\n");
+      return runCreateCredential(
         {
           project: PROJECT_SCOPE,
           name: "token",
           provider: "github",
-          value: "secret",
+          "value-file": "-",
         },
-        new AddResource(fakeProjectRepoCreate, resolverForProject),
-      ),
+        new AddResource(
+          fakeProjectRepoCreate,
+          resolverForProject,
+          new FakeModelCatalog(),
+        ),
+        { stdin: stdinMock, timeoutMs: 5000 },
+      );
+    },
   },
   {
     label: "create notification",
@@ -201,7 +216,11 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "slack",
           destination: "#ops",
         },
-        new AddResource(fakeProjectRepoCreate, resolverForProject),
+        new AddResource(
+          fakeProjectRepoCreate,
+          resolverForProject,
+          new FakeModelCatalog(),
+        ),
       ),
   },
   {
@@ -214,7 +233,11 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "anthropic",
           model: "claude-3",
         },
-        new AddResource(fakeProjectRepoCreate, resolverForProject),
+        new AddResource(
+          fakeProjectRepoCreate,
+          resolverForProject,
+          new FakeModelCatalog([{ provider: "anthropic", model: "claude-3" }]),
+        ),
       ),
   },
   {
@@ -222,7 +245,11 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateFilesystem(
         { project: PROJECT_SCOPE, name: "src", path: "/code" },
-        new AddResource(fakeProjectRepoCreate, resolverForProject),
+        new AddResource(
+          fakeProjectRepoCreate,
+          resolverForProject,
+          new FakeModelCatalog(),
+        ),
       ),
   },
   {

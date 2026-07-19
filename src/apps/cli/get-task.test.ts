@@ -92,6 +92,8 @@ class MemResultSource implements FakeResultSource {
   }
 }
 
+const nullContextSource = { getTaskContext: (_id: string) => ({}) };
+
 function makeGetTask(
   task: Task | undefined,
   result: TaskResultRow | undefined,
@@ -102,7 +104,7 @@ function makeGetTask(
       ? new Map([[task.id, result]])
       : new Map(),
   );
-  return new GetTask(tasks, results);
+  return new GetTask(tasks, results, nullContextSource);
 }
 
 // ---------------------------------------------------------------------------
@@ -292,5 +294,128 @@ describe("runGetTask", () => {
       `stderr must start with 'error:': ${r.stderr[0]}`,
     );
     assert.deepEqual(r.stdout, [], "stdout empty on error");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Story 08 T2 — --result render + --json context + mutual-exclusion guard
+  // ---------------------------------------------------------------------------
+
+  const RESULT_FOR_T2: TaskResultRow = {
+    workspace: "/ws/task-t2",
+    branch: "kanthord/task-t2",
+    baseCommit: "base000",
+    proposalCommit: null,
+    commitSha: "abc123",
+    summary: "done",
+    reason: null,
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: [{ command: "npm test", exitCode: 0, output: "ok" }],
+  };
+
+  function makeStubGetTask(
+    output: Partial<{
+      id: string;
+      title: string;
+      status: string;
+      agent: string | undefined;
+      objectiveId: string;
+      dependencies: string[];
+      result: TaskResultRow | undefined;
+      context: Record<string, string> | undefined;
+    }>,
+  ): GetTask {
+    return {
+      execute: async () => ({
+        id: output.id ?? TASK_ID,
+        title: output.title ?? "stub title",
+        status: output.status ?? "completed",
+        agent: output.agent,
+        objectiveId: "OBJ-1",
+        dependencies: [],
+        result: output.result,
+        context: output.context,
+      }),
+    } as unknown as GetTask;
+  }
+
+  test("T2a: runGetTask --result renders Summary, Commit, commitSha, command, exit 0", async () => {
+    const getTask = makeStubGetTask({ result: RESULT_FOR_T2 });
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, result: true },
+      getTask,
+    );
+    const out = r.stdout.join("\n");
+    assert.equal(r.exitCode, 0, "--result with a result must exit 0");
+    assert.ok(
+      out.includes("Summary"),
+      `stdout must include 'Summary'; got: ${out}`,
+    );
+    assert.ok(
+      out.includes("Commit"),
+      `stdout must include 'Commit'; got: ${out}`,
+    );
+    assert.ok(
+      out.includes("abc123"),
+      `stdout must include commitSha 'abc123'; got: ${out}`,
+    );
+    assert.ok(
+      out.includes("npm test"),
+      `stdout must include command 'npm test'; got: ${out}`,
+    );
+    assert.ok(
+      out.includes("exit 0"),
+      `stdout must include 'exit 0'; got: ${out}`,
+    );
+  });
+
+  test("T2b: runGetTask --result with result undefined returns exitCode 1 mentioning no result", async () => {
+    const getTask = makeStubGetTask({ result: undefined });
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, result: true },
+      getTask,
+    );
+    assert.equal(r.exitCode, 1, "--result with no result must exit 1");
+    assert.ok(
+      r.stderr[0]!.includes("no result"),
+      `stderr must mention 'no result'; got: ${r.stderr[0]}`,
+    );
+  });
+
+  test("T2c: runGetTask --json includes context field when context non-empty", async () => {
+    const getTask = makeStubGetTask({
+      context: { repository: "REPO-1" },
+      result: undefined,
+    });
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, json: true },
+      getTask,
+    );
+    assert.equal(r.exitCode, 0, "--json must exit 0");
+    const parsed = JSON.parse(r.stdout[0]!) as {
+      context?: Record<string, string>;
+    };
+    assert.ok(
+      parsed.context !== undefined,
+      "--json output must include context field",
+    );
+    assert.equal(
+      parsed.context!.repository,
+      "REPO-1",
+      "context.repository must match",
+    );
+  });
+
+  test("T2d: runGetTask --result --json together returns exitCode 1 mentioning mutually exclusive", async () => {
+    const getTask = makeStubGetTask({ result: RESULT_FOR_T2 });
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, result: true, json: true },
+      getTask,
+    );
+    assert.equal(r.exitCode, 1, "--result --json must exit 1");
+    assert.ok(
+      /mutually exclusive/i.test(r.stderr[0] ?? ""),
+      `stderr must mention 'mutually exclusive'; got: ${r.stderr[0]}`,
+    );
   });
 });

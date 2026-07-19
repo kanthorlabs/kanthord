@@ -9,12 +9,16 @@
  *   (d) skipped result does not trigger until-idle exit
  *   (e) polling mode: idle → sleep(pollIntervalMs); stop() → finish in-flight then exit
  *   (f) SQLITE_BUSY from scan → retry after sleep(100), loop continues, exit code unaffected
+ * T2 additions:
+ *   (g) completed result is logged via the logger port
+ *   (h) failed result is logged via the logger port
  */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { RunDaemon } from "./run-daemon.ts";
+import { NullLogger } from "../../logger/null.ts";
 
 // ---------------------------------------------------------------------------
 // Shared types — match the structural interfaces RunDaemon consumes
@@ -92,6 +96,7 @@ test("RunDaemon execute until-idle: recover once, scan before every claim, drain
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(sleepLog),
+    logger: new NullLogger(),
   });
 
   const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
@@ -148,6 +153,7 @@ test("RunDaemon execute one failed result → exitCode 1 and loop continues drai
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(),
+    logger: new NullLogger(),
   });
 
   const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
@@ -187,6 +193,7 @@ test("RunDaemon execute live-insert pickup: scan happens before every claim", as
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(),
+    logger: new NullLogger(),
   });
 
   const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
@@ -231,6 +238,7 @@ test("RunDaemon execute skipped result does not trigger until-idle exit", async 
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(),
+    logger: new NullLogger(),
   });
 
   const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
@@ -269,6 +277,7 @@ test("RunDaemon execute polling mode: idle triggers sleep(pollIntervalMs) then c
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep,
+    logger: new NullLogger(),
   });
   stopSignal = () => daemon.stop();
 
@@ -315,6 +324,7 @@ test("RunDaemon execute stop() lets in-flight runNext finish then exits", async 
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(),
+    logger: new NullLogger(),
   });
 
   const doneP = daemon.execute({ untilIdle: false, pollIntervalMs: 10 });
@@ -368,6 +378,7 @@ test("RunDaemon execute SQLITE_BUSY from scan retries after sleep(100) and loop 
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(sleepLog),
+    logger: new NullLogger(),
   });
 
   const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
@@ -412,6 +423,7 @@ test("RunDaemon stop() before execute() is honored: loop exits immediately with 
     enqueueReady: enqueueUC,
     runNext: runNextUC,
     sleep: makeSleep(),
+    logger: new NullLogger(),
   });
 
   daemon.stop(); // set BEFORE execute() starts
@@ -431,5 +443,67 @@ test("RunDaemon stop() before execute() is honored: loop exits immediately with 
     result.exitCode,
     0,
     "exitCode must be 0 when no failures occurred",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// T2 (g): completed result is logged via the logger port
+// ---------------------------------------------------------------------------
+
+test("RunDaemon execute: completed result is logged via the logger port", async () => {
+  const log: string[] = [];
+  const captureLogger = {
+    lines: [] as string[],
+    info(m: string) {
+      this.lines.push(m);
+    },
+    warn(_m: string) {},
+    error(_m: string) {},
+  };
+
+  const daemon = new RunDaemon({
+    recover: makeRecoverUC(log),
+    enqueueReady: makeEnqueueUC(log, [["T1"]]),
+    runNext: makeRunNextUC(log, [{ outcome: "completed", taskId: "T1" }]),
+    sleep: makeSleep(),
+    logger: captureLogger,
+  });
+
+  await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  assert.ok(
+    captureLogger.lines.some((l) => /task T1.*completed/.test(l)),
+    `logger must capture a 'task T1: completed' line; got: ${JSON.stringify(captureLogger.lines)}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// T2 (h): failed result is logged via the logger port
+// ---------------------------------------------------------------------------
+
+test("RunDaemon execute: failed result is logged via the logger port", async () => {
+  const log: string[] = [];
+  const captureLogger = {
+    lines: [] as string[],
+    info(m: string) {
+      this.lines.push(m);
+    },
+    warn(_m: string) {},
+    error(_m: string) {},
+  };
+
+  const daemon = new RunDaemon({
+    recover: makeRecoverUC(log),
+    enqueueReady: makeEnqueueUC(log, [["T1"]]),
+    runNext: makeRunNextUC(log, [{ outcome: "failed", taskId: "T1" }]),
+    sleep: makeSleep(),
+    logger: captureLogger,
+  });
+
+  await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  assert.ok(
+    captureLogger.lines.some((l) => /task T1.*failed/.test(l)),
+    `logger must capture a 'task T1: failed' line; got: ${JSON.stringify(captureLogger.lines)}`,
   );
 });

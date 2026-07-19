@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
 import { dispatch } from "./router.ts";
+import { runDaemon } from "./daemon.ts";
+import type { Logger } from "../../logger/port.ts";
+import type { RunDaemon } from "../../app/task/run-daemon.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
@@ -242,4 +245,57 @@ test("create task --agent fake@1: exits 0; --agent ghost@9: exits 1 (catalog gua
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// --- Story 07 T3: Logger flows through runDaemon to buildDaemon ---
+
+// Fake RunDaemon that immediately idles (no tasks to run).
+function makeFakeDaemon(): RunDaemon {
+  return {
+    execute: async () => ({ exitCode: 0, escalatedCount: 0 }),
+    stop: () => {},
+  } as unknown as RunDaemon;
+}
+
+test("T3a: runDaemon passes logger to buildDaemon as second argument", async () => {
+  let receivedLogger: Logger | undefined;
+  const capturingBuildDaemon = (
+    _failTaskIds: string[],
+    logger?: Logger,
+  ): RunDaemon => {
+    receivedLogger = logger;
+    return makeFakeDaemon();
+  };
+
+  const capturingLogger: Logger = {
+    info: (_msg: string) => {},
+    warn: (_msg: string) => {},
+    error: (_msg: string) => {},
+  };
+
+  // runDaemon currently only accepts 2 args; T3 adds the third (TS2554 expected until GREEN)
+  const result = await (runDaemon as Function)(
+    { "until-idle": true },
+    capturingBuildDaemon,
+    capturingLogger,
+  );
+
+  assert.equal(result.exitCode, 0, "daemon exits 0 on idle");
+  assert.strictEqual(
+    receivedLogger,
+    capturingLogger,
+    "logger must be forwarded from runDaemon to buildDaemon",
+  );
+});
+
+test("T3b: runDaemon without logger parameter still works (NullLogger default)", async () => {
+  const simpleFakeBuildDaemon = (_failTaskIds: string[]): RunDaemon =>
+    makeFakeDaemon();
+
+  const result = await runDaemon({ "until-idle": true }, simpleFakeBuildDaemon);
+  assert.equal(
+    result.exitCode,
+    0,
+    "two-arg form still exits 0 (NullLogger default)",
+  );
 });

@@ -8,6 +8,8 @@ import {
   UnknownAgentError,
   TaskNotAwaitingConfirmationError,
   ProposalWorkspaceMissingError,
+  EmbeddedCredentialError,
+  UnknownModelError,
 } from "../../app/errors.ts";
 import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
 import { ProposalMissingError } from "../../app/task/approve-task.ts";
@@ -20,6 +22,10 @@ import {
   CreateModeIdError,
   DriftConflictError,
 } from "../../app/graph/import-errors.ts";
+import {
+  ImmutableFieldError,
+  CacheConflictError,
+} from "../../app/resource/update-resource.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -51,7 +57,11 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof UnknownNodeError ||
     err instanceof DuplicateRefError ||
     err instanceof CreateModeIdError ||
-    err instanceof DriftConflictError
+    err instanceof DriftConflictError ||
+    err instanceof EmbeddedCredentialError ||
+    err instanceof UnknownModelError ||
+    err instanceof ImmutableFieldError ||
+    err instanceof CacheConflictError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

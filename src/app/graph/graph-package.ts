@@ -14,6 +14,7 @@ export interface PkgTask {
   verification: string[] | null | undefined; // undefined = no `# Verification`; null/[] = empty section
   dependsOn: string[]; // ULIDs or refs
   sourcePath: string; // B7 provenance, relative to package root
+  context?: Record<string, string>; // C1: per-task context overrides (alias → resolved resource id)
 }
 
 export interface PkgObjective {
@@ -22,6 +23,7 @@ export interface PkgObjective {
   initiativeRef: string;
   name: string;
   sourcePath: string;
+  context?: Record<string, string>; // C1: objective-level context (alias → resolved resource id)
 }
 
 export interface PkgInitiative {
@@ -29,6 +31,7 @@ export interface PkgInitiative {
   ref: string;
   name: string;
   sourcePath: string;
+  bindings?: Record<string, string>; // C1: alias → resource type map (e.g. { source: "repository" })
 }
 
 export interface ExportManifest {

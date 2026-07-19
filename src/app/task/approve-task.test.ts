@@ -26,6 +26,12 @@ import type { Event } from "../../domain/event.ts";
 import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
+import type {
+  RepositoryLanding,
+  LandingCandidate,
+  LandingResult,
+} from "../../landing/port.ts";
+import { LandingConflictError } from "../../landing/port.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -98,6 +104,8 @@ interface ApproveTaskStore {
   saveTaskResult(taskId: string, row: TaskResultRow): void;
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
+  /** Returns the resolved task context: resource-type → resource-id. */
+  getTaskContext(taskId: string): Record<string, string>;
 }
 
 class MemStore implements ApproveTaskStore {
@@ -106,15 +114,18 @@ class MemStore implements ApproveTaskStore {
   readonly #tasks: Map<string, Task>;
   readonly #results: Map<string, TaskResultRow>;
   readonly #initiativeId: string;
+  readonly #contexts: Map<string, Record<string, string>>;
 
   constructor(
     tasks: Task[],
     results: Map<string, TaskResultRow>,
     initiativeId: string,
+    contexts: Map<string, Record<string, string>> = new Map(),
   ) {
     this.#tasks = new Map(tasks.map((t) => [t.id, t]));
     this.#results = new Map(results);
     this.#initiativeId = initiativeId;
+    this.#contexts = contexts;
   }
 
   get(id: string): Task | undefined {
@@ -141,6 +152,34 @@ class MemStore implements ApproveTaskStore {
 
   getInitiativeId(taskId: string): string | undefined {
     return this.#tasks.has(taskId) ? this.#initiativeId : undefined;
+  }
+
+  getTaskContext(taskId: string): Record<string, string> {
+    return this.#contexts.get(taskId) ?? {};
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FakeLanding — Story 11 T5
+// ---------------------------------------------------------------------------
+
+class FakeLanding implements RepositoryLanding {
+  readonly calls: Array<{ homeDir: string; candidate: LandingCandidate }> = [];
+  readonly #result: LandingResult;
+  readonly #throw: Error | undefined;
+
+  constructor(result: LandingResult, throwErr?: Error) {
+    this.#result = result;
+    this.#throw = throwErr;
+  }
+
+  async land(
+    homeDir: string,
+    candidate: LandingCandidate,
+  ): Promise<LandingResult> {
+    this.calls.push({ homeDir, candidate });
+    if (this.#throw !== undefined) throw this.#throw;
+    return this.#result;
   }
 }
 
@@ -574,5 +613,242 @@ test("(S2 regression) escalated task with proposalCommit set but workspace null 
     promoteCallCount,
     0,
     "promote must NOT be called when workspace is null",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 11 T5 — RepositoryLanding integration
+// ---------------------------------------------------------------------------
+
+const T5_REPO_ID = "repo-t5-001";
+const T5_BASE_SHA = "base000000000000000000000000000000000000";
+const T5_CANDIDATE_SHA = "cand111111111111111111111111111111111111";
+const T5_CANONICAL_SHA = T5_CANDIDATE_SHA; // fast-forward: canonical === candidate
+const FAKE_HOME_DIR = "/fake/home/repo-t5-001";
+
+function makeT5Result(proposalCommit: string): TaskResultRow {
+  return {
+    workspace: "/fake/ws",
+    branch: "kanthord/t5-task",
+    baseCommit: T5_BASE_SHA,
+    proposalCommit,
+    commitSha: null,
+    summary: "T5 task summary",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+}
+
+const FAST_FORWARD_RESULT: LandingResult = {
+  candidate: {
+    id: "lc-t5-ff",
+    taskId: "t5-task",
+    repoId: T5_REPO_ID,
+    baseSHA: T5_BASE_SHA,
+    candidateSHA: T5_CANDIDATE_SHA,
+    ref: "kanthord/t5-task",
+    target: "main",
+    workspace: "/fake/ws",
+  },
+  outcome: { kind: "fast-forward" },
+  canonicalSHA: T5_CANONICAL_SHA,
+};
+
+test("(T5-a) ApproveTask with repository context binding calls landing.land with baseSHA from task_results and candidateSHA from proposalCommit", async () => {
+  const taskId = "t5-task-a";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "t5 task a",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeT5Result(T5_CANDIDATE_SHA);
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: T5_REPO_ID }]]),
+  );
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const fakeLanding = new FakeLanding(FAST_FORWARD_RESULT);
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote, fakeLanding);
+  await uc.execute({ taskId });
+
+  assert.equal(
+    fakeLanding.calls.length,
+    1,
+    "landing.land must be called once for a task with repository context binding",
+  );
+  const call = fakeLanding.calls[0]!;
+  assert.equal(
+    call.candidate.baseSHA,
+    T5_BASE_SHA,
+    "candidate.baseSHA must match task_results.baseCommit",
+  );
+  assert.equal(
+    call.candidate.candidateSHA,
+    T5_CANDIDATE_SHA,
+    "candidate.candidateSHA must match task_results.proposalCommit",
+  );
+});
+
+test("(T5-b) after fast-forward land, task_results.base_commit is set to canonicalSHA", async () => {
+  const taskId = "t5-task-b";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "t5 task b",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeT5Result(T5_CANDIDATE_SHA);
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: T5_REPO_ID }]]),
+  );
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const fakeLanding = new FakeLanding(FAST_FORWARD_RESULT);
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote, fakeLanding);
+  await uc.execute({ taskId });
+
+  const savedResult = store.savedResults.find((r) => r.taskId === taskId);
+  assert.ok(savedResult !== undefined, "saveTaskResult must have been called");
+  assert.ok(
+    savedResult.row.baseCommit !== null,
+    "task_results.base_commit must not be null after fast-forward land (A7)",
+  );
+  assert.equal(
+    savedResult.row.baseCommit,
+    T5_CANONICAL_SHA,
+    "task_results.base_commit must equal the canonicalSHA from the landing result",
+  );
+});
+
+test("(T5-c) LandingConflictError from landing emits task.conflict event, task stays awaiting_confirmation, execute resolves without throw", async () => {
+  const taskId = "t5-task-c";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "t5 task c",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeT5Result(T5_CANDIDATE_SHA);
+  const fakeCandidate: LandingCandidate = {
+    id: "lc-t5-conflict",
+    taskId,
+    repoId: T5_REPO_ID,
+    baseSHA: T5_BASE_SHA,
+    candidateSHA: T5_CANDIDATE_SHA,
+    ref: "kanthord/t5-task-c",
+    target: "main",
+    workspace: "/fake/ws",
+  };
+  const conflictErr = new LandingConflictError(fakeCandidate, ["file.ts"]);
+  // FakeLanding result is unused (throws instead)
+  const fakeLanding = new FakeLanding(FAST_FORWARD_RESULT, conflictErr);
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: T5_REPO_ID }]]),
+  );
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote, fakeLanding);
+  // Must NOT throw
+  await uc.execute({ taskId });
+
+  // task.conflict event must have been emitted
+  const conflictEvents = feed.events.filter((e) => e.type === "task.conflict");
+  assert.equal(
+    conflictEvents.length,
+    1,
+    "one task.conflict event must be emitted on landing conflict",
+  );
+
+  // task must NOT have been saved as completed
+  const completedSaves = store.savedTasks.filter(
+    (t) => t.status === "completed",
+  );
+  assert.equal(
+    completedSaves.length,
+    0,
+    "task must NOT be transitioned to completed when landing conflicts",
+  );
+
+  // task must still be awaiting_confirmation
+  const stillAwaiting = store.savedTasks.filter(
+    (t) => t.status === "awaiting_confirmation",
+  );
+  // NOTE: the task may not be saved at all (stays in awaiting_confirmation without a save),
+  // or it may be saved as awaiting_confirmation — both are acceptable; what's NOT acceptable
+  // is saving it as completed.
+  assert.equal(
+    completedSaves.length,
+    0,
+    "no completed transition on conflict (double-check)",
+  );
+});
+
+test("(T5-d) task with no repository context binding skips landing and completes normally", async () => {
+  const taskId = "t5-task-d";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "t5 task d — filesystem source",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeT5Result(T5_CANDIDATE_SHA);
+
+  // context has no "repository" key → filesystem-sourced task
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { filesystem: "fs-resource-id" }]]),
+  );
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const fakeLanding = new FakeLanding(FAST_FORWARD_RESULT);
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote, fakeLanding);
+  await uc.execute({ taskId });
+
+  assert.equal(
+    fakeLanding.calls.length,
+    0,
+    "landing.land must NOT be called for a task with no repository context binding",
+  );
+
+  // task must still complete normally
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must have been saved");
+  assert.equal(
+    last.status,
+    "completed",
+    "task without repository binding must still complete",
   );
 });

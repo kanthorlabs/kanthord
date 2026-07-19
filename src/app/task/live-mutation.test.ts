@@ -32,6 +32,7 @@ import { EnqueueReadyTasks } from "./enqueue-ready-tasks.ts";
 import { RecoverInterruptedTasks } from "./recover-interrupted-tasks.ts";
 import { RunNextTask } from "./run-next-task.ts";
 import { RunDaemon } from "./run-daemon.ts";
+import { NullLogger } from "../../logger/null.ts";
 import { CreateTask } from "./create-task.ts";
 import { AddDependency } from "./add-dependency.ts";
 import { DependenciesLockedError } from "../../domain/task.ts";
@@ -124,6 +125,7 @@ function setup(): Fixture {
       enqueueReady,
       runNext,
       sleep: () => Promise.resolve(),
+      logger: new NullLogger(),
     });
   }
 

@@ -12,9 +12,11 @@ export const EVENT_TYPES = [
   "task.rejected",
   "task.discarded",
   "task.blocked",
+  "task.conflict",
   "agent.started",
   "agent.progress",
   "agent.finished",
+  "task.verification",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
