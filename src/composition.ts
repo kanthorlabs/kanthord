@@ -65,7 +65,11 @@ import { StoreGraph } from "./app/graph/store-graph.ts";
 import { SqliteGraphImportMap } from "./storage/sqlite/sqlite-graph-import-map.ts";
 import { newId } from "./domain/entity.ts";
 import { promoteProposal } from "./workspace/local.ts";
-import { getOAuthProvider } from "@earendil-works/pi-ai/oauth";
+import { builtinModels } from "@earendil-works/pi-ai/providers/all";
+import { createInterface } from "node:readline/promises";
+import type { ModelInfo } from "./apps/cli/models.ts";
+import { PiOAuthLoginProvider } from "./oauth/pi.ts";
+import { LoginProvider } from "./app/auth/login-provider.ts";
 
 /**
  * Wire all concrete adapters and return the `RouterDeps` bundle.
@@ -269,22 +273,39 @@ export function buildDeps(
     });
   }
 
+  const loginProvider = new LoginProvider({
+    oauth: new PiOAuthLoginProvider(),
+    projects: projectRepository,
+    resolver: referenceResolver,
+  });
   const login = {
-    getProvider: (id: string) => getOAuthProvider(id),
-    saveCredential: async (opts: {
-      projectId: string;
-      name: string;
-      provider: string;
-      value: string;
-    }) =>
-      addResource.execute({
-        type: "credential",
-        projectId: opts.projectId,
-        name: opts.name,
-        provider: opts.provider,
-        value: opts.value,
-      }),
+    loginProvider,
+    io: {
+      print: (message: string) => process.stdout.write(`${message}\n`),
+      prompt: async (message: string) => {
+        const rl = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        try {
+          return await rl.question(`${message} `);
+        } finally {
+          rl.close();
+        }
+      },
+    },
   };
+
+  const listModels = (provider?: string): ModelInfo[] =>
+    builtinModels()
+      .getModels(provider)
+      .map((m) => ({
+        provider: m.provider,
+        id: m.id,
+        name: m.name,
+        reasoning: m.reasoning,
+        contextWindow: m.contextWindow,
+      }));
 
   return {
     migrateDb,
@@ -320,6 +341,7 @@ export function buildDeps(
     listInitiatives,
     listObjectives,
     login,
+    listModels,
     newId,
   };
 }

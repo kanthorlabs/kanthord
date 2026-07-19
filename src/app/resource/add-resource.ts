@@ -4,7 +4,7 @@ import type {
   ProjectRepository,
   ReferenceResolver,
 } from "../../storage/port.ts";
-import type { Resource } from "../../domain/resource.ts";
+import type { Resource, ReasoningEffort } from "../../domain/resource.ts";
 import { newId } from "../../domain/entity.ts";
 import {
   DuplicateNameError,
@@ -42,6 +42,7 @@ export type AddResourceInput =
       provider: string;
       model: string;
       baseUrl?: string;
+      effort?: ReasoningEffort;
     }
   | {
       type: "filesystem";
@@ -131,6 +132,7 @@ export class AddResource {
         provider: input.provider,
         model: input.model,
         ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
+        ...(input.effort !== undefined ? { effort: input.effort } : {}),
       };
     } else {
       resource = {

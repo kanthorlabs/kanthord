@@ -239,6 +239,44 @@ test("buildResource ai_provider with baseUrl: builds correct variant", () => {
   assert.equal(r.baseUrl, "https://my-azure.openai.azure.com/");
 });
 
+test("buildResource ai_provider with valid effort: keeps the effort level", () => {
+  const r = buildResource({
+    type: "ai_provider",
+    name: "openai",
+    provider: "openai-codex",
+    model: "gpt-5.5",
+    effort: "medium",
+  });
+  if (!isAIProvider(r)) assert.fail("expected AIProvider variant");
+  assert.equal(r.effort, "medium");
+});
+
+test("buildResource ai_provider without effort: effort is undefined", () => {
+  const r = buildResource({
+    type: "ai_provider",
+    name: "openai",
+    provider: "openai-codex",
+    model: "gpt-5.5",
+  });
+  if (!isAIProvider(r)) assert.fail("expected AIProvider variant");
+  assert.equal(r.effort, undefined);
+});
+
+test("buildResource ai_provider with invalid effort: throws ResourceValidationError naming effort", () => {
+  assert.throws(
+    () =>
+      buildResource({
+        type: "ai_provider",
+        name: "openai",
+        provider: "openai-codex",
+        model: "gpt-5.5",
+        effort: "ultra",
+      }),
+    (err: unknown) =>
+      err instanceof ResourceValidationError && err.field === "effort",
+  );
+});
+
 test("buildResource filesystem: builds correct variant from valid input", () => {
   const r = buildResource({
     type: "filesystem",

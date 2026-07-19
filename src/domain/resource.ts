@@ -33,12 +33,24 @@ export interface Notification extends Entity {
   destination: string;
 }
 
+/** Reasoning effort levels — mirrors pi-ai's ThinkingLevel. */
+export const REASONING_EFFORTS = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export interface AIProvider extends Entity {
   type: "ai_provider";
   name: string;
   provider: string;
   model: string;
   baseUrl?: string;
+  effort?: ReasoningEffort;
 }
 
 export interface Filesystem extends Entity {
@@ -131,6 +143,14 @@ export function buildResource(input: Record<string, unknown>): Resource {
       typeof baseUrlRaw === "string" && baseUrlRaw.length > 0
         ? baseUrlRaw
         : undefined;
+    const effortRaw = input["effort"];
+    let effort: ReasoningEffort | undefined;
+    if (typeof effortRaw === "string" && effortRaw.length > 0) {
+      if (!(REASONING_EFFORTS as readonly string[]).includes(effortRaw)) {
+        throw new ResourceValidationError("effort");
+      }
+      effort = effortRaw as ReasoningEffort;
+    }
     return {
       id,
       type: "ai_provider",
@@ -138,6 +158,7 @@ export function buildResource(input: Record<string, unknown>): Resource {
       provider,
       model,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...(effort !== undefined ? { effort } : {}),
     };
   }
 

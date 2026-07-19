@@ -10,12 +10,17 @@ import type {
   Api,
   Model,
   StreamFunction,
+  SimpleStreamOptions,
   CredentialStore as PiCredentialStore,
   Credential as PiCredential,
   OAuthCredential as PiOAuthCredential,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type { AIProvider, Credential } from "../domain/resource.ts";
+import type {
+  AIProvider,
+  Credential,
+  ReasoningEffort,
+} from "../domain/resource.ts";
 
 // ---------------------------------------------------------------------------
 // Public session type
@@ -65,6 +70,27 @@ export class UnknownModelError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// Reasoning-effort injection
+// ---------------------------------------------------------------------------
+
+/**
+ * Wrap a StreamFunction so every call carries the configured reasoning effort.
+ * pi maps the level onto the model via SimpleStreamOptions.reasoning. When no
+ * effort is set, the base function is returned unchanged.
+ */
+export function withReasoning(
+  base: StreamFunction,
+  effort: ReasoningEffort | undefined,
+): StreamFunction {
+  if (!effort) return base;
+  return (model, context, options) =>
+    base(model, context, {
+      ...options,
+      reasoning: effort,
+    } as SimpleStreamOptions);
+}
+
+// ---------------------------------------------------------------------------
 // PiProviderSessionFactory
 // ---------------------------------------------------------------------------
 
@@ -99,18 +125,6 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
       );
     }
 
-    // Look up model in the built-in catalog
-    const models = builtinModels();
-    const found = models.getModel(aiProvider.provider, aiProvider.model);
-    if (!found) {
-      throw new UnknownModelError(aiProvider.provider, aiProvider.model);
-    }
-
-    // (f) baseUrl override: spread a new model object with the custom URL
-    const model: Model<Api> = aiProvider.baseUrl
-      ? { ...found, baseUrl: aiProvider.baseUrl }
-      : found;
-
     // Discriminate credential kind by attempting JSON parse
     let parsedOAuth: PiOAuthCredential | undefined;
     try {
@@ -126,30 +140,38 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
     let credentialStore: PiCredentialStore | undefined;
 
     if (parsedOAuth) {
-      // (b) OAuth path
-      const oauthCred = parsedOAuth;
+      // (b) OAuth path.
+      // Hand pi the credential store instead of a static token so pi's own
+      // getAuth() runs OAuth refresh under a lock and persists the rotated
+      // token (auth/resolve.ts). `current` is a mutable latest-known copy so
+      // reads within a session see the refreshed value (avoids re-refreshing
+      // with a rotated-away refresh token).
+      let current: PiOAuthCredential = parsedOAuth;
       const credId = credential.id;
       const saveFn = this.#saveCredentialValue;
 
-      // OAuth access token is the API key for request auth
-      getApiKey = () => oauthCred.access;
+      // Return "" (no override): a non-empty apiKey would make pi treat the
+      // request as api-key auth and skip OAuth refresh (auth/resolve.ts:17).
+      getApiKey = () => "";
 
-      // CredentialStore that persists refreshed tokens back through
-      // saveCredentialValue (injected by the composition root / tests)
       credentialStore = {
         read: async (_providerId: string): Promise<PiCredential | undefined> =>
-          oauthCred,
+          current,
         modify: async (
           _providerId: string,
           fn: (
             current: PiCredential | undefined,
           ) => Promise<PiCredential | undefined>,
         ): Promise<PiCredential | undefined> => {
-          const result = await fn(oauthCred);
+          const result = await fn(current);
           if (result !== undefined) {
+            current = result as PiOAuthCredential;
             saveFn(credId, JSON.stringify(result));
           }
-          return result;
+          // Per pi's CredentialStore contract: return the latest credential.
+          // When fn makes no change (returns undefined — e.g. another request
+          // already refreshed) pi still expects the current value, not undefined.
+          return current;
         },
         delete: async (_providerId: string): Promise<void> => {
           // no-op for now; logout path is a later story
@@ -161,7 +183,23 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
       getApiKey = () => apiKey;
     }
 
-    const streamFn = models.streamSimple.bind(models) as StreamFunction;
+    // Build the model catalog. For OAuth, pass the credential store so
+    // streamSimple resolves auth (with refresh) through it.
+    const models = builtinModels(
+      credentialStore ? { credentials: credentialStore } : undefined,
+    );
+    const found = models.getModel(aiProvider.provider, aiProvider.model);
+    if (!found) {
+      throw new UnknownModelError(aiProvider.provider, aiProvider.model);
+    }
+
+    // (f) baseUrl override: spread a new model object with the custom URL
+    const model: Model<Api> = aiProvider.baseUrl
+      ? { ...found, baseUrl: aiProvider.baseUrl }
+      : found;
+
+    const baseStream = models.streamSimple.bind(models) as StreamFunction;
+    const streamFn = withReasoning(baseStream, aiProvider.effort);
 
     return { model, streamFn, getApiKey, credentialStore };
   }

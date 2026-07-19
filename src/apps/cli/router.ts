@@ -78,6 +78,8 @@ import { runExportInitiative } from "./export.ts";
 import { runImportGraph } from "./import-graph.ts";
 import { runLogin } from "./login.ts";
 import type { LoginDeps } from "./login.ts";
+import { runGetModels } from "./models.ts";
+import type { ListModels } from "./models.ts";
 
 /** Composition-root bundle injected by main.ts; extended by later Tasks. */
 export interface RouterDeps {
@@ -114,6 +116,7 @@ export interface RouterDeps {
   listInitiatives: ListInitiatives;
   listObjectives: ListObjectives;
   login: LoginDeps;
+  listModels: ListModels;
   newId: () => string;
 }
 
@@ -301,13 +304,14 @@ export const COMMANDS: Record<string, CommandEntry> = {
 
   "create ai-provider": {
     usage:
-      "usage: create ai-provider --project <id> --name <name> --provider <provider> --model <model>",
+      "usage: create ai-provider --project <id> --name <name> --provider <provider> --model <model> [--effort minimal|low|medium|high|xhigh]",
     parse: {
       project: { type: "string" },
       name: { type: "string" },
       provider: { type: "string" },
       model: { type: "string" },
       "base-url": { type: "string" },
+      effort: { type: "string" },
     },
     async handler(args, deps) {
       return runCreateAiProvider(args, deps.addResource);
@@ -604,14 +608,28 @@ export const COMMANDS: Record<string, CommandEntry> = {
   },
 
   login: {
-    usage: "usage: login --provider <provider> --project <id> --name <name>",
+    usage:
+      "usage: login <provider> --project <id> --name <name> [--method browser|device_code]",
+    positional: "provider",
     parse: {
       provider: { type: "string" },
       project: { type: "string" },
       name: { type: "string" },
+      method: { type: "string" },
     },
     async handler(args, deps) {
       return runLogin(args["provider"] as string, args, deps.login);
+    },
+  },
+
+  "get models": {
+    usage: "usage: get models [--provider <provider>] [--json]",
+    parse: {
+      provider: { type: "string" },
+      json: { type: "boolean" },
+    },
+    handler(args, deps) {
+      return Promise.resolve(runGetModels(args, deps.listModels));
     },
   },
 };
@@ -632,11 +650,17 @@ export async function dispatch(
   let entry = COMMANDS[key];
   let rest = argv.slice(2);
 
-  // Single-word command: the "object" slot contains a flag or is absent.
+  // Single-word command: the "object" slot contains a flag, is absent, or is
+  // the leading positional of a command that declares one (e.g. `login <provider>`).
   // Try looking up by verb alone and consume from argv[1] onward.
-  if (entry === undefined && (obj === "" || obj.startsWith("-"))) {
+  if (entry === undefined) {
     const singleEntry = COMMANDS[verb];
-    if (singleEntry !== undefined) {
+    if (
+      singleEntry !== undefined &&
+      (obj === "" ||
+        obj.startsWith("-") ||
+        singleEntry.positional !== undefined)
+    ) {
       entry = singleEntry;
       rest = argv.slice(1);
     }

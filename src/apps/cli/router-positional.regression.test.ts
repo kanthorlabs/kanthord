@@ -68,6 +68,30 @@ test("import graph accepts first positional as <dir> (Proof compatibility)", asy
   );
 });
 
+test("login accepts first positional as <provider> (documented `login <provider>` form)", async () => {
+  const rootDir = mkdtempSync(join(tmpdir(), "kanthord-positional-login-"));
+  const dbPath = join(rootDir, "kanthord.db");
+  const deps = buildDeps(dbPath);
+  after(() => {
+    rmSync(rootDir, { recursive: true });
+  });
+
+  // `login <provider>` with --project omitted: must route to the login command
+  // (proving the positional promoted to `provider`) and fail on validation
+  // BEFORE any OAuth/network — not fall through to "unknown command".
+  const r = await dispatch(["login", "openai-codex", "--name", "x"], deps);
+  const allOutput = [...r.stdout, ...r.stderr].join("\n");
+  assert.ok(
+    !allOutput.includes("unknown command"),
+    `login <provider> must route to login, not unknown command; got: ${allOutput}`,
+  );
+  assert.equal(r.exitCode, 1);
+  assert.ok(
+    allOutput.includes("--project"),
+    `expected the login --project validation error; got: ${allOutput}`,
+  );
+});
+
 test("export initiative accepts first positional as <id> (Proof compatibility)", async () => {
   const rootDir = mkdtempSync(join(tmpdir(), "kanthord-positional-exp-"));
   const dbPath = join(rootDir, "kanthord.db");

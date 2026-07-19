@@ -1,63 +1,78 @@
 import type {
-  OAuthProviderInterface,
-  OAuthCredentials,
-} from "@earendil-works/pi-ai";
-import { toResult } from "./error-map.ts";
+  LoginProvider,
+  OAuthLoginPresenter,
+} from "../../app/auth/login-provider.ts";
 
-export type SaveCredentialOpts = {
-  projectId: string;
-  name: string;
-  provider: string;
-  value: string;
+/**
+ * Live terminal I/O for the interactive OAuth flow. `print` writes immediately
+ * (the auth URL must appear while the flow is still awaiting the callback);
+ * `prompt` reads a single line from stdin.
+ */
+export type LoginIO = {
+  print(message: string): void;
+  prompt(message: string): Promise<string>;
 };
 
 export type LoginDeps = {
-  getProvider(id: string): OAuthProviderInterface | undefined;
-  saveCredential(opts: SaveCredentialOpts): Promise<string>;
+  loginProvider: LoginProvider;
+  io: LoginIO;
 };
 
 export async function runLogin(
-  provider: string,
+  providerId: string,
   args: Record<string, unknown>,
   deps: LoginDeps,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const err = (message: string) => ({
+    exitCode: 1,
+    stdout: [] as string[],
+    stderr: [`error: ${message}`],
+  });
+
+  // Validate CLI inputs BEFORE running the OAuth flow — a real browser login
+  // must not complete only to fail on a missing/invalid value afterwards.
+  if (typeof providerId !== "string" || providerId === "") {
+    return err("missing required argument <provider>");
+  }
   const projectId = args["project"];
+  if (typeof projectId !== "string" || projectId === "") {
+    return err("missing required flag --project");
+  }
   const name = args["name"];
-
-  const oauthProvider = deps.getProvider(provider);
-  if (oauthProvider === undefined) {
-    return {
-      exitCode: 1,
-      stdout: [],
-      stderr: [`error: no OAuth flow registered for provider ${provider}`],
-    };
+  if (typeof name !== "string" || name === "") {
+    return err("missing required flag --name");
+  }
+  const method =
+    typeof args["method"] === "string" && args["method"] !== ""
+      ? (args["method"] as string)
+      : "browser";
+  if (method !== "browser" && method !== "device_code") {
+    return err(`invalid --method "${method}": must be browser or device_code`);
   }
 
-  let creds: OAuthCredentials;
+  const { io } = deps;
+  const presenter: OAuthLoginPresenter = {
+    showAuthUrl: (url, instructions) => {
+      io.print(`\nOpen this URL in your browser to authenticate:\n${url}\n`);
+      if (instructions) io.print(instructions);
+    },
+    showDeviceCode: ({ userCode, verificationUri }) => {
+      io.print(`\nGo to ${verificationUri} and enter code: ${userCode}\n`);
+    },
+    progress: (message) => io.print(message),
+    promptCode: (message) => io.prompt(message),
+  };
+
   try {
-    creds = await oauthProvider.login({
-      onAuth: () => {},
-      onDeviceCode: () => {},
-      onPrompt: async () => "",
-      onProgress: () => {},
-      onManualCodeInput: async () => "",
-      onSelect: async () => undefined,
+    const credId = await deps.loginProvider.execute({
+      providerId,
+      projectId,
+      name,
+      method,
+      presenter,
     });
-  } catch (err) {
-    return { ...toResult(err), stdout: [] };
+    return { exitCode: 0, stdout: [credId], stderr: [] };
+  } catch (e) {
+    return err(e instanceof Error ? e.message : String(e));
   }
-
-  let credId: string;
-  try {
-    credId = await deps.saveCredential({
-      projectId: projectId as string,
-      name: name as string,
-      provider,
-      value: JSON.stringify(creds),
-    });
-  } catch (err) {
-    return { ...toResult(err), stdout: [] };
-  }
-
-  return { exitCode: 0, stdout: [credId], stderr: [] };
 }

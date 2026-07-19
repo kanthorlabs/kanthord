@@ -1,152 +1,153 @@
 /**
- * Story 04 T3 — login <provider> CLI handler
- *
- * Verifies four scenarios using injectable deps (no network):
- *   (a) known provider → OAuth flow invoked, credential saved with JSON
- *       value, stdout = ULID
- *   (b) same name a second time → succeeds again (upsert path, no duplicate)
- *   (c) provider without an OAuth flow → exit 1, one error line
- *   (d) unknown project → exit 1, one error line
- *
- * Fails today: src/apps/cli/login.ts is absent.
+ * `login <provider>` CLI handler (thin) — after S4 the OAuth orchestration
+ * lives in the LoginProvider use case; this handler only parses/validates
+ * inputs, builds the terminal presenter, calls the use case, and formats.
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { runLogin } from "./login.ts";
+import { runLogin, type LoginDeps } from "./login.ts";
 import type {
-  OAuthCredentials,
-  OAuthProviderInterface,
-} from "@earendil-works/pi-ai";
+  LoginProvider,
+  LoginProviderInput,
+} from "../../app/auth/login-provider.ts";
 
 const PROJECT_ID = "01HZZZZZZZZZZZZZZZZZZZZZPA";
 
-const FAKE_CREDS: OAuthCredentials = {
-  refresh: "tok_r",
-  access: "tok_a",
-  expires: Date.now() + 3_600_000,
-};
-
-function makeFakeProvider(id = "anthropic"): OAuthProviderInterface {
+function fakeIO() {
+  const printed: string[] = [];
   return {
-    id,
-    name: id,
-    async login(_callbacks) {
-      return FAKE_CREDS;
-    },
-    async refreshToken(creds) {
-      return creds;
-    },
-    getApiKey() {
-      return "fake-api-key";
+    printed,
+    io: {
+      print: (m: string) => printed.push(m),
+      prompt: async () => "",
     },
   };
 }
 
-type SaveCredentialOpts = {
-  projectId: string;
-  name: string;
-  provider: string;
-  value: string;
-};
+/** A fake LoginProvider use case that records the input and returns a fixed id. */
+function fakeLoginProvider(
+  impl?: (input: LoginProviderInput) => Promise<string>,
+): { calls: LoginProviderInput[]; provider: LoginProvider } {
+  const calls: LoginProviderInput[] = [];
+  const provider = {
+    async execute(input: LoginProviderInput) {
+      calls.push(input);
+      return impl ? impl(input) : "01HCREDENTIALID0000000000";
+    },
+  } as unknown as LoginProvider;
+  return { calls, provider };
+}
 
-describe("runLogin", () => {
-  test("known provider: OAuth flow is invoked, credential saved with serialized JSON value, stdout is the ULID", async () => {
-    const saved: SaveCredentialOpts[] = [];
-    const newId = "01HZZZZZZZZZZZZZZZZZZZZZ01";
+function deps(loginProvider: LoginProvider, io: LoginDeps["io"]): LoginDeps {
+  return { loginProvider, io };
+}
+
+describe("runLogin (thin handler)", () => {
+  test("happy path: calls the use case with parsed inputs, returns the credential id", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
 
     const result = await runLogin(
-      "anthropic",
-      { project: PROJECT_ID, name: "my-cred" },
-      {
-        getProvider: (id) =>
-          id === "anthropic" ? makeFakeProvider("anthropic") : undefined,
-        saveCredential: async (opts) => {
-          saved.push(opts);
-          return newId;
-        },
-      },
+      "openai-codex",
+      { project: PROJECT_ID, name: "openai", method: "browser" },
+      deps(provider, io),
     );
 
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(
-      result.stdout,
-      [newId],
-      "stdout contains exactly the ULID",
-    );
-    assert.equal(saved.length, 1, "saveCredential called once");
-    assert.equal(saved[0]?.projectId, PROJECT_ID);
-    assert.equal(saved[0]?.name, "my-cred");
-    assert.equal(saved[0]?.provider, "anthropic");
-    assert.deepEqual(
-      JSON.parse(saved[0]?.value ?? "{}"),
-      FAKE_CREDS,
-      "stored value is serialized OAuthCredentials JSON",
-    );
+    assert.deepEqual(result.stdout, ["01HCREDENTIALID0000000000"]);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.providerId, "openai-codex");
+    assert.equal(calls[0]?.projectId, PROJECT_ID);
+    assert.equal(calls[0]?.name, "openai");
+    assert.equal(calls[0]?.method, "browser");
   });
 
-  test("same provider + name a second time: saveCredential is called again without error (upsert path)", async () => {
-    let callCount = 0;
-    const deps = {
-      getProvider: (_id: string) => makeFakeProvider("anthropic"),
-      saveCredential: async (_opts: SaveCredentialOpts) => {
-        callCount++;
-        return "id-fixed";
-      },
-    };
-
-    const r1 = await runLogin(
+  test("method defaults to browser when --method omitted", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+    await runLogin(
       "anthropic",
-      { project: PROJECT_ID, name: "my-cred" },
-      deps,
+      { project: PROJECT_ID, name: "c" },
+      deps(provider, io),
     );
-    const r2 = await runLogin(
-      "anthropic",
-      { project: PROJECT_ID, name: "my-cred" },
-      deps,
-    );
-
-    assert.equal(r1.exitCode, 0);
-    assert.equal(
-      r2.exitCode,
-      0,
-      "second login also succeeds (no DuplicateNameError)",
-    );
-    assert.equal(callCount, 2, "saveCredential called on each login call");
+    assert.equal(calls[0]?.method, "browser");
   });
 
-  test("provider without an OAuth flow returns exit 1 with one error line", async () => {
+  test("presenter.showAuthUrl prints the auth URL live so the human can open it (B1)", async () => {
+    const { printed, io } = fakeIO();
+    const { provider } = fakeLoginProvider(async (input) => {
+      // Simulate the adapter surfacing the auth URL through the presenter.
+      input.presenter.showAuthUrl("https://auth.example/authorize?x=1");
+      return "cid";
+    });
+
     const result = await runLogin(
-      "openai",
-      { project: PROJECT_ID, name: "my-cred" },
-      {
-        getProvider: (_id) => undefined,
-        saveCredential: async () => {
-          throw new Error("saveCredential must not be called");
-        },
-      },
+      "openai-codex",
+      { project: PROJECT_ID, name: "openai" },
+      deps(provider, io),
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.ok(
+      printed.some((line) =>
+        line.includes("https://auth.example/authorize?x=1"),
+      ),
+      "the auth URL is printed live",
+    );
+  });
+
+  test("use-case error is mapped to exit 1 + one clean line, no crash (B2)", async () => {
+    const { io } = fakeIO();
+    const { provider } = fakeLoginProvider(async () => {
+      throw new Error("Login cancelled");
+    });
+
+    const result = await runLogin(
+      "openai-codex",
+      { project: PROJECT_ID, name: "openai" },
+      deps(provider, io),
     );
 
     assert.equal(result.exitCode, 1);
-    assert.equal(result.stderr.length, 1, "exactly one error line on stdout");
-    assert.equal(result.stdout.length, 0, "no stdout on failure");
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(result.stderr, ["error: Login cancelled"]);
   });
 
-  test("unknown project returns exit 1 with one error line", async () => {
-    const { UnknownReferenceError } = await import("../../app/errors.ts");
-
+  test("missing --project: fails before the use case runs (B5)", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
     const result = await runLogin(
       "anthropic",
-      { project: "no-such-project", name: "my-cred" },
-      {
-        getProvider: (_id) => makeFakeProvider("anthropic"),
-        saveCredential: async () => {
-          throw new UnknownReferenceError("project", "no-such-project");
-        },
-      },
+      { name: "c" },
+      deps(provider, io),
     );
-
     assert.equal(result.exitCode, 1);
-    assert.equal(result.stderr.length, 1, "exactly one error line");
-    assert.equal(result.stdout.length, 0, "no stdout on failure");
+    assert.equal(calls.length, 0, "use case must not run without --project");
+    assert.equal(result.stderr.length, 1);
+  });
+
+  test("missing provider argument: exit 1, use case not called", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+    const result = await runLogin(
+      "",
+      { project: PROJECT_ID, name: "c" },
+      deps(provider, io),
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(calls.length, 0);
+  });
+
+  test("invalid --method: exit 1, use case not called", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+    const result = await runLogin(
+      "openai-codex",
+      { project: PROJECT_ID, name: "c", method: "carrier-pigeon" },
+      deps(provider, io),
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(calls.length, 0);
+    assert.match(result.stderr[0] ?? "", /method/);
   });
 });

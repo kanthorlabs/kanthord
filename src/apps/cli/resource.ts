@@ -1,6 +1,17 @@
 import type { AddResource } from "../../app/resource/add-resource.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 
+// Mirrors the domain ReasoningEffort union (apps must not import domain
+// directly — the domain re-validates on its side).
+const REASONING_EFFORTS = [
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const;
+type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
 function requireFlag(args: Record<string, unknown>, flag: string): string {
@@ -114,6 +125,19 @@ export async function runCreateAiProvider(
     const model = requireFlag(args, "model");
     const baseUrl =
       typeof args["base-url"] === "string" ? args["base-url"] : undefined;
+    let effort: ReasoningEffort | undefined;
+    if (typeof args["effort"] === "string" && args["effort"] !== "") {
+      if (!(REASONING_EFFORTS as readonly string[]).includes(args["effort"])) {
+        return {
+          exitCode: 1,
+          stdout: [],
+          stderr: [
+            `error: invalid effort "${args["effort"]}": must be one of ${REASONING_EFFORTS.join(", ")}`,
+          ],
+        };
+      }
+      effort = args["effort"] as ReasoningEffort;
+    }
     const id = await addResource.execute({
       type: "ai_provider",
       projectId,
@@ -121,6 +145,7 @@ export async function runCreateAiProvider(
       provider,
       model,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...(effort !== undefined ? { effort } : {}),
     });
     return {
       exitCode: 0,
