@@ -4,8 +4,9 @@
  * Mirrors the Proof block in .agent/plan/epics/007.1-e2e-hardening.md (Part A).
  * No model, no network — pure CLI + real git in temp dirs.
  *
- * RED today: C1 `import graph --bind` not wired in router.ts (--bind is not in
- * the parse config and findResourcesByName / getResource are not injected).
+ * Exercises resource-safe updates, `import graph --bind` context binding, local
+ * `land repository`, and `export diagnostic` end to end through the Commander
+ * CLI (runCli).
  */
 
 import { test } from "node:test";

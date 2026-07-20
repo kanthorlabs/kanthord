@@ -75,16 +75,16 @@ class FakeTaskRepository implements TaskRepository {
 }
 
 // ---------------------------------------------------------------------------
-// B1 regression — `list task --status` end-to-end wiring through dispatch
+// B1 regression — `list task --status` end-to-end wiring through the CLI
 // ---------------------------------------------------------------------------
 //
-// Two problems prevent end-to-end status filtering:
-//   1. The "list task" COMMANDS entry in router.ts has no `status` parse option
-//      → parseArgs strict mode rejects --status → exit 1 before handler is called.
-//   2. runListTasks never reads args["status"] and never forwards it to
-//      listTasks.execute(), so even if the flag were parsed it would be ignored.
+// Two problems originally prevented end-to-end status filtering:
+//   1. the "list task" command had no `--status` option → the parser rejected
+//      --status → exit 1 before the handler was called.
+//   2. runListTasks never read the status arg and never forwarded it to
+//      listTasks.execute(), so even if parsed it would be ignored.
 //
-// This test dispatches through the real router path.
+// This test dispatches through the real Commander CLI path (runCli).
 
 const AWAITING_TASK: Task = {
   id: "01JWZYQR00000000000000000E",
