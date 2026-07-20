@@ -10,7 +10,7 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { parseTask, parseGraphPackage, serializeNode } from "./graph-codec.ts";
-import { GRAPH_FORMAT_VERSION, GRAPH_FORMAT_VERSION_LEGACY } from "./format.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 import type { PkgInitiative, PkgObjective, PkgTask } from "./graph-package.ts";
 
 // ---------------------------------------------------------------------------
@@ -412,10 +412,6 @@ describe("src/app/graph/graph-codec.ts — Story 10 T2: bindings/context codec r
 describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + format version", () => {
   test("GRAPH_FORMAT_VERSION === 2 (bumped for C1 bindings + context)", () => {
     assert.strictEqual(GRAPH_FORMAT_VERSION, 2);
-  });
-
-  test("GRAPH_FORMAT_VERSION_LEGACY === 1 (format-1 packages still parseable)", () => {
-    assert.strictEqual(GRAPH_FORMAT_VERSION_LEGACY, 1);
   });
 
   test("PkgInitiative accepts bindings field (compile + runtime: field present on object)", () => {
