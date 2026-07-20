@@ -25,12 +25,19 @@ describe("src/apps/cli/credential-input.ts", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  // (a) trailing LF is stripped
-  test("readCredentialValue valuefile: trailing LF is stripped", async () => {
+  // (a) trailing LF is stripped and the read timeout is cleared
+  test("readCredentialValue valuefile: clears the read timeout after success", async (t) => {
     const f = join(tmpDir, "a.txt");
     await writeFile(f, "sk-abc\n");
-    const result = await readCredentialValue({ valuefile: f, timeoutMs: 5000 });
+    const originalClearTimeout = globalThis.clearTimeout;
+    const clearTimeout = t.mock.method(
+      globalThis,
+      "clearTimeout",
+      originalClearTimeout,
+    );
+    const result = await readCredentialValue({ valuefile: f, timeoutMs: 1000 });
     assert.equal(result, "sk-abc");
+    assert.equal(clearTimeout.mock.callCount(), 1);
   });
 
   // (b) trailing CRLF is stripped

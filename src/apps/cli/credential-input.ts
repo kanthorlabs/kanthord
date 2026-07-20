@@ -81,18 +81,23 @@ export async function readCredentialValue(opts: {
   }
 
   if (valuefile !== undefined) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(
+      timer = setTimeout(
         () => reject(new CredentialReadTimeoutError(timeoutMs)),
         timeoutMs,
       );
     });
-    const buf = await Promise.race([readFile(valuefile), timeoutPromise]);
-    const value = stripTrailingNewline(buf);
-    if (value === "") {
-      throw new EmptyCredentialError();
+    try {
+      const buf = await Promise.race([readFile(valuefile), timeoutPromise]);
+      const value = stripTrailingNewline(buf);
+      if (value === "") {
+        throw new EmptyCredentialError();
+      }
+      return value;
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
-    return value;
   }
 
   if (tty !== undefined) {
