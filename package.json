@@ -10,7 +10,7 @@
   "packageManager": "npm@11.18.0",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test",
+    "test": "node --test --test-reporter=./scripts/test-reporter.js",
     "verify:handoff": "node scripts/verify-handoff.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
