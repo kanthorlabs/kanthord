@@ -41,7 +41,7 @@ test("FakeModelCatalog: constructed with no args rejects every pair", () => {
   );
 });
 
-test("UnknownModelError: has name, provider, model fields and message contains 'get models'", () => {
+test("UnknownModelError: has name, provider, model fields and message contains 'list model'", () => {
   const err = new UnknownModelError("openai-codex", "no-such");
   assert.equal(err.name, "UnknownModelError", "name is 'UnknownModelError'");
   assert.equal(
@@ -51,8 +51,12 @@ test("UnknownModelError: has name, provider, model fields and message contains '
   );
   assert.equal(err.model, "no-such", "model field matches constructor arg");
   assert.ok(
-    err.message.includes("get models"),
-    `message must contain 'get models' — got: ${err.message}`,
+    err.message.includes("list model"),
+    `message must contain 'list model' — got: ${err.message}`,
+  );
+  assert.ok(
+    !err.message.includes("get models"),
+    "message must not point to the removed route",
   );
   assert.ok(err instanceof Error, "UnknownModelError extends Error");
 });

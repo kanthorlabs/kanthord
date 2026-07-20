@@ -87,8 +87,8 @@ test("UpdateAiProvider execute: model update with rejecting catalog throws Unkno
       assert.equal(err.provider, "openai-codex");
       assert.equal(err.model, "no-such-model");
       assert.ok(
-        err.message.includes("get models"),
-        "message should mention 'get models'",
+        err.message.includes("list model"),
+        "message should mention 'list model'",
       );
       return true;
     },

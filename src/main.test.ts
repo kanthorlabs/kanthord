@@ -84,3 +84,12 @@ test("KANTHORD_MAX_TURNS unset: startup succeeds with default 50 turns", () => {
     `exit code must be 0 when KANTHORD_MAX_TURNS is unset, got: ${result.status}\nstderr: ${result.stderr}`,
   );
 });
+
+test("main exposes the Commander program help tree", () => {
+  const result = runMain(["--help"], {});
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Usage: kanthord/);
+  assert.match(result.stdout, /create/);
+  assert.match(result.stdout, /db/);
+});

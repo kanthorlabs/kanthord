@@ -2,7 +2,7 @@
 // without launching a process. Only this file (and main.ts) import concrete adapters.
 import { dirname, join } from "node:path";
 import { access } from "node:fs/promises";
-import type { RouterDeps } from "./apps/cli/router.ts";
+import type { CliDeps } from "./apps/cli/deps.ts";
 import { openDatabase } from "./storage/sqlite/open.ts";
 import { SqliteStatusStore } from "./storage/sqlite/sqlite-status-store.ts";
 import { SqliteMigrator } from "./storage/sqlite/sqlite-migrator.ts";
@@ -90,13 +90,13 @@ import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { isRepository } from "./domain/resource.ts";
 
 /**
- * Wire all concrete adapters and return the `RouterDeps` bundle.
+ * Wire all concrete adapters and return the `CliDeps` bundle.
  * Called once at program start (and by integration tests).
  */
 export function buildDeps(
   dbPath: string,
   opts?: { maxTurns?: number; sessionFactory?: ProviderSessionFactory },
-): RouterDeps {
+): CliDeps {
   const db = openDatabase(dbPath);
   const migrator = new SqliteMigrator(db, MIGRATIONS);
   const store = new SqliteStatusStore(db, dbPath);

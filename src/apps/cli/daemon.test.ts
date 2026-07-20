@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 import { runDaemon } from "./daemon.ts";
 import type { Logger } from "../../logger/port.ts";
 import type { RunDaemon } from "../../app/task/run-daemon.ts";
@@ -70,7 +70,7 @@ test("daemon run --until-idle: fake@1 task exits 0 and task is completed", async
   try {
     const { deps, INITIATIVE } = await setupReadyTask(join(dir, "kanthord.db"));
 
-    const result = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const result = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(result.exitCode, 0, "daemon run exits 0");
 
     const list = await dispatch(
@@ -95,7 +95,7 @@ test("daemon run --runner fake: exits 1 (--runner flag removed in T2)", async ()
     await dispatch(["db", "migrate"], deps);
 
     const result = await dispatch(
-      ["daemon", "run", "--runner", "fake", "--until-idle"],
+      ["run", "daemon", "--runner", "fake", "--until-idle"],
       deps,
     );
     assert.equal(
@@ -125,7 +125,7 @@ test("daemon run --fail <id>: scripted task fails, exits 1", async () => {
     );
 
     const result = await dispatch(
-      ["daemon", "run", "--fail", TASK_ID, "--until-idle"],
+      ["run", "daemon", "--fail", TASK_ID, "--until-idle"],
       deps,
     );
     assert.equal(result.exitCode, 1, "exits 1 when a task fails");
@@ -152,7 +152,7 @@ test("daemon run --poll-interval abc: exits 1 with a validation error (not 'unkn
     await dispatch(["db", "migrate"], deps);
 
     const result = await dispatch(
-      ["daemon", "run", "--poll-interval", "abc", "--until-idle"],
+      ["run", "daemon", "--poll-interval", "abc", "--until-idle"],
       deps,
     );
     assert.equal(result.exitCode, 1, "exits 1 for invalid poll-interval");

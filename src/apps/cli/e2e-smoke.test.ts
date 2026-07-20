@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 

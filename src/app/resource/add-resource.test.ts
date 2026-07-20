@@ -433,8 +433,8 @@ describe("AddResource", () => {
         assert.equal(err.provider, "openai-codex", "provider field must match");
         assert.equal(err.model, "no-such-model", "model field must match");
         assert.ok(
-          err.message.includes("get models"),
-          `message must contain 'get models', got: ${err.message}`,
+          err.message.includes("list model"),
+          `message must contain 'list model', got: ${err.message}`,
         );
         return true;
       },

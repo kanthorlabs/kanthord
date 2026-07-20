@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 import { FakeSessionFactory } from "../../agent-runner/fake-session.ts";
 import type { FakeTurn } from "../../agent-runner/fake-session.ts";
 import type { ProviderSessionFactory } from "../../agent-runner/pi-session.ts";
@@ -309,7 +309,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     const TASK1 = t1.stdout[0]!;
     assert.match(TASK1, ULID_RE, "task1 is a ULID");
 
-    const d1 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d1 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d1.exitCode, 0, "Phase 1 daemon exits 0");
 
     // get task 1 with --json
@@ -366,7 +366,10 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     }
 
     // events: task.started → agent.started → ≥1 agent.progress → agent.finished → task.completed
-    const ev1 = await dispatch(["events", "--after", "0", "--json"], deps);
+    const ev1 = await dispatch(
+      ["list", "event", "--after", "0", "--json"],
+      deps,
+    );
     assert.equal(ev1.exitCode, 0, "events exits 0");
     const task1Events = ev1.stdout
       .map((line) => JSON.parse(line) as { type: string; taskId: string })
@@ -440,7 +443,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     const TASK3 = t3.stdout[0]!;
     assert.match(TASK3, ULID_RE);
 
-    const d2 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d2.exitCode, 0, "Phase 2 first daemon exits 0");
     assert.ok(
       d2.stderr.some((l) => l.includes("1 task(s) awaiting confirmation")),
@@ -482,7 +485,10 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     }
 
     // task.escalated event has reason = "need human review"
-    const ev2 = await dispatch(["events", "--after", "0", "--json"], deps);
+    const ev2 = await dispatch(
+      ["list", "event", "--after", "0", "--json"],
+      deps,
+    );
     const task2EscalatedEvent = ev2.stdout
       .map(
         (line) =>
@@ -554,7 +560,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     }
 
     // second daemon run completes TASK3
-    const d3 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d3 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d3.exitCode, 0, "Phase 2 second daemon exits 0");
 
     const g3after = await dispatch(
@@ -569,7 +575,10 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     );
 
     // events: task.escalated → task.approved → task.completed for TASK2
-    const ev3 = await dispatch(["events", "--after", "0", "--json"], deps);
+    const ev3 = await dispatch(
+      ["list", "event", "--after", "0", "--json"],
+      deps,
+    );
     const task2Events = ev3.stdout
       .map((line) => JSON.parse(line) as { type: string; taskId: string })
       .filter((e) => e.taskId === TASK2)
@@ -660,7 +669,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
     const TASK_RETRY = t.stdout[0]!;
 
     // first daemon run → escalates
-    const d1 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d1 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d1.exitCode, 0, "first daemon exits 0 (escalated)");
     assert.ok(
       d1.stderr.some((l) => l.includes("1 task(s) awaiting confirmation")),
@@ -692,7 +701,10 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
     assert.equal(retryData.status, "pending", "rejected-retry task is pending");
 
     // no task.failed event was emitted
-    const ev = await dispatch(["events", "--after", "0", "--json"], deps);
+    const ev = await dispatch(
+      ["list", "event", "--after", "0", "--json"],
+      deps,
+    );
     const failedEvents = ev.stdout
       .map((line) => JSON.parse(line) as { type: string; taskId: string })
       .filter((e) => e.taskId === TASK_RETRY && e.type === "task.failed");
@@ -703,7 +715,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
     );
 
     // second daemon run → completes
-    const d2 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d2.exitCode, 0, "second daemon exits 0 (completed)");
 
     const gFinal = await dispatch(
@@ -794,7 +806,7 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
     const TASK_DEP = tdep.stdout[0]!;
 
     // first daemon run → TASK_DISCARD escalates
-    const d1 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d1 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d1.exitCode, 0, "daemon exits 0 after escalation");
     assert.ok(
       d1.stderr.some((l) => l.includes("1 task(s) awaiting confirmation")),
@@ -817,7 +829,10 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
     assert.equal(discardData.status, "discarded", "TASK_DISCARD is discarded");
 
     // events: task.discarded + task.blocked for TASK_DEP
-    const ev = await dispatch(["events", "--after", "0", "--json"], deps);
+    const ev = await dispatch(
+      ["list", "event", "--after", "0", "--json"],
+      deps,
+    );
     const allEvents = ev.stdout.map(
       (line) =>
         JSON.parse(line) as {
@@ -844,7 +859,7 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
     );
 
     // daemon run — exits 0, dependent never runs
-    const d2 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d2.exitCode, 0, "daemon exits 0 when dependent is blocked");
 
     // TASK_DEP dependencyStatus shows the discarded dependency
@@ -940,7 +955,7 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
     const TASK4 = t4.stdout[0]!;
 
     // daemon exits 1 (EPIC 005 contract: failed task → non-zero exit)
-    const d4 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d4 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d4.exitCode, 1, "Phase 4 daemon exits 1 for credential error");
 
     // task is failed
@@ -953,7 +968,10 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
     assert.equal(task4Data.status, "failed", "TASK4 is failed");
 
     // task.failed event reason starts with "CredentialError"
-    const ev4 = await dispatch(["events", "--after", "0", "--json"], deps);
+    const ev4 = await dispatch(
+      ["list", "event", "--after", "0", "--json"],
+      deps,
+    );
     const failedEvent = ev4.stdout
       .map(
         (line) =>

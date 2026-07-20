@@ -12,7 +12,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,9 +70,9 @@ test("T4a: dispatch update ai-provider with valid model (gpt-5.6-sol) returns ex
 });
 
 // ---------------------------------------------------------------------------
-// T4b: update ai-provider with unknown model → exitCode 1 with 'get models'
+// T4b: update ai-provider with unknown model → exitCode 1 with 'list model'
 // ---------------------------------------------------------------------------
-test("T4b: dispatch update ai-provider with unknown model returns exitCode 1 with 'get models' in stderr", async () => {
+test("T4b: dispatch update ai-provider with unknown model returns exitCode 1 with 'list model' in stderr", async () => {
   const { dir, dbPath } = makeDb();
   try {
     const deps = buildDeps(dbPath);
@@ -103,8 +103,8 @@ test("T4b: dispatch update ai-provider with unknown model returns exitCode 1 wit
       `command must exist; got "unknown command" → add 'update ai-provider' to COMMANDS. stderr: ${result.stderr.join("")}`,
     );
     assert.ok(
-      result.stderr.join("").toLowerCase().includes("get models"),
-      `expected 'get models' from UnknownModelError in stderr, got: ${result.stderr.join("")}`,
+      result.stderr.join("").toLowerCase().includes("list model"),
+      `expected 'list model' from UnknownModelError in stderr, got: ${result.stderr.join("")}`,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

@@ -95,6 +95,9 @@ export async function runEvents(
 
     // Full page → re-read immediately without sleeping.
     if (limit !== undefined && page.length === limit) {
+      if (follow) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
       continue;
     }
 

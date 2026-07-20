@@ -21,7 +21,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
@@ -144,8 +144,8 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
       `D3: unknown model must exit 1; got exitCode: ${rBadAip.exitCode}`,
     );
     assert.ok(
-      rBadAip.stderr.some((l) => /get models/i.test(l)),
-      `D3: stderr must mention 'get models' for unknown model; got: ${JSON.stringify(rBadAip.stderr)}`,
+      rBadAip.stderr.some((l) => /list model/i.test(l)),
+      `D3: stderr must mention 'list model' for unknown model; got: ${JSON.stringify(rBadAip.stderr)}`,
     );
 
     // D3(b): known (provider, model) pair succeeds
@@ -443,8 +443,8 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
     // C2: repo land lands candidate to home/main
     const rLand = await dispatch(
       [
-        "repo",
         "land",
+        "repository",
         "--repository",
         REPO,
         "--workspace",
@@ -480,8 +480,8 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
     // D5: re-landing the same candidate is idempotent
     const rReLand = await dispatch(
       [
-        "repo",
         "land",
+        "repository",
         "--repository",
         REPO,
         "--workspace",
@@ -507,7 +507,7 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
 
     const diagOut = join(tmp, "diag.json");
     const rDiag = await dispatch(
-      ["diagnostics", "export", "--initiative", INITIATIVE, "--out", diagOut],
+      ["export", "diagnostic", "--initiative", INITIATIVE, "--out", diagOut],
       deps,
     );
     assert.equal(

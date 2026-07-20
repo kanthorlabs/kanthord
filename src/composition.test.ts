@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "./composition.ts";
-import { dispatch } from "./apps/cli/router.ts";
+import { runCli as dispatch } from "./apps/cli/commands/run-cli.ts";
 
 // Story 03 T3 — get resource via dispatch: credential value absent from stdout (D6 + composition wiring)
 // Characterization test: the SE implemented the composition.ts wiring in T2's GREEN phase.
@@ -46,15 +46,15 @@ test("T3: dispatch get resource returns credential view with canary value absent
 
 // ---------------------------------------------------------------------------
 // Story 04 T4 — CLI: remove --allow-unknown-model / --base-url; surface
-// UnknownModelError as exitCode 1 with "get models" in stderr.
+// UnknownModelError as exitCode 1 with "list model" in stderr.
 // ---------------------------------------------------------------------------
 
 // T4a: PRIMARY RED test.
 // UnknownModelError from PiModelCatalog (via buildDeps) must be handled by
-// toResult → exitCode 1 with "get models" in stderr.
+// toResult → exitCode 1 with "list model" in stderr.
 // FAILS today: UnknownModelError is not in toResult's guard, so it re-throws;
 // dispatch propagates the exception instead of returning { exitCode: 1, ... }.
-test("T4a: dispatch create ai-provider with unknown model returns exitCode 1 with 'get models' in stderr", async () => {
+test("T4a: dispatch create ai-provider with unknown model returns exitCode 1 with 'list model' in stderr", async () => {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-t4a-"));
   const dbPath = join(dir, "kanthord.db");
   try {
@@ -82,8 +82,8 @@ test("T4a: dispatch create ai-provider with unknown model returns exitCode 1 wit
 
     assert.equal(result.exitCode, 1, "unknown model must return exitCode 1");
     assert.ok(
-      result.stderr.join("").toLowerCase().includes("get models"),
-      `expected 'get models' in stderr, got: ${result.stderr.join("")}`,
+      result.stderr.join("").toLowerCase().includes("list model"),
+      `expected 'list model' in stderr, got: ${result.stderr.join("")}`,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

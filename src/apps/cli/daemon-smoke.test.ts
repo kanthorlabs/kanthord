@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
@@ -160,7 +160,7 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
       await runEpic004Setup(deps);
 
     // ── Phase 1: daemon run until-idle ──────────────────────────────────────
-    const d1 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d1 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d1.exitCode, 0, "phase 1: daemon exits 0");
 
     // All three tasks completed.
@@ -184,7 +184,7 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     );
 
     // Events: lifecycle stream (human output on stderr).
-    const ev1 = await dispatch(["events", "--after", "0"], deps);
+    const ev1 = await dispatch(["list", "event", "--after", "0"], deps);
     assert.equal(ev1.exitCode, 0, "events exits 0");
     const evLines = ev1.stderr;
     assert.ok(evLines.length > 0, "events returns at least one line");
@@ -264,11 +264,11 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     const TASK_MORE = newTaskR.stdout[0]!;
     assert.match(TASK_MORE, ULID_RE);
 
-    const d2 = await dispatch(["daemon", "run", "--until-idle"], deps);
+    const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d2.exitCode, 0, "phase 2: daemon exits 0");
 
     // Only the new task ran: event count grew by exactly 3 (ready + started + completed).
-    const ev2 = await dispatch(["events", "--after", "0"], deps);
+    const ev2 = await dispatch(["list", "event", "--after", "0"], deps);
     assert.equal(ev2.exitCode, 0);
     const evLines2 = ev2.stderr;
     assert.equal(
@@ -309,7 +309,7 @@ test("daemon smoke — phase 3 (fresh DB): --fail deploy exits non-zero; task.fa
 
     // daemon run with --fail $TASK_DEPLOY
     const d = await dispatch(
-      ["daemon", "run", "--fail", TASK_DEPLOY, "--until-idle"],
+      ["run", "daemon", "--fail", TASK_DEPLOY, "--until-idle"],
       deps,
     );
     assert.notEqual(
@@ -331,7 +331,7 @@ test("daemon smoke — phase 3 (fresh DB): --fail deploy exits non-zero; task.fa
     );
 
     // The task.failed event for deploy must exist and carry a reason.
-    const ev = await dispatch(["events", "--after", "0"], deps);
+    const ev = await dispatch(["list", "event", "--after", "0"], deps);
     assert.equal(ev.exitCode, 0);
     const failedLine = ev.stderr.find(
       (l) => l.includes("task.failed") && l.includes(TASK_DEPLOY),

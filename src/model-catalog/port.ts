@@ -11,7 +11,7 @@ export interface ModelCatalog {
 
 /**
  * Thrown by AddResource and UpdateAiProvider when the (provider, model) pair
- * is not in the catalog. Message must contain "get models" verbatim so that the
+ * is not in the catalog. Message must contain "list model" verbatim so that the
  * CLI error-map can forward it to stderr and the Proof's grep check passes.
  */
 export class UnknownModelError extends Error {
@@ -20,7 +20,7 @@ export class UnknownModelError extends Error {
 
   constructor(provider: string, model: string) {
     super(
-      `Unknown (provider, model) pair: "${provider}" / "${model}". Run \`get models\` to see available models.`,
+      `Unknown (provider, model) pair: "${provider}" / "${model}". Run \`list model\` to see available models.`,
     );
     this.name = "UnknownModelError";
     this.provider = provider;

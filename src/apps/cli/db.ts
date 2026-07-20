@@ -1,5 +1,5 @@
-import type { MigrateDb } from "../../app/db/migrate-db.ts";
-import type { GetDbStatus } from "../../app/db/get-db-status.ts";
+import type { DbStatus } from "../../app/db/get-db-status.ts";
+import type { MigrationReport } from "../../app/db/migrate-db.ts";
 
 /** Result shape returned by both db CLI handlers. */
 export interface CliResult {
@@ -8,12 +8,22 @@ export interface CliResult {
   stderr: string[];
 }
 
+interface DatabaseMigrator {
+  execute(): Promise<MigrationReport>;
+}
+
+interface DatabaseStatusReader {
+  execute(): Promise<DbStatus>;
+}
+
 /**
  * Run `db migrate`: apply pending migrations and format the report.
  * On success: one `applied: V name` line per entry, or `up to date`.
  * On throw: applied lines to stdout + error line to stderr, exit 1.
  */
-export async function runDbMigrate(migrateDb: MigrateDb): Promise<CliResult> {
+export async function runDbMigrate(
+  migrateDb: DatabaseMigrator,
+): Promise<CliResult> {
   try {
     const report = await migrateDb.execute();
     const stdout =
@@ -45,7 +55,7 @@ export async function runDbMigrate(migrateDb: MigrateDb): Promise<CliResult> {
  * and one line per table.
  */
 export async function runDbStatus(
-  getDbStatus: GetDbStatus,
+  getDbStatus: DatabaseStatusReader,
 ): Promise<CliResult> {
   const status = await getDbStatus.execute();
   const stdout: string[] = [

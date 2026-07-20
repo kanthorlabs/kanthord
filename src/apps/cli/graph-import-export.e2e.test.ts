@@ -26,7 +26,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
-import { dispatch } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
@@ -118,7 +118,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
 
   // import graph --create --project
   const rCreate = await dispatch(
-    ["import", "graph", "--dir", srcDir, "--create", "--project", PROJECT],
+    ["import", "graph", srcDir, "--create", "--project", PROJECT],
     deps,
   );
   assert.equal(rCreate.exitCode, 0, "import graph --create exits 0");
@@ -180,7 +180,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
   // Leg 2: EXPORT → cosmetic tree + manifest; created file carries ULID
   // -----------------------------------------------------------------------
   const rExport = await dispatch(
-    ["export", "initiative", "--id", INITIATIVE, "--out", exportDir1],
+    ["export", "initiative", INITIATIVE, "--out", exportDir1],
     deps,
   );
   assert.equal(rExport.exitCode, 0, "export initiative exits 0");
@@ -250,7 +250,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
   );
 
   const rApplyUpdate = await dispatch(
-    ["import", "graph", "--dir", pkgDir, "--apply", "--initiative", INITIATIVE],
+    ["import", "graph", pkgDir, "--apply", "--initiative", INITIATIVE],
     deps,
   );
   assert.equal(
@@ -328,7 +328,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
 
   // First apply: 1 created
   const rApplyCreate1 = await dispatch(
-    ["import", "graph", "--dir", pkgDir, "--apply", "--initiative", INITIATIVE],
+    ["import", "graph", pkgDir, "--apply", "--initiative", INITIATIVE],
     deps,
   );
   assert.equal(rApplyCreate1.exitCode, 0, "apply (id-less create) exits 0");
@@ -348,7 +348,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
 
   // Second apply: 0 created (no dup — durable idempotency)
   const rApplyCreate2 = await dispatch(
-    ["import", "graph", "--dir", pkgDir, "--apply", "--initiative", INITIATIVE],
+    ["import", "graph", pkgDir, "--apply", "--initiative", INITIATIVE],
     deps,
   );
   assert.equal(rApplyCreate2.exitCode, 0, "re-apply (idempotency) exits 0");
@@ -383,7 +383,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
   writeFileSync(deployPath, deployReparented);
 
   const rApplyReparent = await dispatch(
-    ["import", "graph", "--dir", pkgDir, "--apply", "--initiative", INITIATIVE],
+    ["import", "graph", pkgDir, "--apply", "--initiative", INITIATIVE],
     deps,
   );
   assert.equal(rApplyReparent.exitCode, 0, "apply (reparent) exits 0");
@@ -426,7 +426,6 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
     [
       "import",
       "graph",
-      "--dir",
       pkgDir,
       "--apply",
       "--initiative",
@@ -454,7 +453,6 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
     [
       "import",
       "graph",
-      "--dir",
       pkgDir,
       "--apply",
       "--initiative",
@@ -490,7 +488,6 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
     [
       "import",
       "graph",
-      "--dir",
       pkgDir,
       "--apply",
       "--initiative",
@@ -522,7 +519,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
   // -----------------------------------------------------------------------
   // Export fresh → edit → apply → bumps implement-api sha in DB
   const rExport2 = await dispatch(
-    ["export", "initiative", "--id", INITIATIVE, "--out", exportDir2],
+    ["export", "initiative", INITIATIVE, "--out", exportDir2],
     deps,
   );
   assert.equal(rExport2.exitCode, 0, "second export exits 0");
@@ -536,15 +533,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
 
   // Apply the fresh export → bumps implement-api sha in DB
   const rApplyFresh = await dispatch(
-    [
-      "import",
-      "graph",
-      "--dir",
-      pkgDir2,
-      "--apply",
-      "--initiative",
-      INITIATIVE,
-    ],
+    ["import", "graph", pkgDir2, "--apply", "--initiative", INITIATIVE],
     deps,
   );
   assert.equal(rApplyFresh.exitCode, 0, "fresh-export apply exits 0");
@@ -557,7 +546,7 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
   // Now re-apply the STALE pkgDir (which has the old sha in its manifest).
   // The preflight should detect the drift and reject.
   const rApplyStale = await dispatch(
-    ["import", "graph", "--dir", pkgDir, "--apply", "--initiative", INITIATIVE],
+    ["import", "graph", pkgDir, "--apply", "--initiative", INITIATIVE],
     deps,
   );
   assert.notEqual(

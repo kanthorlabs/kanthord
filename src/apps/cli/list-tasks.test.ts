@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { runListTasks } from "./list-tasks.ts";
-import { dispatch } from "./router.ts";
-import type { RouterDeps } from "./router.ts";
+import { runCli as dispatch } from "./commands/run-cli.ts";
+import type { CliDeps } from "./deps.ts";
 import type { TaskRepository } from "../../storage/port.ts";
 import type { Task } from "../../domain/task.ts";
 import { ListTasks } from "../../app/task/list-tasks.ts";
@@ -154,7 +154,7 @@ class FakeTaskRepositoryB1 implements TaskRepository {
 test("(B1 regression) dispatch list task --status awaiting_confirmation exits 0 and returns only matching tasks", async () => {
   const deps = {
     listTasks: new ListTasks(new FakeTaskRepositoryB1()),
-  } as unknown as RouterDeps;
+  } as unknown as CliDeps;
 
   const result = await dispatch(
     [

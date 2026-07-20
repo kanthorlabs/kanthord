@@ -1,75 +1,81 @@
+import { readFileSync } from "node:fs";
+
 import { Command } from "commander";
 
-import type { MigrateDb } from "../../app/db/migrate-db.ts";
-import type { GetDbStatus } from "../../app/db/get-db-status.ts";
-import { runGraphCheck } from "./graph-check.ts";
-import { runDbMigrate, runDbStatus } from "./db.ts";
+import { buildAddCommand } from "./commands/add.ts";
+import { buildApproveCommand } from "./commands/approve.ts";
+import { buildCheckCommand } from "./commands/check.ts";
+import { processIo } from "./commands/action.ts";
+import type { CliIo } from "./commands/action.ts";
+import { buildCreateCommand } from "./commands/create.ts";
+import { buildDbCommand } from "./commands/db.ts";
+import { buildExportCommand } from "./commands/export.ts";
+import { buildFindCommand } from "./commands/find.ts";
+import { buildGetCommand } from "./commands/get.ts";
+import { buildImportCommand } from "./commands/import.ts";
+import { buildLandCommand } from "./commands/land.ts";
+import { buildListCommand } from "./commands/list.ts";
+import { buildLoginCommand } from "./commands/login.ts";
+import { buildPauseCommand } from "./commands/pause.ts";
+import { buildRejectCommand } from "./commands/reject.ts";
+import { buildRemoveCommand } from "./commands/remove.ts";
+import { buildRenameCommand } from "./commands/rename.ts";
+import { buildResumeCommand } from "./commands/resume.ts";
+import { buildRetryCommand } from "./commands/retry.ts";
+import { buildRunCommand } from "./commands/run.ts";
+import { buildUpdateCommand } from "./commands/update.ts";
+import type { CliDeps } from "./deps.ts";
 
-/** Use cases the CLI drives. Constructed in main.ts and injected here. */
-export interface CliDeps {
-  migrateDb: MigrateDb;
-  getDbStatus: GetDbStatus;
-}
+const packageVersion = (
+  JSON.parse(
+    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+  ) as { version: string }
+).version;
 
-/** Build the `kanthord` command tree. Thin: parse, call use case, format. */
-export function buildProgram(deps: CliDeps): Command {
-  const program = new Command();
-  program.name("kanthord").description("kanthord daemon CLI");
+/** Build the `kanthord` Commander command tree. */
+export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
+  const create = buildCreateCommand(deps, io).name("create");
+  const rename = buildRenameCommand(deps, io).name("rename");
+  const pause = buildPauseCommand(deps, io).name("pause");
+  const resume = buildResumeCommand(deps, io).name("resume");
+  const add = buildAddCommand(deps, io).name("add");
+  const remove = buildRemoveCommand(deps, io).name("remove");
+  const retry = buildRetryCommand(deps, io).name("retry");
+  const approve = buildApproveCommand(deps, io).name("approve");
+  const reject = buildRejectCommand(deps, io).name("reject");
+  const get = buildGetCommand(deps, io).name("get");
+  const find = buildFindCommand(deps, io).name("find");
+  const list = buildListCommand(deps, io).name("list");
+  const update = buildUpdateCommand(deps, io).name("update");
+  const importCommand = buildImportCommand(deps, io).name("import");
+  const exportCommand = buildExportCommand(deps, io).name("export");
+  const login = buildLoginCommand(deps, io).name("login");
+  const run = buildRunCommand(deps, io).name("run");
+  const land = buildLandCommand(deps, io).name("land");
 
-  // ------------------------------------------------------------------
-  // check group
-  // ------------------------------------------------------------------
-  const check = new Command("check").description("validation commands");
-
-  check
-    .command("graph")
-    .description("validate a task graph YAML file and print readiness")
-    .requiredOption("--path <file>", "path to the graph YAML file")
-    .action(async (opts: { path: string }) => {
-      const result = await runGraphCheck(opts.path);
-      for (const line of result.stdout) {
-        process.stdout.write(line + "\n");
-      }
-      for (const line of result.stderr) {
-        process.stderr.write(line + "\n");
-      }
-      process.exitCode = result.exitCode;
-    });
-
-  program.addCommand(check);
-
-  // ------------------------------------------------------------------
-  // db group
-  // ------------------------------------------------------------------
-  const db = new Command("db").description("database commands");
-
-  db.command("migrate")
-    .description("apply pending migrations")
-    .action(async () => {
-      const result = await runDbMigrate(deps.migrateDb);
-      for (const line of result.stdout) {
-        process.stdout.write(line + "\n");
-      }
-      for (const line of result.stderr) {
-        process.stderr.write(line + "\n");
-      }
-      process.exitCode = result.exitCode;
-    });
-
-  db.command("status")
-    .description("print database status")
-    .action(async () => {
-      const result = await runDbStatus(deps.getDbStatus);
-      for (const line of result.stdout) {
-        process.stdout.write(line + "\n");
-      }
-      for (const line of result.stderr) {
-        process.stderr.write(line + "\n");
-      }
-      process.exitCode = result.exitCode;
-    });
-
-  program.addCommand(db);
-
-  return program;
+  return new Command()
+    .name("kanthord")
+    .description("Kanthord daemon command-line interface.")
+    .version(packageVersion)
+    .showHelpAfterError()
+    .addCommand(buildCheckCommand(deps, io))
+    .addCommand(create)
+    .addCommand(buildDbCommand(deps, io))
+    .addCommand(rename)
+    .addCommand(pause)
+    .addCommand(resume)
+    .addCommand(add)
+    .addCommand(remove)
+    .addCommand(retry)
+    .addCommand(approve)
+    .addCommand(reject)
+    .addCommand(get)
+    .addCommand(find)
+    .addCommand(list)
+    .addCommand(update)
+    .addCommand(importCommand)
+    .addCommand(exportCommand)
+    .addCommand(login)
+    .addCommand(run)
+    .addCommand(land);
 }
