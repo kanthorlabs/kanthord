@@ -85,7 +85,12 @@ import type { Logger } from "./logger/port.ts";
 import { DiagnosticsExport } from "./app/observability/diagnostics-export.ts";
 import { SqliteObservabilityRefs } from "./storage/sqlite/sqlite-observability-refs.ts";
 import { writeFile } from "node:fs/promises";
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFile = promisify(execFileCb);
 import { GitRepositoryLanding } from "./landing/git.ts";
+import { GetConflict } from "./app/task/get-conflict.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { isRepository } from "./domain/resource.ts";
 
@@ -279,6 +284,18 @@ export function buildDeps(
     landingRepository,
   );
 
+  // S3 (007.6): shared feedback hook — reads the note persisted by retryTask.execute.
+  // Exposed in the returned deps so callers and tests can invoke it directly.
+  const getPriorFeedback = (
+    taskId: string,
+  ):
+    | { note?: string; conflictContext?: string; priorSummary?: string }
+    | undefined => {
+    const task = taskRepository.get(taskId);
+    if (!task?.note) return undefined;
+    return { note: task.note };
+  };
+
   function buildDaemon(failTaskIds: string[], logger?: Logger): RunDaemon {
     const effectiveLogger: Logger = logger ?? new NullLogger();
     const fakeRunner = new FakeRunner({ failTaskIds });
@@ -306,15 +323,7 @@ export function buildDeps(
       profiles: new Map([["generic@1", genericProfile]]),
       maxTurns: opts?.maxTurns,
       emit: buildEmitCallback(effectiveLogger, events),
-      getPriorRejection: (taskId) => {
-        const result = taskRepository.getTaskResult(taskId);
-        if (!result?.rejectionReason) return undefined;
-        return {
-          reason: result.rejectionReason,
-          summary: result.summary ?? undefined,
-          proposalCommit: result.proposalCommit ?? undefined,
-        };
-      },
+      getPriorFeedback,
     });
 
     const runners = new Map<string, AgentRunner>([
@@ -375,6 +384,25 @@ export function buildDeps(
     }
     return resource.path;
   };
+
+  const resolveTargetOID = async (
+    homeDir: string,
+    branch: string,
+  ): Promise<string> => {
+    const { stdout } = await execFile(
+      "git",
+      ["rev-parse", `refs/heads/${branch}`],
+      { cwd: homeDir },
+    );
+    return stdout.trim();
+  };
+
+  const getConflict = new GetConflict(
+    landingRepository,
+    repoLanding,
+    resolveHomeDir,
+    resolveTargetOID,
+  );
 
   // Shared workspace manager — used by both the daemon runner and the
   // approve-landing path so homeDir(repoId) resolves the same canonical mirror.
@@ -474,5 +502,7 @@ export function buildDeps(
     resolveHomeDir,
     workspaces,
     newId,
+    getConflict,
+    getPriorFeedback,
   };
 }

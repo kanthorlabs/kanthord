@@ -1764,3 +1764,144 @@ test("(F3 T2) pi runner: no-change workspace resolves to completed (not failed)"
     await ws.cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// S3 (007.6) — getPriorFeedback hook (rename + widen of getPriorRejection)
+// RED: PiAgentRunner currently only accepts getPriorRejection; passing
+// getPriorFeedback is silently ignored → prompt has no note/conflictContext.
+// ---------------------------------------------------------------------------
+
+test("(S3-j-getPriorFeedback-value) PiAgentRunner getPriorFeedback returns { note, conflictContext }: user prompt contains note and context; no conflict markers present", async () => {
+  let capturedMessages: Array<{ role: string; content: unknown }> = [];
+
+  const sessions: ProviderSessionFactory = {
+    async for() {
+      const fake = new FakeSessionFactory([{ text: "done" }]);
+      const streamFn = (model: unknown, context: unknown, opts?: unknown) => {
+        const ctx = context as {
+          messages?: Array<{ role: string; content: unknown }>;
+        };
+        capturedMessages = ctx.messages ?? [];
+        return (fake.streamFn as Function)(model, context, opts);
+      };
+      return {
+        model: {} as unknown as any,
+        streamFn: streamFn as unknown as any,
+        getApiKey: () => "key",
+      } as unknown as any;
+    },
+  };
+
+  // Pass getPriorFeedback — RED: PiAgentRunner only knows getPriorRejection today,
+  // so the hook is ignored and the prompt never includes the note/conflictContext.
+  const runner = new PiAgentRunner({
+    sessions,
+    workspaces: new FakeWorkspaceManager(),
+    newInstructionLoader: (_dir: string) => ({
+      load: () => [] as { path: string; content: string }[],
+    }),
+    getResource: makeGetResource(),
+    profiles: new Map([
+      ["synthetic@1", makeSyntheticProfile("synthetic@1")],
+    ]) as unknown as any,
+    getPriorFeedback: (taskId: string) => {
+      if (taskId === "task-001") {
+        return {
+          note: "keep both event handlers: onSuccess and onError",
+          conflictContext:
+            "target: export function onSuccess() {}\n" +
+            "candidate: export function onSuccess() { console.log('done'); }",
+        };
+      }
+      return undefined;
+    },
+  } as unknown as PiAgentRunnerOptions);
+
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+
+  const userMsgs = capturedMessages.filter((m) => m.role === "user");
+  const promptText = userMsgs
+    .map((m) => {
+      if (typeof m.content === "string") return m.content;
+      if (Array.isArray(m.content)) {
+        return (m.content as Array<{ text?: string }>)
+          .map((c) => c.text ?? "")
+          .join("");
+      }
+      return "";
+    })
+    .join("\n");
+
+  assert.ok(
+    promptText.includes("keep both event handlers: onSuccess and onError"),
+    `user prompt must contain the note text; got snippet: ${promptText.slice(0, 400)}`,
+  );
+  assert.ok(
+    promptText.includes("target: export function onSuccess"),
+    `user prompt must contain the conflictContext; got snippet: ${promptText.slice(0, 400)}`,
+  );
+  assert.ok(
+    !promptText.includes("<<<<<<<"),
+    `user prompt must not contain <<<<<<< conflict markers; got snippet: ${promptText.slice(0, 400)}`,
+  );
+  assert.ok(
+    !promptText.includes(">>>>>>>"),
+    `user prompt must not contain >>>>>>> conflict markers; got snippet: ${promptText.slice(0, 400)}`,
+  );
+});
+
+test("(S3-j-getPriorFeedback-undefined) PiAgentRunner getPriorFeedback returns undefined: user prompt has no feedback block", async () => {
+  let capturedMessages: Array<{ role: string; content: unknown }> = [];
+
+  const sessions: ProviderSessionFactory = {
+    async for() {
+      const fake = new FakeSessionFactory([{ text: "done" }]);
+      const streamFn = (model: unknown, context: unknown, opts?: unknown) => {
+        const ctx = context as {
+          messages?: Array<{ role: string; content: unknown }>;
+        };
+        capturedMessages = ctx.messages ?? [];
+        return (fake.streamFn as Function)(model, context, opts);
+      };
+      return {
+        model: {} as unknown as any,
+        streamFn: streamFn as unknown as any,
+        getApiKey: () => "key",
+      } as unknown as any;
+    },
+  };
+
+  const runner = new PiAgentRunner({
+    sessions,
+    workspaces: new FakeWorkspaceManager(),
+    newInstructionLoader: (_dir: string) => ({
+      load: () => [] as { path: string; content: string }[],
+    }),
+    getResource: makeGetResource(),
+    profiles: new Map([
+      ["synthetic@1", makeSyntheticProfile("synthetic@1")],
+    ]) as unknown as any,
+    getPriorFeedback: () => undefined,
+  } as unknown as PiAgentRunnerOptions);
+
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+
+  const userMsgs = capturedMessages.filter((m) => m.role === "user");
+  const promptText = userMsgs
+    .map((m) => {
+      if (typeof m.content === "string") return m.content;
+      if (Array.isArray(m.content)) {
+        return (m.content as Array<{ text?: string }>)
+          .map((c) => c.text ?? "")
+          .join("");
+      }
+      return "";
+    })
+    .join("\n");
+
+  // No feedback block when getPriorFeedback returns undefined (regression guard)
+  assert.ok(
+    !promptText.includes("keep both"),
+    `prompt must not contain feedback text when getPriorFeedback returns undefined; got snippet: ${promptText.slice(0, 300)}`,
+  );
+});

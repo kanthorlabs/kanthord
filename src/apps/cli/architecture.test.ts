@@ -25,7 +25,7 @@ const INDEX_SRC = join(__dirname, "index.ts");
 const COMMANDS_DIR = join(__dirname, "commands");
 
 /** Number of audited leaves in the EPIC inventory. */
-const EXPECTED_LEAF_COUNT = 46;
+const EXPECTED_LEAF_COUNT = 47;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [

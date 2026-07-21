@@ -3,6 +3,8 @@ import type { RetryTask } from "../../app/task/retry-task.ts";
 import type { GetTask } from "../../app/task/get-task.ts";
 import type { ApproveTask } from "../../app/task/approve-task.ts";
 import type { RejectTask } from "../../app/task/reject-task.ts";
+import type { GetConflict } from "../../app/task/get-conflict.ts";
+import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
@@ -114,8 +116,9 @@ export async function runRetryTask(
   retryTask: RetryTask,
 ): Promise<HandlerResult> {
   const id = args["id"] as string;
+  const note = typeof args["note"] === "string" ? args["note"] : undefined;
   try {
-    await retryTask.execute({ taskId: id });
+    await retryTask.execute({ taskId: id, note });
     return { exitCode: 0, stdout: [], stderr: [`task re-queued: ${id}`] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
@@ -145,7 +148,16 @@ export async function runApproveTask(
         exitCode: 0,
         stdout: [],
         stderr: [
-          `conflict: task ${id} — merge conflict in ${filesPart}; run: retry task --id ${id}, then re-run daemon and approve`,
+          `conflict: task ${id} — merge conflict in ${filesPart}; inspect: get conflict --id ${id}; guide: retry task --id ${id} --note "<guideline>", then re-run daemon and approve`,
+        ],
+      };
+    }
+    if (outcome.kind === "target_moved") {
+      return {
+        exitCode: 0,
+        stdout: [],
+        stderr: [
+          `info: task ${id} — target branch moved during approval; re-run approve to retry`,
         ],
       };
     }
@@ -192,6 +204,36 @@ export async function runRejectTask(
     await rejectTask.execute({ taskId: id, resolution, reason });
     return { exitCode: 0, stdout: [id], stderr: [] };
   } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runGetConflict(
+  args: Record<string, unknown>,
+  getConflict: GetConflict,
+): Promise<HandlerResult> {
+  const id = args["id"];
+  if (typeof id !== "string" || id === "") {
+    return { ...toResult(new MissingFlagError("--id")), stdout: [] };
+  }
+  try {
+    const overview = await getConflict.execute({ taskId: id });
+    const lines: string[] = [];
+    lines.push(`target ${overview.branch}@${overview.targetOID}`);
+    lines.push(`candidate ${overview.taskId}@${overview.candidateOID}`);
+    for (const file of overview.files) {
+      lines.push(`--- ${file.path} ---`);
+      lines.push(file.hunks);
+    }
+    return { exitCode: 0, stdout: lines, stderr: [] };
+  } catch (err) {
+    if (err instanceof NoConflictCandidateError) {
+      return {
+        exitCode: 1,
+        stdout: [],
+        stderr: [`error: no conflict candidate found for task ${id}`],
+      };
+    }
     return { ...toResult(err), stdout: [] };
   }
 }

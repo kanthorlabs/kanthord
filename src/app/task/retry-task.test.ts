@@ -249,6 +249,12 @@ test("RetryTask execute wraps writes in exactly one transaction", async () => {
 class FakeConflictCandidateStore implements ConflictCandidateStore {
   readonly #candidates: Map<string, ChangeCandidate>;
   readonly updatedStates: Array<{ id: string; state: CandidateState }> = [];
+  readonly savedSnapshots: Array<{
+    taskId: string;
+    candidateOID: string;
+    targetOID: string;
+    conflictContext: string;
+  }> = [];
 
   constructor(candidates: ChangeCandidate[]) {
     this.#candidates = new Map(candidates.map((c) => [c.taskId ?? "", c]));
@@ -265,6 +271,19 @@ class FakeConflictCandidateStore implements ConflictCandidateStore {
         this.#candidates.set(key, { ...cand, state });
       }
     }
+  }
+
+  // S3 seam — not yet on ConflictCandidateStore interface; added once SE implements.
+  // The test asserts this is called during conflict recovery; RED today (never called).
+  saveConflictSnapshot(
+    taskId: string,
+    snapshot: {
+      candidateOID: string;
+      targetOID: string;
+      conflictContext: string;
+    },
+  ): void {
+    this.savedSnapshots.push({ taskId, ...snapshot });
   }
 }
 
@@ -370,4 +389,144 @@ test("RetryTask execute awaiting_confirmation task with fresh pending-state cand
   assert.equal(store.saved.length, 0, "no state saved on error");
   assert.equal(queue.enqueued.length, 0, "nothing enqueued on error");
   assert.equal(feed.events.length, 0, "no events on error");
+});
+
+// ---------------------------------------------------------------------------
+// S3 (007.6) — note + conflict snapshot on conflict recovery
+// ---------------------------------------------------------------------------
+
+test("(S3-retry-note-persist) RetryTask S3 conflict recovery with note 'keep both handlers': note persisted on saved task; no task.rejected event", async () => {
+  const store = new SimpleTaskStore([makeTask("awaiting_confirmation")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([
+    makeConflictCandidate(),
+  ]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  // note is a new optional field — RED: execute currently only accepts { taskId }
+  await uc.execute({
+    taskId: TASK_ID,
+    note: "keep both handlers",
+  } as Parameters<typeof uc.execute>[0]);
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  // Observe the note via a typed cast — S4 pre-adjust: Task index signature will be
+  // removed; cast to Task & { note?: string } so this compiles without it.
+  const saved = store.saved[0] as Task & { note?: string };
+  assert.equal(
+    saved.note,
+    "keep both handlers",
+    "note must be persisted on the saved task so it surfaces in get task --json",
+  );
+
+  const eventTypes = feed.events.map((e) => e.type);
+  assert.ok(
+    !eventTypes.includes("task.rejected"),
+    `must NOT emit task.rejected on conflict recovery; got: ${JSON.stringify(eventTypes)}`,
+  );
+});
+
+test("(S3-retry-snapshot) RetryTask S3 conflict recovery records conflict snapshot {candidateOID, targetOID, conflictContext} with no conflict markers", async () => {
+  const store = new SimpleTaskStore([makeTask("awaiting_confirmation")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  // Candidate with pre-stored targetOID and marker-free conflictContext (set during approve/S4)
+  const candidateWithContext: ChangeCandidate = {
+    ...makeConflictCandidate(),
+    targetOID: "aabb1122ff00aabb1122ff00aabb1122ff00dead",
+    conflictContext:
+      "target: const x = 'home-version';\ncandidate: const x = 'ws-version';",
+  };
+  const candidateStore = new FakeConflictCandidateStore([candidateWithContext]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  await uc.execute({
+    taskId: TASK_ID,
+    note: "keep both handlers",
+  } as Parameters<typeof uc.execute>[0]);
+
+  // RED: saveConflictSnapshot is never called today (not on ConflictCandidateStore yet)
+  assert.equal(
+    candidateStore.savedSnapshots.length,
+    1,
+    "one conflict snapshot must be recorded on the recovery attempt",
+  );
+  const snap = candidateStore.savedSnapshots[0]!;
+  assert.equal(
+    snap.candidateOID,
+    CONFLICT_CAND_ID.length > 0 ? "cafebabe" : "",
+    "candidateOID must equal the conflict candidate's SHA (cafebabe)",
+  );
+  assert.equal(
+    snap.targetOID,
+    "aabb1122ff00aabb1122ff00aabb1122ff00dead",
+    "targetOID must be read from the pre-stored candidate field",
+  );
+  assert.ok(
+    !snap.conflictContext.includes("<<<<<<<"),
+    "conflictContext must not contain <<<<<<< conflict markers (marker-free invariant)",
+  );
+  assert.ok(
+    !snap.conflictContext.includes(">>>>>>>"),
+    "conflictContext must not contain >>>>>>> conflict markers (marker-free invariant)",
+  );
+});
+
+test("(S2-note-cleared-on-noteless-retry) RetryTask S2 conflict-recovery retry with no note must clear a previously-set note (regression)", async () => {
+  // Scenario: first conflict-recovery retry passed note:"X" → task now has note:"X"
+  // and re-enters awaiting_confirmation on the next conflict.  A second
+  // conflict-recovery retry issued WITHOUT a note must CLEAR note (set to null/
+  // absent) — stale note must not persist into the saved task.
+  const taskWithStaleNote: Task = {
+    ...makeTask("awaiting_confirmation"),
+    note: "X",
+  };
+  const store = new SimpleTaskStore([taskWithStaleNote]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([
+    makeConflictCandidate(),
+  ]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  // No note supplied — the stale note must be cleared
+  await uc.execute({ taskId: TASK_ID });
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  const saved = store.saved[0] as Task & { note?: string | null };
+  assert.ok(
+    saved.note == null,
+    `note must be null/absent after a no-note retry; got: ${JSON.stringify(saved.note)}`,
+  );
+});
+
+test("(S3-retry-failed-regression) RetryTask S3 failed-retry transitions to pending (regression): no conflict snapshot", async () => {
+  const store = new SimpleTaskStore([makeTask("failed")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  // No candidateStore for the failed path — regression guard that it still works
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await uc.execute({ taskId: TASK_ID });
+
+  assert.equal(
+    store.saved[0]!.status,
+    "pending",
+    "failed task must still transition to pending (regression)",
+  );
+  assert.deepEqual(
+    queue.enqueued,
+    [TASK_ID],
+    "task must be enqueued (regression)",
+  );
 });

@@ -748,6 +748,41 @@ describe("runRetryTask handler", () => {
       `expected exit 0 for conflict-candidate retry; stderr: ${result.stderr.join(", ")}`,
     );
   });
+
+  // S3 (007.6) — retry --note passes the note through to execute
+  test("(S3-cli-retry-note) runRetryTask --id <id> --note '<text>': exit 0 and note arg passed to RetryTask.execute", async () => {
+    let capturedInput: Record<string, unknown> | undefined;
+
+    // Mock RetryTask that captures what execute is called with
+    const mockUc = {
+      async execute(input: Record<string, unknown>): Promise<void> {
+        capturedInput = input;
+      },
+    } as unknown as RetryTask;
+
+    const result = await runRetryTask(
+      { id: RETRY_TASK_ID, note: "keep both event handlers" },
+      mockUc,
+    );
+
+    assert.equal(
+      result.exitCode,
+      0,
+      `exit 0 expected; stderr: ${result.stderr.join(", ")}`,
+    );
+    assert.ok(capturedInput !== undefined, "execute must have been called");
+    // RED: runRetryTask currently calls execute({ taskId: id }) without note
+    assert.equal(
+      capturedInput["note"],
+      "keep both event handlers",
+      "note must be forwarded to RetryTask.execute from the --note CLI arg",
+    );
+    assert.equal(
+      capturedInput["taskId"],
+      RETRY_TASK_ID,
+      "taskId must still be forwarded correctly",
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -951,6 +986,115 @@ describe("runApproveTask S3 — discriminated approve outcomes", () => {
       result.stdout.length,
       0,
       "landing_failed must not write to stdout",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S2 (007.6) — approve conflict outcome enrichment: must hint at get conflict + --note
+// ---------------------------------------------------------------------------
+
+describe("runApproveTask S2 — conflict outcome enrichment (007.6)", () => {
+  function makeApproveUcS2(
+    outcome: unknown,
+  ): Parameters<typeof runApproveTask>[1] {
+    return {
+      execute: async (_input: { taskId: string }) => outcome,
+    } as unknown as Parameters<typeof runApproveTask>[1];
+  }
+
+  test("(S2-cli-approve-conflict-get-hint) conflict outcome stderr mentions 'get conflict --id'", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZS2GCH1";
+    const uc = makeApproveUcS2({
+      kind: "conflict",
+      taskId,
+      conflictFiles: ["src/todo.mjs"],
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(result.exitCode, 0, "conflict outcome must exit 0");
+    assert.equal(
+      result.stderr.length,
+      1,
+      `conflict outcome must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    const line = result.stderr[0]!;
+    assert.ok(
+      line.includes(`get conflict --id ${taskId}`),
+      `conflict stderr must mention 'get conflict --id ${taskId}' so user knows how to inspect; got: ${line}`,
+    );
+  });
+
+  test("(S2-cli-approve-conflict-note-hint) conflict outcome stderr mentions '--note' for guided retry", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZS2NTH2";
+    const uc = makeApproveUcS2({
+      kind: "conflict",
+      taskId,
+      conflictFiles: ["src/todo.mjs"],
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(result.exitCode, 0, "conflict outcome must exit 0");
+    assert.equal(
+      result.stderr.length,
+      1,
+      `conflict outcome must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    const line = result.stderr[0]!;
+    assert.ok(
+      line.includes("--note"),
+      `conflict stderr must include '--note' to hint at guided retry; got: ${line}`,
+    );
+    assert.ok(
+      !line.includes("Error") && !line.includes("at "),
+      `conflict stderr must not contain a stack trace; got: ${line}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S4 (007.6) — approve target_moved outcome → CLI mapping
+// ---------------------------------------------------------------------------
+
+describe("runApproveTask S4 — target_moved outcome", () => {
+  function makeApproveUcS4(
+    outcome: unknown,
+  ): Parameters<typeof runApproveTask>[1] {
+    return {
+      execute: async (_input: { taskId: string }) => outcome,
+    } as unknown as Parameters<typeof runApproveTask>[1];
+  }
+
+  test("(S4-cli-target-moved) target_moved outcome: exit 0; single informational stderr line", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZS4TM1";
+    const uc = makeApproveUcS4({
+      kind: "target_moved",
+      taskId,
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(
+      result.exitCode,
+      0,
+      "target_moved outcome must exit 0 (retryable — user can re-approve)",
+    );
+    assert.equal(
+      result.stderr.length,
+      1,
+      `target_moved must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    const line = result.stderr[0]!;
+    assert.ok(
+      !line.includes("Error") && !line.includes("at "),
+      `target_moved stderr must not contain a stack trace; got: ${line}`,
+    );
+    assert.equal(
+      result.stdout.length,
+      0,
+      "target_moved must not write to stdout",
     );
   });
 });

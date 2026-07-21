@@ -53,6 +53,33 @@ function resolveHomeDir(repoId: string): string {
 // Fake landings
 // ---------------------------------------------------------------------------
 
+// S2 pre-adjust: shared stub methods added so these fakes still satisfy
+// RepositoryLanding once preview/landPreviewed/resolveTargetOID become required.
+// runRepoLand uses CliRepositoryLanding (land-only), so these stubs are never called.
+function s2Stubs(): Pick<
+  RepositoryLanding,
+  "preview" | "landPreviewed" | "resolveTargetOID"
+> {
+  return {
+    async preview(_homeDir, candidate) {
+      return {
+        kind: "fast-forward" as const,
+        candidateOID: candidate.candidateSHA,
+      };
+    },
+    async landPreviewed(_homeDir, candidate, _previewOutcome, _targetOID) {
+      return {
+        candidate,
+        outcome: { kind: "fast-forward" as const },
+        canonicalSHA: candidate.candidateSHA,
+      };
+    },
+    resolveTargetOID(_homeDir, _branch) {
+      return "0000000000000000000000000000000000000000";
+    },
+  };
+}
+
 function makeFfLanding(): RepositoryLanding {
   const result: LandingResult = {
     candidate: CAND_FIXTURE,
@@ -63,6 +90,7 @@ function makeFfLanding(): RepositoryLanding {
     async land(_homeDir, _candidate) {
       return result;
     },
+    ...s2Stubs(),
   };
 }
 
@@ -71,6 +99,7 @@ function makeConflictLanding(): RepositoryLanding {
     async land(_homeDir, candidate) {
       throw new LandingConflictError(candidate, ["conflict.ts"]);
     },
+    ...s2Stubs(),
   };
 }
 
@@ -84,6 +113,7 @@ function makeAlreadyLanding(): RepositoryLanding {
     async land(_homeDir, _candidate) {
       return result;
     },
+    ...s2Stubs(),
   };
 }
 

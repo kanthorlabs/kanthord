@@ -38,8 +38,12 @@ import type {
   RepositoryLanding,
   LandingCandidate,
   LandingResult,
+  PreviewOutcome,
 } from "../../landing/port.ts";
-import { LandingConflictError } from "../../landing/port.ts";
+import {
+  LandingConflictError,
+  LandingCASMismatchError,
+} from "../../landing/port.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -173,12 +177,23 @@ class MemStore implements ApproveTaskStore {
 
 class FakeLanding implements RepositoryLanding {
   readonly calls: Array<{ homeDir: string; candidate: LandingCandidate }> = [];
+  readonly previewCalls: Array<{
+    homeDir: string;
+    candidate: LandingCandidate;
+    targetOID: string;
+  }> = [];
   readonly #result: LandingResult;
   readonly #throw: Error | undefined;
+  readonly #previewOutcome: PreviewOutcome | undefined;
 
-  constructor(result: LandingResult, throwErr?: Error) {
+  constructor(
+    result: LandingResult,
+    throwErr?: Error,
+    previewOutcome?: PreviewOutcome,
+  ) {
     this.#result = result;
     this.#throw = throwErr;
+    this.#previewOutcome = previewOutcome;
   }
 
   async land(
@@ -188,6 +203,30 @@ class FakeLanding implements RepositoryLanding {
     this.calls.push({ homeDir, candidate });
     if (this.#throw !== undefined) throw this.#throw;
     return this.#result;
+  }
+
+  async preview(
+    homeDir: string,
+    candidate: LandingCandidate,
+    targetOID: string,
+  ): Promise<PreviewOutcome> {
+    this.previewCalls.push({ homeDir, candidate, targetOID });
+    if (this.#previewOutcome !== undefined) return this.#previewOutcome;
+    return { kind: "fast-forward", candidateOID: candidate.candidateSHA };
+  }
+
+  async landPreviewed(
+    _homeDir: string,
+    _candidate: LandingCandidate,
+    _previewOutcome: PreviewOutcome,
+    _targetOID: string,
+  ): Promise<LandingResult> {
+    if (this.#throw !== undefined) throw this.#throw;
+    return this.#result;
+  }
+
+  resolveTargetOID(_homeDir: string, _branch: string): string {
+    return "0000000000000000000000000000000000000000";
   }
 }
 
@@ -705,11 +744,11 @@ test("(T5-a) ApproveTask with repository context binding calls landing.land with
   await uc.execute({ taskId });
 
   assert.equal(
-    fakeLanding.calls.length,
+    fakeLanding.previewCalls.length,
     1,
-    "landing.land must be called once for a task with repository context binding",
+    "landing.preview must be called once for a task with repository context binding",
   );
-  const call = fakeLanding.calls[0]!;
+  const call = fakeLanding.previewCalls[0]!;
   assert.equal(
     call.candidate.baseSHA,
     T5_BASE_SHA,
@@ -771,19 +810,22 @@ test("(T5-c) LandingConflictError from landing emits task.conflict event, task s
     dependencies: [],
   };
   const result = makeT5Result(T5_CANDIDATE_SHA);
-  const fakeCandidate: LandingCandidate = {
-    id: "lc-t5-conflict",
-    taskId,
-    repoId: T5_REPO_ID,
-    baseSHA: T5_BASE_SHA,
-    candidateSHA: T5_CANDIDATE_SHA,
-    ref: "kanthord/t5-task-c",
-    target: "main",
-    workspace: "/fake/ws",
+  // Conflict detected via predict path: preview returns conflict, no land() call.
+  const conflictPreviewOutcome: PreviewOutcome = {
+    kind: "conflict",
+    files: ["file.ts"],
+    perFile: [
+      {
+        path: "file.ts",
+        hunks: "<<<<<<< target\n=======\n>>>>>>> candidate",
+      },
+    ],
   };
-  const conflictErr = new LandingConflictError(fakeCandidate, ["file.ts"]);
-  // FakeLanding result is unused (throws instead)
-  const fakeLanding = new FakeLanding(FAST_FORWARD_RESULT, conflictErr);
+  const fakeLanding = new FakeLanding(
+    FAST_FORWARD_RESULT,
+    undefined,
+    conflictPreviewOutcome,
+  );
 
   const store = new MemStore(
     [awaitingTask],
@@ -1004,25 +1046,25 @@ test("(T3-a) repository-bound approve loads the persisted candidate (ULID id, co
   await uc.execute({ taskId });
 
   assert.equal(
-    fakeLanding.calls.length,
+    fakeLanding.previewCalls.length,
     1,
-    "landing.land must be called exactly once for a repository-bound task",
+    "landing.preview must be called exactly once for a repository-bound task",
   );
-  const call = fakeLanding.calls[0]!;
+  const call = fakeLanding.previewCalls[0]!;
   assert.equal(
     call.candidate.id,
     T3_STORED_ULID,
-    "landed candidate id must be the persisted ULID, NOT `${taskId}-lc`",
+    "preview candidate id must be the persisted ULID, NOT `${taskId}-lc`",
   );
   assert.equal(
     call.candidate.target,
     T3_RELEASE,
-    "landed candidate target must be the configured branch, NOT hardcoded 'main'",
+    "preview candidate target must be the configured branch, NOT hardcoded 'main'",
   );
   assert.equal(
     call.homeDir,
     T3_HOME_DIR,
-    "landing homeDir must come from homeDir(repoId), NOT result.workspace",
+    "preview homeDir must come from homeDir(repoId), NOT result.workspace",
   );
 
   const savedResult = store.savedResults.find((r) => r.taskId === taskId);
@@ -1215,18 +1257,22 @@ test("(S3-b) LandingConflictError returns { kind: 'conflict', taskId }; task sta
     dependencies: [],
   };
   const result = makeS3Result();
-  const fakeCandidate: LandingCandidate = {
-    id: "lc-s3-conflict",
-    taskId,
-    repoId: S3_REPO_ID,
-    baseSHA: S3_BASE_SHA,
-    candidateSHA: S3_CANDIDATE_SHA,
-    ref: "kanthord/s3-task-b",
-    target: "main",
-    workspace: "/fake/ws",
+  // Conflict detected via predict path: preview returns conflict, no land() call.
+  const conflictPreviewOutcome: PreviewOutcome = {
+    kind: "conflict",
+    files: ["src/main.ts"],
+    perFile: [
+      {
+        path: "src/main.ts",
+        hunks: "<<<<<<< target\n=======\n>>>>>>> candidate",
+      },
+    ],
   };
-  const conflictErr = new LandingConflictError(fakeCandidate, ["src/main.ts"]);
-  const fakeLanding = new FakeLanding(S3_FF_RESULT, conflictErr);
+  const fakeLanding = new FakeLanding(
+    S3_FF_RESULT,
+    undefined,
+    conflictPreviewOutcome,
+  );
 
   const store = new MemStore(
     [awaitingTask],
@@ -1416,5 +1462,746 @@ test("(S3-d) generic landing error returns { kind: 'landing_failed', taskId, mes
     store.savedTasks.filter((t) => t.status === "completed").length,
     0,
     "task must NOT be saved as completed on generic landing failure",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// S4 (007.6) — predict-before-mutate + land-the-previewed-tree via atomic CAS
+// ---------------------------------------------------------------------------
+
+// Error shape thrown by MockLandingS4.landPreviewed to signal a CAS mismatch.
+// Extends LandingCASMismatchError so `instanceof LandingCASMismatchError` in
+// ApproveTask correctly identifies it as a real CAS mismatch.
+class MockCASMismatch extends LandingCASMismatchError {
+  constructor(newTargetOID: string) {
+    super(newTargetOID);
+    this.name = "MockCASMismatch";
+  }
+}
+
+/**
+ * S4 mock landing — scripted `preview` + `landPreviewed`.
+ * Tracks `land()` calls separately so conflict / no-mutation tests can assert
+ * that the legacy mutating path was never invoked.
+ * Also exposes `resolveTargetOID` as an extra method (not yet on the port
+ * interface) for ApproveTask to call when it pins the target OID before preview.
+ */
+class MockLandingS4 implements RepositoryLanding {
+  readonly landCalls: Array<{ homeDir: string; candidate: LandingCandidate }> =
+    [];
+  readonly previewCalls: Array<{
+    homeDir: string;
+    candidate: LandingCandidate;
+    targetOID: string;
+  }> = [];
+  readonly landPreviewedCalls: Array<{
+    homeDir: string;
+    candidate: LandingCandidate;
+    previewOutcome: PreviewOutcome;
+    targetOID: string;
+  }> = [];
+
+  readonly #scriptedTargetOID: string;
+  readonly #previewQueue: PreviewOutcome[];
+  readonly #landPreviewedQueue: Array<LandingResult | Error>;
+
+  constructor(
+    scriptedTargetOID: string,
+    previewQueue: PreviewOutcome[],
+    landPreviewedQueue: Array<LandingResult | Error> = [],
+  ) {
+    this.#scriptedTargetOID = scriptedTargetOID;
+    this.#previewQueue = [...previewQueue];
+    this.#landPreviewedQueue = [...landPreviewedQueue];
+  }
+
+  // RepositoryLanding.land() — must be present (required method on the port)
+  // but must NOT be called by the predict-before-mutate path.
+  async land(
+    homeDir: string,
+    candidate: LandingCandidate,
+  ): Promise<LandingResult> {
+    this.landCalls.push({ homeDir, candidate });
+    return {
+      candidate,
+      outcome: { kind: "fast-forward" },
+      canonicalSHA: candidate.candidateSHA,
+    };
+  }
+
+  // Scripted preview — shifts the next PreviewOutcome from the queue.
+  async preview(
+    homeDir: string,
+    candidate: LandingCandidate,
+    targetOID: string,
+  ): Promise<PreviewOutcome> {
+    this.previewCalls.push({ homeDir, candidate, targetOID });
+    const next = this.#previewQueue.shift();
+    if (next === undefined)
+      throw new Error("MockLandingS4.preview: queue exhausted");
+    return next;
+  }
+
+  // Scripted land-the-previewed-tree — shifts from the queue or throws.
+  async landPreviewed(
+    homeDir: string,
+    candidate: LandingCandidate,
+    previewOutcome: PreviewOutcome,
+    targetOID: string,
+  ): Promise<LandingResult> {
+    this.landPreviewedCalls.push({
+      homeDir,
+      candidate,
+      previewOutcome,
+      targetOID,
+    });
+    const next = this.#landPreviewedQueue.shift();
+    if (next === undefined)
+      throw new Error("MockLandingS4.landPreviewed: queue exhausted");
+    if (next instanceof Error) throw next;
+    return next;
+  }
+
+  // Extra method (not yet on the port interface) — resolves the current branch
+  // OID so ApproveTask can pin the targetOID before calling preview.
+  resolveTargetOID(_homeDir: string, _branch: string): string {
+    return this.#scriptedTargetOID;
+  }
+}
+
+// S4 shared fixture constants (fake SHA-like 40-char strings)
+const S4_REPO_ID = "repo-s4-007";
+const S4_TARGET_BRANCH = "main";
+const S4_HOME_DIR = "/fake/home/s4-007";
+const S4_TARGET_OID = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // 40 chars
+const S4_CANDIDATE_OID = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"; // 40 chars
+const S4_BASE_OID = "cccccccccccccccccccccccccccccccccccccccc"; // 40 chars
+const S4_TREE_OID = "dddddddddddddddddddddddddddddddddddddddd"; // 40 chars
+const S4_MERGE_COMMIT = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"; // 40 chars
+const S4_CAND_ULID = "01S4" + "Z".repeat(22); // 26-char ULID-shaped id
+
+function makeS4LandingRepo(taskId: string): FakeLandingRepository {
+  const candidate = newChangeCandidate({
+    id: S4_CAND_ULID,
+    taskId,
+    repoId: S4_REPO_ID,
+    baseSHA: S4_BASE_OID,
+    candidateSHA: S4_CANDIDATE_OID,
+    ref: `kanthord/${taskId}`,
+    target: S4_TARGET_BRANCH,
+  });
+  return new FakeLandingRepository(candidate);
+}
+
+function makeS4Store(taskId: string): MemStore {
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s4 task",
+    status: "awaiting_confirmation" as const,
+    dependencies: [],
+  };
+  const result: TaskResultRow = {
+    workspace: "/fake/s4/ws",
+    branch: `kanthord/${taskId}`,
+    baseCommit: S4_BASE_OID,
+    proposalCommit: S4_CANDIDATE_OID,
+    commitSha: null,
+    summary: "S4 summary",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+  return new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S4_REPO_ID }]]),
+  );
+}
+
+test("(S4-conflict-no-mutation) predict conflict: execute returns {kind:conflict}; task.conflict appended; no mutating land call; task stays awaiting_confirmation", async () => {
+  const taskId = "s4-conflict-001";
+  const store = makeS4Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const mockLanding = new MockLandingS4(S4_TARGET_OID, [
+    {
+      kind: "conflict",
+      files: ["src/todo.ts"],
+      perFile: [
+        {
+          path: "src/todo.ts",
+          hunks: "<<<<<<< target\n=======\n>>>>>>> candidate",
+        },
+      ],
+    },
+  ]);
+  const fakeLandingRepo = makeS4LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S4_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "conflict",
+    `predict conflict: execute must return {kind:'conflict'}; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    feed.events.filter((e) => e.type === "task.conflict").length,
+    1,
+    "predict conflict: task.conflict event must be appended once",
+  );
+  assert.equal(
+    mockLanding.landCalls.length,
+    0,
+    "predict conflict: legacy land() must NOT be called (zero mutation before conflict return)",
+  );
+  assert.equal(
+    mockLanding.landPreviewedCalls.length,
+    0,
+    "predict conflict: landPreviewed() must NOT be called (no mutation on conflict)",
+  );
+  assert.equal(
+    store.savedTasks.filter((t) => t.status === "completed").length,
+    0,
+    "predict conflict: task must NOT be saved as completed",
+  );
+});
+
+test("(S4-ff-lands-via-CAS) predict fast-forward: landPreviewed called; canonicalSHA equals candidateOID; task completed", async () => {
+  const taskId = "s4-ff-001";
+  const store = makeS4Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const ffLandResult: LandingResult = {
+    candidate: {
+      id: S4_CAND_ULID,
+      taskId,
+      repoId: S4_REPO_ID,
+      baseSHA: S4_BASE_OID,
+      candidateSHA: S4_CANDIDATE_OID,
+      ref: `kanthord/${taskId}`,
+      target: S4_TARGET_BRANCH,
+      workspace: "/fake/s4/ws",
+    },
+    outcome: { kind: "fast-forward" },
+    canonicalSHA: S4_CANDIDATE_OID,
+  };
+  const mockLanding = new MockLandingS4(
+    S4_TARGET_OID,
+    [{ kind: "fast-forward", candidateOID: S4_CANDIDATE_OID }],
+    [ffLandResult],
+  );
+  const fakeLandingRepo = makeS4LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S4_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "approved",
+    `predict ff: execute must return {kind:'approved'}; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    (outcome as { canonicalSHA?: string }).canonicalSHA,
+    S4_CANDIDATE_OID,
+    "predict ff: canonicalSHA must equal candidateOID",
+  );
+  assert.equal(
+    mockLanding.landPreviewedCalls.length,
+    1,
+    "predict ff: landPreviewed must be called once (not legacy land())",
+  );
+  assert.equal(
+    mockLanding.landCalls.length,
+    0,
+    "predict ff: legacy land() must NOT be called (CAS path only)",
+  );
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must have been saved");
+  assert.equal(last.status, "completed", "predict ff: task must be completed");
+});
+
+test("(S4-mergeable-lands-previewed-tree) predict mergeable: landPreviewed called with previewed treeOID and expectedOld equals pinned targetOID; task completed", async () => {
+  const taskId = "s4-merge-001";
+  const store = makeS4Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const mergeLandResult: LandingResult = {
+    candidate: {
+      id: S4_CAND_ULID,
+      taskId,
+      repoId: S4_REPO_ID,
+      baseSHA: S4_BASE_OID,
+      candidateSHA: S4_CANDIDATE_OID,
+      ref: `kanthord/${taskId}`,
+      target: S4_TARGET_BRANCH,
+      workspace: "/fake/s4/ws",
+    },
+    outcome: { kind: "merge", mergeCommit: S4_MERGE_COMMIT },
+    canonicalSHA: S4_MERGE_COMMIT,
+  };
+  const mockLanding = new MockLandingS4(
+    S4_TARGET_OID,
+    [{ kind: "mergeable", treeOID: S4_TREE_OID }],
+    [mergeLandResult],
+  );
+  const fakeLandingRepo = makeS4LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S4_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "approved",
+    `predict mergeable: execute must return {kind:'approved'}; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    mockLanding.landPreviewedCalls.length,
+    1,
+    "predict mergeable: landPreviewed must be called once",
+  );
+  assert.equal(
+    mockLanding.landCalls.length,
+    0,
+    "predict mergeable: legacy land() must NOT be called",
+  );
+  const lcall = mockLanding.landPreviewedCalls[0]!;
+  assert.ok(
+    lcall.previewOutcome.kind === "mergeable" &&
+      lcall.previewOutcome.treeOID === S4_TREE_OID,
+    `landPreviewed must receive the previewed treeOID (${S4_TREE_OID}); got previewOutcome: ${JSON.stringify(lcall.previewOutcome)}`,
+  );
+  assert.equal(
+    lcall.targetOID,
+    S4_TARGET_OID,
+    "landPreviewed expectedOld must equal the pinned targetOID from preview",
+  );
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must have been saved");
+  assert.equal(
+    last.status,
+    "completed",
+    "predict mergeable: task must be completed",
+  );
+});
+
+test("(S4-target-moved-repreviews) CAS mismatch: preview re-called with new targetOID; after cap retries returns target_moved; land never called on wrong base", async () => {
+  const taskId = "s4-cas-001";
+  const store = makeS4Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  // Three consecutive CAS failures with successive new targetOIDs from each error
+  const CAS_OID1 = "cas1" + "0".repeat(36);
+  const CAS_OID2 = "cas2" + "0".repeat(36);
+  const CAS_OID3 = "cas3" + "0".repeat(36);
+
+  // Fill preview queue for initial attempt + up to 3 retries
+  const previewQueue: PreviewOutcome[] = [
+    { kind: "mergeable", treeOID: S4_TREE_OID },
+    { kind: "mergeable", treeOID: S4_TREE_OID },
+    { kind: "mergeable", treeOID: S4_TREE_OID },
+    { kind: "mergeable", treeOID: S4_TREE_OID },
+  ];
+  const casQueue: Array<LandingResult | Error> = [
+    new MockCASMismatch(CAS_OID1),
+    new MockCASMismatch(CAS_OID2),
+    new MockCASMismatch(CAS_OID3),
+  ];
+  const mockLanding = new MockLandingS4(S4_TARGET_OID, previewQueue, casQueue);
+  const fakeLandingRepo = makeS4LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S4_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "target_moved",
+    `CAS retry cap: execute must return {kind:'target_moved'} after exhausting retries; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    (outcome as { taskId?: string }).taskId,
+    taskId,
+    "target_moved outcome must carry the taskId",
+  );
+  // Re-preview happened: the second preview call used the new targetOID from the first CAS error
+  assert.ok(
+    mockLanding.previewCalls.length >= 2,
+    `CAS retry: preview must be called at least twice (initial + at least one re-preview); called ${mockLanding.previewCalls.length} times`,
+  );
+  assert.equal(
+    mockLanding.previewCalls[1]!.targetOID,
+    CAS_OID1,
+    "re-preview must use the newTargetOID from the CAS mismatch error, not the original targetOID",
+  );
+  assert.equal(
+    mockLanding.landCalls.length,
+    0,
+    "CAS retry: legacy land() must never be called (never land on wrong base)",
+  );
+  // Task must NOT be completed on target_moved
+  assert.equal(
+    store.savedTasks.filter((t) => t.status === "completed").length,
+    0,
+    "target_moved: task must NOT be saved as completed",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// S5 — recovery candidate re-enters the gate (007.6)
+//
+// After a `retry task` the landing-repo returns a NEW candidate (the one
+// produced by the recovery agent run). Approving it must go through the same
+// S4 predict-before-mutate gate — no shortcut for "second-attempt" candidates.
+// The MockLandingS4 class (above) is reused; S5 only varies the candidate IDs
+// to signal "this is a recovery candidate produced after the original conflict".
+// ---------------------------------------------------------------------------
+
+// Recovery-candidate fixture constants (distinct from first-attempt OIDs)
+const S5_REPO_ID = "repo-s5-007";
+const S5_TARGET_BRANCH = "main";
+const S5_HOME_DIR = "/fake/home/s5-007";
+const S5_TARGET_OID = "5555555555555555555555555555555555555555"; // 40 chars
+const S5_RECOVERY_CANDIDATE_OID = "6666666666666666666666666666666666666666"; // 40 chars
+const S5_RECOVERY_BASE_OID = "7777777777777777777777777777777777777777"; // 40 chars
+const S5_RECOVERY_TREE_OID = "8888888888888888888888888888888888888888"; // 40 chars
+const S5_RECOVERY_MERGE_SHA = "9999999999999999999999999999999999999999"; // 40 chars
+const S5_RECOVERY_ULID = "01S5RCVR" + "Z".repeat(18); // 26-char ULID-shaped id
+
+/** Build the store + landing-repo for an S5 scenario with a recovery candidate. */
+function makeS5Store(taskId: string): MemStore {
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s5 recovery task",
+    status: "awaiting_confirmation" as const,
+    dependencies: [],
+  };
+  const result: TaskResultRow = {
+    workspace: "/fake/s5/ws",
+    branch: `kanthord/${taskId}`,
+    baseCommit: S5_RECOVERY_BASE_OID, // latest main at retry time
+    proposalCommit: S5_RECOVERY_CANDIDATE_OID,
+    commitSha: null,
+    summary: "S5 recovery run summary",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+  return new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S5_REPO_ID }]]),
+  );
+}
+
+function makeS5LandingRepo(taskId: string): FakeLandingRepository {
+  // This candidate was produced by the recovery agent run on the clean latest base.
+  const recoveryCandidate = newChangeCandidate({
+    id: S5_RECOVERY_ULID,
+    taskId,
+    repoId: S5_REPO_ID,
+    baseSHA: S5_RECOVERY_BASE_OID,
+    candidateSHA: S5_RECOVERY_CANDIDATE_OID,
+    ref: `kanthord/${taskId}`,
+    target: S5_TARGET_BRANCH,
+  });
+  return new FakeLandingRepository(recoveryCandidate);
+}
+
+test("(S5-recovery-previewed-then-lands) recovery candidate: preview invoked before landPreviewed; scripted mergeable lands via CAS; task completed", async () => {
+  const taskId = "s5-recovery-mergeable-001";
+  const store = makeS5Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  // Script: preview → mergeable, landPreviewed → success
+  const mockLanding = new MockLandingS4(
+    S5_TARGET_OID,
+    [{ kind: "mergeable", treeOID: S5_RECOVERY_TREE_OID }],
+    [
+      {
+        candidate: {
+          id: S5_RECOVERY_ULID,
+          taskId,
+          repoId: S5_REPO_ID,
+          baseSHA: S5_RECOVERY_BASE_OID,
+          candidateSHA: S5_RECOVERY_CANDIDATE_OID,
+          ref: `kanthord/${taskId}`,
+          target: S5_TARGET_BRANCH,
+          workspace: "/fake/s5/ws",
+        },
+        outcome: { kind: "merge", mergeCommit: S5_RECOVERY_MERGE_SHA },
+        canonicalSHA: S5_RECOVERY_MERGE_SHA,
+      },
+    ],
+  );
+  const fakeLandingRepo = makeS5LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S5_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  // preview must have been called for the recovery candidate
+  assert.equal(
+    mockLanding.previewCalls.length,
+    1,
+    "(S5-recovery-previewed-then-lands) recovery candidate: preview must be called once before landing",
+  );
+  assert.equal(
+    mockLanding.previewCalls[0]!.candidate.id,
+    S5_RECOVERY_ULID,
+    "(S5-recovery-previewed-then-lands) preview must receive the recovery candidate (ULID from recovery run)",
+  );
+
+  // landPreviewed must have been called exactly once (S4 CAS path)
+  assert.equal(
+    mockLanding.landPreviewedCalls.length,
+    1,
+    "(S5-recovery-previewed-then-lands) landPreviewed must be called exactly once (S4 CAS path)",
+  );
+  // landPreviewed received the previewed treeOID from the same preview call
+  assert.equal(
+    (mockLanding.landPreviewedCalls[0]!.previewOutcome as { treeOID?: string })
+      .treeOID,
+    S5_RECOVERY_TREE_OID,
+    "(S5-recovery-previewed-then-lands) landPreviewed treeOID must equal the one returned by preview",
+  );
+
+  // legacy land() must NOT have been called (not blind landing)
+  assert.equal(
+    mockLanding.landCalls.length,
+    0,
+    "(S5-recovery-previewed-then-lands) legacy land() must NOT be called — recovery candidate must not be landed blind",
+  );
+
+  // task must be completed
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(
+    last !== undefined,
+    "(S5-recovery-previewed-then-lands) task must be saved",
+  );
+  assert.equal(
+    last!.status,
+    "completed",
+    "(S5-recovery-previewed-then-lands) task must be completed after recovery candidate lands",
+  );
+
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "approved",
+    `(S5-recovery-previewed-then-lands) outcome must be approved; got: ${JSON.stringify(outcome)}`,
+  );
+});
+
+test("(S5-recovery-re-conflict) recovery candidate re-predicts conflict: typed conflict outcome; zero mutation; landing unchanged", async () => {
+  const taskId = "s5-recovery-conflict-001";
+  const store = makeS5Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  // Script: recovery candidate still conflicts
+  const mockLanding = new MockLandingS4(S5_TARGET_OID, [
+    {
+      kind: "conflict",
+      files: ["src/api.ts"],
+      perFile: [
+        {
+          path: "src/api.ts",
+          hunks: "<<<<<<< target\n=======\n>>>>>>> candidate",
+        },
+      ],
+    },
+  ]);
+  const fakeLandingRepo = makeS5LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S5_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  // outcome must be typed conflict
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "conflict",
+    `(S5-recovery-re-conflict) recovery re-conflict: outcome must be {kind:'conflict'}; got: ${JSON.stringify(outcome)}`,
+  );
+
+  // preview was called for the recovery candidate
+  assert.equal(
+    mockLanding.previewCalls.length,
+    1,
+    "(S5-recovery-re-conflict) preview must be called once for re-conflicting recovery candidate",
+  );
+
+  // landPreviewed must NOT have been called (zero mutation)
+  assert.equal(
+    mockLanding.landPreviewedCalls.length,
+    0,
+    "(S5-recovery-re-conflict) landPreviewed must NOT be called on conflict (zero mutation)",
+  );
+
+  // legacy land() must NOT have been called either
+  assert.equal(
+    mockLanding.landCalls.length,
+    0,
+    "(S5-recovery-re-conflict) legacy land() must NOT be called (no mutation on re-conflict)",
+  );
+
+  // task.conflict event emitted
+  assert.equal(
+    feed.events.filter((e) => e.type === "task.conflict").length,
+    1,
+    "(S5-recovery-re-conflict) task.conflict event must be emitted for re-conflicting recovery candidate",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// S3 regression — CAS duck-type misclassification
+//
+// ApproveTask detects CAS mismatch with `"newTargetOID" in casErr`.  A real
+// non-CAS landing failure (e.g. storage error) that happens to carry a
+// coincidental `newTargetOID` property on its Error object is misclassified as
+// {kind:"target_moved"} instead of {kind:"landing_failed"}.
+// Fix: use `casErr instanceof LandingCASMismatchError` (already exported from
+// landing/port.ts).
+// ---------------------------------------------------------------------------
+test("(S3-non-cas-error-with-newTargetOID-is-landing-failed) landPreviewed throws plain error with newTargetOID field: outcome is landing_failed, not target_moved", async () => {
+  const taskId = "s3-non-cas-001";
+  const store = makeS4Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  // A plain landing error (NOT instanceof LandingCASMismatchError) that happens
+  // to carry a newTargetOID field — duck-type check `"newTargetOID" in casErr`
+  // misclassifies this as a CAS mismatch and returns target_moved.
+  class NonCASLandingError extends Error {
+    readonly newTargetOID: string; // coincidental field, not a CAS signal
+    constructor() {
+      super("internal storage error: disk full");
+      this.name = "NonCASLandingError";
+      this.newTargetOID = "ffffffffffffffffffffffffffffffffffffffff";
+    }
+  }
+
+  // Fill preview queue with enough items for MAX_CAS_RETRIES (3) + initial attempt so
+  // the misclassification plays out to {kind:"target_moved"} instead of throwing
+  // "queue exhausted".  The duck-type check treats NonCASLandingError as CAS and
+  // re-previews until the cap, returning target_moved.  After the fix (instanceof
+  // check), the first catch immediately returns landing_failed.
+  const mockLanding = new MockLandingS4(
+    S4_TARGET_OID,
+    [
+      { kind: "fast-forward", candidateOID: S4_CANDIDATE_OID },
+      { kind: "fast-forward", candidateOID: S4_CANDIDATE_OID },
+      { kind: "fast-forward", candidateOID: S4_CANDIDATE_OID },
+      { kind: "fast-forward", candidateOID: S4_CANDIDATE_OID },
+    ],
+    [
+      new NonCASLandingError(), // first landPreviewed throws non-CAS error
+      new NonCASLandingError(), // subsequent retries (duck-type re-previews) also fail
+      new NonCASLandingError(),
+    ],
+  );
+  const fakeLandingRepo = makeS4LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    fakeLandingRepo,
+    undefined,
+    () => S4_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  assert.notEqual(
+    (outcome as { kind?: string }).kind,
+    "target_moved",
+    `non-CAS error with coincidental newTargetOID must NOT be misclassified as target_moved; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "landing_failed",
+    `non-CAS error with coincidental newTargetOID must surface as landing_failed; got: ${JSON.stringify(outcome)}`,
   );
 });

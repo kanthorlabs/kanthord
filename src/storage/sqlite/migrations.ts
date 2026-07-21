@@ -251,4 +251,12 @@ DROP TABLE events;
 ALTER TABLE events_new3 RENAME TO events;
 `),
   },
+  {
+    version: 9,
+    name: "007.6-s3-task-note",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE tasks ADD COLUMN note TEXT;
+`),
+  },
 ];

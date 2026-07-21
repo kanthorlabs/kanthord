@@ -13,6 +13,7 @@ type TaskRow = {
   instructions: string;
   ac: string;
   verification: string | null;
+  note: string | null;
 };
 type DepRow = { dependency: string };
 
@@ -87,15 +88,16 @@ export class SqliteTaskRepository implements TaskRepository {
     const sha = this.#computeTaskSha(task);
     this.#db
       .prepare(
-        "INSERT INTO tasks (id, objectiveId, title, status, agent, instructions, ac, verification, sha256)" +
-          " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)" +
+        "INSERT INTO tasks (id, objectiveId, title, status, agent, instructions, ac, verification, sha256, note)" +
+          " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)" +
           " ON CONFLICT(id) DO UPDATE SET" +
           " status = excluded.status," +
           " agent = excluded.agent," +
           " instructions = excluded.instructions," +
           " ac = excluded.ac," +
           " verification = excluded.verification," +
-          " sha256 = excluded.sha256",
+          " sha256 = excluded.sha256," +
+          " note = excluded.note",
       )
       .run(
         task.id,
@@ -109,6 +111,7 @@ export class SqliteTaskRepository implements TaskRepository {
           ? JSON.stringify(task.verification)
           : null,
         sha,
+        task.note ?? null,
       );
     const insertDep = this.#db.prepare(
       "INSERT OR IGNORE INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
@@ -160,7 +163,7 @@ export class SqliteTaskRepository implements TaskRepository {
   get(id: string): Task | undefined {
     const row = this.#db
       .prepare(
-        "SELECT id, objectiveId, title, status, agent, instructions, ac, verification FROM tasks WHERE id = ?",
+        "SELECT id, objectiveId, title, status, agent, instructions, ac, verification, note FROM tasks WHERE id = ?",
       )
       .get(id) as TaskRow | undefined;
     if (row === undefined) return undefined;
@@ -181,6 +184,7 @@ export class SqliteTaskRepository implements TaskRepository {
       ...(row.verification != null
         ? { verification: JSON.parse(row.verification) as string[] }
         : {}),
+      ...(row.note != null ? { note: row.note } : {}),
     };
   }
 

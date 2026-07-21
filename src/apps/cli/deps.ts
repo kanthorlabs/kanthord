@@ -32,6 +32,7 @@ import type { ListEvents } from "../../app/task/list-events.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
 import type { RejectTask } from "../../app/task/reject-task.ts";
 import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
+import type { GetConflict } from "../../app/task/get-conflict.ts";
 import type { RetryTask } from "../../app/task/retry-task.ts";
 import type { RunDaemon } from "../../app/task/run-daemon.ts";
 import type { CreateTask } from "../../app/task/create-task.ts";
@@ -89,6 +90,8 @@ export interface Logger {
 
 /** Composition-root bundle injected by main.ts; extended by later Tasks. */
 export interface CliDeps {
+  // Index signature allows safe cast to Record<string, unknown> in tests.
+  [key: string]: unknown;
   migrateDb: MigrateDb;
   getDbStatus: GetDbStatus;
   createProject: CreateProject;
@@ -117,6 +120,7 @@ export interface CliDeps {
   listTasks: ListTasks;
   retryTask: RetryTask;
   getTask: GetTask;
+  getConflict: GetConflict;
   approveTask: ApproveTask;
   rejectTask: RejectTask;
   buildDaemon: (failTaskIds: string[], logger?: Logger) => RunDaemon;
@@ -135,4 +139,10 @@ export interface CliDeps {
   resolveHomeDir: (repoId: string) => string;
   workspaces: CliWorkspaceManager;
   newId: () => string;
+  /** S3 (007.6): reads back the note (and optional conflict context) persisted at retry time. */
+  getPriorFeedback: (
+    taskId: string,
+  ) =>
+    | { note?: string; conflictContext?: string; priorSummary?: string }
+    | undefined;
 }

@@ -275,7 +275,21 @@ export interface PiAgentRunnerOptions {
   newInstructionLoader: (workspaceDir: string) => InstructionLoader;
   getResource: (id: string) => unknown;
   profiles: Map<string, PiAgentProfile>;
-  getPriorRejection: (
+  /**
+   * S3 (007.6): wider feedback hook — carries note + marker-free conflict context.
+   * Takes precedence over the legacy `getPriorRejection` when both are provided.
+   */
+  getPriorFeedback?: (
+    taskId: string,
+  ) =>
+    | { note?: string; conflictContext?: string; priorSummary?: string }
+    | undefined;
+  /**
+   * Legacy hook — kept for backward compatibility with existing callers that
+   * pass `{ reason, summary }`. Wrapped internally into `getPriorFeedback`.
+   * Prefer `getPriorFeedback` for new callers.
+   */
+  getPriorRejection?: (
     taskId: string,
   ) =>
     { reason: string; summary?: string; proposalCommit?: string } | undefined;
@@ -297,10 +311,11 @@ export class PiAgentRunner implements AgentRunner {
   readonly #newInstructionLoader: (workspaceDir: string) => InstructionLoader;
   readonly #getResource: (id: string) => unknown;
   readonly #profiles: Map<string, PiAgentProfile>;
-  readonly #getPriorRejection: (
+  readonly #getPriorFeedback: (
     taskId: string,
   ) =>
-    { reason: string; summary?: string; proposalCommit?: string } | undefined;
+    | { note?: string; conflictContext?: string; priorSummary?: string }
+    | undefined;
   readonly #emit: (
     taskId: string,
     type: EventType,
@@ -315,7 +330,20 @@ export class PiAgentRunner implements AgentRunner {
     this.#newInstructionLoader = options.newInstructionLoader;
     this.#getResource = options.getResource;
     this.#profiles = options.profiles;
-    this.#getPriorRejection = options.getPriorRejection;
+    // Prefer getPriorFeedback (S3 hook); fall back to wrapping the legacy
+    // getPriorRejection { reason, summary } → { note, priorSummary }.
+    if (options.getPriorFeedback !== undefined) {
+      this.#getPriorFeedback = options.getPriorFeedback;
+    } else if (options.getPriorRejection !== undefined) {
+      const legacyFn = options.getPriorRejection;
+      this.#getPriorFeedback = (taskId: string) => {
+        const r = legacyFn(taskId);
+        if (r === undefined) return undefined;
+        return { note: r.reason, priorSummary: r.summary };
+      };
+    } else {
+      this.#getPriorFeedback = () => undefined;
+    }
     this.#emit = options.emit ?? (() => {});
     this.#clock = options.clock ?? (() => Date.now());
     this.#maxTurns = options.maxTurns ?? 50;
@@ -448,13 +476,19 @@ export class PiAgentRunner implements AgentRunner {
         instructions,
       });
 
-      // Build user prompt with optional prior-rejection feedback block
+      // Build user prompt with optional prior-feedback block (S3: note + conflict context).
       let userPrompt = renderTaskPrompt(task);
-      const rejection = this.#getPriorRejection(task.id);
-      if (rejection) {
-        userPrompt += `\n\n## Prior Rejection\n${rejection.reason}`;
-        if (rejection.summary) {
-          userPrompt += `\n${rejection.summary}`;
+      const feedback = this.#getPriorFeedback(task.id);
+      if (feedback) {
+        userPrompt += `\n\n## Prior Feedback`;
+        if (feedback.note) {
+          userPrompt += `\n${feedback.note}`;
+        }
+        if (feedback.conflictContext) {
+          userPrompt += `\n${feedback.conflictContext}`;
+        }
+        if (feedback.priorSummary) {
+          userPrompt += `\n${feedback.priorSummary}`;
         }
       }
 

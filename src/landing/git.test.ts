@@ -12,9 +12,9 @@ import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
-import { GitRepositoryLanding } from "./git.ts";
+import { GitRepositoryLanding, buildConflictContext } from "./git.ts";
 import { LandingConflictError } from "./port.ts";
-import type { LandingCandidate } from "./port.ts";
+import type { LandingCandidate, PreviewOutcome } from "./port.ts";
 import { SqliteLandingRepository } from "../storage/sqlite/landing.ts";
 import { LocalWorkspaceManager } from "../workspace/local.ts";
 import type {
@@ -810,6 +810,308 @@ test("Story 05 T2 (c) landing onto a non-checked-out target leaves the checked-o
   }
 });
 
+// ---------------------------------------------------------------------------
+// S1 (007.6) — preview: non-mutating conflict prediction via merge-tree --write-tree
+// ---------------------------------------------------------------------------
+
+test("(S1-preview-a) preview fast-forward: returns {kind:'fast-forward',candidateOID}; refs/HEAD/status unchanged", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s1pa-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHome(homeDir);
+    await cloneWs(homeDir, wsDir);
+    const candidateSHA = await wsCommit(
+      wsDir,
+      "file.ts",
+      "export const v = 1;",
+    );
+
+    // candidateSHA is a direct descendant of baseSHA → fast-forward
+    const targetOID = baseSHA;
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s1pa",
+      "repo-s1pa",
+      baseSHA,
+      candidateSHA,
+      "task-s1pa",
+      wsDir,
+    );
+
+    const beforeBranch = await git(homeDir, "rev-parse", "main");
+    const beforeHead = await git(homeDir, "rev-parse", "HEAD");
+    const { stdout: bso } = await execFileProm(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: homeDir },
+    );
+    const beforeStatus = bso.trim();
+
+    const outcome = await landing.preview(homeDir, cand, targetOID);
+
+    const afterBranch = await git(homeDir, "rev-parse", "main");
+    const afterHead = await git(homeDir, "rev-parse", "HEAD");
+    const { stdout: aso } = await execFileProm(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: homeDir },
+    );
+    const afterStatus = aso.trim();
+
+    assert.equal(
+      outcome.kind,
+      "fast-forward",
+      "direct ancestor must return kind fast-forward",
+    );
+    assert.ok(
+      outcome.kind === "fast-forward" && outcome.candidateOID === candidateSHA,
+      `candidateOID must equal candidateSHA; got ${outcome.kind === "fast-forward" ? outcome.candidateOID : "(wrong kind)"}`,
+    );
+    assert.equal(
+      afterBranch,
+      beforeBranch,
+      "main ref must be unchanged after ff preview",
+    );
+    assert.equal(
+      afterHead,
+      beforeHead,
+      "HEAD must be unchanged after ff preview",
+    );
+    assert.equal(
+      afterStatus,
+      beforeStatus,
+      "worktree/index status must be unchanged after ff preview",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("(S1-preview-b) preview mergeable: returns {kind:'mergeable',treeOID} (treeOID is a real tree object); refs/HEAD/status unchanged", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s1pb-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHome(homeDir);
+    await cloneWs(homeDir, wsDir);
+
+    // ws: add file_a.ts (disjoint change)
+    const candidateSHA = await wsCommit(wsDir, "file_a.ts", "const a = 1;");
+
+    // home: diverging commit on file_b.ts (disjoint from candidate)
+    await writeFile(join(homeDir, "file_b.ts"), "const b = 2;");
+    await execFileProm("git", ["add", "file_b.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "home diverge"], {
+      cwd: homeDir,
+    });
+    const targetOID = await git(homeDir, "rev-parse", "main");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s1pb",
+      "repo-s1pb",
+      baseSHA,
+      candidateSHA,
+      "task-s1pb",
+      wsDir,
+    );
+
+    const beforeBranch = await git(homeDir, "rev-parse", "main");
+    const beforeHead = await git(homeDir, "rev-parse", "HEAD");
+    const { stdout: bso } = await execFileProm(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: homeDir },
+    );
+    const beforeStatus = bso.trim();
+
+    const outcome = await landing.preview(homeDir, cand, targetOID);
+
+    const afterBranch = await git(homeDir, "rev-parse", "main");
+    const afterHead = await git(homeDir, "rev-parse", "HEAD");
+    const { stdout: aso } = await execFileProm(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: homeDir },
+    );
+    const afterStatus = aso.trim();
+
+    assert.equal(
+      outcome.kind,
+      "mergeable",
+      "disjoint changes must return kind mergeable",
+    );
+    assert.ok(
+      outcome.kind === "mergeable" &&
+        typeof outcome.treeOID === "string" &&
+        outcome.treeOID.length > 0,
+      `treeOID must be a non-empty string; got ${outcome.kind === "mergeable" ? outcome.treeOID : "(wrong kind)"}`,
+    );
+
+    if (outcome.kind === "mergeable") {
+      const { stdout: objType } = await execFileProm(
+        "git",
+        ["cat-file", "-t", outcome.treeOID],
+        { cwd: homeDir },
+      );
+      assert.equal(
+        objType.trim(),
+        "tree",
+        "treeOID must refer to a real tree object in the object DB",
+      );
+    }
+
+    assert.equal(
+      afterBranch,
+      beforeBranch,
+      "main ref must be unchanged after mergeable preview",
+    );
+    assert.equal(
+      afterHead,
+      beforeHead,
+      "HEAD must be unchanged after mergeable preview",
+    );
+    assert.equal(
+      afterStatus,
+      beforeStatus,
+      "worktree/index status must be unchanged after mergeable preview",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("(S1-preview-c) preview conflict: returns {kind:'conflict',files,perFile} with <<<<<<< and >>>>>>>; refs/HEAD/status unchanged", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s1pc-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    // home: initial commit with conflict.ts
+    await mkdir(homeDir, { recursive: true });
+    await execFileProm("git", ["init", "-q", "-b", "main"], { cwd: homeDir });
+    await execFileProm("git", ["config", "user.email", "test@localhost"], {
+      cwd: homeDir,
+    });
+    await execFileProm("git", ["config", "user.name", "Test"], {
+      cwd: homeDir,
+    });
+    await writeFile(join(homeDir, "conflict.ts"), "const x = 'base';\n");
+    await execFileProm("git", ["add", "conflict.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "init with conflict.ts"], {
+      cwd: homeDir,
+    });
+    const baseSHA = await git(homeDir, "rev-parse", "HEAD");
+
+    // ws: conflicting change to conflict.ts
+    await cloneWs(homeDir, wsDir);
+    await writeFile(join(wsDir, "conflict.ts"), "const x = 'ws-version';\n");
+    await execFileProm("git", ["add", "conflict.ts"], { cwd: wsDir });
+    await execFileProm("git", ["commit", "-q", "-m", "ws change"], {
+      cwd: wsDir,
+    });
+    const candidateSHA = await git(wsDir, "rev-parse", "HEAD");
+
+    // home: also modify conflict.ts differently (diverge + conflict)
+    await writeFile(
+      join(homeDir, "conflict.ts"),
+      "const x = 'home-version';\n",
+    );
+    await execFileProm("git", ["add", "conflict.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "home diverge"], {
+      cwd: homeDir,
+    });
+    const targetOID = await git(homeDir, "rev-parse", "main");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s1pc",
+      "repo-s1pc",
+      baseSHA,
+      candidateSHA,
+      "task-s1pc",
+      wsDir,
+    );
+
+    const beforeBranch = await git(homeDir, "rev-parse", "main");
+    const beforeHead = await git(homeDir, "rev-parse", "HEAD");
+    const { stdout: bso } = await execFileProm(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: homeDir },
+    );
+    const beforeStatus = bso.trim();
+
+    const outcome = await landing.preview(homeDir, cand, targetOID);
+
+    const afterBranch = await git(homeDir, "rev-parse", "main");
+    const afterHead = await git(homeDir, "rev-parse", "HEAD");
+    const { stdout: aso } = await execFileProm(
+      "git",
+      ["status", "--porcelain"],
+      { cwd: homeDir },
+    );
+    const afterStatus = aso.trim();
+
+    assert.equal(
+      outcome.kind,
+      "conflict",
+      "conflicting changes must return kind conflict",
+    );
+    assert.ok(
+      outcome.kind === "conflict" && outcome.files.includes("conflict.ts"),
+      `files must include 'conflict.ts'; got ${outcome.kind === "conflict" ? JSON.stringify(outcome.files) : "(wrong kind)"}`,
+    );
+    const conflictEntry =
+      outcome.kind === "conflict"
+        ? outcome.perFile.find((f) => f.path === "conflict.ts")
+        : undefined;
+    assert.ok(
+      conflictEntry !== undefined,
+      "perFile must have an entry for conflict.ts",
+    );
+    assert.ok(
+      conflictEntry.hunks.includes("<<<<<<<"),
+      "hunks must contain <<<<<<< conflict marker",
+    );
+    assert.ok(
+      conflictEntry.hunks.includes(">>>>>>>"),
+      "hunks must contain >>>>>>> conflict marker",
+    );
+
+    assert.equal(
+      afterBranch,
+      beforeBranch,
+      "main ref must be unchanged after conflict preview",
+    );
+    assert.equal(
+      afterHead,
+      beforeHead,
+      "HEAD must be unchanged after conflict preview",
+    );
+    assert.equal(
+      afterStatus,
+      beforeStatus,
+      "worktree/index status must be unchanged after conflict preview",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
 test("Story 05 T2 (d) stale baseSHA (target moved) merges without losing target commits (CAS, no silent overwrite)", async () => {
   const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-t2d-"));
   try {
@@ -1162,4 +1464,357 @@ test("(h) S1-F1: real land — LocalWorkspaceManager with relative root produces
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// S4 (007.6) — landPreviewed: land the previewed tree via atomic CAS
+// ---------------------------------------------------------------------------
+
+test("(S4-git-mergeable-tree-matches-preview) landPreviewed mergeable: committed tree equals previewed treeOID; parents are {targetOID, candidateOID}", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s4m-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHome(homeDir);
+    await cloneWs(homeDir, wsDir);
+
+    // Candidate adds file_a.ts (disjoint from target's change)
+    const candidateSHA = await wsCommit(wsDir, "file_a.ts", "const a = 1;");
+
+    // Target (home) diverges on file_b.ts
+    await writeFile(join(homeDir, "file_b.ts"), "const b = 2;");
+    await execFileProm("git", ["add", "file_b.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "home diverge"], {
+      cwd: homeDir,
+    });
+    const targetOID = await git(homeDir, "rev-parse", "main");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s4m",
+      "repo-s4m",
+      baseSHA,
+      candidateSHA,
+      "task-s4m",
+      wsDir,
+    );
+
+    // First preview to get the merged treeOID
+    const previewOutcome = await landing.preview(homeDir, cand, targetOID);
+    assert.equal(
+      previewOutcome.kind,
+      "mergeable",
+      "setup: preview must return mergeable",
+    );
+    assert.ok(previewOutcome.kind === "mergeable");
+
+    // Land the previewed tree
+    const landResult = await (
+      landing as unknown as {
+        landPreviewed(
+          homeDir: string,
+          candidate: LandingCandidate,
+          outcome: PreviewOutcome,
+          targetOID: string,
+        ): Promise<{ canonicalSHA: string }>;
+      }
+    ).landPreviewed(homeDir, cand, previewOutcome, targetOID);
+
+    const canonicalSHA = landResult.canonicalSHA;
+
+    // Branch must have advanced
+    const newBranchOID = await git(homeDir, "rev-parse", "main");
+    assert.equal(
+      newBranchOID,
+      canonicalSHA,
+      "main must point to the new merge commit after landPreviewed",
+    );
+
+    // The committed tree must equal the previewed treeOID (land-the-tree, not re-merge)
+    const committedTree = await git(
+      homeDir,
+      "rev-parse",
+      `${canonicalSHA}^{tree}`,
+    );
+    assert.equal(
+      committedTree,
+      previewOutcome.treeOID,
+      "landed commit tree must equal the previewed treeOID (construction guarantee)",
+    );
+
+    // Parents must include both targetOID and candidateSHA
+    const parentLine = await git(
+      homeDir,
+      "rev-list",
+      "--parents",
+      "-n",
+      "1",
+      canonicalSHA,
+    );
+    const parents = parentLine.split(" ").slice(1);
+    assert.ok(
+      parents.includes(targetOID),
+      `targetOID (${targetOID}) must be a parent of the merge commit; parents: ${JSON.stringify(parents)}`,
+    );
+    assert.ok(
+      parents.includes(candidateSHA),
+      `candidateSHA (${candidateSHA}) must be a parent of the merge commit; parents: ${JSON.stringify(parents)}`,
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("(S4-git-ff-advances-branch) landPreviewed fast-forward: branch advances to candidateOID atomically", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s4ff-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHome(homeDir);
+    await cloneWs(homeDir, wsDir);
+
+    // Candidate is a direct descendant → fast-forward scenario
+    const candidateSHA = await wsCommit(wsDir, "new.ts", "const x = 1;");
+    const targetOID = baseSHA; // home is at baseSHA, candidate is ahead
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s4ff",
+      "repo-s4ff",
+      baseSHA,
+      candidateSHA,
+      "task-s4ff",
+      wsDir,
+    );
+
+    const previewOutcome = await landing.preview(homeDir, cand, targetOID);
+    assert.equal(
+      previewOutcome.kind,
+      "fast-forward",
+      "setup: preview must return fast-forward",
+    );
+    assert.ok(previewOutcome.kind === "fast-forward");
+
+    const landResult = await (
+      landing as unknown as {
+        landPreviewed(
+          homeDir: string,
+          candidate: LandingCandidate,
+          outcome: PreviewOutcome,
+          targetOID: string,
+        ): Promise<{ canonicalSHA: string }>;
+      }
+    ).landPreviewed(homeDir, cand, previewOutcome, targetOID);
+
+    // Branch must equal candidateSHA
+    const newBranchOID = await git(homeDir, "rev-parse", "main");
+    assert.equal(
+      newBranchOID,
+      candidateSHA,
+      "main must advance to candidateSHA after ff landPreviewed",
+    );
+    assert.equal(
+      landResult.canonicalSHA,
+      candidateSHA,
+      "canonicalSHA from landPreviewed must equal candidateSHA",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("(S4-git-stale-cas-fails-branch-untouched) landPreviewed stale expectedOld: throws with newTargetOID; branch stays at current position", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s4cas-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHome(homeDir);
+    await cloneWs(homeDir, wsDir);
+
+    // Candidate adds file_a.ts (disjoint from target's change → mergeable)
+    const candidateSHA = await wsCommit(wsDir, "file_a.ts", "const a = 1;");
+
+    // Target diverges on file_b.ts
+    await writeFile(join(homeDir, "file_b.ts"), "const b = 2;");
+    await execFileProm("git", ["add", "file_b.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "home diverge"], {
+      cwd: homeDir,
+    });
+    const targetOID = await git(homeDir, "rev-parse", "main");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s4cas",
+      "repo-s4cas",
+      baseSHA,
+      candidateSHA,
+      "task-s4cas",
+      wsDir,
+    );
+
+    // Preview against the current targetOID
+    const previewOutcome = await landing.preview(homeDir, cand, targetOID);
+    assert.equal(
+      previewOutcome.kind,
+      "mergeable",
+      "setup: preview must return mergeable",
+    );
+    assert.ok(previewOutcome.kind === "mergeable");
+
+    // Externally advance the branch (simulate concurrent push) — stale CAS
+    await writeFile(join(homeDir, "file_c.ts"), "const c = 3;");
+    await execFileProm("git", ["add", "file_c.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "concurrent push"], {
+      cwd: homeDir,
+    });
+    const advancedOID = await git(homeDir, "rev-parse", "main");
+    assert.notEqual(
+      advancedOID,
+      targetOID,
+      "setup: branch must have moved past targetOID",
+    );
+
+    // landPreviewed with stale expectedOld must throw
+    let threw = false;
+    let thrownErr: unknown;
+    try {
+      await (
+        landing as unknown as {
+          landPreviewed(
+            homeDir: string,
+            candidate: LandingCandidate,
+            outcome: PreviewOutcome,
+            targetOID: string,
+          ): Promise<unknown>;
+        }
+      ).landPreviewed(homeDir, cand, previewOutcome, targetOID);
+    } catch (err) {
+      threw = true;
+      thrownErr = err;
+    }
+
+    assert.ok(
+      threw,
+      "landPreviewed with stale expectedOld must throw (CAS mismatch)",
+    );
+    assert.ok(
+      thrownErr !== null &&
+        typeof thrownErr === "object" &&
+        "newTargetOID" in (thrownErr as object),
+      `thrown error must carry newTargetOID property; got: ${JSON.stringify(thrownErr)}`,
+    );
+
+    // Branch must remain at the externally-advanced position, NOT at candidateSHA
+    const finalOID = await git(homeDir, "rev-parse", "main");
+    assert.equal(
+      finalOID,
+      advancedOID,
+      "after stale-CAS failure, branch must remain at the concurrently-advanced OID (not mutated)",
+    );
+    assert.notEqual(
+      finalOID,
+      candidateSHA,
+      "after stale-CAS failure, branch must NOT be at candidateSHA (never landed on wrong base)",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// B2 regression — preview() with empty workspace and ODB-reachable candidateSHA
+//
+// GetConflict builds a LandingCandidate with workspace:"" (the workspace path
+// is not stored on the candidate row).  preview() currently runs
+//   git fetch "" <sha>
+// unconditionally, which fails.  When candidateSHA is already reachable in
+// homeDir's object DB (it was fetched during the original land() attempt),
+// preview() must classify without throwing — the fetch must be guarded.
+// ---------------------------------------------------------------------------
+test("(B2-preview-empty-workspace) preview with empty workspace and candidateSHA already reachable in ODB: classifies (fast-forward) without throwing", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-b2-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHome(homeDir);
+    await cloneWs(homeDir, wsDir);
+
+    // Make a candidate commit in wsDir (fast-forward: candidateSHA directly ahead of baseSHA)
+    const candidateSHA = await wsCommit(
+      wsDir,
+      "feature.ts",
+      "export const x = 1;",
+    );
+
+    // Pre-fetch the candidateSHA into homeDir's ODB — this mirrors what land() does;
+    // GetConflict calls preview() after land() already fetched the object but
+    // stored workspace:"" on the candidate row.
+    await execFileProm("git", ["fetch", wsDir, candidateSHA], { cwd: homeDir });
+
+    // Verify the object is reachable (setup guard)
+    const { stdout: objType } = await execFileProm(
+      "git",
+      ["cat-file", "-t", candidateSHA],
+      { cwd: homeDir },
+    );
+    assert.equal(
+      objType.trim(),
+      "commit",
+      "setup: candidateSHA must be reachable in homeDir before calling preview with empty workspace",
+    );
+
+    const targetOID = baseSHA; // baseSHA is an ancestor of candidateSHA → fast-forward
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+
+    // workspace is intentionally "" — the GetConflict scenario (no workspace stored)
+    const cand = makeCandidate(
+      "cand-b2",
+      "repo-b2",
+      baseSHA,
+      candidateSHA,
+      "task-b2",
+      "", // empty workspace — triggers `git fetch "" <sha>` in the current code
+    );
+
+    // Must NOT throw; must classify correctly even though workspace is "".
+    const outcome = await landing.preview(homeDir, cand, targetOID);
+
+    assert.equal(
+      outcome.kind,
+      "fast-forward",
+      `preview with empty workspace + reachable candidateSHA must return fast-forward; got: ${outcome.kind}`,
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// B1 (EPIC 007.6) — buildConflictContext tripwire stub
+// ---------------------------------------------------------------------------
+
+test("(B1-build-conflict-context-stub) buildConflictContext throws 'not implemented' — EPIC 007.6 B1", () => {
+  assert.throws(
+    () => buildConflictContext([]),
+    (err: unknown) =>
+      err instanceof Error && err.message.includes("not implemented"),
+    "buildConflictContext must throw with message containing 'not implemented'",
+  );
 });

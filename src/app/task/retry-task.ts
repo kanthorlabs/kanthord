@@ -31,6 +31,15 @@ interface KindResolver {
 export interface ConflictCandidateStore {
   getCandidateByTask(taskId: string): ChangeCandidate | undefined;
   updateCandidateState(id: string, state: CandidateState): void;
+  /** Optional: durably snapshot conflict metadata onto the recovery attempt. */
+  saveConflictSnapshot?(
+    taskId: string,
+    snapshot: {
+      candidateOID: string;
+      targetOID: string;
+      conflictContext: string;
+    },
+  ): void;
 }
 
 export class RetryTask {
@@ -57,8 +66,8 @@ export class RetryTask {
     this.#candidateStore = candidateStore;
   }
 
-  async execute(input: { taskId: string }): Promise<void> {
-    const { taskId } = input;
+  async execute(input: { taskId: string; note?: string }): Promise<void> {
+    const { taskId, note } = input;
 
     const kind = this.#resolver.resolveKind(taskId);
     if (kind === undefined) {
@@ -85,7 +94,25 @@ export class RetryTask {
           "pending",
         );
         const updated = transitionTask(task, "pending");
-        this.#store.save(updated);
+        // Persist optional guidance note so it surfaces on get task --json
+        // and is readable by the prompt hook (getPriorFeedback).
+        const taskToSave = { ...updated, note: note ?? undefined };
+        this.#store.save(taskToSave);
+        // Durably snapshot conflict context for deterministic rebuild prompt.
+        const candidateOID = candidate.candidateSHA;
+        const targetOID =
+          typeof candidate["targetOID"] === "string"
+            ? candidate["targetOID"]
+            : "";
+        const conflictContext =
+          typeof candidate["conflictContext"] === "string"
+            ? candidate["conflictContext"]
+            : "";
+        this.#candidateStore?.saveConflictSnapshot?.(taskId, {
+          candidateOID,
+          targetOID,
+          conflictContext,
+        });
         const enqueued = this.#queue.enqueue(taskId);
         if (enqueued) {
           this.#feed.append(newEvent("task.ready", { taskId }));

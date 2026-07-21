@@ -45,6 +45,37 @@ export class LandingConflictError extends Error {
   }
 }
 
+export type PreviewOutcome =
+  | { kind: "fast-forward"; candidateOID: string }
+  | { kind: "mergeable"; treeOID: string }
+  | {
+      kind: "conflict";
+      files: string[];
+      perFile: { path: string; hunks: string }[];
+    };
+
+export class LandingCASMismatchError extends Error {
+  readonly newTargetOID: string;
+
+  constructor(newTargetOID: string) {
+    super(`CAS mismatch: branch moved to ${newTargetOID}`);
+    this.name = "LandingCASMismatchError";
+    this.newTargetOID = newTargetOID;
+  }
+}
+
 export interface RepositoryLanding {
   land(homeDir: string, candidate: LandingCandidate): Promise<LandingResult>;
+  preview(
+    homeDir: string,
+    candidate: LandingCandidate,
+    targetOID: string,
+  ): Promise<PreviewOutcome>;
+  landPreviewed(
+    homeDir: string,
+    candidate: LandingCandidate,
+    previewOutcome: PreviewOutcome,
+    targetOID: string,
+  ): Promise<LandingResult>;
+  resolveTargetOID(homeDir: string, branch: string): string | Promise<string>;
 }

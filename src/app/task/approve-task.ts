@@ -13,7 +13,7 @@ import type {
   RepositoryLanding,
   LandingCandidate,
 } from "../../landing/port.ts";
-import { LandingConflictError } from "../../landing/port.ts";
+import { LandingCASMismatchError } from "../../landing/port.ts";
 import type { WorkspaceManager } from "../../workspace/port.ts";
 import {
   UnknownReferenceError,
@@ -27,6 +27,7 @@ export { TaskNotAwaitingConfirmationError } from "../errors.ts";
 export type ApproveOutcome =
   | { kind: "approved"; taskId: string; canonicalSHA: string }
   | { kind: "conflict"; taskId: string; conflictFiles?: string[] }
+  | { kind: "target_moved"; taskId: string }
   | {
       kind: "landing_failed";
       taskId: string;
@@ -191,8 +192,9 @@ export class ApproveTask {
     if (isRepoBoundLanding) {
       let candidate: LandingCandidate;
       let homeDir: string;
-      // Port members are optional (Story 05 T1) so un-editable fakes stay
-      // valid; capture them and fall back to the legacy shape when absent.
+      // Constructor-level deps (landingRepo/workspaceManager) are optional so
+      // un-editable fakes stay valid; capture them and fall back when absent.
+      // Note: port methods preview/landPreviewed/resolveTargetOID are REQUIRED.
       const landingRepo = this.#landingRepo;
       const workspaceManager = this.#workspaceManager;
       const getCandidateByTask = landingRepo?.getCandidateByTask;
@@ -240,17 +242,33 @@ export class ApproveTask {
         homeDir = result.workspace ?? "";
         candidate = this.#legacyCandidate(taskId, context, result);
       }
-      try {
-        const landResult = await this.landing.land(homeDir, candidate);
-        canonicalSHA = landResult.canonicalSHA;
-      } catch (err) {
-        if (err instanceof LandingConflictError) {
+      // Preview-then-land via atomic CAS. Re-preview on CAS mismatch up to the
+      // bounded cap.
+      const MAX_CAS_RETRIES = 3;
+      let casRetries = 0;
+      let currentTargetOID = await this.landing.resolveTargetOID(
+        homeDir,
+        candidate.target,
+      );
+
+      for (;;) {
+        if (casRetries >= MAX_CAS_RETRIES) {
+          return { kind: "target_moved", taskId };
+        }
+
+        const previewOutcome = await this.landing.preview(
+          homeDir,
+          candidate,
+          currentTargetOID,
+        );
+
+        if (previewOutcome.kind === "conflict") {
           try {
             this.#feed.append(newEvent("task.conflict", { taskId }));
             return {
               kind: "conflict",
               taskId,
-              conflictFiles: err.conflictFiles,
+              conflictFiles: previewOutcome.files,
             };
           } catch (feedErr) {
             return {
@@ -261,12 +279,30 @@ export class ApproveTask {
             };
           }
         }
-        return {
-          kind: "landing_failed",
-          taskId,
-          message: "landing failed unexpectedly",
-          cause: err,
-        };
+
+        // fast-forward or mergeable — land the previewed tree via CAS
+        try {
+          const landResult = await this.landing.landPreviewed(
+            homeDir,
+            candidate,
+            previewOutcome,
+            currentTargetOID,
+          );
+          canonicalSHA = landResult.canonicalSHA;
+          break;
+        } catch (casErr) {
+          if (!(casErr instanceof LandingCASMismatchError)) {
+            return {
+              kind: "landing_failed",
+              taskId,
+              message: "landing failed unexpectedly",
+              cause: casErr,
+            };
+          }
+          // CAS mismatch: re-preview against the new target OID.
+          currentTargetOID = casErr.newTargetOID;
+          casRetries++;
+        }
       }
     }
 

@@ -5,6 +5,7 @@ import {
   type LandingCandidate,
   type LandingOutcome,
   type LandingResult,
+  type PreviewOutcome,
   type RepositoryLanding,
 } from "./port.ts";
 
@@ -36,7 +37,7 @@ test("LandingConflictError with empty conflictFiles array", () => {
 
 test("FakeLanding implements RepositoryLanding (compile test — interface surface)", () => {
   // A hand-written fake that satisfies the RepositoryLanding interface.
-  // If port.ts exports the right interface, this compiles without error.
+  // If port.ts exports the right interface (including preview), this compiles without error.
   let called = false;
   const fake: RepositoryLanding = {
     land: async (
@@ -51,10 +52,48 @@ test("FakeLanding implements RepositoryLanding (compile test — interface surfa
         canonicalSHA: candidate.candidateSHA,
       };
     },
+    preview: async (
+      _homeDir: string,
+      candidate: LandingCandidate,
+      _targetOID: string,
+    ): Promise<PreviewOutcome> => {
+      return { kind: "fast-forward", candidateOID: candidate.candidateSHA };
+    },
+    // S2 pre-adjust: implement required methods so fake still compiles once
+    // RepositoryLanding promotes landPreviewed/resolveTargetOID to required.
+    landPreviewed: async (
+      _homeDir: string,
+      candidate: LandingCandidate,
+      _previewOutcome: PreviewOutcome,
+      _targetOID: string,
+    ): Promise<LandingResult> => {
+      const outcome: LandingOutcome = { kind: "fast-forward" };
+      return { candidate, outcome, canonicalSHA: candidate.candidateSHA };
+    },
+    resolveTargetOID: (_homeDir: string, _branch: string): string => {
+      return "0000000000000000000000000000000000000000";
+    },
   };
   // Call it to satisfy the compiler (no unused-variable error)
   assert.equal(typeof fake.land, "function");
+  assert.equal(typeof fake.preview, "function");
   assert.equal(called, false);
+});
+
+test("PreviewOutcome covers fast-forward, mergeable, conflict kinds — merge kind absent (compile test)", () => {
+  // Verifies PreviewOutcome is distinct from LandingOutcome: no 'merge' kind, but 'mergeable' is present.
+  const ff: PreviewOutcome = { kind: "fast-forward", candidateOID: "abc" };
+  const mergeable: PreviewOutcome = { kind: "mergeable", treeOID: "def" };
+  const conflict: PreviewOutcome = {
+    kind: "conflict",
+    files: ["a.ts"],
+    perFile: [
+      { path: "a.ts", hunks: "<<<<<<< HEAD\n=======\n>>>>>>> candidate\n" },
+    ],
+  };
+  assert.equal(ff.kind, "fast-forward");
+  assert.equal(mergeable.kind, "mergeable");
+  assert.equal(conflict.kind, "conflict");
 });
 
 test("LandingOutcome union covers all four kinds (compile test)", () => {

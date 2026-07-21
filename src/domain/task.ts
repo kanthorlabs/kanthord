@@ -21,6 +21,8 @@ export interface Task extends Entity {
   instructions?: string;
   ac?: string[];
   verification?: string[];
+  /** Free-text note attached by the user at retry time (e.g. conflict guidance). */
+  note?: string;
 }
 
 export class InvalidTaskFieldError extends Error {

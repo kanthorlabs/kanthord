@@ -351,3 +351,121 @@ test("B1 regression: retryTask wired with candidateStore recovers a conflict-can
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// S3 (007.6) — composition: getPriorFeedback reads persisted note back
+//
+// RED today: buildDeps does not expose getPriorFeedback; calling
+// deps.getPriorFeedback(taskId) throws TypeError at runtime.
+// After SE renames getPriorRejection → getPriorFeedback and exposes the
+// accessor from buildDeps, this test verifies the wiring end-to-end.
+// ---------------------------------------------------------------------------
+test("(S3-composition-note) composition: getPriorFeedback reads note persisted by retryTask.execute", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-s3-comp-"));
+  const dbPath = join(dir, "kanthord.db");
+  try {
+    const deps = buildDeps(dbPath);
+
+    const migrate = await dispatch(["db", "migrate"], deps);
+    assert.equal(migrate.exitCode, 0, "db migrate exits 0");
+
+    // Create minimal entity tree: project → initiative → objective → task
+    const rp = await dispatch(["create", "project", "--name", "s3demo"], deps);
+    assert.equal(rp.exitCode, 0, "create project exits 0");
+    const PROJECT = rp.stdout[0]!;
+
+    const ri = await dispatch(
+      ["create", "initiative", "--project", PROJECT, "--name", "s3init"],
+      deps,
+    );
+    assert.equal(ri.exitCode, 0, "create initiative exits 0");
+    const INITIATIVE = ri.stdout[0]!;
+
+    const ro = await dispatch(
+      ["create", "objective", "--initiative", INITIATIVE, "--name", "s3obj"],
+      deps,
+    );
+    assert.equal(ro.exitCode, 0, "create objective exits 0");
+    const OBJECTIVE = ro.stdout[0]!;
+
+    const rt = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "s3 task",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+      ],
+      deps,
+    );
+    assert.equal(rt.exitCode, 0, "create task exits 0");
+    const TASK_ID = rt.stdout[0]!;
+
+    // Inject conflict state directly via a second DB connection (same as B1 regression)
+    const db2 = new DatabaseSync(dbPath);
+    db2
+      .prepare("UPDATE tasks SET status = 'awaiting_confirmation' WHERE id = ?")
+      .run(TASK_ID);
+    const CAND_ID = "01JZZZZZZZZZZZZZZZZS3CAND1";
+    db2
+      .prepare(
+        `INSERT INTO landing_candidates
+         (id, task_id, repo_id, base_sha, candidate_sha, ref, target, state)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'conflict')`,
+      )
+      .run(
+        CAND_ID,
+        TASK_ID,
+        "01JZZZZZZZZZZZZZZZZZZZREPOY",
+        "deadbeef",
+        "cafebabe",
+        `kanthord/${TASK_ID}`,
+        "main",
+      );
+    db2.close();
+
+    // Retry with a note — the note must be persisted
+    await assert.doesNotReject(
+      () =>
+        deps.retryTask.execute({
+          taskId: TASK_ID,
+          note: "keep both handlers",
+        } as Parameters<typeof deps.retryTask.execute>[0]),
+      "conflict-candidate retry with note must not throw",
+    );
+
+    // RED: deps.getPriorFeedback is not yet exposed from buildDeps.
+    // After the SE exposes it, calling it must return { note: "keep both handlers" }.
+    const depsAny = deps as Record<string, unknown>;
+    const getPriorFeedback = depsAny["getPriorFeedback"] as
+      | ((
+          taskId: string,
+        ) =>
+          | { note?: string; conflictContext?: string; priorSummary?: string }
+          | undefined)
+      | undefined;
+
+    assert.ok(
+      typeof getPriorFeedback === "function",
+      "deps.getPriorFeedback must be exposed from buildDeps after the S3 rename",
+    );
+
+    const feedback = getPriorFeedback!(TASK_ID);
+    assert.ok(
+      feedback !== undefined,
+      "getPriorFeedback must return a value after a note has been stored",
+    );
+    assert.equal(
+      feedback.note,
+      "keep both handlers",
+      "getPriorFeedback must return the note that was persisted by retryTask.execute",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
