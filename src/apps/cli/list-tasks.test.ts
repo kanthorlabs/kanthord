@@ -43,8 +43,8 @@ class FakeTaskRepository implements TaskRepository {
   getTaskContext(_taskId: string): Record<string, string> {
     return {};
   }
-  addDependency(_taskId: string, _dependsOn: string): void {}
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
   getInitiativeId(_taskId: string): string | undefined {
     return undefined;
   }
@@ -120,8 +120,8 @@ class FakeTaskRepositoryB1 implements TaskRepository {
   getTaskContext(_taskId: string): Record<string, string> {
     return {};
   }
-  addDependency(_taskId: string, _dependsOn: string): void {}
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
   getInitiativeId(_taskId: string): string | undefined {
     return undefined;
   }

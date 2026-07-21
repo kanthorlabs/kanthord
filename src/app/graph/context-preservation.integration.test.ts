@@ -146,7 +146,7 @@ test("context-preservation: apply(spec+dep edit) leaves task_context byte-identi
         ac: ["returns 200 for valid creds", "rejects invalid creds with 401"],
         agent: "generic@1",
         verification: undefined,
-        dependsOn: [],
+        dependencies: [],
         sourcePath: "testinit/testobj/implement-auth.md",
       },
     ],

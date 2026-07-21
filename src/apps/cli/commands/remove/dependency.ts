@@ -16,15 +16,15 @@ export function buildRemoveDependencyCommand(
       "--task <id>",
       "ID of the task that depends on another task",
     )
-    .requiredOption("--depends-on <id>", "ID of the task to stop depending on")
+    .requiredOption("--dependency <id>", "ID of the task to stop depending on")
     .addHelpText(
       "after",
-      "\nExample:\n  kanthord remove dependency --task task-1 --depends-on task-2\n",
+      "\nExample:\n  kanthord remove dependency --task task-1 --dependency task-2\n",
     )
-    .action(async (opts: { task: string; dependsOn: string }) => {
+    .action(async (opts: { task: string; dependency: string }) => {
       emitResult(
         await runRemoveDependency(
-          { task: opts.task, "depends-on": opts.dependsOn },
+          { task: opts.task, dependency: opts.dependency },
           deps.removeDependency,
         ),
         io,

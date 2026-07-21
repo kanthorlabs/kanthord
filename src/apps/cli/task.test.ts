@@ -132,8 +132,8 @@ class FakeTaskRepository implements TaskRepository {
   getTaskContext(taskId: string): Record<string, string> {
     return this.#context.get(taskId) ?? {};
   }
-  addDependency(_taskId: string, _dependsOn: string): void {}
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
   listTasksByObjective(_objectiveId: string): Task[] {
     return [];
   }
@@ -272,7 +272,7 @@ describe("runCreateTask", () => {
     assert.match(result.stdout[0]!, /^[0-9A-Z]{26}$/, "stdout is a ULID");
   });
 
-  test("runCreateTask repeatable --depends-on parses into dep id array", async () => {
+  test("runCreateTask repeatable --dependencies parses into dep id array", async () => {
     const f = buildFakes();
     const result = await runCreateTask(
       {
@@ -280,7 +280,7 @@ describe("runCreateTask", () => {
         title: "deploy",
         instructions: "deploy it",
         ac: ["deployed"],
-        "depends-on": [DEP_ID1, DEP_ID2],
+        dependencies: [DEP_ID1, DEP_ID2],
       },
       new CreateTask(
         f.taskRepository,

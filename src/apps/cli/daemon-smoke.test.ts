@@ -100,7 +100,7 @@ async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
       OBJECTIVE,
       "--title",
       "deploy",
-      "--depends-on",
+      "--dependencies",
       TASK_API,
       "--instructions",
       "Deploy the service",
@@ -139,7 +139,7 @@ async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
 
   // implement api now depends on spike auth
   const r8 = await dispatch(
-    ["add", "dependency", "--task", TASK_API, "--depends-on", TASK_PREP],
+    ["add", "dependency", "--task", TASK_API, "--dependency", TASK_PREP],
     deps,
   );
   assert.equal(r8.exitCode, 0, "add dependency exits 0");

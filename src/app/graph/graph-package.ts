@@ -12,7 +12,7 @@ export interface PkgTask {
   ac: string[];
   agent: string; // codec defaults absent → "generic@1"
   verification: string[] | null | undefined; // undefined = no `# Verification`; null/[] = empty section
-  dependsOn: string[]; // ULIDs or refs
+  dependencies: string[]; // ULIDs or refs
   sourcePath: string; // B7 provenance, relative to package root
   context?: Record<string, string>; // C1: per-task context overrides (alias → resolved resource id)
 }

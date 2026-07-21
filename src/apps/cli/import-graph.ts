@@ -415,15 +415,15 @@ async function runCreate(
     // Resolve objectiveRef slug → ULID
     const resolvedObjectiveRef =
       objectiveRefToId[task.objectiveRef] ?? task.objectiveRef;
-    // Resolve dependsOn refs → ULIDs
-    const resolvedDependsOn = task.dependsOn.map(
+    // Resolve dependency refs → ULIDs
+    const resolvedDependencies = task.dependencies.map(
       (ref) => taskRefToId[ref] ?? ref,
     );
     const updatedTask: PkgTask = {
       ...task,
       id: assignedId,
       objectiveRef: resolvedObjectiveRef,
-      dependsOn: resolvedDependsOn,
+      dependencies: resolvedDependencies,
     };
     await atomicWrite(join(dir, task.sourcePath), serializeNode(updatedTask));
   }

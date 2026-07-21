@@ -12,18 +12,18 @@ export async function runAddDependency(
     return { ...toResult(err), stdout: [] };
   }
 
-  const dependsOn = args["depends-on"];
-  if (typeof dependsOn !== "string" || dependsOn === "") {
-    const err = new MissingFlagError("--depends-on");
+  const dependencyId = args["dependency"];
+  if (typeof dependencyId !== "string" || dependencyId === "") {
+    const err = new MissingFlagError("--dependency");
     return { ...toResult(err), stdout: [] };
   }
 
   try {
-    await addDependency.execute({ taskId, dependsOn });
+    await addDependency.execute({ taskId, dependencyId });
     return {
       exitCode: 0,
       stdout: [],
-      stderr: [`dependency added: ${taskId} → ${dependsOn}`],
+      stderr: [`dependency added: ${taskId} → ${dependencyId}`],
     };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
@@ -40,14 +40,14 @@ export async function runRemoveDependency(
     return { ...toResult(err), stdout: [] };
   }
 
-  const dependsOn = args["depends-on"];
-  if (typeof dependsOn !== "string" || dependsOn === "") {
-    const err = new MissingFlagError("--depends-on");
+  const dependencyId = args["dependency"];
+  if (typeof dependencyId !== "string" || dependencyId === "") {
+    const err = new MissingFlagError("--dependency");
     return { ...toResult(err), stdout: [] };
   }
 
   try {
-    await removeDependency.execute({ taskId, dependsOn });
+    await removeDependency.execute({ taskId, dependencyId });
     return { exitCode: 0, stdout: [], stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };

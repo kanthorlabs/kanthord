@@ -209,7 +209,7 @@ export class SqliteTaskRepository implements TaskRepository {
     return result;
   }
 
-  addDependency(taskId: string, dependsOn: string): void {
+  addDependency(taskId: string, dependencyId: string): void {
     type MaxRow = { maxPos: number | null };
     const maxRow = this.#db
       .prepare(
@@ -222,16 +222,16 @@ export class SqliteTaskRepository implements TaskRepository {
       .prepare(
         "INSERT INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
       )
-      .run(taskId, dependsOn, nextPos);
+      .run(taskId, dependencyId, nextPos);
     this.#stampSha(taskId);
   }
 
-  removeDependency(taskId: string, dependsOn: string): void {
+  removeDependency(taskId: string, dependencyId: string): void {
     this.#db
       .prepare(
         "DELETE FROM task_dependencies WHERE taskId = ? AND dependency = ?",
       )
-      .run(taskId, dependsOn);
+      .run(taskId, dependencyId);
     this.#stampSha(taskId);
   }
 

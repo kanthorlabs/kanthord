@@ -38,7 +38,7 @@ objective: <ULID-or-slug>
 name: <string> # initiative / objective
 title: <string> # task
 agent: <string> # task; absent → generic@1
-depends-on: [<ULID-or-slug>, …] # task; absent → []
+dependencies: [<ULID-or-slug>, …] # task; absent → []
 ---
 ```
 
@@ -96,7 +96,7 @@ npm test
 - LF line endings.
 - `- [ ] ` checklist prefix.
 - Single trailing newline.
-- `depends-on` serializes as a sorted set; `ac`/`verification` as ordered lists.
+- `dependencies` serializes as a sorted set; `ac`/`verification` as ordered lists.
 
 ## Manifest (`.kanthord-export.json`)
 

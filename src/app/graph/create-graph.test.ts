@@ -127,9 +127,9 @@ class FakeTaskRepository implements TaskRepository {
     return {};
   }
 
-  addDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
 
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
 
   getInitiativeId(_taskId: string): string | undefined {
     return undefined;
@@ -266,7 +266,7 @@ function makeAuthoredPkg(): GraphPackage {
         ac: ["returns 200 for valid creds"],
         agent: "generic@1",
         verification: undefined,
-        dependsOn: [],
+        dependencies: [],
         sourcePath: "backend/implement-api.md",
       },
       {
@@ -277,7 +277,7 @@ function makeAuthoredPkg(): GraphPackage {
         ac: ["health check green"],
         agent: "generic@1",
         verification: undefined,
-        dependsOn: ["implement-api"],
+        dependencies: ["implement-api"],
         sourcePath: "backend/deploy.md",
       },
     ],
@@ -493,8 +493,8 @@ test("CreateGraph throws CycleError for cyclic deps and saveAll is never called"
   assert.ok(task0 !== undefined && task1 !== undefined);
   // implement-api depends on deploy, deploy depends on implement-api → cycle
   pkg.tasks = [
-    { ...task0, dependsOn: ["deploy"] },
-    { ...task1, dependsOn: ["implement-api"] },
+    { ...task0, dependencies: ["deploy"] },
+    { ...task1, dependencies: ["implement-api"] },
   ];
 
   await assert.rejects(
@@ -549,7 +549,7 @@ function makeAuthoredPkgWithBindings(): GraphPackage {
         ac: ["endpoints return correct status codes"],
         agent: "generic@1",
         verification: undefined,
-        dependsOn: [],
+        dependencies: [],
         sourcePath: "api/impl.md",
       },
     ],

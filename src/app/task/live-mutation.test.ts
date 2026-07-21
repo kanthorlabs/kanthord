@@ -228,7 +228,7 @@ test("live mutation — re-arrange while queued: X→Y added during pivot; X sta
         pivot,
         async () => {
           // X is still pending; add X→Y (X now depends on Y).
-          await addDep.execute({ taskId: taskX, dependsOn: taskY });
+          await addDep.execute({ taskId: taskX, dependencyId: taskY });
         },
       ],
     ]);
@@ -298,7 +298,7 @@ test("live mutation — no retro-blocking: AddDependency on a running task throw
         async () => {
           // task1 is running (tx1 committed its status = 'running').
           try {
-            await addDep.execute({ taskId: task1, dependsOn: task2 });
+            await addDep.execute({ taskId: task1, dependencyId: task2 });
           } catch (err) {
             runningError = err;
           }
@@ -320,7 +320,7 @@ test("live mutation — no retro-blocking: AddDependency on a running task throw
     // Post-run: task1 is completed — AddDependency must also throw.
     assert.equal(d.taskRepo.get(task1)?.status, "completed", "task1 completed");
     await assert.rejects(
-      () => addDep.execute({ taskId: task1, dependsOn: task2 }),
+      () => addDep.execute({ taskId: task1, dependencyId: task2 }),
       DependenciesLockedError,
       "AddDependency on completed task throws DependenciesLockedError",
     );

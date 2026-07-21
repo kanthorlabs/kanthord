@@ -53,22 +53,22 @@ class FakeTaskRepository implements TaskRepository {
     return {};
   }
 
-  addDependency(taskId: string, dependsOn: string): void {
+  addDependency(taskId: string, dependencyId: string): void {
     const task = this.#tasks.get(taskId);
     if (task) {
       this.#tasks.set(taskId, {
         ...task,
-        dependencies: [...task.dependencies, dependsOn],
+        dependencies: [...task.dependencies, dependencyId],
       });
     }
   }
 
-  removeDependency(taskId: string, dependsOn: string): void {
+  removeDependency(taskId: string, dependencyId: string): void {
     const task = this.#tasks.get(taskId);
     if (task) {
       this.#tasks.set(taskId, {
         ...task,
-        dependencies: task.dependencies.filter((d) => d !== dependsOn),
+        dependencies: task.dependencies.filter((d) => d !== dependencyId),
       });
     }
   }
@@ -230,7 +230,7 @@ describe("runAddDependency", () => {
     });
 
     const result = await runAddDependency(
-      { task: TASK_A, "depends-on": TASK_B },
+      { task: TASK_A, dependency: TASK_B },
       new AddDependency(
         f.taskRepository,
         f.initiativeRepository,
@@ -268,7 +268,7 @@ describe("runAddDependency", () => {
     });
 
     const result = await runAddDependency(
-      { task: TASK_B, "depends-on": TASK_A },
+      { task: TASK_B, dependency: TASK_A },
       new AddDependency(
         f.taskRepository,
         f.initiativeRepository,
@@ -308,7 +308,7 @@ describe("runAddDependency", () => {
     });
 
     const result = await runAddDependency(
-      { task: TASK_A, "depends-on": TASK_B },
+      { task: TASK_A, dependency: TASK_B },
       new AddDependency(
         f.taskRepository,
         f.initiativeRepository,
@@ -351,7 +351,7 @@ describe("runRemoveDependency", () => {
     });
 
     const result = await runRemoveDependency(
-      { task: TASK_A, "depends-on": TASK_B },
+      { task: TASK_A, dependency: TASK_B },
       new RemoveDependency(
         f.taskRepository,
         f.initiativeRepository,

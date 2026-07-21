@@ -209,12 +209,12 @@ function buildTask(
   const agent =
     typeof fm["agent"] === "string" ? (fm["agent"] as string) : DEFAULT_AGENT;
 
-  let dependsOn: string[] = [];
-  const rawDeps = fm["depends-on"];
+  let dependencies: string[] = [];
+  const rawDeps = fm["dependencies"];
   if (Array.isArray(rawDeps)) {
-    dependsOn = rawDeps.filter((d): d is string => typeof d === "string");
+    dependencies = rawDeps.filter((d): d is string => typeof d === "string");
   }
-  for (const dep of dependsOn) {
+  for (const dep of dependencies) {
     classifyRef(dep);
   }
 
@@ -246,7 +246,7 @@ function buildTask(
     ac,
     agent,
     verification,
-    dependsOn,
+    dependencies,
     sourcePath,
     context,
   };
@@ -404,9 +404,9 @@ function serializeTask(node: PkgTask): string {
     `agent: ${node.agent}`,
   ];
 
-  const sortedDeps = [...node.dependsOn].sort();
+  const sortedDeps = [...node.dependencies].sort();
   if (sortedDeps.length > 0) {
-    fmLines.push(`depends-on: [${sortedDeps.map(yamlScalar).join(", ")}]`);
+    fmLines.push(`dependencies: [${sortedDeps.map(yamlScalar).join(", ")}]`);
   }
   if (node.context !== undefined && Object.keys(node.context).length > 0) {
     fmLines.push("context:");

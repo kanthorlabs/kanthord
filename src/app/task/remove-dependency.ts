@@ -31,8 +31,11 @@ export class RemoveDependency {
     this.#tx = tx;
   }
 
-  async execute(input: { taskId: string; dependsOn: string }): Promise<void> {
-    const { taskId, dependsOn } = input;
+  async execute(input: {
+    taskId: string;
+    dependencyId: string;
+  }): Promise<void> {
+    const { taskId, dependencyId } = input;
 
     // 1. Validate taskId kind
     const taskKind = this.#resolver.resolveKind(taskId);
@@ -43,13 +46,13 @@ export class RemoveDependency {
       throw new WrongTypeReferenceError("task", taskKind, taskId);
     }
 
-    // 2. Validate dependsOn kind
-    const depKind = this.#resolver.resolveKind(dependsOn);
+    // 2. Validate dependencyId kind
+    const depKind = this.#resolver.resolveKind(dependencyId);
     if (depKind === undefined) {
-      throw new UnknownReferenceError("task", dependsOn);
+      throw new UnknownReferenceError("task", dependencyId);
     }
     if (depKind !== "task") {
-      throw new WrongTypeReferenceError("task", depKind, dependsOn);
+      throw new WrongTypeReferenceError("task", depKind, dependencyId);
     }
 
     // 3. Load the task
@@ -60,7 +63,7 @@ export class RemoveDependency {
 
     // 4. If the edge is not present, removal is an idempotent no-op success —
     //    nothing changes, so it is allowed regardless of task status (no event).
-    if (!task.dependencies.includes(dependsOn)) {
+    if (!task.dependencies.includes(dependencyId)) {
       return;
     }
 
@@ -68,7 +71,7 @@ export class RemoveDependency {
     assertDependenciesEditable(task);
 
     // 6. Load objective to get initiativeId and validate the proposed graph
-    const proposed = task.dependencies.filter((d) => d !== dependsOn);
+    const proposed = task.dependencies.filter((d) => d !== dependencyId);
     const objective = this.#initiativeRepo.getObjective(task.objectiveId);
     if (objective === undefined) {
       throw new UnknownReferenceError("objective", task.objectiveId);
@@ -81,7 +84,7 @@ export class RemoveDependency {
 
     // 7. Persist removal and emit event atomically
     this.#tx.run(() => {
-      this.#taskRepo.removeDependency(taskId, dependsOn);
+      this.#taskRepo.removeDependency(taskId, dependencyId);
       this.#events.append(newEvent("task.dependencies_changed", { taskId }));
     });
   }

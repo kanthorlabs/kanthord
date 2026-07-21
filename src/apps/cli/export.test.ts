@@ -61,7 +61,7 @@ const FIXED_PKG: GraphPackage = {
       ac: ["returns 200 for valid creds"],
       agent: "generic@1",
       verification: undefined,
-      dependsOn: [],
+      dependencies: [],
       sourcePath: "backend/implement-api.md",
     },
     {
@@ -73,7 +73,7 @@ const FIXED_PKG: GraphPackage = {
       ac: ["health check green"],
       agent: "generic@1",
       verification: undefined,
-      dependsOn: [TASK1_ID],
+      dependencies: [TASK1_ID],
       sourcePath: "backend/deploy.md",
     },
   ],
@@ -232,5 +232,9 @@ test("runExportInitiative round-trip: re-parsing the export yields semantically 
 
   const t2 = reparsed.tasks.find((t) => t.id === TASK2_ID);
   assert.ok(t2, "task2 found");
-  assert.deepEqual(t2!.dependsOn, [TASK1_ID], "task2 depends-on ULID reparsed");
+  assert.deepEqual(
+    t2!.dependencies,
+    [TASK1_ID],
+    "task2 depends on ULID reparsed",
+  );
 });

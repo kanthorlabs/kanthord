@@ -7,7 +7,7 @@
  *     sha COPIED from fake repo (deliberately non-computed sentinel values)
  * (c) manifest.files = initiative + objectives + pending tasks only
  * (d) every exported node: id === ref (ULID-as-ref, ruling 2026-07-18)
- * (e) PkgTask.dependsOn / objectiveRef / initiativeRef carry parent ULIDs
+ * (e) PkgTask.dependencies / objectiveRef / initiativeRef carry parent ULIDs
  */
 
 import { test } from "node:test";
@@ -125,8 +125,8 @@ class FakeTaskRepository implements TaskRepository {
     return {};
   }
 
-  addDependency(_taskId: string, _dependsOn: string): void {}
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
 
   getInitiativeId(_taskId: string): string | undefined {
     return INIT_ID;
@@ -310,7 +310,7 @@ test("ExportInitiative every exported node has id === ref (ULID-as-ref; no lower
   }
 });
 
-test("ExportInitiative PkgTask.dependsOn / objectiveRef / initiativeRef carry parent ULIDs", async () => {
+test("ExportInitiative PkgTask.dependencies / objectiveRef / initiativeRef carry parent ULIDs", async () => {
   const uc = new ExportInitiative({
     tasks: new FakeTaskRepository(),
     initiatives: new FakeInitiativeRepository(),
@@ -319,7 +319,11 @@ test("ExportInitiative PkgTask.dependsOn / objectiveRef / initiativeRef carry pa
 
   const task2 = pkg.tasks.find((t) => t.id === TASK2_ID);
   assert.ok(task2, "task2 present");
-  assert.deepEqual(task2.dependsOn, [TASK1_ID], "task2 depends on task1 ULID");
+  assert.deepEqual(
+    task2.dependencies,
+    [TASK1_ID],
+    "task2 depends on task1 ULID",
+  );
   assert.equal(task2.objectiveRef, OBJ1_ID, "task2 objectiveRef is OBJ1 ULID");
 
   const task1 = pkg.tasks.find((t) => t.id === TASK1_ID);

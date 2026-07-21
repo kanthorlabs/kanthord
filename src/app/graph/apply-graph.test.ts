@@ -165,8 +165,8 @@ class FakeTaskRepository implements TaskRepository {
   getTaskContext(_taskId: string): Record<string, string> {
     return {};
   }
-  addDependency(_taskId: string, _dependsOn: string): void {}
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
   getInitiativeId(taskId: string): string | undefined {
     const task = this.#tasks.get(taskId);
     if (!task) return undefined;
@@ -364,7 +364,7 @@ function makeBasePackage(
         ac: ["returns 200"],
         agent: "generic@1",
         verification: undefined,
-        dependsOn: [],
+        dependencies: [],
         sourcePath: "backend/implement-api.md",
       },
       {
@@ -376,7 +376,7 @@ function makeBasePackage(
         ac: ["health check green"],
         agent: "generic@1",
         verification: undefined,
-        dependsOn: [TASK1_ID],
+        dependencies: [TASK1_ID],
         sourcePath: "backend/deploy.md",
       },
     ],
@@ -644,7 +644,7 @@ test("ApplyGraph — id-less task with importMap hit (creationSha matches) → u
     ac: ["returns 200"],
     agent: "generic@1",
     verification: undefined,
-    dependsOn: [],
+    dependencies: [],
     sourcePath: "backend/implement-api.md",
   };
 
@@ -701,7 +701,7 @@ test("ApplyGraph — manifest.files node absent from package → classified as m
 
 describe("Story 07 T2 — merged-graph validation", () => {
   /**
-   * Test (a): a package task's depends-on references TASK3, which lives in
+   * Test (a): a package task's depends on references TASK3, which lives in
    * the DB but is NOT present in the package. After merged-graph validation,
    * TASK3 is included in the node set → validation passes.
    *
@@ -728,9 +728,9 @@ describe("Story 07 T2 — merged-graph validation", () => {
       "a".repeat(64),
     );
 
-    // TASK2 now depends-on TASK3 (which is in DB but absent from the package).
+    // TASK2 now depends on TASK3 (which is in DB but absent from the package).
     const pkg = makeBasePackage();
-    pkg.tasks[1]!.dependsOn = [TASK3_ID];
+    pkg.tasks[1]!.dependencies = [TASK3_ID];
 
     const uc = new ApplyGraph(makeDeps({ initiatives, tasks }));
     // Must NOT throw — TASK3 is found in the merged (DB) node set.
@@ -745,14 +745,14 @@ describe("Story 07 T2 — merged-graph validation", () => {
   });
 
   /**
-   * Test (b): TASK1 (package) depends-on TASK3 (DB-only). TASK3 in the DB
-   * depends-on TASK1 → cycle through an omitted persisted task.
+   * Test (b): TASK1 (package) depends on TASK3 (DB-only). TASK3 in the DB
+   * depends on TASK1 → cycle through an omitted persisted task.
    * Expected: execute throws CycleError (domain validateGraph propagates).
    * Fails today: no validateGraph call → execute returns normally.
    */
   test("cycle through omitted persisted task — throws CycleError", async () => {
     const { initiatives, tasks } = makeBaseDb();
-    // TASK3 is in DB, NOT the package; it depends-on TASK1 → cycle
+    // TASK3 is in DB, NOT the package; it depends on TASK1 → cycle
     tasks.seed(
       {
         id: TASK3_ID,
@@ -762,14 +762,14 @@ describe("Story 07 T2 — merged-graph validation", () => {
         ac: ["done"],
         agent: "generic@1",
         status: "pending",
-        dependencies: [TASK1_ID], // ← TASK3 depends-on TASK1
+        dependencies: [TASK1_ID], // ← TASK3 depends on TASK1
       },
       "b".repeat(64),
     );
 
-    // TASK1 in the package depends-on TASK3 (which depends-on TASK1 in DB)
+    // TASK1 in the package depends on TASK3 (which depends on TASK1 in DB)
     const pkg = makeBasePackage();
-    pkg.tasks[0]!.dependsOn = [TASK3_ID];
+    pkg.tasks[0]!.dependencies = [TASK3_ID];
 
     const uc = new ApplyGraph(makeDeps({ initiatives, tasks }));
     await assert.rejects(
@@ -786,7 +786,7 @@ describe("Story 07 T2 — merged-graph validation", () => {
   });
 
   /**
-   * Test (c): TASK1 in the package depends-on UNKNOWN_ID, which exists
+   * Test (c): TASK1 in the package depends on UNKNOWN_ID, which exists
    * in neither the package nor the DB.
    * Expected: execute throws UnknownDependencyError.
    * Fails today: no validateGraph call → execute returns normally.
@@ -794,7 +794,7 @@ describe("Story 07 T2 — merged-graph validation", () => {
   test("dep resolves to neither package nor DB — throws UnknownDependencyError", async () => {
     // Standard base DB (TASK1 and TASK2 only). UNKNOWN_ID is absent from both.
     const pkg = makeBasePackage();
-    pkg.tasks[0]!.dependsOn = [UNKNOWN_ID]; // TASK1 depends-on a ghost
+    pkg.tasks[0]!.dependencies = [UNKNOWN_ID]; // TASK1 depends on a ghost
 
     const uc = new ApplyGraph(makeDeps());
     await assert.rejects(
@@ -1160,7 +1160,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
           ac: ["returns 200"],
           agent: "generic@1",
           verification: undefined,
-          dependsOn: [],
+          dependencies: [],
           sourcePath: "backend/implement-api.md",
         },
       ],
@@ -1274,7 +1274,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
           ac: ["returns 200"],
           agent: "generic@1",
           verification: undefined,
-          dependsOn: [],
+          dependencies: [],
           sourcePath: "backend/implement-api.md",
         },
       ],
@@ -1876,7 +1876,7 @@ describe("Story 08 T3 — confirmed delete execution", () => {
           ac: ["returns 200"],
           agent: "generic@1",
           verification: undefined,
-          dependsOn: [],
+          dependencies: [],
           sourcePath: "backend/implement-api.md",
         },
       ],
@@ -2074,7 +2074,7 @@ describe("RB regressions — classify-order + late-CAS-rollback", () => {
       ac: ["returns 200"],
       agent: "generic@1",
       verification: undefined,
-      dependsOn: [],
+      dependencies: [],
       sourcePath: "backend/implement-api.md",
     };
 

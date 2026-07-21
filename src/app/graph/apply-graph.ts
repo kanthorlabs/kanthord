@@ -205,7 +205,7 @@ export class ApplyGraph {
               ac: task.ac,
               agent: task.agent,
               verification: task.verification ?? undefined,
-              dependencies: task.dependsOn,
+              dependencies: task.dependencies,
               objectiveId: task.objectiveRef,
               status: liveStatus,
             }),
@@ -239,7 +239,7 @@ export class ApplyGraph {
               ac: task.ac,
               agent: task.agent,
               verification: task.verification ?? undefined,
-              dependencies: task.dependsOn,
+              dependencies: task.dependencies,
               objectiveId: task.objectiveRef,
               status: liveStatus,
             }),
@@ -344,7 +344,7 @@ export class ApplyGraph {
         }
       }
       // If a dep ULID belongs to a different initiative, reject with CrossInitiativeError.
-      for (const dep of task.dependsOn) {
+      for (const dep of task.dependencies) {
         if (ULID_RE_APPLY.test(dep)) {
           const depInitId = this.#deps.tasks.getInitiativeId(dep);
           if (depInitId !== undefined && depInitId !== input.initiativeId) {
@@ -380,7 +380,7 @@ export class ApplyGraph {
       mergedMap.set(nodeId, {
         id: nodeId,
         status: liveStatus,
-        dependencies: pkgTask.dependsOn,
+        dependencies: pkgTask.dependencies,
       });
     }
     validateGraph([...mergedMap.values()]);
@@ -447,7 +447,7 @@ export class ApplyGraph {
                     ac: pkgTask.ac,
                     agent: pkgTask.agent,
                     verification: pkgTask.verification ?? undefined,
-                    dependencies: pkgTask.dependsOn,
+                    dependencies: pkgTask.dependencies,
                     objectiveId: liveTask.objectiveId,
                     status: liveTask.status,
                   }),
@@ -477,7 +477,7 @@ export class ApplyGraph {
                       ac: pkgTask.ac,
                       agent: pkgTask.agent,
                       verification: pkgTask.verification ?? null,
-                      dependencies: pkgTask.dependsOn,
+                      dependencies: pkgTask.dependencies,
                     },
                   );
                   if (casResult.status === "conflict") {
@@ -545,7 +545,7 @@ export class ApplyGraph {
                 ac: pkgTask.ac,
                 agent: pkgTask.agent,
                 verification: pkgTask.verification ?? undefined,
-                dependencies: pkgTask.dependsOn,
+                dependencies: pkgTask.dependencies,
               });
               this.#deps.tasks.save(task);
 
@@ -558,7 +558,7 @@ export class ApplyGraph {
                   ac: pkgTask.ac,
                   agent: pkgTask.agent,
                   verification: pkgTask.verification ?? undefined,
-                  dependencies: pkgTask.dependsOn,
+                  dependencies: pkgTask.dependencies,
                   objectiveId: pkgTask.objectiveRef,
                   status: "pending",
                 }),

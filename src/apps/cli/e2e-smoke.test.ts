@@ -106,7 +106,7 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
     const TASK_API = r5.stdout[0]!;
     assert.match(TASK_API, ULID_RE, "create task (api) returns a ULID");
 
-    // -- create task: deploy (depends-on api) --
+    // -- create task: deploy (depends on api) --
     const r6 = await dispatch(
       [
         "create",
@@ -115,7 +115,7 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
         OBJECTIVE,
         "--title",
         "deploy",
-        "--depends-on",
+        "--dependencies",
         TASK_API,
         "--instructions",
         "Deploy the service",
@@ -177,9 +177,9 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
     const TASK_PREP = r8.stdout[0]!;
     assert.match(TASK_PREP, ULID_RE, "create task (spike auth) returns a ULID");
 
-    // -- add dependency: api now also depends-on spike auth --
+    // -- add dependency: api now also depends on spike auth --
     const r9 = await dispatch(
-      ["add", "dependency", "--task", TASK_API, "--depends-on", TASK_PREP],
+      ["add", "dependency", "--task", TASK_API, "--dependency", TASK_PREP],
       deps,
     );
     assert.equal(r9.exitCode, 0, "add dependency exits 0");
@@ -206,7 +206,7 @@ test("e2e smoke: full Proof sequence through composition root", async () => {
 
     // -- cycle-closing add dependency: spike auth → deploy would form a cycle → exit 1 --
     const r11 = await dispatch(
-      ["add", "dependency", "--task", TASK_PREP, "--depends-on", TASK_DEPLOY],
+      ["add", "dependency", "--task", TASK_PREP, "--dependency", TASK_DEPLOY],
       deps,
     );
     assert.equal(r11.exitCode, 1, "cycle-closing dependency exits 1");

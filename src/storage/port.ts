@@ -103,8 +103,8 @@ export interface TaskRepository {
   listTasksByObjective(objectiveId: string): Task[];
   saveTaskContext(taskId: string, context: Record<string, string>): void;
   getTaskContext(taskId: string): Record<string, string>;
-  addDependency(taskId: string, dependsOn: string): void;
-  removeDependency(taskId: string, dependsOn: string): void;
+  addDependency(taskId: string, dependencyId: string): void;
+  removeDependency(taskId: string, dependencyId: string): void;
   getInitiativeId(taskId: string): string | undefined;
   /** Returns the stored sha256 token for a task row, or undefined if not found. */
   getSha256(id: string): string | undefined;

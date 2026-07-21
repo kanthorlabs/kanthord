@@ -447,7 +447,7 @@ describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + 
       ac: [],
       agent: "generic@1",
       verification: undefined,
-      dependsOn: [],
+      dependencies: [],
       sourcePath: "tsk.md",
       context: { model: "model" },
     };

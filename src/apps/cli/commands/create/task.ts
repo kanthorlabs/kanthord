@@ -25,7 +25,7 @@ export function buildCreateTaskCommand(deps: CliDeps, io: CliIo): Command {
       [],
     )
     .option(
-      "--depends-on <id>",
+      "--dependencies <id>",
       "task dependency; repeat for each dependency",
       (value, values: string[]) => (values.push(value), values),
       [],
@@ -48,7 +48,7 @@ export function buildCreateTaskCommand(deps: CliDeps, io: CliIo): Command {
         instructions: string;
         ac: string[];
         verification: string[];
-        dependsOn: string[];
+        dependencies: string[];
         context: string[];
         agent?: string;
       }) => {
@@ -60,7 +60,7 @@ export function buildCreateTaskCommand(deps: CliDeps, io: CliIo): Command {
               instructions: opts.instructions,
               ac: opts.ac,
               verification: opts.verification,
-              "depends-on": opts.dependsOn,
+              dependencies: opts.dependencies,
               context: opts.context,
               agent: opts.agent,
             },

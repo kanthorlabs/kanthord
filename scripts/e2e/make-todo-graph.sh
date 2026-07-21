@@ -81,7 +81,7 @@ ref: list-tasks
 objective: todo-api-obj
 title: List Tasks — GET /tasks
 agent: generic@1
-depends-on: [create-task]
+dependencies: [create-task]
 context:
   source: source
   provider: provider
@@ -111,7 +111,7 @@ ref: get-task
 objective: todo-api-obj
 title: Get Task — GET /tasks/:id
 agent: generic@1
-depends-on: [create-task]
+dependencies: [create-task]
 context:
   source: source
   provider: provider
@@ -139,7 +139,7 @@ ref: update-task
 objective: todo-api-obj
 title: Update Task — PUT /tasks/:id
 agent: generic@1
-depends-on: [create-task]
+dependencies: [create-task]
 context:
   source: source
   provider: provider
@@ -168,7 +168,7 @@ ref: delete-task
 objective: todo-api-obj
 title: Delete Task — DELETE /tasks/:id
 agent: generic@1
-depends-on: [create-task]
+dependencies: [create-task]
 context:
   source: source
   provider: provider

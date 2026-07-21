@@ -31,8 +31,11 @@ export class AddDependency {
     this.#tx = tx;
   }
 
-  async execute(input: { taskId: string; dependsOn: string }): Promise<void> {
-    const { taskId, dependsOn } = input;
+  async execute(input: {
+    taskId: string;
+    dependencyId: string;
+  }): Promise<void> {
+    const { taskId, dependencyId } = input;
 
     // 1. Validate taskId kind
     const taskKind = this.#resolver.resolveKind(taskId);
@@ -43,13 +46,13 @@ export class AddDependency {
       throw new WrongTypeReferenceError("task", taskKind, taskId);
     }
 
-    // 2. Validate dependsOn kind
-    const depKind = this.#resolver.resolveKind(dependsOn);
+    // 2. Validate dependencyId kind
+    const depKind = this.#resolver.resolveKind(dependencyId);
     if (depKind === undefined) {
-      throw new UnknownReferenceError("task", dependsOn);
+      throw new UnknownReferenceError("task", dependencyId);
     }
     if (depKind !== "task") {
-      throw new WrongTypeReferenceError("task", depKind, dependsOn);
+      throw new WrongTypeReferenceError("task", depKind, dependencyId);
     }
 
     // 3. Load the task
@@ -71,14 +74,14 @@ export class AddDependency {
     const allTasks = this.#taskRepo.listByInitiative(objective.initiativeId);
     const proposed = allTasks.map((t) =>
       t.id === taskId
-        ? { ...t, dependencies: [...t.dependencies, dependsOn] }
+        ? { ...t, dependencies: [...t.dependencies, dependencyId] }
         : t,
     );
     validateGraph(proposed);
 
     // 7. Persist edge and emit event atomically
     this.#tx.run(() => {
-      this.#taskRepo.addDependency(taskId, dependsOn);
+      this.#taskRepo.addDependency(taskId, dependencyId);
       this.#events.append(newEvent("task.dependencies_changed", { taskId }));
     });
   }

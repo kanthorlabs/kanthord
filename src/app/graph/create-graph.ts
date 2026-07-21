@@ -104,7 +104,7 @@ export class CreateGraph {
     const graphNodes: GraphNode[] = input.pkg.tasks.map((t) => ({
       id: t.ref,
       status: "pending" as const,
-      dependencies: t.dependsOn,
+      dependencies: t.dependencies,
     }));
     validateGraph(graphNodes);
 
@@ -143,7 +143,7 @@ export class CreateGraph {
         if (objectiveId === undefined) {
           throw new Error(`Unknown objectiveRef: ${t.objectiveRef}`);
         }
-        const resolvedDeps = t.dependsOn.map((ref) => {
+        const resolvedDeps = t.dependencies.map((ref) => {
           const depId = taskRefToId.get(ref);
           if (depId === undefined) throw new Error(`Unknown dep ref: ${ref}`);
           return depId;

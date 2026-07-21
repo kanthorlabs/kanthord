@@ -443,7 +443,7 @@ describe("Story 09 T2 — task with DB-persisted objective absent from package",
           ac: ["works"],
           agent: "generic@1",
           verification: undefined,
-          dependsOn: [],
+          dependencies: [],
           sourcePath: "backend/task.md",
         },
       ],
@@ -522,7 +522,7 @@ describe("Story 09 T2 — unknown objectiveRef (neither package nor DB)", () => 
           ac: ["succeeds"],
           agent: "generic@1",
           verification: undefined,
-          dependsOn: [],
+          dependencies: [],
           sourcePath: "backend/new-task.md",
         },
       ],
@@ -576,7 +576,7 @@ describe("Story 09 T2 — dep ULID from a different initiative", () => {
       refToId: { objectives: {}, tasks: {} },
     };
 
-    // id-less task whose depends-on references a task from another initiative
+    // id-less task whose depends on references a task from another initiative
     const pkg: GraphPackage = {
       packageId: PKG_ID,
       formatVersion: 1,
@@ -596,7 +596,7 @@ describe("Story 09 T2 — dep ULID from a different initiative", () => {
           ac: ["done"],
           agent: "generic@1",
           verification: undefined,
-          dependsOn: [FOREIGN_TASK_ID], // dep belongs to ANOTHER_INIT_ID
+          dependencies: [FOREIGN_TASK_ID], // dep belongs to ANOTHER_INIT_ID
           sourcePath: "my-task.md",
         },
       ],

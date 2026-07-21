@@ -443,7 +443,7 @@ describe("src/apps/cli/commands/create.ts", () => {
         "a2",
         "--verification",
         "v1",
-        "--depends-on",
+        "--dependencies",
         "task-0",
         "--context",
         "filesystem=resource-1",

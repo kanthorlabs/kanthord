@@ -130,9 +130,9 @@ class FakeTaskRepository implements TaskRepository {
     return this.#context.get(taskId) ?? {};
   }
 
-  addDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
 
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
 
   listTasksByObjective(_objectiveId: string): Task[] {
     return [];
@@ -309,7 +309,7 @@ describe("CreateTask", () => {
     );
   });
 
-  test("CreateTask unknown depends-on id throws UnknownReferenceError kind task", async () => {
+  test("CreateTask unknown dependency id throws UnknownReferenceError kind task", async () => {
     const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
       buildDeps();
     const uc = new CreateTask(

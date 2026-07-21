@@ -199,7 +199,7 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     }
   });
 
-  test("adds a dependency from its task and depends-on inputs", async () => {
+  test("adds a dependency from its task and dependency inputs", async () => {
     let received: unknown;
     const cap = capture();
     const deps = {
@@ -213,17 +213,17 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     await buildAddCommand(
       deps,
       cap.io as Parameters<typeof buildAddCommand>[1],
-    ).parseAsync(["dependency", "--task", "task-1", "--depends-on", "task-2"], {
+    ).parseAsync(["dependency", "--task", "task-1", "--dependency", "task-2"], {
       from: "user",
     });
 
-    assert.deepEqual(received, { taskId: "task-1", dependsOn: "task-2" });
+    assert.deepEqual(received, { taskId: "task-1", dependencyId: "task-2" });
     assert.deepEqual(cap.out, []);
     assert.deepEqual(cap.err, ["dependency added: task-1 → task-2\n"]);
     assert.equal(cap.code(), 0);
   });
 
-  test("removes a dependency from its task and depends-on inputs", async () => {
+  test("removes a dependency from its task and dependency inputs", async () => {
     let received: unknown;
     const cap = capture();
     const deps = {
@@ -237,11 +237,11 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     await buildRemoveCommand(
       deps,
       cap.io as Parameters<typeof buildRemoveCommand>[1],
-    ).parseAsync(["dependency", "--task", "task-1", "--depends-on", "task-2"], {
+    ).parseAsync(["dependency", "--task", "task-1", "--dependency", "task-2"], {
       from: "user",
     });
 
-    assert.deepEqual(received, { taskId: "task-1", dependsOn: "task-2" });
+    assert.deepEqual(received, { taskId: "task-1", dependencyId: "task-2" });
     assert.deepEqual(cap.out, []);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);

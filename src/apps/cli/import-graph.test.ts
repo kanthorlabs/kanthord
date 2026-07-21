@@ -101,7 +101,7 @@ async function makeAuthoredDir(): Promise<string> {
       "objective: backend",
       "title: deploy",
       "agent: generic@1",
-      "depends-on: [impl-api]",
+      "dependencies: [impl-api]",
       "---",
       "# Instructions",
       "Deploy the backend.",

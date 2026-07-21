@@ -60,8 +60,8 @@ export async function runCreateTask(
       : [rawVerification as string];
   }
 
-  // Normalize --depends-on: may be a string, string[], or absent
-  const rawDeps = args["depends-on"];
+  // Normalize --dependencies: may be a string, string[], or absent
+  const rawDeps = args["dependencies"];
   let dependencies: string[] | undefined;
   if (rawDeps !== undefined) {
     dependencies = Array.isArray(rawDeps)

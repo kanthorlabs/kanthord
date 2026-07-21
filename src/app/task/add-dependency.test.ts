@@ -33,8 +33,8 @@ class FakeReferenceResolver implements ReferenceResolver {
 
 class FakeTaskRepository implements TaskRepository {
   readonly #tasks: Map<string, Task> = new Map();
-  readonly addedEdges: Array<{ taskId: string; dependsOn: string }> = [];
-  readonly removedEdges: Array<{ taskId: string; dependsOn: string }> = [];
+  readonly addedEdges: Array<{ taskId: string; dependencyId: string }> = [];
+  readonly removedEdges: Array<{ taskId: string; dependencyId: string }> = [];
 
   save(task: Task): void {
     this.#tasks.set(task.id, { ...task, dependencies: [...task.dependencies] });
@@ -58,24 +58,24 @@ class FakeTaskRepository implements TaskRepository {
     return {};
   }
 
-  addDependency(taskId: string, dependsOn: string): void {
-    this.addedEdges.push({ taskId, dependsOn });
+  addDependency(taskId: string, dependencyId: string): void {
+    this.addedEdges.push({ taskId, dependencyId });
     const task = this.#tasks.get(taskId);
     if (task) {
       this.#tasks.set(taskId, {
         ...task,
-        dependencies: [...task.dependencies, dependsOn],
+        dependencies: [...task.dependencies, dependencyId],
       });
     }
   }
 
-  removeDependency(taskId: string, dependsOn: string): void {
-    this.removedEdges.push({ taskId, dependsOn });
+  removeDependency(taskId: string, dependencyId: string): void {
+    this.removedEdges.push({ taskId, dependencyId });
     const task = this.#tasks.get(taskId);
     if (task) {
       this.#tasks.set(taskId, {
         ...task,
-        dependencies: task.dependencies.filter((d) => d !== dependsOn),
+        dependencies: task.dependencies.filter((d) => d !== dependencyId),
       });
     }
   }
@@ -248,12 +248,12 @@ describe("AddDependency", () => {
       events,
       transactor,
     );
-    await uc.execute({ taskId: TASK_A, dependsOn: TASK_B });
+    await uc.execute({ taskId: TASK_A, dependencyId: TASK_B });
 
     assert.equal(taskRepo.addedEdges.length, 1, "addDependency called once");
     assert.deepEqual(taskRepo.addedEdges[0], {
       taskId: TASK_A,
-      dependsOn: TASK_B,
+      dependencyId: TASK_B,
     });
     assert.equal(events.events.length, 1, "one event emitted");
     assert.equal(events.events[0]?.type, "task.dependencies_changed");
@@ -295,7 +295,7 @@ describe("AddDependency", () => {
       transactor,
     );
     await assert.rejects(
-      () => uc.execute({ taskId: TASK_B, dependsOn: TASK_A }),
+      () => uc.execute({ taskId: TASK_B, dependencyId: TASK_A }),
       (err: unknown) => {
         assert.ok(err instanceof CycleError, "throws CycleError");
         return true;
@@ -305,7 +305,7 @@ describe("AddDependency", () => {
     assert.equal(events.events.length, 0, "no event emitted");
   });
 
-  test("AddDependency non-task dependsOn id throws WrongTypeReferenceError", async () => {
+  test("AddDependency non-task dependencyId id throws WrongTypeReferenceError", async () => {
     const OBJ_REF = "01JZZZZZZZZZZZZZZZZZZZOBJ9";
     const { resolver, taskRepo, initiativeRepo, events, transactor } =
       buildDeps({
@@ -328,7 +328,7 @@ describe("AddDependency", () => {
       transactor,
     );
     await assert.rejects(
-      () => uc.execute({ taskId: TASK_A, dependsOn: OBJ_REF }),
+      () => uc.execute({ taskId: TASK_A, dependencyId: OBJ_REF }),
       (err: unknown) => {
         assert.ok(err instanceof WrongTypeReferenceError);
         assert.equal(err.expected, "task");
@@ -366,7 +366,7 @@ describe("AddDependency", () => {
       transactor,
     );
     await assert.rejects(
-      () => uc.execute({ taskId: TASK_A, dependsOn: TASK_B }),
+      () => uc.execute({ taskId: TASK_A, dependencyId: TASK_B }),
       (err: unknown) => {
         assert.ok(err instanceof DependenciesLockedError);
         return true;
@@ -406,7 +406,7 @@ describe("RemoveDependency", () => {
       transactor,
     );
     // Should succeed without throwing
-    await uc.execute({ taskId: TASK_A, dependsOn: TASK_B });
+    await uc.execute({ taskId: TASK_A, dependencyId: TASK_B });
 
     assert.equal(events.events.length, 0, "no event for no-op removal");
   });
@@ -442,7 +442,7 @@ describe("RemoveDependency", () => {
       events,
       transactor,
     );
-    await uc.execute({ taskId: TASK_A, dependsOn: TASK_B });
+    await uc.execute({ taskId: TASK_A, dependencyId: TASK_B });
 
     assert.equal(taskRepo.removedEdges.length, 0, "no edge removed");
     assert.equal(events.events.length, 0, "no event for no-op removal");
@@ -480,7 +480,7 @@ describe("RemoveDependency", () => {
       transactor,
     );
     await assert.rejects(
-      () => uc.execute({ taskId: TASK_A, dependsOn: TASK_B }),
+      () => uc.execute({ taskId: TASK_A, dependencyId: TASK_B }),
       (err: unknown) => {
         assert.ok(err instanceof DependenciesLockedError);
         return true;

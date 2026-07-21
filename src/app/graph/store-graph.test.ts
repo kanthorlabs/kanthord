@@ -28,9 +28,9 @@ class FakeTaskRepository implements TaskRepository {
     return {};
   }
 
-  addDependency(_taskId: string, _dependsOn: string): void {}
+  addDependency(_taskId: string, _dependencyId: string): void {}
 
-  removeDependency(_taskId: string, _dependsOn: string): void {}
+  removeDependency(_taskId: string, _dependencyId: string): void {}
 
   listTasksByObjective(_objectiveId: string): Task[] {
     return [];

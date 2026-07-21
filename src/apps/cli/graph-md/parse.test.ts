@@ -609,8 +609,8 @@ describe("src/apps/cli/graph-md/parse.ts — boundary cases (Story 09 T2)", () =
     }
   });
 
-  test("malformed depends-on value (not ULID or slug grammar) — MalformedReferenceError naming the file", async () => {
-    // A task with a depends-on value that matches neither the ULID grammar nor the slug grammar
+  test("malformed dependencies value (not ULID or slug grammar) — MalformedReferenceError naming the file", async () => {
+    // A task with a dependencies value that matches neither the ULID grammar nor the slug grammar
     const taskFile = join(pkgDir, "task-malformed.md");
     await writeFile(
       taskFile,
@@ -621,7 +621,7 @@ describe("src/apps/cli/graph-md/parse.ts — boundary cases (Story 09 T2)", () =
         "objective: test-init",
         "title: Malformed deps task",
         "agent: generic@1",
-        "depends-on: ['  BAD VALUE  ']",
+        "dependencies: ['  BAD VALUE  ']",
         "---",
         "# Instructions",
         "do stuff",
@@ -635,7 +635,7 @@ describe("src/apps/cli/graph-md/parse.ts — boundary cases (Story 09 T2)", () =
       await assert.rejects(
         () => parseGraphPackage(pkgDir),
         MalformedReferenceError,
-        "a depends-on value matching neither ULID nor slug grammar must throw MalformedReferenceError naming the file",
+        "a dependencies value matching neither ULID nor slug grammar must throw MalformedReferenceError naming the file",
       );
     } finally {
       await rm(taskFile, { force: true });

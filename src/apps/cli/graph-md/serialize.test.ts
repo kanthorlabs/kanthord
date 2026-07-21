@@ -61,7 +61,7 @@ const CANONICAL_OBJ = [
 
 /**
  * Canonical bytes for an exported task node:
- *   id, objective (ULID), title, agent, no depends-on, instructions, ac, verification.
+ *   id, objective (ULID), title, agent, no dependencies, instructions, ac, verification.
  */
 const CANONICAL_TASK_EXPORTED = [
   "---",
@@ -102,7 +102,7 @@ const CANONICAL_TASK_AUTHORED = [
 ].join("\n");
 
 /**
- * Canonical bytes for a task with depends-on (must appear sorted in output).
+ * Canonical bytes for a task with dependencies (must appear sorted in output).
  * DEP1_ID < DEP2_ID lexicographically (both uppercase Crockford ULIDs).
  */
 const CANONICAL_TASK_DEPS = [
@@ -112,7 +112,7 @@ const CANONICAL_TASK_DEPS = [
   `objective: ${OBJ_ID}`,
   "title: deploy",
   "agent: generic@1",
-  `depends-on: [${DEP1_ID}, ${DEP2_ID}]`,
+  `dependencies: [${DEP1_ID}, ${DEP2_ID}]`,
   "---",
   "# Instructions",
   "Deploy it.",
@@ -218,8 +218,8 @@ describe("src/apps/cli/graph-md/serialize.ts", () => {
     );
   });
 
-  test("depends-on serializes as sorted set — REVERSED input becomes sorted output", async () => {
-    // Input file has depends-on in REVERSE order; serialized output must be sorted.
+  test("dependencies serializes as sorted set — REVERSED input becomes sorted output", async () => {
+    // Input file has dependencies in REVERSE order; serialized output must be sorted.
     const reversedDepsTask = [
       "---",
       "kind: task",
@@ -227,7 +227,7 @@ describe("src/apps/cli/graph-md/serialize.ts", () => {
       `objective: ${OBJ_ID}`,
       "title: deploy",
       "agent: generic@1",
-      `depends-on: [${DEP2_ID}, ${DEP1_ID}]`,
+      `dependencies: [${DEP2_ID}, ${DEP1_ID}]`,
       "---",
       "# Instructions",
       "Deploy it.",
@@ -248,7 +248,7 @@ describe("src/apps/cli/graph-md/serialize.ts", () => {
     assert.strictEqual(
       serialized,
       CANONICAL_TASK_DEPS,
-      `depends-on must be sorted in serialized output.\nExpected:\n${CANONICAL_TASK_DEPS}\nGot:\n${serialized}`,
+      `dependencies must be sorted in serialized output.\nExpected:\n${CANONICAL_TASK_DEPS}\nGot:\n${serialized}`,
     );
   });
 

@@ -26,7 +26,7 @@ export const OBJECTIVE_KEY_ORDER = [
 
 /**
  * Canonical frontmatter key order for task nodes.
- * `depends-on` is omitted when the dep list is empty.
+ * `dependencies` is omitted when the dep list is empty.
  */
 export const TASK_FRONTMATTER_KEY_ORDER = [
   "kind",
@@ -35,5 +35,5 @@ export const TASK_FRONTMATTER_KEY_ORDER = [
   "objective",
   "title",
   "agent",
-  "depends-on",
+  "dependencies",
 ] as const;

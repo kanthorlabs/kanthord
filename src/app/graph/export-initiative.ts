@@ -113,7 +113,7 @@ export class ExportInitiative {
         ac: task.ac ?? [],
         agent: task.agent ?? "generic@1",
         verification: task.verification,
-        dependsOn: task.dependencies,
+        dependencies: task.dependencies,
         sourcePath: `${objName}/${task.title.toLowerCase().replace(/\s+/g, "-")}.md`,
       };
     });

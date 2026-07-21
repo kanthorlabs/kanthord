@@ -13,15 +13,15 @@ export function buildAddDependencyCommand(deps: CliDeps, io: CliIo): Command {
       "--task <id>",
       "ID of the task that depends on another task",
     )
-    .requiredOption("--depends-on <id>", "ID of the task to depend on")
+    .requiredOption("--dependency <id>", "ID of the task to depend on")
     .addHelpText(
       "after",
-      "\nExample:\n  kanthord add dependency --task task-1 --depends-on task-2\n",
+      "\nExample:\n  kanthord add dependency --task task-1 --dependency task-2\n",
     )
-    .action(async (opts: { task: string; dependsOn: string }) => {
+    .action(async (opts: { task: string; dependency: string }) => {
       emitResult(
         await runAddDependency(
-          { task: opts.task, "depends-on": opts.dependsOn },
+          { task: opts.task, dependency: opts.dependency },
           deps.addDependency,
         ),
         io,
