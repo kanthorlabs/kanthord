@@ -55,7 +55,9 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
 
   return new Command()
     .name("kanthord")
-    .description("Kanthord daemon command-line interface.")
+    .description(
+      "Kanthord - Kanthor's agentic program does the work with an opinionated setup.",
+    )
     .version(packageVersion)
     .showHelpAfterError()
     .addCommand(buildCheckCommand(deps, io))
