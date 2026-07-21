@@ -131,8 +131,25 @@ export async function runApproveTask(
     return { ...toResult(new MissingFlagError("--id")), stdout: [] };
   }
   try {
-    await approveTask.execute({ taskId: id });
-    return { exitCode: 0, stdout: [id], stderr: [] };
+    const outcome = await approveTask.execute({ taskId: id });
+    if (outcome.kind === "approved") {
+      return { exitCode: 0, stdout: [id], stderr: [] };
+    }
+    if (outcome.kind === "conflict") {
+      return {
+        exitCode: 0,
+        stdout: [],
+        stderr: [
+          `conflict: task ${id} — merge conflict detected; re-run after resolving`,
+        ],
+      };
+    }
+    // landing_failed
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: [`error: ${outcome.message}`],
+    };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
   }

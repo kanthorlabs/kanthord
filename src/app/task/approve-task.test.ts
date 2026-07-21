@@ -217,6 +217,20 @@ class MemFeed implements EventFeed {
   }
 }
 
+// S3: a feed that throws when task.conflict is appended (simulates DB failure)
+class ThrowingOnConflictFeed implements EventFeed {
+  readonly events: Event[] = [];
+  append(event: Event): void {
+    if (event.type === "task.conflict") {
+      throw new Error("DB constraint failed: CHECK events.type");
+    }
+    this.events.push(event);
+  }
+  readAfter(_cursor: string, _limit?: number): Event[] {
+    return [];
+  }
+}
+
 class MemUow implements UnitOfWork {
   transaction<T>(fn: () => T): T {
     return fn();
@@ -1101,5 +1115,306 @@ test("(T3-c) architecture/wiring: the real ApproveTask from buildDeps is constru
   assert.ok(
     deps.approveTask.landing !== undefined,
     "buildDeps().approveTask must have a RepositoryLanding injected (landing must not be undefined)",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story S3 (007.4 F3) — discriminated approve outcomes
+// ---------------------------------------------------------------------------
+
+const S3_REPO_ID = "repo-s3-001";
+const S3_BASE_SHA = "base333333333333333333333333333333333333";
+const S3_CANDIDATE_SHA = "cand444444444444444444444444444444444444";
+const S3_CANONICAL_SHA = S3_CANDIDATE_SHA; // fast-forward: canonical === candidate
+
+function makeS3Result(): TaskResultRow {
+  return {
+    workspace: "/fake/ws",
+    branch: "kanthord/s3-task",
+    baseCommit: S3_BASE_SHA,
+    proposalCommit: S3_CANDIDATE_SHA,
+    commitSha: null,
+    summary: "S3 task summary",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+}
+
+const S3_FF_RESULT: LandingResult = {
+  candidate: {
+    id: "lc-s3-ff",
+    taskId: "s3-task",
+    repoId: S3_REPO_ID,
+    baseSHA: S3_BASE_SHA,
+    candidateSHA: S3_CANDIDATE_SHA,
+    ref: "kanthord/s3-task",
+    target: "main",
+    workspace: "/fake/ws",
+  },
+  outcome: { kind: "fast-forward" },
+  canonicalSHA: S3_CANONICAL_SHA,
+};
+
+test("(S3-a) fast-forward landing returns { kind: 'approved', taskId, canonicalSHA }", async () => {
+  const taskId = "s3-task-a";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s3 task a",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeS3Result();
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S3_REPO_ID }]]),
+  );
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const fakeLanding = new FakeLanding(S3_FF_RESULT);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    fakeLanding,
+  );
+  const outcome = (await uc.execute({ taskId })) as unknown;
+
+  assert.equal(
+    (outcome as { kind?: string } | undefined)?.kind,
+    "approved",
+    `execute() must return { kind: "approved" } discriminated outcome; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    (outcome as { taskId?: string } | undefined)?.taskId,
+    taskId,
+    "outcome.taskId must equal the approved task id",
+  );
+  assert.equal(
+    (outcome as { canonicalSHA?: string } | undefined)?.canonicalSHA,
+    S3_CANONICAL_SHA,
+    "outcome.canonicalSHA must equal the landing result canonicalSHA",
+  );
+});
+
+test("(S3-b) LandingConflictError returns { kind: 'conflict', taskId }; task stays awaiting_confirmation; task.conflict event recorded; no throw", async () => {
+  const taskId = "s3-task-b";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s3 task b",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeS3Result();
+  const fakeCandidate: LandingCandidate = {
+    id: "lc-s3-conflict",
+    taskId,
+    repoId: S3_REPO_ID,
+    baseSHA: S3_BASE_SHA,
+    candidateSHA: S3_CANDIDATE_SHA,
+    ref: "kanthord/s3-task-b",
+    target: "main",
+    workspace: "/fake/ws",
+  };
+  const conflictErr = new LandingConflictError(fakeCandidate, ["src/main.ts"]);
+  const fakeLanding = new FakeLanding(S3_FF_RESULT, conflictErr);
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S3_REPO_ID }]]),
+  );
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    fakeLanding,
+  );
+
+  let didThrow = false;
+  let outcome: unknown;
+  try {
+    outcome = await uc.execute({ taskId });
+  } catch (e) {
+    didThrow = true;
+    outcome = e;
+  }
+
+  assert.ok(
+    !didThrow,
+    `execute() must NOT throw on LandingConflictError; threw: ${outcome}`,
+  );
+  assert.equal(
+    (outcome as { kind?: string } | undefined)?.kind,
+    "conflict",
+    `execute() must return { kind: "conflict" } discriminated outcome; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    (outcome as { taskId?: string } | undefined)?.taskId,
+    taskId,
+    "outcome.taskId must match the conflicting task",
+  );
+
+  // task.conflict event must have been recorded before returning the conflict outcome
+  const conflictEvents = feed.events.filter((e) => e.type === "task.conflict");
+  assert.equal(
+    conflictEvents.length,
+    1,
+    "one task.conflict event must be recorded when returning conflict outcome",
+  );
+
+  // task must NOT have transitioned to completed
+  assert.equal(
+    store.savedTasks.filter((t) => t.status === "completed").length,
+    0,
+    "task must NOT be completed on conflict — must stay awaiting_confirmation",
+  );
+});
+
+test("(S3-c) feed.append failure on task.conflict returns { kind: 'landing_failed' }, NOT approved, NOT a throw", async () => {
+  const taskId = "s3-task-c";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s3 task c",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeS3Result();
+  const fakeCandidate: LandingCandidate = {
+    id: "lc-s3-conflict-c",
+    taskId,
+    repoId: S3_REPO_ID,
+    baseSHA: S3_BASE_SHA,
+    candidateSHA: S3_CANDIDATE_SHA,
+    ref: "kanthord/s3-task-c",
+    target: "main",
+    workspace: "/fake/ws",
+  };
+  const conflictErr = new LandingConflictError(fakeCandidate, ["src/main.ts"]);
+  const fakeLanding = new FakeLanding(S3_FF_RESULT, conflictErr);
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S3_REPO_ID }]]),
+  );
+  // ThrowingOnConflictFeed: throws when task.conflict event is appended
+  const throwingFeed = new ThrowingOnConflictFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    throwingFeed,
+    uow,
+    noopPromote,
+    fakeLanding,
+  );
+
+  let didThrow = false;
+  let outcome: unknown;
+  try {
+    outcome = await uc.execute({ taskId });
+  } catch (e) {
+    didThrow = true;
+    outcome = e;
+  }
+
+  assert.ok(
+    !didThrow,
+    `execute() must NOT throw when feed.append fails during conflict recording; threw: ${outcome}`,
+  );
+  assert.equal(
+    (outcome as { kind?: string } | undefined)?.kind,
+    "landing_failed",
+    `feed.append failure on conflict must yield landing_failed, NOT approved; got: ${JSON.stringify(outcome)}`,
+  );
+});
+
+test("(S3-d) generic landing error returns { kind: 'landing_failed', taskId, message, cause }; no throw", async () => {
+  const taskId = "s3-task-d";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s3 task d",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeS3Result();
+  const genericErr = new Error(
+    "git fetch failed: Connection refused to git@github.com",
+  );
+  // FakeLanding throws a generic (non-LandingConflictError) error
+  const fakeLanding = new FakeLanding(S3_FF_RESULT, genericErr);
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S3_REPO_ID }]]),
+  );
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    fakeLanding,
+  );
+
+  let didThrow = false;
+  let outcome: unknown;
+  try {
+    outcome = await uc.execute({ taskId });
+  } catch (e) {
+    didThrow = true;
+    outcome = e;
+  }
+
+  assert.ok(
+    !didThrow,
+    `execute() must NOT throw on generic landing error (current behavior: throws); threw: ${outcome}`,
+  );
+  assert.equal(
+    (outcome as { kind?: string } | undefined)?.kind,
+    "landing_failed",
+    `generic landing error must yield { kind: "landing_failed" }; got: ${JSON.stringify(outcome)}`,
+  );
+  assert.equal(
+    typeof (outcome as { message?: unknown } | undefined)?.message,
+    "string",
+    "outcome.message must be a safe string for the user",
+  );
+  assert.ok(
+    (outcome as { cause?: unknown } | undefined)?.cause === genericErr,
+    "outcome.cause must be the original error retained for structured logging",
+  );
+  assert.equal(
+    store.savedTasks.filter((t) => t.status === "completed").length,
+    0,
+    "task must NOT be saved as completed on generic landing failure",
   );
 });

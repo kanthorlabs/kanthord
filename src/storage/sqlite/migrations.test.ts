@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { openDatabase } from "./open.ts";
 import { migrate, type MigrationReport } from "./migrate.ts";
 import { MIGRATIONS } from "./migrations.ts";
+import { EVENT_TYPES } from "../../domain/event.ts";
 
 function userVersion(db: DatabaseSync): number {
   const row = db.prepare("PRAGMA user_version").get() as {
@@ -61,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 7 and creates exactly sixteen core tables", () => {
+test("migrates to version 8 and creates exactly sixteen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 7);
+    assert.equal(userVersion(db), 8);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -316,7 +317,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 7);
+    assert.equal(second.version, 8);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -663,4 +664,92 @@ test("migration 7 creates workspace_cached_policies with repo_id PRIMARY KEY", (
       ).run("r1", "aaa000", "2026-07-19T01:00:00Z", "bbb111");
     }, "repo_id PRIMARY KEY must reject duplicate insert");
   });
+});
+
+// ── (p) migration 8 — S2: task.conflict schema + bidirectional drift guard ────
+
+test("S2: all 16 EVENT_TYPES members are accepted by the migrated events table", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    for (const eventType of EVENT_TYPES) {
+      assert.doesNotThrow(() => {
+        db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+          `ev-${eventType}`,
+          eventType,
+          taskId,
+        );
+      }, `event type '${eventType}' must be accepted by the events CHECK constraint`);
+    }
+  });
+});
+
+test("S2: unknown event type 'task.nope' is rejected by the events CHECK after migration 8", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.throws(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-nope",
+        "task.nope",
+        taskId,
+      );
+    }, "task.nope must be rejected by the events.type CHECK constraint");
+  });
+});
+
+test("S2: pre-existing event rows and indexes survive the migration 8 table rebuild", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-s2-rebuild-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 7 only (before the task.conflict rebuild).
+    migrate(db, MIGRATIONS.slice(0, 7));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-s2', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-s2', 'proj-s2', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-s2', 'init-s2', 'O');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-s2', 'obj-s2', 'T', 'pending');
+    `);
+    // Seed three event rows with currently-valid types so we can verify survival.
+    db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+      "ev-s2-1",
+      "task.created",
+      "task-s2",
+    );
+    db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+      "ev-s2-2",
+      "task.completed",
+      "task-s2",
+    );
+    db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+      "ev-s2-3",
+      "task.verification",
+      "task-s2",
+    );
+    // Apply all migrations including the new migration 8.
+    migrate(db, MIGRATIONS);
+    // (a) Schema must now be version 8.
+    assert.equal(
+      userVersion(db),
+      8,
+      "schema version must be 8 after migration 8",
+    );
+    // (b) All seeded rows must survive the rebuild.
+    const countRow = db
+      .prepare("SELECT COUNT(*) AS cnt FROM events WHERE taskId = ?")
+      .get("task-s2") as { cnt: number };
+    assert.equal(
+      countRow.cnt,
+      3,
+      "all 3 seeded event rows must survive the migration 8 table rebuild",
+    );
+    // (c) Individual seeded rows are readable.
+    const row = db
+      .prepare("SELECT type FROM events WHERE id = ?")
+      .get("ev-s2-1") as { type: string } | undefined;
+    assert.ok(row !== undefined, "seeded event row ev-s2-1 must survive");
+    assert.equal(row.type, "task.created");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -276,9 +276,14 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       approveTask: {
         execute: async (input: unknown) => {
           received = input;
+          return {
+            kind: "approved",
+            taskId: (input as { taskId: string }).taskId,
+            canonicalSHA: "",
+          };
         },
       },
-    } as Parameters<typeof buildApproveCommand>[0];
+    } as unknown as Parameters<typeof buildApproveCommand>[0];
 
     await buildApproveCommand(
       deps,

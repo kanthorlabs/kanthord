@@ -12,7 +12,7 @@ import {
   writeFile,
   constants,
 } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
@@ -1027,6 +1027,49 @@ describe("LocalWorkspaceManager — Story 06 T1 shared lock wiring", () => {
       await lockHeld(lockPath),
       false,
       "no orphan .lock left after both operations complete",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.4 S1 — relative root resolved to absolute ws.dir
+// RED today: LocalWorkspaceManager stores root as-is (no resolve()), so
+// ws.dir = join(relativeRoot, taskId) is still relative.
+// GREEN after: constructor calls resolve(root) once, making every ws.dir absolute.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — 007.4 S1: relative root resolved to absolute ws.dir", () => {
+  let tmpRoot: string;
+  let srcDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-ws-s1rel-"));
+    srcDir = join(tmpRoot, "source");
+    await mkdir(srcDir, { recursive: true });
+    await writeFile(join(srcDir, "hello.txt"), "hello");
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("relative root produces absolute ws.dir (isAbsolute === true)", async () => {
+    // Compute a relative path from process.cwd() into tmpRoot — this simulates
+    // the default-install scenario where workspaceRoot = join(dirname(dbPath), "workspaces")
+    // and dbPath is the relative ".data/kanthord.db".
+    const absoluteWsRoot = join(tmpRoot, "ws-rel");
+    const relativeRoot = relative(process.cwd(), absoluteWsRoot);
+    assert.ok(
+      !isAbsolute(relativeRoot),
+      `precondition: relativeRoot must be relative for this test to be meaningful; got: "${relativeRoot}"`,
+    );
+
+    const mgr = new LocalWorkspaceManager({ root: relativeRoot });
+    const fs = makeFilesystem(srcDir);
+    const ws = await mgr.prepare("task-s1-rel", fs);
+
+    assert.ok(
+      isAbsolute(ws.dir),
+      `ws.dir must be absolute even when root is relative; got: "${ws.dir}"`,
     );
   });
 });

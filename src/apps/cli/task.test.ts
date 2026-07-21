@@ -717,22 +717,26 @@ describe("runRetryTask handler", () => {
 // ---------------------------------------------------------------------------
 
 describe("runApproveTask", () => {
-  // Inline fake for ApproveTask duck-typed interface
+  // Inline fake for ApproveTask duck-typed interface.
+  // Uses double-cast so the inline object is accepted regardless of return type.
   function makeApproveUc(
-    onExecute: (input: { taskId: string }) => Promise<void>,
-  ): { execute(input: { taskId: string }): Promise<void> } {
-    return { execute: onExecute };
+    onExecute: (input: { taskId: string }) => Promise<unknown>,
+  ): Parameters<typeof runApproveTask>[1] {
+    return { execute: onExecute } as unknown as Parameters<
+      typeof runApproveTask
+    >[1];
   }
 
   test("runApproveTask --id <id>: returns exit 0 when use case succeeds", async () => {
     let calledWith: string | undefined;
     const uc = makeApproveUc(async ({ taskId }) => {
       calledWith = taskId;
+      return { kind: "approved", taskId, canonicalSHA: "" };
     });
 
     const result = await runApproveTask(
       { id: "01JZZZZZZZZZZZZZZZZZZZTSKAP" },
-      uc as Parameters<typeof runApproveTask>[1],
+      uc,
     );
     assert.equal(result.exitCode, 0, "exit 0 on success");
     assert.equal(
@@ -749,15 +753,92 @@ describe("runApproveTask", () => {
 
   test("runApproveTask missing --id: returns exit 1", async () => {
     const uc = makeApproveUc(async () => {});
-    const result = await runApproveTask(
-      {},
-      uc as Parameters<typeof runApproveTask>[1],
-    );
+    const result = await runApproveTask({}, uc);
     assert.equal(result.exitCode, 1, "exit 1 when --id is missing");
     assert.equal(result.stderr.length, 1, "exactly one error line");
     assert.ok(
       result.stderr[0]!.startsWith("error:"),
       `expected 'error:' prefix; got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runApproveTask S3 (007.4 F3) — discriminated outcome → CLI exit code mapping
+// ---------------------------------------------------------------------------
+
+describe("runApproveTask S3 — discriminated approve outcomes", () => {
+  // Fake factory for discriminated-return approve use case.
+  // Uses double-cast (unknown) so the inline object is accepted by runApproveTask
+  // regardless of the current execute() return type.
+  function makeApproveUcS3(
+    outcome: unknown,
+  ): Parameters<typeof runApproveTask>[1] {
+    return {
+      execute: async (_input: { taskId: string }) => outcome,
+    } as unknown as Parameters<typeof runApproveTask>[1];
+  }
+
+  test("(S3-cli-conflict) conflict outcome → exit 0 and single actionable stderr line containing 'conflict'", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZSCLIC";
+    const uc = makeApproveUcS3({
+      kind: "conflict",
+      taskId,
+      conflictFiles: ["src/todo.mjs"],
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(
+      result.exitCode,
+      0,
+      "conflict outcome must exit 0 (recoverable)",
+    );
+    assert.equal(
+      result.stderr.length,
+      1,
+      `conflict outcome must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    assert.ok(
+      result.stderr[0]!.toLowerCase().includes("conflict"),
+      `conflict stderr line must mention 'conflict'; got: ${result.stderr[0]}`,
+    );
+    assert.equal(
+      result.stdout.length,
+      0,
+      "conflict outcome must not write to stdout",
+    );
+  });
+
+  test("(S3-cli-landing-failed) landing_failed outcome → exit 1 and single stderr line starting with 'error:'", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZSCLLF";
+    const uc = makeApproveUcS3({
+      kind: "landing_failed",
+      taskId,
+      message: "landing failed: git fetch error",
+      cause: new Error("internal git error"),
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(
+      result.exitCode,
+      1,
+      "landing_failed outcome must exit non-zero",
+    );
+    assert.equal(
+      result.stderr.length,
+      1,
+      `landing_failed must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `landing_failed stderr line must start with 'error:'; got: ${result.stderr[0]}`,
+    );
+    assert.equal(
+      result.stdout.length,
+      0,
+      "landing_failed must not write to stdout",
     );
   });
 });

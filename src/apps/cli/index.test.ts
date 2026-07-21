@@ -135,7 +135,11 @@ describe("src/apps/cli/index.ts", () => {
       approveTask: {
         execute: async (input: unknown) => {
           received = input;
-          return "task-1";
+          return {
+            kind: "approved",
+            taskId: (input as { taskId: string }).taskId,
+            canonicalSHA: "",
+          };
         },
       },
     } as unknown as Parameters<typeof buildProgram>[0];

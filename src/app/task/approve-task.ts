@@ -24,6 +24,16 @@ import {
 // Re-export so existing importers (tests, CLI error-map) keep working.
 export { TaskNotAwaitingConfirmationError } from "../errors.ts";
 
+export type ApproveOutcome =
+  | { kind: "approved"; taskId: string; canonicalSHA: string }
+  | { kind: "conflict"; taskId: string; conflictFiles?: string[] }
+  | {
+      kind: "landing_failed";
+      taskId: string;
+      message: string;
+      cause: unknown;
+    };
+
 export class ProposalMissingError extends Error {
   readonly taskId: string;
 
@@ -102,7 +112,7 @@ export class ApproveTask {
     };
   }
 
-  async execute({ taskId }: { taskId: string }): Promise<void> {
+  async execute({ taskId }: { taskId: string }): Promise<ApproveOutcome> {
     const task = this.#store.get(taskId);
     if (task === undefined) {
       throw new UnknownReferenceError("task", taskId);
@@ -117,7 +127,7 @@ export class ApproveTask {
       result.commitSha !== null &&
       result.commitSha === result.proposalCommit
     ) {
-      return;
+      return { kind: "approved", taskId, canonicalSHA: result.commitSha ?? "" };
     }
 
     // (c) wrong status
@@ -235,10 +245,28 @@ export class ApproveTask {
         canonicalSHA = landResult.canonicalSHA;
       } catch (err) {
         if (err instanceof LandingConflictError) {
-          this.#feed.append(newEvent("task.conflict", { taskId }));
-          return;
+          try {
+            this.#feed.append(newEvent("task.conflict", { taskId }));
+            return {
+              kind: "conflict",
+              taskId,
+              conflictFiles: err.conflictFiles,
+            };
+          } catch (feedErr) {
+            return {
+              kind: "landing_failed",
+              taskId,
+              message: "failed to record landing conflict",
+              cause: feedErr,
+            };
+          }
         }
-        throw err;
+        return {
+          kind: "landing_failed",
+          taskId,
+          message: "landing failed unexpectedly",
+          cause: err,
+        };
       }
     }
 
@@ -281,5 +309,7 @@ export class ApproveTask {
         }
       }
     });
+
+    return { kind: "approved", taskId, canonicalSHA: canonicalSHA ?? "" };
   }
 }

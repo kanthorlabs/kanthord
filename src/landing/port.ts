@@ -24,6 +24,13 @@ export interface LandingResult {
   canonicalSHA: string;
 }
 
+export class LandingInvariantError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LandingInvariantError";
+  }
+}
+
 export class LandingConflictError extends Error {
   readonly candidate: LandingCandidate;
   readonly conflictFiles: string[];

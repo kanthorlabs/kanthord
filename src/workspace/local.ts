@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { constants, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
@@ -223,7 +223,7 @@ export class LocalWorkspaceManager implements WorkspaceManager {
   readonly #homes = new Map<string, string>();
 
   constructor(opts: LocalWorkspaceManagerOptions) {
-    this.root = opts.root;
+    this.root = resolve(opts.root);
     this.resolveCredential = opts.resolveCredential;
     this.lockDir = opts.lockDir;
     this.getCachedPolicy = opts.getCachedPolicy;

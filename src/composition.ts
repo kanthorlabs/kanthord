@@ -1,6 +1,6 @@
 // Composition factory — extracted from main.ts so tests can instantiate deps
 // without launching a process. Only this file (and main.ts) import concrete adapters.
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { access } from "node:fs/promises";
 import type { CliDeps } from "./apps/cli/deps.ts";
 import { openDatabase } from "./storage/sqlite/open.ts";
@@ -373,9 +373,10 @@ export function buildDeps(
 
   // Shared workspace manager — used by both the daemon runner and the
   // approve-landing path so homeDir(repoId) resolves the same canonical mirror.
-  const workspaceRoot =
+  const workspaceRoot = resolve(
     process.env["KANTHORD_WORKSPACE_ROOT"] ??
-    join(dirname(dbPath), "workspaces");
+      join(dirname(dbPath), "workspaces"),
+  );
   const workspaces = new LocalWorkspaceManager({
     root: workspaceRoot,
     lockDir,

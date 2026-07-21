@@ -4,7 +4,7 @@
 // durable candidate metadata for crash-idempotent recovery.
 
 import { open, unlink, constants } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
 import type { FileHandle } from "node:fs/promises";
@@ -13,7 +13,7 @@ import type {
   LandingCandidate,
   LandingResult,
 } from "./port.ts";
-import { LandingConflictError } from "./port.ts";
+import { LandingConflictError, LandingInvariantError } from "./port.ts";
 import type { LandingRepository } from "../storage/port.ts";
 import type { ChangeCandidate, Integration } from "../domain/landing.ts";
 
@@ -95,6 +95,12 @@ export class GitRepositoryLanding implements RepositoryLanding {
       this.#lockDir,
       `${candidate.repoId}-${candidate.target}.lock`,
     );
+
+    if (!isAbsolute(candidate.workspace)) {
+      throw new LandingInvariantError(
+        `candidate.workspace must be an absolute path; got: ${candidate.workspace}`,
+      );
+    }
 
     const fh = await acquireLock(lockPath);
     try {

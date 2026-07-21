@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, mkdir, writeFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
@@ -16,6 +16,7 @@ import { GitRepositoryLanding } from "./git.ts";
 import { LandingConflictError } from "./port.ts";
 import type { LandingCandidate } from "./port.ts";
 import { SqliteLandingRepository } from "../storage/sqlite/landing.ts";
+import { LocalWorkspaceManager } from "../workspace/local.ts";
 import type {
   ChangeCandidate,
   CandidateState,
@@ -1012,6 +1013,151 @@ test("Story 07 T1 conflict: adapter aborts merge, persists conflict candidate st
     assert.ok(
       caught.conflictFiles.includes("conflict.ts"),
       "LandingConflictError.conflictFiles must include 'conflict.ts'",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.4 S1 — GitRepositoryLanding invariant + end-to-end with relative root
+//
+// (g) relative candidate.workspace → LandingInvariantError (typed, before git fetch)
+// (h) real land: LocalWorkspaceManager with relative root in non-trivial cwd succeeds (ff)
+//
+// RED today for (g): current code runs `git fetch <relative-path> <sha>` and
+// throws an ExecFile error (git subprocess failure), NOT a LandingInvariantError.
+// RED today for (h): prepare() produces a relative ws.dir → git fetch fails.
+// ---------------------------------------------------------------------------
+
+test("(g) S1-F1: relative candidate.workspace throws LandingInvariantError before any git fetch", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s1g-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    // homeDir must be a valid git repo so we can acquire the lock; the fetch
+    // must be blocked BEFORE any subprocess call by the invariant check.
+    const baseSHA = await initHome(homeDir);
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+
+    const cand: LandingCandidate = {
+      id: "cand-s1-inv",
+      taskId: "task-s1-inv",
+      repoId: "repo-s1-inv",
+      baseSHA,
+      candidateSHA: "0000000000000000000000000000000000000000",
+      ref: "kanthord/task-s1-inv",
+      target: "main",
+      workspace: "relative/path/to/workspace", // RELATIVE — triggers the invariant
+    };
+
+    await assert.rejects(
+      () => landing.land(homeDir, cand),
+      (err: unknown) => {
+        assert.ok(err instanceof Error, "must throw an Error subclass");
+        assert.equal(
+          (err as Error).name,
+          "LandingInvariantError",
+          `expected LandingInvariantError; got ${(err as Error).name}: ${(err as Error).message}`,
+        );
+        return true;
+      },
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("(h) S1-F1: real land — LocalWorkspaceManager with relative root produces absolute workspace and lands (ff)", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s1h-"));
+  try {
+    const remoteDir = join(tmp, "remote");
+    const mirrorDir = join(tmp, "mirror");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    // Initialise the "remote" git repo (plays the role of the origin)
+    const baseSHA = await initHome(remoteDir);
+
+    // Build a relative root from process.cwd() into a subdir of tmp —
+    // same default-install scenario as the local.test.ts S1 test.
+    const absoluteWsRoot = join(tmp, "workspaces");
+    const relativeWsRoot = relative(process.cwd(), absoluteWsRoot);
+    assert.ok(
+      !isAbsolute(relativeWsRoot),
+      `precondition: relativeWsRoot must be relative; got: "${relativeWsRoot}"`,
+    );
+
+    const mgr = new LocalWorkspaceManager({ root: relativeWsRoot });
+
+    // repo.path is the mirror dir (absolute), remoteUrl is file:// on the remote
+    const repo = {
+      id: "repo-s1h",
+      type: "repository" as const,
+      name: "test",
+      remoteUrl: `file://${remoteDir}`,
+      branch: "main",
+      path: mirrorDir,
+      auth: { kind: "ambient" as const },
+    };
+
+    // prepare(): clones remoteDir → mirrorDir, then mirrorDir → workspace
+    const ws = await mgr.prepare("task-s1h", repo);
+
+    // ws.dir must be absolute (S1 fix in LocalWorkspaceManager)
+    assert.ok(
+      isAbsolute(ws.dir),
+      `ws.dir must be absolute after S1 fix; got: "${ws.dir}"`,
+    );
+
+    // Commit a file in the workspace so there is something to land
+    await writeFile(join(ws.dir, "output.ts"), "export const v = 1;");
+    await execFileProm("git", ["add", "output.ts"], { cwd: ws.dir });
+    await execFileProm(
+      "git",
+      [
+        "-c",
+        "user.email=t@t.t",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-q",
+        "-m",
+        "task output",
+      ],
+      { cwd: ws.dir },
+    );
+    const candidateSHA = await git(ws.dir, "rev-parse", "HEAD");
+
+    // Land: candidate.workspace is ws.dir (absolute after S1 fix)
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand: LandingCandidate = {
+      id: "cand-s1h",
+      taskId: "task-s1h",
+      repoId: "repo-s1h",
+      baseSHA,
+      candidateSHA,
+      ref: "kanthord/task-s1h",
+      target: "main",
+      workspace: ws.dir, // absolute after S1 fix → git fetch succeeds
+    };
+
+    const result = await landing.land(mirrorDir, cand);
+
+    assert.equal(
+      result.outcome.kind,
+      "fast-forward",
+      "land must fast-forward when workspace path is absolute (S1-F1 end-to-end)",
+    );
+    assert.equal(
+      result.canonicalSHA,
+      candidateSHA,
+      "canonicalSHA must equal candidateSHA after ff",
     );
   } finally {
     await rm(tmp, { recursive: true, force: true });
