@@ -5,11 +5,14 @@ import {
   access,
   mkdtemp,
   mkdir,
+  open,
   readdir,
   rm,
+  unlink,
   writeFile,
+  constants,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
@@ -18,6 +21,7 @@ import {
   DivergenceError,
   FetchError,
 } from "./port.ts";
+import { buildDeps } from "../composition.ts";
 import type { Workspace, CachedModePolicy } from "./port.ts";
 import { LocalWorkspaceManager } from "./local.ts";
 import type { Repository, Filesystem } from "../domain/resource.ts";
@@ -809,5 +813,220 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 05 T1 — homeDir(repoId) accessor (canonical mirror path)
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — Story 05 T1 homeDir(repoId) accessor", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-ws-homedir-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("homeDir returns the canonical mirror path: stable and distinct from a task workspace dir", async () => {
+    const homePath = join(tmpRoot, "home-hd");
+    const wsRoot = join(tmpRoot, "workspaces-hd");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    // prepare clones the home to repo.path and a task workspace to wsRoot/<taskId>
+    const ws = await mgr.prepare("t-hd", repo);
+
+    const home = mgr.homeDir(repo.id);
+
+    // returns a non-empty path string
+    assert.ok(
+      typeof home === "string" && home.length > 0,
+      "homeDir must return a path string",
+    );
+    // stable across calls (the same canonical mirror for the repoId)
+    assert.equal(
+      home,
+      mgr.homeDir(repo.id),
+      "homeDir must be stable for the same repoId",
+    );
+    // distinct from the task workspace dir the manager creates for a task
+    assert.notEqual(
+      home,
+      ws.dir,
+      "homeDir must not equal a task workspace dir",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 06 T1 (F3) — shared per-repo+branch lock wired into LocalWorkspaceManager
+// and shared with GitRepositoryLanding so prepare-fetch and land serialize.
+//
+// RED today (both prove the wiring gap):
+//  1. `CliDeps.workspaces` is not exposed by buildDeps yet → `deps.workspaces`
+//     is undefined (typecheck error + runtime TypeError on `.prepare`).
+//  2. Even with the seam, `buildDeps` constructs `LocalWorkspaceManager` with
+//     `{ root }` only (no lockDir), so `prepare` never acquires the shared lock
+//     and does NOT serialize with `repoLanding.land` on the same repo+branch.
+// The shared lock path is `<lockDir>/<repoId>-<branch>.lock` where lockDir is
+// dirname(dbPath) — exactly the path GitRepositoryLanding uses — so holding that
+// file must block a buildDeps-wired prepare.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — Story 06 T1 shared lock wiring", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+  let homeDir: string;
+  let mainSha: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-ws-lock-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+    // Pre-clone the canonical home mirror so `land`'s already-landed candidate
+    // is valid and `prepare` takes the home-exists fetch+CAS path.
+    homeDir = join(tmpRoot, "home");
+    await execFile("git", ["clone", `file://${seedDir}`, homeDir]);
+    mainSha = await git(homeDir, "rev-parse", "main");
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  function lockPathFor(dbPath: string, repoId: string, branch: string): string {
+    return join(dirname(dbPath), `${repoId}-${branch}.lock`);
+  }
+
+  async function lockHeld(lockPath: string): Promise<boolean> {
+    return access(lockPath)
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  test("(a) buildDeps wires lockDir into the workspace manager: prepare blocks on the shared lock at dirname(dbPath)", async () => {
+    const dbDir = join(tmpRoot, "db-a");
+    await mkdir(dbDir, { recursive: true });
+    const dbPath = join(dbDir, "kanthord.db");
+
+    const deps = buildDeps(dbPath);
+    // SE must expose `workspaces` on CliDeps (RED today: undefined).
+    const mgr = deps.workspaces;
+    const repo = makeRepo(homeDir, "main", `file://${seedDir}`);
+
+    const lockPath = lockPathFor(dbPath, repo.id, repo.branch);
+    // Manually hold the shared lock at the exact path GitRepositoryLanding uses.
+    const fh = await open(
+      lockPath,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+      0o600,
+    );
+
+    let settled = false;
+    const p = mgr.prepare("t-lock-a", repo).then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(
+      settled,
+      false,
+      "prepare must block on the shared lock (lockDir = dirname(dbPath) wired into buildDeps)",
+    );
+    // Release and confirm prepare completes cleanly with no orphan lock.
+    await fh.close();
+    await unlink(lockPath);
+    await p;
+    assert.equal(
+      await lockHeld(lockPath),
+      false,
+      "no orphan .lock left after prepare completes",
+    );
+  });
+
+  test("(b) prepare-fetch and a land serialize on the shared lock (one waits; both complete; no orphan .lock)", async () => {
+    const dbDir = join(tmpRoot, "db-b");
+    await mkdir(dbDir, { recursive: true });
+    const dbPath = join(dbDir, "kanthord.db");
+    const deps = buildDeps(dbPath);
+    const mgr = deps.workspaces;
+    const repo = makeRepo(homeDir, "main", `file://${seedDir}`);
+
+    // A clone of the home used purely as the candidate's workspace source so
+    // `land`'s fetch is a normal local fetch.
+    const wsClone = join(tmpRoot, "wsclone-b");
+    await execFile("git", ["clone", `file://${seedDir}`, wsClone]);
+
+    // already-landed candidate: candidateSHA == current main HEAD, target == main.
+    const candidate = {
+      id: "c-t1-b",
+      taskId: "t-lock-b",
+      repoId: repo.id,
+      baseSHA: mainSha,
+      candidateSHA: mainSha,
+      ref: "kanthord/t-lock-b",
+      target: "main",
+      workspace: wsClone,
+    };
+
+    const lockPath = lockPathFor(dbPath, repo.id, repo.branch);
+    const fh = await open(
+      lockPath,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+      0o600,
+    );
+
+    let prepareSettled = false;
+    let landSettled = false;
+    const pPrepare = mgr.prepare("t-lock-b", repo).then(
+      () => {
+        prepareSettled = true;
+      },
+      () => {
+        prepareSettled = true;
+      },
+    );
+    const pLand = deps.repoLanding.land(homeDir, candidate).then(
+      () => {
+        landSettled = true;
+      },
+      () => {
+        landSettled = true;
+      },
+    );
+
+    await new Promise((r) => setTimeout(r, 400));
+    assert.equal(
+      prepareSettled,
+      false,
+      "prepare must block on the shared lock while it is held",
+    );
+    assert.equal(
+      landSettled,
+      false,
+      "land must block on the shared lock while it is held",
+    );
+
+    // Release the lock; both must now complete (one waits for the other).
+    await fh.close();
+    await unlink(lockPath);
+    await Promise.all([pPrepare, pLand]);
+
+    assert.equal(
+      await lockHeld(lockPath),
+      false,
+      "no orphan .lock left after both operations complete",
+    );
   });
 });

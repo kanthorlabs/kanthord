@@ -1,6 +1,5 @@
 import type { GetDbStatus } from "../../app/db/get-db-status.ts";
 import type { MigrateDb } from "../../app/db/migrate-db.ts";
-import type { RepositoryLanding } from "../../app/errors.ts";
 import type { ExportInitiative } from "../../app/graph/export-initiative.ts";
 import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import type { FindInitiative } from "../../app/initiative/find-initiative.ts";
@@ -40,6 +39,47 @@ import type { CreateGraph } from "../../app/graph/create-graph.ts";
 import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
 import type { LoginDeps } from "./login.ts";
 import type { ListModels } from "./models.ts";
+
+/**
+ * Minimal structural surface of the workspace manager that the CLI bundle
+ * exposes. Declared locally (rather than importing `WorkspaceManager` from
+ * `workspace/port.ts`) so this `apps/` module honors the architecture boundary:
+ * `apps/` may depend on `app/` only, never a capability port. The concrete
+ * `LocalWorkspaceManager` (an adapter) remains structurally assignable to this
+ * shape, so `composition.ts` can return it as part of `CliDeps`.
+ */
+export interface CliWorkspace {
+  dir: string;
+  branch: string;
+  baseCommit: string;
+}
+export interface CliWorkspaceManager {
+  prepare(taskId: string, source: unknown): Promise<CliWorkspace>;
+  homeDir?(repoId: string): string;
+}
+
+/**
+ * Minimal structural surface of the repository-landing capability that the CLI
+ * bundle exposes. Declared locally (rather than importing `RepositoryLanding`
+ * from `landing/port.ts` via `app/errors.ts`) so this `apps/` module honors the
+ * architecture boundary: `apps/` may depend on `app/` only, never a capability
+ * port type. The concrete `GitRepositoryLanding` (an adapter) remains
+ * structurally assignable to this shape, so `composition.ts` can return it as
+ * part of `CliDeps`. Mirrors the `CliWorkspaceManager` pattern.
+ */
+export interface CliRepositoryLanding {
+  land(
+    homeDir: string,
+    candidate: unknown,
+  ): Promise<{
+    outcome:
+      | { kind: "fast-forward" }
+      | { kind: "merge"; mergeCommit: string }
+      | { kind: "conflict"; files: string[] }
+      | { kind: "already-landed"; canonicalSHA: string };
+    canonicalSHA: string;
+  }>;
+}
 
 export interface Logger {
   info(message: string): void;
@@ -91,7 +131,8 @@ export interface CliDeps {
   login: LoginDeps;
   listModels: ListModels;
   diagnosticsExport: DiagnosticsExport;
-  repoLanding: RepositoryLanding;
+  repoLanding: CliRepositoryLanding;
   resolveHomeDir: (repoId: string) => string;
+  workspaces: CliWorkspaceManager;
   newId: () => string;
 }

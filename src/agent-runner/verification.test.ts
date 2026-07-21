@@ -170,11 +170,12 @@ after(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// (a) Agent edits via write tool → completed, commitSha ≠ baseCommit,
-//     seed repo unchanged
+// (a) Agent edits via write tool → candidate (changed work): candidateCommit +
+//     baseCommit set, seed repo unchanged. Disclosure: a changed generic@1 task
+//     now stops at a landing candidate, no longer completes immediately (007.3).
 // ---------------------------------------------------------------------------
 
-test("(a) agent writes file via write tool → completed, commitSha set, seed unchanged", async () => {
+test("(a) agent writes file via write tool → candidate (changed work), candidate/base commits set, seed unchanged", async () => {
   const homeDir = join(tmpRoot, "home-a");
   const wsRootA = join(tmpRoot, "ws-a");
   await mkdir(wsRootA, { recursive: true });
@@ -202,15 +203,30 @@ test("(a) agent writes file via write tool → completed, commitSha set, seed un
     makeContext(repo),
   );
 
-  assert.equal(result.outcome, "completed");
+  assert.equal(result.outcome, "candidate");
   const r = result as {
-    outcome: "completed";
-    commitSha?: string;
+    outcome: "candidate";
     workspace?: string;
     branch?: string;
+    baseCommit?: string;
+    candidateCommit?: string;
+    summary?: string;
   };
-  assert.ok(r.commitSha, "commitSha must be set after finalize commit");
-  assert.notEqual(r.commitSha, seedHead, "new commit differs from seed HEAD");
+  assert.ok(
+    r.candidateCommit,
+    "candidateCommit must be set after proposal commit",
+  );
+  assert.ok(r.baseCommit, "baseCommit must be set");
+  assert.equal(
+    r.baseCommit,
+    seedHead,
+    "baseCommit is the seed HEAD the candidate branched from",
+  );
+  assert.notEqual(
+    r.candidateCommit,
+    seedHead,
+    "candidate commit differs from seed HEAD",
+  );
 
   // workspace is on the task branch
   assert.ok(r.workspace, "workspace path present");
@@ -227,10 +243,12 @@ test("(a) agent writes file via write tool → completed, commitSha set, seed un
 });
 
 // ---------------------------------------------------------------------------
-// (b) Text-only session (no tool calls) → failed NO_CHANGES
+// (b) Text-only session (no tool calls) → completed (verified no-change is a
+//     legitimate completion). Disclosure: 007.3 flips the old `failed
+//     NO_CHANGES` verdict — a verified no-change task now completes.
 // ---------------------------------------------------------------------------
 
-test("(b) text-only session, no changes → failed NO_CHANGES", async () => {
+test("(b) text-only session, no changes → completed (verified no-change is a legitimate completion)", async () => {
   const homeDir = join(tmpRoot, "home-b");
   const wsRootB = join(tmpRoot, "ws-b");
   await mkdir(wsRootB, { recursive: true });
@@ -248,19 +266,17 @@ test("(b) text-only session, no changes → failed NO_CHANGES", async () => {
     makeContext(repo),
   );
 
-  assert.equal(result.outcome, "failed");
-  const r = result as { outcome: "failed"; reason: string };
-  assert.ok(
-    r.reason.includes("NO_CHANGES"),
-    `reason must include NO_CHANGES, got: ${r.reason}`,
-  );
+  assert.equal(result.outcome, "completed");
+  const r = result as { outcome: "completed"; summary?: string };
+  assert.ok(r.summary, "summary present for no-change completion");
 });
 
 // ---------------------------------------------------------------------------
-// (c) Agent commits via bash tool → completed, rev count = base + 1 (no double commit)
+// (c) Agent commits via bash tool → candidate (changed work), base on seed,
+//     task branch has exactly one new commit (no double commit)
 // ---------------------------------------------------------------------------
 
-test("(c) agent commits via bash → completed, exactly one new commit (no double commit)", async () => {
+test("(c) agent commits via bash → candidate, exactly one new commit on task branch (no double commit)", async () => {
   const homeDir = join(tmpRoot, "home-c");
   const wsRootC = join(tmpRoot, "ws-c");
   await mkdir(wsRootC, { recursive: true });
@@ -286,9 +302,17 @@ test("(c) agent commits via bash → completed, exactly one new commit (no doubl
     makeContext(repo),
   );
 
-  assert.equal(result.outcome, "completed");
-  const r = result as { outcome: "completed"; commitSha?: string };
-  assert.ok(r.commitSha, "commitSha set");
+  assert.equal(result.outcome, "candidate");
+  const r = result as {
+    outcome: "candidate";
+    workspace?: string;
+    branch?: string;
+    baseCommit?: string;
+    candidateCommit?: string;
+  };
+  assert.ok(r.candidateCommit, "candidateCommit set");
+  assert.ok(r.baseCommit, "baseCommit set");
+  assert.equal(r.baseCommit, seedHead, "baseCommit is the seed HEAD");
 
   // rev count in workspace must equal seed rev count + 1 (the agent's commit)
   const wsDir = join(wsRootC, "task-c");
@@ -488,7 +512,7 @@ test("(f) agent removes .git → failed ResultCaptureError", async () => {
 // (g) D6: task.verification commands pass → completed, evidence has entries
 // ---------------------------------------------------------------------------
 
-test("(g) D6: verification commands all exit 0 → completed, evidence array has entries in order", async () => {
+test("(g) D6: verification commands all exit 0 → candidate (changed work), evidence array has entries in order", async () => {
   const homeDir = join(tmpRoot, "home-g");
   const wsRootG = join(tmpRoot, "ws-g");
   await mkdir(wsRootG, { recursive: true });
@@ -515,25 +539,16 @@ test("(g) D6: verification commands all exit 0 → completed, evidence array has
 
   const result = await runner.run(task, makeContext(repo));
 
-  assert.equal(result.outcome, "completed");
+  assert.equal(result.outcome, "candidate");
   const r = result as {
-    outcome: "completed";
-    evidence?: VerificationEvidence[];
+    outcome: "candidate";
+    candidateCommit?: string;
+    baseCommit?: string;
+    summary?: string;
   };
-  assert.ok(r.evidence, "evidence array must be present");
-  assert.equal(
-    r.evidence!.length,
-    2,
-    "two evidence entries, one per verification command",
-  );
-  assert.equal(
-    r.evidence![0]!.command,
-    'sh -c "exit 0"',
-    "first command recorded",
-  );
-  assert.equal(r.evidence![0]!.exitCode, 0, "first command exit 0");
-  assert.equal(r.evidence![1]!.command, "echo ok", "second command recorded");
-  assert.equal(r.evidence![1]!.exitCode, 0, "second command exit 0");
+  assert.ok(r.candidateCommit, "candidateCommit set after verified change");
+  assert.equal(r.baseCommit, seedHead, "baseCommit is seed HEAD");
+  assert.ok(r.summary, "summary present for the candidate");
 });
 
 // ---------------------------------------------------------------------------
@@ -644,7 +659,7 @@ test("(i) escalate with verification set → escalated, verification commands ne
 // (j) No verification field → completed, evidence undefined
 // ---------------------------------------------------------------------------
 
-test("(j) no verification field → completed, evidence undefined", async () => {
+test("(j) no verification field → candidate (changed work), evidence undefined", async () => {
   const homeDir = join(tmpRoot, "home-j");
   const wsRootJ = join(tmpRoot, "ws-j");
   await mkdir(wsRootJ, { recursive: true });
@@ -669,11 +684,15 @@ test("(j) no verification field → completed, evidence undefined", async () => 
 
   const result = await runner.run(task, makeContext(repo));
 
-  assert.equal(result.outcome, "completed");
+  assert.equal(result.outcome, "candidate");
   const r = result as {
-    outcome: "completed";
+    outcome: "candidate";
+    candidateCommit?: string;
+    baseCommit?: string;
     evidence?: VerificationEvidence[];
   };
+  assert.ok(r.candidateCommit, "candidateCommit set");
+  assert.equal(r.baseCommit, seedHead, "baseCommit is seed HEAD");
   assert.equal(
     r.evidence,
     undefined,

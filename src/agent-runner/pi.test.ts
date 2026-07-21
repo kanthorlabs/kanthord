@@ -1355,3 +1355,412 @@ test("(T4) A6: agent.finished payload carries turns, tokensIn, tokensOut", async
     `tokensOut must be a non-negative integer string; got: '${payload.tokensOut}'`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// Story 01 T1 (F2) — real per-turn token accounting in agent.finished
+//
+// The existing FakeSessionFactory auto-estimates usage from prompt text and
+// cannot deliver a controlled fixture, so this section drives the real pi
+// Agent loop with a custom streamFn that emits an AssistantMessageEventStream
+// whose `done` event carries an exact, per-turn `usage` fixture. Each assistant
+// turn's `usage` is delivered verbatim; no network, no real model.
+// ---------------------------------------------------------------------------
+
+// Per-turn usage fixture — mirrors pi's Usage bucket semantics:
+// `reasoning` is a SUBSET of `output`; `cacheWrite1h` is a SUBSET of `cacheWrite`.
+type UsageFixture = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  reasoning?: number;
+  cacheWrite1h?: number;
+};
+
+function makeFixtureMessage(
+  fixture: UsageFixture,
+  stopReason: string,
+  content: unknown[],
+): Record<string, unknown> {
+  const usage = {
+    input: fixture.input,
+    output: fixture.output,
+    cacheRead: fixture.cacheRead,
+    cacheWrite: fixture.cacheWrite,
+    reasoning: fixture.reasoning,
+    cacheWrite1h: fixture.cacheWrite1h,
+    totalTokens:
+      fixture.input + fixture.output + fixture.cacheRead + fixture.cacheWrite,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+  return {
+    role: "assistant",
+    content,
+    api: "faux",
+    provider: "faux",
+    model: "faux-1",
+    usage,
+    stopReason,
+    timestamp: 0,
+  };
+}
+
+/**
+ * Build a ProviderSessionFactory whose streamFn emits a controlled, per-turn
+ * `usage` fixture. For each agent turn it returns an AssistantMessageEventStream
+ * that delivers a single `done` event carrying the fixture message:
+ *   - non-final turns emit a `search_files` toolCall (stopReason "toolUse") so
+ *     the agent loop continues to the next turn;
+ *   - the final turn emits a `search_files` toolCall too, UNLESS `escalateLast`
+ *     is set, in which case it emits an `escalate` toolCall (→ escalated).
+ */
+function makeUsageSessionFactory(
+  usages: UsageFixture[],
+  opts: { escalateLast?: boolean } = {},
+): ProviderSessionFactory {
+  return {
+    async for() {
+      let callIndex = 0;
+      const streamFn = (_model: unknown, _ctx: unknown, _o?: unknown) => {
+        const i = callIndex++;
+        const fixture = usages[Math.min(i, usages.length - 1)]!;
+        const isLast = i >= usages.length - 1;
+        let content: unknown[];
+        let stopReason: string;
+        if (isLast && opts.escalateLast) {
+          content = [
+            {
+              type: "toolCall",
+              id: `esc-${i}`,
+              name: "escalate",
+              arguments: { reason: "need human review" },
+            },
+          ];
+          stopReason = "toolUse";
+        } else if (!isLast) {
+          content = [
+            {
+              type: "toolCall",
+              id: `sf-${i}`,
+              name: "search_files",
+              arguments: { path: `/src/${i}` },
+            },
+          ];
+          stopReason = "toolUse";
+        } else {
+          content = [{ type: "text", text: "done" }];
+          stopReason = "stop";
+        }
+        const message = makeFixtureMessage(fixture, stopReason, content);
+        const events = [{ type: "done", reason: stopReason, message }];
+        let k = 0;
+        const stream = {
+          async *[Symbol.asyncIterator]() {
+            while (k < events.length) yield events[k++];
+          },
+          result() {
+            return Promise.resolve(message as unknown);
+          },
+        };
+        return stream as unknown;
+      };
+      return {
+        model: {} as unknown as any,
+        streamFn: streamFn as unknown as any,
+        getApiKey: () => "fake-key",
+      } as unknown as any;
+    },
+  };
+}
+
+function makeUsageRunner(
+  usages: UsageFixture[],
+  emitted: EmitRecord08[],
+  opts: { escalateLast?: boolean } = {},
+) {
+  const sessions = makeUsageSessionFactory(usages, opts);
+  return new PiAgentRunner({
+    sessions,
+    workspaces: new FakeWorkspaceManager(),
+    newInstructionLoader: (_dir: string) => ({ load: () => [] }),
+    getResource: makeGetResource(),
+    profiles: new Map([
+      ["synthetic@1", profileWithSearch08],
+    ]) as unknown as PiAgentRunnerOptions["profiles"],
+    getPriorRejection: () => undefined,
+    emit: (tid: string, type: string, payload: Record<string, string>) => {
+      emitted.push({ taskId: tid, type, payload });
+    },
+    clock: () => 0,
+  } as unknown as PiAgentRunnerOptions);
+}
+
+const F2_USAGES: UsageFixture[] = [
+  {
+    input: 100,
+    cacheRead: 10,
+    cacheWrite: 5,
+    output: 20,
+    reasoning: 8,
+    cacheWrite1h: 2,
+  },
+  { input: 200, cacheRead: 20, cacheWrite: 8, output: 30, reasoning: 12 },
+  {
+    input: 50,
+    cacheRead: 5,
+    cacheWrite: 3,
+    output: 10,
+    reasoning: 4,
+    cacheWrite1h: 1,
+  },
+];
+
+// (a)-(e) Exact arithmetic across ≥3 assistant turns; reasoning and
+// cacheWrite1h are subsets and must NOT be added on top of output/cacheWrite.
+test("(F2 T1) multi-turn usage: agent.finished tokensIn/tokensOut sum every assistant turn exactly; reasoning & cacheWrite1h not double-counted", async () => {
+  const emitted: EmitRecord08[] = [];
+  const runner = makeUsageRunner(F2_USAGES, emitted);
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+  );
+
+  assert.equal(result.outcome, "completed", "task completed");
+  const finished = emitted.filter((e) => e.type === "agent.finished");
+  assert.equal(finished.length, 1, "exactly one agent.finished event");
+  const payload = finished[0]?.payload;
+  assert.ok(payload !== undefined, "agent.finished must carry a payload");
+
+  // Σ(input+cacheRead+cacheWrite) = (100+10+5)+(200+20+8)+(50+5+3) = 401
+  const expectedIn = 100 + 10 + 5 + (200 + 20 + 8) + (50 + 5 + 3);
+  // Σ(output) = 20+30+10 = 60 (output already includes reasoning subset)
+  const expectedOut = 20 + 30 + 10;
+
+  assert.equal(
+    payload.tokensIn,
+    String(expectedIn),
+    `tokensIn must equal Σ(input+cacheRead+cacheWrite)=${expectedIn}; got '${payload.tokensIn}'`,
+  );
+  assert.equal(
+    payload.tokensOut,
+    String(expectedOut),
+    `tokensOut must equal Σ(output)=${expectedOut}; got '${payload.tokensOut}'`,
+  );
+  // reasoning is a subset of output — adding it again would give 84
+  assert.notEqual(
+    payload.tokensOut,
+    String(expectedOut + 8 + 12 + 4),
+    "reasoning must NOT be added on top of output (no double count)",
+  );
+  // cacheWrite1h is a subset of cacheWrite — adding it again would give 404
+  assert.notEqual(
+    payload.tokensIn,
+    String(expectedIn + 2 + 1),
+    "cacheWrite1h must NOT be added on top of cacheWrite (no double count)",
+  );
+});
+
+// (f) A run that ends in `failed` (verification failure) still emits the real
+// usage accumulated across the turns that ran.
+test("(F2 T1) failed run (verification failure) still emits non-zero tokensIn/tokensOut from the turns that ran", async () => {
+  const emitted: EmitRecord08[] = [];
+  const runner = makeUsageRunner(F2_USAGES, emitted);
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1", verification: ["false"] }),
+    makeContext(),
+  );
+
+  assert.equal(result.outcome, "failed", "verification failure → failed");
+  const finished = emitted.filter((e) => e.type === "agent.finished");
+  assert.equal(finished.length, 1, "agent.finished emitted even on failure");
+  const payload = finished[0]?.payload;
+  assert.ok(payload !== undefined, "agent.finished must carry a payload");
+  assert.equal(payload.outcome, "failed", "payload outcome must be failed");
+  assert.equal(
+    payload.tokensIn,
+    String(100 + 10 + 5 + (200 + 20 + 8) + (50 + 5 + 3)),
+    `tokensIn must still sum the run's turns; got '${payload.tokensIn}'`,
+  );
+  assert.equal(
+    payload.tokensOut,
+    String(20 + 30 + 10),
+    `tokensOut must still sum the run's turns; got '${payload.tokensOut}'`,
+  );
+});
+
+// (f) A run that ends in `escalated` still emits the real usage accumulated
+// across the turns that ran.
+test("(F2 T1) escalated run still emits non-zero tokensIn/tokensOut from the turns that ran", async () => {
+  const emitted: EmitRecord08[] = [];
+  const runner = makeUsageRunner(F2_USAGES, emitted, { escalateLast: true });
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+  );
+
+  assert.equal(result.outcome, "escalated", "escalate tool → escalated");
+  const finished = emitted.filter((e) => e.type === "agent.finished");
+  assert.equal(finished.length, 1, "agent.finished emitted on escalation");
+  const payload = finished[0]?.payload;
+  assert.ok(payload !== undefined, "agent.finished must carry a payload");
+  assert.equal(
+    payload.outcome,
+    "escalated",
+    "payload outcome must be escalated",
+  );
+  assert.equal(
+    payload.tokensIn,
+    String(100 + 10 + 5 + (200 + 20 + 8) + (50 + 5 + 3)),
+    `tokensIn must still sum the run's turns; got '${payload.tokensIn}'`,
+  );
+  assert.equal(
+    payload.tokensOut,
+    String(20 + 30 + 10),
+    `tokensOut must still sum the run's turns; got '${payload.tokensOut}'`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 03 T2 (F3) — executor-neutral candidate result contract on the runner
+//   changed   → candidate (carrying base + proposal commits)
+//   no-change → completed (verified no-change is a legitimate completion)
+// Driven with the REAL generic@1 profile (not the synthetic stub) so the
+// changed/no-change branch in genericProfile.verify() + pi.ts is exercised.
+// ---------------------------------------------------------------------------
+
+import { genericProfile } from "./pi-profile.ts";
+
+class T2WorkspaceManager {
+  readonly #ws: { dir: string; baseCommit: string };
+  constructor(ws: { dir: string; baseCommit: string }) {
+    this.#ws = ws;
+  }
+  async prepare(_taskId: string, _source: unknown): Promise<Workspace> {
+    return {
+      dir: this.#ws.dir,
+      branch: "kanthord/task-001",
+      baseCommit: this.#ws.baseCommit,
+    };
+  }
+}
+
+async function makeT2Workspace(
+  dirty: boolean,
+): Promise<{ dir: string; baseCommit: string; cleanup: () => Promise<void> }> {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-pi-t2-"));
+  await execFileAsync("git", ["init", "-b", "main"], { cwd: dir });
+  await execFileAsync("git", ["config", "user.email", "test@localhost"], {
+    cwd: dir,
+  });
+  await execFileAsync("git", ["config", "user.name", "Test"], { cwd: dir });
+  await writeFile(join(dir, "README.md"), "# seed");
+  await execFileAsync("git", ["add", "."], { cwd: dir });
+  await execFileAsync("git", ["commit", "-m", "initial"], { cwd: dir });
+  const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
+    cwd: dir,
+  });
+  const baseCommit = stdout.trim();
+  if (dirty) {
+    // Leave an untracked new file so computeEvidence sees hasChanges === true.
+    await writeFile(join(dir, "feature.ts"), "// new file\n");
+  }
+  return {
+    dir,
+    baseCommit,
+    cleanup: () => rm(dir, { recursive: true, force: true }),
+  };
+}
+
+function makeGenericRunner(ws: {
+  dir: string;
+  baseCommit: string;
+}): PiAgentRunner {
+  return new PiAgentRunner({
+    sessions: makeSessionFactory([{ text: "done" }]),
+    workspaces: new T2WorkspaceManager(ws),
+    newInstructionLoader: (_dir: string) => ({ load: () => [] }),
+    getResource: makeGetResource(),
+    profiles: new Map([["generic@1", genericProfile]]),
+    getPriorRejection: () => undefined,
+  });
+}
+
+// (b) changed workspace → candidate carrying base + proposal commits
+test("(F3 T2) pi runner: changed workspace resolves to candidate (not completed/failed)", async () => {
+  const ws = await makeT2Workspace(true);
+  try {
+    const runner = makeGenericRunner(ws);
+    const result = await runner.run(
+      makeTask({ agent: "generic@1" }),
+      makeContext(),
+    );
+
+    assert.equal(
+      result.outcome,
+      "candidate",
+      "changed work must resolve to candidate (awaiting landing gate), not completed/failed",
+    );
+    const cand = result as unknown as {
+      outcome: "candidate";
+      baseCommit: string;
+      candidateCommit: string;
+      branch: string;
+      workspace: string;
+      summary: string;
+    };
+    assert.equal(
+      cand.baseCommit,
+      ws.baseCommit,
+      "candidate.baseCommit must equal workspace.baseCommit",
+    );
+    assert.ok(
+      typeof cand.candidateCommit === "string" &&
+        cand.candidateCommit.length > 0,
+      `candidate.candidateCommit must be a non-empty commit SHA, got: '${cand.candidateCommit}'`,
+    );
+    assert.notEqual(
+      cand.candidateCommit,
+      cand.baseCommit,
+      "candidate.candidateCommit must differ from baseCommit (it is the proposal commit to land)",
+    );
+    assert.equal(
+      cand.branch,
+      "kanthord/task-001",
+      "candidate.branch must equal the task branch",
+    );
+    assert.equal(
+      cand.workspace,
+      ws.dir,
+      "candidate.workspace must equal the workspace dir",
+    );
+    assert.ok(
+      typeof cand.summary === "string",
+      "candidate.summary must be a string",
+    );
+  } finally {
+    await ws.cleanup();
+  }
+});
+
+// (c) no-change workspace → completed (verified no-change is legitimate)
+test("(F3 T2) pi runner: no-change workspace resolves to completed (not failed)", async () => {
+  const ws = await makeT2Workspace(false);
+  try {
+    const runner = makeGenericRunner(ws);
+    const result = await runner.run(
+      makeTask({ agent: "generic@1" }),
+      makeContext(),
+    );
+
+    assert.equal(
+      result.outcome,
+      "completed",
+      "verified no-change must resolve to completed (legitimate completion, not failed)",
+    );
+  } finally {
+    await ws.cleanup();
+  }
+});

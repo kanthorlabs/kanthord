@@ -11,7 +11,7 @@ import type { Logger } from "../../logger/port.ts";
 type RunNextResult =
   | { outcome: "idle" }
   | {
-      outcome: "skipped" | "completed" | "failed" | "escalated";
+      outcome: "skipped" | "completed" | "failed" | "escalated" | "candidate";
       taskId: string;
     };
 

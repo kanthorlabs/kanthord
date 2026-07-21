@@ -62,13 +62,10 @@ export const genericProfile: PiAgentProfile = {
 
   async verify(evidence) {
     const ev = evidence as OutcomeEvidence;
-    if (ev.finalDiff.hasChanges) {
-      return { verdict: "accepted" as const, evidence: ev.finalResponse };
-    }
-    return {
-      verdict: "rejected" as const,
-      code: "NO_CHANGES" as const,
-      message: "Agent made no changes to the workspace",
-    };
+    // Two-valued judgment. A verified no-change is a legitimate completion —
+    // the runner maps it to `completed`, NOT `failed`. Only a real verification
+    // failure (e.g. a failing verification command surfaced via a `rejected`
+    // verdict) reaches the runner's `failed` path.
+    return { verdict: "accepted" as const, evidence: ev.finalResponse };
   },
 };

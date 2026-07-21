@@ -169,6 +169,8 @@ export type CasResult =
 export interface LandingRepository {
   saveCandidate(candidate: ChangeCandidate): void;
   getCandidate(id: string): ChangeCandidate | undefined;
+  /** Returns the latest candidate saved for a task, or undefined. Optional so existing fakes need not implement it. */
+  getCandidateByTask?(taskId: string): ChangeCandidate | undefined;
   updateCandidateState(id: string, state: CandidateState): void;
   saveIntegration(integration: Integration): void;
   getIntegration(candidateId: string): Integration | undefined;

@@ -43,3 +43,33 @@ test("generic@1 createTools tool names deep-equal createCodingTools output names
     await rm(dir, { recursive: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Story 03 T2 (F3) — executor-neutral no-change verdict
+//
+// `genericProfile.verify()` with `finalDiff.hasChanges === false` must no longer
+// return the `rejected` / `NO_CHANGES` verdict that the runner maps to `failed`.
+// A verified no-change is a legitimate completion, so the profile must surface a
+// non-rejected verdict the runner consumes to pick `completed`. (The runner's
+// changed/no-change branch is pinned separately in pi.test.ts F3 T2 (b)/(c).)
+// ---------------------------------------------------------------------------
+
+test("(F3 T2) genericProfile.verify: no-change is NOT a rejected verdict (NO_CHANGES must not map the runner to failed)", async () => {
+  const changed = await genericProfile.verify({
+    baseCommit: "baseSHA",
+    finalDiff: { files: ["src/x.ts"], hasChanges: true },
+    finalResponse: "did work",
+  });
+  const noChange = await genericProfile.verify({
+    baseCommit: "baseSHA",
+    finalDiff: { files: [], hasChanges: false },
+    finalResponse: "no changes",
+  });
+
+  assert.equal(changed.verdict, "accepted", "changed work is accepted");
+  assert.notEqual(
+    noChange.verdict,
+    "rejected",
+    "verified no-change must NOT be a rejected verdict (NO_CHANGES currently makes the runner return failed); it must be the accepted/no-change verdict the runner consumes to pick completed",
+  );
+});

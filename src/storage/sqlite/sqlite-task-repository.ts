@@ -446,6 +446,20 @@ export class SqliteTaskRepository implements TaskRepository {
       );
   }
 
+  /** Resolve a repository resource's configured canonical branch. */
+  getRepositoryBranch(repoId: string): string | undefined {
+    type Row = { attributes: string };
+    const row = this.#db
+      .prepare(
+        "SELECT attributes FROM resources WHERE id = ? AND type = 'repository'",
+      )
+      .get(repoId) as Row | undefined;
+    if (row === undefined) return undefined;
+    const attrs = JSON.parse(row.attributes) as Record<string, unknown>;
+    const branch = attrs["branch"];
+    return typeof branch === "string" ? branch : undefined;
+  }
+
   getTaskResult(taskId: string): TaskResultRow | undefined {
     type ResultRow = {
       workspace: string | null;

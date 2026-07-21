@@ -3,7 +3,7 @@
 // Currently: `repo land` — lands an accepted candidate branch onto the
 // home canonical branch via the RepositoryLanding port.
 
-import type { RepositoryLanding, LandingCandidate } from "../../app/errors.ts";
+import type { CliRepositoryLanding } from "./deps.ts";
 import { LandingConflictError } from "../../app/errors.ts";
 import { MissingFlagError } from "./error-map.ts";
 
@@ -34,7 +34,7 @@ function requireFlag(args: Record<string, unknown>, flag: string): string {
  */
 export async function runRepoLand(
   args: Record<string, unknown>,
-  landing: RepositoryLanding,
+  landing: CliRepositoryLanding,
   resolveHomeDir: (repoId: string) => string,
 ): Promise<HandlerResult> {
   const repoId = requireFlag(args, "repository");
@@ -44,11 +44,10 @@ export async function runRepoLand(
 
   const homeDir = resolveHomeDir(repoId);
 
-  // Build a minimal LandingCandidate from the CLI flags.
-  // taskId / baseSHA / ref are not known at CLI invocation time;
-  // the adapter uses candidateSHA for the git operation and the id for
-  // crash-idempotent tracking.
-  const candidate: LandingCandidate = {
+  // Build a minimal candidate from the CLI flags. taskId / baseSHA / ref are
+  // not known at CLI invocation time; the adapter uses candidateSHA for the git
+  // operation and the id for crash-idempotent tracking.
+  const candidate = {
     id: candidateSHA,
     taskId: null,
     repoId,

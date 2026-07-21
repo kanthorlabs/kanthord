@@ -15,7 +15,7 @@ import { SqliteTaskRepository } from "./storage/sqlite/sqlite-task-repository.ts
 import { SqliteReferenceResolver } from "./storage/sqlite/reference-resolver.ts";
 import { SqliteTransactor } from "./storage/sqlite/sqlite-transactor.ts";
 import { SqliteEventFeed } from "./events/sqlite.ts";
-import { newEvent } from "./domain/event.ts";
+import { newEvent, type Event, type EventType } from "./domain/event.ts";
 import { CreateProject } from "./app/project/create-project.ts";
 import { RenameProject } from "./app/project/rename-project.ts";
 import { GetProject } from "./app/project/get-project.ts";
@@ -88,6 +88,35 @@ import { writeFile } from "node:fs/promises";
 import { GitRepositoryLanding } from "./landing/git.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { isRepository } from "./domain/resource.ts";
+
+/**
+ * Build the agent-lifecycle event emitter used by the pi runner.
+ * Emits structured lines to the logger for human-visible progress while still
+ * appending the raw event to the feed (the line and the feed are decoupled).
+ * Exported for unit testing the accounting line (Story 02 T1).
+ */
+export function buildEmitCallback(
+  logger: Logger,
+  events: { append(event: Event): void },
+): (taskId: string, type: EventType, payload: Record<string, string>) => void {
+  return (taskId, type, payload) => {
+    if (type === "agent.started") {
+      logger.info(`task ${taskId}: agent started`);
+    } else if (type === "agent.finished") {
+      logger.info(
+        `task ${taskId}: agent finished: turns=${payload.turns} tokensIn=${payload.tokensIn} tokensOut=${payload.tokensOut}`,
+      );
+    } else if (type === "task.verification") {
+      const phase = (payload as Record<string, unknown>).phase;
+      if (phase === "start") {
+        logger.info(`task ${taskId}: verification started`);
+      } else if (phase === "end") {
+        logger.info(`task ${taskId}: verification ended`);
+      }
+    }
+    return events.append(newEvent(type, { taskId, payload }));
+  };
+}
 
 /**
  * Wire all concrete adapters and return the `CliDeps` bundle.
@@ -230,13 +259,6 @@ export function buildDeps(
   });
   const listEvents = new ListEvents(events);
   const getTask = new GetTask(taskRepository, taskRepository, taskRepository);
-  const approveTask = new ApproveTask(
-    taskRepository,
-    jobQueue,
-    events,
-    unitOfWork,
-    promoteProposal,
-  );
   const rejectTask = new RejectTask(
     taskRepository,
     jobQueue,
@@ -267,14 +289,9 @@ export function buildDeps(
       );
     };
 
-    const workspaceRoot =
-      process.env["KANTHORD_WORKSPACE_ROOT"] ??
-      join(dirname(dbPath), "workspaces");
-
     const sessions =
       opts?.sessionFactory ??
       new PiProviderSessionFactory({ saveCredentialValue });
-    const workspaces = new LocalWorkspaceManager({ root: workspaceRoot });
     const piRunner = new PiAgentRunner({
       sessions,
       workspaces,
@@ -282,19 +299,7 @@ export function buildDeps(
       getResource: (id) => projectRepository.getResource(id),
       profiles: new Map([["generic@1", genericProfile]]),
       maxTurns: opts?.maxTurns,
-      emit: (taskId, type, payload) => {
-        if (type === "agent.started") {
-          effectiveLogger.info(`task ${taskId}: agent started`);
-        } else if (type === "task.verification") {
-          const phase = (payload as Record<string, unknown>).phase;
-          if (phase === "start") {
-            effectiveLogger.info(`task ${taskId}: verification started`);
-          } else if (phase === "end") {
-            effectiveLogger.info(`task ${taskId}: verification ended`);
-          }
-        }
-        return events.append(newEvent(type, { taskId, payload }));
-      },
+      emit: buildEmitCallback(effectiveLogger, events),
       getPriorRejection: (taskId) => {
         const result = taskRepository.getTaskResult(taskId);
         if (!result?.rejectionReason) return undefined;
@@ -330,6 +335,7 @@ export function buildDeps(
       events,
       unitOfWork,
       resolver,
+      landingRepository,
     );
     return new RunDaemon({
       recover,
@@ -364,6 +370,31 @@ export function buildDeps(
     }
     return resource.path;
   };
+
+  // Shared workspace manager — used by both the daemon runner and the
+  // approve-landing path so homeDir(repoId) resolves the same canonical mirror.
+  const workspaceRoot =
+    process.env["KANTHORD_WORKSPACE_ROOT"] ??
+    join(dirname(dbPath), "workspaces");
+  const workspaces = new LocalWorkspaceManager({
+    root: workspaceRoot,
+    lockDir,
+  });
+
+  // Wire the real ApproveTask WITH landing: the RepositoryLanding adapter
+  // (Story 05 T3) plus the persisted candidate store + workspace manager so a
+  // repository-bound approve lands onto the configured branch of the home repo.
+  const approveTask = new ApproveTask(
+    taskRepository,
+    jobQueue,
+    events,
+    unitOfWork,
+    promoteProposal,
+    repoLanding,
+    landingRepository,
+    workspaces,
+    resolveHomeDir,
+  );
 
   const logger = new StdoutLogger();
 
@@ -435,6 +466,7 @@ export function buildDeps(
     diagnosticsExport,
     repoLanding,
     resolveHomeDir,
+    workspaces,
     newId,
   };
 }

@@ -8,6 +8,17 @@ import type {
   Integration,
 } from "../../domain/landing.ts";
 
+type LandingRow = {
+  id: string;
+  task_id: string | null;
+  repo_id: string;
+  base_sha: string;
+  candidate_sha: string;
+  ref: string;
+  target: string;
+  state: string;
+};
+
 export class SqliteLandingRepository implements LandingRepository {
   readonly #db: DatabaseSync;
 
@@ -41,19 +52,24 @@ export class SqliteLandingRepository implements LandingRepository {
         `SELECT id, task_id, repo_id, base_sha, candidate_sha, ref, target, state
            FROM landing_candidates WHERE id = ?`,
       )
-      .get(id) as
-      | {
-          id: string;
-          task_id: string | null;
-          repo_id: string;
-          base_sha: string;
-          candidate_sha: string;
-          ref: string;
-          target: string;
-          state: string;
-        }
-      | undefined;
+      .get(id) as LandingRow | undefined;
     if (row === undefined) return undefined;
+    return this.rowToCandidate(row);
+  }
+
+  getCandidateByTask(taskId: string): ChangeCandidate | undefined {
+    const row = this.#db
+      .prepare(
+        `SELECT id, task_id, repo_id, base_sha, candidate_sha, ref, target, state
+           FROM landing_candidates WHERE task_id = ? ORDER BY id DESC LIMIT 1`,
+      )
+      .get(taskId) as LandingRow | undefined;
+    if (row === undefined) return undefined;
+    return this.rowToCandidate(row);
+  }
+
+  /** Maps a `landing_candidates` row to the domain `ChangeCandidate`. */
+  private rowToCandidate(row: LandingRow): ChangeCandidate {
     return {
       id: row.id,
       taskId: row.task_id,

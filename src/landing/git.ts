@@ -142,6 +142,16 @@ export class GitRepositoryLanding implements RepositoryLanding {
         this.#landing.saveCandidate(record);
       }
 
+      // --- Move onto the NAMED target ref before any ff/merge so we never
+      // mutate the checked-out HEAD (which may be a different branch, e.g.
+      // `main`). Landing is executor-neutral: the target comes from
+      // `candidate.target` (the repository's configured canonical branch),
+      // never from the currently checked-out branch. This is what makes a
+      // non-checked-out target (like `trunk`) advance while `main` stays put.
+      await execFile("git", ["checkout", "-q", candidate.target], {
+        cwd: homeDir,
+      });
+
       // --- Classify: fast-forward or merge ---
       // FF: current target HEAD is an ancestor of candidateSHA
       const currentHead = await gitOut(homeDir, "rev-parse", candidate.target);
@@ -203,7 +213,11 @@ export class GitRepositoryLanding implements RepositoryLanding {
           const integration: Integration = {
             candidateId: candidate.id,
             outcome: "conflict",
-            canonicalSHA: candidate.candidateSHA,
+            // The target HEAD captured before the (aborted) merge — not the
+            // candidate SHA. The lock invariant is that a conflict leaves the
+            // canonical branch untouched, so the recorded canonicalSHA must be
+            // the unchanged target HEAD, never the diverged candidate.
+            canonicalSHA: currentHead,
             conflictFiles,
           };
           this.#landing.saveIntegration(integration);

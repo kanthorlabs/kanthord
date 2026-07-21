@@ -30,6 +30,7 @@ import { promisify } from "node:util";
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
+import type { Usage } from "@earendil-works/pi-ai";
 import type {
   AIProvider,
   Credential,
@@ -322,12 +323,13 @@ export class PiAgentRunner implements AgentRunner {
 
   async run(task: Task, context: TaskContextBinding[]): Promise<TaskResult> {
     const turnCountRef = { current: 0 };
-    const result = await this.#doRun(task, context, turnCountRef);
+    const usageRef = { in: 0, out: 0 };
+    const result = await this.#doRun(task, context, turnCountRef, usageRef);
     this.#emit(task.id, "agent.finished", {
       outcome: result.outcome,
       turns: String(turnCountRef.current),
-      tokensIn: "0",
-      tokensOut: "0",
+      tokensIn: String(usageRef.in),
+      tokensOut: String(usageRef.out),
     });
     return result;
   }
@@ -336,6 +338,7 @@ export class PiAgentRunner implements AgentRunner {
     task: Task,
     context: TaskContextBinding[],
     turnCountRef: { current: number },
+    usageRef: { in: number; out: number },
   ): Promise<TaskResult> {
     // 1. Profile lookup
     const profile = this.#profiles.get(task.agent ?? "");
@@ -479,12 +482,19 @@ export class PiAgentRunner implements AgentRunner {
         }
       });
 
-      // Subscribe for turn budget enforcement
+      // Subscribe for turn budget enforcement + per-turn token accounting
       let budgetExceeded = false;
       const maxTurns = this.#maxTurns;
       agent.subscribe((event) => {
         if (event.type === "turn_end") {
           turnCountRef.current += 1;
+          const msg = event.message as { role?: string; usage?: Usage };
+          if (msg.role === "assistant" && msg.usage) {
+            const u = msg.usage;
+            usageRef.in +=
+              (u.input ?? 0) + (u.cacheRead ?? 0) + (u.cacheWrite ?? 0);
+            usageRef.out += u.output ?? 0;
+          }
           if (turnCountRef.current >= maxTurns) {
             budgetExceeded = true;
             agent.abort();
@@ -560,7 +570,11 @@ export class PiAgentRunner implements AgentRunner {
         };
       }
 
-      // 11. D6: execute task.verification commands sequentially
+      // 11. D6: execute task.verification commands sequentially. Runs for BOTH
+      //     changed and verified-no-change work, so a genuine verification
+      //     failure (e.g. a non-zero exit) is mapped to `failed` BEFORE any
+      //     candidate/commit is produced — the runner never masks a real
+      //     verification failure as a landing candidate.
       let verificationEvidence: VerificationEvidence[] | undefined;
       if (task.verification && task.verification.length > 0) {
         verificationEvidence = [];
@@ -591,7 +605,34 @@ export class PiAgentRunner implements AgentRunner {
         }
       }
 
-      // 12. Finalize: commit-if-dirty, return completed
+      // 12. Changed work becomes a candidate awaiting the landing gate; the D6
+      //     step above has already gated it. Verified no-change proceeds to
+      //     finalize as a legitimate completion.
+      if (evidence.finalDiff.hasChanges) {
+        let candidateCommit: string;
+        try {
+          candidateCommit = await createProposalCommit(
+            workspace.dir,
+            workspace.baseCommit,
+            task.id,
+          );
+        } catch (err) {
+          return {
+            outcome: "failed",
+            reason: `ResultCaptureError: ${extractStderr(err)}`,
+          };
+        }
+        return {
+          outcome: "candidate",
+          workspace: workspace.dir,
+          branch: workspace.branch,
+          baseCommit: workspace.baseCommit,
+          candidateCommit,
+          summary: evidence.finalResponse,
+        };
+      }
+
+      // 13. Finalize: commit-if-dirty, return completed (verified no-change).
       let commitSha: string;
       try {
         commitSha = await finalize(workspace.dir, task.title);

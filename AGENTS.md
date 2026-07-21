@@ -143,8 +143,10 @@ src/
 - Domain and use cases test hermetically with fakes implementing ports — no
   network, no real SQLite required (SQLite adapters get their own tests).
 
-## Commit formatting
+## Others
 
 - A Prettier pre-commit hook (husky + lint-staged) auto-formats staged files on
   every commit; formatting changes to your staged files at commit time are
   expected and correct — do not panic or revert them.
+
+- No backward-compatible needs because we are in local development only

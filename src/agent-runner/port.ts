@@ -35,6 +35,15 @@ export type TaskResult =
       branch: string;
       baseCommit: string;
       proposalCommit?: string;
+    }
+  | {
+      outcome: "candidate";
+      workspace: string;
+      branch: string;
+      baseCommit: string;
+      candidateCommit: string;
+      summary: string;
+      evidence?: VerificationEvidence[];
     };
 
 export interface TaskContextBinding {

@@ -585,3 +585,435 @@ test("SqliteLandingRepository: updateCandidateState changes state field", () => 
   assert.ok(updated !== undefined);
   assert.equal(updated.state, "landed");
 });
+
+// ---------------------------------------------------------------------------
+// Story 5 T2 — land onto the CONFIGURED branch (not `main`) of the home repo.
+// Every test below uses a home repo whose canonical branch is `trunk` while the
+// checked-out branch is `main`, proving `land()` updates the NAMED target ref
+// (not the currently checked-out HEAD). The pre-fix code merges into HEAD
+// (`main`), leaving `trunk` untouched → these tests RED until the adapter
+// targets `candidate.target` under CAS.
+// ---------------------------------------------------------------------------
+
+/** Initialises a git repo on `branch`, makes an empty initial commit, returns baseSHA. */
+async function initHomeBranch(dir: string, branch: string): Promise<string> {
+  await mkdir(dir, { recursive: true });
+  await execFileProm("git", ["init", "-q", "-b", branch], { cwd: dir });
+  await execFileProm("git", ["config", "user.email", "test@localhost"], {
+    cwd: dir,
+  });
+  await execFileProm("git", ["config", "user.name", "Test"], { cwd: dir });
+  await execFileProm("git", ["commit", "--allow-empty", "-q", "-m", "init"], {
+    cwd: dir,
+  });
+  return git(dir, "rev-parse", "HEAD");
+}
+
+/** Writes+commits a file on the CURRENTLY checked-out branch of `dir`; returns new HEAD SHA. */
+async function homeCommit(
+  dir: string,
+  filename: string,
+  content: string,
+): Promise<string> {
+  await writeFile(join(dir, filename), content);
+  await execFileProm("git", ["add", filename], { cwd: dir });
+  await execFileProm("git", ["commit", "-q", "-m", `home change ${filename}`], {
+    cwd: dir,
+  });
+  return git(dir, "rev-parse", "HEAD");
+}
+
+function makeCandidateTargeted(
+  id: string,
+  repoId: string,
+  baseSHA: string,
+  candidateSHA: string,
+  target: string,
+  taskId = "task-1",
+  workspace = "",
+): LandingCandidate {
+  return {
+    id,
+    taskId,
+    repoId,
+    baseSHA,
+    candidateSHA,
+    ref: `kanthord/${taskId}`,
+    target,
+    workspace,
+  };
+}
+
+test("Story 05 T2 (a) fast-forward lands onto the configured non-main target branch (trunk) and advances that named ref", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-t2a-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHomeBranch(homeDir, "trunk");
+    await execFileProm("git", ["checkout", "-q", "-b", "main"], {
+      cwd: homeDir,
+    }); // HEAD = main (not target)
+
+    await cloneWs(homeDir, wsDir);
+    const candidateSHA = await wsCommit(
+      wsDir,
+      "answer.ts",
+      "export const x = 1;",
+    );
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidateTargeted(
+      "cand-t2a",
+      "repo-t2a",
+      baseSHA,
+      candidateSHA,
+      "trunk",
+      "task-1",
+      wsDir,
+    );
+
+    const result = await landing.land(homeDir, cand);
+
+    assert.equal(
+      result.outcome.kind,
+      "fast-forward",
+      "linear descendant of trunk must fast-forward",
+    );
+    assert.equal(
+      result.canonicalSHA,
+      candidateSHA,
+      "canonicalSHA must equal candidateSHA after ff",
+    );
+    const trunkHead = await git(homeDir, "rev-parse", "trunk");
+    assert.equal(
+      trunkHead,
+      candidateSHA,
+      "the named target ref 'trunk' must advance to candidateSHA",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Story 05 T2 (b) diverged candidate merges onto the configured non-main target branch (trunk)", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-t2b-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHomeBranch(homeDir, "trunk");
+    await execFileProm("git", ["checkout", "-q", "-b", "main"], {
+      cwd: homeDir,
+    });
+    // diverge: add a commit directly on trunk (the target), then back to main
+    await execFileProm("git", ["checkout", "-q", "trunk"], { cwd: homeDir });
+    await homeCommit(homeDir, "file_b.ts", "const b = 2;");
+    await execFileProm("git", ["checkout", "-q", "main"], { cwd: homeDir });
+
+    await cloneWs(homeDir, wsDir);
+    const candidateSHA = await wsCommit(wsDir, "file_a.ts", "const a = 1;");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidateTargeted(
+      "cand-t2b",
+      "repo-t2b",
+      baseSHA,
+      candidateSHA,
+      "trunk",
+      "task-1",
+      wsDir,
+    );
+
+    const result = await landing.land(homeDir, cand);
+
+    assert.equal(
+      result.outcome.kind,
+      "merge",
+      "diverged candidate must merge onto trunk",
+    );
+    const parents = (
+      await git(homeDir, "rev-list", "--parents", "-n", "1", "trunk")
+    ).split(" ").length;
+    assert.equal(parents, 3, "trunk must be a merge commit with two parents");
+    const reachable = await execFileProm(
+      "git",
+      ["merge-base", "--is-ancestor", candidateSHA, "trunk"],
+      { cwd: homeDir },
+    )
+      .then(() => true)
+      .catch(() => false);
+    assert.ok(
+      reachable,
+      "candidateSHA must be reachable from trunk after merge",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Story 05 T2 (c) landing onto a non-checked-out target leaves the checked-out branch (main) untouched", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-t2c-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHomeBranch(homeDir, "trunk");
+    await execFileProm("git", ["checkout", "-q", "-b", "main"], {
+      cwd: homeDir,
+    });
+
+    await cloneWs(homeDir, wsDir);
+    const candidateSHA = await wsCommit(
+      wsDir,
+      "answer.ts",
+      "export const x = 1;",
+    );
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidateTargeted(
+      "cand-t2c",
+      "repo-t2c",
+      baseSHA,
+      candidateSHA,
+      "trunk",
+      "task-1",
+      wsDir,
+    );
+
+    await landing.land(homeDir, cand);
+
+    const mainHead = await git(homeDir, "rev-parse", "main");
+    assert.equal(
+      mainHead,
+      baseSHA,
+      "the checked-out branch main must NOT advance when landing onto trunk",
+    );
+    const trunkHead = await git(homeDir, "rev-parse", "trunk");
+    assert.equal(
+      trunkHead,
+      candidateSHA,
+      "the named target ref trunk must advance to candidateSHA",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+test("Story 05 T2 (d) stale baseSHA (target moved) merges without losing target commits (CAS, no silent overwrite)", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-t2d-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    const baseSHA = await initHomeBranch(homeDir, "trunk");
+    await execFileProm("git", ["checkout", "-q", "-b", "main"], {
+      cwd: homeDir,
+    });
+    // target (trunk) moves forward AFTER the candidate was minted → baseSHA is now stale
+    await execFileProm("git", ["checkout", "-q", "trunk"], { cwd: homeDir });
+    const extraSha = await homeCommit(homeDir, "extra.ts", "const e = 9;");
+    await execFileProm("git", ["checkout", "-q", "main"], { cwd: homeDir });
+
+    await cloneWs(homeDir, wsDir);
+    const candidateSHA = await wsCommit(wsDir, "file_a.ts", "const a = 1;");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidateTargeted(
+      "cand-t2d",
+      "repo-t2d",
+      baseSHA,
+      candidateSHA,
+      "trunk",
+      "task-1",
+      wsDir,
+    );
+
+    const result = await landing.land(homeDir, cand);
+
+    assert.ok(
+      result.outcome.kind === "merge" || result.outcome.kind === "fast-forward",
+      `stale-base land must complete (merge/ff); got '${result.outcome.kind}'`,
+    );
+    // No target commit may be silently overwritten: the extra commit that moved trunk must survive.
+    const extraPreserved = await execFileProm(
+      "git",
+      ["merge-base", "--is-ancestor", extraSha, "trunk"],
+      { cwd: homeDir },
+    )
+      .then(() => true)
+      .catch(() => false);
+    assert.ok(
+      extraPreserved,
+      "the commit that moved trunk must remain reachable after landing (no silent overwrite)",
+    );
+    const candidatePreserved = await execFileProm(
+      "git",
+      ["merge-base", "--is-ancestor", candidateSHA, "trunk"],
+      { cwd: homeDir },
+    )
+      .then(() => true)
+      .catch(() => false);
+    assert.ok(
+      candidatePreserved,
+      "candidateSHA must be reachable from trunk after landing",
+    );
+    const parents = (
+      await git(homeDir, "rev-list", "--parents", "-n", "1", "trunk")
+    ).split(" ").length;
+    assert.equal(
+      parents,
+      3,
+      "trunk must be a merge commit combining both lineages",
+    );
+    const mainHead = await git(homeDir, "rev-parse", "main");
+    assert.equal(
+      mainHead,
+      baseSHA,
+      "checked-out branch main must remain untouched",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 07 T1 — adapter: abort + persist the conflict integration row.
+// Faithful to the locked behavior in 07-f3-conflict-lifecycle.md:
+//   on conflict, `land` must (1) abort the merge leaving the target HEAD
+//   UNCHANGED, (2) persist candidate.state = "conflict", (3) persist an
+//   integration row { outcome:"conflict", canonicalSHA:<unchanged target HEAD>,
+//   conflictFiles }, and (4) throw LandingConflictError with the same files.
+// NOTE: the conflict path shipped in 007.1 already does (1)(2)(4) and writes a
+// conflict integration row — but it records canonicalSHA = candidateSHA (the
+// candidate's commit), NOT the unchanged target HEAD the lock requires. That is
+// the genuine failing seam this test pins; the other three assertions guard
+// the already-shipped behavior from regressing.
+// ---------------------------------------------------------------------------
+test("Story 07 T1 conflict: adapter aborts merge, persists conflict candidate state + integration row with canonicalSHA = unchanged target HEAD", async () => {
+  const tmp = await mkdtemp(join(tmpdir(), "kanthord-land-s7t1-"));
+  try {
+    const homeDir = join(tmp, "home");
+    const wsDir = join(tmp, "ws");
+    const lockDir = join(tmp, "locks");
+    await mkdir(lockDir, { recursive: true });
+
+    // home: initial commit with conflict.ts on main
+    await mkdir(homeDir, { recursive: true });
+    await execFileProm("git", ["init", "-q", "-b", "main"], { cwd: homeDir });
+    await execFileProm("git", ["config", "user.email", "test@localhost"], {
+      cwd: homeDir,
+    });
+    await execFileProm("git", ["config", "user.name", "Test"], {
+      cwd: homeDir,
+    });
+    await writeFile(join(homeDir, "conflict.ts"), "const x = 'base';\n");
+    await execFileProm("git", ["add", "conflict.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "init with conflict.ts"], {
+      cwd: homeDir,
+    });
+    const baseSHA = await git(homeDir, "rev-parse", "HEAD");
+
+    // ws: clone, conflicting change
+    await cloneWs(homeDir, wsDir);
+    await writeFile(join(wsDir, "conflict.ts"), "const x = 'ws-version';\n");
+    await execFileProm("git", ["add", "conflict.ts"], { cwd: wsDir });
+    await execFileProm("git", ["commit", "-q", "-m", "ws change"], {
+      cwd: wsDir,
+    });
+    const candidateSHA = await git(wsDir, "rev-parse", "HEAD");
+
+    // home: also modify conflict.ts differently (diverge + conflict)
+    await writeFile(
+      join(homeDir, "conflict.ts"),
+      "const x = 'home-version';\n",
+    );
+    await execFileProm("git", ["add", "conflict.ts"], { cwd: homeDir });
+    await execFileProm("git", ["commit", "-q", "-m", "home diverge"], {
+      cwd: homeDir,
+    });
+
+    // (a) capture target HEAD before land
+    const targetHeadBefore = await git(homeDir, "rev-parse", "main");
+
+    const fakeRepo = new FakeLandingRepository();
+    const landing = new GitRepositoryLanding(lockDir, fakeRepo, GIT_CONFIG);
+    const cand = makeCandidate(
+      "cand-s7t1",
+      "repo-s7t1",
+      baseSHA,
+      candidateSHA,
+      "task-1",
+      wsDir,
+    );
+
+    let caught: LandingConflictError | undefined;
+    try {
+      await landing.land(homeDir, cand);
+      assert.fail("land must throw LandingConflictError for a conflict");
+    } catch (err) {
+      assert.ok(
+        err instanceof LandingConflictError,
+        `expected LandingConflictError, got: ${String(err)}`,
+      );
+      caught = err;
+    }
+
+    // (a) home target HEAD unchanged (merge aborted, no half-merge)
+    const targetHeadAfter = await git(homeDir, "rev-parse", "main");
+    assert.equal(
+      targetHeadAfter,
+      targetHeadBefore,
+      "home target HEAD must be unchanged after a conflict (merge aborted, no half-merge)",
+    );
+
+    // (b) candidate state persisted as conflict
+    const saved = fakeRepo.getCandidate("cand-s7t1");
+    assert.ok(saved !== undefined, "candidate row must exist after conflict");
+    assert.equal(
+      saved.state,
+      "conflict",
+      "candidate.state must be 'conflict' after a conflict",
+    );
+
+    // (c) integration row exists: outcome conflict + conflictFiles + canonicalSHA = unchanged target HEAD
+    const integ = fakeRepo.getIntegration("cand-s7t1");
+    assert.ok(integ !== undefined, "integration row must exist after conflict");
+    assert.equal(
+      integ.outcome,
+      "conflict",
+      "integration.outcome must be 'conflict'",
+    );
+    assert.ok(
+      integ.conflictFiles !== undefined &&
+        integ.conflictFiles.includes("conflict.ts"),
+      `conflictFiles must include 'conflict.ts'; got: ${JSON.stringify(integ.conflictFiles)}`,
+    );
+    assert.equal(
+      integ.canonicalSHA,
+      targetHeadBefore,
+      "integration.canonicalSHA must be the UNCHANGED target HEAD (the lock requires this, not the candidate SHA)",
+    );
+
+    // (d) the thrown error carries the same conflict files
+    assert.ok(caught !== undefined, "LandingConflictError must be thrown");
+    assert.ok(
+      caught.conflictFiles.includes("conflict.ts"),
+      "LandingConflictError.conflictFiles must include 'conflict.ts'",
+    );
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
+  }
+});

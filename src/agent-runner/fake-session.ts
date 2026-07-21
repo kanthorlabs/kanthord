@@ -12,6 +12,7 @@ import {
   fauxToolCall,
 } from "@earendil-works/pi-ai";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -49,4 +50,26 @@ export class FakeSessionFactory {
   get streamFn(): StreamFn {
     return this._streamFn;
   }
+}
+
+/**
+ * Adapt scripted turns into the `ProviderSessionFactory` port so the real
+ * composition root can run the pi Agent loop with no model / no network. Each
+ * `.for()` call yields a fresh faux session serving the scripted turns; the
+ * `aiProvider`/`credential` arguments are ignored (they only satisfy the
+ * runner's context-binding check). Used by the `KANTHORD_FAKE_AGENT` e2e seam.
+ */
+export function fakeSessionFactoryFromTurns(
+  turns: FakeTurn[],
+): ProviderSessionFactory {
+  return {
+    async for(): Promise<ProviderSession> {
+      const fake = new FakeSessionFactory(turns);
+      return {
+        model: {} as ProviderSession["model"],
+        streamFn: fake.streamFn as unknown as ProviderSession["streamFn"],
+        getApiKey: () => "fake-key",
+      };
+    },
+  };
 }

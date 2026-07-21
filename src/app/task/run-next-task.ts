@@ -2,9 +2,15 @@ import type { Task } from "../../domain/task.ts";
 import { transitionTask } from "../../domain/task.ts";
 import { readiness } from "../../domain/graph.ts";
 import { newEvent } from "../../domain/event.ts";
+import { newId } from "../../domain/entity.ts";
+import { newChangeCandidate } from "../../domain/landing.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
-import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
+import type {
+  UnitOfWork,
+  TaskResultRow,
+  LandingRepository,
+} from "../../storage/port.ts";
 import type {
   AgentRunnerResolver,
   TaskContextBinding,
@@ -18,13 +24,14 @@ interface TaskStore {
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
   getTaskContext(taskId: string): Record<string, string>;
+  getRepositoryBranch?(repoId: string): string | undefined;
   saveTaskResult(taskId: string, row: TaskResultRow): void;
 }
 
 type RunResult =
   | { outcome: "idle" }
   | {
-      outcome: "skipped" | "completed" | "failed" | "escalated";
+      outcome: "skipped" | "completed" | "failed" | "escalated" | "candidate";
       taskId: string;
     };
 
@@ -43,6 +50,7 @@ export class RunNextTask {
   readonly #feed: EventFeed;
   readonly #uow: UnitOfWork;
   readonly #resolver: AgentRunnerResolver;
+  readonly #landing?: LandingRepository;
 
   constructor(
     queue: JobQueue,
@@ -50,12 +58,14 @@ export class RunNextTask {
     feed: EventFeed,
     uow: UnitOfWork,
     resolver: AgentRunnerResolver,
+    landing?: LandingRepository,
   ) {
     this.#queue = queue;
     this.#store = store;
     this.#feed = feed;
     this.#uow = uow;
     this.#resolver = resolver;
+    this.#landing = landing;
   }
 
   async execute(): Promise<RunResult> {
@@ -107,6 +117,8 @@ export class RunNextTask {
       Extract<TaskResult, { outcome: "completed" }> | undefined;
     let escalatedResult:
       Extract<TaskResult, { outcome: "escalated" }> | undefined;
+    let candidateResult:
+      Extract<TaskResult, { outcome: "candidate" }> | undefined;
 
     try {
       const runner = this.#resolver.for(runningTask, contextBindings);
@@ -115,8 +127,10 @@ export class RunNextTask {
         completedResult = result;
       } else if (result.outcome === "escalated") {
         escalatedResult = result;
-      } else {
+      } else if (result.outcome === "failed") {
         failReason = result.reason;
+      } else {
+        candidateResult = result;
       }
     } catch (err: unknown) {
       const e = err instanceof Error ? err : new Error(String(err));
@@ -124,8 +138,11 @@ export class RunNextTask {
     }
 
     // tx2: persist the outcome.
+    let resultOutcome: "completed" | "failed" | "escalated" | "candidate" =
+      "failed";
     this.#uow.transaction(() => {
       if (completedResult !== undefined) {
+        resultOutcome = "completed";
         const completedTask = transitionTask(runningTask, "completed");
         this.#store.save(completedTask);
         this.#queue.finish(jobId, "completed");
@@ -185,6 +202,88 @@ export class RunNextTask {
           rejectionReason: null,
           evidence: null,
         });
+        resultOutcome = "escalated";
+      } else if (candidateResult !== undefined) {
+        // A changed run produced a landing candidate.
+        // With a repository binding there is something to land → hold at
+        // awaiting_confirmation and persist the candidate atomically (F3).
+        // Without a repository binding (filesystem-backed task) there is
+        // nothing to land → complete directly.
+        const repoBinding = contextBindings.find(
+          (b) => b.type === "repository",
+        );
+        if (repoBinding === undefined) {
+          const completedTask = transitionTask(runningTask, "completed");
+          this.#store.save(completedTask);
+          this.#queue.finish(jobId, "completed");
+          // A filesystem-bound changed task still completes — emit the event so
+          // a client polling `list event` observes it (mirrors the repo-bound
+          // completed path at :145).
+          this.#feed.append(newEvent("task.completed", { taskId }));
+          this.#store.saveTaskResult(taskId, {
+            workspace: candidateResult.workspace,
+            branch: candidateResult.branch,
+            baseCommit: candidateResult.baseCommit,
+            proposalCommit: candidateResult.candidateCommit,
+            commitSha: null,
+            summary: candidateResult.summary,
+            reason: null,
+            rejectionResolution: null,
+            rejectionReason: null,
+            evidence: candidateResult.evidence ?? null,
+          });
+          // Re-scan the initiative for newly-ready tasks.
+          const refreshed = initiativeId
+            ? this.#store.listByInitiative(initiativeId)
+            : [];
+          for (const entry of readiness(refreshed)) {
+            if (entry.state === "ready") {
+              const inserted = this.#queue.enqueue(entry.id);
+              if (inserted) {
+                this.#feed.append(newEvent("task.ready", { taskId: entry.id }));
+              }
+            }
+          }
+          resultOutcome = "completed";
+        } else {
+          // Persist a fresh candidate id that identifies THIS execution attempt
+          // (not the legacy `${taskId}-lc`), in the SAME transaction as the
+          // task transition so a crash can never leave a candidate-less
+          // awaiting_confirmation (F3 / Story 04 T1).
+          const candidateId = newId();
+          const target =
+            this.#store.getRepositoryBranch?.(repoBinding.resourceId) ?? "main";
+          const candidate = newChangeCandidate({
+            id: candidateId,
+            taskId,
+            repoId: repoBinding.resourceId,
+            baseSHA: candidateResult.baseCommit,
+            candidateSHA: candidateResult.candidateCommit,
+            ref: candidateResult.branch,
+            target,
+          });
+          this.#landing?.saveCandidate(candidate);
+
+          const candidateTask = transitionTask(
+            runningTask,
+            "awaiting_confirmation",
+          );
+          this.#store.save(candidateTask);
+          this.#queue.finish(jobId, "completed");
+          this.#store.saveTaskResult(taskId, {
+            workspace: candidateResult.workspace,
+            branch: candidateResult.branch,
+            baseCommit: candidateResult.baseCommit,
+            proposalCommit: candidateResult.candidateCommit,
+            commitSha: null,
+            summary: candidateResult.summary,
+            reason: null,
+            rejectionResolution: null,
+            rejectionReason: null,
+            evidence: candidateResult.evidence ?? null,
+          });
+          resultOutcome = "candidate";
+        }
       } else {
         const reason = failReason ?? "unknown failure";
         const failedTask = transitionTask(runningTask, "failed");
@@ -193,11 +292,10 @@ export class RunNextTask {
         this.#feed.append(
           newEvent("task.failed", { taskId, payload: { reason } }),
         );
+        resultOutcome = "failed";
       }
     });
 
-    if (completedResult !== undefined) return { outcome: "completed", taskId };
-    if (escalatedResult !== undefined) return { outcome: "escalated", taskId };
-    return { outcome: "failed", taskId };
+    return { outcome: resultOutcome, taskId };
   }
 }

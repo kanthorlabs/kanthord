@@ -8,6 +8,13 @@ export interface Workspace {
 
 export interface WorkspaceManager {
   prepare(taskId: string, source: Repository | Filesystem): Promise<Workspace>;
+  /**
+   * Returns the canonical local mirror path for a repository (the path the
+   * manager clones the repository's `remoteUrl` into), stable for a given
+   * `repoId` and distinct from any per-task workspace dir it builds as
+   * `join(root, <taskId>)`. Optional so existing fakes need not implement it.
+   */
+  homeDir?(repoId: string): string;
 }
 
 export class WorkspacePreparationError extends Error {

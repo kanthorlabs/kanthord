@@ -219,6 +219,8 @@ export class LocalWorkspaceManager implements WorkspaceManager {
   private readonly saveCachedPolicy?: (
     policy: CachedModePolicy,
   ) => Promise<void>;
+  /** repoId → canonical local mirror path, populated during prepare(). */
+  readonly #homes = new Map<string, string>();
 
   constructor(opts: LocalWorkspaceManagerOptions) {
     this.root = opts.root;
@@ -226,6 +228,16 @@ export class LocalWorkspaceManager implements WorkspaceManager {
     this.lockDir = opts.lockDir;
     this.getCachedPolicy = opts.getCachedPolicy;
     this.saveCachedPolicy = opts.saveCachedPolicy;
+  }
+
+  /**
+   * Returns the canonical local mirror path the manager cloned a repository's
+   * `remoteUrl` into (the repository's configured `path`), stable for a given
+   * `repoId`. Distinct from any per-task workspace dir built as
+   * `join(root, <taskId>)`. Populated by `prepare()` from a repository source.
+   */
+  homeDir(repoId: string): string {
+    return this.#homes.get(repoId) ?? "";
   }
 
   async prepare(
@@ -302,6 +314,8 @@ export class LocalWorkspaceManager implements WorkspaceManager {
       const remoteUrl = repo.remoteUrl;
       const homePath = repo.path;
       const branch = repo.branch;
+      // Record the canonical mirror path so homeDir(repoId) resolves it later.
+      this.#homes.set(repo.id, homePath);
 
       // Acquire per-repo+branch lock when lockDir is configured
       let lockFh: FileHandle | undefined;

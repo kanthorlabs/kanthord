@@ -63,11 +63,7 @@ class SmokeSessionFactory {
 // ---------------------------------------------------------------------------
 
 /** Initialize a local sandbox git repo with a README and an origin remote. */
-async function makeSandbox(
-  dir: string,
-  org: string,
-  name: string,
-): Promise<void> {
+async function makeSandbox(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true });
   await execFileAsync("git", ["init", "-b", "main"], { cwd: dir });
   await execFileAsync("git", ["config", "user.email", "test@localhost"], {
@@ -77,11 +73,17 @@ async function makeSandbox(
   await writeFile(join(dir, "README.md"), "# seed\n");
   await execFileAsync("git", ["add", "."], { cwd: dir });
   await execFileAsync("git", ["commit", "-m", "initial"], { cwd: dir });
+
+  // Create a bare origin so the workspace manager can fetch it hermetically
+  // (no network). The repository resource's remote-url points at this clone.
+  const originDir = `${dir}.git`;
+  await execFileAsync("git", ["clone", "--bare", dir, originDir], {});
   await execFileAsync(
     "git",
-    ["remote", "add", "origin", `https://github.com/${org}/${name}.git`],
+    ["remote", "add", "origin", `file://${originDir}`],
     { cwd: dir },
   );
+  await execFileAsync("git", ["fetch", "origin"], { cwd: dir });
 }
 
 /**
@@ -161,7 +163,7 @@ async function runSetup(
       "--name",
       "sandbox",
       "--remote-url",
-      "https://github.com/kanthorlabs/sandbox.git",
+      `file://${sandboxDir}.git`,
       "--branch",
       "main",
       "--path",
@@ -231,7 +233,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
   const dbPath = join(tmpRoot, "kanthord.db");
 
   try {
-    await makeSandbox(sandboxDir, "kanthorlabs", "sandbox");
+    await makeSandbox(sandboxDir);
 
     // Phase 1 session: bash edits README, then text "Done"
     // Phase 2 (TASK2): bash edits a file, then escalate
@@ -310,7 +312,11 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     assert.match(TASK1, ULID_RE, "task1 is a ULID");
 
     const d1 = await dispatch(["run", "daemon", "--until-idle"], deps);
-    assert.equal(d1.exitCode, 0, "Phase 1 daemon exits 0");
+    assert.equal(
+      d1.exitCode,
+      0,
+      "Phase 1 daemon exits 0 (changed task gates as a candidate)",
+    );
 
     // get task 1 with --json
     const g1 = await dispatch(["get", "task", "--id", TASK1, "--json"], deps);
@@ -321,11 +327,15 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       result?: {
         workspace: string | null;
         branch: string | null;
-        commitSha: string | null;
-        summary: string | null;
+        baseCommit: string | null;
+        proposalCommit: string | null;
       };
     };
-    assert.equal(task1Data.status, "completed", "task1 is completed");
+    assert.equal(
+      task1Data.status,
+      "awaiting_confirmation",
+      "task1 is awaiting_confirmation (changed work gates as a candidate)",
+    );
     assert.ok(task1Data.result !== undefined, "task1 has a result");
     assert.ok(
       task1Data.result.workspace !== null,
@@ -333,8 +343,12 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     );
     assert.ok(task1Data.result.branch !== null, "task1 result has branch");
     assert.ok(
-      task1Data.result.commitSha !== null,
-      "task1 result has commitSha",
+      task1Data.result.baseCommit !== null,
+      "task1 result has baseCommit",
+    );
+    assert.ok(
+      task1Data.result.proposalCommit !== null,
+      "task1 result has proposalCommit (candidate)",
     );
     assert.equal(
       task1Data.result.branch,
@@ -342,7 +356,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       "task1 branch is kanthord/<task-id>",
     );
 
-    // sandbox README must still be "# seed\n" (untouched)
+    // sandbox README must still be "# seed\n" (untouched — change is gated)
     const sandboxReadme = await readFile(join(sandboxDir, "README.md"), "utf8");
     assert.equal(
       sandboxReadme,
@@ -350,22 +364,31 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       "sandbox README is untouched after Phase 1",
     );
 
-    // workspace clone contains the commit on the branch
-    const wsDir = task1Data.result.workspace;
-    if (wsDir !== null) {
-      const { stdout: branchOut } = await execFileAsync(
-        "git",
-        ["rev-parse", `kanthord/${TASK1}`],
-        { cwd: wsDir },
-      );
-      assert.equal(
-        branchOut.trim(),
-        task1Data.result.commitSha,
-        "kanthord/<task-id> in workspace points at commitSha",
-      );
-    }
+    // approve TASK1 → lands the candidate onto the canonical branch + completed
+    const approve1 = await dispatch(["approve", "task", "--id", TASK1], deps);
+    assert.equal(approve1.exitCode, 0, "approve task1 exits 0");
 
-    // events: task.started → agent.started → ≥1 agent.progress → agent.finished → task.completed
+    const g1after = await dispatch(
+      ["get", "task", "--id", TASK1, "--json"],
+      deps,
+    );
+    assert.equal(g1after.exitCode, 0, "get task1 after approve exits 0");
+    const task1After = JSON.parse(g1after.stdout[0]!) as {
+      status: string;
+      result?: { workspace: string | null; commitSha: string | null };
+    };
+    assert.equal(
+      task1After.status,
+      "completed",
+      "TASK1 is completed after approval",
+    );
+    assert.ok(
+      task1After.result?.commitSha !== null,
+      "TASK1 completed has a commitSha (landed proposal)",
+    );
+
+    // events: task.started → agent.started → ≥1 agent.progress → agent.finished
+    //   → task.approved → task.completed
     const ev1 = await dispatch(
       ["list", "event", "--after", "0", "--json"],
       deps,
@@ -380,12 +403,14 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     const agentStartIdx = task1Events.indexOf("agent.started");
     const progressIdx = task1Events.findIndex((t) => t === "agent.progress");
     const agentFinishedIdx = task1Events.lastIndexOf("agent.finished");
+    const approvedIdx = task1Events.indexOf("task.approved");
     const completedIdx = task1Events.lastIndexOf("task.completed");
 
     assert.ok(startIdx !== -1, "task.started event emitted");
     assert.ok(agentStartIdx !== -1, "agent.started event emitted");
     assert.ok(progressIdx !== -1, "at least one agent.progress event emitted");
     assert.ok(agentFinishedIdx !== -1, "agent.finished event emitted");
+    assert.ok(approvedIdx !== -1, "task.approved event emitted");
     assert.ok(completedIdx !== -1, "task.completed event emitted");
     assert.ok(startIdx < agentStartIdx, "task.started before agent.started");
     assert.ok(
@@ -394,8 +419,12 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     );
     assert.ok(progressIdx < agentFinishedIdx, "progress before agent.finished");
     assert.ok(
-      agentFinishedIdx < completedIdx,
-      "agent.finished before task.completed",
+      agentFinishedIdx < approvedIdx,
+      "agent.finished before task.approved",
+    );
+    assert.ok(
+      approvedIdx < completedIdx,
+      "task.approved before task.completed",
     );
 
     // ── Phase 2 ──────────────────────────────────────────────────────────────
@@ -559,7 +588,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       );
     }
 
-    // second daemon run completes TASK3
+    // second daemon run makes TASK3 a candidate (changed work gates)
     const d3 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d3.exitCode, 0, "Phase 2 second daemon exits 0");
 
@@ -570,8 +599,23 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     const task3After = JSON.parse(g3after.stdout[0]!) as { status: string };
     assert.equal(
       task3After.status,
+      "awaiting_confirmation",
+      "TASK3 gates as awaiting_confirmation (changed work is a candidate)",
+    );
+
+    // approve TASK3 → lands the candidate + completed
+    const approve3 = await dispatch(["approve", "task", "--id", TASK3], deps);
+    assert.equal(approve3.exitCode, 0, "approve task3 exits 0");
+
+    const g3final = await dispatch(
+      ["get", "task", "--id", TASK3, "--json"],
+      deps,
+    );
+    const task3Final = JSON.parse(g3final.stdout[0]!) as { status: string };
+    assert.equal(
+      task3Final.status,
       "completed",
-      "TASK3 completes after TASK2 approved",
+      "TASK3 completes after approval",
     );
 
     // events: task.escalated → task.approved → task.completed for TASK2
@@ -609,7 +653,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
   const dbPath = join(tmpRoot, "kanthord.db");
 
   try {
-    await makeSandbox(sandboxDir, "kanthorlabs", "sandbox");
+    await makeSandbox(sandboxDir);
 
     // TASK_RETRY run 1: escalate; run 2: complete
     const factory = new SmokeSessionFactory([
@@ -714,9 +758,27 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
       "no task.failed event for retry-rejected task",
     );
 
-    // second daemon run → completes
+    // second daemon run → gates as a candidate (changed work after retry)
     const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
-    assert.equal(d2.exitCode, 0, "second daemon exits 0 (completed)");
+    assert.equal(d2.exitCode, 0, "second daemon exits 0 (candidate)");
+
+    const gAfter = await dispatch(
+      ["get", "task", "--id", TASK_RETRY, "--json"],
+      deps,
+    );
+    const afterData = JSON.parse(gAfter.stdout[0]!) as { status: string };
+    assert.equal(
+      afterData.status,
+      "awaiting_confirmation",
+      "TASK_RETRY gates as awaiting_confirmation after retry (changed work is a candidate)",
+    );
+
+    // approve TASK_RETRY → lands the candidate + completed
+    const approveRetry = await dispatch(
+      ["approve", "task", "--id", TASK_RETRY],
+      deps,
+    );
+    assert.equal(approveRetry.exitCode, 0, "approve task-retry exits 0");
 
     const gFinal = await dispatch(
       ["get", "task", "--id", TASK_RETRY, "--json"],
@@ -726,7 +788,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
     assert.equal(
       finalData.status,
       "completed",
-      "TASK_RETRY completed after retry",
+      "TASK_RETRY completed after approval",
     );
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
@@ -739,7 +801,7 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
   const dbPath = join(tmpRoot, "kanthord.db");
 
   try {
-    await makeSandbox(sandboxDir, "kanthorlabs", "sandbox");
+    await makeSandbox(sandboxDir);
 
     // TASK_DISCARD: escalate (then discard); TASK_DEP never runs
     const factory = new SmokeSessionFactory([
@@ -894,7 +956,7 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
   const BAD_CRED_VALUE = "secret-bad-cred-value";
 
   try {
-    await makeSandbox(sandboxDir, "kanthorlabs", "sandbox");
+    await makeSandbox(sandboxDir);
 
     // Factory will throw CredentialError when provider mismatch is detected;
     // no turns needed since session.for() never returns.

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { buildDeps } from "./composition.ts";
+import { buildDeps, buildEmitCallback } from "./composition.ts";
+import type { Event } from "./domain/event.ts";
+import type { Logger } from "./logger/port.ts";
 import { runCli as dispatch } from "./apps/cli/commands/run-cli.ts";
 
 // Story 03 T3 — get resource via dispatch: credential value absent from stdout (D6 + composition wiring)
@@ -201,4 +203,44 @@ test("buildDeps returns a RouterDeps bundle with all registered capabilities", (
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Story 02 T1 (F2) — daemon accounting stdout line for agent.finished
+// Focused test of the emit callback (the seam buildDaemon wires into the runner).
+// Fails today: there is no exported buildEmitCallback, and the inline callback
+// has no agent.finished branch, so no `agent finished:` line is emitted.
+// ---------------------------------------------------------------------------
+test("T1: emit callback prints `agent finished:` line with turns/tokensIn/tokensOut and still appends the event", () => {
+  const lines: string[] = [];
+  const logger: Logger = {
+    info: (m: string) => lines.push(m),
+    warn: () => {},
+    error: () => {},
+  };
+  const appended: Event[] = [];
+  const events = {
+    append: (e: Event) => {
+      appended.push(e);
+    },
+  };
+
+  const emit = buildEmitCallback(logger, events);
+  emit("t1", "agent.finished", {
+    outcome: "completed",
+    turns: "8",
+    tokensIn: "1234",
+    tokensOut: "567",
+  });
+
+  assert.ok(
+    lines.includes(
+      "task t1: agent finished: turns=8 tokensIn=1234 tokensOut=567",
+    ),
+    `expected the agent finished line; got: ${JSON.stringify(lines)}`,
+  );
+  // The event must still be appended to the feed (decoupled from the line).
+  assert.equal(appended.length, 1, "exactly one event appended to the feed");
+  assert.equal(appended[0]!.type, "agent.finished");
+  assert.equal(appended[0]!.taskId, "t1");
 });

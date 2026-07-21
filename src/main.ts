@@ -18,7 +18,21 @@ if (rawMaxTurns !== undefined) {
   maxTurns = parsed;
 }
 
-const deps = buildDeps(dbPath, { maxTurns });
+// E2E seam (off by default): KANTHORD_FAKE_AGENT=<path> points at a JSON file
+// of scripted `FakeTurn[]`. When set, the daemon runs the pi Agent loop with a
+// deterministic no-model/no-network session factory instead of a real provider.
+// Used only by the deterministic Part-A landing Proof (scripts/e2e).
+const fakeAgentPath = process.env.KANTHORD_FAKE_AGENT;
+let sessionFactory;
+if (fakeAgentPath !== undefined) {
+  const { readFileSync } = await import("node:fs");
+  const { fakeSessionFactoryFromTurns } =
+    await import("./agent-runner/fake-session.ts");
+  const turns = JSON.parse(readFileSync(fakeAgentPath, "utf8"));
+  sessionFactory = fakeSessionFactoryFromTurns(turns);
+}
+
+const deps = buildDeps(dbPath, { maxTurns, sessionFactory });
 
 const program = buildProgram(deps);
 await program.parseAsync(process.argv);

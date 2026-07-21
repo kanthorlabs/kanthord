@@ -3,13 +3,23 @@ import assert from "node:assert/strict";
 import { RunNextTask } from "./run-next-task.ts";
 import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
-import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
+import type {
+  UnitOfWork,
+  TaskResultRow,
+  LandingRepository,
+} from "../../storage/port.ts";
+import type {
+  ChangeCandidate,
+  CandidateState,
+  Integration,
+} from "../../domain/landing.ts";
 import type { Event } from "../../domain/event.ts";
 import type { Task } from "../../domain/task.ts";
 import type {
   AgentRunner,
   AgentRunnerResolver,
   TaskContextBinding,
+  TaskResult,
 } from "../../agent-runner/port.ts";
 import { RunnerNotResolvableError } from "../../agent-runner/port.ts";
 import { FakeRunner } from "../../agent-runner/fake.ts";
@@ -24,6 +34,7 @@ interface TaskStore {
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
   getTaskContext(taskId: string): Record<string, string>;
+  getRepositoryBranch(repoId: string): string | undefined;
   saveTaskResult(taskId: string, row: TaskResultRow): void;
 }
 
@@ -33,18 +44,22 @@ interface TaskStore {
 
 class SimpleTaskStore implements TaskStore {
   readonly saved: Task[] = [];
+  readonly taskResults: TaskResultRow[] = [];
   readonly #tasks: Map<string, Task>;
   readonly #initiativeId: string;
   readonly #contexts: Map<string, Record<string, string>>;
+  #repoBranch: string;
 
   constructor(
     tasks: Task[],
     initiativeId: string,
     contexts: Map<string, Record<string, string>> = new Map(),
+    repoBranch = "main",
   ) {
     this.#tasks = new Map(tasks.map((t) => [t.id, t]));
     this.#initiativeId = initiativeId;
     this.#contexts = contexts;
+    this.#repoBranch = repoBranch;
   }
 
   get(id: string): Task | undefined {
@@ -68,8 +83,12 @@ class SimpleTaskStore implements TaskStore {
     return this.#contexts.get(taskId) ?? {};
   }
 
-  saveTaskResult(_taskId: string, _row: TaskResultRow): void {
-    // no-op stub for pre-emptive cascade guard (Story 06 T2)
+  getRepositoryBranch(_repoId: string): string | undefined {
+    return this.#repoBranch;
+  }
+
+  saveTaskResult(_taskId: string, row: TaskResultRow): void {
+    this.taskResults.push(row);
   }
 }
 
@@ -479,4 +498,239 @@ test("RunNextTask execute uses two transactions with runner executing between th
   assert.ok(tx1End < runnerIdx, "tx1 must end before runner executes");
   assert.ok(runnerIdx < tx2Start, "runner must execute before tx2 starts");
   assert.equal(txStartCount, 2, "exactly two transaction calls total");
+});
+
+// ---------------------------------------------------------------------------
+// Story 04 T1 — atomic candidate persistence in RunNextTask (F3)
+// ---------------------------------------------------------------------------
+
+class FakeLandingRepository implements LandingRepository {
+  readonly saved: ChangeCandidate[] = [];
+
+  saveCandidate(candidate: ChangeCandidate): void {
+    this.saved.push(candidate);
+  }
+
+  getCandidate(id: string): ChangeCandidate | undefined {
+    return this.saved.find((c) => c.id === id);
+  }
+
+  updateCandidateState(_id: string, _state: CandidateState): void {}
+
+  saveIntegration(_integration: Integration): void {}
+
+  getIntegration(_candidateId: string): Integration | undefined {
+    return undefined;
+  }
+}
+
+/** A runner that always returns a changed-work `candidate` result. */
+function candidateRunner(
+  opts: {
+    baseCommit?: string;
+    candidateCommit?: string;
+  } = {},
+): AgentRunner {
+  return {
+    async run(task: Task, _context: TaskContextBinding[]): Promise<TaskResult> {
+      return {
+        outcome: "candidate",
+        workspace: "/w/run",
+        branch: `kanthord/${task.id}`,
+        baseCommit: opts.baseCommit ?? "BASE_SHA",
+        candidateCommit: opts.candidateCommit ?? "CAND_SHA",
+        summary: "changed work ready to land",
+      };
+    },
+  };
+}
+
+test("RunNextTask repository-bound candidate persists a unique pending candidate and holds the task at awaiting_confirmation (Story 04 T1 a)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const contexts = new Map([[TASK_SIMPLE.id, { repository: "res-1" }]]);
+  const store = new SimpleTaskStore(
+    [{ ...TASK_SIMPLE }],
+    INI_ID,
+    contexts,
+    "release",
+  );
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const landing = new FakeLandingRepository();
+  const resolver: AgentRunnerResolver = { for: () => candidateRunner() };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, landing);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "candidate", taskId: TASK_SIMPLE.id });
+
+  // task held at awaiting_confirmation (changed work awaits a human gate)
+  const lastSaved = store.saved[store.saved.length - 1]!;
+  assert.equal(
+    lastSaved.status,
+    "awaiting_confirmation",
+    "changed repo-bound task must await confirmation",
+  );
+
+  // exactly one candidate row persisted, with the right shape
+  assert.equal(landing.saved.length, 1, "exactly one candidate row saved");
+  const cand = landing.saved[0]!;
+  assert.equal(cand.taskId, TASK_SIMPLE.id);
+  assert.equal(cand.baseSHA, "BASE_SHA");
+  assert.equal(cand.candidateSHA, "CAND_SHA");
+  assert.equal(cand.ref, `kanthord/${TASK_SIMPLE.id}`);
+  assert.equal(
+    cand.target,
+    "release",
+    "target must be the repository's configured branch, not hardcoded 'main'",
+  );
+  assert.equal(cand.state, "pending");
+
+  // candidate id identifies THIS execution attempt: a fresh ULID, not the legacy form
+  assert.equal(cand.id.length, 26, "candidate id must be a 26-char ULID");
+  assert.notEqual(
+    cand.id,
+    `${TASK_SIMPLE.id}-lc`,
+    "candidate id must not be the legacy '${taskId}-lc' form",
+  );
+
+  // task_results row carries non-null base/proposal commits
+  const row = store.taskResults[store.taskResults.length - 1]!;
+  assert.equal(row.baseCommit, "BASE_SHA");
+  assert.equal(row.proposalCommit, "CAND_SHA");
+});
+
+test("RunNextTask filesystem-bound candidate completes directly with no candidate row (Story 04 T1 b)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  // NO repository binding → filesystem-bound; there is nothing to land.
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const landing = new FakeLandingRepository();
+  const resolver: AgentRunnerResolver = { for: () => candidateRunner() };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, landing);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  const lastSaved = store.saved[store.saved.length - 1]!;
+  assert.equal(
+    lastSaved.status,
+    "completed",
+    "filesystem-bound changed task completes directly",
+  );
+  assert.equal(queue.finished[0]!.outcome, "completed");
+  assert.equal(
+    landing.saved.length,
+    0,
+    "no candidate row for a filesystem-bound task",
+  );
+});
+
+test("RunNextTask candidate persistence is atomic: a crash commits neither the transition nor the candidate (Story 04 T1 c)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const contexts = new Map([[TASK_SIMPLE.id, { repository: "res-1" }]]);
+  const store = new SimpleTaskStore(
+    [{ ...TASK_SIMPLE }],
+    INI_ID,
+    contexts,
+    "release",
+  );
+  const feed = new RecordingEventFeed();
+  // Crash only on the SECOND transaction (tx2 — the outcome persist), so tx1
+  // completes and the candidate branch actually runs before the simulated crash.
+  let txCalls = 0;
+  const crashOnSecondTx: UnitOfWork = {
+    transaction<T>(fn: () => T): T {
+      txCalls += 1;
+      const r = fn();
+      if (txCalls >= 2) throw new Error("simulated crash at commit");
+      return r;
+    },
+  };
+  const landing = new FakeLandingRepository();
+  const resolver: AgentRunnerResolver = { for: () => candidateRunner() };
+
+  const uc = new RunNextTask(
+    queue,
+    store,
+    feed,
+    crashOnSecondTx,
+    resolver,
+    landing,
+  );
+  await assert.rejects(() => uc.execute(), /simulated crash/);
+
+  const awaitingWithoutCandidate =
+    store.saved.some((t) => t.status === "awaiting_confirmation") &&
+    landing.saved.length === 0;
+  assert.equal(
+    awaitingWithoutCandidate,
+    false,
+    "a crash must not leave a candidate-less awaiting_confirmation (atomicity)",
+  );
+});
+
+test("RunNextTask verified no-change still completes directly (Story 04 T1 d regression)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const landing = new FakeLandingRepository();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, landing);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.equal(store.saved[store.saved.length - 1]!.status, "completed");
+  assert.equal(landing.saved.length, 0, "no candidate for a no-change run");
+});
+
+// ---------------------------------------------------------------------------
+// HUMAN_REVIEW BLOCKER B1 (regression) — the filesystem-bound changed-task
+// completion path (run-next-task.ts:211-239) transitions the task to
+// completed, finishes the queue, and re-scans dependents, but OMITTED the
+// `task.completed` event (contrary to the repo-bound completed path :145).
+// A client polling `list event` never sees these tasks complete.
+// ---------------------------------------------------------------------------
+
+test("RunNextTask filesystem-bound changed task emits a task.completed event (B1 regression)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  // NO repository binding → filesystem-bound; there is nothing to land, so the
+  // changed run completes directly (Story 04 T1 b behavior).
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const landing = new FakeLandingRepository();
+  const resolver: AgentRunnerResolver = { for: () => candidateRunner() };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, landing);
+  const result = await uc.execute();
+
+  // The task transitions to completed (existing T1 b behavior)…
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.equal(
+    store.saved[store.saved.length - 1]!.status,
+    "completed",
+    "filesystem-bound changed task completes directly",
+  );
+
+  // …and a client polling `list event` MUST observe it complete: a
+  // `task.completed` event must be emitted for this task.
+  const completedEvts = feed.events.filter((e) => e.type === "task.completed");
+  assert.ok(
+    completedEvts.length >= 1,
+    "a task.completed event must be emitted for the filesystem-bound changed task (B1)",
+  );
+  assert.ok(
+    completedEvts.some((e) => e.taskId === TASK_SIMPLE.id),
+    "the task.completed event must reference this task",
+  );
 });

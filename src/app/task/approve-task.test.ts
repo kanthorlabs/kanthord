@@ -21,11 +21,19 @@ import {
 } from "./approve-task.ts";
 import { ProposalWorkspaceMissingError } from "../errors.ts";
 import type { Task } from "../../domain/task.ts";
-import type { TaskResultRow } from "../../storage/port.ts";
+import type { TaskResultRow, LandingRepository } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
 import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
+import type { WorkspaceManager, Workspace } from "../../workspace/port.ts";
+import {
+  newChangeCandidate,
+  type ChangeCandidate,
+  type CandidateState,
+  type Integration,
+} from "../../domain/landing.ts";
+import { buildDeps } from "../../composition.ts";
 import type {
   RepositoryLanding,
   LandingCandidate,
@@ -850,5 +858,248 @@ test("(T5-d) task with no repository context binding skips landing and completes
     last.status,
     "completed",
     "task without repository binding must still complete",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 05 T3 — correct ApproveTask landing
+// (a) repository-bound: load persisted candidate (ULID id, configured target),
+//     land via homeDir(repoId), record base_commit = canonicalSHA (A7)
+// (b) filesystem-bound: never query the candidate store, never call landing
+// (c) wiring: the real ApproveTask from buildDeps has a RepositoryLanding injected
+// These fail today: ApproveTask hardcodes id `${taskId}-lc`, target "main",
+// homeDir = result.workspace, has no LandingRepository/WorkspaceManager deps,
+// and is constructed in composition WITHOUT a RepositoryLanding.
+// ---------------------------------------------------------------------------
+
+const T3_REPO_ID = "repo-t3-001";
+const T3_STORED_ULID = "01J" + "Z".repeat(23); // 26-char ULID-shaped id
+const T3_RELEASE = "release"; // repository's configured (non-main) branch
+const T3_BASE_SHA = "base000000000000000000000000000000000000";
+const T3_CANDIDATE_SHA = "cand222222222222222222222222222222222222";
+const T3_HOME_DIR = `/fake/home/${T3_REPO_ID}`;
+
+class FakeLandingRepository implements LandingRepository {
+  getCandidateByTaskCallCount = 0;
+  #candidate: ChangeCandidate | undefined;
+  constructor(candidate: ChangeCandidate | undefined) {
+    this.#candidate = candidate;
+  }
+  saveCandidate(_c: ChangeCandidate): void {}
+  getCandidate(_id: string): ChangeCandidate | undefined {
+    return undefined;
+  }
+  getCandidateByTask(_taskId: string): ChangeCandidate | undefined {
+    this.getCandidateByTaskCallCount++;
+    return this.#candidate;
+  }
+  updateCandidateState(_id: string, _state: CandidateState): void {}
+  saveIntegration(_i: Integration): void {}
+  getIntegration(_id: string): Integration | undefined {
+    return undefined;
+  }
+}
+
+class FakeWorkspaceManager implements WorkspaceManager {
+  #homePath: string;
+  constructor(homePath: string) {
+    this.#homePath = homePath;
+  }
+  async prepare(_taskId: string, _source: unknown): Promise<Workspace> {
+    return { dir: "/tmp/ws", branch: "main", baseCommit: "x" };
+  }
+  homeDir(_repoId: string): string {
+    return this.#homePath;
+  }
+}
+
+function makeT3Result(proposalCommit: string): TaskResultRow {
+  return {
+    workspace: "/fake/ws", // OLD code wrongly used this as homeDir
+    branch: "kanthord/t3-task",
+    baseCommit: T3_BASE_SHA,
+    proposalCommit,
+    commitSha: null,
+    summary: "T3 task summary",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+}
+
+const T3_FF_RESULT: LandingResult = {
+  candidate: {
+    id: T3_STORED_ULID,
+    taskId: "t3-task",
+    repoId: T3_REPO_ID,
+    baseSHA: T3_BASE_SHA,
+    candidateSHA: T3_CANDIDATE_SHA,
+    ref: "kanthord/t3-task",
+    target: T3_RELEASE,
+    workspace: T3_HOME_DIR,
+  },
+  outcome: { kind: "fast-forward" },
+  canonicalSHA: T3_CANDIDATE_SHA,
+};
+
+test("(T3-a) repository-bound approve loads the persisted candidate (ULID id, configured target) and lands via homeDir(repoId); base_commit = canonicalSHA", async () => {
+  const taskId = "t3-task-a";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "t3 task a",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeT3Result(T3_CANDIDATE_SHA);
+  const storedCandidate = newChangeCandidate({
+    id: T3_STORED_ULID,
+    taskId,
+    repoId: T3_REPO_ID,
+    baseSHA: T3_BASE_SHA,
+    candidateSHA: T3_CANDIDATE_SHA,
+    ref: "kanthord/t3-task",
+    target: T3_RELEASE,
+  });
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: T3_REPO_ID }]]),
+  );
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const fakeLanding = new FakeLanding(T3_FF_RESULT);
+  const fakeLandingRepo = new FakeLandingRepository(storedCandidate);
+  const fakeWorkspace = new FakeWorkspaceManager(T3_HOME_DIR);
+
+  const uc = new ApproveTask(
+    store,
+    queue,
+    feed,
+    uow,
+    noopPromote,
+    fakeLanding,
+    fakeLandingRepo,
+    fakeWorkspace,
+  );
+  await uc.execute({ taskId });
+
+  assert.equal(
+    fakeLanding.calls.length,
+    1,
+    "landing.land must be called exactly once for a repository-bound task",
+  );
+  const call = fakeLanding.calls[0]!;
+  assert.equal(
+    call.candidate.id,
+    T3_STORED_ULID,
+    "landed candidate id must be the persisted ULID, NOT `${taskId}-lc`",
+  );
+  assert.equal(
+    call.candidate.target,
+    T3_RELEASE,
+    "landed candidate target must be the configured branch, NOT hardcoded 'main'",
+  );
+  assert.equal(
+    call.homeDir,
+    T3_HOME_DIR,
+    "landing homeDir must come from homeDir(repoId), NOT result.workspace",
+  );
+
+  const savedResult = store.savedResults.find((r) => r.taskId === taskId);
+  assert.ok(savedResult !== undefined, "saveTaskResult must have been called");
+  assert.equal(
+    savedResult.row.baseCommit,
+    T3_CANDIDATE_SHA,
+    "task_results.base_commit (A7) must equal the landing canonicalSHA",
+  );
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must have been saved");
+  assert.equal(
+    last.status,
+    "completed",
+    "task must complete after a successful land",
+  );
+});
+
+test("(T3-b) filesystem-bound approve does NOT query the candidate store and does NOT call landing", async () => {
+  const taskId = "t3-task-b";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "t3 task b — filesystem source",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result = makeT3Result(T3_CANDIDATE_SHA);
+  // A candidate EXISTS in the store, but the task is filesystem-bound, so it
+  // must be ignored — this proves the repository-binding gate, not just an
+  // absent row.
+  const storedCandidate = newChangeCandidate({
+    id: T3_STORED_ULID,
+    taskId,
+    repoId: T3_REPO_ID,
+    baseSHA: T3_BASE_SHA,
+    candidateSHA: T3_CANDIDATE_SHA,
+    ref: "kanthord/t3-task-b",
+    target: T3_RELEASE,
+  });
+
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { filesystem: "fs-resource-id" }]]),
+  );
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const fakeLanding = new FakeLanding(T3_FF_RESULT);
+  const fakeLandingRepo = new FakeLandingRepository(storedCandidate);
+  const fakeWorkspace = new FakeWorkspaceManager(T3_HOME_DIR);
+
+  const uc = new ApproveTask(
+    store,
+    queue,
+    feed,
+    uow,
+    noopPromote,
+    fakeLanding,
+    fakeLandingRepo,
+    fakeWorkspace,
+  );
+  await uc.execute({ taskId });
+
+  assert.equal(
+    fakeLandingRepo.getCandidateByTaskCallCount,
+    0,
+    "filesystem-bound approve must NOT query the candidate store",
+  );
+  assert.equal(
+    fakeLanding.calls.length,
+    0,
+    "landing.land must NOT be called for a filesystem-bound task",
+  );
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must have been saved");
+  assert.equal(
+    last.status,
+    "completed",
+    "filesystem-bound task still completes without landing",
+  );
+});
+
+test("(T3-c) architecture/wiring: the real ApproveTask from buildDeps is constructed WITH a RepositoryLanding injected", () => {
+  const dbPath = join(tmpdir(), `kanthord-t3-wire-${Date.now()}.db`);
+  const deps = buildDeps(dbPath);
+  assert.ok(
+    deps.approveTask.landing !== undefined,
+    "buildDeps().approveTask must have a RepositoryLanding injected (landing must not be undefined)",
   );
 });
