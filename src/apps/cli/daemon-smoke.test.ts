@@ -184,7 +184,10 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     );
 
     // Events: lifecycle stream (human output on stderr).
-    const ev1 = await dispatch(["list", "event", "--after", "0"], deps);
+    const ev1 = await dispatch(
+      ["list", "event", "--after", "0", "--limit", "1000"],
+      deps,
+    );
     assert.equal(ev1.exitCode, 0, "events exits 0");
     const evLines = ev1.stderr;
     assert.ok(evLines.length > 0, "events returns at least one line");
@@ -268,7 +271,10 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     assert.equal(d2.exitCode, 0, "phase 2: daemon exits 0");
 
     // Only the new task ran: event count grew by exactly 3 (ready + started + completed).
-    const ev2 = await dispatch(["list", "event", "--after", "0"], deps);
+    const ev2 = await dispatch(
+      ["list", "event", "--after", "0", "--limit", "1000"],
+      deps,
+    );
     assert.equal(ev2.exitCode, 0);
     const evLines2 = ev2.stderr;
     assert.equal(
@@ -331,7 +337,10 @@ test("daemon smoke — phase 3 (fresh DB): --fail deploy exits non-zero; task.fa
     );
 
     // The task.failed event for deploy must exist and carry a reason.
-    const ev = await dispatch(["list", "event", "--after", "0"], deps);
+    const ev = await dispatch(
+      ["list", "event", "--after", "0", "--limit", "1000"],
+      deps,
+    );
     assert.equal(ev.exitCode, 0);
     const failedLine = ev.stderr.find(
       (l) => l.includes("task.failed") && l.includes(TASK_DEPLOY),

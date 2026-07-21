@@ -8,6 +8,7 @@ export interface TaskRow {
   title: string;
   status: TaskStatus;
   state: "ready" | "blocked";
+  dependencies: string[];
   waiting: string[];
 }
 
@@ -52,6 +53,7 @@ export class ListTasks {
         title: t.title,
         status: t.status,
         state: r?.state ?? "ready",
+        dependencies: t.dependencies,
         waiting: r?.waiting ?? [],
       };
     });

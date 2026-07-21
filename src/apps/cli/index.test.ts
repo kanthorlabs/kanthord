@@ -199,7 +199,8 @@ describe("src/apps/cli/index.ts", () => {
     });
 
     assert.deepEqual(providers, [undefined]);
-    assert.deepEqual(eventInputs, [{ after: "0", limit: undefined }]);
+    // Non-follow with no --limit → default page 10 + a probe row → limit 11.
+    assert.deepEqual(eventInputs, [{ after: "0", limit: 11 }]);
     assert.deepEqual(cap.out, ["[]\n"]);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);

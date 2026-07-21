@@ -175,6 +175,105 @@ describe("ListTasks", () => {
     assert.deepEqual(rows[0]!.waiting, []);
   });
 
+  // S1 — declared dependencies in list read model
+  test("S1: root task row carries dependencies equal to declared empty array", async () => {
+    const taskRepo = new FakeTaskRepository();
+    taskRepo.seed({
+      id: TASK_API,
+      objectiveId: OBJ_ID,
+      title: "implement api",
+      status: "pending",
+      dependencies: [],
+    });
+    taskRepo.seed({
+      id: TASK_DEPLOY,
+      objectiveId: OBJ_ID,
+      title: "deploy",
+      status: "pending",
+      dependencies: [TASK_API],
+    });
+
+    const useCase = new ListTasks(taskRepo);
+    const rows = await useCase.execute({ initiativeId: INIT_ID });
+
+    const apiRow = rows.find((r) => r.id === TASK_API);
+    assert.ok(apiRow, "api row should exist");
+    assert.deepEqual(
+      apiRow.dependencies,
+      [],
+      "root task must have dependencies: []",
+    );
+    // waiting must still be present and distinct
+    assert.deepEqual(apiRow.waiting, []);
+  });
+
+  test("S1: sibling task row carries dependencies equal to declared edge", async () => {
+    const taskRepo = new FakeTaskRepository();
+    taskRepo.seed({
+      id: TASK_API,
+      objectiveId: OBJ_ID,
+      title: "implement api",
+      status: "pending",
+      dependencies: [],
+    });
+    taskRepo.seed({
+      id: TASK_DEPLOY,
+      objectiveId: OBJ_ID,
+      title: "deploy",
+      status: "pending",
+      dependencies: [TASK_API],
+    });
+
+    const useCase = new ListTasks(taskRepo);
+    const rows = await useCase.execute({ initiativeId: INIT_ID });
+
+    const deployRow = rows.find((r) => r.id === TASK_DEPLOY);
+    assert.ok(deployRow, "deploy row should exist");
+    assert.deepEqual(
+      deployRow.dependencies,
+      [TASK_API],
+      "sibling task must have dependencies: [TASK_API]",
+    );
+    // waiting must still be present and distinct
+    assert.deepEqual(deployRow.waiting, [TASK_API]);
+  });
+
+  test("S1: after root completes sibling dependencies stays while waiting becomes empty", async () => {
+    const taskRepo = new FakeTaskRepository();
+    taskRepo.seed({
+      id: TASK_API,
+      objectiveId: OBJ_ID,
+      title: "implement api",
+      status: "completed",
+      dependencies: [],
+    });
+    taskRepo.seed({
+      id: TASK_DEPLOY,
+      objectiveId: OBJ_ID,
+      title: "deploy",
+      status: "pending",
+      dependencies: [TASK_API],
+    });
+
+    const useCase = new ListTasks(taskRepo);
+    const rows = await useCase.execute({ initiativeId: INIT_ID });
+
+    const deployRow = rows.find((r) => r.id === TASK_DEPLOY);
+    assert.ok(deployRow, "deploy row should exist");
+    // static declared edges must remain even after root completes
+    assert.deepEqual(
+      deployRow.dependencies,
+      [TASK_API],
+      "sibling dependencies must remain [TASK_API] even after root is completed",
+    );
+    // dynamic waiting must be empty once root is satisfied
+    assert.deepEqual(
+      deployRow.waiting,
+      [],
+      "sibling waiting must be [] once root is completed",
+    );
+  });
+
   // Story 07 T2 (i) — status filter
   test("ListTasks with status filter returns only awaiting_confirmation tasks (i)", async () => {
     const TASK_AWAIT = "01JZZZZZZZZZZZZZZZZZZTSKAW1";

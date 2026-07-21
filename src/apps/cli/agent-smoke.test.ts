@@ -390,7 +390,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     // events: task.started → agent.started → ≥1 agent.progress → agent.finished
     //   → task.approved → task.completed
     const ev1 = await dispatch(
-      ["list", "event", "--after", "0", "--json"],
+      ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
     assert.equal(ev1.exitCode, 0, "events exits 0");
@@ -515,7 +515,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
 
     // task.escalated event has reason = "need human review"
     const ev2 = await dispatch(
-      ["list", "event", "--after", "0", "--json"],
+      ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
     const task2EscalatedEvent = ev2.stdout
@@ -620,7 +620,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
 
     // events: task.escalated → task.approved → task.completed for TASK2
     const ev3 = await dispatch(
-      ["list", "event", "--after", "0", "--json"],
+      ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
     const task2Events = ev3.stdout
@@ -746,7 +746,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
 
     // no task.failed event was emitted
     const ev = await dispatch(
-      ["list", "event", "--after", "0", "--json"],
+      ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
     const failedEvents = ev.stdout
@@ -892,7 +892,7 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
 
     // events: task.discarded + task.blocked for TASK_DEP
     const ev = await dispatch(
-      ["list", "event", "--after", "0", "--json"],
+      ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
     const allEvents = ev.stdout.map(
@@ -1031,7 +1031,7 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
 
     // task.failed event reason starts with "CredentialError"
     const ev4 = await dispatch(
-      ["list", "event", "--after", "0", "--json"],
+      ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
     const failedEvent = ev4.stdout

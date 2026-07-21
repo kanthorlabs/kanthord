@@ -250,4 +250,40 @@ describe("runListTasks", () => {
     // JSON waiting must contain dep IDs (not titles)
     assert.deepEqual(deployRow!.waiting, [TASK_API_ID]);
   });
+
+  test("S1: --json output includes dependencies array on each row", async () => {
+    const args: Record<string, unknown> = {
+      initiative: INITIATIVE_ID,
+      json: true,
+    };
+    const result = await runListTasks(
+      args,
+      new ListTasks(new FakeTaskRepository()),
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 1);
+    const parsed = JSON.parse(result.stdout[0]!) as Array<{
+      id: string;
+      dependencies: string[];
+      waiting: string[];
+    }>;
+    const apiRow = parsed.find((r) => r.id === TASK_API_ID);
+    const deployRow = parsed.find((r) => r.id === TASK_DEPLOY_ID);
+    assert.ok(apiRow, "API task must be in JSON output");
+    assert.ok(deployRow, "deploy task must be in JSON output");
+    // root has no declared edges
+    assert.deepEqual(
+      apiRow!.dependencies,
+      [],
+      "root task JSON must carry dependencies: []",
+    );
+    // sibling declares one edge to root
+    assert.deepEqual(
+      deployRow!.dependencies,
+      [TASK_API_ID],
+      "sibling task JSON must carry dependencies: [TASK_API_ID]",
+    );
+    // both waiting and dependencies must be present
+    assert.deepEqual(deployRow!.waiting, [TASK_API_ID]);
+  });
 });
