@@ -710,6 +710,44 @@ describe("runRetryTask handler", () => {
       `expected 'error:' prefix, got: ${result.stderr[0]}`,
     );
   });
+
+  // S2 (007.5) — CLI: retry task on conflict-candidate awaiting_confirmation exits 0
+  test("runRetryTask conflict-candidate awaiting_confirmation task exits 0 and re-queues", async () => {
+    // Inline narrow fake for the conflict-candidate dependency.
+    const conflictCandidateStore = {
+      getCandidateByTask(_taskId: string) {
+        return {
+          id: "01JZZZZZZZZZZZZZZZZZZZCNFL",
+          taskId: RETRY_TASK_ID,
+          repoId: "01JZZZZZZZZZZZZZZZZZZZRPOX",
+          baseSHA: "deadbeef",
+          candidateSHA: "cafebabe",
+          ref: `kanthord/${RETRY_TASK_ID}`,
+          target: "main",
+          state: "conflict" as const,
+        };
+      },
+      updateCandidateState(_id: string, _state: string) {},
+    };
+
+    const store = new SimpleRetryTaskStore([
+      makeRetryHandlerTask("awaiting_confirmation"),
+    ]);
+    const uc = new RetryTask(
+      store,
+      new NoopJobQueue(),
+      new NoopEventFeed(),
+      new PassthroughUoW(),
+      new FixedKindResolver("task"),
+      conflictCandidateStore,
+    );
+    const result = await runRetryTask({ id: RETRY_TASK_ID }, uc);
+    assert.equal(
+      result.exitCode,
+      0,
+      `expected exit 0 for conflict-candidate retry; stderr: ${result.stderr.join(", ")}`,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -802,6 +840,80 @@ describe("runApproveTask S3 — discriminated approve outcomes", () => {
     assert.ok(
       result.stderr[0]!.toLowerCase().includes("conflict"),
       `conflict stderr line must mention 'conflict'; got: ${result.stderr[0]}`,
+    );
+    assert.equal(
+      result.stdout.length,
+      0,
+      "conflict outcome must not write to stdout",
+    );
+  });
+
+  // S1 (007.5) — conflict message names `retry task --id` and lists conflicting files
+  test("(S1-cli-conflict-files) conflict outcome with conflictFiles names recovery command and lists files", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZS1MSG1";
+    const uc = makeApproveUcS3({
+      kind: "conflict",
+      taskId,
+      conflictFiles: ["src/todo.mjs"],
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(
+      result.exitCode,
+      0,
+      "conflict outcome must exit 0 (recoverable)",
+    );
+    assert.equal(
+      result.stderr.length,
+      1,
+      `conflict outcome must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    const line = result.stderr[0]!;
+    assert.ok(
+      line.includes(`retry task --id ${taskId}`),
+      `conflict stderr must name 'retry task --id ${taskId}'; got: ${line}`,
+    );
+    assert.ok(
+      line.includes("src/todo.mjs"),
+      `conflict stderr must list conflicting file 'src/todo.mjs'; got: ${line}`,
+    );
+    assert.ok(
+      line.toLowerCase().includes("daemon"),
+      `conflict stderr must mention 'daemon' (next-step clause); got: ${line}`,
+    );
+    assert.ok(
+      !line.includes("Error") && !line.includes("at "),
+      `conflict stderr must not contain a stack trace; got: ${line}`,
+    );
+    assert.equal(
+      result.stdout.length,
+      0,
+      "conflict outcome must not write to stdout",
+    );
+  });
+
+  // S1 (007.5) — conflict message degrades gracefully when conflictFiles is empty
+  test("(S1-cli-conflict-empty-files) conflict outcome with empty conflictFiles still names recovery command", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZS1MSG2";
+    const uc = makeApproveUcS3({
+      kind: "conflict",
+      taskId,
+      conflictFiles: [],
+    });
+
+    const result = await runApproveTask({ id: taskId }, uc);
+
+    assert.equal(result.exitCode, 0, "conflict outcome must exit 0");
+    assert.equal(
+      result.stderr.length,
+      1,
+      `conflict outcome must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    const line = result.stderr[0]!;
+    assert.ok(
+      line.includes(`retry task --id ${taskId}`),
+      `conflict stderr must name 'retry task --id ${taskId}' even with empty files; got: ${line}`,
     );
     assert.equal(
       result.stdout.length,

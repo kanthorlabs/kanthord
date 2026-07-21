@@ -136,11 +136,16 @@ export async function runApproveTask(
       return { exitCode: 0, stdout: [id], stderr: [] };
     }
     if (outcome.kind === "conflict") {
+      const files = outcome.conflictFiles;
+      const filesPart =
+        files && files.length > 0
+          ? files.join(", ")
+          : "conflicting files unavailable";
       return {
         exitCode: 0,
         stdout: [],
         stderr: [
-          `conflict: task ${id} — merge conflict detected; re-run after resolving`,
+          `conflict: task ${id} — merge conflict in ${filesPart}; run: retry task --id ${id}, then re-run daemon and approve`,
         ],
       };
     }

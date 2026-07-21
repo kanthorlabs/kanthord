@@ -265,12 +265,18 @@ export function buildDeps(
     events,
     unitOfWork,
   );
+  // Constructed here (above RetryTask) so it can be passed as the 6th
+  // ConflictCandidateStore argument — it is also referenced later for
+  // repoLanding, approveTask, and RunNextTask (all closures or sequential
+  // assignments that reference it after this point).
+  const landingRepository = new SqliteLandingRepository(db);
   const retryTask = new RetryTask(
     taskRepository,
     jobQueue,
     events,
     unitOfWork,
     referenceResolver,
+    landingRepository,
   );
 
   function buildDaemon(failTaskIds: string[], logger?: Logger): RunDaemon {
@@ -356,7 +362,6 @@ export function buildDeps(
     },
   );
 
-  const landingRepository = new SqliteLandingRepository(db);
   // Lock files live in the same directory as the database (always exists).
   const lockDir = dirname(dbPath);
   const repoLanding = new GitRepositoryLanding(lockDir, landingRepository, {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { DatabaseSync } from "node:sqlite";
 import { buildDeps, buildEmitCallback } from "./composition.ts";
 import type { Event } from "./domain/event.ts";
 import type { Logger } from "./logger/port.ts";
@@ -243,4 +244,110 @@ test("T1: emit callback prints `agent finished:` line with turns/tokensIn/tokens
   assert.equal(appended.length, 1, "exactly one event appended to the feed");
   assert.equal(appended[0]!.type, "agent.finished");
   assert.equal(appended[0]!.taskId, "t1");
+});
+
+// ---------------------------------------------------------------------------
+// B1 regression (007.5) — composition wiring: retryTask must receive the
+// ConflictCandidateStore (landingRepository) so that a conflict-marked
+// awaiting_confirmation task recovers to pending via the real wired path.
+//
+// Fails against the current (unwired) composition because RetryTask is
+// constructed without the 6th candidateStore arg, so execute() always throws
+// TaskNotRetryableError for awaiting_confirmation tasks.
+// ---------------------------------------------------------------------------
+test("B1 regression: retryTask wired with candidateStore recovers a conflict-candidate task through the real buildDeps composition", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-b1-"));
+  const dbPath = join(dir, "kanthord.db");
+  try {
+    const deps = buildDeps(dbPath);
+
+    // Set up schema
+    const migrate = await dispatch(["db", "migrate"], deps);
+    assert.equal(migrate.exitCode, 0, "db migrate exits 0");
+
+    // Create minimal entity tree: project → initiative → objective → task
+    const rp = await dispatch(["create", "project", "--name", "b1demo"], deps);
+    assert.equal(rp.exitCode, 0, "create project exits 0");
+    const PROJECT = rp.stdout[0]!;
+
+    const ri = await dispatch(
+      ["create", "initiative", "--project", PROJECT, "--name", "b1init"],
+      deps,
+    );
+    assert.equal(ri.exitCode, 0, "create initiative exits 0");
+    const INITIATIVE = ri.stdout[0]!;
+
+    const ro = await dispatch(
+      ["create", "objective", "--initiative", INITIATIVE, "--name", "b1obj"],
+      deps,
+    );
+    assert.equal(ro.exitCode, 0, "create objective exits 0");
+    const OBJECTIVE = ro.stdout[0]!;
+
+    const rt = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJECTIVE,
+        "--title",
+        "b1 task",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+      ],
+      deps,
+    );
+    assert.equal(rt.exitCode, 0, "create task exits 0");
+    const TASK_ID = rt.stdout[0]!;
+
+    // Use a second DatabaseSync connection to inject the conflict state.
+    // (Both connections share the WAL-mode file; this is safe for test setup.)
+    const db2 = new DatabaseSync(dbPath);
+
+    // Transition task to awaiting_confirmation status directly in the DB.
+    db2
+      .prepare("UPDATE tasks SET status = 'awaiting_confirmation' WHERE id = ?")
+      .run(TASK_ID);
+
+    // Insert a landing_candidate row with state='conflict' for this task.
+    const CAND_ID = "01JZZZZZZZZZZZZZZZZB1CAND1";
+    db2
+      .prepare(
+        `INSERT INTO landing_candidates
+           (id, task_id, repo_id, base_sha, candidate_sha, ref, target, state)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'conflict')`,
+      )
+      .run(
+        CAND_ID,
+        TASK_ID,
+        "01JZZZZZZZZZZZZZZZZZZZREPOX",
+        "deadbeef",
+        "cafebabe",
+        `kanthord/${TASK_ID}`,
+        "main",
+      );
+    db2.close();
+
+    // Call retryTask through the real wired composition-root instance.
+    // FAILS today: RetryTask is wired without the 6th ConflictCandidateStore arg,
+    // so it throws TaskNotRetryableError(awaiting_confirmation) instead of recovering.
+    await assert.doesNotReject(
+      () => deps.retryTask.execute({ taskId: TASK_ID }),
+      "conflict-candidate task must recover (not throw TaskNotRetryableError) when candidateStore is wired",
+    );
+
+    // After recovery the task must be pending.
+    const rg = await dispatch(["get", "task", "--id", TASK_ID, "--json"], deps);
+    assert.equal(rg.exitCode, 0, "get task exits 0");
+    const taskJson = JSON.parse(rg.stdout.join("")) as { status: string };
+    assert.equal(
+      taskJson.status,
+      "pending",
+      `task must be pending after conflict-recovery retry; got: ${taskJson.status}`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
