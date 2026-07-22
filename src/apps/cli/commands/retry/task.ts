@@ -10,8 +10,15 @@ export function buildRetryTaskCommand(deps: CliDeps, io: CliIo): Command {
     .description("Retry a task.")
     .configureHelp({ commandUsage: () => "kanthord retry task" })
     .requiredOption("--id <id>", "ID of the task to retry")
-    .addHelpText("after", "\nExample:\n  kanthord retry task --id task-1\n")
-    .action(async (opts: { id: string }) => {
-      emitResult(await runRetryTask({ id: opts.id }, deps.retryTask), io);
+    .option("--note <text>", "guidance note for the retried task")
+    .addHelpText(
+      "after",
+      '\nExample:\n  kanthord retry task --id task-1 --note "merge at anchor"\n',
+    )
+    .action(async (opts: { id: string; note?: string }) => {
+      emitResult(
+        await runRetryTask({ id: opts.id, note: opts.note }, deps.retryTask),
+        io,
+      );
     });
 }

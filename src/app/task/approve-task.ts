@@ -189,6 +189,7 @@ export class ApproveTask {
     // candidate commit onto the home repo (the landing port owns the canonical
     // branch). Otherwise #promote already advanced the task-clone branch.
     let canonicalSHA: string | null = null;
+    let landedCandidateId: string | undefined;
     if (isRepoBoundLanding) {
       let candidate: LandingCandidate;
       let homeDir: string;
@@ -264,7 +265,20 @@ export class ApproveTask {
 
         if (previewOutcome.kind === "conflict") {
           try {
-            this.#feed.append(newEvent("task.conflict", { taskId }));
+            this.#uow.transaction(() => {
+              // A persisted candidate row is the precise signal that
+              // #landingRepo is wired; persist the lifecycle state only then
+              // (the legacy / no-repo path has no row to update). Explicit
+              // guard, not `?.`, so the invariant is visible rather than
+              // silently swallowed.
+              if (this.#landingRepo !== undefined && hasPersistedCandidate) {
+                this.#landingRepo.updateCandidateState(
+                  candidate.id,
+                  "conflict",
+                );
+              }
+              this.#feed.append(newEvent("task.conflict", { taskId }));
+            });
             return {
               kind: "conflict",
               taskId,
@@ -289,6 +303,7 @@ export class ApproveTask {
             currentTargetOID,
           );
           canonicalSHA = landResult.canonicalSHA;
+          landedCandidateId = candidate.id;
           break;
         } catch (casErr) {
           if (!(casErr instanceof LandingCASMismatchError)) {
@@ -310,6 +325,17 @@ export class ApproveTask {
     const commitSha = result?.proposalCommit ?? null;
 
     this.#uow.transaction(() => {
+      // Persist candidate state for repo-bound landings — only when a
+      // persisted candidate row exists (which guarantees #landingRepo is
+      // wired); the legacy / no-repo path has no row to update.
+      if (
+        landedCandidateId !== undefined &&
+        hasPersistedCandidate &&
+        this.#landingRepo !== undefined
+      ) {
+        this.#landingRepo.updateCandidateState(landedCandidateId, "landed");
+      }
+
       // Persist the updated result row with commitSha (and canonicalSHA as baseCommit if landed)
       if (result !== undefined) {
         const updatedResult: TaskResultRow =

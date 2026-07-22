@@ -89,3 +89,64 @@ test("SqliteLandingRepository.getCandidateByTask returns undefined when none", (
     "must return undefined for an unknown task",
   );
 });
+
+// ---------------------------------------------------------------------------
+// 007.8 S1 atomicity — the conflict-branch guarantee, proven against real SQLite.
+//
+// ApproveTask's conflict branch writes updateCandidateState(id, "conflict") and
+// appends the `task.conflict` event inside ONE SqliteUnitOfWork.transaction, so
+// the state write must roll back with the event if anything in the block throws.
+// The S1 unit test used a TrackedUow that only COUNTS transactions — it cannot
+// prove rollback. Only a real BEGIN/COMMIT/ROLLBACK on the shared connection can
+// (debate S4). This asserts the row state is unchanged after a mid-transaction throw.
+// ---------------------------------------------------------------------------
+
+test("(S1-atomic-conflict-rollback) updateCandidateState('conflict') rolls back when the same transaction throws", async () => {
+  const { SqliteUnitOfWork } = await import("./sqlite-unit-of-work.ts");
+  const { db, dir, repo } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  repo.saveCandidate(cand(ID_A, "task-1")); // starts state='pending'
+  const uow = new SqliteUnitOfWork(db);
+
+  assert.throws(
+    () =>
+      uow.transaction(() => {
+        repo.updateCandidateState(ID_A, "conflict");
+        // stand-in for a failing feed.append in the same block
+        throw new Error("event append failed");
+      }),
+    /event append failed/,
+  );
+
+  assert.equal(
+    repo.getCandidate(ID_A)!.state,
+    "pending",
+    "conflict state write must roll back with the failed transaction, not persist",
+  );
+});
+
+test("(S1-atomic-conflict-commit) updateCandidateState('conflict') persists when the transaction commits", async () => {
+  const { SqliteUnitOfWork } = await import("./sqlite-unit-of-work.ts");
+  const { db, dir, repo } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  repo.saveCandidate(cand(ID_A, "task-1"));
+  const uow = new SqliteUnitOfWork(db);
+
+  uow.transaction(() => {
+    repo.updateCandidateState(ID_A, "conflict");
+  });
+
+  assert.equal(
+    repo.getCandidate(ID_A)!.state,
+    "conflict",
+    "conflict state must persist after the transaction commits",
+  );
+});

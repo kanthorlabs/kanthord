@@ -3,6 +3,16 @@
 import { buildProgram } from "./apps/cli/index.ts";
 import { buildDeps } from "./composition.ts";
 
+// Pipe safety: a downstream reader closing the pipe early (e.g. `… | grep -q`,
+// `… | head`) makes Node emit an unhandled 'error' on stdout/stderr and crash
+// with EPIPE. Swallow EPIPE and exit cleanly so every CLI command is pipe-safe.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EPIPE") process.exit(0);
+    throw err;
+  });
+}
+
 const dbPath = process.env.KANTHORD_DB ?? ".data/kanthord.db";
 
 const rawMaxTurns = process.env.KANTHORD_MAX_TURNS;

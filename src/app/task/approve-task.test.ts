@@ -276,6 +276,18 @@ class MemUow implements UnitOfWork {
   }
 }
 
+/**
+ * TrackedUow — counts transaction invocations so tests can verify that
+ * operations are grouped inside a UnitOfWork transaction block.
+ */
+class TrackedUow implements UnitOfWork {
+  transactionCount = 0;
+  transaction<T>(fn: () => T): T {
+    this.transactionCount++;
+    return fn();
+  }
+}
+
 // Promote via real git: `git branch -f kanthord/<taskId> <proposalCommit>`
 async function realPromote(
   dir: string,
@@ -937,6 +949,7 @@ const T3_HOME_DIR = `/fake/home/${T3_REPO_ID}`;
 
 class FakeLandingRepository implements LandingRepository {
   getCandidateByTaskCallCount = 0;
+  readonly stateUpdates: Array<{ id: string; state: CandidateState }> = [];
   #candidate: ChangeCandidate | undefined;
   constructor(candidate: ChangeCandidate | undefined) {
     this.#candidate = candidate;
@@ -949,7 +962,9 @@ class FakeLandingRepository implements LandingRepository {
     this.getCandidateByTaskCallCount++;
     return this.#candidate;
   }
-  updateCandidateState(_id: string, _state: CandidateState): void {}
+  updateCandidateState(id: string, state: CandidateState): void {
+    this.stateUpdates.push({ id, state });
+  }
   saveIntegration(_i: Integration): void {}
   getIntegration(_id: string): Integration | undefined {
     return undefined;
@@ -2203,5 +2218,405 @@ test("(S3-non-cas-error-with-newTargetOID-is-landing-failed) landPreviewed throw
     (outcome as { kind?: string }).kind,
     "landing_failed",
     `non-CAS error with coincidental newTargetOID must surface as landing_failed; got: ${JSON.stringify(outcome)}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// S1 (007.8 A1) — candidate lifecycle state persistence
+//
+// `ApproveTask` must write candidate state on conflict and landed outcomes,
+// and must NOT write on CAS-mismatch / target_moved / non-repo-bound paths.
+// ---------------------------------------------------------------------------
+
+const S1_REPO_ID = "repo-s1-0078";
+const S1_TARGET_BRANCH = "main";
+const S1_HOME_DIR = "/fake/home/s1-0078";
+const S1_TARGET_OID = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1";
+const S1_CANDIDATE_OID = "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1";
+const S1_BASE_OID = "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1";
+const S1_TREE_OID = "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1";
+const S1_CAND_ULID = "01S1A1" + "Z".repeat(20);
+
+function makeS1Store(taskId: string): MemStore {
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "s1 A1 task",
+    status: "awaiting_confirmation" as const,
+    dependencies: [],
+  };
+  const result: TaskResultRow = {
+    workspace: "/fake/s1/ws",
+    branch: `kanthord/${taskId}`,
+    baseCommit: S1_BASE_OID,
+    proposalCommit: S1_CANDIDATE_OID,
+    commitSha: null,
+    summary: "S1 A1 summary",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+  return new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { repository: S1_REPO_ID }]]),
+  );
+}
+
+function makeS1LandingRepo(taskId: string): FakeLandingRepository {
+  const candidate = newChangeCandidate({
+    id: S1_CAND_ULID,
+    taskId,
+    repoId: S1_REPO_ID,
+    baseSHA: S1_BASE_OID,
+    candidateSHA: S1_CANDIDATE_OID,
+    ref: `kanthord/${taskId}`,
+    target: S1_TARGET_BRANCH,
+  });
+  return new FakeLandingRepository(candidate);
+}
+
+test("(S1-A1-conflict) conflict preview → updateCandidateState(candidateId, 'conflict') recorded; event+state in same transaction; task stays awaiting_confirmation", async () => {
+  const taskId = "s1-a1-conflict-001";
+  const store = makeS1Store(taskId);
+  const feed = new MemFeed();
+  const uow = new TrackedUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const mockLanding = new MockLandingS4(S1_TARGET_OID, [
+    { kind: "conflict", files: ["src/todo.ts"], perFile: [] },
+  ]);
+  const landingRepo = makeS1LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    landingRepo,
+    undefined,
+    () => S1_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  // updateCandidateState must have been called with the persisted candidate id and "conflict"
+  assert.equal(
+    landingRepo.stateUpdates.length,
+    1,
+    `conflict path: exactly one updateCandidateState call expected; got ${landingRepo.stateUpdates.length}`,
+  );
+  assert.equal(
+    landingRepo.stateUpdates[0]!.id,
+    S1_CAND_ULID,
+    "conflict path: must use persisted candidate id",
+  );
+  assert.equal(
+    landingRepo.stateUpdates[0]!.state,
+    "conflict",
+    "conflict path: state must be 'conflict'",
+  );
+
+  // task.conflict event must be recorded
+  assert.equal(
+    feed.events.filter((e) => e.type === "task.conflict").length,
+    1,
+    "task.conflict event must be appended",
+  );
+
+  // The state update and the event append must happen inside a transaction
+  assert.ok(
+    uow.transactionCount >= 1,
+    `conflict path: updateCandidateState+event must be wrapped in a transaction; transactionCount=${uow.transactionCount}`,
+  );
+
+  // Task must NOT be completed
+  assert.equal(
+    store.savedTasks.filter((t) => t.status === "completed").length,
+    0,
+    "task must NOT be completed",
+  );
+
+  // Outcome must be conflict
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "conflict",
+    "outcome must be conflict",
+  );
+});
+
+test("(S1-A1-landed) mergeable preview + successful landPreviewed → updateCandidateState(candidateId, 'landed') recorded; task completed", async () => {
+  const taskId = "s1-a1-landed-001";
+  const store = makeS1Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const landResult: LandingResult = {
+    candidate: {
+      id: S1_CAND_ULID,
+      taskId,
+      repoId: S1_REPO_ID,
+      baseSHA: S1_BASE_OID,
+      candidateSHA: S1_CANDIDATE_OID,
+      ref: `kanthord/${taskId}`,
+      target: S1_TARGET_BRANCH,
+      workspace: "/fake/s1/ws",
+    },
+    outcome: { kind: "fast-forward" },
+    canonicalSHA: S1_CANDIDATE_OID,
+  };
+  const mockLanding = new MockLandingS4(
+    S1_TARGET_OID,
+    [{ kind: "fast-forward", candidateOID: S1_CANDIDATE_OID }],
+    [landResult],
+  );
+  const landingRepo = makeS1LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    landingRepo,
+    undefined,
+    () => S1_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  // updateCandidateState must have been called with the persisted candidate id and "landed"
+  assert.equal(
+    landingRepo.stateUpdates.length,
+    1,
+    `landed path: exactly one updateCandidateState call expected; got ${landingRepo.stateUpdates.length}`,
+  );
+  assert.equal(
+    landingRepo.stateUpdates[0]!.id,
+    S1_CAND_ULID,
+    "landed path: must use persisted candidate id",
+  );
+  assert.equal(
+    landingRepo.stateUpdates[0]!.state,
+    "landed",
+    "landed path: state must be 'landed'",
+  );
+
+  // Task must be completed
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must be saved");
+  assert.equal(last.status, "completed", "task must be completed");
+
+  // Outcome must be approved
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "approved",
+    "outcome must be approved",
+  );
+});
+
+test("(S1-CAS-then-success) one CAS mismatch then success → exactly one 'landed' write; no 'conflict' write", async () => {
+  const taskId = "s1-cas-then-land-001";
+  const store = makeS1Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const CAS_OID1 = "cas9797" + "0".repeat(33);
+  const mockLanding = new MockLandingS4(
+    S1_TARGET_OID,
+    [
+      { kind: "mergeable", treeOID: S1_TREE_OID },
+      { kind: "mergeable", treeOID: S1_TREE_OID },
+    ],
+    [
+      new MockCASMismatch(CAS_OID1),
+      {
+        candidate: {
+          id: S1_CAND_ULID,
+          taskId,
+          repoId: S1_REPO_ID,
+          baseSHA: S1_BASE_OID,
+          candidateSHA: S1_CANDIDATE_OID,
+          ref: `kanthord/${taskId}`,
+          target: S1_TARGET_BRANCH,
+          workspace: "/fake/s1/ws",
+        },
+        outcome: { kind: "fast-forward" },
+        canonicalSHA: S1_CANDIDATE_OID,
+      },
+    ],
+  );
+  const landingRepo = makeS1LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    landingRepo,
+    undefined,
+    () => S1_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  // Exactly one 'landed' write, no 'conflict' write
+  assert.equal(
+    landingRepo.stateUpdates.length,
+    1,
+    `CAS-then-success: exactly one updateCandidateState call expected; got ${landingRepo.stateUpdates.length}`,
+  );
+  assert.equal(
+    landingRepo.stateUpdates[0]!.state,
+    "landed",
+    "CAS-then-success: state must be 'landed', not 'conflict'",
+  );
+  const conflictWrites = landingRepo.stateUpdates.filter(
+    (u) => u.state === "conflict",
+  );
+  assert.equal(
+    conflictWrites.length,
+    0,
+    "CAS-then-success: must NOT write 'conflict'",
+  );
+
+  // Task must be completed
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must be saved");
+  assert.equal(last.status, "completed", "task must be completed");
+
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "approved",
+    "outcome must be approved",
+  );
+});
+
+test("(S1-target-moved-no-state-write) exhausted CAS retries → outcome target_moved; zero updateCandidateState calls", async () => {
+  const taskId = "s1-target-moved-001";
+  const store = makeS1Store(taskId);
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  // 3 previews + 3 CAS errors → cap exhausted → target_moved
+  const CAS_OID1 = "casA" + "0".repeat(36);
+  const CAS_OID2 = "casB" + "0".repeat(36);
+  const CAS_OID3 = "casC" + "0".repeat(36);
+  const mockLanding = new MockLandingS4(
+    S1_TARGET_OID,
+    [
+      { kind: "mergeable", treeOID: S1_TREE_OID },
+      { kind: "mergeable", treeOID: S1_TREE_OID },
+      { kind: "mergeable", treeOID: S1_TREE_OID },
+    ],
+    [
+      new MockCASMismatch(CAS_OID1),
+      new MockCASMismatch(CAS_OID2),
+      new MockCASMismatch(CAS_OID3),
+    ],
+  );
+  const landingRepo = makeS1LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    landingRepo,
+    undefined,
+    () => S1_HOME_DIR,
+  );
+
+  const outcome = await uc.execute({ taskId });
+
+  // Zero updateCandidateState calls — candidate stays pending
+  assert.equal(
+    landingRepo.stateUpdates.length,
+    0,
+    `target_moved: zero updateCandidateState calls expected (candidate stays pending); got ${landingRepo.stateUpdates.length}`,
+  );
+  assert.equal(
+    (outcome as { kind?: string }).kind,
+    "target_moved",
+    "outcome must be target_moved",
+  );
+  assert.equal(
+    store.savedTasks.filter((t) => t.status === "completed").length,
+    0,
+    "task must NOT be completed",
+  );
+});
+
+test("(S1-non-repo-bound) filesystem-bound approve → no updateCandidateState call; completes normally (regression guard)", async () => {
+  const taskId = "s1-fs-001";
+  const awaitingTask: Task = {
+    id: taskId,
+    objectiveId: OBJ_ID,
+    title: "filesystem task",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const result: TaskResultRow = {
+    workspace: "/fake/ws",
+    branch: `kanthord/${taskId}`,
+    baseCommit: "base000000000000000000000000000000000000",
+    proposalCommit: "cand111111111111111111111111111111111111",
+    commitSha: null,
+    summary: "fs task",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+  const store = new MemStore(
+    [awaitingTask],
+    new Map([[taskId, result]]),
+    INI_ID,
+    new Map([[taskId, { filesystem: "fs-resource-id" }]]),
+  );
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const mockLanding = new MockLandingS4(S1_TARGET_OID, []);
+  const landingRepo = makeS1LandingRepo(taskId);
+
+  const uc = new ApproveTask(
+    store,
+    new MemQueue(),
+    feed,
+    uow,
+    noopPromote,
+    mockLanding,
+    landingRepo,
+    undefined,
+    () => S1_HOME_DIR,
+  );
+
+  await uc.execute({ taskId });
+
+  // No state update — filesystem-bound task has no candidate row
+  assert.equal(
+    landingRepo.stateUpdates.length,
+    0,
+    "non-repo-bound: must NOT call updateCandidateState",
+  );
+
+  // Task must complete normally
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined, "task must be saved");
+  assert.equal(
+    last.status,
+    "completed",
+    "non-repo-bound task must complete normally",
   );
 });

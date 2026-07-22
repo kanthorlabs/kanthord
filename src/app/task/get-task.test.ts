@@ -229,3 +229,38 @@ test("GetTask context: output.context is undefined when ContextSource returns em
     "context must be undefined when ContextSource returns empty map",
   );
 });
+
+// ---------------------------------------------------------------------------
+// 007.8 S2 regression — `note` surfaces on get task --json.
+//
+// `retry task --note "…"` persists the note on the task; get task --json MUST
+// project it (a rebuild-guidance value, readable by the prompt hook). The prior
+// S2 test used a MOCK RetryTask that only checked the flag was forwarded, so it
+// could not catch GetTask dropping the field. These assert the projection
+// directly, mirroring the epic Proof's `get task --json | grep "<note>"`.
+// ---------------------------------------------------------------------------
+
+test("(S2-note-projection) GetTask projects `note` when the task carries one", async () => {
+  const withNote: Task = { ...FAKE_TASK, note: "merge at anchor" };
+  const tasks = new MemTaskSource([withNote]);
+  const results = new MemResultSource(new Map());
+  const uc = new GetTask(tasks, results, nullContextSource);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.note,
+    "merge at anchor",
+    "note must surface on get task output so `get task --json` shows it",
+  );
+});
+
+test("(S2-note-absent) GetTask omits `note` when the task has none", async () => {
+  const tasks = new MemTaskSource([FAKE_TASK]); // FAKE_TASK has no note
+  const results = new MemResultSource(new Map());
+  const uc = new GetTask(tasks, results, nullContextSource);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(output.note, undefined, "note must be absent when unset");
+});
