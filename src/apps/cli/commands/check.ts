@@ -6,7 +6,7 @@ import type { CliIo } from "./action.ts";
 
 export function buildCheckCommand(deps: CliDeps, io: CliIo): Command {
   const command = new Command("check")
-    .name("kanthord check")
+    .name("check")
     .description("Check command output.")
     .showHelpAfterError();
 
