@@ -410,7 +410,7 @@ describe("src/apps/cli/commands/read.ts", () => {
     assert.equal(listenersWhileListing, listenersBefore + 1);
     assert.equal(process.listenerCount("SIGINT"), listenersBefore);
     assert.deepEqual(cap.out, [
-      '{"id":"event-1","type":"task.ready","taskId":"task-1"}\n',
+      '{"events":[{"id":"event-1","type":"task.ready","taskId":"task-1"}],"nextCursor":""}\n',
     ]);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);

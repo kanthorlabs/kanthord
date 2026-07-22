@@ -313,6 +313,13 @@ describe("runGetTask", () => {
     evidence: [{ command: "npm test", exitCode: 0, output: "ok" }],
   };
 
+  type LandingCandidateOutput = {
+    state: "pending" | "landed" | "conflict";
+    baseSHA: string;
+    candidateSHA: string;
+    target: string;
+  } | null;
+
   function makeStubGetTask(
     output: Partial<{
       id: string;
@@ -323,6 +330,7 @@ describe("runGetTask", () => {
       dependencies: string[];
       result: TaskResultRow | undefined;
       context: Record<string, string> | undefined;
+      landingCandidate: LandingCandidateOutput;
     }>,
   ): GetTask {
     return {
@@ -335,6 +343,10 @@ describe("runGetTask", () => {
         dependencies: [],
         result: output.result,
         context: output.context,
+        landingCandidate:
+          output.landingCandidate === undefined
+            ? null
+            : output.landingCandidate,
       }),
     } as unknown as GetTask;
   }
@@ -417,5 +429,80 @@ describe("runGetTask", () => {
       /mutually exclusive/i.test(r.stderr[0] ?? ""),
       `stderr must mention 'mutually exclusive'; got: ${r.stderr[0]}`,
     );
+  });
+
+  // ---------------------------------------------------------------------------
+  // Story A (007.10 F1) — landingCandidate surfaces in human + --json output.
+  // ---------------------------------------------------------------------------
+
+  const PENDING_LANDING_CANDIDATE: LandingCandidateOutput = {
+    state: "pending",
+    baseSHA: "base111",
+    candidateSHA: "cand111",
+    target: "main",
+  };
+
+  test("(Story A) runGetTask human output shows the candidate state line when landingCandidate is present", async () => {
+    const getTask = makeStubGetTask({
+      landingCandidate: PENDING_LANDING_CANDIDATE,
+    });
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    const out = r.stdout.join("\n");
+    assert.ok(
+      /landing.?candidate/i.test(out) || /candidate.*pending/i.test(out),
+      `stdout must show the candidate state; got: ${out}`,
+    );
+    assert.ok(
+      out.includes("pending"),
+      `stdout must mention state; got: ${out}`,
+    );
+    assert.ok(
+      out.includes("base111") && out.includes("cand111"),
+      `stdout must mention the base/candidate SHAs; got: ${out}`,
+    );
+  });
+
+  test("(Story A) runGetTask human output omits the candidate line when landingCandidate is null", async () => {
+    const getTask = makeStubGetTask({ landingCandidate: null });
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    const out = r.stdout.join("\n");
+    assert.ok(
+      !/landing.?candidate/i.test(out),
+      `stdout must not mention a candidate line when null; got: ${out}`,
+    );
+  });
+
+  test("(Story A) runGetTask --json round-trips landingCandidate", async () => {
+    const getTask = makeStubGetTask({
+      landingCandidate: PENDING_LANDING_CANDIDATE,
+    });
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, json: true },
+      getTask,
+    );
+
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout[0]!) as {
+      landingCandidate: LandingCandidateOutput;
+    };
+    assert.deepEqual(parsed.landingCandidate, PENDING_LANDING_CANDIDATE);
+  });
+
+  test("(Story A) runGetTask --json shows landingCandidate as null when absent", async () => {
+    const getTask = makeStubGetTask({ landingCandidate: null });
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, json: true },
+      getTask,
+    );
+
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout[0]!) as {
+      landingCandidate: LandingCandidateOutput;
+    };
+    assert.equal(parsed.landingCandidate, null);
   });
 });

@@ -508,6 +508,185 @@ test("(S2-note-cleared-on-noteless-retry) RetryTask S2 conflict-recovery retry w
   );
 });
 
+// ---------------------------------------------------------------------------
+// Story B (007.10 F2) — explicit `--rebuild` of a stale (pending) candidate
+// ---------------------------------------------------------------------------
+
+test("(StoryB-rebuild-accepted) RetryTask execute awaiting_confirmation + candidate:pending + rebuild:true transitions to pending, enqueues once, emits task.ready, no throw", async () => {
+  const store = new SimpleTaskStore([makeTask("awaiting_confirmation")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([makeFreshCandidate()]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  await uc.execute({
+    taskId: TASK_ID,
+    rebuild: true,
+  } as Parameters<typeof uc.execute>[0]);
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  assert.equal(
+    store.saved[0]!.status,
+    "pending",
+    "task must transition to pending",
+  );
+  assert.deepEqual(queue.enqueued, [TASK_ID], "task must be enqueued once");
+  const eventTypes = feed.events.map((e) => e.type);
+  assert.ok(eventTypes.includes("task.ready"), "must emit task.ready");
+});
+
+test("(StoryB-rebuild-guard) RetryTask execute awaiting_confirmation + candidate:pending + no rebuild still throws TaskNotRetryableError (regression)", async () => {
+  const store = new SimpleTaskStore([makeTask("awaiting_confirmation")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([makeFreshCandidate()]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  await assert.rejects(
+    () => uc.execute({ taskId: TASK_ID }),
+    (err: unknown) =>
+      err instanceof TaskNotRetryableError &&
+      (err as TaskNotRetryableError).status === "awaiting_confirmation",
+  );
+  assert.equal(store.saved.length, 0, "no state saved on error");
+  assert.equal(queue.enqueued.length, 0, "nothing enqueued on error");
+});
+
+test("(StoryB-conflict-unchanged) RetryTask execute awaiting_confirmation + candidate:conflict + no rebuild still succeeds (today's path unchanged)", async () => {
+  const store = new SimpleTaskStore([makeTask("awaiting_confirmation")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([
+    makeConflictCandidate(),
+  ]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  await uc.execute({ taskId: TASK_ID });
+
+  assert.equal(store.saved[0]!.status, "pending");
+  assert.deepEqual(queue.enqueued, [TASK_ID]);
+});
+
+test("(StoryB-rebuild-idempotent) RetryTask execute --rebuild twice throws TaskNotRetryableError on the second call and does not double-enqueue (human-review blocker regression)", async () => {
+  const task = makeTask("awaiting_confirmation");
+  const store = new SimpleTaskStore([task]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([makeFreshCandidate()]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  await uc.execute({
+    taskId: TASK_ID,
+    rebuild: true,
+  } as Parameters<typeof uc.execute>[0]);
+
+  // Task is now "pending" in the store (per SimpleTaskStore.save mutating the map).
+  // Re-running --rebuild on the now-pending task must THROW TaskNotRetryableError
+  // (not silently no-op), since the task is no longer awaiting_confirmation.
+  // Throwing (instead of no-op) still satisfies "no second enqueue".
+  await assert.rejects(
+    () =>
+      uc.execute({
+        taskId: TASK_ID,
+        rebuild: true,
+      } as Parameters<typeof uc.execute>[0]),
+    (err: unknown) =>
+      err instanceof TaskNotRetryableError &&
+      (err as TaskNotRetryableError).status === "pending",
+  );
+
+  assert.equal(
+    queue.enqueued.length,
+    1,
+    `must enqueue exactly once across two --rebuild calls; got: ${JSON.stringify(queue.enqueued)}`,
+  );
+});
+
+test("(StoryB-rebuild-completed-throws) RetryTask execute a completed task with --rebuild throws TaskNotRetryableError, not a silent no-op (human-review blocker)", async () => {
+  const store = new SimpleTaskStore([makeTask("completed")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await assert.rejects(
+    () =>
+      uc.execute({
+        taskId: TASK_ID,
+        rebuild: true,
+      } as Parameters<typeof uc.execute>[0]),
+    (err: unknown) =>
+      err instanceof TaskNotRetryableError &&
+      (err as TaskNotRetryableError).status === "completed",
+  );
+  assert.equal(store.saved.length, 0, "no state saved on error");
+  assert.equal(queue.enqueued.length, 0, "nothing enqueued on error");
+  assert.equal(feed.events.length, 0, "no events on error");
+});
+
+test("(StoryB-rebuild-running-throws) RetryTask execute a running task with --rebuild throws TaskNotRetryableError, not a silent no-op (human-review blocker)", async () => {
+  const store = new SimpleTaskStore([makeTask("running")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await assert.rejects(
+    () =>
+      uc.execute({
+        taskId: TASK_ID,
+        rebuild: true,
+      } as Parameters<typeof uc.execute>[0]),
+    (err: unknown) =>
+      err instanceof TaskNotRetryableError &&
+      (err as TaskNotRetryableError).status === "running",
+  );
+  assert.equal(store.saved.length, 0, "no state saved on error");
+  assert.equal(queue.enqueued.length, 0, "nothing enqueued on error");
+  assert.equal(feed.events.length, 0, "no events on error");
+});
+
+test("(StoryB-rebuild-failed-retries) RetryTask execute a failed task with --rebuild still retries (transitions to pending, enqueues, emits task.ready) instead of silently no-oping (human-review blocker)", async () => {
+  const store = new SimpleTaskStore([makeTask("failed")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await uc.execute({
+    taskId: TASK_ID,
+    rebuild: true,
+  } as Parameters<typeof uc.execute>[0]);
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  assert.equal(
+    store.saved[0]!.status,
+    "pending",
+    "failed task with --rebuild must still transition to pending",
+  );
+  assert.deepEqual(
+    queue.enqueued,
+    [TASK_ID],
+    "failed task with --rebuild must still be enqueued",
+  );
+  const eventTypes = feed.events.map((e) => e.type);
+  assert.ok(
+    eventTypes.includes("task.ready"),
+    "failed task with --rebuild must still emit task.ready",
+  );
+});
+
 test("(S3-retry-failed-regression) RetryTask S3 failed-retry transitions to pending (regression): no conflict snapshot", async () => {
   const store = new SimpleTaskStore([makeTask("failed")]);
   const queue = new RecordingJobQueue();

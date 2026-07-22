@@ -783,6 +783,52 @@ describe("runRetryTask handler", () => {
       "taskId must still be forwarded correctly",
     );
   });
+
+  // Story B (007.10 F2) — --rebuild forwarded to RetryTask.execute
+  test("(StoryB-cli-retry-rebuild) runRetryTask --id <id> --rebuild: exit 0 and rebuild:true passed to RetryTask.execute", async () => {
+    let capturedInput: Record<string, unknown> | undefined;
+
+    const mockUc = {
+      async execute(input: Record<string, unknown>): Promise<void> {
+        capturedInput = input;
+      },
+    } as unknown as RetryTask;
+
+    const result = await runRetryTask(
+      { id: RETRY_TASK_ID, rebuild: true },
+      mockUc,
+    );
+
+    assert.equal(
+      result.exitCode,
+      0,
+      `exit 0 expected; stderr: ${result.stderr.join(", ")}`,
+    );
+    assert.ok(capturedInput !== undefined, "execute must have been called");
+    assert.equal(
+      capturedInput["rebuild"],
+      true,
+      "rebuild:true must be forwarded to RetryTask.execute from the --rebuild CLI flag",
+    );
+  });
+
+  test("(StoryB-cli-retry-no-rebuild) runRetryTask --id <id> (no --rebuild): rebuild is undefined/false on RetryTask.execute", async () => {
+    let capturedInput: Record<string, unknown> | undefined;
+
+    const mockUc = {
+      async execute(input: Record<string, unknown>): Promise<void> {
+        capturedInput = input;
+      },
+    } as unknown as RetryTask;
+
+    await runRetryTask({ id: RETRY_TASK_ID }, mockUc);
+
+    assert.ok(capturedInput !== undefined, "execute must have been called");
+    assert.ok(
+      !capturedInput["rebuild"],
+      `rebuild must be falsy when --rebuild is not passed; got: ${JSON.stringify(capturedInput["rebuild"])}`,
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

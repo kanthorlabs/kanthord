@@ -12,6 +12,7 @@ import { GetTask } from "./get-task.ts";
 import { UnknownReferenceError } from "../errors.ts";
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow } from "../../storage/port.ts";
+import type { ChangeCandidate } from "../../domain/landing.ts";
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -263,4 +264,89 @@ test("(S2-note-absent) GetTask omits `note` when the task has none", async () =>
   const output = await uc.execute({ id: TASK_ID });
 
   assert.equal(output.note, undefined, "note must be absent when unset");
+});
+
+// ---------------------------------------------------------------------------
+// Story A (007.10 F1) — landingCandidate projection sourced from the landing
+// read path (a fake implementing the same shape as
+// SqliteLandingRepository.getCandidateByTask).
+// ---------------------------------------------------------------------------
+
+interface FakeLandingSource {
+  getCandidateByTask(taskId: string): ChangeCandidate | undefined;
+}
+
+class MemLandingSource implements FakeLandingSource {
+  readonly #byTask: Map<string, ChangeCandidate>;
+  constructor(candidates: ChangeCandidate[]) {
+    this.#byTask = new Map(
+      candidates
+        .filter((c) => c.taskId !== null)
+        .map((c) => [c.taskId as string, c]),
+    );
+  }
+  getCandidateByTask(taskId: string): ChangeCandidate | undefined {
+    return this.#byTask.get(taskId);
+  }
+}
+
+const PENDING_CANDIDATE: ChangeCandidate = {
+  id: "01JZZZZZZZZZZZZZZZZZZZCAN1",
+  taskId: TASK_ID,
+  repoId: "01JZZZZZZZZZZZZZZZZZZZREP1",
+  baseSHA: "base111",
+  candidateSHA: "cand111",
+  ref: "refs/kanthord/cand1",
+  target: "main",
+  state: "pending",
+};
+
+const LANDED_CANDIDATE: ChangeCandidate = {
+  ...PENDING_CANDIDATE,
+  id: "01JZZZZZZZZZZZZZZZZZZZCAN2",
+  state: "landed",
+};
+
+test("(Story A) GetTask projects landingCandidate{state,baseSHA,candidateSHA,target} for a pending candidate", async () => {
+  const tasks = new MemTaskSource([FAKE_TASK]);
+  const results = new MemResultSource(new Map());
+  const landing = new MemLandingSource([PENDING_CANDIDATE]);
+  const uc = new GetTask(tasks, results, nullContextSource, landing);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.ok(
+    output.landingCandidate !== null && output.landingCandidate !== undefined,
+    "landingCandidate must be present when a candidate row exists",
+  );
+  assert.equal(output.landingCandidate!.state, "pending");
+  assert.equal(output.landingCandidate!.baseSHA, "base111");
+  assert.equal(output.landingCandidate!.candidateSHA, "cand111");
+  assert.equal(output.landingCandidate!.target, "main");
+});
+
+test("(Story A) GetTask projects landingCandidate.state as 'landed' for a landed candidate", async () => {
+  const tasks = new MemTaskSource([FAKE_TASK]);
+  const results = new MemResultSource(new Map());
+  const landing = new MemLandingSource([LANDED_CANDIDATE]);
+  const uc = new GetTask(tasks, results, nullContextSource, landing);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(output.landingCandidate!.state, "landed");
+});
+
+test("(Story A) GetTask.landingCandidate is null when the task has no candidate row", async () => {
+  const tasks = new MemTaskSource([FAKE_TASK]);
+  const results = new MemResultSource(new Map());
+  const landing = new MemLandingSource([]); // no candidates
+  const uc = new GetTask(tasks, results, nullContextSource, landing);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.landingCandidate,
+    null,
+    "landingCandidate must be null, not undefined, when absent",
+  );
 });

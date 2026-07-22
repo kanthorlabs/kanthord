@@ -263,7 +263,11 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       cap.io as Parameters<typeof buildRetryCommand>[1],
     ).parseAsync(["task", "--id", "task-1"], { from: "user" });
 
-    assert.deepEqual(received, { taskId: "task-1", note: undefined });
+    assert.deepEqual(received, {
+      taskId: "task-1",
+      note: undefined,
+      rebuild: undefined,
+    });
     assert.deepEqual(cap.out, []);
     assert.deepEqual(cap.err, ["task re-queued: task-1\n"]);
     assert.equal(cap.code(), 0);

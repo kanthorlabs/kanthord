@@ -1,5 +1,6 @@
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow } from "../../storage/port.ts";
+import type { ChangeCandidate } from "../../domain/landing.ts";
 import { UnknownReferenceError } from "../errors.ts";
 
 interface TaskSource {
@@ -12,6 +13,17 @@ interface ResultSource {
 
 interface ContextSource {
   getTaskContext(taskId: string): Record<string, string>;
+}
+
+interface LandingSource {
+  getCandidateByTask(taskId: string): ChangeCandidate | undefined;
+}
+
+export interface LandingCandidateOutput {
+  state: "pending" | "landed" | "conflict";
+  baseSHA: string;
+  candidateSHA: string;
+  target: string;
 }
 
 export interface GetTaskOutput {
@@ -28,21 +40,25 @@ export interface GetTaskOutput {
   result: TaskResultRow | undefined;
   dependencyStatus?: Array<{ id: string; status: string }>;
   context?: Record<string, string>;
+  landingCandidate: LandingCandidateOutput | null;
 }
 
 export class GetTask {
   readonly #tasks: TaskSource;
   readonly #results: ResultSource;
   readonly #context: ContextSource;
+  readonly #landing: LandingSource | undefined;
 
   constructor(
     tasks: TaskSource,
     results: ResultSource,
     context: ContextSource,
+    landing?: LandingSource,
   ) {
     this.#tasks = tasks;
     this.#results = results;
     this.#context = context;
+    this.#landing = landing;
   }
 
   async execute({ id }: { id: string }): Promise<GetTaskOutput> {
@@ -52,6 +68,16 @@ export class GetTask {
     }
     const result = this.#results.getTaskResult(id);
     const ctx = this.#context.getTaskContext(id);
+    const candidate = this.#landing?.getCandidateByTask(id);
+    const landingCandidate: LandingCandidateOutput | null =
+      candidate !== undefined
+        ? {
+            state: candidate.state,
+            baseSHA: candidate.baseSHA,
+            candidateSHA: candidate.candidateSHA,
+            target: candidate.target,
+          }
+        : null;
 
     const dependencyStatus =
       task.dependencies.length > 0
@@ -79,6 +105,7 @@ export class GetTask {
       result,
       ...(dependencyStatus !== undefined ? { dependencyStatus } : {}),
       ...(Object.keys(ctx).length > 0 ? { context: ctx } : {}),
+      landingCandidate,
     };
   }
 }

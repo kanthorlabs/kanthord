@@ -12,13 +12,18 @@ type CliEvent = {
  *
  * Human output: one `stderr` line per event — `"<id> <type> <taskId>"` plus
  * the payload as JSON when present.
- * JSON output: one `stdout` ndjson line per event.
+ * JSON output: exactly one `stdout` document per page — a single
+ * `{"events":[...],"nextCursor":"<id-or-empty>"}` envelope (never bare
+ * per-event lines). In `--follow` mode an empty poll page pushes no
+ * envelope at all (idle polling must not spam an empty document); a
+ * non-follow invocation always emits its one envelope, even when empty.
  *
  * Non-follow paging: returns a single page of `--limit` events (default 10).
  * It reads one extra row (`pageSize + 1`); if that probe row comes back, more
- * events exist, so it drops the probe and appends a truncation signal — a
- * `{"nextCursor":"<lastId>"}` ndjson line (JSON) or a `more available — pass
- * --after <lastId>` line (human). A page that reaches the tail emits neither.
+ * events exist, so it drops the probe and sets the envelope's `nextCursor` to
+ * the last shown event's id (JSON) or appends a `more available — pass
+ * --after <lastId>` line (human). A page that reaches the tail leaves
+ * `nextCursor` as `""` (JSON) and emits no hint (human).
  *
  * --follow paging (unchanged): a full page (length === --limit) re-reads
  * immediately; a short/empty page sleeps then re-reads; the loop exits when the
@@ -85,9 +90,10 @@ export async function runEvents(
     const hasMore = !follow && batch.length > pageSize;
     const visible = hasMore ? batch.slice(0, pageSize) : batch;
 
+    const pageEvents: CliEvent[] = [];
     for (const event of visible) {
       if (json) {
-        stdout.push(JSON.stringify(event));
+        pageEvents.push(event);
       } else {
         // Display throttle: for agent.progress, emit at most one line per
         // taskId per 5 seconds (capture is un-throttled per A3).
@@ -111,15 +117,23 @@ export async function runEvents(
       cursor = visible[visible.length - 1]!.id;
     }
 
-    // Non-follow: single page only — emit a truncation signal when a next page
-    // exists (the probe row came back), then stop.
+    // JSON output: exactly one envelope per page — never bare per-event lines.
+    // In follow mode, skip the push for an empty page (idle polling must not
+    // spam an empty envelope); non-follow always emits its one envelope.
+    if (json && (!follow || pageEvents.length > 0)) {
+      stdout.push(
+        JSON.stringify({
+          events: pageEvents,
+          nextCursor: hasMore ? cursor : "",
+        }),
+      );
+    }
+
+    // Non-follow: single page only — emit a truncation hint (human) when a
+    // next page exists (the probe row came back), then stop.
     if (!follow) {
-      if (hasMore) {
-        if (json) {
-          stdout.push(JSON.stringify({ nextCursor: cursor }));
-        } else {
-          stderr.push(`more available — pass --after ${cursor}`);
-        }
+      if (hasMore && !json) {
+        stderr.push(`more available — pass --after ${cursor}`);
       }
       break;
     }

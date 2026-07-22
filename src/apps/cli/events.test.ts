@@ -50,7 +50,7 @@ test("events --after 0 prints all events as human lines and --json produces ndjs
     "E3 line includes payload JSON",
   );
 
-  // --json ndjson on stdout
+  // --json emits exactly one envelope document on stdout (Story C)
   const jsonOut = await runEvents(
     { after: "0", json: true },
     feed,
@@ -58,10 +58,14 @@ test("events --after 0 prints all events as human lines and --json produces ndjs
     neverAbort,
   );
   assert.equal(jsonOut.exitCode, 0);
-  assert.equal(jsonOut.stdout.length, 3, "three ndjson lines on stdout");
-  const parsed = jsonOut.stdout.map((l) => JSON.parse(l));
-  assert.deepEqual(parsed[0], E1);
-  assert.deepEqual(parsed[2], E3);
+  assert.equal(jsonOut.stdout.length, 1, "exactly one JSON document on stdout");
+  const envelope = JSON.parse(jsonOut.stdout[0]!);
+  assert.deepEqual(envelope.events, [E1, E2, E3]);
+  assert.equal(
+    envelope.nextCursor,
+    "",
+    "no next page -> nextCursor is empty string",
+  );
 });
 
 test("events --after <mid-cursor> prints only newer events", async () => {
@@ -79,7 +83,7 @@ test("events --after <mid-cursor> prints only newer events", async () => {
 // truncated page signals the next cursor. Tests below replace the old
 // "three immediate reads" test (known rewrite per Story 02 contract).
 
-test("S2: non-follow --limit 2 --json over 5 events emits 2 ndjson lines then nextCursor sentinel", async () => {
+test("StoryC: non-follow --limit 2 --json over 5 events emits one envelope with 2 events and nextCursor 'B'", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.ready", taskId: "T2" },
@@ -97,15 +101,17 @@ test("S2: non-follow --limit 2 --json over 5 events emits 2 ndjson lines then ne
   );
 
   assert.equal(result.exitCode, 0);
-  // 2 event ndjson lines + 1 sentinel line = 3 stdout lines
-  assert.equal(result.stdout.length, 3, "2 event lines + 1 sentinel on stdout");
-  assert.deepEqual(JSON.parse(result.stdout[0]!), events[0]);
-  assert.deepEqual(JSON.parse(result.stdout[1]!), events[1]);
-  const sentinel = JSON.parse(result.stdout[2]!);
   assert.equal(
-    sentinel.nextCursor,
+    result.stdout.length,
+    1,
+    "exactly one JSON document (envelope) on stdout",
+  );
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.deepEqual(envelope.events, [events[0], events[1]]);
+  assert.equal(
+    envelope.nextCursor,
     "B",
-    "sentinel nextCursor equals id of last returned event",
+    "nextCursor equals id of last returned event when truncated",
   );
 });
 
@@ -141,7 +147,7 @@ test("S2: non-follow --limit 2 (human) over 5 events emits 2 lines then more-ava
   );
 });
 
-test("S2: non-follow --limit 10 --json covers all 5 events emits no sentinel", async () => {
+test("StoryC: non-follow --limit 10 --json covers all 5 events emits one envelope with nextCursor ''", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.ready", taskId: "T2" },
@@ -161,18 +167,19 @@ test("S2: non-follow --limit 10 --json covers all 5 events emits no sentinel", a
   assert.equal(result.exitCode, 0);
   assert.equal(
     result.stdout.length,
-    5,
-    "exactly 5 event ndjson lines, no sentinel",
+    1,
+    "exactly one JSON document (envelope) on stdout",
   );
-  // No sentinel: last line should be a plain event, not {nextCursor:...}
-  const last = JSON.parse(result.stdout[4]!);
-  assert.ok(
-    last.nextCursor === undefined,
-    "last line is an event row, not a sentinel",
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.equal(envelope.events.length, 5, "all 5 events present");
+  assert.equal(
+    envelope.nextCursor,
+    "",
+    "no next page -> nextCursor is empty string",
   );
 });
 
-test("S2: non-follow --after last event id emits nothing", async () => {
+test("StoryC: non-follow --after last event id (--json) emits one envelope with empty events and nextCursor ''", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.ready", taskId: "T2" },
@@ -190,11 +197,22 @@ test("S2: non-follow --after last event id emits nothing", async () => {
   );
 
   assert.equal(result.exitCode, 0);
-  assert.equal(result.stdout.length, 0, "no events and no sentinel emitted");
+  assert.equal(
+    result.stdout.length,
+    1,
+    "exactly one JSON document (envelope), even for an empty page",
+  );
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.deepEqual(envelope.events, [], "no events on an empty page");
+  assert.equal(
+    envelope.nextCursor,
+    "",
+    "empty page has no last-event id to derive a cursor from",
+  );
   assert.equal(result.stderr.length, 0, "no hint emitted");
 });
 
-test("S2: non-follow default page size is 10 — 12 events emit 10 lines then nextCursor sentinel", async () => {
+test("StoryC: non-follow default page size is 10 — 12 events emit one envelope with 10 events and nextCursor 'E10'", async () => {
   const events: Event[] = Array.from({ length: 12 }, (_, i) => ({
     id: `E${String(i + 1).padStart(2, "0")}`,
     type: "task.ready",
@@ -213,24 +231,25 @@ test("S2: non-follow default page size is 10 — 12 events emit 10 lines then ne
   assert.equal(result.exitCode, 0);
   assert.equal(
     result.stdout.length,
-    11,
-    "10 event ndjson lines + 1 sentinel line",
+    1,
+    "exactly one JSON document (envelope) on stdout",
   );
-  assert.deepEqual(JSON.parse(result.stdout[0]!), events[0]);
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.deepEqual(envelope.events[0], events[0]);
   assert.deepEqual(
-    JSON.parse(result.stdout[9]!),
+    envelope.events[9],
     events[9],
     "10th shown row is the 10th event (probe row E11 is dropped)",
   );
-  const sentinel = JSON.parse(result.stdout[10]!);
+  assert.equal(envelope.events.length, 10, "exactly 10 events in the page");
   assert.equal(
-    sentinel.nextCursor,
+    envelope.nextCursor,
     "E10",
-    "sentinel cursor = id of the 10th (last shown) event",
+    "nextCursor = id of the 10th (last shown) event",
   );
 });
 
-test("S2: non-follow default page — 3 events (< 10) emit all with no sentinel", async () => {
+test("StoryC: non-follow default page — 3 events (< 10) emit one envelope with nextCursor ''", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.started", taskId: "T1" },
@@ -246,10 +265,17 @@ test("S2: non-follow default page — 3 events (< 10) emit all with no sentinel"
   );
 
   assert.equal(result.exitCode, 0);
-  assert.equal(result.stdout.length, 3, "3 event lines, no sentinel");
-  assert.ok(
-    JSON.parse(result.stdout[2]!).nextCursor === undefined,
-    "last line is an event row, not a sentinel",
+  assert.equal(
+    result.stdout.length,
+    1,
+    "exactly one JSON document (envelope) on stdout",
+  );
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.deepEqual(envelope.events, events);
+  assert.equal(
+    envelope.nextCursor,
+    "",
+    "no next page -> nextCursor is empty string",
   );
 });
 
@@ -290,6 +316,54 @@ test("events --follow with injected sleep: two polls with an append between prin
   assert.ok(result.stderr[0]!.includes("A1"));
   assert.ok(result.stderr[1]!.includes("B2"));
   assert.ok(result.stderr[2]!.includes("C3"));
+});
+
+test("(human-review blocker) --follow --json: an empty poll page pushes NO stdout envelope", async () => {
+  const feed = new FakeListEvents([]);
+
+  const ac = new AbortController();
+  let sleepCalls = 0;
+  const mockSleep = async (_ms: number) => {
+    sleepCalls++;
+    if (sleepCalls === 1) {
+      // abort after the first idle poll so the loop exits after one empty cycle
+      ac.abort();
+    }
+  };
+
+  const result = await runEvents(
+    { after: "0", follow: true, json: true, "poll-interval": "50" },
+    feed,
+    mockSleep,
+    ac.signal,
+  );
+
+  assert.equal(result.exitCode, 0, "exits 0 on clean abort");
+  assert.equal(
+    result.stdout.length,
+    0,
+    `follow --json must push no stdout document for an empty poll; got: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test('(human-review blocker regression) non-follow --json: an empty page still emits exactly one {events:[],nextCursor:""} envelope', async () => {
+  const feed = new FakeListEvents([]);
+
+  const result = await runEvents(
+    { after: "0", json: true },
+    feed,
+    noopSleep,
+    neverAbort,
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(
+    result.stdout.length,
+    1,
+    "non-follow empty page must still emit exactly one JSON envelope",
+  );
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.deepEqual(envelope, { events: [], nextCursor: "" });
 });
 
 // (A3) Display throttle: human mode throttles agent.progress per taskId; json emits all
@@ -355,8 +429,14 @@ test("(A3 display throttle) json mode: 3 consecutive agent.progress for same tas
   assert.equal(result.exitCode, 0);
   assert.equal(
     result.stdout.length,
+    1,
+    "exactly one JSON document (envelope) on stdout",
+  );
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.equal(
+    envelope.events.length,
     3,
-    `json mode: all agent.progress events emitted regardless of display throttle; got ${result.stdout.length}`,
+    `json mode: all agent.progress events emitted regardless of display throttle; got ${envelope.events.length}`,
   );
 });
 

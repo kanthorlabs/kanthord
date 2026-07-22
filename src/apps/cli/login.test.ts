@@ -55,6 +55,11 @@ describe("runLogin (thin handler)", () => {
 
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["01HCREDENTIALID0000000000"]);
+    assert.deepEqual(
+      result.stderr,
+      ["credential created: 01HCREDENTIALID0000000000"],
+      "(Story D2) login provider must confirm the created credential on stderr, matching the create * id-on-stdout / friendly-line-on-stderr contract",
+    );
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.providerId, "openai-codex");
     assert.equal(calls[0]?.projectId, PROJECT_ID);

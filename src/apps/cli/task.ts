@@ -117,8 +117,9 @@ export async function runRetryTask(
 ): Promise<HandlerResult> {
   const id = args["id"] as string;
   const note = typeof args["note"] === "string" ? args["note"] : undefined;
+  const rebuild = args["rebuild"] === true ? true : undefined;
   try {
-    await retryTask.execute({ taskId: id, note });
+    await retryTask.execute({ taskId: id, note, rebuild });
     return { exitCode: 0, stdout: [], stderr: [`task re-queued: ${id}`] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
@@ -311,6 +312,13 @@ export async function runGetTask(
           lines.push(`${entry.command} → exit ${entry.exitCode}`);
         }
       }
+    }
+
+    if (output.landingCandidate !== null) {
+      const c = output.landingCandidate;
+      lines.push(
+        `landing candidate: ${c.state} (base ${c.baseSHA} → candidate ${c.candidateSHA}, target ${c.target})`,
+      );
     }
 
     return { exitCode: 0, stdout: lines, stderr: [] };

@@ -152,4 +152,47 @@ describe("src/apps/cli/architecture.ts", () => {
       );
     }
   });
+
+  /**
+   * (Story D / F5, EPIC 007.10) `<group> <sub> --help` must print the
+   * subcommand's own help (`Usage: kanthord <group> <sub> [options]…`), not
+   * the root program's help (`Usage: kanthord [options] [command]`) — proven
+   * across the command-group matrix, with `login provider` as the regression
+   * guard for the one group already known to work.
+   */
+  test("(Story D) '<group> <sub> --help' prints the subcommand's own help across the command matrix", async () => {
+    const MATRIX: Array<[group: string, sub: string]> = [
+      ["get", "conflict"],
+      ["create", "ai-provider"],
+      ["run", "daemon"],
+      ["retry", "task"],
+      ["login", "provider"], // regression guard: this pair already works today
+    ];
+
+    for (const [group, sub] of MATRIX) {
+      const result = await runCli([group, sub, "--help"], noopDeps);
+      const output = result.stdout[0] ?? result.stderr[0] ?? "";
+      const firstLine = output.split("\n")[0] ?? "";
+      assert.equal(
+        firstLine,
+        `Usage: kanthord ${group} ${sub} [options]`,
+        `'${group} ${sub} --help' must print the subcommand's own usage line; got: ${firstLine}`,
+      );
+    }
+  });
+
+  /**
+   * (Story D / F5) The `<group> help <sub>` form (Commander's built-in
+   * "help as a command" spelling) must keep printing the same subcommand
+   * help as `<group> <sub> --help`.
+   */
+  test("(Story D) '<group> help <sub>' keeps printing the subcommand's own help", async () => {
+    const result = await runCli(["get", "help", "conflict"], noopDeps);
+    const output = result.stdout[0] ?? result.stderr[0] ?? "";
+    const firstLine = output.split("\n")[0] ?? "";
+    assert.ok(
+      firstLine.startsWith("Usage: kanthord get conflict"),
+      `'get help conflict' must print the conflict subcommand's own usage line; got: ${firstLine}`,
+    );
+  });
 });

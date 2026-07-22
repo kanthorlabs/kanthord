@@ -71,7 +71,11 @@ export async function runLogin(
       method,
       presenter,
     });
-    return { exitCode: 0, stdout: [credId], stderr: [] };
+    return {
+      exitCode: 0,
+      stdout: [credId],
+      stderr: [`credential created: ${credId}`],
+    };
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }

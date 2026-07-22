@@ -265,18 +265,23 @@ export function buildDeps(
     newId,
   });
   const listEvents = new ListEvents(events);
-  const getTask = new GetTask(taskRepository, taskRepository, taskRepository);
+  // Constructed here (above GetTask/RetryTask) so it can be passed as the 4th
+  // GetTask arg and the 6th ConflictCandidateStore argument — it is also
+  // referenced later for repoLanding, approveTask, and RunNextTask (all
+  // closures or sequential assignments that reference it after this point).
+  const landingRepository = new SqliteLandingRepository(db);
+  const getTask = new GetTask(
+    taskRepository,
+    taskRepository,
+    taskRepository,
+    landingRepository,
+  );
   const rejectTask = new RejectTask(
     taskRepository,
     jobQueue,
     events,
     unitOfWork,
   );
-  // Constructed here (above RetryTask) so it can be passed as the 6th
-  // ConflictCandidateStore argument — it is also referenced later for
-  // repoLanding, approveTask, and RunNextTask (all closures or sequential
-  // assignments that reference it after this point).
-  const landingRepository = new SqliteLandingRepository(db);
   const retryTask = new RetryTask(
     taskRepository,
     jobQueue,

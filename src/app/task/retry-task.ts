@@ -66,8 +66,12 @@ export class RetryTask {
     this.#candidateStore = candidateStore;
   }
 
-  async execute(input: { taskId: string; note?: string }): Promise<void> {
-    const { taskId, note } = input;
+  async execute(input: {
+    taskId: string;
+    note?: string;
+    rebuild?: boolean;
+  }): Promise<void> {
+    const { taskId, note, rebuild } = input;
 
     const kind = this.#resolver.resolveKind(taskId);
     if (kind === undefined) {
@@ -84,35 +88,36 @@ export class RetryTask {
 
     if (task.status === "awaiting_confirmation") {
       const candidate = this.#candidateStore?.getCandidateByTask(taskId);
-      if (candidate?.state !== "conflict") {
+      const isConflict = candidate?.state === "conflict";
+      const isRebuild = rebuild === true && candidate?.state === "pending";
+      if (!isConflict && !isRebuild) {
         throw new TaskNotRetryableError(taskId, task.status);
       }
-      const conflictCandidateId = candidate.id;
+      const candidateId = candidate!.id;
       this.#uow.transaction(() => {
-        this.#candidateStore!.updateCandidateState(
-          conflictCandidateId,
-          "pending",
-        );
+        this.#candidateStore!.updateCandidateState(candidateId, "pending");
         const updated = transitionTask(task, "pending");
         // Persist optional guidance note so it surfaces on get task --json
         // and is readable by the prompt hook (getPriorFeedback).
         const taskToSave = { ...updated, note: note ?? undefined };
         this.#store.save(taskToSave);
-        // Durably snapshot conflict context for deterministic rebuild prompt.
-        const candidateOID = candidate.candidateSHA;
-        const targetOID =
-          typeof candidate["targetOID"] === "string"
-            ? candidate["targetOID"]
-            : "";
-        const conflictContext =
-          typeof candidate["conflictContext"] === "string"
-            ? candidate["conflictContext"]
-            : "";
-        this.#candidateStore?.saveConflictSnapshot?.(taskId, {
-          candidateOID,
-          targetOID,
-          conflictContext,
-        });
+        if (isConflict) {
+          // Durably snapshot conflict context for deterministic rebuild prompt.
+          const candidateOID = candidate!.candidateSHA;
+          const targetOID =
+            typeof candidate!["targetOID"] === "string"
+              ? candidate!["targetOID"]
+              : "";
+          const conflictContext =
+            typeof candidate!["conflictContext"] === "string"
+              ? candidate!["conflictContext"]
+              : "";
+          this.#candidateStore?.saveConflictSnapshot?.(taskId, {
+            candidateOID,
+            targetOID,
+            conflictContext,
+          });
+        }
         const enqueued = this.#queue.enqueue(taskId);
         if (enqueued) {
           this.#feed.append(newEvent("task.ready", { taskId }));

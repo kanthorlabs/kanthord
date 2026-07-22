@@ -18,7 +18,7 @@ import type { CliIo } from "../action.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-type CapturedInput = { taskId: string; note?: string };
+type CapturedInput = { taskId: string; note?: string; rebuild?: boolean };
 
 function makeMockRetryTask() {
   let captured: CapturedInput | undefined;
@@ -56,9 +56,7 @@ function makeIo(): {
 }
 
 /** Parse args through buildRetryTaskCommand and return captured result. */
-async function parseRetryTask(
-  args: string[],
-): Promise<{
+async function parseRetryTask(args: string[]): Promise<{
   exitCode: number;
   stdout: string[];
   stderr: string[];
@@ -159,5 +157,26 @@ test("(S2-cli-retry-no-note) retry task --id t1 (no --note) passes note: undefin
     captured!.note,
     undefined,
     "note must be undefined when --note is not provided",
+  );
+});
+
+// Story B (007.10 F2) — --rebuild flag parses via buildRetryTaskCommand
+test("(StoryB-cli-command-rebuild) retry task --id t1 --rebuild parses via buildRetryTaskCommand and passes rebuild:true to RetryTask.execute", async () => {
+  const result = await parseRetryTask(["--id", "t1", "--rebuild"]);
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `retry task with --rebuild must exit 0; got ${result.exitCode}, stderr: ${result.stderr.join(", ")}`,
+  );
+  assert.ok(
+    result.captured !== undefined,
+    "RetryTask.execute must have been called",
+  );
+  assert.equal(result.captured!.taskId, "t1", "taskId must be forwarded");
+  assert.equal(
+    result.captured!.rebuild,
+    true,
+    "rebuild:true must be forwarded to RetryTask.execute from the --rebuild CLI flag",
   );
 });

@@ -359,7 +359,7 @@ describe("src/apps/cli/commands/login.ts", () => {
     });
     assert.equal(typeof presenter, "object");
     assert.deepEqual(cap.out, ["credential-1\n"]);
-    assert.deepEqual(cap.err, []);
+    assert.deepEqual(cap.err, ["credential created: credential-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
