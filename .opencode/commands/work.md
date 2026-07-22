@@ -1,6 +1,7 @@
 ---
 description: Drive a TDD implementation cycle for one EPIC — dispatching test-engineer / software-engineer in alternation until IMPLEMENTATION_READY_FOR_REVIEW, then a reviewer-engineer gate that auto-routes action:YES findings back through the loop once, then the human review. Escalates to the human when one Task fails its attempt limit. Lifecycle state lives in the discussion file; the orchestrator writes no frontmatter or status board.
 agent: build
+subtask: false
 ---
 
 # /work — orchestrate a TDD implementation cycle
@@ -22,6 +23,7 @@ You do **not** commit; the human reviews and commits. You do **not** write to th
 A "turn" is one logical handoff, not one keystroke. A subagent may make many tool calls inside a single Task invocation (read context, edit sources / test files, build, append) and produce one substantive entry in the discussion file. Granularity below that belongs in version-control commits, not in the discussion file.
 
 The canonical TDD cycle:
+
 - `test-engineer` opens with either a failing test (RED) for the next unimplemented Task, or a GREEN-ONLY pass-through for Tasks that have no `Action — RED:` block. Tasks are `### Task` headings in the Story files — there are no checkboxes; progress is tracked from the discussion file.
 - `software-engineer` makes that test green by editing production sources (RED flow), or implements the forwarded Task(s) directly from the Story spec (GREEN-ONLY flow).
 - `test-engineer` runs the test (GREEN), then either opens the next RED or — when every Task is green and the EPIC's Verification Gate runs clean — appends `IMPLEMENTATION_READY_FOR_REVIEW:`. For GREEN-ONLY Tasks, the TE runs a build-only check instead of a test.
@@ -33,6 +35,7 @@ Separately, while the TDD loop runs, the orchestrator counts `ATTEMPT-FAILED: <t
 ## Step 1 — Parse arguments
 
 From `$ARGUMENTS`:
+
 - **First positional** = EPIC file path (required). If missing or empty, print usage and stop.
 - **`--max-turns N`** = override turn cap. Default `128`. `0` means unlimited (use with care).
 
@@ -92,6 +95,7 @@ None needed. Tests and typecheck run in-process with no emulator, database, brow
 Initialize `turn_count = 0`. Sweep any stale draft temps left by an aborted prior run (the orchestrator owns these — see 5e/5g.1): `rm -f '<root>'/.agent/tdd/.*-response-*.md`. Then repeat:
 
 ### 5a. Stop on max-turns
+
 If `max_turns > 0` and `turn_count >= max_turns`: report `max-turns reached (<N>)` and jump to Step 8 (do **not** close the lifecycle — the work isn't done).
 
 ### 5b. Stop on IMPLEMENTATION_READY_FOR_REVIEW
@@ -124,6 +128,7 @@ Capture the result as `tail_actor` (may be empty if no marker exists yet).
 - Anything else → abort with `"unrecognized tail state: <tail_actor>"` for human review
 
 ### 5e. Mint the turn id, capture `tail_before` and a changed-file snapshot
+
 Save the raw tail line (or `<none>` if `tail_actor` was empty). Used after the Task call to verify the subagent actually wrote.
 
 Mint this turn's id and the draft-file path. The orchestrator computes them **once here** and reuses them for create (5f) and delete (5g.1), so the draft temp is always cleaned by its **exact** name regardless of what the agent does. **The timestamp is minted here, by `/work`, never inside the agent** — an agent that recomputed `date` across its separate Bash calls would produce a name `/work` could not later delete:
@@ -143,6 +148,7 @@ git -C '<root>' status --porcelain -uall | cut -c4- | sort > '/tmp/work-<epic-sl
 `-uall` is required so git lists each new file individually instead of collapsing it into a directory path; `sort` is required because Step 5g.1 feeds these snapshots to `comm`, which assumes sorted input.
 
 ### 5f. Dispatch the subagent
+
 Call the Task tool with `subagent_type` equal to `next` (`test-engineer` or `software-engineer`), a short description of the turn, and this prompt verbatim, substituting `<root>`, `<EPIC_FILE>` (= `<root>/<epic-relative-path>`), `<DISCUSSION_FILE>`, `<DRAFT_FILE>` (from 5e), and `<ENV>` (whatever Step 4 captured):
 
 ```
@@ -185,7 +191,9 @@ Return one short sentence summarizing what you wrote.
 ```
 
 ### 5g. Verify the subagent wrote
+
 Re-read the tail (same pipeline as 5c) and also check for any new `^IMPLEMENTATION_READY_FOR_REVIEW:` line. Compare with `tail_before`:
+
 - If the tail is unchanged AND no new `IMPLEMENTATION_READY_FOR_REVIEW:` line appeared → abort with `"subagent <next> returned but discussion file unchanged"`. Leave the file as-is for human review.
 
 ### 5g.1 Lane ownership check (git diff)
@@ -229,7 +237,7 @@ LAST_FAIL=$(grep '^ATTEMPT-FAILED:' '<discussion-file>' | tail -1)
 
 If `LAST_FAIL` is empty → no failed attempt this turn — skip to 5i.
 
-Otherwise extract its `<task-id>` (everything between `ATTEMPT-FAILED:` and the ` — ` em-dash delimiter) and count how many failed attempts that same Task has accumulated **in the current review cycle**. Splitting on the em-dash only — not on any hyphen — is load-bearing: task-ids contain hyphens, so a `[—-]` split would truncate them. Scoping the count to lines after the last review-fail boundary stops a Task that already went green in an earlier cycle from inheriting stale failures and false-escalating:
+Otherwise extract its `<task-id>` (everything between `ATTEMPT-FAILED:` and the `—` em-dash delimiter) and count how many failed attempts that same Task has accumulated **in the current review cycle**. Splitting on the em-dash only — not on any hyphen — is load-bearing: task-ids contain hyphens, so a `[—-]` split would truncate them. Scoping the count to lines after the last review-fail boundary stops a Task that already went green in an earlier cycle from inheriting stale failures and false-escalating:
 
 ```bash
 TASK_ID=$(printf '%s\n' "$LAST_FAIL" | sed -E 's/^ATTEMPT-FAILED:[[:space:]]*//; s/[[:space:]]*—.*$//')
@@ -243,6 +251,7 @@ FAIL_COUNT=$(awk -v s="${FAIL_LINE:-0}" 'NR>s' '<discussion-file>' | grep -F "AT
 (A Task that flips to GREEN simply stops emitting `ATTEMPT-FAILED:` lines, so only a Task that never goes green reaches the limit.)
 
 ### 5i. Increment and continue
+
 `turn_count += 1`. Loop back to 5a.
 
 ## Step 6 — Human review handoff
@@ -347,6 +356,7 @@ Reached when Step 6a confirms `HUMAN_REVIEW: PASS`. That line **is** the closing
 ## Step 8 — Exit
 
 When the run ends, print a one-line summary:
+
 - `done · turns=<N> · reason=<...> · human_review=<PASS|FAIL|pending> · lifecycle=<opened|closed>`
 
 `lifecycle=opened` means the discussion file was seeded this run; `closed` means a `HUMAN_REVIEW: PASS` was confirmed. Then print a short bullet list of what happened this run.
