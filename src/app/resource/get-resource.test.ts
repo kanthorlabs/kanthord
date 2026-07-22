@@ -1,7 +1,8 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { GetResource, toResourceView } from "./get-resource.ts";
-import type { ResourceView } from "./get-resource.ts";
+import { GetResource } from "./get-resource.ts";
+import { toResourceView } from "./resource-view.ts";
+import type { ResourceView } from "./resource-view.ts";
 import type { ProjectRepository } from "../../storage/port.ts";
 import type {
   Resource,

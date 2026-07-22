@@ -20,6 +20,7 @@ import type { AddResource } from "../../app/resource/add-resource.ts";
 import type { FindResource } from "../../app/resource/find-resource.ts";
 import type { GetResource } from "../../app/resource/get-resource.ts";
 import type { ImportResources } from "../../app/resource/import-resources.ts";
+import type { ListResources } from "../../app/resource/list-resources.ts";
 import type { UpdateAiProvider } from "../../app/resource/update-ai-provider.ts";
 import type { UpdateCredential } from "../../app/resource/update-credential.ts";
 import type { UpdateFilesystem } from "../../app/resource/update-filesystem.ts";
@@ -109,6 +110,7 @@ export interface CliDeps {
   addResource: AddResource;
   findResource: FindResource;
   getResource: GetResource;
+  listResources: ListResources;
   updateAiProvider: UpdateAiProvider;
   updateCredential: UpdateCredential;
   updateRepository: UpdateRepository;
@@ -123,7 +125,11 @@ export interface CliDeps {
   getConflict: GetConflict;
   approveTask: ApproveTask;
   rejectTask: RejectTask;
-  buildDaemon: (failTaskIds: string[], logger?: Logger) => RunDaemon;
+  buildDaemon: (
+    failTaskIds: string[],
+    failTransient?: Record<string, number>,
+    logger?: Logger,
+  ) => RunDaemon;
   logger: Logger;
   listEvents: ListEvents;
   importResources: ImportResources;

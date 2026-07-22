@@ -21,7 +21,7 @@ import type { Project } from "../../domain/project.ts";
 import { AddResource } from "../../app/resource/add-resource.ts";
 import { FakeModelCatalog } from "../../model-catalog/fake.ts";
 import { GetResource } from "../../app/resource/get-resource.ts";
-import type { ResourceView } from "../../app/resource/get-resource.ts";
+import type { ResourceView } from "../../app/resource/resource-view.ts";
 import { UnknownReferenceError } from "../../app/errors.ts";
 
 // --- Fake ProjectRepository ---
@@ -149,6 +149,25 @@ describe("runCreateRepository", () => {
     );
     assert.equal(result.exitCode, 1);
   });
+
+  // 007.9 Story 03 item B: consistent `<kind> created: <id>` stderr line.
+  test("runCreateRepository stderr is the consistent 'repository created: <id>' line", async () => {
+    const result = await runCreateRepository(
+      {
+        project: PROJECT_ID,
+        name: "backend",
+        "remote-url": "https://github.com/o/r.git",
+        branch: "main",
+        auth: "ambient",
+      },
+      makeAddResource(),
+    );
+    assert.equal(
+      result.stderr[0],
+      `repository created: ${result.stdout[0]}`,
+      `expected consistent created-line, got: ${result.stderr[0]}`,
+    );
+  });
 });
 
 describe("runCreateCredential", () => {
@@ -250,6 +269,31 @@ describe("runCreateCredential", () => {
       `expected "timeout" in stderr, got: ${result.stderr.join("")}`,
     );
   });
+
+  // 007.9 Story 03 item B: consistent `<kind> created: <id>` stderr line.
+  test("runCreateCredential stderr is the consistent 'credential created: <id>' line", async () => {
+    const tmpFile = join(tmpdir(), `cred-test-consistency-${Date.now()}.txt`);
+    await writeFile(tmpFile, "sk-ok\n");
+    try {
+      const result = await runCreateCredential(
+        {
+          project: PROJECT_ID,
+          name: "my-token",
+          provider: "github",
+          "value-file": tmpFile,
+        },
+        makeAddResource(),
+        { timeoutMs: 5000 },
+      );
+      assert.equal(
+        result.stderr[0],
+        `credential created: ${result.stdout[0]}`,
+        `expected consistent created-line, got: ${result.stderr[0]}`,
+      );
+    } finally {
+      await unlink(tmpFile);
+    }
+  });
 });
 
 describe("runCreateNotification", () => {
@@ -303,6 +347,24 @@ describe("runCreateNotification", () => {
       `expected 'error:' prefix, got: ${result.stderr[0]}`,
     );
   });
+
+  // 007.9 Story 03 item B: consistent `<kind> created: <id>` stderr line.
+  test("runCreateNotification stderr is the consistent 'notification created: <id>' line", async () => {
+    const result = await runCreateNotification(
+      {
+        project: PROJECT_ID,
+        name: "alerts",
+        provider: "slack",
+        destination: "#eng",
+      },
+      makeAddResource(),
+    );
+    assert.equal(
+      result.stderr[0],
+      `notification created: ${result.stdout[0]}`,
+      `expected consistent created-line, got: ${result.stderr[0]}`,
+    );
+  });
 });
 
 describe("runCreateAiProvider", () => {
@@ -338,6 +400,24 @@ describe("runCreateAiProvider", () => {
       `expected --model in error, got: ${result.stderr[0]}`,
     );
   });
+
+  // 007.9 Story 03 item B: consistent `<kind> created: <id>` stderr line.
+  test("runCreateAiProvider stderr is the consistent 'ai_provider created: <id>' line", async () => {
+    const result = await runCreateAiProvider(
+      {
+        project: PROJECT_ID,
+        name: "claude",
+        provider: "anthropic",
+        model: "claude-3",
+      },
+      makeAddResource(),
+    );
+    assert.equal(
+      result.stderr[0],
+      `ai_provider created: ${result.stdout[0]}`,
+      `expected consistent created-line, got: ${result.stderr[0]}`,
+    );
+  });
 });
 
 describe("runCreateFilesystem", () => {
@@ -366,6 +446,19 @@ describe("runCreateFilesystem", () => {
     assert.ok(
       result.stderr[0]!.includes("--path"),
       `expected --path in error, got: ${result.stderr[0]}`,
+    );
+  });
+
+  // 007.9 Story 03 item B: consistent `<kind> created: <id>` stderr line.
+  test("runCreateFilesystem stderr is the consistent 'filesystem created: <id>' line", async () => {
+    const result = await runCreateFilesystem(
+      { project: PROJECT_ID, name: "workspace", path: "/work" },
+      makeAddResource(),
+    );
+    assert.equal(
+      result.stderr[0],
+      `filesystem created: ${result.stdout[0]}`,
+      `expected consistent created-line, got: ${result.stderr[0]}`,
     );
   });
 });

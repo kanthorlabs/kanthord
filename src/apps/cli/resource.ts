@@ -1,5 +1,6 @@
 import type { AddResource } from "../../app/resource/add-resource.ts";
 import type { GetResource } from "../../app/resource/get-resource.ts";
+import type { ListResources } from "../../app/resource/list-resources.ts";
 import type { UpdateAiProvider } from "../../app/resource/update-ai-provider.ts";
 import type { UpdateCredential } from "../../app/resource/update-credential.ts";
 import type { UpdateRepository } from "../../app/resource/update-repository.ts";
@@ -21,6 +22,11 @@ const REASONING_EFFORTS = [
   "xhigh",
 ] as const;
 type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+// Mirrors the domain ResourceType union (apps must not import domain
+// directly — the domain re-validates on its side).
+export type ResourceType =
+  "repository" | "credential" | "notification" | "ai_provider" | "filesystem";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
@@ -81,7 +87,7 @@ export async function runCreateRepository(
     return {
       exitCode: 0,
       stdout: [id],
-      stderr: [`repository resource added: ${name}`],
+      stderr: [`repository created: ${id}`],
     };
   } catch (err) {
     const mapped = toResult(err);
@@ -155,7 +161,7 @@ export async function runCreateCredential(
     return {
       exitCode: 0,
       stdout: [id],
-      stderr: [`credential resource added: ${name}`],
+      stderr: [`credential created: ${id}`],
     };
   } catch (err) {
     const mapped = toResult(err);
@@ -191,7 +197,7 @@ export async function runCreateNotification(
     return {
       exitCode: 0,
       stdout: [id],
-      stderr: [`notification resource added: ${name}`],
+      stderr: [`notification created: ${id}`],
     };
   } catch (err) {
     const mapped = toResult(err);
@@ -232,7 +238,7 @@ export async function runCreateAiProvider(
     return {
       exitCode: 0,
       stdout: [id],
-      stderr: [`ai_provider resource added: ${name}`],
+      stderr: [`ai_provider created: ${id}`],
     };
   } catch (err) {
     const mapped = toResult(err);
@@ -257,7 +263,7 @@ export async function runCreateFilesystem(
     return {
       exitCode: 0,
       stdout: [id],
-      stderr: [`filesystem resource added: ${name}`],
+      stderr: [`filesystem created: ${id}`],
     };
   } catch (err) {
     const mapped = toResult(err);
@@ -297,6 +303,23 @@ export async function runGetResource(
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };
   }
+}
+
+export function runListResources(
+  args: Record<string, unknown>,
+  type: ResourceType,
+  listResources: ListResources,
+): HandlerResult {
+  const projectId = args["project"] as string;
+  const rows = listResources.execute({ projectId, type });
+  if (args["json"]) {
+    return { exitCode: 0, stdout: [JSON.stringify(rows)], stderr: [] };
+  }
+  return {
+    exitCode: 0,
+    stdout: rows.map((r) => `${r.id}  ${r.name}`),
+    stderr: [],
+  };
 }
 
 export async function runUpdateAiProvider(

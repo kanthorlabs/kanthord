@@ -17,6 +17,7 @@ export const EVENT_TYPES = [
   "agent.progress",
   "agent.finished",
   "task.verification",
+  "provider.retry",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

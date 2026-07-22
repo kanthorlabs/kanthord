@@ -7,6 +7,11 @@ import { buildListEventCommand } from "./list/event.ts";
 import { buildListModelCommand } from "./list/model.ts";
 import { buildListObjectiveCommand } from "./list/objective.ts";
 import { buildListTaskCommand } from "./list/task.ts";
+import {
+  buildListCredentialCommand,
+  buildListAiProviderCommand,
+  buildListRepositoryCommand,
+} from "./list/resource.ts";
 
 export function buildListCommand(deps: CliDeps, io: CliIo): Command {
   const command = new Command("list")
@@ -22,6 +27,9 @@ export function buildListCommand(deps: CliDeps, io: CliIo): Command {
   command.addCommand(buildListObjectiveCommand(deps, io));
   command.addCommand(buildListEventCommand(deps, io));
   command.addCommand(buildListModelCommand(deps, io));
+  command.addCommand(buildListCredentialCommand(deps, io));
+  command.addCommand(buildListAiProviderCommand(deps, io));
+  command.addCommand(buildListRepositoryCommand(deps, io));
 
   return command;
 }

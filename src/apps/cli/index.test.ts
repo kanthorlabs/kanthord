@@ -98,7 +98,7 @@ describe("src/apps/cli/index.ts", () => {
 
     assert.deepEqual(received, { name: "x" });
     assert.deepEqual(cap.out, ["project-1\n"]);
-    assert.deepEqual(cap.err, ["project created: x\n"]);
+    assert.deepEqual(cap.err, ["project created: project-1\n"]);
     assert.equal(cap.code(), 0);
   });
 

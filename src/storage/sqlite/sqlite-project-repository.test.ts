@@ -212,6 +212,64 @@ test("SqliteProjectRepository addResource with unknown projectId throws", () => 
   assert.throws(() => repo.addResource("nonexistent-project-id", resource));
 });
 
+test("SqliteProjectRepository listResourcesByProject(projectId, type) filters resources by type (007.9 Story 03 item A)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteProjectRepository(db);
+  const project: Project = { id: newId(), name: "P6" };
+  repo.save(project);
+
+  const credA: Credential = {
+    id: newId(),
+    type: "credential",
+    name: "cred-a",
+    provider: "github",
+    value: "secret-a",
+  };
+  const credB: Credential = {
+    id: newId(),
+    type: "credential",
+    name: "cred-b",
+    provider: "openai",
+    value: "secret-b",
+  };
+  const repoResource: Repository = {
+    id: newId(),
+    type: "repository",
+    name: "my-repo",
+    remoteUrl: "https://github.com/acme/my-repo.git",
+    branch: "main",
+    path: "/workspace/my-repo",
+    auth: { kind: "ambient" },
+  };
+  repo.addResource(project.id, credA);
+  repo.addResource(project.id, credB);
+  repo.addResource(project.id, repoResource);
+
+  const credentials = repo.listResourcesByProject(project.id, "credential");
+  assert.equal(
+    credentials.length,
+    2,
+    `expected 2 credentials, got ${credentials.length}`,
+  );
+  assert.deepEqual(
+    new Set(credentials.map((r) => r.id)),
+    new Set([credA.id, credB.id]),
+  );
+
+  const repositories = repo.listResourcesByProject(project.id, "repository");
+  assert.equal(
+    repositories.length,
+    1,
+    `expected 1 repository, got ${repositories.length}`,
+  );
+  assert.deepEqual(repositories[0], repoResource);
+});
+
 test("SqliteProjectRepository resolveProjectByName returns [id] for a unique name", () => {
   const { db, dir } = makeTempDb();
   after(() => {

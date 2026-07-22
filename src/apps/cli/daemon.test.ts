@@ -257,10 +257,11 @@ function makeFakeDaemon(): RunDaemon {
   } as unknown as RunDaemon;
 }
 
-test("T3a: runDaemon passes logger to buildDaemon as second argument", async () => {
+test("T3a: runDaemon passes logger to buildDaemon as third argument", async () => {
   let receivedLogger: Logger | undefined;
   const capturingBuildDaemon = (
     _failTaskIds: string[],
+    _failTransient?: Record<string, number>,
     logger?: Logger,
   ): RunDaemon => {
     receivedLogger = logger;
@@ -289,8 +290,11 @@ test("T3a: runDaemon passes logger to buildDaemon as second argument", async () 
 });
 
 test("T3b: runDaemon without logger parameter still works (NullLogger default)", async () => {
-  const simpleFakeBuildDaemon = (_failTaskIds: string[]): RunDaemon =>
-    makeFakeDaemon();
+  const simpleFakeBuildDaemon = (
+    _failTaskIds: string[],
+    _failTransient?: Record<string, number>,
+    _logger?: Logger,
+  ): RunDaemon => makeFakeDaemon();
 
   const result = await runDaemon({ "until-idle": true }, simpleFakeBuildDaemon);
   assert.equal(
@@ -298,4 +302,61 @@ test("T3b: runDaemon without logger parameter still works (NullLogger default)",
     0,
     "two-arg form still exits 0 (NullLogger default)",
   );
+});
+
+// --- 007.9 Story 02 — Contract item 5: --fail-transient daemon wiring ---
+
+test("daemon run --fail-transient <id>:<count> parses to a { [taskId]: count } map and reaches buildDaemon (007.9 S2)", async () => {
+  let receivedFailTransient: Record<string, number> | undefined;
+  const capturingBuildDaemon = (
+    _failTaskIds: string[],
+    failTransient?: Record<string, number>,
+    _logger?: Logger,
+  ): RunDaemon => {
+    receivedFailTransient = failTransient;
+    return makeFakeDaemon();
+  };
+
+  const result = await runDaemon(
+    { "until-idle": true, "fail-transient": ["TASK123:2"] },
+    capturingBuildDaemon,
+  );
+
+  assert.equal(result.exitCode, 0, "daemon exits 0 on idle");
+  assert.deepEqual(
+    receivedFailTransient,
+    { TASK123: 2 },
+    "runDaemon must parse '<id>:<count>' and forward a { [taskId]: count } map to buildDaemon",
+  );
+});
+
+test("daemon run --fail-transient <id>:<count>: task retries through transient failures then completes, exits 0 (007.9 S2 end-to-end)", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-daemon-ft-"));
+  try {
+    const { deps, INITIATIVE, TASK_ID } = await setupReadyTask(
+      join(dir, "kanthord.db"),
+    );
+
+    const result = await dispatch(
+      ["run", "daemon", "--fail-transient", `${TASK_ID}:2`, "--until-idle"],
+      deps,
+    );
+    assert.equal(
+      result.exitCode,
+      0,
+      "daemon exits 0: transient failures must be retried, not fatal",
+    );
+
+    const list = await dispatch(
+      ["list", "task", "--initiative", INITIATIVE],
+      deps,
+    );
+    assert.equal(list.exitCode, 0, "list task exits 0");
+    assert.ok(
+      list.stdout.join("\n").includes("completed"),
+      "task should reach completed once the transient failures are retried through",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

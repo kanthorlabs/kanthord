@@ -14,6 +14,9 @@ set -euo pipefail
 MJS="${1:?usage: e2e-smoke-todo.sh <path-to-todo.mjs> [port]}"
 PORT="${2:-3999}"
 test -f "$MJS" || { echo "no such file: $MJS"; exit 1; }
+# Resolve symlinks (e.g. macOS /tmp -> /private/tmp) so a documented
+# /tmp/todo.mjs invocation matches the real path any run-guard compares against.
+MJS="$(realpath "$MJS")"
 
 node --check "$MJS" || { echo "FAIL: $MJS is not valid JS"; exit 1; }
 

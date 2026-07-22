@@ -62,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 9 and creates exactly sixteen core tables", () => {
+test("migrates to version 10 and creates exactly sixteen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 9);
+    assert.equal(userVersion(db), 10);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -318,7 +318,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 9);
+    assert.equal(second.version, 10);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -726,13 +726,13 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
       "task.verification",
       "task-s2",
     );
-    // Apply all migrations including the new migration 8 (and 9).
+    // Apply all migrations including the new migration 8 (and 9, 10).
     migrate(db, MIGRATIONS);
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      9,
-      "schema version must be 9 after all migrations",
+      10,
+      "schema version must be 10 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db

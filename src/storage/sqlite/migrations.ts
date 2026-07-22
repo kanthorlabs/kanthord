@@ -259,4 +259,26 @@ ALTER TABLE events_new3 RENAME TO events;
 ALTER TABLE tasks ADD COLUMN note TEXT;
 `),
   },
+  {
+    version: 10,
+    name: "007.9-s2-provider-retry-event",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new4 (
+  id      TEXT PRIMARY KEY,
+  type    TEXT NOT NULL CHECK (type IN (
+            'task.created','task.ready','task.started','task.completed',
+            'task.failed','task.dependencies_changed',
+            'task.escalated','task.approved','task.rejected','task.discarded',
+            'task.blocked','task.conflict','agent.started','agent.progress',
+            'agent.finished','task.verification','provider.retry'
+          )),
+  taskId  TEXT NOT NULL REFERENCES tasks(id),
+  payload TEXT
+);
+INSERT INTO events_new4 (id, type, taskId, payload) SELECT id, type, taskId, payload FROM events;
+DROP TABLE events;
+ALTER TABLE events_new4 RENAME TO events;
+`),
+  },
 ];

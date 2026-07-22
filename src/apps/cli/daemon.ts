@@ -8,7 +8,11 @@ interface Logger {
   error(message: string): void;
 }
 
-type DaemonFactory = (failTaskIds: string[], logger?: Logger) => RunDaemon;
+type DaemonFactory = (
+  failTaskIds: string[],
+  failTransient?: Record<string, number>,
+  logger?: Logger,
+) => RunDaemon;
 
 export async function runDaemon(
   args: Record<string, unknown>,
@@ -43,7 +47,24 @@ export async function runDaemon(
         ? (rawFail as string[])
         : [rawFail as string];
 
-  const daemon = buildDaemon(failTaskIds, logger);
+  // Normalise --fail-transient: repeatable "<id>:<count>" → { [id]: count }.
+  const rawFailTransient = args["fail-transient"];
+  const failTransientEntries: string[] =
+    rawFailTransient === undefined
+      ? []
+      : Array.isArray(rawFailTransient)
+        ? (rawFailTransient as string[])
+        : [rawFailTransient as string];
+  const failTransient: Record<string, number> = {};
+  for (const entry of failTransientEntries) {
+    const sep = entry.lastIndexOf(":");
+    if (sep === -1) continue;
+    const count = parseInt(entry.slice(sep + 1), 10);
+    if (isNaN(count)) continue;
+    failTransient[entry.slice(0, sep)] = count;
+  }
+
+  const daemon: RunDaemon = buildDaemon(failTaskIds, failTransient, logger);
 
   // Wire SIGINT → daemon.stop() so an in-flight task finishes cleanly.
   const sigintHandler = () => daemon.stop();

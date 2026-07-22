@@ -462,4 +462,128 @@ describe("src/apps/cli/commands/read.ts", () => {
     assert.deepEqual(filtered.err, []);
     assert.equal(filtered.code(), 0);
   });
+
+  // -------------------------------------------------------------------------
+  // 007.9 Story 03 item A — list credential | ai-provider | repository
+  // -------------------------------------------------------------------------
+
+  test("(007.9 S3-A) list credential --project <id> --json: forwards {projectId, type: 'credential'}; secret absent from output", async () => {
+    let received: unknown;
+    const cap = capture();
+    const CANARY = "CANARY_SECRET_VALUE";
+    const deps = {
+      listResources: {
+        execute: (input: unknown) => {
+          received = input;
+          return [
+            {
+              type: "credential",
+              id: "cred-1",
+              name: "k1",
+              provider: "openai",
+            },
+          ];
+        },
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      ["credential", "--project", "project-1", "--json"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, { projectId: "project-1", type: "credential" });
+    const out = cap.out.join("");
+    assert.ok(
+      out.includes("cred-1") && out.includes("k1"),
+      `expected id + name in output, got: ${out}`,
+    );
+    assert.equal(
+      out.includes(CANARY),
+      false,
+      "credential secret value must never appear in list output (even --json)",
+    );
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(007.9 S3-A) list ai-provider --project <id>: forwards {projectId, type: 'ai_provider'}", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      listResources: {
+        execute: (input: unknown) => {
+          received = input;
+          return [
+            {
+              type: "ai_provider",
+              id: "aip-1",
+              name: "claude",
+              provider: "anthropic",
+              model: "claude-3-5-sonnet",
+            },
+          ];
+        },
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(["ai-provider", "--project", "project-1"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { projectId: "project-1", type: "ai_provider" });
+    assert.ok(
+      cap.out.join("").includes("aip-1"),
+      `expected id in output, got: ${cap.out.join("")}`,
+    );
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(007.9 S3-A) list repository --project <id> --json: forwards {projectId, type: 'repository'}", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      listResources: {
+        execute: (input: unknown) => {
+          received = input;
+          return [
+            {
+              type: "repository",
+              id: "repo-1",
+              name: "home",
+              remoteUrl: "https://github.com/acme/api.git",
+            },
+          ];
+        },
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      ["repository", "--project", "project-1", "--json"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, { projectId: "project-1", type: "repository" });
+    assert.deepEqual(cap.out, [
+      '[{"type":"repository","id":"repo-1","name":"home","remoteUrl":"https://github.com/acme/api.git"}]\n',
+    ]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
 });

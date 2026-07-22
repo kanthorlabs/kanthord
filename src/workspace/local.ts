@@ -4,9 +4,13 @@ import {
   access,
   chmod,
   cp,
+  lstat,
   open,
+  readdir,
+  realpath,
   rename,
   rm,
+  stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -124,15 +128,120 @@ async function buildGitEnv(
   return { env, cleanup: () => {} };
 }
 
-async function isGitRepo(
+/**
+ * Classifies `p` via `lstat` (never `access`, which follows symlinks and
+ * would misread a broken symlink as absent): `absent` (ENOENT),
+ * `broken-symlink` (a symlink whose target does not resolve), `directory` (a
+ * real directory, or a symlink that resolves to one), `file` (anything else).
+ */
+async function inspectPath(
+  p: string,
+): Promise<"absent" | "directory" | "file" | "broken-symlink"> {
+  let entry;
+  try {
+    entry = await lstat(p);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return "absent";
+    throw err;
+  }
+  if (entry.isSymbolicLink()) {
+    try {
+      const target = await stat(p);
+      return target.isDirectory() ? "directory" : "file";
+    } catch {
+      return "broken-symlink";
+    }
+  }
+  return entry.isDirectory() ? "directory" : "file";
+}
+
+type CheckoutInspection =
+  | { kind: "root-checkout" }
+  | { kind: "enclosing-checkout"; toplevel: string }
+  | { kind: "bare" }
+  | { kind: "not-a-repo" }
+  | { kind: "git-error"; cause: unknown };
+
+/**
+ * Inspects `dir` (already confirmed to be a directory) against git's own view
+ * — this replaces the old boolean `isGitRepo()` (`git rev-parse --git-dir`),
+ * which succeeds from ANY dir nested inside a worktree and so misreads the
+ * ENCLOSING repo as "home exists". Discriminates a genuine root checkout from
+ * that enclosing-checkout bug case, a bare repo, no repo at all, or an
+ * indeterminate git/spawn failure — never masked as one of the others.
+ * Symlink-acceptance policy: `dir` itself may be a symlink to the checkout
+ * root and still classify as `root-checkout`, because both sides of the
+ * comparison are passed through `realpath`.
+ */
+async function inspectCheckout(
   dir: string,
   env?: Record<string, string>,
-): Promise<boolean> {
+): Promise<CheckoutInspection> {
+  let bareOut: string;
   try {
-    await execFile("git", ["rev-parse", "--git-dir"], { cwd: dir, env });
-    return true;
-  } catch {
-    return false;
+    const { stdout } = await execFile(
+      "git",
+      ["rev-parse", "--is-bare-repository"],
+      { cwd: dir, env },
+    );
+    bareOut = stdout.trim();
+  } catch (err) {
+    const stderr = String((err as { stderr?: string }).stderr ?? err);
+    if (/not a git repository/i.test(stderr)) {
+      return { kind: "not-a-repo" };
+    }
+    return { kind: "git-error", cause: err };
+  }
+
+  if (bareOut === "true") {
+    return { kind: "bare" };
+  }
+
+  let toplevelOut: string;
+  try {
+    const { stdout } = await execFile("git", ["rev-parse", "--show-toplevel"], {
+      cwd: dir,
+      env,
+    });
+    toplevelOut = stdout.trim();
+  } catch (err) {
+    return { kind: "git-error", cause: err };
+  }
+
+  const [resolvedToplevel, resolvedDir] = await Promise.all([
+    realpath(toplevelOut),
+    realpath(dir),
+  ]);
+
+  return resolvedToplevel === resolvedDir
+    ? { kind: "root-checkout" }
+    : { kind: "enclosing-checkout", toplevel: resolvedToplevel };
+}
+
+/** Clone `remoteUrl` into a temp dir beside `homePath`, then rename atomically
+ * onto `homePath` — works whether `homePath` is absent or an already-existing
+ * empty directory (POSIX `rename` onto an empty dir target replaces it). */
+async function cloneIntoHome(
+  remoteUrl: string,
+  homePath: string,
+  env: Record<string, string> | undefined,
+): Promise<void> {
+  const tmpSuffix = randomBytes(4).toString("hex");
+  const tmpPath = `${homePath}.tmp-${tmpSuffix}`;
+  try {
+    await execFile("git", [...GIT_CONFIG, "clone", remoteUrl, tmpPath], {
+      env,
+    });
+    await rename(tmpPath, homePath);
+  } catch (err) {
+    try {
+      await execFile("rm", ["-rf", tmpPath]);
+    } catch {
+      // ignore cleanup errors
+    }
+    throw new WorkspacePreparationError(
+      `Failed to clone ${remoteUrl} to ${homePath}: ${String(err)}`,
+    );
   }
 }
 
@@ -330,30 +439,80 @@ export class LocalWorkspaceManager implements WorkspaceManager {
         // Only set when lockDir is active (fetch+CAS logic runs).
         let canonicalSHA: string | undefined;
 
-        if (!(await pathExists(homePath))) {
-          // Clone into a temp dir then rename atomically
-          const tmpSuffix = randomBytes(4).toString("hex");
-          const tmpPath = `${homePath}.tmp-${tmpSuffix}`;
-          try {
-            await execFile(
-              "git",
-              [...GIT_CONFIG, "clone", remoteUrl, tmpPath],
-              {
-                env,
-              },
-            );
-            await rename(tmpPath, homePath);
-          } catch (err) {
-            // Clean up temp dir if it exists
-            try {
-              await execFile("rm", ["-rf", tmpPath]);
-            } catch {
-              // ignore cleanup errors
-            }
+        // Classify homePath before any clone action (lstat, never access, so
+        // a broken symlink is never misread as absent).
+        const pathState = await inspectPath(homePath);
+
+        if (pathState === "broken-symlink") {
+          throw new WorkspacePreparationError(
+            `Home path ${homePath} is a broken symlink (its target does not exist)`,
+          );
+        }
+        if (pathState === "file") {
+          throw new WorkspacePreparationError(
+            `Home path ${homePath} exists and is not a directory`,
+          );
+        }
+
+        let clonedFresh = false;
+
+        if (pathState === "absent") {
+          await cloneIntoHome(remoteUrl, homePath, env);
+          clonedFresh = true;
+        } else {
+          // Inspect the checkout ROOT, not just "is it inside a repo" —
+          // `git rev-parse --git-dir` succeeds from any dir nested inside a
+          // worktree and would misread the ENCLOSING repo as "home exists".
+          const inspection = await inspectCheckout(homePath, env);
+
+          if (inspection.kind === "git-error") {
             throw new WorkspacePreparationError(
-              `Failed to clone ${remoteUrl} to ${homePath}: ${String(err)}`,
+              `Home path ${homePath}: git inspection failed: ${String(inspection.cause)}`,
             );
           }
+          if (inspection.kind === "bare") {
+            throw new WorkspacePreparationError(
+              `Home path ${homePath} exists and is a bare git repository`,
+            );
+          }
+
+          if (inspection.kind !== "root-checkout") {
+            // not-a-repo or enclosing-checkout: only safe to clone fresh when
+            // the dir is confirmed empty (zero entries, hidden files count) —
+            // otherwise report the real problem instead of masking it as a
+            // wrong-origin mismatch.
+            const entries = await readdir(homePath);
+            if (entries.length === 0) {
+              await cloneIntoHome(remoteUrl, homePath, env);
+              clonedFresh = true;
+            } else if (inspection.kind === "enclosing-checkout") {
+              throw new WorkspacePreparationError(
+                `Home path ${homePath} is not a git checkout of ${remoteUrl}; it is nested inside ${inspection.toplevel}`,
+              );
+            } else {
+              throw new WorkspacePreparationError(
+                `Home path ${homePath} exists and is not empty`,
+              );
+            }
+          } else {
+            // root-checkout — validate origin matches expected URL
+            let actualUrl: string;
+            try {
+              actualUrl = await getRemoteUrl(homePath, env);
+            } catch {
+              throw new WorkspacePreparationError(
+                `Home path ${homePath} has no remote named origin`,
+              );
+            }
+            if (actualUrl !== remoteUrl) {
+              throw new WorkspacePreparationError(
+                `Home path ${homePath} has origin ${actualUrl} but expected ${remoteUrl}`,
+              );
+            }
+          }
+        }
+
+        if (clonedFresh) {
           // After a fresh clone, canonical SHA is the local branch HEAD
           if (this.lockDir) {
             const { stdout } = await execFile(
@@ -364,28 +523,7 @@ export class LocalWorkspaceManager implements WorkspaceManager {
             canonicalSHA = stdout.trim();
           }
         } else {
-          // home exists — validate it is a git repo
-          if (!(await isGitRepo(homePath, env))) {
-            throw new WorkspacePreparationError(
-              `Home path ${homePath} exists but is not a git repository`,
-            );
-          }
-          // Validate origin matches expected URL
-          let actualUrl: string;
-          try {
-            actualUrl = await getRemoteUrl(homePath, env);
-          } catch {
-            throw new WorkspacePreparationError(
-              `Home path ${homePath} has no remote named origin`,
-            );
-          }
-          if (actualUrl !== remoteUrl) {
-            throw new WorkspacePreparationError(
-              `Home path ${homePath} has origin ${actualUrl} but expected ${remoteUrl}`,
-            );
-          }
-
-          // Fetch + CAS when lockDir is configured
+          // Fetch + CAS when lockDir is configured (root-checkout path only)
           if (this.lockDir) {
             let fetchSucceeded = true;
             let fetchErr: unknown;

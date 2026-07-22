@@ -2,7 +2,11 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { ProjectRepository } from "../port.ts";
 import type { Project } from "../../domain/project.ts";
-import { isRepository, type Resource } from "../../domain/resource.ts";
+import {
+  isRepository,
+  type Resource,
+  type ResourceType,
+} from "../../domain/resource.ts";
 
 /** `node:sqlite` adapter for the `ProjectRepository` port. */
 export class SqliteProjectRepository implements ProjectRepository {
@@ -76,6 +80,23 @@ export class SqliteProjectRepository implements ProjectRepository {
         "SELECT id, type, name, attributes FROM resources WHERE projectId = ?",
       )
       .all(projectId) as Array<{
+      id: string;
+      type: string;
+      name: string;
+      attributes: string;
+    }>;
+    return rows.map((r) => {
+      const extra = JSON.parse(r.attributes) as Record<string, unknown>;
+      return { id: r.id, type: r.type, name: r.name, ...extra } as Resource;
+    });
+  }
+
+  listResourcesByProject(projectId: string, type: ResourceType): Resource[] {
+    const rows = this.#db
+      .prepare(
+        "SELECT id, type, name, attributes FROM resources WHERE projectId = ? AND type = ?",
+      )
+      .all(projectId, type) as Array<{
       id: string;
       type: string;
       name: string;

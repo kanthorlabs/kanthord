@@ -734,3 +734,182 @@ test("RunNextTask filesystem-bound changed task emits a task.completed event (B1
     "the task.completed event must reference this task",
   );
 });
+
+// ---------------------------------------------------------------------------
+// 007.9 Story 02 — provider transient-retry at the execution loop
+// ---------------------------------------------------------------------------
+
+/** Records every ms it is asked to wait; resolves immediately (no real delay). */
+function makeSleepRT(log: number[]): (ms: number) => Promise<void> {
+  return async (ms: number) => {
+    log.push(ms);
+  };
+}
+
+test("RunNextTask retries a transient failure with bounded attempts: 2 transient failures then completed → completed, exactly 2 provider.retry events, runner.run called 3x (007.9 S2 a)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({ failTransient: { [TASK_SIMPLE.id]: 2 } });
+  const resolver: AgentRunnerResolver = { for: () => runner };
+  const sleepLog: number[] = [];
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    maxAttempts: 3,
+    sleep: makeSleepRT(sleepLog),
+  });
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.equal(
+    runner.calls.length,
+    3,
+    "runner.run must be called exactly 3 times (2 failed attempts + 1 success)",
+  );
+  const retryEvents = feed.events.filter((e) => e.type === "provider.retry");
+  assert.equal(
+    retryEvents.length,
+    2,
+    "exactly 2 provider.retry events for the 2 transient failures",
+  );
+});
+
+test("RunNextTask exhausts retries: transient failures beyond the cap end failed with the LAST reason and no more than the cap of run() calls (007.9 S2 b)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  let calls = 0;
+  const alwaysTransientRunner: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+    ): Promise<TaskResult> {
+      calls += 1;
+      return {
+        outcome: "failed",
+        reason: `transient error attempt ${calls}`,
+        transient: true,
+      };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => alwaysTransientRunner };
+  const sleepLog: number[] = [];
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    maxAttempts: 2,
+    sleep: makeSleepRT(sleepLog),
+  });
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "failed", taskId: TASK_SIMPLE.id });
+  assert.equal(
+    calls,
+    2,
+    "runner.run must never be called more than the max-attempts cap",
+  );
+
+  const failedEvt = feed.events.find((e) => e.type === "task.failed");
+  assert.ok(failedEvt, "task.failed event must be emitted");
+  assert.equal(
+    failedEvt!.payload?.reason,
+    "transient error attempt 2",
+    "failReason must be the LAST attempt's reason, not the first",
+  );
+  assert.equal(
+    failedEvt!.payload?.attempts,
+    "2",
+    "the failed payload must record the total attempt count",
+  );
+
+  const retryEvents = feed.events.filter((e) => e.type === "provider.retry");
+  assert.equal(
+    retryEvents.length,
+    1,
+    "provider.retry fires once — before the 2nd (final, exhausting) attempt",
+  );
+});
+
+test("RunNextTask does not retry a non-transient failure: failed on first attempt with zero provider.retry events (007.9 S2 c, regression guard)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_PARENT.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore(
+    [{ ...TASK_PARENT }, { ...TASK_CHILD }],
+    INI_ID,
+  );
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({ failTaskIds: [TASK_PARENT.id] });
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  // maxAttempts is generous (5) to prove the single call is because the
+  // failure is non-transient, not because the budget happens to be 1.
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    maxAttempts: 5,
+    sleep: makeSleepRT([]),
+  });
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "failed", taskId: TASK_PARENT.id });
+  assert.equal(
+    runner.calls.length,
+    1,
+    "a non-transient failure must not be retried — exactly one run() call",
+  );
+  const retryEvents = feed.events.filter((e) => e.type === "provider.retry");
+  assert.equal(
+    retryEvents.length,
+    0,
+    "zero provider.retry events for a non-transient failure",
+  );
+});
+
+test("RunNextTask honors retryAfterMs from the failed result as a floor for the backoff wait (007.9 S2 d)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  let calls = 0;
+  const rateLimitedRunner: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+    ): Promise<TaskResult> {
+      calls += 1;
+      if (calls === 1) {
+        return {
+          outcome: "failed",
+          reason: "rate limited",
+          transient: true,
+          retryAfterMs: 5_000,
+        };
+      }
+      return { outcome: "completed", summary: "ok" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => rateLimitedRunner };
+  const sleepLog: number[] = [];
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    maxAttempts: 3,
+    sleep: makeSleepRT(sleepLog),
+  });
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.equal(
+    sleepLog.length,
+    1,
+    "backoff waits exactly once (before the 2nd attempt)",
+  );
+  assert.ok(
+    sleepLog[0]! >= 5_000,
+    `backoff must wait at least the server's retryAfterMs (5000); waited ${sleepLog[0]}`,
+  );
+});

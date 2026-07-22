@@ -26,7 +26,12 @@ export type TaskResult =
       commitSha?: string;
       evidence?: VerificationEvidence[];
     }
-  | { outcome: "failed"; reason: string }
+  | {
+      outcome: "failed";
+      reason: string;
+      transient?: boolean;
+      retryAfterMs?: number;
+    }
   | {
       outcome: "escalated";
       reason: string;

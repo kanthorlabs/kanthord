@@ -15,6 +15,12 @@ export function buildRunDaemonCommand(deps: CliDeps, io: CliIo): Command {
       (value, values: string[]) => (values.push(value), values),
       [],
     )
+    .option(
+      "--fail-transient <id:count>",
+      "task ID to fail transiently <count> times then succeed; repeat for each task",
+      (value, values: string[]) => (values.push(value), values),
+      [],
+    )
     .option("--until-idle", "stop after the daemon has no work")
     .option("--poll-interval <ms>", "positive polling interval in milliseconds")
     .addHelpText(
@@ -24,6 +30,7 @@ export function buildRunDaemonCommand(deps: CliDeps, io: CliIo): Command {
     .action(
       async (opts: {
         fail: string[];
+        failTransient: string[];
         untilIdle?: boolean;
         pollInterval?: string;
       }) => {
@@ -31,6 +38,7 @@ export function buildRunDaemonCommand(deps: CliDeps, io: CliIo): Command {
           await runDaemon(
             {
               fail: opts.fail,
+              "fail-transient": opts.failTransient,
               "until-idle": opts.untilIdle,
               "poll-interval": opts.pollInterval,
             },

@@ -68,9 +68,13 @@ describe("runCreateProject handler", () => {
     );
     assert.match(result.stdout[0]!, /^[0-9A-Z]{26}$/, "id is a ULID");
     assert.ok(result.stderr.length === 1);
-    assert.ok(
-      result.stderr[0]!.includes("demo"),
-      "stderr mentions the project name",
+    // 007.9 Story 03 item B: every `create` handler emits the same
+    // `<kind> created: <id>` shape on stderr (id, not name — consistent
+    // across all create* handlers so scripts can rely on one format).
+    assert.equal(
+      result.stderr[0],
+      `project created: ${result.stdout[0]}`,
+      "stderr must be the consistent '<kind> created: <id>' line",
     );
   });
 

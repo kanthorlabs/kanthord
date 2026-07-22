@@ -4,7 +4,7 @@ import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the sixteen literals in order", () => {
+test("EVENT_TYPES lists exactly the seventeen literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -22,6 +22,7 @@ test("EVENT_TYPES lists exactly the sixteen literals in order", () => {
     "agent.progress",
     "agent.finished",
     "task.verification", // A4 — new
+    "provider.retry", // 007.9 S2 — new
   ]);
 });
 

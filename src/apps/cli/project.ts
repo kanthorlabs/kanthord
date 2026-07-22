@@ -9,7 +9,7 @@ export async function runCreateProject(
   const name = args["name"] as string;
   try {
     const id = await createProject.execute({ name });
-    return { exitCode: 0, stdout: [id], stderr: [`project created: ${name}`] };
+    return { exitCode: 0, stdout: [id], stderr: [`project created: ${id}`] };
   } catch (err) {
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };

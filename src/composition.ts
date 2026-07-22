@@ -31,6 +31,7 @@ import { FindObjective } from "./app/objective/find-objective.ts";
 import { AddResource } from "./app/resource/add-resource.ts";
 import { FindResource } from "./app/resource/find-resource.ts";
 import { GetResource } from "./app/resource/get-resource.ts";
+import { ListResources } from "./app/resource/list-resources.ts";
 import { ImportResources } from "./app/resource/import-resources.ts";
 import { UpdateAiProvider } from "./app/resource/update-ai-provider.ts";
 import { UpdateCredential } from "./app/resource/update-credential.ts";
@@ -187,6 +188,7 @@ export function buildDeps(
   );
   const findResource = new FindResource(projectRepository);
   const getResource = new GetResource(projectRepository);
+  const listResources = new ListResources(projectRepository);
   const homePathExists = async (path: string): Promise<boolean> => {
     if (!path) return false;
     try {
@@ -296,9 +298,13 @@ export function buildDeps(
     return { note: task.note };
   };
 
-  function buildDaemon(failTaskIds: string[], logger?: Logger): RunDaemon {
+  function buildDaemon(
+    failTaskIds: string[],
+    failTransient?: Record<string, number>,
+    logger?: Logger,
+  ): RunDaemon {
     const effectiveLogger: Logger = logger ?? new NullLogger();
-    const fakeRunner = new FakeRunner({ failTaskIds });
+    const fakeRunner = new FakeRunner({ failTaskIds, failTransient });
 
     // Save updated credential value (for OAuth refresh) directly into the resources table.
     const saveCredentialValue = (credentialId: string, value: string): void => {
@@ -473,6 +479,7 @@ export function buildDeps(
     addResource,
     findResource,
     getResource,
+    listResources,
     updateAiProvider,
     updateCredential,
     updateRepository,

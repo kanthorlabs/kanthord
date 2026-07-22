@@ -1,5 +1,5 @@
 import type { Project } from "../domain/project.ts";
-import type { Resource } from "../domain/resource.ts";
+import type { Resource, ResourceType } from "../domain/resource.ts";
 import type { Initiative, Objective } from "../domain/initiative.ts";
 import type { Task } from "../domain/task.ts";
 import type {
@@ -59,6 +59,8 @@ export interface ProjectRepository {
   addResource(projectId: string, resource: Resource): void;
   getResource(id: string): Resource | undefined;
   listResources(projectId: string): Resource[];
+  /** Returns resources of `type` in `projectId`. Optional so existing fakes need not implement it. */
+  listResourcesByProject?(projectId: string, type: ResourceType): Resource[];
   listProjects(): Project[];
   resolveProjectByName(name: string): string[];
   resolveResourceByName(projectId: string, name: string): string[];

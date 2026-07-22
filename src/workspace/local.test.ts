@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   access,
+  chmod,
   mkdtemp,
   mkdir,
   open,
   readdir,
+  realpath,
   rm,
+  symlink,
   unlink,
   writeFile,
   constants,
@@ -1071,5 +1074,217 @@ describe("LocalWorkspaceManager — 007.4 S1: relative root resolved to absolute
       isAbsolute(ws.dir),
       `ws.dir must be absolute even when root is relative; got: "${ws.dir}"`,
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.9 Story 01 — workspace-prep inspects the checkout ROOT, not
+// "inside a repo" (e2e-0079 bug reproduction + hardening).
+//
+// RED today: LocalWorkspaceManager's `isGitRepo()` runs `git rev-parse
+// --git-dir`, which succeeds from ANY dir nested inside a git worktree —
+// resolving to the ENCLOSING repo, not homePath's own. `pathExists()` uses
+// `access()` (follows symlinks) instead of `lstat`. These five cases pin the
+// discriminated-state contract from Story 01 that fixes both.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — 007.9 Story 01: checkout-root inspection", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-ws-checkoutroot-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("(A) empty dir nested inside an outer repo clones fresh — the e2e-0079 bug reproduction", async () => {
+    const outerDir = join(tmpRoot, "outer-a");
+    await mkdir(outerDir, { recursive: true });
+    await execFile("git", ["init", "-q"], { cwd: outerDir });
+
+    const homePath = join(outerDir, "nested", "home");
+    await mkdir(homePath, { recursive: true });
+
+    // Guard: prove `--show-toplevel` from inside the empty nested dir really
+    // does resolve to the OUTER repo — this is the exact precondition that
+    // made run e2e-0079 misread "home exists" as "wrong origin".
+    const { stdout: toplevelOut } = await execFile(
+      "git",
+      ["rev-parse", "--show-toplevel"],
+      { cwd: homePath },
+    );
+    const resolvedToplevel = await realpath(toplevelOut.trim());
+    const resolvedOuter = await realpath(outerDir);
+    assert.equal(
+      resolvedToplevel,
+      resolvedOuter,
+      "precondition: --show-toplevel from the empty nested dir must resolve to the OUTER repo (proves the bug setup)",
+    );
+
+    const wsRoot = join(tmpRoot, "workspaces-a");
+    await mkdir(wsRoot, { recursive: true });
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    const ws = await mgr.prepare("t-checkoutroot-a", repo);
+
+    assert.ok(
+      ws.baseCommit.length >= 7,
+      "must return a valid prepared workspace (no throw)",
+    );
+    const { stdout: originOut } = await execFile(
+      "git",
+      ["remote", "get-url", "origin"],
+      { cwd: homePath },
+    );
+    assert.equal(
+      originOut.trim(),
+      `file://${seedDir}`,
+      "the nested empty dir must be cloned fresh with the EXPECTED origin, not the outer repo's",
+    );
+  });
+
+  test("(B) enclosing-checkout: non-empty dir with no .git of its own, inside an outer repo, errors naming the real problem (not 'wrong origin')", async () => {
+    const outerDir = join(tmpRoot, "outer-b");
+    await mkdir(outerDir, { recursive: true });
+    await execFile("git", ["init", "-q"], { cwd: outerDir });
+    await execFile(
+      "git",
+      ["remote", "add", "origin", "file:///nonexistent-outer-origin.git"],
+      { cwd: outerDir },
+    );
+
+    const homePath = join(outerDir, "nested", "home");
+    await mkdir(homePath, { recursive: true });
+    await writeFile(join(homePath, "some-file.txt"), "content");
+
+    const wsRoot = join(tmpRoot, "workspaces-b");
+    await mkdir(wsRoot, { recursive: true });
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    const resolvedOuter = await realpath(outerDir);
+    await assert.rejects(
+      () => mgr.prepare("t-checkoutroot-b", repo),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof WorkspacePreparationError,
+          "must be WorkspacePreparationError",
+        );
+        assert.ok(
+          err.message.includes("nested inside"),
+          `message must name the real problem ("nested inside"), not a wrong-origin mismatch: ${err.message}`,
+        );
+        assert.ok(
+          err.message.includes(resolvedOuter) || err.message.includes(outerDir),
+          `message must name the enclosing checkout root: ${err.message}`,
+        );
+        assert.ok(
+          !err.message.includes("nonexistent-outer-origin"),
+          `message must NOT read the outer repo's origin as if it were home's own: ${err.message}`,
+        );
+        return true;
+      },
+    );
+  });
+
+  test("(C) non-empty non-repo dir (a lone hidden file) errors 'not empty'; dir left untouched", async () => {
+    const homePath = await mkdtemp(join(tmpdir(), "kanthord-ws-nonempty-"));
+    await writeFile(join(homePath, ".hidden-marker"), "x");
+
+    const wsRoot = join(tmpRoot, "workspaces-c");
+    await mkdir(wsRoot, { recursive: true });
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    try {
+      await assert.rejects(
+        () => mgr.prepare("t-checkoutroot-c", repo),
+        (err: unknown) => {
+          assert.ok(
+            err instanceof WorkspacePreparationError,
+            "must be WorkspacePreparationError",
+          );
+          assert.ok(
+            err.message.toLowerCase().includes("not empty"),
+            `message must say the dir is not empty (hidden files count as entries): ${err.message}`,
+          );
+          return true;
+        },
+      );
+      const entries = await readdir(homePath);
+      assert.deepEqual(
+        entries,
+        [".hidden-marker"],
+        "dir must be left untouched — hidden file still present, nothing removed",
+      );
+    } finally {
+      await rm(homePath, { recursive: true, force: true });
+    }
+  });
+
+  test("(D) git-error (permission-denied home dir) propagates the underlying failure, not masked as 'not a git repository'", async () => {
+    const homePath = await mkdtemp(join(tmpdir(), "kanthord-ws-giterr-"));
+    await writeFile(join(homePath, "placeholder.txt"), "x");
+    await chmod(homePath, 0o000);
+
+    const wsRoot = join(tmpRoot, "workspaces-d");
+    await mkdir(wsRoot, { recursive: true });
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    try {
+      await assert.rejects(
+        () => mgr.prepare("t-checkoutroot-d", repo),
+        (err: unknown) => {
+          assert.ok(
+            err instanceof WorkspacePreparationError,
+            "must be WorkspacePreparationError",
+          );
+          assert.ok(
+            err.message.toLowerCase().includes("eacces"),
+            `message must preserve the underlying git/spawn failure (EACCES), not a generic "not a git repository": ${err.message}`,
+          );
+          return true;
+        },
+      );
+    } finally {
+      await chmod(homePath, 0o755);
+      await rm(homePath, { recursive: true, force: true });
+    }
+  });
+
+  test("(E) broken-symlink homePath is classified via lstat, not treated as absent (no clone-then-crash)", async () => {
+    const parentDir = await mkdtemp(join(tmpdir(), "kanthord-ws-symlink-"));
+    const homePath = join(parentDir, "broken-link");
+    await symlink(join(parentDir, "does-not-exist"), homePath);
+
+    const wsRoot = join(tmpRoot, "workspaces-e");
+    await mkdir(wsRoot, { recursive: true });
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    try {
+      await assert.rejects(
+        () => mgr.prepare("t-checkoutroot-e", repo),
+        (err: unknown) => {
+          assert.ok(
+            err instanceof WorkspacePreparationError,
+            "must be WorkspacePreparationError",
+          );
+          assert.ok(
+            !err.message.includes("Failed to clone"),
+            `a broken symlink must be classified up front (lstat) as a distinct non-absent state, not treated as absent and clone-attempted then crashed on rename: ${err.message}`,
+          );
+          return true;
+        },
+      );
+    } finally {
+      await rm(parentDir, { recursive: true, force: true });
+    }
   });
 });

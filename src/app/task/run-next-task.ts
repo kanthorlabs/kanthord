@@ -44,6 +44,21 @@ type Tx1Outcome =
       initiativeId: string | undefined;
     };
 
+// 007.9 Story 02 — retry policy tuning. Small default (investigation: the SDK
+// already absorbs some transient HTTP noise below the turn boundary, so this
+// task/turn-level retry budget is kept small rather than stacked deep).
+const DEFAULT_MAX_ATTEMPTS = 3;
+const DEFAULT_MAX_ELAPSED_MS = 120_000;
+const BASE_BACKOFF_MS = 250;
+const MAX_BACKOFF_MS = 5_000;
+
+/** Exponential backoff with full jitter, capped, honoring retryAfterMs as a floor. */
+function backoffDelayMs(attempt: number, retryAfterMs?: number): number {
+  const cap = Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** (attempt - 1));
+  const jittered = Math.random() * cap;
+  return Math.max(jittered, retryAfterMs ?? 0);
+}
+
 export class RunNextTask {
   readonly #queue: JobQueue;
   readonly #store: TaskStore;
@@ -51,6 +66,9 @@ export class RunNextTask {
   readonly #uow: UnitOfWork;
   readonly #resolver: AgentRunnerResolver;
   readonly #landing?: LandingRepository;
+  readonly #maxAttempts: number;
+  readonly #maxElapsedMs: number;
+  readonly #sleep: (ms: number) => Promise<void>;
 
   constructor(
     queue: JobQueue,
@@ -59,6 +77,7 @@ export class RunNextTask {
     uow: UnitOfWork,
     resolver: AgentRunnerResolver,
     landing?: LandingRepository,
+    opts?: { maxAttempts?: number; sleep?: (ms: number) => Promise<void> },
   ) {
     this.#queue = queue;
     this.#store = store;
@@ -66,6 +85,11 @@ export class RunNextTask {
     this.#uow = uow;
     this.#resolver = resolver;
     this.#landing = landing;
+    this.#maxAttempts = opts?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+    this.#maxElapsedMs = DEFAULT_MAX_ELAPSED_MS;
+    this.#sleep =
+      opts?.sleep ??
+      ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
   async execute(): Promise<RunResult> {
@@ -111,7 +135,8 @@ export class RunNextTask {
 
     const { runningTask, contextBindings, initiativeId } = tx1;
 
-    // Between tx1 and tx2: resolve runner and await the run.
+    // Between tx1 and tx2: resolve runner and await the run, retrying a
+    // transient failure (007.9 Story 02) — bounded by attempts + elapsed time.
     let failReason: string | null = null;
     let completedResult:
       Extract<TaskResult, { outcome: "completed" }> | undefined;
@@ -119,10 +144,31 @@ export class RunNextTask {
       Extract<TaskResult, { outcome: "escalated" }> | undefined;
     let candidateResult:
       Extract<TaskResult, { outcome: "candidate" }> | undefined;
+    let attempts = 0;
 
     try {
       const runner = this.#resolver.for(runningTask, contextBindings);
-      const result = await runner.run(runningTask, contextBindings);
+      const startedAt = Date.now();
+      let result: TaskResult;
+      for (;;) {
+        attempts += 1;
+        result = await runner.run(runningTask, contextBindings);
+
+        if (result.outcome !== "failed" || result.transient !== true) break;
+
+        const attemptsRemain = attempts < this.#maxAttempts;
+        const elapsedOk = Date.now() - startedAt < this.#maxElapsedMs;
+        if (!attemptsRemain || !elapsedOk) break;
+
+        this.#feed.append(
+          newEvent("provider.retry", {
+            taskId,
+            payload: { attempt: String(attempts), reason: result.reason },
+          }),
+        );
+        await this.#sleep(backoffDelayMs(attempts, result.retryAfterMs));
+      }
+
       if (result.outcome === "completed") {
         completedResult = result;
       } else if (result.outcome === "escalated") {
@@ -290,7 +336,10 @@ export class RunNextTask {
         this.#store.save(failedTask);
         this.#queue.finish(jobId, "failed");
         this.#feed.append(
-          newEvent("task.failed", { taskId, payload: { reason } }),
+          newEvent("task.failed", {
+            taskId,
+            payload: { reason, attempts: String(attempts) },
+          }),
         );
         resultOutcome = "failed";
       }

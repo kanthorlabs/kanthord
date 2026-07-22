@@ -49,7 +49,7 @@ describe("src/apps/cli/commands/create.ts", () => {
 
     assert.deepEqual(received, { name: "roadmap" });
     assert.deepEqual(cap.out, ["project-1\n"]);
-    assert.deepEqual(cap.err, ["project created: roadmap\n"]);
+    assert.deepEqual(cap.err, ["project created: project-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
@@ -157,7 +157,7 @@ describe("src/apps/cli/commands/create.ts", () => {
       destination: "#ops",
     });
     assert.deepEqual(cap.out, ["notification-1\n"]);
-    assert.deepEqual(cap.err, ["notification resource added: alerts\n"]);
+    assert.deepEqual(cap.err, ["notification created: notification-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
@@ -196,7 +196,7 @@ describe("src/apps/cli/commands/create.ts", () => {
       path: "./work",
     });
     assert.deepEqual(cap.out, ["filesystem-1\n"]);
-    assert.deepEqual(cap.err, ["filesystem resource added: workspace\n"]);
+    assert.deepEqual(cap.err, ["filesystem created: filesystem-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
@@ -241,7 +241,7 @@ describe("src/apps/cli/commands/create.ts", () => {
       effort: "high",
     });
     assert.deepEqual(cap.out, ["ai-provider-1\n"]);
-    assert.deepEqual(cap.err, ["ai_provider resource added: primary\n"]);
+    assert.deepEqual(cap.err, ["ai_provider created: ai-provider-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
@@ -290,7 +290,7 @@ describe("src/apps/cli/commands/create.ts", () => {
       auth: { kind: "https-token", credentialId: "credential-1" },
     });
     assert.deepEqual(cap.out, ["repository-1\n"]);
-    assert.deepEqual(cap.err, ["repository resource added: api\n"]);
+    assert.deepEqual(cap.err, ["repository created: repository-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
@@ -393,7 +393,7 @@ describe("src/apps/cli/commands/create.ts", () => {
     }
 
     assert.deepEqual(cap.out, ["credential-1\n"]);
-    assert.deepEqual(cap.err, ["credential resource added: anthropic-key\n"]);
+    assert.deepEqual(cap.err, ["credential created: credential-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
