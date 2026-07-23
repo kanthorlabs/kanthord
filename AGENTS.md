@@ -51,6 +51,18 @@ Binding rules:
   `scripts/`, `package.json`) is a **maintainer epic**: executed directly by
   the human + assistant in normal sessions, not dispatched through `/work`.
 
+**IMPORTANT:** Epics are sequence order only, the epic N will always depend on epic N-1.
+
+**IMPORTANT — deterministic stories.** Story/Task files are execution scripts,
+not briefs. Expand them so the implementing agent follows steps, not reasons its
+way to a design. Every story states the exact edit (file + site), the exact
+tests to write, and the pass/fail check — with no ambiguity left to resolve at
+build time. Include **only** what is needed to implement and verify; cut
+motivation, history, debate, and background — those distract the agent. Both
+implementation and testing must be deterministic (same graph → same order → same
+result). If a story cannot be made deterministic, that is a planning defect: fix
+the story, do not push the decision onto the agent.
+
 ## Architecture
 
 Hexagonal (Ports & Adapters) with light DDD, as a single modular monolith.
