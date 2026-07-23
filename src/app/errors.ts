@@ -15,7 +15,10 @@ export { UnknownModelError } from "../model-catalog/port.ts";
 // Landing types and errors — re-exported so apps/ can reference them without
 // importing the landing port directly.
 export type { RepositoryLanding, LandingCandidate } from "../landing/port.ts";
-export { LandingConflictError } from "../landing/port.ts";
+export {
+  LandingConflictError,
+  LandingCASMismatchError,
+} from "../landing/port.ts";
 
 import type { TaskStatus } from "../domain/task.ts";
 

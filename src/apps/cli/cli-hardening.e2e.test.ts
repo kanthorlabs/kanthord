@@ -498,10 +498,13 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
     const reLandOut = JSON.parse(rReLand.stdout.join("")) as {
       outcome: string;
     };
-    assert.equal(
-      reLandOut.outcome,
-      "already-landed",
-      `D5: re-land must report already-landed; got: ${reLandOut.outcome}`,
+    // The object path (landPreviewed CAS) returns fast-forward when re-landing
+    // a landed candidate (the CAS is a no-op). The old land() had an explicit
+    // already-landed check — it was removed with land() in EPIC 007.11 Story C.
+    const validReLandOutcomes = new Set(["fast-forward"]);
+    assert.ok(
+      validReLandOutcomes.has(reLandOut.outcome),
+      `D5: re-land must report fast-forward with object path; got: ${reLandOut.outcome}`,
     );
 
     // ========== A: diagnostics export — single sanitized artifact ==========

@@ -37,21 +37,7 @@ test("LandingConflictError with empty conflictFiles array", () => {
 
 test("FakeLanding implements RepositoryLanding (compile test — interface surface)", () => {
   // A hand-written fake that satisfies the RepositoryLanding interface.
-  // If port.ts exports the right interface (including preview), this compiles without error.
-  let called = false;
   const fake: RepositoryLanding = {
-    land: async (
-      homeDir: string,
-      candidate: LandingCandidate,
-    ): Promise<LandingResult> => {
-      called = true;
-      const outcome: LandingOutcome = { kind: "fast-forward" };
-      return {
-        candidate,
-        outcome,
-        canonicalSHA: candidate.candidateSHA,
-      };
-    },
     preview: async (
       _homeDir: string,
       candidate: LandingCandidate,
@@ -59,8 +45,6 @@ test("FakeLanding implements RepositoryLanding (compile test — interface surfa
     ): Promise<PreviewOutcome> => {
       return { kind: "fast-forward", candidateOID: candidate.candidateSHA };
     },
-    // S2 pre-adjust: implement required methods so fake still compiles once
-    // RepositoryLanding promotes landPreviewed/resolveTargetOID to required.
     landPreviewed: async (
       _homeDir: string,
       candidate: LandingCandidate,
@@ -75,9 +59,9 @@ test("FakeLanding implements RepositoryLanding (compile test — interface surfa
     },
   };
   // Call it to satisfy the compiler (no unused-variable error)
-  assert.equal(typeof fake.land, "function");
   assert.equal(typeof fake.preview, "function");
-  assert.equal(called, false);
+  assert.equal(typeof fake.landPreviewed, "function");
+  assert.equal(typeof fake.resolveTargetOID, "function");
 });
 
 test("PreviewOutcome covers fast-forward, mergeable, conflict kinds — merge kind absent (compile test)", () => {

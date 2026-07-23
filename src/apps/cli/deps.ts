@@ -57,7 +57,7 @@ export interface CliWorkspace {
 }
 export interface CliWorkspaceManager {
   prepare(taskId: string, source: unknown): Promise<CliWorkspace>;
-  homeDir?(repoId: string): string;
+  homeDir(repoId: string): string;
 }
 
 /**
@@ -68,11 +68,30 @@ export interface CliWorkspaceManager {
  * port type. The concrete `GitRepositoryLanding` (an adapter) remains
  * structurally assignable to this shape, so `composition.ts` can return it as
  * part of `CliDeps`. Mirrors the `CliWorkspaceManager` pattern.
+ *
+ * Exposes the object-path methods (resolveTargetOID, preview, landPreviewed)
+ * used by runRepoLand — no legacy land().
  */
 export interface CliRepositoryLanding {
-  land(
+  resolveTargetOID(homeDir: string, branch: string): string | Promise<string>;
+  preview(
     homeDir: string,
     candidate: unknown,
+    targetOID: string,
+  ): Promise<
+    | { kind: "fast-forward"; candidateOID: string }
+    | { kind: "mergeable"; treeOID: string }
+    | {
+        kind: "conflict";
+        files: string[];
+        perFile: { path: string; hunks: string }[];
+      }
+  >;
+  landPreviewed(
+    homeDir: string,
+    candidate: unknown,
+    previewOutcome: unknown,
+    targetOID: string,
   ): Promise<{
     outcome:
       | { kind: "fast-forward" }

@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
+import { Command } from "commander";
 
 import { buildCheckCommand } from "./check.ts";
 
@@ -64,14 +65,18 @@ describe("src/apps/cli/commands/check.ts", () => {
 
   test("documents the graph command with its canonical usage and example", async () => {
     const cap = capture();
-    const command = buildCheckCommand(
+    // Build under a root "kanthord" program, mirroring buildProgram's wiring, so
+    // the usage line reflects the real command path (`kanthord check graph`).
+    const check = buildCheckCommand(
       {} as Parameters<typeof buildCheckCommand>[0],
       cap.io as Parameters<typeof buildCheckCommand>[1],
     ).exitOverride();
-    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    check.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    const program = new Command("kanthord").addCommand(check).exitOverride();
+    program.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
 
     await assert.rejects(
-      command.parseAsync(["graph", "--help"], { from: "user" }),
+      program.parseAsync(["check", "graph", "--help"], { from: "user" }),
     );
 
     assert.match(cap.out.join(""), /Usage: kanthord check graph/);

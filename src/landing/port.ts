@@ -65,7 +65,6 @@ export class LandingCASMismatchError extends Error {
 }
 
 export interface RepositoryLanding {
-  land(homeDir: string, candidate: LandingCandidate): Promise<LandingResult>;
   preview(
     homeDir: string,
     candidate: LandingCandidate,

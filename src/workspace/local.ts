@@ -218,9 +218,13 @@ async function inspectCheckout(
     : { kind: "enclosing-checkout", toplevel: resolvedToplevel };
 }
 
-/** Clone `remoteUrl` into a temp dir beside `homePath`, then rename atomically
- * onto `homePath` — works whether `homePath` is absent or an already-existing
- * empty directory (POSIX `rename` onto an empty dir target replaces it). */
+/** Clone `remoteUrl` as a BARE repo into a temp dir beside `homePath`, then
+ * rename atomically onto `homePath` — works whether `homePath` is absent or an
+ * already-existing empty directory (POSIX `rename` onto an empty dir target
+ * replaces it). Configures `remote.origin.fetch` to the standard non-bare
+ * refspec so `refs/remotes/origin/*` tracks remote heads, keeping
+ * `refs/heads/*` only for the local branch state managed by the fetch+CAS
+ * logic. */
 async function cloneIntoHome(
   remoteUrl: string,
   homePath: string,
@@ -229,9 +233,19 @@ async function cloneIntoHome(
   const tmpSuffix = randomBytes(4).toString("hex");
   const tmpPath = `${homePath}.tmp-${tmpSuffix}`;
   try {
-    await execFile("git", [...GIT_CONFIG, "clone", remoteUrl, tmpPath], {
-      env,
-    });
+    await execFile(
+      "git",
+      [...GIT_CONFIG, "clone", "--bare", remoteUrl, tmpPath],
+      { env },
+    );
+    // Configure fetch refspec so remotes track to refs/remotes/origin/*.
+    await execFile(
+      "git",
+      ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+      { cwd: tmpPath, env },
+    );
+    // Fetch to populate refs/remotes/origin/ under the new refspec.
+    await execFile("git", ["fetch", "origin"], { cwd: tmpPath, env });
     await rename(tmpPath, homePath);
   } catch (err) {
     try {
@@ -316,6 +330,16 @@ async function acquireLock(
   }
 }
 
+/**
+ * The managed home (`repository.path`) is a **bare, kanthord-owned cache** —
+ * never a developer checkout (EPIC 007.11). It holds only git objects and refs;
+ * kanthord provisions it with `git clone --bare` and keeps `refs/heads/*` in
+ * sync with the remote via fetch + CAS `update-ref`. There is no working tree,
+ * so it cannot drift out of sync. Read landed work by cloning fresh or with
+ * `git show <ref>:<path>`. A non-bare home is refused, not silently converted:
+ * remove it and let kanthord recreate it as a bare clone. Per-task workspaces
+ * are separate non-bare clones taken from this bare home.
+ */
 export class LocalWorkspaceManager implements WorkspaceManager {
   private readonly root: string;
   private readonly resolveCredential?: (
@@ -471,12 +495,22 @@ export class LocalWorkspaceManager implements WorkspaceManager {
             );
           }
           if (inspection.kind === "bare") {
-            throw new WorkspacePreparationError(
-              `Home path ${homePath} exists and is a bare git repository`,
-            );
-          }
-
-          if (inspection.kind !== "root-checkout") {
+            // Bare home — validate origin URL matches expected remoteUrl.
+            let actualUrl: string;
+            try {
+              actualUrl = await getRemoteUrl(homePath, env);
+            } catch {
+              throw new WorkspacePreparationError(
+                `Home path ${homePath} has no remote named origin`,
+              );
+            }
+            if (actualUrl !== remoteUrl) {
+              throw new WorkspacePreparationError(
+                `Home path ${homePath} has origin ${actualUrl} but expected ${remoteUrl}`,
+              );
+            }
+            // Falls through to the shared fetch/CAS block below.
+          } else if (inspection.kind !== "root-checkout") {
             // not-a-repo or enclosing-checkout: only safe to clone fresh when
             // the dir is confirmed empty (zero entries, hidden files count) —
             // otherwise report the real problem instead of masking it as a
@@ -495,20 +529,10 @@ export class LocalWorkspaceManager implements WorkspaceManager {
               );
             }
           } else {
-            // root-checkout — validate origin matches expected URL
-            let actualUrl: string;
-            try {
-              actualUrl = await getRemoteUrl(homePath, env);
-            } catch {
-              throw new WorkspacePreparationError(
-                `Home path ${homePath} has no remote named origin`,
-              );
-            }
-            if (actualUrl !== remoteUrl) {
-              throw new WorkspacePreparationError(
-                `Home path ${homePath} has origin ${actualUrl} but expected ${remoteUrl}`,
-              );
-            }
+            // root-checkout (non-bare) — always refused per migration policy
+            throw new WorkspacePreparationError(
+              `Home path ${homePath} is a non-bare git checkout; kanthord requires a bare repository. Remove the directory and let kanthord recreate it as a bare clone.`,
+            );
           }
         }
 
@@ -523,7 +547,7 @@ export class LocalWorkspaceManager implements WorkspaceManager {
             canonicalSHA = stdout.trim();
           }
         } else {
-          // Fetch + CAS when lockDir is configured (root-checkout path only)
+          // Fetch + CAS when lockDir is configured (root-checkout or bare home)
           if (this.lockDir) {
             let fetchSucceeded = true;
             let fetchErr: unknown;

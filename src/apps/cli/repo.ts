@@ -4,7 +4,10 @@
 // home canonical branch via the RepositoryLanding port.
 
 import type { CliRepositoryLanding } from "./deps.ts";
-import { LandingConflictError } from "../../app/errors.ts";
+import {
+  LandingConflictError,
+  LandingCASMismatchError,
+} from "../../app/errors.ts";
 import { MissingFlagError } from "./error-map.ts";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
@@ -58,42 +61,39 @@ export async function runRepoLand(
     workspace,
   };
 
+  // Object-path landing: resolveTargetOID → preview → landPreviewed (CAS).
+  // Retries up to MAX_CAS_RETRIES if the branch moves between preview and land.
+  const MAX_CAS_RETRIES = 3;
+  let casRetries = 0;
+  let currentTargetOID: string;
+
   try {
-    const result = await landing.land(homeDir, candidate);
-    const { outcome, canonicalSHA } = result;
+    currentTargetOID = await landing.resolveTargetOID(homeDir, target);
+  } catch {
+    throw new Error(
+      `Could not resolve target branch "${target}" in home repository at ${homeDir}`,
+    );
+  }
 
-    let json: Record<string, unknown>;
-    let stderr: string[] = [];
-
-    if (outcome.kind === "fast-forward") {
-      json = { outcome: "fast-forward", canonicalSHA };
-    } else if (outcome.kind === "merge") {
-      json = {
-        outcome: "merge",
-        mergeCommit: outcome.mergeCommit,
-        canonicalSHA,
-      };
-    } else if (outcome.kind === "already-landed") {
-      json = { outcome: "already-landed", canonicalSHA };
-      // The Proof command greps for "already landed" (space) in combined output.
-      stderr = ["already landed"];
-    } else {
-      // outcome.kind === "conflict" — returned rather than thrown
-      const conflictOutcome = outcome as { kind: "conflict"; files: string[] };
-      json = { outcome: "conflict", files: conflictOutcome.files };
+  for (;;) {
+    if (casRetries >= MAX_CAS_RETRIES) {
       return {
         exitCode: 1,
-        stdout: [JSON.stringify(json, null, 2)],
+        stdout: [JSON.stringify({ outcome: "target_moved" }, null, 2)],
         stderr: [],
       };
     }
 
-    return { exitCode: 0, stdout: [JSON.stringify(json, null, 2)], stderr };
-  } catch (err) {
-    if (err instanceof LandingConflictError) {
+    const previewOutcome = await landing.preview(
+      homeDir,
+      candidate,
+      currentTargetOID,
+    );
+
+    if (previewOutcome.kind === "conflict") {
       const json: Record<string, unknown> = {
         outcome: "conflict",
-        files: err.conflictFiles,
+        files: previewOutcome.files,
       };
       return {
         exitCode: 1,
@@ -101,6 +101,64 @@ export async function runRepoLand(
         stderr: [],
       };
     }
-    throw err;
+
+    try {
+      const result = await landing.landPreviewed(
+        homeDir,
+        candidate,
+        previewOutcome,
+        currentTargetOID,
+      );
+      const { outcome, canonicalSHA } = result;
+
+      let json: Record<string, unknown>;
+      let stderr: string[] = [];
+
+      if (outcome.kind === "fast-forward") {
+        json = { outcome: "fast-forward", canonicalSHA };
+      } else if (outcome.kind === "merge") {
+        json = {
+          outcome: "merge",
+          mergeCommit: outcome.mergeCommit,
+          canonicalSHA,
+        };
+      } else if (outcome.kind === "already-landed") {
+        json = { outcome: "already-landed", canonicalSHA };
+        // The Proof command greps for "already landed" (space) in combined output.
+        stderr = ["already landed"];
+      } else {
+        // outcome.kind === "conflict" — returned rather than thrown
+        const conflictOutcome = outcome as {
+          kind: "conflict";
+          files: string[];
+        };
+        json = { outcome: "conflict", files: conflictOutcome.files };
+        return {
+          exitCode: 1,
+          stdout: [JSON.stringify(json, null, 2)],
+          stderr: [],
+        };
+      }
+
+      return { exitCode: 0, stdout: [JSON.stringify(json, null, 2)], stderr };
+    } catch (err) {
+      if (err instanceof LandingCASMismatchError) {
+        currentTargetOID = err.newTargetOID;
+        casRetries++;
+        continue;
+      }
+      if (err instanceof LandingConflictError) {
+        const json: Record<string, unknown> = {
+          outcome: "conflict",
+          files: err.conflictFiles,
+        };
+        return {
+          exitCode: 1,
+          stdout: [JSON.stringify(json, null, 2)],
+          stderr: [],
+        };
+      }
+      throw err;
+    }
   }
 }

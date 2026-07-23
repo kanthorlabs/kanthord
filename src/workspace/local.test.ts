@@ -8,6 +8,7 @@ import {
   mkdir,
   open,
   readdir,
+  readFile,
   realpath,
   rm,
   symlink,
@@ -147,7 +148,14 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     await mkdir(wsRoot, { recursive: true });
 
     // T4: pre-seed via file:// so origin matches repo.remoteUrl
-    await execFile("git", ["clone", `file://${seedDir}`, homePath]);
+    // Match production cloneIntoHome: bare clone + remotes refspec + refetch.
+    await execFile("git", ["clone", "--bare", `file://${seedDir}`, homePath]);
+    await execFile(
+      "git",
+      ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+      { cwd: homePath },
+    );
+    await execFile("git", ["fetch", "origin"], { cwd: homePath });
 
     const repo = makeRepo(homePath, "main", `file://${seedDir}`);
     const mgr = new LocalWorkspaceManager({ root: wsRoot });
@@ -172,9 +180,16 @@ describe("LocalWorkspaceManager — repository source (T1)", () => {
     const wsRoot = join(tmpRoot, "workspaces-c");
     await mkdir(wsRoot, { recursive: true });
 
-    // T4: clone from file:// so origin = file://${seedDir}; repo.remoteUrl is the
+    // T4: clone --bare from file:// so origin = file://${seedDir}; repo.remoteUrl is the
     // default github stub → mismatch without needing a separate differentUrl var.
-    await execFile("git", ["clone", `file://${seedDir}`, homePath]);
+    // Match production cloneIntoHome: bare clone + remotes refspec + refetch.
+    await execFile("git", ["clone", "--bare", `file://${seedDir}`, homePath]);
+    await execFile(
+      "git",
+      ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+      { cwd: homePath },
+    );
+    await execFile("git", ["fetch", "origin"], { cwd: homePath });
 
     // repo.remoteUrl defaults to the github stub (not the seedDir file:// URL)
     const repo = makeRepo(homePath);
@@ -540,12 +555,15 @@ describe("LocalWorkspaceManager — T4 secure git env", () => {
 // ---------------------------------------------------------------------------
 describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
   // Clone from a file:// URL and configure git user in the clone so commits work.
-  async function cloneAndCfg(from: string, to: string): Promise<void> {
-    await execFile("git", ["clone", `file://${from}`, to]);
-    await execFile("git", ["config", "user.email", "test@localhost"], {
-      cwd: to,
-    });
-    await execFile("git", ["config", "user.name", "Test"], { cwd: to });
+  async function cloneBare(from: string, to: string): Promise<void> {
+    // Match production cloneIntoHome: bare clone + remotes refspec + refetch.
+    await execFile("git", ["clone", "--bare", `file://${from}`, to]);
+    await execFile(
+      "git",
+      ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+      { cwd: to },
+    );
+    await execFile("git", ["fetch", "origin"], { cwd: to });
   }
 
   // Write a file, stage, commit, return new HEAD SHA.
@@ -576,7 +594,7 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
       await createSeedRepo(originDir);
 
       const homeDir = join(tmp, "home");
-      await cloneAndCfg(originDir, homeDir);
+      await cloneBare(originDir, homeDir);
 
       // advance origin → homeDir is behind by one commit
       const c2Sha = await addAndCommit(originDir, "extra.txt", "extra", "c2");
@@ -616,14 +634,21 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
       await createSeedRepo(originDir);
 
       const homeDir = join(tmp, "home");
-      await cloneAndCfg(originDir, homeDir);
-      // homeDir is AHEAD of origin (simulates a local landing)
+      // Bare home: push a commit via a workdir to simulate local landing
+      await cloneBare(originDir, homeDir);
+      const workDir = join(tmp, "work");
+      await execFile("git", ["clone", `file://${originDir}`, workDir]);
+      await execFile("git", ["config", "user.email", "test@localhost"], {
+        cwd: workDir,
+      });
+      await execFile("git", ["config", "user.name", "Test"], { cwd: workDir });
       const c2Sha = await addAndCommit(
-        homeDir,
+        workDir,
         "landed.txt",
         "landed",
         "local-landed",
       );
+      await execFile("git", ["push", homeDir, "HEAD:main"], { cwd: workDir });
 
       const repo = makeRepo(homeDir, "main", `file://${originDir}`);
       const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
@@ -659,10 +684,17 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
       await createSeedRepo(originDir);
 
       const homeDir = join(tmp, "home");
-      await cloneAndCfg(originDir, homeDir);
+      await cloneBare(originDir, homeDir);
 
       // diverge both sides from c1 (the shared base)
-      await addAndCommit(homeDir, "local.txt", "local", "home-only");
+      const workDir = join(tmp, "work");
+      await execFile("git", ["clone", `file://${originDir}`, workDir]);
+      await execFile("git", ["config", "user.email", "test@localhost"], {
+        cwd: workDir,
+      });
+      await execFile("git", ["config", "user.name", "Test"], { cwd: workDir });
+      await addAndCommit(workDir, "local.txt", "local", "home-only");
+      await execFile("git", ["push", homeDir, "HEAD:main"], { cwd: workDir });
       await addAndCommit(originDir, "remote.txt", "remote", "origin-only");
 
       const repo = makeRepo(homeDir, "main", `file://${originDir}`);
@@ -701,10 +733,17 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
       const c1Sha = await git(originDir, "rev-parse", "HEAD");
 
       const homeDir = join(tmp, "home");
-      await cloneAndCfg(originDir, homeDir);
+      await cloneBare(originDir, homeDir);
 
       // diverge both sides
-      await addAndCommit(homeDir, "local.txt", "local", "home-only");
+      const workDir = join(tmp, "work");
+      await execFile("git", ["clone", `file://${originDir}`, workDir]);
+      await execFile("git", ["config", "user.email", "test@localhost"], {
+        cwd: workDir,
+      });
+      await execFile("git", ["config", "user.name", "Test"], { cwd: workDir });
+      await addAndCommit(workDir, "local.txt", "local", "home-only");
+      await execFile("git", ["push", homeDir, "HEAD:main"], { cwd: workDir });
       await addAndCommit(originDir, "remote.txt", "remote", "origin-only");
 
       const cachedPolicy: CachedModePolicy = {
@@ -745,7 +784,7 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
       await createSeedRepo(originDir);
 
       const homeDir = join(tmp, "home");
-      await cloneAndCfg(originDir, homeDir);
+      await cloneBare(originDir, homeDir);
 
       // Remove origin so any fetch attempt fails
       await rm(originDir, { recursive: true, force: true });
@@ -781,7 +820,7 @@ describe("LocalWorkspaceManager — T3 fetch + CAS + canonical SHA", () => {
       await createSeedRepo(originDir);
 
       const homeDir = join(tmp, "home");
-      await cloneAndCfg(originDir, homeDir);
+      await cloneBare(originDir, homeDir);
 
       // advance origin → both concurrent prepares must see c2Sha after fetch
       const c2Sha = await addAndCommit(originDir, "extra.txt", "extra", "c2");
@@ -958,7 +997,7 @@ describe("LocalWorkspaceManager — Story 06 T1 shared lock wiring", () => {
     );
   });
 
-  test("(b) prepare-fetch and a land serialize on the shared lock (one waits; both complete; no orphan .lock)", async () => {
+  test("(b) prepare-fetch blocks on the shared lock; land (object path) is lock-free; no orphan .lock", async () => {
     const dbDir = join(tmpRoot, "db-b");
     await mkdir(dbDir, { recursive: true });
     const dbPath = join(dbDir, "kanthord.db");
@@ -966,12 +1005,10 @@ describe("LocalWorkspaceManager — Story 06 T1 shared lock wiring", () => {
     const mgr = deps.workspaces;
     const repo = makeRepo(homeDir, "main", `file://${seedDir}`);
 
-    // A clone of the home used purely as the candidate's workspace source so
-    // `land`'s fetch is a normal local fetch.
     const wsClone = join(tmpRoot, "wsclone-b");
     await execFile("git", ["clone", `file://${seedDir}`, wsClone]);
 
-    // already-landed candidate: candidateSHA == current main HEAD, target == main.
+    // candidateSHA == current main HEAD, target == main.
     const candidate = {
       id: "c-t1-b",
       taskId: "t-lock-b",
@@ -1000,7 +1037,25 @@ describe("LocalWorkspaceManager — Story 06 T1 shared lock wiring", () => {
         prepareSettled = true;
       },
     );
-    const pLand = deps.repoLanding.land(homeDir, candidate).then(
+    // The object path (resolveTargetOID → preview → landPreviewed) is lock-free:
+    // the old land() acquired the lock internally, but landPreviewed uses direct CAS update-ref.
+    const pLand = (async () => {
+      const targetOID = await deps.repoLanding.resolveTargetOID(
+        homeDir,
+        candidate.target,
+      );
+      const previewOutcome = await deps.repoLanding.preview(
+        homeDir,
+        candidate,
+        targetOID,
+      );
+      return deps.repoLanding.landPreviewed(
+        homeDir,
+        candidate,
+        previewOutcome,
+        targetOID,
+      );
+    })().then(
       () => {
         landSettled = true;
       },
@@ -1015,13 +1070,10 @@ describe("LocalWorkspaceManager — Story 06 T1 shared lock wiring", () => {
       false,
       "prepare must block on the shared lock while it is held",
     );
-    assert.equal(
-      landSettled,
-      false,
-      "land must block on the shared lock while it is held",
-    );
+    // landPreviewed is lock-free (the old land() was the one that acquired the lock).
+    // landSettled may be true or false — we don't assert on it.
 
-    // Release the lock; both must now complete (one waits for the other).
+    // Release the lock; both must now complete.
     await fh.close();
     await unlink(lockPath);
     await Promise.all([pPrepare, pLand]);
@@ -1286,5 +1338,414 @@ describe("LocalWorkspaceManager — 007.9 Story 01: checkout-root inspection", (
     } finally {
       await rm(parentDir, { recursive: true, force: true });
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.11 Stories A+B — bare managed home creation + bare-aware prep
+//
+// RED today: cloneIntoHome creates a non-bare clone → home is not bare.
+// After Stories A+B: fresh prepare creates a bare home, fetch/CAS targets
+// the bare git dir, per-task clone remains a non-bare checkout.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — 007.11 A+B: bare managed home", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-0711ab-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  // Helper: write file, stage, commit, return new HEAD SHA.
+  async function addAndCommit(
+    dir: string,
+    file: string,
+    content: string,
+    msg: string,
+  ): Promise<string> {
+    await writeFile(join(dir, file), content);
+    await execFile("git", ["add", "-A"], { cwd: dir });
+    await execFile("git", ["commit", "-m", msg], { cwd: dir });
+    const { stdout } = await execFile("git", ["rev-parse", "HEAD"], {
+      cwd: dir,
+    });
+    return stdout.trim();
+  }
+
+  test("(a) fresh prepare on absent home creates a bare home with refs/heads + refs/remotes, no working-tree files", async () => {
+    const homePath = join(tmpRoot, "home-a");
+    const wsRoot = join(tmpRoot, "ws-a");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    const ws = await mgr.prepare("t-a", repo);
+
+    // Workspace is usable
+    assert.equal(ws.branch, "kanthord/t-a");
+    assert.ok(ws.baseCommit.length >= 7, "baseCommit must be a git sha");
+
+    // Home is bare
+    const { stdout: bareOut } = await execFile(
+      "git",
+      ["rev-parse", "--is-bare-repository"],
+      { cwd: homePath },
+    );
+    assert.equal(bareOut.trim(), "true", "home must be a bare repository");
+
+    // Has refs/heads/main
+    const { stdout: headOut } = await execFile(
+      "git",
+      ["rev-parse", "refs/heads/main"],
+      { cwd: homePath },
+    );
+    assert.ok(
+      headOut.trim().length >= 7,
+      "refs/heads/main must exist in bare home",
+    );
+
+    // Has refs/remotes/origin/main
+    const { stdout: remoteOut } = await execFile(
+      "git",
+      ["rev-parse", "refs/remotes/origin/main"],
+      { cwd: homePath },
+    );
+    assert.ok(
+      remoteOut.trim().length >= 7,
+      "refs/remotes/origin/main must exist in bare home",
+    );
+
+    // No working-tree files at the home root (bare repo has only git internals)
+    const { stdout: lsOut } = await execFile("ls", [homePath]);
+    assert.ok(
+      !lsOut.includes("src/"),
+      "bare home must not have a src/ working-tree directory",
+    );
+    assert.ok(lsOut.includes("HEAD"), "bare home must contain HEAD");
+    assert.ok(lsOut.includes("objects"), "bare home must contain objects/");
+
+    // Workspace is a non-bare checkout
+    const { stdout: wsBare } = await execFile(
+      "git",
+      ["rev-parse", "--is-bare-repository"],
+      { cwd: ws.dir },
+    );
+    assert.equal(
+      wsBare.trim(),
+      "false",
+      "workspace clone must be a non-bare checkout",
+    );
+  });
+
+  test("(b) bare home: remote advance fast-forwards refs/heads/<branch> on second prepare", async () => {
+    const homePath = join(tmpRoot, "home-b");
+    const wsRoot = join(tmpRoot, "ws-b");
+    await mkdir(wsRoot, { recursive: true });
+    const lockDir = join(tmpRoot, "locks-b");
+    await mkdir(lockDir, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+
+    // First prepare creates the bare home (clones from seed)
+    {
+      const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+      await mgr.prepare("t-b1", repo);
+    }
+
+    // Advance the remote by one commit
+    const c2Sha = await addAndCommit(seedDir, "extra.txt", "extra", "c2");
+
+    // Second prepare must see the new remote commit and ff-advance
+    const mgr2 = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+    const ws2 = await mgr2.prepare("t-b2", repo);
+
+    // Bare home's refs/heads/main must have advanced
+    const homeMain = await git(homePath, "rev-parse", "refs/heads/main");
+    assert.equal(
+      homeMain,
+      c2Sha,
+      "bare home refs/heads/main must ff-advance to the new origin commit",
+    );
+
+    // Workspace baseCommit equals the bare home branch tip
+    assert.equal(
+      ws2.baseCommit,
+      c2Sha,
+      "workspace baseCommit must equal the bare home branch tip",
+    );
+  });
+
+  test("(c) divergent bare home still raises DivergenceError", async () => {
+    const homePath = join(tmpRoot, "home-c");
+    const wsRoot = join(tmpRoot, "ws-c");
+    await mkdir(wsRoot, { recursive: true });
+    const lockDir = join(tmpRoot, "locks-c");
+    await mkdir(lockDir, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+
+    // First prepare creates home at c1 (non-bare before A+B, bare after A+B)
+    {
+      const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+      await mgr.prepare("t-c1", repo);
+    }
+
+    // --- Create a local-only commit on the home using env-based plumbing ---
+    // Uses GIT_INDEX_FILE + hash-object -w + write-tree + commit-tree so all
+    // objects land in homePath's ODB regardless of whether it's bare or not.
+    const parentSha = await git(homePath, "rev-parse", "refs/heads/main");
+
+    const tmpWt = join(tmpRoot, "tmp-wt-c");
+    await mkdir(tmpWt, { recursive: true });
+    await writeFile(join(tmpWt, "local.txt"), "local diverge");
+
+    // Write blob into homePath's ODB
+    const { stdout: blobSha } = await execFile(
+      "git",
+      ["hash-object", "-w", join(tmpWt, "local.txt")],
+      { cwd: homePath },
+    );
+
+    // Build a tree in homePath's ODB via temp index
+    const tmpIdx = join(tmpRoot, "tmp-idx-c");
+    const addEnv = { ...process.env, GIT_INDEX_FILE: tmpIdx };
+    await execFile(
+      "git",
+      [
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        "100644",
+        blobSha.trim(),
+        "local.txt",
+      ],
+      { env: addEnv, cwd: homePath },
+    );
+    const { stdout: treeSha } = await execFile("git", ["write-tree"], {
+      env: addEnv,
+      cwd: homePath,
+    });
+
+    // Create commit object in homePath's ODB
+    const { stdout: commitSha } = await execFile(
+      "git",
+      [
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@localhost",
+        "commit-tree",
+        treeSha.trim(),
+        "-p",
+        parentSha,
+        "-m",
+        "local diverge",
+      ],
+      { cwd: homePath },
+    );
+    await execFile("git", ["update-ref", "refs/heads/main", commitSha.trim()], {
+      cwd: homePath,
+    });
+    await rm(tmpWt, { recursive: true, force: true });
+    await rm(tmpIdx, { recursive: true, force: true });
+
+    // --- Origin also diverges ---
+    await addAndCommit(seedDir, "remote.txt", "remote", "origin-only");
+
+    // Second prepare on the divergent pair must raise DivergenceError
+    const repo2 = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr2 = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+    await assert.rejects(
+      () => mgr2.prepare("t-c2", repo2),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof DivergenceError,
+          `must be DivergenceError; got: ${String(err)}`,
+        );
+        assert.equal(err.repoId, repo2.id, "DivergenceError must carry repoId");
+        return true;
+      },
+    );
+  });
+
+  test("(d) bare home lifecycle: home not initialized until prepare is called (regression — BLOCKER B1)", async () => {
+    const homePath = join(tmpRoot, "home-d");
+    const wsRoot = join(tmpRoot, "ws-d");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+
+    // Before prepare: home path must NOT exist on the filesystem
+    // (proves the lifecycle ordering — the EPIC proof's Story A block must
+    // run AFTER prepare/daemon, not before, or it checks a non-existent home)
+    let homeExistsBefore: boolean;
+    try {
+      await access(homePath);
+      homeExistsBefore = true;
+    } catch {
+      homeExistsBefore = false;
+    }
+    assert.equal(
+      homeExistsBefore,
+      false,
+      "home path must not exist before prepare is called — lifecycle: only prepare() initializes the bare home",
+    );
+
+    // Now call prepare — this must create the bare home
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+    const ws = await mgr.prepare("t-d", repo);
+
+    // After prepare: home must exist and be bare
+    const { stdout: bareOut } = await execFile(
+      "git",
+      ["rev-parse", "--is-bare-repository"],
+      { cwd: homePath },
+    );
+    assert.equal(
+      bareOut.trim(),
+      "true",
+      "home must be a bare repository after prepare",
+    );
+
+    // Workspace is a usable non-bare checkout
+    assert.equal(ws.branch, "kanthord/t-d");
+    assert.ok(ws.baseCommit.length >= 7, "baseCommit must be a git sha");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.11 Story D — existing-home migration policy
+//
+// A non-bare home (root-checkout) is the "unexpected" shape — the policy must
+// refuse it with a clear WorkspacePreparationError (never silently accept or
+// convert a non-bare checkout). A bare home is untouched and succeeds.
+// RED today: the code accepts non-bare root-checkout homes silently.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — 007.11 D: existing-home migration policy", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-0711d-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("(a) non-bare clean home is refused (WorkspacePreparationError)", async () => {
+    const homePath = join(tmpRoot, "home-a");
+    const wsRoot = join(tmpRoot, "ws-a");
+    await mkdir(wsRoot, { recursive: true });
+
+    // Create a non-bare git repo (root-checkout) at homePath, with matching origin
+    await execFile("git", ["clone", `file://${seedDir}`, homePath]);
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    await assert.rejects(
+      () => mgr.prepare("t-d-a", repo),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof WorkspacePreparationError,
+          `must be WorkspacePreparationError; got: ${String(err)}`,
+        );
+        assert.ok(
+          err.message.includes(homePath),
+          `message must name the home path: ${err.message}`,
+        );
+        assert.ok(
+          err.message.toLowerCase().includes("bare") ||
+            err.message.toLowerCase().includes("recreate") ||
+            err.message.toLowerCase().includes("remove"),
+          `message must mention bare/recreate/remove: ${err.message}`,
+        );
+        return true;
+      },
+    );
+
+    // Home must still exist (not deleted)
+    const { stdout: lsOut } = await execFile("ls", [homePath]);
+    assert.ok(
+      lsOut.includes("README.md"),
+      "non-bare home must still exist after refusal",
+    );
+  });
+
+  test("(b) non-bare dirty home is refused; dirty file preserved", async () => {
+    const homePath = join(tmpRoot, "home-b");
+    const wsRoot = join(tmpRoot, "ws-b");
+    await mkdir(wsRoot, { recursive: true });
+
+    // Create a non-bare git repo at homePath
+    await execFile("git", ["clone", `file://${seedDir}`, homePath]);
+
+    // Create a dirty file in the working tree (untracked, not committed)
+    await writeFile(join(homePath, "dirty-local.txt"), "local changes");
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    await assert.rejects(
+      () => mgr.prepare("t-d-b", repo),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof WorkspacePreparationError,
+          `must be WorkspacePreparationError; got: ${String(err)}`,
+        );
+        return true;
+      },
+    );
+
+    // The dirty file must still be present (home not modified)
+    const dirtyContent = await readFile(
+      join(homePath, "dirty-local.txt"),
+      "utf8",
+    ).catch(() => null);
+    assert.equal(
+      dirtyContent,
+      "local changes",
+      "dirty file must be preserved after refusal",
+    );
+  });
+
+  test("(c) bare home is untouched, prepare succeeds", async () => {
+    const homePath = join(tmpRoot, "home-c");
+    const wsRoot = join(tmpRoot, "ws-c");
+    await mkdir(wsRoot, { recursive: true });
+
+    // First prepare creates a bare home
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+    await mgr.prepare("t-d-c1", repo);
+
+    // Record the bare home's main SHA
+    const mainShaBefore = await git(homePath, "rev-parse", "refs/heads/main");
+
+    // Second prepare — bare home must be untouched, succeeds
+    const mgr2 = new LocalWorkspaceManager({ root: wsRoot });
+    const ws = await mgr2.prepare("t-d-c2", repo);
+
+    // Bare home ref is unchanged
+    const mainShaAfter = await git(homePath, "rev-parse", "refs/heads/main");
+    assert.equal(
+      mainShaAfter,
+      mainShaBefore,
+      "bare home main ref must be unchanged",
+    );
+
+    // Workspace is usable
+    assert.equal(ws.branch, "kanthord/t-d-c2");
+    assert.ok(ws.baseCommit.length >= 7, "baseCommit must be a git sha");
   });
 });

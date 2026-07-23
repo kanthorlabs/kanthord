@@ -1,10 +1,10 @@
 // src/landing/git.ts — GitRepositoryLanding adapter.
-// Uses real git via execFile (no shell). Acquires a cross-process per-repo+branch
-// lock, classifies ancestry (ff / merge / conflict / already-landed), and persists
-// durable candidate metadata for crash-idempotent recovery.
+// Uses real git via execFile (no shell). Provides preview (read-only merge-tree)
+// and landPreviewed (atomic CAS update-ref) for object/ref-only landing.
+// The lock seam is preserved for cross-process coordination during landPreviewed.
 
-import { open, unlink, constants } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { open, constants } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { execFile as execFileCb } from "node:child_process";
 import type { FileHandle } from "node:fs/promises";
@@ -14,13 +14,8 @@ import type {
   LandingResult,
   PreviewOutcome,
 } from "./port.ts";
-import {
-  LandingConflictError,
-  LandingInvariantError,
-  LandingCASMismatchError,
-} from "./port.ts";
+import { LandingCASMismatchError } from "./port.ts";
 import type { LandingRepository } from "../storage/port.ts";
-import type { ChangeCandidate, Integration } from "../domain/landing.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -90,174 +85,6 @@ export class GitRepositoryLanding implements RepositoryLanding {
     this.#lockDir = lockDir;
     this.#landing = landing;
     this.#gitConfig = gitConfig;
-  }
-
-  async land(
-    homeDir: string,
-    candidate: LandingCandidate,
-  ): Promise<LandingResult> {
-    const lockPath = join(
-      this.#lockDir,
-      `${candidate.repoId}-${candidate.target}.lock`,
-    );
-
-    if (!isAbsolute(candidate.workspace)) {
-      throw new LandingInvariantError(
-        `candidate.workspace must be an absolute path; got: ${candidate.workspace}`,
-      );
-    }
-
-    const fh = await acquireLock(lockPath);
-    try {
-      // --- Fetch candidate object from workspace clone into home repo ---
-      // Ensures candidateSHA is reachable locally before any ancestry/merge ops.
-      await execFile(
-        "git",
-        ["fetch", candidate.workspace, candidate.candidateSHA],
-        { cwd: homeDir },
-      );
-
-      // --- Idempotent already-landed check ---
-      // candidateSHA reachable from target → no mutation needed.
-      const alreadyLanded = await isAncestor(
-        homeDir,
-        candidate.candidateSHA,
-        candidate.target,
-      );
-      if (alreadyLanded) {
-        const canonicalSHA = await gitOut(
-          homeDir,
-          "rev-parse",
-          candidate.target,
-        );
-        return {
-          candidate,
-          outcome: { kind: "already-landed", canonicalSHA },
-          canonicalSHA,
-        };
-      }
-
-      // --- Crash-idempotent: save pending row if not already persisted ---
-      const existing = this.#landing.getCandidate(candidate.id);
-      if (existing === undefined) {
-        const record: ChangeCandidate = {
-          id: candidate.id,
-          taskId: candidate.taskId,
-          repoId: candidate.repoId,
-          baseSHA: candidate.baseSHA,
-          candidateSHA: candidate.candidateSHA,
-          ref: candidate.ref,
-          target: candidate.target,
-          state: "pending",
-        };
-        this.#landing.saveCandidate(record);
-      }
-
-      // --- Move onto the NAMED target ref before any ff/merge so we never
-      // mutate the checked-out HEAD (which may be a different branch, e.g.
-      // `main`). Landing is executor-neutral: the target comes from
-      // `candidate.target` (the repository's configured canonical branch),
-      // never from the currently checked-out branch. This is what makes a
-      // non-checked-out target (like `trunk`) advance while `main` stays put.
-      await execFile("git", ["checkout", "-q", candidate.target], {
-        cwd: homeDir,
-      });
-
-      // --- Classify: fast-forward or merge ---
-      // FF: current target HEAD is an ancestor of candidateSHA
-      const currentHead = await gitOut(homeDir, "rev-parse", candidate.target);
-      const isFf = await isAncestor(
-        homeDir,
-        currentHead,
-        candidate.candidateSHA,
-      );
-
-      let outcome: LandingResult["outcome"];
-      let canonicalSHA: string;
-
-      if (isFf) {
-        // Fast-forward: use --ff-only to guarantee no merge commit
-        await execFile("git", ["merge", "--ff-only", candidate.candidateSHA], {
-          cwd: homeDir,
-        });
-        canonicalSHA = await gitOut(homeDir, "rev-parse", candidate.target);
-        outcome = { kind: "fast-forward" };
-      } else {
-        // Merge — may conflict
-        try {
-          await execFile(
-            "git",
-            [
-              "-c",
-              `user.name=${this.#gitConfig.name}`,
-              "-c",
-              `user.email=${this.#gitConfig.email}`,
-              "merge",
-              "--no-edit",
-              candidate.candidateSHA,
-            ],
-            { cwd: homeDir },
-          );
-          const mergeCommit = await gitOut(homeDir, "rev-parse", "HEAD");
-          canonicalSHA = mergeCommit;
-          outcome = { kind: "merge", mergeCommit };
-        } catch {
-          // Collect conflict files, then abort
-          let conflictFiles: string[] = [];
-          try {
-            const out = await gitOut(
-              homeDir,
-              "diff",
-              "--name-only",
-              "--diff-filter=U",
-            );
-            conflictFiles = out.split("\n").filter((f) => f.length > 0);
-          } catch {
-            // fallback: no files listed
-          }
-          try {
-            await execFile("git", ["merge", "--abort"], { cwd: homeDir });
-          } catch {
-            // ignore abort errors
-          }
-          this.#landing.updateCandidateState(candidate.id, "conflict");
-          const integration: Integration = {
-            candidateId: candidate.id,
-            outcome: "conflict",
-            // The target HEAD captured before the (aborted) merge — not the
-            // candidate SHA. The lock invariant is that a conflict leaves the
-            // canonical branch untouched, so the recorded canonicalSHA must be
-            // the unchanged target HEAD, never the diverged candidate.
-            canonicalSHA: currentHead,
-            conflictFiles,
-          };
-          this.#landing.saveIntegration(integration);
-          throw new LandingConflictError(candidate, conflictFiles);
-        }
-      }
-
-      // --- Persist outcome ---
-      this.#landing.updateCandidateState(candidate.id, "landed");
-      const integration: Integration = {
-        candidateId: candidate.id,
-        outcome: outcome.kind === "fast-forward" ? "fast-forward" : "merge",
-        canonicalSHA,
-        ...(outcome.kind === "merge"
-          ? { mergeCommit: outcome.mergeCommit }
-          : {}),
-      };
-      this.#landing.saveIntegration(integration);
-
-      return { candidate, outcome, canonicalSHA };
-    } finally {
-      // Always release the lock
-      try {
-        await fh.close();
-        await unlink(lockPath);
-      } catch {
-        // ignore cleanup errors
-      }
-    }
   }
 
   /**

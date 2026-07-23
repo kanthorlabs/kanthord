@@ -26,6 +26,21 @@ import type { AIProvider, Credential } from "../../domain/resource.ts";
 const execFileAsync = promisify(execFileCb);
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
+type FeedEvent = {
+  id: string;
+  type: string;
+  taskId: string;
+  payload?: Record<string, string>;
+};
+
+/** Flatten `list event --json` output: each stdout line is one
+ * `{events,nextCursor}` envelope — return the concatenated events. */
+function parseEventFeed(stdout: string[]): FeedEvent[] {
+  return stdout.flatMap(
+    (line) => (JSON.parse(line) as { events: FeedEvent[] }).events,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Fake session factory — queued turns; throws CredentialError on mismatch.
 // ---------------------------------------------------------------------------
@@ -154,6 +169,10 @@ async function runSetup(
   const CRED = cr.stdout[0]!;
   assert.match(CRED, ULID_RE);
 
+  // The managed home is a bare, kanthord-owned store (EPIC 007.11) — never a
+  // developer checkout. Point --path at a fresh dir so kanthord provisions a
+  // bare clone from the bare origin; the sandbox checkout stays the source only.
+  const homeDir = `${sandboxDir}-home`;
   const rp = await dispatch(
     [
       "create",
@@ -167,7 +186,7 @@ async function runSetup(
       "--branch",
       "main",
       "--path",
-      sandboxDir,
+      homeDir,
     ],
     deps,
   );
@@ -394,8 +413,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       deps,
     );
     assert.equal(ev1.exitCode, 0, "events exits 0");
-    const task1Events = ev1.stdout
-      .map((line) => JSON.parse(line) as { type: string; taskId: string })
+    const task1Events = parseEventFeed(ev1.stdout)
       .filter((e) => e.taskId === TASK1)
       .map((e) => e.type);
 
@@ -518,16 +536,9 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
-    const task2EscalatedEvent = ev2.stdout
-      .map(
-        (line) =>
-          JSON.parse(line) as {
-            type: string;
-            taskId: string;
-            payload?: Record<string, string>;
-          },
-      )
-      .find((e) => e.taskId === TASK2 && e.type === "task.escalated");
+    const task2EscalatedEvent = parseEventFeed(ev2.stdout).find(
+      (e) => e.taskId === TASK2 && e.type === "task.escalated",
+    );
     assert.ok(
       task2EscalatedEvent !== undefined,
       "task.escalated event emitted for TASK2",
@@ -623,8 +634,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
-    const task2Events = ev3.stdout
-      .map((line) => JSON.parse(line) as { type: string; taskId: string })
+    const task2Events = parseEventFeed(ev3.stdout)
       .filter((e) => e.taskId === TASK2)
       .map((e) => e.type);
     const escalIdx = task2Events.indexOf("task.escalated");
@@ -749,9 +759,9 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
-    const failedEvents = ev.stdout
-      .map((line) => JSON.parse(line) as { type: string; taskId: string })
-      .filter((e) => e.taskId === TASK_RETRY && e.type === "task.failed");
+    const failedEvents = parseEventFeed(ev.stdout).filter(
+      (e) => e.taskId === TASK_RETRY && e.type === "task.failed",
+    );
     assert.equal(
       failedEvents.length,
       0,
@@ -895,14 +905,7 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
-    const allEvents = ev.stdout.map(
-      (line) =>
-        JSON.parse(line) as {
-          type: string;
-          taskId: string;
-          payload?: Record<string, string>;
-        },
-    );
+    const allEvents = parseEventFeed(ev.stdout);
     const discardedEvent = allEvents.find(
       (e) => e.taskId === TASK_DISCARD && e.type === "task.discarded",
     );
@@ -1034,16 +1037,9 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
     );
-    const failedEvent = ev4.stdout
-      .map(
-        (line) =>
-          JSON.parse(line) as {
-            type: string;
-            taskId: string;
-            payload?: Record<string, string>;
-          },
-      )
-      .find((e) => e.taskId === TASK4 && e.type === "task.failed");
+    const failedEvent = parseEventFeed(ev4.stdout).find(
+      (e) => e.taskId === TASK4 && e.type === "task.failed",
+    );
     assert.ok(failedEvent !== undefined, "task.failed event emitted");
     assert.ok(
       failedEvent?.payload?.["reason"]?.startsWith("CredentialError"),

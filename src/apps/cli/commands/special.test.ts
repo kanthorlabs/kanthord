@@ -462,14 +462,32 @@ describe("src/apps/cli/commands/land.ts", () => {
   test("lands a repository from its required canonical options", async () => {
     const candidates: unknown[] = [];
     const homes: string[] = [];
+    let previews = 0;
+    let targetResolutions = 0;
     const cap = capture();
     const deps = {
       repoLanding: {
-        land: async (home: string, candidate: unknown) => {
+        resolveTargetOID: async (home: string, _branch: string) => {
           homes.push(home);
+          targetResolutions++;
+          return "0000000000000000000000000000000000000000";
+        },
+        preview: async (
+          _home: string,
+          candidate: unknown,
+          _targetOID: string,
+        ) => {
           candidates.push(candidate);
+          previews++;
           return {
-            outcome: { kind: "fast-forward" },
+            kind: "fast-forward" as const,
+            candidateOID: (candidate as Record<string, unknown>)
+              .candidateSHA as string,
+          };
+        },
+        landPreviewed: async () => {
+          return {
+            outcome: { kind: "fast-forward" as const },
             canonicalSHA: "canonical-1",
           };
         },
@@ -495,6 +513,8 @@ describe("src/apps/cli/commands/land.ts", () => {
       { from: "user" },
     );
 
+    assert.equal(targetResolutions, 1, "resolveTargetOID must be called once");
+    assert.equal(previews, 1, "preview must be called once");
     assert.deepEqual(homes, ["/home/repository-1"]);
     assert.deepEqual(candidates, [
       {

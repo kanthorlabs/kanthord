@@ -1,13 +1,10 @@
 /**
  * Story 11 T6 — CLI `repo land` command handler.
- *
- * Fails today: `src/apps/cli/repo.ts` does not exist → ERR_MODULE_NOT_FOUND.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runRepoLand } from "./repo.ts";
-import type { RepositoryLanding, LandingResult } from "../../landing/port.ts";
-import { LandingConflictError } from "../../landing/port.ts";
+import type { RepositoryLanding } from "../../landing/port.ts";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -50,70 +47,64 @@ function resolveHomeDir(repoId: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Fake landings
+// Landing factory helpers used by the T6 fakes below
 // ---------------------------------------------------------------------------
 
-// S2 pre-adjust: shared stub methods added so these fakes still satisfy
-// RepositoryLanding once preview/landPreviewed/resolveTargetOID become required.
-// runRepoLand uses CliRepositoryLanding (land-only), so these stubs are never called.
-function s2Stubs(): Pick<
-  RepositoryLanding,
-  "preview" | "landPreviewed" | "resolveTargetOID"
-> {
+function makeFfLanding(): RepositoryLanding {
   return {
+    resolveTargetOID() {
+      return "0000000000000000000000000000000000000000";
+    },
     async preview(_homeDir, candidate) {
       return {
         kind: "fast-forward" as const,
         candidateOID: candidate.candidateSHA,
       };
     },
-    async landPreviewed(_homeDir, candidate, _previewOutcome, _targetOID) {
+    async landPreviewed() {
       return {
-        candidate,
+        candidate: CAND_FIXTURE,
         outcome: { kind: "fast-forward" as const },
-        canonicalSHA: candidate.candidateSHA,
+        canonicalSHA: FF_SHA,
       };
     },
-    resolveTargetOID(_homeDir, _branch) {
-      return "0000000000000000000000000000000000000000";
-    },
-  };
-}
-
-function makeFfLanding(): RepositoryLanding {
-  const result: LandingResult = {
-    candidate: CAND_FIXTURE,
-    outcome: { kind: "fast-forward" },
-    canonicalSHA: FF_SHA,
-  };
-  return {
-    async land(_homeDir, _candidate) {
-      return result;
-    },
-    ...s2Stubs(),
   };
 }
 
 function makeConflictLanding(): RepositoryLanding {
   return {
-    async land(_homeDir, candidate) {
-      throw new LandingConflictError(candidate, ["conflict.ts"]);
+    resolveTargetOID() {
+      return "0000000000000000000000000000000000000000";
     },
-    ...s2Stubs(),
+    async preview() {
+      return { kind: "conflict" as const, files: ["conflict.ts"], perFile: [] };
+    },
+    async landPreviewed() {
+      throw new Error(
+        "landPreviewed must not be called when preview returns conflict",
+      );
+    },
   };
 }
 
 function makeAlreadyLanding(): RepositoryLanding {
-  const result: LandingResult = {
-    candidate: CAND_FIXTURE,
-    outcome: { kind: "already-landed", canonicalSHA: FF_SHA },
-    canonicalSHA: FF_SHA,
-  };
   return {
-    async land(_homeDir, _candidate) {
-      return result;
+    resolveTargetOID() {
+      return "0000000000000000000000000000000000000000";
     },
-    ...s2Stubs(),
+    async preview(_homeDir, candidate) {
+      return {
+        kind: "fast-forward" as const,
+        candidateOID: candidate.candidateSHA,
+      };
+    },
+    async landPreviewed() {
+      return {
+        candidate: CAND_FIXTURE,
+        outcome: { kind: "already-landed" as const, canonicalSHA: FF_SHA },
+        canonicalSHA: FF_SHA,
+      };
+    },
   };
 }
 
@@ -180,4 +171,46 @@ test("T6-already-landed: runRepoLand when already landed returns exitCode 0 and 
     "already-landed",
     "outcome must be already-landed",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Story C — object/ref-only landing (confirms runRepoLand uses object path)
+// ---------------------------------------------------------------------------
+
+test("Story C object-path: runRepoLand with resolveTargetOID/preview/landPreviewed succeeds for fast-forward", async () => {
+  const objectPathLanding: import("../../landing/port.ts").RepositoryLanding = {
+    resolveTargetOID: async (_homeDir: string, _branch: string) =>
+      "0000000000000000000000000000000000000001",
+    preview: async (
+      _homeDir: string,
+      candidate: import("../../landing/port.ts").LandingCandidate,
+      _targetOID: string,
+    ) => {
+      return {
+        kind: "fast-forward" as const,
+        candidateOID: candidate.candidateSHA,
+      };
+    },
+    landPreviewed: async () => {
+      return {
+        candidate: CAND_FIXTURE,
+        outcome: { kind: "fast-forward" as const },
+        canonicalSHA: FF_SHA,
+      };
+    },
+  };
+
+  const result = await runRepoLand(
+    makeArgs(),
+    objectPathLanding,
+    resolveHomeDir,
+  );
+  assert.equal(
+    result.exitCode,
+    0,
+    `expected exit 0 for fast-forward via object path, got ${result.exitCode}: ${result.stderr.join("")}`,
+  );
+  const json = JSON.parse(result.stdout.join("")) as Record<string, unknown>;
+  assert.equal(json["outcome"], "fast-forward", "outcome must be fast-forward");
+  assert.equal(json["canonicalSHA"], FF_SHA, "canonicalSHA must match FF_SHA");
 });
