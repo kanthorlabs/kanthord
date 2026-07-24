@@ -17,6 +17,7 @@ import { buildLandCommand } from "./commands/land.ts";
 import { buildListCommand } from "./commands/list.ts";
 import { buildLoginCommand } from "./commands/login.ts";
 import { buildPauseCommand } from "./commands/pause.ts";
+import { buildPublishCommand } from "./commands/publish.ts";
 import { buildRejectCommand } from "./commands/reject.ts";
 import { buildRemoveCommand } from "./commands/remove.ts";
 import { buildRenameCommand } from "./commands/rename.ts";
@@ -52,6 +53,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const login = buildLoginCommand(deps, io).name("login");
   const run = buildRunCommand(deps, io).name("run");
   const land = buildLandCommand(deps, io).name("land");
+  const publish = buildPublishCommand(deps, io).name("publish");
 
   return new Command()
     .name("kanthord")
@@ -79,5 +81,6 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(exportCommand)
     .addCommand(login)
     .addCommand(run)
-    .addCommand(land);
+    .addCommand(land)
+    .addCommand(publish);
 }

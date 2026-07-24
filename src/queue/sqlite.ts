@@ -30,6 +30,12 @@ export class SqliteJobQueue implements JobQueue {
            JOIN objectives o ON t.objectiveId = o.id
            JOIN initiatives i ON o.initiativeId = i.id
            WHERE j.status='queued' AND i.paused = 0
+             AND NOT EXISTS (
+               SELECT 1 FROM jobs rj
+               JOIN tasks rt ON rj.taskId = rt.id
+               JOIN objectives ro ON rt.objectiveId = ro.id
+               WHERE rj.status='running' AND ro.initiativeId = i.id
+             )
            ORDER BY j.id LIMIT 1
          )
          RETURNING id, taskId`,

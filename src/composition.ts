@@ -98,6 +98,9 @@ const execFile = promisify(execFileCb);
 import { GitRepositoryLanding } from "./landing/git.ts";
 import { GetConflict } from "./app/task/get-conflict.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
+import { SqlitePublicationRepository } from "./storage/sqlite/publication.ts";
+import { GitRepositoryPublisher } from "./publication/git.ts";
+import { PublishRepository } from "./app/repository/publish-repository.ts";
 import { isRepository } from "./domain/resource.ts";
 import { ApproveObjective } from "./app/objective/approve-objective.ts";
 import { RetryObjective } from "./app/objective/retry-objective.ts";
@@ -195,7 +198,8 @@ export function buildDeps(
     modelCatalog,
   );
   const findResource = new FindResource(projectRepository);
-  const getResource = new GetResource(projectRepository);
+  const publicationRepository = new SqlitePublicationRepository(db);
+  const getResource = new GetResource(projectRepository, publicationRepository);
   const listResources = new ListResources(projectRepository);
   const homePathExists = async (path: string): Promise<boolean> => {
     if (!path) return false;
@@ -451,6 +455,27 @@ export function buildDeps(
     resolveTargetOID,
   );
 
+  // Story 007.13-A — resolves an https-token credential's stored value for
+  // GitRepositoryPublisher (mirrors the credential lookup in pi.ts:397-401).
+  const resolveCredential = async (credentialId: string): Promise<string> => {
+    const cred = projectRepository.getResource(credentialId);
+    if (!cred || cred.type !== "credential") {
+      throw new Error(`no credential resource found for id: ${credentialId}`);
+    }
+    return cred.value;
+  };
+
+  // Story 007.13-B — publish delivers a landed branch to its remote,
+  // separate from (and never automatic on) approve/land.
+  const repositoryPublisher = new GitRepositoryPublisher(resolveCredential);
+  const publishRepository = new PublishRepository(
+    projectRepository,
+    repositoryPublisher,
+    publicationRepository,
+    resolveHomeDir,
+    resolveTargetOID,
+  );
+
   // Shared workspace manager — used by both the daemon runner and the
   // approve-landing path so homeDir(repoId) resolves the same canonical mirror.
   const workspaceRoot = resolve(
@@ -687,10 +712,12 @@ export function buildDeps(
     listModels,
     diagnosticsExport,
     repoLanding,
+    publishRepository,
     resolveHomeDir,
     workspaces,
     newId,
     getConflict,
     getPriorFeedback,
+    resolveCredential,
   };
 }

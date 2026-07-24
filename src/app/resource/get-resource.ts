@@ -1,4 +1,7 @@
-import type { ProjectRepository } from "../../storage/port.ts";
+import type {
+  ProjectRepository,
+  PublicationRepository,
+} from "../../storage/port.ts";
 import { UnknownReferenceError } from "../errors.ts";
 import { toResourceView, type ResourceView } from "./resource-view.ts";
 
@@ -8,9 +11,14 @@ import { toResourceView, type ResourceView } from "./resource-view.ts";
 
 export class GetResource {
   private readonly projectRepository: ProjectRepository;
+  private readonly publicationRepository?: PublicationRepository;
 
-  constructor(projectRepository: ProjectRepository) {
+  constructor(
+    projectRepository: ProjectRepository,
+    publicationRepository?: PublicationRepository,
+  ) {
     this.projectRepository = projectRepository;
+    this.publicationRepository = publicationRepository;
   }
 
   execute(id: string): ResourceView {
@@ -18,6 +26,14 @@ export class GetResource {
     if (resource === undefined) {
       throw new UnknownReferenceError("resource", id);
     }
-    return toResourceView(resource);
+    const view = toResourceView(resource);
+    if (
+      view.type === "repository" &&
+      this.publicationRepository !== undefined
+    ) {
+      const record = this.publicationRepository.getLatestPublication(view.id);
+      view.publication = record ?? null;
+    }
+    return view;
   }
 }

@@ -336,4 +336,18 @@ ALTER TABLE objectives ADD COLUMN commitOid TEXT;
 ALTER TABLE objectives ADD COLUMN parentOid TEXT;
 `),
   },
+  {
+    version: 15,
+    name: "007.13-s3-publications",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE publications (
+  repo_id    TEXT NOT NULL,
+  branch     TEXT NOT NULL,
+  state      TEXT NOT NULL CHECK (state IN ('unpublished','published','diverged')),
+  remote_oid TEXT,
+  PRIMARY KEY (repo_id, branch)
+);
+`),
+  },
 ];

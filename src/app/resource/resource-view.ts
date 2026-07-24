@@ -29,6 +29,10 @@ export type RepositoryView = {
   branch: string;
   path: string;
   auth: RepositoryAuth;
+  publication: {
+    state: "unpublished" | "published" | "diverged";
+    remoteOID: string | null;
+  } | null;
 };
 
 export type NotificationView = {
@@ -94,6 +98,7 @@ export function toResourceView(resource: Resource): ResourceView {
         branch: r.branch,
         path: r.path,
         auth: r.auth,
+        publication: null,
       };
     }
     case "notification": {

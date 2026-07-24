@@ -40,5 +40,23 @@ Land storage + read view before/with Story B's write.
   `--json`; no row → `unpublished`/null.
 - `node --test` migration: table exists; `validateSequence` passes.
 - `npm run verify` exits 0.
-- Proof C (`get repository --json` reports `publication{state=published,
+- Proof C (`get resource --id <repo> --json` reports `publication{state=published,
 remoteOID}`).
+
+## Reconciliation with 007.12 (maintainer, 2026-07-24)
+
+Under the shipped 007.12 objective-branch workflow, delivery publishes the
+**initiative branch** `kanthord/init/<id>`, not the repo's configured branch
+(`main`). So `GetResource` must NOT key the read on `view.branch` (that would
+always miss the published init branch). Instead:
+
+- **Store port** gains `getLatestPublication(repoId)` — the publication for the
+  repo's most-recently-published branch (any branch), or `undefined` if none.
+  sqlite adapter: `SELECT ... FROM publications WHERE repo_id = ? ORDER BY
+rowid DESC LIMIT 1` (each branch publishes once in the flow, so rowid order is
+  stable). `getPublication(repoId, branch)` stays for the publish use case's
+  `expectedRemoteOID` read.
+- **`GetResource.execute`** sources `view.publication` from
+  `getLatestPublication(repo.id)` instead of `getPublication(id, view.branch)`.
+- The `get-resource.test.ts` fake and the publication-store test cover
+  `getLatestPublication` (latest-branch round-trip; no rows → null).

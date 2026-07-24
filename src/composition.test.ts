@@ -996,3 +996,57 @@ test("(007.12 daemon wiring) a second objective's squash chains onto the first o
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 007.13 review-blocker regression — composition must wire a credential
+// resolver that GitRepositoryPublisher can use for https-token auth.
+//
+// RED today: buildDeps does not expose resolveCredential (and does not
+// construct GitRepositoryPublisher with one), so an https-token publish
+// cannot authenticate. This mirrors the getPriorFeedback wiring-regression
+// pattern above: assert an accessor exposed from buildDeps.
+// ---------------------------------------------------------------------------
+test("(007.13-credential-resolver) composition: resolveCredential reads the stored credential value by id", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-0713-cred-"));
+  const dbPath = join(dir, "kanthord.db");
+  try {
+    const deps = buildDeps(dbPath);
+
+    const migrate = await dispatch(["db", "migrate"], deps);
+    assert.equal(migrate.exitCode, 0, "db migrate exits 0");
+
+    const rp = await dispatch(
+      ["create", "project", "--name", "cred0713demo"],
+      deps,
+    );
+    assert.equal(rp.exitCode, 0, "create project exits 0");
+    const PROJECT = rp.stdout[0]!;
+
+    const CANARY = "CANARY_PUBLISH_CREDENTIAL_VALUE";
+    const credId = await deps.addResource.execute({
+      type: "credential",
+      projectId: PROJECT,
+      name: "publish-cred",
+      provider: "github",
+      value: CANARY,
+    });
+
+    const depsAny = deps as Record<string, unknown>;
+    const resolveCredential = depsAny["resolveCredential"] as
+      ((credentialId: string) => Promise<string>) | undefined;
+
+    assert.ok(
+      typeof resolveCredential === "function",
+      "deps.resolveCredential must be exposed from buildDeps and wired into GitRepositoryPublisher",
+    );
+
+    const resolved = await resolveCredential!(credId);
+    assert.equal(
+      resolved,
+      CANARY,
+      "resolveCredential must read the stored credential's canary value back by id",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -138,6 +138,17 @@ src/
   `GET /events?after=<last-ulid>` with a cursor (ULIDs sort by time).
 - One repository per aggregate (Project, Initiative, Task) — not per entity.
 
+### Delivery contract
+
+A task `completed` + candidate `landed` (007.11) / objective `integrated`
+(007.12) means the work is **locally landed** in the bare managed home — it is
+not yet on the remote. Delivery to the remote is a separate, explicit
+`publish repository` step (007.13): human-gated, fast-forward-only, and never
+force-pushes. Each repository target carries its own publication state —
+`unpublished` / `published@<remoteOID>` / `diverged` — so a local land is always
+distinguishable from a completed remote delivery. The deferred `pr@1` agent
+(007.12) will call `publish`; until then, publication is a manual operator step.
+
 ### Testing
 
 - Domain and use cases test hermetically with fakes implementing ports — no

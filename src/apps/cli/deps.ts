@@ -41,6 +41,7 @@ import type { GetConflict } from "../../app/task/get-conflict.ts";
 import type { RetryTask } from "../../app/task/retry-task.ts";
 import type { RunDaemon } from "../../app/task/run-daemon.ts";
 import type { CreateTask } from "../../app/task/create-task.ts";
+import type { PublishRepository } from "../../app/repository/publish-repository.ts";
 import type { CreateGraph } from "../../app/graph/create-graph.ts";
 import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
 import type { LoginDeps } from "./login.ts";
@@ -169,6 +170,7 @@ export interface CliDeps {
   listModels: ListModels;
   diagnosticsExport: DiagnosticsExport;
   repoLanding: CliRepositoryLanding;
+  publishRepository: PublishRepository;
   resolveHomeDir: (repoId: string) => string;
   workspaces: CliWorkspaceManager;
   newId: () => string;

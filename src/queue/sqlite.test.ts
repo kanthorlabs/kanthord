@@ -432,6 +432,106 @@ test("claim skips queued job for paused initiative; claimable after resume", () 
   assert.equal(resumed.taskId, pausedTaskId);
 });
 
+// ---------------------------------------------------------------------------
+// Story E — per-initiative claim exclusion
+// ---------------------------------------------------------------------------
+
+function seedInitiative(db: ReturnType<typeof openDatabase>): string {
+  const projectRepo = new SqliteProjectRepository(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+
+  const projectId = newId();
+  const initiativeId = newId();
+
+  projectRepo.save({ id: projectId, name: "Proj" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+
+  return initiativeId;
+}
+
+function seedTaskUnderInitiative(
+  db: ReturnType<typeof openDatabase>,
+  initiativeId: string,
+): string {
+  const initRepo = new SqliteInitiativeRepository(db);
+  const taskRepo = new SqliteTaskRepository(db);
+
+  const objectiveId = newId();
+  const taskId = newId();
+
+  initRepo.saveObjective({ id: objectiveId, initiativeId, name: "Obj" });
+  taskRepo.save({
+    id: taskId,
+    objectiveId,
+    title: "Task",
+    status: "pending",
+    dependencies: [],
+  });
+
+  return taskId;
+}
+
+test("claim serializes tasks within the SAME initiative", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const initiativeId = seedInitiative(db);
+  const taskId1 = seedTaskUnderInitiative(db, initiativeId);
+  const taskId2 = seedTaskUnderInitiative(db, initiativeId);
+  const queue = new SqliteJobQueue(db);
+
+  queue.enqueue(taskId1);
+  queue.enqueue(taskId2);
+
+  const job1 = queue.claim();
+  assert.ok(job1 !== undefined, "first claim should return task 1");
+  assert.equal(job1.taskId, taskId1);
+
+  // task 1's job is still running, so task 2 (same initiative) must NOT be
+  // claimable yet.
+  const blocked = queue.claim();
+  assert.equal(
+    blocked,
+    undefined,
+    "second claim must be blocked while the initiative has an in-flight job",
+  );
+
+  queue.finish(job1.id, "completed");
+
+  const job2 = queue.claim();
+  assert.ok(job2 !== undefined, "claim after finish should return task 2");
+  assert.equal(job2.taskId, taskId2);
+});
+
+test("claim allows parallelism across DIFFERENT initiatives", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const initiativeId1 = seedInitiative(db);
+  const initiativeId2 = seedInitiative(db);
+  const taskId1 = seedTaskUnderInitiative(db, initiativeId1);
+  const taskId2 = seedTaskUnderInitiative(db, initiativeId2);
+  const queue = new SqliteJobQueue(db);
+
+  queue.enqueue(taskId1);
+  queue.enqueue(taskId2);
+
+  const job1 = queue.claim();
+  const job2 = queue.claim();
+  assert.ok(job1 !== undefined, "first initiative's task should be claimable");
+  assert.ok(
+    job2 !== undefined,
+    "second initiative's task should be claimable in parallel",
+  );
+  assert.notEqual(job1.taskId, job2.taskId);
+});
+
 test(
   "batch sweep: two workers together claim exactly the full set",
   { timeout: 30000 },

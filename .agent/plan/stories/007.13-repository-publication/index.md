@@ -18,6 +18,7 @@ B's persistence write; B wires the use case + CLI; D is docs.
 - B — `publish repository` CLI + use case → `02-publish-repository-cli-usecase.md`
 - C — persisted publication state → `03-persisted-publication-state.md`
 - D — delivery-contract docs → `04-delivery-contract-docs.md`
+- E — per-initiative claim exclusion (job queue) → `05-per-initiative-claim-exclusion.md`
 
 ## Facts (needed for implementation)
 

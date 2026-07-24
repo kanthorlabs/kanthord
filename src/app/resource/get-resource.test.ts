@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { GetResource } from "./get-resource.ts";
 import { toResourceView } from "./resource-view.ts";
 import type { ResourceView } from "./resource-view.ts";
-import type { ProjectRepository } from "../../storage/port.ts";
+import type {
+  ProjectRepository,
+  PublicationRepository,
+  PublicationRecord,
+} from "../../storage/port.ts";
 import type {
   Resource,
   Repository,
@@ -37,6 +41,31 @@ function makeFakeRepo(resources: Resource[]): ProjectRepository {
       return [];
     },
   } as unknown as ProjectRepository;
+}
+
+// ---------------------------------------------------------------------------
+// Minimal fake PublicationRepository (007.13 Story C)
+// ---------------------------------------------------------------------------
+function makeFakePublicationRepo(records: Map<string, PublicationRecord>) {
+  return {
+    getPublication(repoId: string, branch: string) {
+      return records.get(`${repoId}:${branch}`);
+    },
+    setPublication(repoId: string, branch: string, record: PublicationRecord) {
+      records.set(`${repoId}:${branch}`, record);
+    },
+    // 007.12 reconciliation: delivery publishes the initiative branch
+    // (kanthord/init/<id>), not the repo's configured branch, so the "what
+    // was last published" lookup must scan across branches, most-recent
+    // insertion wins (Map preserves insertion order).
+    getLatestPublication(repoId: string) {
+      let latest: PublicationRecord | undefined;
+      for (const [key, record] of records) {
+        if (key.startsWith(`${repoId}:`)) latest = record;
+      }
+      return latest;
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -153,6 +182,76 @@ describe("src/app/resource/get-resource.ts", () => {
           );
           return true;
         },
+      );
+    });
+  });
+
+  describe("GetResource — publication state on the repository view (007.13 Story C)", () => {
+    test("GetResource.execute reports publication{state:'published', remoteOID} when a publication record exists", () => {
+      const projectRepo = makeFakeRepo([repo]);
+      const publicationRepo = makeFakePublicationRepo(
+        new Map([
+          [
+            "repo-1:main",
+            { state: "published", remoteOID: "abc123" } as PublicationRecord,
+          ],
+        ]),
+      );
+      const uc = new GetResource(projectRepo, publicationRepo);
+      const view = uc.execute("repo-1") as Extract<
+        ResourceView,
+        { type: "repository" }
+      >;
+      assert.deepEqual(view.publication, {
+        state: "published",
+        remoteOID: "abc123",
+      });
+    });
+
+    test("GetResource.execute reports the publication of the most-recently-published branch, not the repo's configured branch (007.12 reconciliation)", () => {
+      // repo.branch is "main" (see the `repo` fixture above), but delivery
+      // under 007.12 publishes the initiative branch instead — GetResource
+      // must NOT key its lookup on view.branch, or it would always miss this.
+      const projectRepo = makeFakeRepo([repo]);
+      const publicationRepo = makeFakePublicationRepo(
+        new Map([
+          [
+            "repo-1:main",
+            { state: "published", remoteOID: "main-oid" } as PublicationRecord,
+          ],
+          [
+            "repo-1:kanthord/init/X",
+            {
+              state: "published",
+              remoteOID: "deadbeef",
+            } as PublicationRecord,
+          ],
+        ]),
+      );
+      const uc = new GetResource(projectRepo, publicationRepo);
+      const view = uc.execute("repo-1") as Extract<
+        ResourceView,
+        { type: "repository" }
+      >;
+      assert.deepEqual(
+        view.publication,
+        { state: "published", remoteOID: "deadbeef" },
+        "must report the init-branch publication (getLatestPublication), not the configured-branch one",
+      );
+    });
+
+    test("GetResource.execute reports publication null when no publication record exists for the repo's branch", () => {
+      const projectRepo = makeFakeRepo([repo]);
+      const publicationRepo = makeFakePublicationRepo(new Map());
+      const uc = new GetResource(projectRepo, publicationRepo);
+      const view = uc.execute("repo-1") as Extract<
+        ResourceView,
+        { type: "repository" }
+      >;
+      assert.equal(
+        view.publication,
+        null,
+        "no stored publication record must surface as publication: null",
       );
     });
   });

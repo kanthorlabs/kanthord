@@ -62,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 14 and creates exactly sixteen core tables", () => {
+test("migrates to version 15 and creates exactly seventeen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 14);
+    assert.equal(userVersion(db), 15);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -75,6 +75,7 @@ test("migrates to version 14 and creates exactly sixteen core tables", () => {
       "objectives",
       "observability_refs",
       "projects",
+      "publications",
       "repo_locks",
       "resources",
       "task_context",
@@ -325,7 +326,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 14);
+    assert.equal(second.version, 15);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -738,8 +739,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      14,
-      "schema version must be 14 after all migrations",
+      15,
+      "schema version must be 15 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -869,7 +870,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 14);
+    assert.equal(userVersion(db), 15);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -958,7 +959,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 14);
+    assert.equal(userVersion(db), 15);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -981,6 +982,41 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
       .prepare("SELECT workspace FROM initiatives WHERE id = ?")
       .get("init-m13") as WorkspaceRow | undefined;
     assert.equal(updated?.workspace, "/tmp/kanthord/init/init-m13");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (t) migration 15 — publications table (007.13 Story C) ──────────────────
+
+test("migration 15 creates publications table keyed by (repo_id, branch) with a state CHECK", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m15-publications-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    const report = migrate(db, MIGRATIONS);
+    assert.equal(report.version, 15);
+    assert.ok(
+      userTables(db).includes("publications"),
+      "publications table must exist after migration 15",
+    );
+    assert.deepEqual(
+      columnNames(db, "publications").sort(),
+      ["branch", "remote_oid", "repo_id", "state"].sort(),
+    );
+
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO publications(repo_id, branch, state, remote_oid) VALUES (?, ?, ?, ?)",
+      ).run("repo-m15", "main", "published", "deadbeef");
+    }, "a 'published' row with a remote_oid must be accepted");
+
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO publications(repo_id, branch, state, remote_oid) VALUES (?, ?, ?, ?)",
+      ).run("repo-m15", "other", "bogus-state", null);
+    }, /CHECK/i);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

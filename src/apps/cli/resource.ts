@@ -290,6 +290,14 @@ export async function runGetResource(
     const lines: string[] = [];
     for (const [k, v] of Object.entries(view as Record<string, unknown>)) {
       if (v === undefined) continue;
+      if (k === "publication") {
+        if (v === null) continue;
+        const pub = v as { state: string; remoteOID: string | null };
+        lines.push(
+          `publication: ${pub.state}${pub.remoteOID !== null ? ` @${pub.remoteOID}` : ""}`,
+        );
+        continue;
+      }
       const valueStr =
         typeof v === "object" && v !== null ? JSON.stringify(v) : String(v);
       lines.push(`${k}: ${valueStr}`);

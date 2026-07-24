@@ -186,6 +186,27 @@ export interface LandingRepository {
   getIntegration(candidateId: string): Integration | undefined;
 }
 
+/** The publication lifecycle state of a repository target (repoId, branch). */
+export type PublicationStateName = "unpublished" | "published" | "diverged";
+
+/** A stored publication record: its state and the remote OID it observed. */
+export interface PublicationRecord {
+  state: PublicationStateName;
+  remoteOID: string | null;
+}
+
+/** Repository for per-(repoId, branch) publication state (007.13 Story C). */
+export interface PublicationRepository {
+  getPublication(repoId: string, branch: string): PublicationRecord | undefined;
+  /** Returns the record for the repo's most-recently-published branch, or undefined if none. */
+  getLatestPublication(repoId: string): PublicationRecord | undefined;
+  setPublication(
+    repoId: string,
+    branch: string,
+    record: PublicationRecord,
+  ): void;
+}
+
 /**
  * Durable ref→id idempotency store backed by the `graph_import_map` table
  * (migration 6). Used by `import graph --create` (reserve) and
