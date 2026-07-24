@@ -1,61 +1,42 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kanthor Core Docs</title>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #07111f;
-      --card: rgba(17, 35, 66, 0.9);
-      --line: rgba(154, 184, 226, 0.28);
-      --text: #ecf5ff;
-      --muted: #a9bbd5;
-      --cyan: #4bd5ff;
-      --green: #84f0a4;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      min-height: 100vh;
-      margin: 0;
-      display: grid;
-      place-items: center;
-      padding: 24px;
-      background:
-        radial-gradient(circle at 18% 18%, rgba(75, 213, 255, 0.16), transparent 28rem),
-        linear-gradient(135deg, #050914 0%, var(--bg) 48%, #101a31 100%);
-      color: var(--text);
-    }
-
-    main {
-      width: min(680px, 100%);
-      padding: clamp(24px, 5vw, 42px);
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      background: var(--card);
-      box-shadow: 0 24px 90px rgba(0, 0, 0, 0.38);
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(2rem, 7vw, 4.6rem);
-      line-height: 0.94;
-      letter-spacing: -0.07em;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KanthorD Docs</title>
+  <meta name="description" content="KanthorD documentation" />
+  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
 </head>
 
 <body>
-  <main>
-    <h1>KanthorD</h1>
-  </main>
+  <div id="app"></div>
+  <script>
+    window.$docsify = {
+      name: 'KanthorD',
+      loadSidebar: true,
+      subMaxLevel: 3,
+      auto2top: true,
+      markdown: {
+        renderer: {
+          code(code, lang) {
+            if (lang === 'mermaid') {
+              return `<div class="mermaid">${code}</div>`;
+            }
+            return this.origin.code.apply(this, arguments);
+          }
+        }
+      },
+      plugins: [
+        (hook) => hook.doneEach(() => window.mermaid?.run({ querySelector: '.mermaid' }))
+      ]
+    };
+  </script>
+  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+  <script src="//cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false });
+  </script>
 </body>
 
 </html>

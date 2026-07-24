@@ -1,0 +1,11 @@
+- [Overview](/)
+- [Git Workflow](git-workflow.md)
+- Per-epic views
+  - [001 — Dev environment](flowchart/001.md)
+  - [002 — Domain core](flowchart/002.md)
+  - [003 — Persistence & queue](flowchart/003.md)
+  - [004 — CLI work graph](flowchart/004.md)
+  - [005 — Execution loop](flowchart/005.md)
+  - [006 — Real agents via pi](flowchart/006.md)
+- Formats
+  - [graph-md](formats/graph-md.md)
