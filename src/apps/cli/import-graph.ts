@@ -447,6 +447,9 @@ async function runCreate(
     initiativeId,
     nodes: result.nodes,
     files: fileIds,
+    objectiveIds: pkg.objectives
+      .map((o) => objectiveRefToId[o.ref])
+      .filter((id): id is string => id !== undefined),
     refToId: {
       objectives: result.refToId.objectives,
       tasks: result.refToId.tasks,

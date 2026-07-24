@@ -14,9 +14,16 @@ export class SqliteEventFeed implements EventFeed {
       event.payload !== undefined ? JSON.stringify(event.payload) : null;
     this.#db
       .prepare(
-        "INSERT INTO events(id, type, taskId, payload) VALUES(?, ?, ?, ?)",
+        "INSERT INTO events(id, type, taskId, payload, objectiveId, initiativeId) VALUES(?, ?, ?, ?, ?, ?)",
       )
-      .run(event.id, event.type, event.taskId, payload);
+      .run(
+        event.id,
+        event.type,
+        event.taskId ?? null,
+        payload,
+        event.objectiveId ?? null,
+        event.initiativeId ?? null,
+      );
   }
 
   readAfter(cursor: string, limit?: number): Event[] {
@@ -28,21 +35,31 @@ export class SqliteEventFeed implements EventFeed {
 
     const rows = this.#db
       .prepare(
-        "SELECT id, type, taskId, payload FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
+        "SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
       )
       .all(cursor, effectiveLimit) as Array<{
       id: string;
       type: string;
-      taskId: string;
+      taskId: string | null;
       payload: string | null;
+      objectiveId: string | null;
+      initiativeId: string | null;
     }>;
 
     return rows.map((r) => {
       const event: Event = {
         id: r.id,
         type: r.type as Event["type"],
-        taskId: r.taskId,
       };
+      if (r.taskId !== null) {
+        event.taskId = r.taskId;
+      }
+      if (r.objectiveId !== null) {
+        event.objectiveId = r.objectiveId;
+      }
+      if (r.initiativeId !== null) {
+        event.initiativeId = r.initiativeId;
+      }
       if (r.payload !== null) {
         event.payload = JSON.parse(r.payload) as Record<string, string>;
       }

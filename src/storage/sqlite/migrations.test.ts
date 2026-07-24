@@ -62,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 10 and creates exactly sixteen core tables", () => {
+test("migrates to version 14 and creates exactly sixteen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 10);
+    assert.equal(userVersion(db), 14);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -112,12 +112,17 @@ test("schema columns match locked DDL for all sixteen tables", () => {
       "name",
       "paused",
       "sha256",
+      "status",
+      "workspace",
     ]);
     assert.deepEqual(columnNames(db, "objectives"), [
       "id",
       "initiativeId",
       "name",
       "sha256",
+      "status",
+      "commitOid",
+      "parentOid",
     ]);
     assert.deepEqual(columnNames(db, "tasks"), [
       "id",
@@ -142,6 +147,8 @@ test("schema columns match locked DDL for all sixteen tables", () => {
       "type",
       "taskId",
       "payload",
+      "objectiveId",
+      "initiativeId",
     ]);
     assert.deepEqual(columnNames(db, "task_context"), [
       "task_id",
@@ -318,7 +325,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 10);
+    assert.equal(second.version, 14);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -731,8 +738,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      10,
-      "schema version must be 10 after all migrations",
+      14,
+      "schema version must be 14 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -749,6 +756,231 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
       .get("ev-s2-1") as { type: string } | undefined;
     assert.ok(row !== undefined, "seeded event row ev-s2-1 must survive");
     assert.equal(row.type, "task.created");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (q) migration 11 — initiative/objective status column ───────────────────
+
+test("migration 11 adds status column to initiatives and objectives, defaulting existing rows to building", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m11-status-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 10 only (pre-status-column state), then seed rows
+    // using only the pre-migration-11 columns.
+    migrate(db, MIGRATIONS.slice(0, 10));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m11', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m11', 'proj-m11', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m11', 'init-m11', 'O');
+    `);
+
+    migrate(db, MIGRATIONS);
+
+    type StatusRow = { status: string };
+    const initRow = db
+      .prepare("SELECT status FROM initiatives WHERE id = ?")
+      .get("init-m11") as StatusRow | undefined;
+    assert.equal(
+      initRow?.status,
+      "building",
+      "pre-existing initiative row must default status to building",
+    );
+    const objRow = db
+      .prepare("SELECT status FROM objectives WHERE id = ?")
+      .get("obj-m11") as StatusRow | undefined;
+    assert.equal(
+      objRow?.status,
+      "building",
+      "pre-existing objective row must default status to building",
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 11 initiatives.status CHECK accepts building|awaiting_pr|delivered and rejects other values", () => {
+  withMigratedDb((db) => {
+    db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+      "proj-m11-check",
+      "P",
+    );
+    for (const status of ["building", "awaiting_pr", "delivered"]) {
+      assert.doesNotThrow(() => {
+        db.prepare(
+          "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
+        ).run(`init-${status}`, "proj-m11-check", "I", status);
+      }, `initiatives.status = ${status} must be accepted`);
+    }
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
+      ).run("init-bad-status", "proj-m11-check", "I", "invalid");
+    }, "initiatives.status CHECK should reject invalid value");
+  });
+});
+
+test("migration 11 objectives.status CHECK accepts building|awaiting_confirmation|conflict|integrated and rejects other values", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m11-obj-check', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m11-obj-check', 'proj-m11-obj-check', 'I');
+    `);
+    for (const status of [
+      "building",
+      "awaiting_confirmation",
+      "conflict",
+      "integrated",
+    ]) {
+      assert.doesNotThrow(() => {
+        db.prepare(
+          "INSERT INTO objectives(id, initiativeId, name, status) VALUES (?, ?, ?, ?)",
+        ).run(`obj-${status}`, "init-m11-obj-check", "O", status);
+      }, `objectives.status = ${status} must be accepted`);
+    }
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objectives(id, initiativeId, name, status) VALUES (?, ?, ?, ?)",
+      ).run("obj-bad-status", "init-m11-obj-check", "O", "invalid");
+    }, "objectives.status CHECK should reject invalid value");
+  });
+});
+
+// ── (r) migration 12 — objective/initiative-scoped events ───────────────────
+
+test("migration 12 adds objectiveId and initiativeId columns to events and makes taskId nullable", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m12-events-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 11 only (pre-scoped-event state) and seed a
+    // task-scoped event using only the pre-migration-12 columns.
+    migrate(db, MIGRATIONS.slice(0, 11));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m12', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m12', 'proj-m12', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m12', 'init-m12', 'O');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-m12', 'obj-m12', 'T', 'pending');
+      INSERT INTO events(id, type, taskId) VALUES ('ev-m12-task', 'task.created', 'task-m12');
+    `);
+
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 14);
+    assert.deepEqual(columnNames(db, "events"), [
+      "id",
+      "type",
+      "taskId",
+      "payload",
+      "objectiveId",
+      "initiativeId",
+    ]);
+
+    const taskRow = db
+      .prepare(
+        "SELECT taskId, objectiveId, initiativeId FROM events WHERE id = ?",
+      )
+      .get("ev-m12-task") as {
+      taskId: string;
+      objectiveId: string | null;
+      initiativeId: string | null;
+    };
+    assert.equal(
+      taskRow.taskId,
+      "task-m12",
+      "pre-existing task-scoped event row survives the rebuild",
+    );
+    assert.equal(taskRow.objectiveId, null);
+    assert.equal(taskRow.initiativeId, null);
+
+    // taskId is now nullable: an objective-scoped event with no taskId inserts.
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO events(id, type, objectiveId) VALUES (?, ?, ?)",
+      ).run("ev-m12-obj", "objective.integrated", "obj-m12");
+    }, "events.taskId must be nullable after migration 12");
+    const objRow = db
+      .prepare("SELECT taskId, objectiveId FROM events WHERE id = ?")
+      .get("ev-m12-obj") as { taskId: string | null; objectiveId: string };
+    assert.equal(objRow.taskId, null);
+    assert.equal(objRow.objectiveId, "obj-m12");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 12 events.type CHECK accepts the six new objective/initiative event types", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m12-types', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m12-types', 'proj-m12-types', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m12-types', 'init-m12-types', 'O');
+    `);
+    for (const type of [
+      "objective.building",
+      "objective.awaiting_confirmation",
+      "objective.integrated",
+      "objective.conflict",
+    ]) {
+      assert.doesNotThrow(() => {
+        db.prepare(
+          "INSERT INTO events(id, type, objectiveId) VALUES (?, ?, ?)",
+        ).run(`ev-${type}`, type, "obj-m12-types");
+      }, `event type '${type}' must be accepted by the events CHECK constraint`);
+    }
+    for (const type of ["initiative.awaiting_pr", "initiative.delivered"]) {
+      assert.doesNotThrow(() => {
+        db.prepare(
+          "INSERT INTO events(id, type, initiativeId) VALUES (?, ?, ?)",
+        ).run(`ev-${type}`, type, "init-m12-types");
+      }, `event type '${type}' must be accepted by the events CHECK constraint`);
+    }
+  });
+});
+
+// ── (s) migration 13 — initiative workspace (clone dir) column ──────────────
+
+test("migration 13 adds a nullable workspace column to initiatives, defaulting existing rows to null", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m13-workspace-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 12 only (pre-workspace-column state), then seed a
+    // row using only the pre-migration-13 columns.
+    migrate(db, MIGRATIONS.slice(0, 12));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m13', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m13', 'proj-m13', 'I');
+    `);
+
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 14);
+
+    type WorkspaceRow = { workspace: string | null };
+    const row = db
+      .prepare("SELECT workspace FROM initiatives WHERE id = ?")
+      .get("init-m13") as WorkspaceRow | undefined;
+    assert.equal(
+      row?.workspace,
+      null,
+      "pre-existing initiative row must default workspace to null",
+    );
+
+    // The column accepts a clone-dir path once the daemon provisions one.
+    assert.doesNotThrow(() => {
+      db.prepare("UPDATE initiatives SET workspace = ? WHERE id = ?").run(
+        "/tmp/kanthord/init/init-m13",
+        "init-m13",
+      );
+    }, "workspace column must accept a clone-dir path string");
+    const updated = db
+      .prepare("SELECT workspace FROM initiatives WHERE id = ?")
+      .get("init-m13") as WorkspaceRow | undefined;
+    assert.equal(updated?.workspace, "/tmp/kanthord/init/init-m13");
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

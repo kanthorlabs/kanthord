@@ -277,6 +277,20 @@ test("ExportInitiative manifest.files includes initiative+objectives+pending tas
   assert.ok(!files.includes(TASK3_ID), "running task3 NOT in files");
 });
 
+test("ExportInitiative manifest.objectiveIds is the ordered list of objective ids (initiative-branch workflow needs objective order)", async () => {
+  const uc = new ExportInitiative({
+    tasks: new FakeTaskRepository(),
+    initiatives: new FakeInitiativeRepository(),
+  });
+  const pkg = await uc.execute(INIT_ID);
+
+  assert.deepEqual(
+    pkg.manifest?.objectiveIds,
+    [OBJ1_ID, OBJ2_ID],
+    "manifest.objectiveIds is [OBJ1_ID, OBJ2_ID] in listObjectives order",
+  );
+});
+
 test("ExportInitiative every exported node has id === ref (ULID-as-ref; no lowercase ref)", async () => {
   const uc = new ExportInitiative({
     tasks: new FakeTaskRepository(),

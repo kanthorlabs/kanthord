@@ -2,7 +2,9 @@
 type CliEvent = {
   id: string;
   type: string;
-  taskId: string;
+  taskId?: string;
+  objectiveId?: string;
+  initiativeId?: string;
   payload?: Record<string, string>;
 };
 
@@ -97,14 +99,15 @@ export async function runEvents(
       } else {
         // Display throttle: for agent.progress, emit at most one line per
         // taskId per 5 seconds (capture is un-throttled per A3).
-        if (event.type === "agent.progress") {
+        if (event.type === "agent.progress" && event.taskId !== undefined) {
           const last = lastProgressMs.get(event.taskId) ?? 0;
           if (Date.now() - last < 5000) {
             continue;
           }
           lastProgressMs.set(event.taskId, Date.now());
         }
-        let line = `${event.id} ${event.type} ${event.taskId}`;
+        const scopeId = event.taskId ?? event.objectiveId ?? event.initiativeId;
+        let line = `${event.id} ${event.type} ${scopeId}`;
         if (event.payload !== undefined) {
           line += ` ${JSON.stringify(event.payload)}`;
         }

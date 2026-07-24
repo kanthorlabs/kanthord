@@ -1,13 +1,25 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { promisify } from "node:util";
+import { execFile as execFileCb, execFileSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { buildDeps, buildEmitCallback } from "./composition.ts";
 import type { Event } from "./domain/event.ts";
 import type { Logger } from "./logger/port.ts";
+import type { Repository } from "./domain/resource.ts";
+import { LocalWorkspaceManager } from "./workspace/local.ts";
 import { runCli as dispatch } from "./apps/cli/commands/run-cli.ts";
+
+const execFile = promisify(execFileCb);
+
+async function git(cwd: string, ...args: string[]): Promise<string> {
+  const { stdout } = await execFile("git", args, { cwd });
+  return stdout.trim();
+}
 
 // Story 03 T3 — get resource via dispatch: credential value absent from stdout (D6 + composition wiring)
 // Characterization test: the SE implemented the composition.ts wiring in T2's GREEN phase.
@@ -201,6 +213,13 @@ test("buildDeps returns a RouterDeps bundle with all registered capabilities", (
     assert.ok("updateRepository" in deps, "deps.updateRepository present");
     assert.ok("updateNotification" in deps, "deps.updateNotification present");
     assert.ok("updateFilesystem" in deps, "deps.updateFilesystem present");
+    // Story C (007.12) — approve objective broker use case wired through composition
+    assert.ok("approveObjective" in deps, "deps.approveObjective present");
+    // Story E (007.12) — retry objective (conflict resolution) wired through composition
+    assert.ok("retryObjective" in deps, "deps.retryObjective present");
+    // Story F (007.12) — get initiative / get objective read use cases wired through composition
+    assert.ok("getInitiative" in deps, "deps.getInitiative present");
+    assert.ok("getObjective" in deps, "deps.getObjective present");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -464,6 +483,514 @@ test("(S3-composition-note) composition: getPriorFeedback reads note persisted b
       feedback.note,
       "keep both handlers",
       "getPriorFeedback must return the note that was persisted by retryTask.execute",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.12 — daemon-path objective squash wiring gap
+//
+// The prior SE turn wired `initiativeWorkspaces.ensure` into buildDaemon's
+// real RunNextTask, but flagged that the *squash* seam (`opts.workspaces`,
+// the `WorkspaceSquasher`) plus the store's `getObjective`/`saveObjective`/
+// `getObjectiveParentOid` reads are NOT supplied to the real `RunNextTask`
+// constructed in `buildDaemon` — so the objective-boundary squash (Story B,
+// already unit-tested against fakes in run-next-task.test.ts) never actually
+// runs during a real `run daemon` pass. This is the exact gap the EPIC
+// Proof's PASS B/C steps depend on.
+//
+// RED today: a real `buildDeps` composition, given an initiative-clone task
+// (a "workspace" context binding surfaced by the initiative's persisted
+// `workspace` column) that completes as the last task of its objective,
+// never squashes and never transitions the objective past "building" —
+// because `buildDaemon`'s real `RunNextTask` is constructed without a
+// `workspaces` squasher or a store exposing `getObjective`/`saveObjective`/
+// `getObjectiveParentOid`.
+// ---------------------------------------------------------------------------
+test("(007.12 daemon wiring) a real `run daemon` pass squashes an initiative-clone task's objective to awaiting_confirmation with a real commitOid", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-0712-daemon-squash-"));
+  const dbPath = join(dir, "kanthord.db");
+  try {
+    // Seed remote with one commit.
+    const seedDir = join(dir, "seed.git");
+    await mkdir(seedDir, { recursive: true });
+    await execFile("git", ["init", "-b", "main"], { cwd: seedDir });
+    await execFile("git", ["config", "user.email", "test@localhost"], {
+      cwd: seedDir,
+    });
+    await execFile("git", ["config", "user.name", "Test"], { cwd: seedDir });
+    await writeFile(join(seedDir, "README.md"), "# seed");
+    await execFile("git", ["add", "."], { cwd: seedDir });
+    await execFile("git", ["commit", "-m", "initial"], { cwd: seedDir });
+
+    const deps = buildDeps(dbPath);
+    const migrate = await dispatch(["db", "migrate"], deps);
+    assert.equal(migrate.exitCode, 0, "db migrate exits 0");
+
+    const rp = await dispatch(
+      ["create", "project", "--name", "sq-daemon"],
+      deps,
+    );
+    assert.equal(rp.exitCode, 0, "create project exits 0");
+    const PROJECT = rp.stdout[0]!;
+
+    const ri = await dispatch(
+      ["create", "initiative", "--project", PROJECT, "--name", "sq-init"],
+      deps,
+    );
+    assert.equal(ri.exitCode, 0, "create initiative exits 0");
+    const INIT_ID = ri.stdout[0]!;
+
+    const ro = await dispatch(
+      ["create", "objective", "--initiative", INIT_ID, "--name", "sq-obj"],
+      deps,
+    );
+    assert.equal(ro.exitCode, 0, "create objective exits 0");
+    const OBJ_ID = ro.stdout[0]!;
+
+    const rt = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJ_ID,
+        "--title",
+        "sq task",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+        "--agent",
+        "fake@1",
+      ],
+      deps,
+    );
+    assert.equal(rt.exitCode, 0, "create task exits 0");
+    const TASK_ID = rt.stdout[0]!;
+
+    // Provision the initiative branch + isolated clone directly through a
+    // standalone `LocalWorkspaceManager` (Story A's `prepareInitiative`,
+    // already implemented/unit-tested) rather than `deps.workspaces`, whose
+    // lock-file path construction does not yet handle a branch name
+    // containing "/" (a separate, pre-existing bug unrelated to this
+    // Task's wiring gap) — bypasses the FakeRunner (which performs no git
+    // work of its own) either way.
+    const homePath = join(dir, "home");
+    const wsRoot = join(dir, "ws-root");
+    await mkdir(wsRoot, { recursive: true });
+    const bootstrapWorkspaces = new LocalWorkspaceManager({ root: wsRoot });
+
+    // Persist a real repository resource (so composition.ts's
+    // resolveInitiativeHomeDir / resolveInitiativeRepository /
+    // getObjectiveParentOid — which read the "repository" context binding
+    // off a task and then look the id up as a real project resource — can
+    // resolve it) and bind it onto the task's context, mirroring how the
+    // EPIC Proof's `import graph --bind repository=...` populates the same
+    // "repository" task-context row.
+    const rr = await dispatch(
+      [
+        "create",
+        "repository",
+        "--project",
+        PROJECT,
+        "--name",
+        "sq-repo",
+        "--remote-url",
+        `file://${seedDir}`,
+        "--branch",
+        "main",
+        "--auth",
+        "ambient",
+        "--path",
+        homePath,
+      ],
+      deps,
+    );
+    assert.equal(rr.exitCode, 0, "create repository exits 0");
+    const REPO_ID = rr.stdout[0]!;
+    const repo: Repository = {
+      id: REPO_ID,
+      type: "repository",
+      name: "sq-repo",
+      remoteUrl: `file://${seedDir}`,
+      branch: "main",
+      path: homePath,
+      auth: { kind: "ambient" },
+    };
+    await bootstrapWorkspaces.prepare("bootstrap-task", repo);
+    const ws = await bootstrapWorkspaces.prepareInitiative(INIT_ID, repo);
+
+    const dbCtx = new DatabaseSync(dbPath);
+    dbCtx
+      .prepare(
+        "INSERT INTO task_context (task_id, type, resource_id) VALUES (?, 'repository', ?)",
+      )
+      .run(TASK_ID, REPO_ID);
+    dbCtx.close();
+    const homeInitRefBefore = await git(
+      homePath,
+      "rev-parse",
+      `refs/heads/kanthord/init/${INIT_ID}`,
+    );
+
+    // Simulate the objective's work already having produced one commit in
+    // the isolated clone (the real agent runner would do this; FakeRunner
+    // does not).
+    await writeFile(join(ws.dir, "work.txt"), "objective work\n");
+    await execFile("git", ["add", "."], { cwd: ws.dir });
+    await execFile(
+      "git",
+      [
+        "-c",
+        "user.email=test@localhost",
+        "-c",
+        "user.name=Test",
+        "commit",
+        "-m",
+        "task work",
+      ],
+      { cwd: ws.dir },
+    );
+
+    // Record the provisioned clone dir on the initiative directly (the
+    // same effect `ensureInitiativeWorkspace` would have produced, done here
+    // so the manual commit above survives — `prepareInitiative` wipes and
+    // re-clones its target directory on every call).
+    const db2 = new DatabaseSync(dbPath);
+    db2
+      .prepare("UPDATE initiatives SET workspace = ? WHERE id = ?")
+      .run(ws.dir, INIT_ID);
+    db2.close();
+
+    // Run a real daemon pass — this is the seam under test.
+    const result = await deps.buildDaemon([]).execute({ untilIdle: true });
+    assert.equal(result.exitCode, 0, "daemon run exits 0");
+
+    const rg = await dispatch(
+      ["get", "objective", "--id", OBJ_ID, "--json"],
+      deps,
+    );
+    assert.equal(rg.exitCode, 0, "get objective exits 0");
+    const objectiveJson = JSON.parse(rg.stdout.join("")) as {
+      status: string;
+    };
+    assert.equal(
+      objectiveJson.status,
+      "awaiting_confirmation",
+      `objective must be squashed to awaiting_confirmation once its last initiative-clone task completes; got status: ${objectiveJson.status}`,
+    );
+
+    // `GetObjective`/CLI does not expose `commitOid` (a separate, later
+    // Task) — pin it via the persisted row directly, the same seam
+    // `ApproveObjective`'s broker will read from.
+    const db3 = new DatabaseSync(dbPath);
+    const objRow = db3
+      .prepare("SELECT commitOid FROM objectives WHERE id = ?")
+      .get(OBJ_ID) as { commitOid: string | null };
+    db3.close();
+    assert.ok(
+      typeof objRow.commitOid === "string" && objRow.commitOid.length > 0,
+      "objective must record a real commitOid from the squash",
+    );
+
+    // The daemon-only broker (approve objective) has not run — home's
+    // initiative branch must be untouched by the squash itself.
+    const homeInitRefAfter = await git(
+      homePath,
+      "rev-parse",
+      `refs/heads/kanthord/init/${INIT_ID}`,
+    );
+    assert.equal(
+      homeInitRefAfter,
+      homeInitRefBefore,
+      "squashing in the clone must not write to the initiative branch in home",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.12 Proof PASS C gap — a second objective's squash must chain onto
+// the FIRST objective's own commitOid (domain state), not onto whatever SHA
+// home's `kanthord/init/<initId>` ref currently happens to point at. When
+// both objectives' tasks become ready and complete in one `run daemon`
+// pass — before a human has run `approve objective` on the first one — home
+// has NOT advanced past the initiative's original base yet. If the second
+// objective's recorded `parentOid` is read from home's live ref (as
+// `composition.ts`'s `getObjectiveParentOid` does today) instead of the
+// first objective's own `commitOid`, the broker later sees the second
+// objective's parent as the pre-initiative base — not the first objective's
+// commit — so `countCommitsSince` on approval reports more than one commit
+// and the objective is wrongly recorded as `conflict` instead of chaining
+// linearly. This reproduces the EPIC Proof's real `FAIL C: count=1`.
+// ---------------------------------------------------------------------------
+test("(007.12 daemon wiring) a second objective's squash chains onto the first objective's own commitOid, not home's not-yet-advanced ref", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-0712-sequential-obj-"));
+  const dbPath = join(dir, "kanthord.db");
+  try {
+    const seedDir = join(dir, "seed.git");
+    await mkdir(seedDir, { recursive: true });
+    await execFile("git", ["init", "-b", "main"], { cwd: seedDir });
+    await execFile("git", ["config", "user.email", "test@localhost"], {
+      cwd: seedDir,
+    });
+    await execFile("git", ["config", "user.name", "Test"], { cwd: seedDir });
+    await writeFile(join(seedDir, "README.md"), "# seed");
+    await execFile("git", ["add", "."], { cwd: seedDir });
+    await execFile("git", ["commit", "-m", "initial"], { cwd: seedDir });
+
+    const deps = buildDeps(dbPath);
+    const migrate = await dispatch(["db", "migrate"], deps);
+    assert.equal(migrate.exitCode, 0, "db migrate exits 0");
+
+    const rp = await dispatch(["create", "project", "--name", "seq-obj"], deps);
+    assert.equal(rp.exitCode, 0, "create project exits 0");
+    const PROJECT = rp.stdout[0]!;
+
+    const ri = await dispatch(
+      ["create", "initiative", "--project", PROJECT, "--name", "seq-init"],
+      deps,
+    );
+    assert.equal(ri.exitCode, 0, "create initiative exits 0");
+    const INIT_ID = ri.stdout[0]!;
+
+    const roA = await dispatch(
+      ["create", "objective", "--initiative", INIT_ID, "--name", "obj-a"],
+      deps,
+    );
+    assert.equal(roA.exitCode, 0, "create objective A exits 0");
+    const OBJ_A_ID = roA.stdout[0]!;
+
+    const roB = await dispatch(
+      ["create", "objective", "--initiative", INIT_ID, "--name", "obj-b"],
+      deps,
+    );
+    assert.equal(roB.exitCode, 0, "create objective B exits 0");
+    const OBJ_B_ID = roB.stdout[0]!;
+
+    const rtA = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJ_A_ID,
+        "--title",
+        "obj-a task",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+        "--agent",
+        "fake@1",
+      ],
+      deps,
+    );
+    assert.equal(rtA.exitCode, 0, "create task A exits 0");
+    const TASK_A_ID = rtA.stdout[0]!;
+
+    const rtB = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJ_B_ID,
+        "--title",
+        "obj-b task",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+        "--dependencies",
+        TASK_A_ID,
+        "--agent",
+        "fake@1",
+      ],
+      deps,
+    );
+    assert.equal(rtB.exitCode, 0, "create task B exits 0");
+    const TASK_B_ID = rtB.stdout[0]!;
+
+    const homePath = join(dir, "home");
+    const wsRoot = join(dir, "ws-root");
+    await mkdir(wsRoot, { recursive: true });
+    const bootstrapWorkspaces = new LocalWorkspaceManager({ root: wsRoot });
+
+    const rr = await dispatch(
+      [
+        "create",
+        "repository",
+        "--project",
+        PROJECT,
+        "--name",
+        "seq-repo",
+        "--remote-url",
+        `file://${seedDir}`,
+        "--branch",
+        "main",
+        "--auth",
+        "ambient",
+        "--path",
+        homePath,
+      ],
+      deps,
+    );
+    assert.equal(rr.exitCode, 0, "create repository exits 0");
+    const REPO_ID = rr.stdout[0]!;
+    const repo: Repository = {
+      id: REPO_ID,
+      type: "repository",
+      name: "seq-repo",
+      remoteUrl: `file://${seedDir}`,
+      branch: "main",
+      path: homePath,
+      auth: { kind: "ambient" },
+    };
+    await bootstrapWorkspaces.prepare("bootstrap-task", repo);
+    const ws = await bootstrapWorkspaces.prepareInitiative(INIT_ID, repo);
+
+    const dbCtx = new DatabaseSync(dbPath);
+    dbCtx
+      .prepare(
+        "INSERT INTO task_context (task_id, type, resource_id) VALUES (?, 'repository', ?)",
+      )
+      .run(TASK_A_ID, REPO_ID);
+    dbCtx
+      .prepare(
+        "INSERT INTO task_context (task_id, type, resource_id) VALUES (?, 'repository', ?)",
+      )
+      .run(TASK_B_ID, REPO_ID);
+    dbCtx.close();
+
+    const homeInitRefBefore = await git(
+      homePath,
+      "rev-parse",
+      `refs/heads/kanthord/init/${INIT_ID}`,
+    );
+
+    const db1 = new DatabaseSync(dbPath);
+    db1
+      .prepare("UPDATE initiatives SET workspace = ? WHERE id = ?")
+      .run(ws.dir, INIT_ID);
+    db1.close();
+
+    // FakeRunner performs no git work, so the "agent" work for each task is
+    // scripted upfront. `RunDaemon.execute({ untilIdle: true })` drains the
+    // WHOLE ready queue in one call — it claims + completes task A (which
+    // squashes objective A's already-committed work to `awaiting_confirmation`),
+    // and then, in the SAME call, claims + completes task B as soon as it
+    // becomes ready (task A's dependency satisfied), with NO human
+    // `approve objective` step in between — mirroring the real EPIC Proof,
+    // where both objectives' tasks become ready and are built in the SAME
+    // `run daemon --until-idle` pass.
+    //
+    // Because objective A's squash resets the clone to whatever is
+    // committed at the moment task A completes, task B's own "changed work"
+    // must land in the clone strictly AFTER task A's squash but before task
+    // B is claimed — there is no await boundary between those two steps
+    // that this test's own (sequential, single-threaded) code can land in.
+    // The `Logger` passed to `buildDaemon` is an existing constructor seam
+    // (3rd positional arg, already used for observability elsewhere in this
+    // file); this test reuses it — synchronously, via `execFileSync` — to
+    // commit task B's work the instant task A's completion is logged, still
+    // inside the single `execute({ untilIdle: true })` call below.
+    await writeFile(join(ws.dir, "a.txt"), "objective a work\n");
+    await execFile("git", ["add", "."], { cwd: ws.dir });
+    await execFile(
+      "git",
+      [
+        "-c",
+        "user.email=test@localhost",
+        "-c",
+        "user.name=Test",
+        "commit",
+        "-m",
+        "obj a task work",
+      ],
+      { cwd: ws.dir },
+    );
+
+    const commitTaskBWork = (): void => {
+      writeFileSync(join(ws.dir, "b.txt"), "objective b work\n");
+      execFileSync("git", ["add", "."], { cwd: ws.dir });
+      execFileSync(
+        "git",
+        [
+          "-c",
+          "user.email=test@localhost",
+          "-c",
+          "user.name=Test",
+          "commit",
+          "-m",
+          "obj b task work",
+        ],
+        { cwd: ws.dir },
+      );
+    };
+    let taskBWorkCommitted = false;
+    const logger: Logger = {
+      info: (message: string) => {
+        if (!taskBWorkCommitted && message === `task ${TASK_A_ID}: completed`) {
+          taskBWorkCommitted = true;
+          commitTaskBWork();
+        }
+      },
+      warn: () => {},
+      error: () => {},
+    };
+
+    // Run the daemon once: a single `untilIdle` drain claims + completes
+    // task A (squashing objective A to `awaiting_confirmation`), commits
+    // task B's work via the logger hook above, then claims + completes
+    // task B (squashing objective B) — all inside this one call.
+    const result1 = await deps
+      .buildDaemon([], undefined, logger)
+      .execute({ untilIdle: true });
+    assert.equal(result1.exitCode, 0, "daemon run exits 0");
+
+    // Home's initiative branch has NOT been advanced — no `approve objective`
+    // has run yet.
+    const homeInitRefAfter = await git(
+      homePath,
+      "rev-parse",
+      `refs/heads/kanthord/init/${INIT_ID}`,
+    );
+    assert.equal(
+      homeInitRefAfter,
+      homeInitRefBefore,
+      "home's initiative branch must be untouched — no approve objective has run",
+    );
+
+    const db2 = new DatabaseSync(dbPath);
+    const objA = db2
+      .prepare("SELECT status, commitOid FROM objectives WHERE id = ?")
+      .get(OBJ_A_ID) as { status: string; commitOid: string | null };
+    const objB = db2
+      .prepare("SELECT status, parentOid FROM objectives WHERE id = ?")
+      .get(OBJ_B_ID) as { status: string; parentOid: string | null };
+    db2.close();
+
+    assert.equal(
+      objA.status,
+      "awaiting_confirmation",
+      "objective A must be squashed to awaiting_confirmation",
+    );
+    assert.equal(
+      objB.status,
+      "awaiting_confirmation",
+      "objective B must be squashed to awaiting_confirmation",
+    );
+    assert.ok(
+      typeof objA.commitOid === "string" && objA.commitOid.length > 0,
+      "objective A must record a real commitOid",
+    );
+    assert.equal(
+      objB.parentOid,
+      objA.commitOid,
+      "objective B's recorded parentOid must chain onto objective A's own commitOid (domain state), " +
+        "not home's live initiative-branch ref (which has not advanced — no approve objective has run yet)",
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });

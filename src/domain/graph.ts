@@ -105,6 +105,48 @@ export function validateGraph(nodes: GraphNode[]): void {
   }
 }
 
+export function serialOrder(nodes: GraphNode[]): string[] {
+  const indexOf = new Map<string, number>();
+  nodes.forEach((node, i) => indexOf.set(node.id, i));
+
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>();
+  for (const node of nodes) {
+    inDegree.set(node.id, node.dependencies.length);
+    for (const dep of node.dependencies) {
+      const list = dependents.get(dep) ?? [];
+      list.push(node.id);
+      dependents.set(dep, list);
+    }
+  }
+
+  const ready: string[] = nodes
+    .filter((node) => inDegree.get(node.id) === 0)
+    .map((node) => node.id);
+
+  const result: string[] = [];
+  const seen = new Set<string>();
+
+  while (ready.length > 0) {
+    // pick the ready node with the earliest input-array position
+    ready.sort((x, y) => (indexOf.get(x) ?? 0) - (indexOf.get(y) ?? 0));
+    const id = ready.shift() as string;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+
+    for (const dependent of dependents.get(id) ?? []) {
+      const remaining = (inDegree.get(dependent) ?? 0) - 1;
+      inDegree.set(dependent, remaining);
+      if (remaining === 0) {
+        ready.push(dependent);
+      }
+    }
+  }
+
+  return result;
+}
+
 export interface ReadinessEntry {
   id: string;
   state: "ready" | "blocked";
@@ -122,7 +164,7 @@ export function readiness(nodes: GraphNode[]): ReadinessEntry[] {
     if (node.status !== "pending") continue;
 
     const waiting = node.dependencies.filter(
-      (dep) => statusMap.get(dep) !== "completed"
+      (dep) => statusMap.get(dep) !== "completed",
     );
 
     result.push({

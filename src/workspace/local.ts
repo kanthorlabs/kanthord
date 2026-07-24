@@ -714,6 +714,160 @@ export class LocalWorkspaceManager implements WorkspaceManager {
       cleanup();
     }
   }
+
+  /**
+   * Provisions `refs/heads/kanthord/init/<initId>` in the bare home
+   * (`repo.path`) at the integration tip of `refs/heads/<repo.branch>`
+   * (idempotent — reused, not moved, on re-provision), then produces an
+   * isolated clone (`--no-hardlinks --single-branch`, `origin` removed)
+   * checked out on that branch. Only the daemon calls this.
+   */
+  async prepareInitiative(
+    initId: string,
+    repo: Repository,
+  ): Promise<Workspace> {
+    const { env, cleanup } = await buildGitEnv(
+      repo.auth,
+      this.resolveCredential,
+    );
+    try {
+      const homePath = repo.path;
+      const integrationBranch = repo.branch;
+      const initBranch = `kanthord/init/${initId}`;
+
+      // Provision the bare home itself when it doesn't exist yet — the real
+      // daemon path calls prepareInitiative before any per-task prepare(), so
+      // it may be the very first thing to touch repo.path (see
+      // prepareFromRepository's absent-case handling above).
+      const homeState = await inspectPath(homePath);
+      if (homeState === "broken-symlink") {
+        throw new WorkspacePreparationError(
+          `Home path ${homePath} is a broken symlink (its target does not exist)`,
+        );
+      }
+      if (homeState === "file") {
+        throw new WorkspacePreparationError(
+          `Home path ${homePath} exists and is not a directory`,
+        );
+      }
+      if (homeState === "absent") {
+        await cloneIntoHome(repo.remoteUrl, homePath, env);
+      }
+
+      let lockFh: FileHandle | undefined;
+      let lockPath: string | undefined;
+      if (this.lockDir) {
+        // The branch name contains '/' (kanthord/init/<initId>); flatten it so
+        // the lock file is a single path segment under lockDir, never an
+        // implied subdirectory that doesn't exist.
+        const lockBranch = initBranch.replaceAll("/", "-");
+        lockPath = join(this.lockDir, `${repo.id}-${lockBranch}.lock`);
+        lockFh = await acquireLock(lockPath);
+      }
+
+      try {
+        // Reuse the initiative branch if it already exists (idempotent).
+        let alreadyExists = true;
+        try {
+          await execFile(
+            "git",
+            ["rev-parse", "--verify", `refs/heads/${initBranch}`],
+            { cwd: homePath, env },
+          );
+        } catch {
+          alreadyExists = false;
+        }
+
+        if (!alreadyExists) {
+          const { stdout: tipOut } = await execFile(
+            "git",
+            ["rev-parse", `refs/heads/${integrationBranch}`],
+            { cwd: homePath, env },
+          );
+          const tip = tipOut.trim();
+          await execFile(
+            "git",
+            ["update-ref", `refs/heads/${initBranch}`, tip],
+            { cwd: homePath, env },
+          );
+        }
+
+        // Isolated clone: no hardlinked objects, single-branch checkout.
+        const wsDir = join(this.root, "init", initId);
+        if (await pathExists(wsDir)) {
+          await rm(wsDir, { recursive: true, force: true });
+        }
+
+        try {
+          await execFile(
+            "git",
+            [
+              ...GIT_CONFIG,
+              "clone",
+              "--no-hardlinks",
+              "--single-branch",
+              "--branch",
+              initBranch,
+              homePath,
+              wsDir,
+            ],
+            { env },
+          );
+        } catch (err) {
+          throw new WorkspacePreparationError(
+            `Failed to clone initiative branch ${initBranch} from home repo to workspace: ${String(err)}`,
+          );
+        }
+        await execFile("git", ["remote", "remove", "origin"], {
+          cwd: wsDir,
+          env,
+        });
+
+        const { stdout: baseCommitOut } = await execFile(
+          "git",
+          ["rev-parse", "HEAD"],
+          { cwd: wsDir, env },
+        );
+
+        return {
+          dir: wsDir,
+          branch: initBranch,
+          baseCommit: baseCommitOut.trim(),
+        };
+      } finally {
+        if (lockFh !== undefined && lockPath !== undefined) {
+          try {
+            await lockFh.close();
+            await unlink(lockPath);
+          } catch {
+            // ignore cleanup errors
+          }
+        }
+      }
+    } finally {
+      cleanup();
+    }
+  }
+
+  /**
+   * Collapses every commit in `dir` since `parentOid` into exactly one commit
+   * on top of `parentOid`, preserving the working tree, and returns the new
+   * commit's sha. Operates entirely inside the isolated clone — no home write.
+   */
+  async squashObjective(
+    dir: string,
+    parentOid: string,
+    message: string,
+  ): Promise<{ oid: string }> {
+    await execFile("git", ["reset", "--soft", parentOid], { cwd: dir });
+    await execFile("git", [...GIT_CONFIG, "commit", "-m", message], {
+      cwd: dir,
+    });
+    const { stdout } = await execFile("git", ["rev-parse", "HEAD"], {
+      cwd: dir,
+    });
+    return { oid: stdout.trim() };
+  }
 }
 
 /**

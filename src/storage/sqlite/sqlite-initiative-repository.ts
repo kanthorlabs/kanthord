@@ -1,7 +1,12 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { InitiativeRepository, CasResult } from "../port.ts";
-import type { Initiative, Objective } from "../../domain/initiative.ts";
+import type {
+  Initiative,
+  Objective,
+  InitiativeStatus,
+  ObjectiveStatus,
+} from "../../domain/initiative.ts";
 import {
   sha256Hex,
   canonicalInitiative,
@@ -23,19 +28,43 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
         projectId: initiative.projectId,
       }),
     );
+    const status = initiative.status ?? "building";
     this.#db
       .prepare(
-        "INSERT INTO initiatives (id, projectId, name, sha256) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256",
+        "INSERT INTO initiatives (id, projectId, name, sha256, status) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256, status = excluded.status",
       )
-      .run(initiative.id, initiative.projectId, initiative.name, sha256);
+      .run(
+        initiative.id,
+        initiative.projectId,
+        initiative.name,
+        sha256,
+        status,
+      );
   }
 
   get(id: string): Initiative | undefined {
     const row = this.#db
-      .prepare("SELECT id, projectId, name FROM initiatives WHERE id = ?")
-      .get(id) as { id: string; projectId: string; name: string } | undefined;
+      .prepare(
+        "SELECT id, projectId, name, status, workspace FROM initiatives WHERE id = ?",
+      )
+      .get(id) as
+      | {
+          id: string;
+          projectId: string;
+          name: string;
+          status: InitiativeStatus;
+          workspace: string | null;
+        }
+      | undefined;
     if (row === undefined) return undefined;
-    return { id: row.id, projectId: row.projectId, name: row.name };
+    const initiative: Initiative = {
+      id: row.id,
+      projectId: row.projectId,
+      name: row.name,
+      status: row.status,
+    };
+    if (row.workspace !== null) initiative.workspace = row.workspace;
+    return initiative;
   }
 
   saveObjective(objective: Objective): void {
@@ -45,54 +74,99 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
         initiativeId: objective.initiativeId,
       }),
     );
+    const status = objective.status ?? "building";
+    const commitOid = objective.commitOid ?? null;
+    const parentOid = objective.parentOid ?? null;
     this.#db
       .prepare(
-        "INSERT INTO objectives (id, initiativeId, name, sha256) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256",
+        "INSERT INTO objectives (id, initiativeId, name, sha256, status, commitOid, parentOid) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256, status = excluded.status, commitOid = excluded.commitOid, parentOid = excluded.parentOid",
       )
-      .run(objective.id, objective.initiativeId, objective.name, sha256);
+      .run(
+        objective.id,
+        objective.initiativeId,
+        objective.name,
+        sha256,
+        status,
+        commitOid,
+        parentOid,
+      );
   }
 
   getObjective(id: string): Objective | undefined {
     const row = this.#db
-      .prepare("SELECT id, initiativeId, name FROM objectives WHERE id = ?")
+      .prepare(
+        "SELECT id, initiativeId, name, status, commitOid, parentOid FROM objectives WHERE id = ?",
+      )
       .get(id) as
-      { id: string; initiativeId: string; name: string } | undefined;
+      | {
+          id: string;
+          initiativeId: string;
+          name: string;
+          status: ObjectiveStatus;
+          commitOid: string | null;
+          parentOid: string | null;
+        }
+      | undefined;
     if (row === undefined) return undefined;
-    return { id: row.id, initiativeId: row.initiativeId, name: row.name };
+    const objective: Objective = {
+      id: row.id,
+      initiativeId: row.initiativeId,
+      name: row.name,
+      status: row.status,
+    };
+    if (row.commitOid !== null) objective.commitOid = row.commitOid;
+    if (row.parentOid !== null) objective.parentOid = row.parentOid;
+    return objective;
   }
 
   listObjectives(initiativeId: string): Objective[] {
     const rows = this.#db
       .prepare(
-        "SELECT id, initiativeId, name FROM objectives WHERE initiativeId = ? ORDER BY id ASC",
+        "SELECT id, initiativeId, name, status, commitOid, parentOid FROM objectives WHERE initiativeId = ? ORDER BY id ASC",
       )
       .all(initiativeId) as Array<{
       id: string;
       initiativeId: string;
       name: string;
+      status: ObjectiveStatus;
+      commitOid: string | null;
+      parentOid: string | null;
     }>;
-    return rows.map((r) => ({
-      id: r.id,
-      initiativeId: r.initiativeId,
-      name: r.name,
-    }));
+    return rows.map((r) => {
+      const objective: Objective = {
+        id: r.id,
+        initiativeId: r.initiativeId,
+        name: r.name,
+        status: r.status,
+      };
+      if (r.commitOid !== null) objective.commitOid = r.commitOid;
+      if (r.parentOid !== null) objective.parentOid = r.parentOid;
+      return objective;
+    });
   }
 
   listInitiatives(projectId: string): Initiative[] {
     const rows = this.#db
       .prepare(
-        "SELECT id, projectId, name FROM initiatives WHERE projectId = ? ORDER BY id ASC",
+        "SELECT id, projectId, name, status, workspace FROM initiatives WHERE projectId = ? ORDER BY id ASC",
       )
       .all(projectId) as Array<{
       id: string;
       projectId: string;
       name: string;
+      status: InitiativeStatus;
+      workspace: string | null;
     }>;
-    return rows.map((r) => ({
-      id: r.id,
-      projectId: r.projectId,
-      name: r.name,
-    }));
+    return rows.map((r) => {
+      const initiative: Initiative = {
+        id: r.id,
+        projectId: r.projectId,
+        name: r.name,
+        status: r.status,
+      };
+      if (r.workspace !== null) initiative.workspace = r.workspace;
+      return initiative;
+    });
   }
 
   resolveInitiativeByName(projectId: string, name: string): string[] {
@@ -113,6 +187,12 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
     this.#db
       .prepare("UPDATE initiatives SET paused = ? WHERE id = ?")
       .run(paused ? 1 : 0, id);
+  }
+
+  setWorkspace(id: string, dir: string): void {
+    this.#db
+      .prepare("UPDATE initiatives SET workspace = ? WHERE id = ?")
+      .run(dir, id);
   }
 
   listAllInitiatives(): Array<{ id: string; paused: boolean }> {

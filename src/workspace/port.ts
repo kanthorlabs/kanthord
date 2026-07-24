@@ -15,6 +15,26 @@ export interface WorkspaceManager {
    * `join(root, <taskId>)`. Optional so existing fakes need not implement it.
    */
   homeDir?(repoId: string): string;
+  /**
+   * Provisions `refs/heads/kanthord/init/<initId>` in the bare home at the
+   * integration tip of `source.branch` (idempotent — reused, not moved, on
+   * re-provision), then produces an isolated clone (`--no-hardlinks
+   * --single-branch`, `origin` removed) checked out on that branch. Only the
+   * daemon calls this — agents never write the home. Optional so existing
+   * fakes need not implement it.
+   */
+  prepareInitiative?(initId: string, source: Repository): Promise<Workspace>;
+  /**
+   * Collapses every commit in the isolated clone at `dir` since `parentOid`
+   * into exactly one commit on top of `parentOid`, preserving the working
+   * tree, and returns the new commit's sha. No home write. Optional so
+   * existing fakes need not implement it.
+   */
+  squashObjective?(
+    dir: string,
+    parentOid: string,
+    message: string,
+  ): Promise<{ oid: string }>;
 }
 
 export class WorkspacePreparationError extends Error {

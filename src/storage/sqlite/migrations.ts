@@ -281,4 +281,59 @@ DROP TABLE events;
 ALTER TABLE events_new4 RENAME TO events;
 `),
   },
+  {
+    version: 11,
+    name: "007.12-s4-initiative-objective-status",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE initiatives ADD COLUMN status TEXT NOT NULL DEFAULT 'building'
+  CHECK (status IN ('building','awaiting_pr','delivered'));
+ALTER TABLE objectives ADD COLUMN status TEXT NOT NULL DEFAULT 'building'
+  CHECK (status IN ('building','awaiting_confirmation','conflict','integrated'));
+`),
+  },
+  {
+    version: 12,
+    name: "007.12-s4-objective-initiative-scoped-events",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new5 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.awaiting_pr','initiative.delivered'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id)
+);
+INSERT INTO events_new5 (id, type, taskId, payload) SELECT id, type, taskId, payload FROM events;
+DROP TABLE events;
+ALTER TABLE events_new5 RENAME TO events;
+`),
+  },
+  {
+    version: 13,
+    name: "007.12-s1-initiative-workspace",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE initiatives ADD COLUMN workspace TEXT;
+`),
+  },
+  {
+    version: 14,
+    name: "007.12-s2-objective-commit-oid",
+    up: (db) =>
+      db.exec(`
+ALTER TABLE objectives ADD COLUMN commitOid TEXT;
+ALTER TABLE objectives ADD COLUMN parentOid TEXT;
+`),
+  },
 ];

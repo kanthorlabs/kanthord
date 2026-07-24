@@ -440,6 +440,41 @@ test("(A3 display throttle) json mode: 3 consecutive agent.progress for same tas
   );
 });
 
+// ── objective-scoped events, no taskId (007.12 Story D) ─────────────────────
+
+test("human + --json: an objective-scoped event with no taskId round-trips (line includes objectiveId, envelope preserves the event)", async () => {
+  const objEvent: Event = {
+    id: "OBJ1",
+    type: "objective.integrated",
+    objectiveId: "some-objective-id",
+  };
+  const feed = new FakeListEvents([objEvent]);
+
+  const human = await runEvents({ after: "0" }, feed, noopSleep, neverAbort);
+  assert.equal(human.exitCode, 0);
+  assert.equal(human.stderr.length, 1, "one human line for the one event");
+  assert.ok(human.stderr[0]!.includes("OBJ1"), "line contains id");
+  assert.ok(
+    human.stderr[0]!.includes("objective.integrated"),
+    "line contains type",
+  );
+  assert.ok(
+    human.stderr[0]!.includes("some-objective-id"),
+    "line contains objectiveId when taskId is absent",
+  );
+
+  const jsonOut = await runEvents(
+    { after: "0", json: true },
+    feed,
+    noopSleep,
+    neverAbort,
+  );
+  assert.equal(jsonOut.exitCode, 0);
+  assert.equal(jsonOut.stdout.length, 1);
+  const envelope = JSON.parse(jsonOut.stdout[0]!);
+  assert.deepEqual(envelope.events, [objEvent]);
+});
+
 test("events --limit 0 exits 1 with a one-line error", async () => {
   const feed = new FakeListEvents([E1]);
 

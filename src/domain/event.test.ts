@@ -4,7 +4,7 @@ import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the seventeen literals in order", () => {
+test("EVENT_TYPES lists exactly the twenty-three literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -23,6 +23,12 @@ test("EVENT_TYPES lists exactly the seventeen literals in order", () => {
     "agent.finished",
     "task.verification", // A4 — new
     "provider.retry", // 007.9 S2 — new
+    "objective.building", // 007.12 Story D — new
+    "objective.awaiting_confirmation", // 007.12 Story D — new
+    "objective.integrated", // 007.12 Story D — new
+    "objective.conflict", // 007.12 Story D — new
+    "initiative.awaiting_pr", // 007.12 Story D — new
+    "initiative.delivered", // 007.12 Story D — new
   ]);
 });
 
@@ -70,4 +76,24 @@ test("newEvent with payload passes payload through", () => {
 test("newEvent without payload has no payload key", () => {
   const ev = newEvent("task.ready", { taskId: "task-ready-1" });
   assert.equal(Object.prototype.hasOwnProperty.call(ev, "payload"), false);
+});
+
+// ── objective/initiative-scoped events (007.12 Story D) ─────────────────────
+
+test("newEvent constructs an objective-scoped event with objectiveId and no taskId key", () => {
+  const objectiveId = "some-objective-id";
+  const ev = newEvent("objective.integrated", { objectiveId });
+  assert.match(ev.id, ULID_RE);
+  assert.equal(ev.type, "objective.integrated");
+  assert.equal(ev.objectiveId, objectiveId);
+  assert.equal(Object.prototype.hasOwnProperty.call(ev, "taskId"), false);
+});
+
+test("newEvent constructs an initiative-scoped event with initiativeId and no taskId key", () => {
+  const initiativeId = "some-initiative-id";
+  const ev = newEvent("initiative.awaiting_pr", { initiativeId });
+  assert.match(ev.id, ULID_RE);
+  assert.equal(ev.type, "initiative.awaiting_pr");
+  assert.equal(ev.initiativeId, initiativeId);
+  assert.equal(Object.prototype.hasOwnProperty.call(ev, "taskId"), false);
 });

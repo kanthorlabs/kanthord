@@ -24,11 +24,11 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const INDEX_SRC = join(__dirname, "index.ts");
 const COMMANDS_DIR = join(__dirname, "commands");
 
-/** Number of leaf files under commands/ subdirectories (007.9 Story 03 item A added one file, list/resource.ts, that registers three leaves). */
-const EXPECTED_LEAF_FILE_COUNT = 48;
+/** Number of leaf files under commands/ subdirectories (007.12 added four: approve/objective.ts, retry/objective.ts, get/initiative.ts, get/objective.ts). */
+const EXPECTED_LEAF_FILE_COUNT = 52;
 
 /** Number of audited leaves in the EPIC inventory. */
-const EXPECTED_LEAF_COUNT = 50;
+const EXPECTED_LEAF_COUNT = 54;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [
@@ -62,7 +62,7 @@ describe("src/apps/cli/architecture.ts", () => {
     }
   });
 
-  test("commands/ contains exactly 48 leaf files — one per audited inventory entry", () => {
+  test("commands/ contains exactly 52 leaf files — one per audited inventory entry", () => {
     const parentDirs = readdirSync(COMMANDS_DIR, { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => e.name);

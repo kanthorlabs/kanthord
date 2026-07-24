@@ -300,6 +300,49 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
+  test("approves an objective from its required ID and emits its result (Story C broker CLI)", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      approveObjective: {
+        execute: async (input: unknown) => {
+          received = input;
+        },
+      },
+    } as unknown as Parameters<typeof buildApproveCommand>[0];
+
+    await buildApproveCommand(
+      deps,
+      cap.io as Parameters<typeof buildApproveCommand>[1],
+    ).parseAsync(["objective", "--id", "obj-1"], { from: "user" });
+
+    assert.deepEqual(received, { objectiveId: "obj-1" });
+    assert.deepEqual(cap.out, ["obj-1\n"]);
+    assert.deepEqual(cap.err, ["objective integrated: obj-1\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("retries an objective from its required ID and emits its result (Story E CLI)", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      retryObjective: {
+        execute: async (input: unknown) => {
+          received = input;
+        },
+      },
+    } as Parameters<typeof buildRetryCommand>[0];
+
+    await buildRetryCommand(
+      deps,
+      cap.io as Parameters<typeof buildRetryCommand>[1],
+    ).parseAsync(["objective", "--id", "obj-1"], { from: "user" });
+
+    assert.deepEqual(received, { objectiveId: "obj-1" });
+    assert.deepEqual(cap.out, ["obj-1\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
   test("rejects a task with its resolution and optional reason", async () => {
     let received: unknown;
     const cap = capture();

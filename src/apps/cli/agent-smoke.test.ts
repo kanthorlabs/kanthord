@@ -334,7 +334,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     assert.equal(
       d1.exitCode,
       0,
-      "Phase 1 daemon exits 0 (changed task gates as a candidate)",
+      "Phase 1 daemon exits 0 (initiative-clone task completes directly — Story B, EPIC 007.12: the objective, not the task, is the integration unit)",
     );
 
     // get task 1 with --json
@@ -348,12 +348,13 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
         branch: string | null;
         baseCommit: string | null;
         proposalCommit: string | null;
+        commitSha: string | null;
       };
     };
     assert.equal(
       task1Data.status,
-      "awaiting_confirmation",
-      "task1 is awaiting_confirmation (changed work gates as a candidate)",
+      "completed",
+      "task1 completes directly (initiative-clone task, no per-task approve gate)",
     );
     assert.ok(task1Data.result !== undefined, "task1 has a result");
     assert.ok(
@@ -367,15 +368,21 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     );
     assert.ok(
       task1Data.result.proposalCommit !== null,
-      "task1 result has proposalCommit (candidate)",
+      "task1 result has proposalCommit (the task's commit in the initiative clone)",
     );
     assert.equal(
-      task1Data.result.branch,
-      `kanthord/${TASK1}`,
-      "task1 branch is kanthord/<task-id>",
+      task1Data.result.commitSha,
+      null,
+      "task1 has no per-task commitSha — no per-task landing occurs for an initiative-clone task",
+    );
+    assert.match(
+      task1Data.result.branch!,
+      /^kanthord\/init\//,
+      "task1 result.branch is the initiative branch in the isolated clone, not a per-task kanthord/<task-id> branch",
     );
 
-    // sandbox README must still be "# seed\n" (untouched — change is gated)
+    // sandbox README must still be "# seed\n" — kanthord never writes into the
+    // developer's sandbox checkout; all work happens in the isolated clone.
     const sandboxReadme = await readFile(join(sandboxDir, "README.md"), "utf8");
     assert.equal(
       sandboxReadme,
@@ -383,31 +390,8 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       "sandbox README is untouched after Phase 1",
     );
 
-    // approve TASK1 → lands the candidate onto the canonical branch + completed
-    const approve1 = await dispatch(["approve", "task", "--id", TASK1], deps);
-    assert.equal(approve1.exitCode, 0, "approve task1 exits 0");
-
-    const g1after = await dispatch(
-      ["get", "task", "--id", TASK1, "--json"],
-      deps,
-    );
-    assert.equal(g1after.exitCode, 0, "get task1 after approve exits 0");
-    const task1After = JSON.parse(g1after.stdout[0]!) as {
-      status: string;
-      result?: { workspace: string | null; commitSha: string | null };
-    };
-    assert.equal(
-      task1After.status,
-      "completed",
-      "TASK1 is completed after approval",
-    );
-    assert.ok(
-      task1After.result?.commitSha !== null,
-      "TASK1 completed has a commitSha (landed proposal)",
-    );
-
     // events: task.started → agent.started → ≥1 agent.progress → agent.finished
-    //   → task.approved → task.completed
+    //   → task.completed (no task.approved — no per-task landing gate)
     const ev1 = await dispatch(
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
@@ -421,15 +405,18 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     const agentStartIdx = task1Events.indexOf("agent.started");
     const progressIdx = task1Events.findIndex((t) => t === "agent.progress");
     const agentFinishedIdx = task1Events.lastIndexOf("agent.finished");
-    const approvedIdx = task1Events.indexOf("task.approved");
     const completedIdx = task1Events.lastIndexOf("task.completed");
 
     assert.ok(startIdx !== -1, "task.started event emitted");
     assert.ok(agentStartIdx !== -1, "agent.started event emitted");
     assert.ok(progressIdx !== -1, "at least one agent.progress event emitted");
     assert.ok(agentFinishedIdx !== -1, "agent.finished event emitted");
-    assert.ok(approvedIdx !== -1, "task.approved event emitted");
     assert.ok(completedIdx !== -1, "task.completed event emitted");
+    assert.equal(
+      task1Events.indexOf("task.approved"),
+      -1,
+      "no task.approved event — an initiative-clone task never goes through the per-task landing gate",
+    );
     assert.ok(startIdx < agentStartIdx, "task.started before agent.started");
     assert.ok(
       agentStartIdx < progressIdx,
@@ -437,15 +424,30 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     );
     assert.ok(progressIdx < agentFinishedIdx, "progress before agent.finished");
     assert.ok(
-      agentFinishedIdx < approvedIdx,
-      "agent.finished before task.approved",
-    );
-    assert.ok(
-      approvedIdx < completedIdx,
-      "task.approved before task.completed",
+      agentFinishedIdx < completedIdx,
+      "agent.finished before task.completed",
     );
 
     // ── Phase 2 ──────────────────────────────────────────────────────────────
+
+    // A fresh objective — OBJECTIVE (Phase 1's) already completed and moved to
+    // awaiting_confirmation as soon as its only task (TASK1) completed; Story B
+    // (EPIC 007.12) makes the objective, not the task, the integration unit, so
+    // Phase 2's tasks need their own not-yet-complete objective to attach to.
+    const obj2 = await dispatch(
+      [
+        "create",
+        "objective",
+        "--initiative",
+        INITIATIVE,
+        "--name",
+        "smoke-objective-2",
+      ],
+      deps,
+    );
+    assert.equal(obj2.exitCode, 0);
+    const OBJECTIVE2 = obj2.stdout[0]!;
+    assert.match(OBJECTIVE2, ULID_RE);
 
     // TASK2 (will escalate) + TASK3 (depends on TASK2)
     const t2 = await dispatch(
@@ -453,7 +455,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
         "create",
         "task",
         "--objective",
-        OBJECTIVE,
+        OBJECTIVE2,
         "--title",
         "add second line to README",
         "--instructions",
@@ -473,7 +475,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
         "create",
         "task",
         "--objective",
-        OBJECTIVE,
+        OBJECTIVE2,
         "--title",
         "cleanup after review",
         "--instructions",
@@ -599,7 +601,9 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       );
     }
 
-    // second daemon run makes TASK3 a candidate (changed work gates)
+    // second daemon run: TASK3's dependency (TASK2) is satisfied, so it runs
+    // and — being an initiative-clone task — completes directly (no per-task
+    // approve gate; Story B, EPIC 007.12).
     const d3 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d3.exitCode, 0, "Phase 2 second daemon exits 0");
 
@@ -610,23 +614,8 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
     const task3After = JSON.parse(g3after.stdout[0]!) as { status: string };
     assert.equal(
       task3After.status,
-      "awaiting_confirmation",
-      "TASK3 gates as awaiting_confirmation (changed work is a candidate)",
-    );
-
-    // approve TASK3 → lands the candidate + completed
-    const approve3 = await dispatch(["approve", "task", "--id", TASK3], deps);
-    assert.equal(approve3.exitCode, 0, "approve task3 exits 0");
-
-    const g3final = await dispatch(
-      ["get", "task", "--id", TASK3, "--json"],
-      deps,
-    );
-    const task3Final = JSON.parse(g3final.stdout[0]!) as { status: string };
-    assert.equal(
-      task3Final.status,
       "completed",
-      "TASK3 completes after approval",
+      "TASK3 completes directly (initiative-clone task, no per-task approve gate)",
     );
 
     // events: task.escalated → task.approved → task.completed for TASK2
@@ -768,9 +757,11 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
       "no task.failed event for retry-rejected task",
     );
 
-    // second daemon run → gates as a candidate (changed work after retry)
+    // second daemon run: the retried run's changed work completes the task
+    // directly — an initiative-clone task has no per-task approve gate
+    // (Story B, EPIC 007.12).
     const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
-    assert.equal(d2.exitCode, 0, "second daemon exits 0 (candidate)");
+    assert.equal(d2.exitCode, 0, "second daemon exits 0 (completes directly)");
 
     const gAfter = await dispatch(
       ["get", "task", "--id", TASK_RETRY, "--json"],
@@ -779,26 +770,8 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
     const afterData = JSON.parse(gAfter.stdout[0]!) as { status: string };
     assert.equal(
       afterData.status,
-      "awaiting_confirmation",
-      "TASK_RETRY gates as awaiting_confirmation after retry (changed work is a candidate)",
-    );
-
-    // approve TASK_RETRY → lands the candidate + completed
-    const approveRetry = await dispatch(
-      ["approve", "task", "--id", TASK_RETRY],
-      deps,
-    );
-    assert.equal(approveRetry.exitCode, 0, "approve task-retry exits 0");
-
-    const gFinal = await dispatch(
-      ["get", "task", "--id", TASK_RETRY, "--json"],
-      deps,
-    );
-    const finalData = JSON.parse(gFinal.stdout[0]!) as { status: string };
-    assert.equal(
-      finalData.status,
       "completed",
-      "TASK_RETRY completed after approval",
+      "TASK_RETRY completes directly after retry (initiative-clone task, no per-task approve gate)",
     );
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });

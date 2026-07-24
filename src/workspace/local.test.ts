@@ -11,6 +11,7 @@ import {
   readFile,
   realpath,
   rm,
+  stat,
   symlink,
   unlink,
   writeFile,
@@ -1747,5 +1748,252 @@ describe("LocalWorkspaceManager — 007.11 D: existing-home migration policy", (
     // Workspace is usable
     assert.equal(ws.branch, "kanthord/t-d-c2");
     assert.ok(ws.baseCommit.length >= 7, "baseCommit must be a git sha");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.12 Story A — initiative branch + brokered isolated clone
+//
+// RED today: LocalWorkspaceManager has no prepareInitiative method.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — 007.12 Story A: prepareInitiative", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-0712a-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("(a) creates refs/heads/kanthord/init/<initId> in home at the integration tip, clones it isolated (no origin, no hardlinked objects), and re-provisioning is idempotent", async () => {
+    const homePath = join(tmpRoot, "home-a");
+    const wsRoot = join(tmpRoot, "ws-a");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    // Provision the bare home first via a normal per-task prepare.
+    await mgr.prepare("seed-task", repo);
+    const homeTip = await git(homePath, "rev-parse", "refs/heads/main");
+
+    const ws = await mgr.prepareInitiative("init-1", repo);
+
+    assert.equal(ws.branch, "kanthord/init/init-1");
+    assert.ok(ws.baseCommit.length >= 7, "baseCommit must be a git sha");
+
+    // Branch created in home at the integration tip.
+    const branchSha = await git(
+      homePath,
+      "rev-parse",
+      "refs/heads/kanthord/init/init-1",
+    );
+    assert.equal(
+      branchSha,
+      homeTip,
+      "initiative branch must be created at the integration tip in home",
+    );
+
+    // Clone is a real checkout on the initiative branch.
+    const cloneBranch = await git(ws.dir, "rev-parse", "--abbrev-ref", "HEAD");
+    assert.equal(cloneBranch, "kanthord/init/init-1");
+
+    // No origin remote — the agent's clone has no write path to home.
+    let originUrl = "";
+    try {
+      originUrl = await git(ws.dir, "config", "--get", "remote.origin.url");
+    } catch {
+      originUrl = "";
+    }
+    assert.equal(
+      originUrl,
+      "",
+      "initiative clone must have no origin remote configured",
+    );
+
+    // --no-hardlinks: clone's objects must not share inodes with home's objects.
+    const { stdout: findOut } = await execFile("find", [
+      join(homePath, "objects"),
+      "-type",
+      "f",
+    ]);
+    const objFiles = findOut.trim().split("\n").filter(Boolean);
+    assert.ok(objFiles.length > 0, "home must have object files to compare");
+    const sample = objFiles[0]!;
+    const rel = relative(join(homePath, "objects"), sample);
+    const cloneObjPath = join(ws.dir, ".git", "objects", rel);
+    const homeStat = await stat(sample);
+    const cloneStat = await stat(cloneObjPath).catch(() => undefined);
+    assert.ok(
+      cloneStat,
+      `clone must contain the corresponding object at .git/objects/${rel}`,
+    );
+    assert.notEqual(
+      cloneStat!.ino,
+      homeStat.ino,
+      "--no-hardlinks: clone objects must not be hardlinked to home objects (distinct inodes)",
+    );
+
+    // Re-provisioning the same initiative is idempotent: branch is reused, not moved.
+    const ws2 = await mgr.prepareInitiative("init-1", repo);
+    assert.equal(ws2.branch, "kanthord/init/init-1");
+    const branchShaAfter = await git(
+      homePath,
+      "rev-parse",
+      "refs/heads/kanthord/init/init-1",
+    );
+    assert.equal(
+      branchShaAfter,
+      homeTip,
+      "re-provisioning must reuse the existing initiative branch at the same tip",
+    );
+  });
+
+  test("(b) prepareInitiative succeeds when a lockDir is configured, even though the initiative branch name contains '/' (kanthord/init/<initId>)", async () => {
+    const homePath = join(tmpRoot, "home-b-lock");
+    const wsRoot = join(tmpRoot, "ws-b-lock");
+    const lockDir = join(tmpRoot, "locks-b-lock");
+    await mkdir(wsRoot, { recursive: true });
+    await mkdir(lockDir, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot, lockDir });
+
+    await mgr.prepare("seed-task", repo);
+
+    // Must not throw ENOENT trying to open a lock file under a path
+    // segment implied by the branch name's '/' (kanthord/init/<initId>).
+    const ws = await mgr.prepareInitiative("init-lock-1", repo);
+    assert.equal(ws.branch, "kanthord/init/init-lock-1");
+  });
+
+  test("(c) prepareInitiative provisions the bare home itself (clone from remote) when it does not exist yet — the daemon calls it before any per-task prepare() (EPIC 007.12 Proof PASS A gap)", async () => {
+    const homePath = join(tmpRoot, "home-c-no-prior-prepare");
+    const wsRoot = join(tmpRoot, "ws-c-no-prior-prepare");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    // No prior mgr.prepare(...) call — homePath does not exist on disk yet.
+    // This mirrors the real daemon path: RunNextTask's initiativeWorkspaces
+    // .ensure() calls prepareInitiative() before the per-task prepare().
+    const ws = await mgr.prepareInitiative("init-c", repo);
+
+    assert.equal(ws.branch, "kanthord/init/init-c");
+    assert.ok(ws.baseCommit.length >= 7, "baseCommit must be a git sha");
+
+    // Home itself must now exist as a bare repo cloned from the remote.
+    const branchSha = await git(
+      homePath,
+      "rev-parse",
+      "refs/heads/kanthord/init/init-c",
+    );
+    assert.equal(branchSha, ws.baseCommit);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.12 Story B — objective boundary: squash the clone's accumulated
+// commits into exactly one commit on kanthord/init/<initId>.
+//
+// RED today: LocalWorkspaceManager has no squashObjective method.
+// ---------------------------------------------------------------------------
+describe("LocalWorkspaceManager — 007.12 Story B: squashObjective", () => {
+  let tmpRoot: string;
+  let seedDir: string;
+
+  before(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-0712b-"));
+    seedDir = join(tmpRoot, "seed.git");
+    await createSeedRepo(seedDir);
+  });
+
+  after(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  test("squashes multiple accumulated commits since parentOid into exactly one commit, preserving the final tree and moving the branch tip", async () => {
+    const homePath = join(tmpRoot, "home-b");
+    const wsRoot = join(tmpRoot, "ws-b");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    await mgr.prepare("seed-task", repo);
+    const ws = await mgr.prepareInitiative("init-b", repo);
+    const parentOid = ws.baseCommit;
+
+    // Simulate two sequential tasks each contributing an ordinary commit.
+    await writeFile(join(ws.dir, "task-a.txt"), "task a\n");
+    await git(ws.dir, "add", "-A");
+    await git(
+      ws.dir,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-m",
+      "task a",
+    );
+    await writeFile(join(ws.dir, "task-b.txt"), "task b\n");
+    await git(ws.dir, "add", "-A");
+    await git(
+      ws.dir,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "commit",
+      "-m",
+      "task b",
+    );
+
+    const beforeCount = await git(
+      ws.dir,
+      "rev-list",
+      "--count",
+      `${parentOid}..HEAD`,
+    );
+    assert.equal(beforeCount, "2", "two task commits must exist before squash");
+
+    const result = await mgr.squashObjective(
+      ws.dir,
+      parentOid,
+      "objective: obj-1",
+    );
+
+    assert.ok(result.oid.length >= 7, "squashObjective must return a real sha");
+
+    const afterCount = await git(
+      ws.dir,
+      "rev-list",
+      "--count",
+      `${parentOid}..HEAD`,
+    );
+    assert.equal(
+      afterCount,
+      "1",
+      "exactly one commit must remain on top of parentOid after squashing",
+    );
+
+    const tip = await git(ws.dir, "rev-parse", "HEAD");
+    assert.equal(tip, result.oid, "the squashed commit must be the new tip");
+
+    // Working tree content from both task commits must survive the squash.
+    const taskAContent = readFileSync(join(ws.dir, "task-a.txt"), "utf8");
+    const taskBContent = readFileSync(join(ws.dir, "task-b.txt"), "utf8");
+    assert.equal(taskAContent, "task a\n");
+    assert.equal(taskBContent, "task b\n");
+
+    const message = await git(ws.dir, "log", "-1", "--format=%s");
+    assert.equal(message, "objective: obj-1");
   });
 });

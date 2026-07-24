@@ -75,3 +75,80 @@ test("(c) runDaemon prints no summary line when escalatedCount is 0", async () =
     `stderr must not include awaiting-confirmation summary when none; got: ${JSON.stringify(result.stderr)}`,
   );
 });
+
+/**
+ * Story F (007.12) — daemon summary lines for objectives awaiting brokering
+ * (`objectivesAwaitingConfirmation`) and initiatives awaiting PR
+ * (`initiativesAwaitingPr`).
+ *
+ * Fails today: `runDaemon` only reads `escalatedCount` off `daemon.execute()`'s
+ * result — the two new counts are silently dropped, so no summary line is
+ * ever printed for them.
+ */
+function makeFakeDaemonWithBrokerCounts(counts: {
+  objectivesAwaitingConfirmation: number;
+  initiativesAwaitingPr: number;
+}): RunDaemonClass {
+  return {
+    execute(_opts: {
+      untilIdle: boolean;
+      pollIntervalMs?: number;
+    }): Promise<{ exitCode: 0 | 1 }> {
+      return Promise.resolve({
+        exitCode: 0 as const,
+        escalatedCount: 0,
+        ...counts,
+      } as unknown as { exitCode: 0 | 1 });
+    },
+    stop(): void {},
+  } as unknown as RunDaemonClass;
+}
+
+test("(007.12 Story F) runDaemon prints '1 objective(s) awaiting confirmation' when objectivesAwaitingConfirmation is 1", async () => {
+  const result = await runDaemon({ "until-idle": true }, () =>
+    makeFakeDaemonWithBrokerCounts({
+      objectivesAwaitingConfirmation: 1,
+      initiativesAwaitingPr: 0,
+    }),
+  );
+
+  assert.equal(result.exitCode, 0, "exit code must be 0");
+  assert.ok(
+    result.stderr.some((l) => l === "1 objective(s) awaiting confirmation"),
+    `stderr must include '1 objective(s) awaiting confirmation'; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("(007.12 Story F) runDaemon prints '2 initiative(s) awaiting PR' when initiativesAwaitingPr is 2", async () => {
+  const result = await runDaemon({ "until-idle": true }, () =>
+    makeFakeDaemonWithBrokerCounts({
+      objectivesAwaitingConfirmation: 0,
+      initiativesAwaitingPr: 2,
+    }),
+  );
+
+  assert.equal(result.exitCode, 0, "exit code must be 0");
+  assert.ok(
+    result.stderr.some((l) => l === "2 initiative(s) awaiting PR"),
+    `stderr must include '2 initiative(s) awaiting PR'; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("(007.12 Story F) runDaemon prints no objective/initiative summary lines when both counts are 0", async () => {
+  const result = await runDaemon({ "until-idle": true }, () =>
+    makeFakeDaemonWithBrokerCounts({
+      objectivesAwaitingConfirmation: 0,
+      initiativesAwaitingPr: 0,
+    }),
+  );
+
+  assert.equal(result.exitCode, 0, "exit code must be 0");
+  assert.ok(
+    !result.stderr.some(
+      (l) =>
+        l.includes("objective(s) awaiting confirmation") ||
+        l.includes("initiative(s) awaiting PR"),
+    ),
+    `stderr must not include objective/initiative summary lines when both are 0; got: ${JSON.stringify(result.stderr)}`,
+  );
+});

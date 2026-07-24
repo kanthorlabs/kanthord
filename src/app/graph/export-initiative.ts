@@ -79,6 +79,7 @@ export class ExportInitiative {
       digestAlgorithm: "sha256",
       nodes,
       files,
+      objectiveIds: objectives.map((obj) => obj.id),
       refToId: {
         objectives: refToIdObjectives,
         tasks: refToIdTasks,

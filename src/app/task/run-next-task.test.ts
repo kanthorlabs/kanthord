@@ -15,6 +15,7 @@ import type {
 } from "../../domain/landing.ts";
 import type { Event } from "../../domain/event.ts";
 import type { Task } from "../../domain/task.ts";
+import type { Objective } from "../../domain/initiative.ts";
 import type {
   AgentRunner,
   AgentRunnerResolver,
@@ -45,21 +46,44 @@ interface TaskStore {
 class SimpleTaskStore implements TaskStore {
   readonly saved: Task[] = [];
   readonly taskResults: TaskResultRow[] = [];
+  readonly savedObjectives: Objective[] = [];
   readonly #tasks: Map<string, Task>;
   readonly #initiativeId: string;
   readonly #contexts: Map<string, Record<string, string>>;
   #repoBranch: string;
+  readonly #objectives: Map<string, Objective>;
+  readonly #objectiveParentOid: string;
 
   constructor(
     tasks: Task[],
     initiativeId: string,
     contexts: Map<string, Record<string, string>> = new Map(),
     repoBranch = "main",
+    objectives: Objective[] = [],
+    objectiveParentOid = "PARENT_OID_1",
   ) {
     this.#tasks = new Map(tasks.map((t) => [t.id, t]));
     this.#initiativeId = initiativeId;
     this.#contexts = contexts;
     this.#repoBranch = repoBranch;
+    this.#objectives = new Map(objectives.map((o) => [o.id, o]));
+    this.#objectiveParentOid = objectiveParentOid;
+  }
+
+  // Story B objective-boundary squash: the objective read/write + expected
+  // parent-OID lookup `RunNextTask` needs to squash + transition an
+  // initiative-clone objective once its last task completes.
+  getObjective(id: string): Objective | undefined {
+    return this.#objectives.get(id);
+  }
+
+  saveObjective(objective: Objective): void {
+    this.#objectives.set(objective.id, objective);
+    this.savedObjectives.push(objective);
+  }
+
+  getObjectiveParentOid(_objectiveId: string): string {
+    return this.#objectiveParentOid;
   }
 
   get(id: string): Task | undefined {
@@ -629,6 +653,48 @@ test("RunNextTask filesystem-bound candidate completes directly with no candidat
   );
 });
 
+test("RunNextTask completes an initiative-clone task directly (no per-task approve gate) even though it is repository-bound and its run yields a changed-work candidate — the objective, not the task, is the integration unit (Story B constraint, EPIC 007.12 Proof PASS A/B gap)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  // BOTH a repository binding AND a workspace binding — exactly how a task
+  // routed to the Story A initiative clone is bound (repository via the
+  // "source" alias, workspace via the clone dir).
+  const contexts = new Map([
+    [TASK_SIMPLE.id, { repository: "res-1", workspace: "/tmp/init-clone" }],
+  ]);
+  const store = new SimpleTaskStore(
+    [{ ...TASK_SIMPLE }],
+    INI_ID,
+    contexts,
+    "release",
+  );
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const landing = new FakeLandingRepository();
+  const resolver: AgentRunnerResolver = { for: () => candidateRunner() };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, landing);
+  const result = await uc.execute();
+
+  assert.deepEqual(
+    result,
+    { outcome: "completed", taskId: TASK_SIMPLE.id },
+    "an initiative-clone (workspace-bound) task completes directly, not held as a candidate",
+  );
+  const lastSaved = store.saved[store.saved.length - 1]!;
+  assert.equal(
+    lastSaved.status,
+    "completed",
+    "initiative-clone task must complete directly — Story B: integration unit is the objective commit, not the per-task candidate",
+  );
+  assert.equal(queue.finished[0]!.outcome, "completed");
+  assert.equal(
+    landing.saved.length,
+    0,
+    "no per-task candidate row is persisted for an initiative-clone task",
+  );
+});
+
 test("RunNextTask candidate persistence is atomic: a crash commits neither the transition nor the candidate (Story 04 T1 c)", async () => {
   const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
   const queue = new RecordingJobQueue(claimed);
@@ -911,5 +977,137 @@ test("RunNextTask honors retryAfterMs from the failed result as a floor for the 
   assert.ok(
     sleepLog[0]! >= 5_000,
     `backoff must wait at least the server's retryAfterMs (5000); waited ${sleepLog[0]}`,
+  );
+});
+
+test("RunNextTask squashes the objective into one commit and moves it to awaiting_confirmation only once all of its clone-routed tasks are completed (Story B objective boundary)", async () => {
+  const cloneDir = "/tmp/kanthord-init-clone";
+  const contexts = new Map([
+    [T_PARENT_ID, { workspace: cloneDir }],
+    [T_CHILD_ID, { workspace: cloneDir }],
+  ]);
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INI_ID,
+    name: "obj-a",
+    status: "building",
+  };
+  const store = new SimpleTaskStore(
+    [{ ...TASK_PARENT }, { ...TASK_CHILD }],
+    INI_ID,
+    contexts,
+    "main",
+    [objective],
+    "PARENT_OID_1",
+  );
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const squashCalls: Array<{
+    dir: string;
+    parentOid: string;
+    message: string;
+  }> = [];
+  const workspaces = {
+    async squashObjective(dir: string, parentOid: string, message: string) {
+      squashCalls.push({ dir, parentOid, message });
+      return { oid: "SQUASHED_OID_1" };
+    },
+  };
+
+  // 1st run: parent (no deps) is claimed and completes. Child becomes ready,
+  // but the objective still has an incomplete task — no squash yet.
+  const queue1 = new RecordingJobQueue({ id: JOB_ID, taskId: T_PARENT_ID });
+  const uc1 = new RunNextTask(queue1, store, feed, uow, resolver, undefined, {
+    workspaces,
+  });
+  await uc1.execute();
+
+  assert.equal(
+    squashCalls.length,
+    0,
+    "squashObjective must not run while the objective still has an incomplete task",
+  );
+  assert.equal(
+    store.savedObjectives.length,
+    0,
+    "objective must not be transitioned while incomplete",
+  );
+
+  // 2nd run: child (now ready) is claimed and completes — the last task of
+  // the objective — so it must squash + transition + record the OID.
+  const queue2 = new RecordingJobQueue({
+    id: "01JZZZZZZZZZZZZZZZZZZZJOB2",
+    taskId: T_CHILD_ID,
+  });
+  const uc2 = new RunNextTask(queue2, store, feed, uow, resolver, undefined, {
+    workspaces,
+  });
+  await uc2.execute();
+
+  assert.equal(
+    squashCalls.length,
+    1,
+    "squashObjective called exactly once, on objective completion",
+  );
+  assert.equal(squashCalls[0]!.dir, cloneDir, "squash runs in the clone dir");
+  assert.equal(
+    squashCalls[0]!.parentOid,
+    "PARENT_OID_1",
+    "squash parent is the recorded expected parent OID",
+  );
+
+  const savedObjective = store.savedObjectives.at(-1);
+  assert.ok(savedObjective, "objective saved");
+  assert.equal(savedObjective!.status, "awaiting_confirmation");
+  assert.equal(
+    (savedObjective as Objective & { commitOid?: string }).commitOid,
+    "SQUASHED_OID_1",
+    "recorded objective-commit OID",
+  );
+  assert.equal(
+    (savedObjective as Objective & { parentOid?: string }).parentOid,
+    "PARENT_OID_1",
+    "recorded expected parent OID",
+  );
+
+  assert.ok(
+    feed.events.some(
+      (e) =>
+        e.type === "objective.awaiting_confirmation" &&
+        e.objectiveId === OBJ_ID,
+    ),
+    "objective.awaiting_confirmation event appended, scoped to the objective",
+  );
+});
+
+test("RunNextTask ensures the claimed task's initiative workspace is provisioned before the task runs (Story A/B wiring gap — daemon must actually provision the initiative branch/clone)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const ensureCalls: string[] = [];
+  const initiativeWorkspaces = {
+    async ensure(initiativeId: string): Promise<void> {
+      ensureCalls.push(initiativeId);
+    },
+  };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    initiativeWorkspaces,
+  });
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.deepEqual(
+    ensureCalls,
+    [INI_ID],
+    "initiativeWorkspaces.ensure(initiativeId) must be called exactly once, with the claimed task's initiative id, before the task runs",
   );
 });

@@ -77,6 +77,14 @@ export interface InitiativeRepository {
   resolveInitiativeByName(projectId: string, name: string): string[];
   resolveObjectiveByName(initiativeId: string, name: string): string[];
   setPaused(id: string, paused: boolean): void;
+  /**
+   * Persist the daemon-provisioned isolated clone directory for the
+   * initiative's branch. Optional (mirroring `homeDir?` on `WorkspaceManager`)
+   * so pre-existing fake `InitiativeRepository` test implementations, which
+   * predate this Story A task, still structurally conform without a new
+   * method.
+   */
+  setWorkspace?(id: string, dir: string): void;
   listAllInitiatives(): Array<{ id: string; paused: boolean }>;
   /** Returns the stored sha256 token for an initiative or objective row, or undefined if not found. */
   getSha256(id: string): string | undefined;

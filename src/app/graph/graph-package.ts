@@ -41,6 +41,7 @@ export interface ExportManifest {
   digestAlgorithm: "sha256";
   nodes: Record<string, string>; // id → sha256 — FULL snapshot: initiative+objectives+tasks (TS1)
   files: string[]; // ids written as files — delete-eligibility set (TB1), SEPARATE from nodes
+  objectiveIds?: string[]; // ordered objective ids (initiative-branch workflow needs objective order)
   refToId: {
     // kind-scoped (B6) — namespaces never collide
     objectives: Record<string, string>;

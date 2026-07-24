@@ -71,10 +71,23 @@ export async function runDaemon(
   process.on("SIGINT", sigintHandler);
   try {
     const result = await daemon.execute({ untilIdle, pollIntervalMs });
-    const stderr: string[] =
-      result.escalatedCount > 0
-        ? [`${result.escalatedCount} task(s) awaiting confirmation`]
-        : [];
+    const objectivesAwaitingConfirmation =
+      (result as { objectivesAwaitingConfirmation?: number })
+        .objectivesAwaitingConfirmation ?? 0;
+    const initiativesAwaitingPr =
+      (result as { initiativesAwaitingPr?: number }).initiativesAwaitingPr ?? 0;
+    const stderr: string[] = [];
+    if (result.escalatedCount > 0) {
+      stderr.push(`${result.escalatedCount} task(s) awaiting confirmation`);
+    }
+    if (objectivesAwaitingConfirmation > 0) {
+      stderr.push(
+        `${objectivesAwaitingConfirmation} objective(s) awaiting confirmation`,
+      );
+    }
+    if (initiativesAwaitingPr > 0) {
+      stderr.push(`${initiativesAwaitingPr} initiative(s) awaiting PR`);
+    }
     return { exitCode: result.exitCode, stdout: [], stderr };
   } finally {
     process.removeListener("SIGINT", sigintHandler);

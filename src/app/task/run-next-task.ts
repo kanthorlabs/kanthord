@@ -4,6 +4,8 @@ import { readiness } from "../../domain/graph.ts";
 import { newEvent } from "../../domain/event.ts";
 import { newId } from "../../domain/entity.ts";
 import { newChangeCandidate } from "../../domain/landing.ts";
+import type { Objective } from "../../domain/initiative.ts";
+import { transitionObjective } from "../../domain/initiative.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type {
@@ -26,6 +28,29 @@ interface TaskStore {
   getTaskContext(taskId: string): Record<string, string>;
   getRepositoryBranch?(repoId: string): string | undefined;
   saveTaskResult(taskId: string, row: TaskResultRow): void;
+  // Story B objective-boundary squash — the objective read/write + expected
+  // parent-OID lookup needed to squash + transition an initiative-clone
+  // objective once its last task completes.
+  getObjective?(id: string): Objective | undefined;
+  saveObjective?(objective: Objective): void;
+  getObjectiveParentOid?(objectiveId: string): string;
+}
+
+interface WorkspaceSquasher {
+  squashObjective(
+    dir: string,
+    parentOid: string,
+    message: string,
+  ): Promise<{ oid: string }>;
+}
+
+// Story A/B wiring gap — the daemon-only initiative branch/clone provisioning
+// (LocalWorkspaceManager.prepareInitiative + InitiativeRepository.setWorkspace,
+// both already implemented) was never invoked anywhere in the production call
+// graph. This narrow collaborator is the seam through which RunNextTask
+// triggers that provisioning once per initiative, before the task runs.
+interface InitiativeWorkspaces {
+  ensure(initiativeId: string): Promise<void>;
 }
 
 type RunResult =
@@ -69,6 +94,8 @@ export class RunNextTask {
   readonly #maxAttempts: number;
   readonly #maxElapsedMs: number;
   readonly #sleep: (ms: number) => Promise<void>;
+  readonly #workspaces?: WorkspaceSquasher;
+  readonly #initiativeWorkspaces?: InitiativeWorkspaces;
 
   constructor(
     queue: JobQueue,
@@ -77,7 +104,12 @@ export class RunNextTask {
     uow: UnitOfWork,
     resolver: AgentRunnerResolver,
     landing?: LandingRepository,
-    opts?: { maxAttempts?: number; sleep?: (ms: number) => Promise<void> },
+    opts?: {
+      maxAttempts?: number;
+      sleep?: (ms: number) => Promise<void>;
+      workspaces?: WorkspaceSquasher;
+      initiativeWorkspaces?: InitiativeWorkspaces;
+    },
   ) {
     this.#queue = queue;
     this.#store = store;
@@ -90,6 +122,8 @@ export class RunNextTask {
     this.#sleep =
       opts?.sleep ??
       ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+    this.#workspaces = opts?.workspaces;
+    this.#initiativeWorkspaces = opts?.initiativeWorkspaces;
   }
 
   async execute(): Promise<RunResult> {
@@ -98,6 +132,18 @@ export class RunNextTask {
     if (claimed === undefined) return { outcome: "idle" };
 
     const { id: jobId, taskId } = claimed;
+
+    // Story A/B wiring gap — provision the claimed task's initiative branch
+    // + isolated clone (if any) before the task's context is read/it runs, so
+    // a freshly-provisioned `workspace` context binding is visible to this
+    // same run. Read-only lookup (no mutation), safe to run outside tx1;
+    // tx1 re-derives the same initiativeId below.
+    if (this.#initiativeWorkspaces !== undefined) {
+      const initiativeId = this.#store.getInitiativeId(taskId);
+      if (initiativeId !== undefined) {
+        await this.#initiativeWorkspaces.ensure(initiativeId);
+      }
+    }
 
     // tx1: check readiness; start the task, or discard a stale job.
     const tx1: Tx1Outcome = this.#uow.transaction((): Tx1Outcome => {
@@ -254,11 +300,17 @@ export class RunNextTask {
         // With a repository binding there is something to land → hold at
         // awaiting_confirmation and persist the candidate atomically (F3).
         // Without a repository binding (filesystem-backed task) there is
-        // nothing to land → complete directly.
+        // nothing to land → complete directly. A workspace binding marks an
+        // initiative-clone task (Story B): the objective, not the task, is
+        // the integration unit, so it also completes directly regardless of
+        // any repository binding also present (`source` alias requirement).
         const repoBinding = contextBindings.find(
           (b) => b.type === "repository",
         );
-        if (repoBinding === undefined) {
+        const workspaceBinding = contextBindings.find(
+          (b) => b.type === "workspace",
+        );
+        if (repoBinding === undefined || workspaceBinding !== undefined) {
           const completedTask = transitionTask(runningTask, "completed");
           this.#store.save(completedTask);
           this.#queue.finish(jobId, "completed");
@@ -344,6 +396,54 @@ export class RunNextTask {
         resultOutcome = "failed";
       }
     });
+
+    // Story B objective-boundary squash — outside tx2 since it involves an
+    // async git operation on the initiative clone. Only applies to a
+    // completed task routed to an initiative clone (a "workspace" context
+    // binding), and only once every task sharing its objectiveId is
+    // completed.
+    if ((resultOutcome as string) === "completed") {
+      const workspaceBinding = contextBindings.find(
+        (b) => b.type === "workspace",
+      );
+      if (
+        workspaceBinding !== undefined &&
+        this.#workspaces !== undefined &&
+        this.#store.getObjective !== undefined &&
+        this.#store.saveObjective !== undefined &&
+        this.#store.getObjectiveParentOid !== undefined
+      ) {
+        const objectiveId = runningTask.objectiveId;
+        const siblings = (
+          initiativeId ? this.#store.listByInitiative(initiativeId) : []
+        ).filter((t) => t.objectiveId === objectiveId);
+        const allCompleted = siblings.every((t) => t.status === "completed");
+
+        if (allCompleted) {
+          const parentOid = this.#store.getObjectiveParentOid(objectiveId);
+          const { oid } = await this.#workspaces.squashObjective(
+            workspaceBinding.resourceId,
+            parentOid,
+            `objective ${objectiveId}`,
+          );
+          const objective = this.#store.getObjective(objectiveId);
+          if (objective !== undefined) {
+            const transitioned = transitionObjective(
+              objective,
+              "awaiting_confirmation",
+            );
+            this.#store.saveObjective({
+              ...transitioned,
+              commitOid: oid,
+              parentOid,
+            });
+            this.#feed.append(
+              newEvent("objective.awaiting_confirmation", { objectiveId }),
+            );
+          }
+        }
+      }
+    }
 
     return { outcome: resultOutcome, taskId };
   }

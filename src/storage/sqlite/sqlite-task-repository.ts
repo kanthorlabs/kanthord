@@ -206,6 +206,18 @@ export class SqliteTaskRepository implements TaskRepository {
     for (const row of rows) {
       result[row.type] = row.resource_id;
     }
+    type WorkspaceRow = { workspace: string | null };
+    const workspaceRow = this.#db
+      .prepare(
+        "SELECT i.workspace AS workspace FROM tasks t" +
+          " JOIN objectives o ON t.objectiveId = o.id" +
+          " JOIN initiatives i ON o.initiativeId = i.id" +
+          " WHERE t.id = ?",
+      )
+      .get(taskId) as WorkspaceRow | undefined;
+    if (workspaceRow?.workspace != null) {
+      result.workspace = workspaceRow.workspace;
+    }
     return result;
   }
 

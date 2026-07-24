@@ -242,6 +242,30 @@ test("--create writes .kanthord-export.json with packageId + nodes snapshot", as
   assert.ok(nodes[TASK2_ID], `manifest.nodes has TASK2_ID ${TASK2_ID}`);
 });
 
+test("--create writes .kanthord-export.json with ordered manifest.objectiveIds (backend then frontend, matching package declaration order)", async () => {
+  const dir = await makeAuthoredDir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: true, apply: false, project: PROJ_ID },
+    { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `exit 0; stderr: ${result.stderr.join(" ")}`,
+  );
+
+  const raw = await readFile(join(dir, ".kanthord-export.json"), "utf8");
+  const manifest = JSON.parse(raw) as Record<string, unknown>;
+  assert.deepEqual(
+    manifest["objectiveIds"],
+    [OBJ1_ID, OBJ2_ID],
+    "manifest.objectiveIds is [backend, frontend] ULIDs in package declaration order",
+  );
+});
+
 test("S3: --create packageId minted by injected newId is a ULID (uppercase Crockford ^[0-9A-HJKMNP-TV-Z]{26}$), not a UUID", async () => {
   const dir = await makeAuthoredDir();
   const fake = new FakeCreateGraph();

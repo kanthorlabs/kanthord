@@ -393,6 +393,41 @@ test("SqliteTaskRepository saveTaskContext + getTaskContext round-trips two cont
   assert.deepEqual(loadedCtx, context);
 });
 
+test("SqliteTaskRepository getTaskContext includes a workspace binding when the task's initiative has a provisioned clone (Story A/B routing)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { initiativeId, objectiveId } = seedHierarchy(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+  initRepo.setWorkspace(initiativeId, "/tmp/kanthord-init-clone");
+
+  const repo = new SqliteTaskRepository(db);
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Initiative-clone task",
+    status: "pending",
+    dependencies: [],
+  };
+  repo.save(task);
+  repo.saveTaskContext(task.id, { repository: newId() });
+
+  const ctx = repo.getTaskContext(task.id);
+  assert.equal(
+    ctx.workspace,
+    "/tmp/kanthord-init-clone",
+    "getTaskContext must include a workspace binding sourced from the initiative's recorded clone dir",
+  );
+  assert.equal(
+    ctx.repository !== undefined,
+    true,
+    "explicit context bindings must still be present alongside the derived workspace binding",
+  );
+});
+
 test("SqliteTaskRepository getTaskContext returns empty object for task with no context", () => {
   const { db, dir } = makeTempDb();
   after(() => {

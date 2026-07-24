@@ -3,6 +3,7 @@ import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts
 import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
 import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
 import type { ListInitiatives } from "../../app/initiative/list-initiatives.ts";
+import type { GetInitiative } from "../../app/initiative/get-initiative.ts";
 import { toResult } from "./error-map.ts";
 
 export async function runCreateInitiative(
@@ -64,6 +65,30 @@ export async function runResumeInitiative(
   } catch (err) {
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };
+  }
+}
+
+export async function runGetInitiative(
+  args: Record<string, unknown>,
+  getInitiative: GetInitiative,
+): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const id = args["id"] as string;
+  try {
+    const output = await getInitiative.execute({ id });
+    if (args["json"]) {
+      return { exitCode: 0, stdout: [JSON.stringify(output)], stderr: [] };
+    }
+    const lines: string[] = [
+      `id: ${output.id}`,
+      `name: ${output.name}`,
+      `status: ${output.status}`,
+    ];
+    if (output.workspace !== undefined) {
+      lines.push(`workspace: ${output.workspace}`);
+    }
+    return { exitCode: 0, stdout: lines, stderr: [] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
   }
 }
 

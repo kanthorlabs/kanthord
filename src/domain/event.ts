@@ -18,6 +18,12 @@ export const EVENT_TYPES = [
   "agent.finished",
   "task.verification",
   "provider.retry",
+  "objective.building",
+  "objective.awaiting_confirmation",
+  "objective.integrated",
+  "objective.conflict",
+  "initiative.awaiting_pr",
+  "initiative.delivered",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
@@ -25,19 +31,34 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export interface Event {
   id: string;
   type: EventType;
-  taskId: string;
+  taskId?: string;
+  objectiveId?: string;
+  initiativeId?: string;
   payload?: Record<string, string>;
 }
 
 export function newEvent(
   type: EventType,
-  input: { taskId: string; payload?: Record<string, string> },
+  input: {
+    taskId?: string;
+    objectiveId?: string;
+    initiativeId?: string;
+    payload?: Record<string, string>;
+  },
 ): Event {
   const event: Event = {
     id: newId(),
     type,
-    taskId: input.taskId,
   };
+  if (input.taskId !== undefined) {
+    event.taskId = input.taskId;
+  }
+  if (input.objectiveId !== undefined) {
+    event.objectiveId = input.objectiveId;
+  }
+  if (input.initiativeId !== undefined) {
+    event.initiativeId = input.initiativeId;
+  }
   if (input.payload !== undefined) {
     event.payload = input.payload;
   }

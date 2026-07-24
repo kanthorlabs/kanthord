@@ -1,6 +1,11 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { runCreateObjective, runRenameObjective } from "./objective.ts";
+import {
+  runCreateObjective,
+  runRenameObjective,
+  runApproveObjective,
+  runRetryObjective,
+} from "./objective.ts";
 import type {
   InitiativeRepository,
   ReferenceResolver,
@@ -8,6 +13,10 @@ import type {
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import { CreateObjective } from "../../app/objective/create-objective.ts";
 import { RenameObjective } from "../../app/objective/rename-objective.ts";
+import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
+import type { RetryObjective } from "../../app/objective/retry-objective.ts";
+import { UnknownReferenceError } from "../../app/errors.ts";
+import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
@@ -168,6 +177,119 @@ describe("runRenameObjective handler", () => {
     assert.ok(
       result.stderr[0]!.startsWith("error:"),
       `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+class FakeApproveObjective {
+  readonly calls: string[] = [];
+  #error: unknown;
+
+  constructor(error?: unknown) {
+    this.#error = error;
+  }
+
+  async execute(input: { objectiveId: string }): Promise<void> {
+    this.calls.push(input.objectiveId);
+    if (this.#error !== undefined) {
+      throw this.#error;
+    }
+  }
+}
+
+describe("runApproveObjective handler", () => {
+  test("runApproveObjective --id <id>: returns exitCode 0, stdout [id], stderr ['objective integrated: <id>'] on success", async () => {
+    const fake = new FakeApproveObjective();
+    const result = await runApproveObjective(
+      { id: "obj-1" },
+      fake as unknown as ApproveObjective,
+    );
+    assert.deepEqual(fake.calls, ["obj-1"]);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.stdout, ["obj-1"]);
+    assert.deepEqual(result.stderr, ["objective integrated: obj-1"]);
+  });
+
+  test("runApproveObjective missing --id: returns exitCode 1, no use-case call", async () => {
+    const fake = new FakeApproveObjective();
+    const result = await runApproveObjective(
+      {},
+      fake as unknown as ApproveObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fake.calls, []);
+  });
+
+  test("runApproveObjective returns exitCode 1 with error line when the use case rejects (e.g. unknown objective)", async () => {
+    const fake = new FakeApproveObjective(
+      new UnknownReferenceError("objective", "no-such"),
+    );
+    const result = await runApproveObjective(
+      { id: "no-such" },
+      fake as unknown as ApproveObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.ok(
+      result.stderr[0]!.startsWith("error:"),
+      `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+class FakeRetryObjective {
+  readonly calls: string[] = [];
+  #error: unknown;
+
+  constructor(error?: unknown) {
+    this.#error = error;
+  }
+
+  async execute(input: { objectiveId: string }): Promise<void> {
+    this.calls.push(input.objectiveId);
+    if (this.#error !== undefined) {
+      throw this.#error;
+    }
+  }
+}
+
+describe("runRetryObjective handler", () => {
+  test("runRetryObjective --id <id>: returns exitCode 0, stdout [id] on success", async () => {
+    const fake = new FakeRetryObjective();
+    const result = await runRetryObjective(
+      { id: "obj-1" },
+      fake as unknown as RetryObjective,
+    );
+    assert.deepEqual(fake.calls, ["obj-1"]);
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.stdout, ["obj-1"]);
+  });
+
+  test("runRetryObjective missing --id: returns exitCode 1, no use-case call", async () => {
+    const fake = new FakeRetryObjective();
+    const result = await runRetryObjective(
+      {},
+      fake as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fake.calls, []);
+  });
+
+  test("runRetryObjective returns exitCode 1 with error line naming non-tip immutability when the use case rejects", async () => {
+    const fake = new FakeRetryObjective(
+      new ObjectiveNotRetryableError("obj-1"),
+    );
+    const result = await runRetryObjective(
+      { id: "obj-1" },
+      fake as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.match(
+      result.stderr[0]!,
+      /non-tip|not rewritable|already integrated/i,
     );
   });
 });

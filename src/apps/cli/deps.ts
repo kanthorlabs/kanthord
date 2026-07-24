@@ -3,6 +3,7 @@ import type { MigrateDb } from "../../app/db/migrate-db.ts";
 import type { ExportInitiative } from "../../app/graph/export-initiative.ts";
 import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import type { FindInitiative } from "../../app/initiative/find-initiative.ts";
+import type { GetInitiative } from "../../app/initiative/get-initiative.ts";
 import type { ListInitiatives } from "../../app/initiative/list-initiatives.ts";
 import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
 import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
@@ -10,6 +11,7 @@ import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts
 import type { DiagnosticsExport } from "../../app/observability/diagnostics-export.ts";
 import type { CreateObjective } from "../../app/objective/create-objective.ts";
 import type { FindObjective } from "../../app/objective/find-objective.ts";
+import type { GetObjective } from "../../app/objective/get-objective.ts";
 import type { ListObjectives } from "../../app/objective/list-objectives.ts";
 import type { RenameObjective } from "../../app/objective/rename-objective.ts";
 import type { CreateProject } from "../../app/project/create-project.ts";
@@ -28,6 +30,8 @@ import type { UpdateNotification } from "../../app/resource/update-notification.
 import type { UpdateRepository } from "../../app/resource/update-repository.ts";
 import type { AddDependency } from "../../app/task/add-dependency.ts";
 import type { ApproveTask } from "../../app/task/approve-task.ts";
+import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
+import type { RetryObjective } from "../../app/objective/retry-objective.ts";
 import type { GetTask } from "../../app/task/get-task.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
@@ -121,11 +125,13 @@ export interface CliDeps {
   createInitiative: CreateInitiative;
   renameInitiative: RenameInitiative;
   findInitiative: FindInitiative;
+  getInitiative: GetInitiative;
   pauseInitiative: PauseInitiative;
   resumeInitiative: ResumeInitiative;
   createObjective: CreateObjective;
   renameObjective: RenameObjective;
   findObjective: FindObjective;
+  getObjective: GetObjective;
   addResource: AddResource;
   findResource: FindResource;
   getResource: GetResource;
@@ -143,6 +149,8 @@ export interface CliDeps {
   getTask: GetTask;
   getConflict: GetConflict;
   approveTask: ApproveTask;
+  approveObjective: ApproveObjective;
+  retryObjective: RetryObjective;
   rejectTask: RejectTask;
   buildDaemon: (
     failTaskIds: string[],

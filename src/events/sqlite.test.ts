@@ -208,6 +208,62 @@ test("append with payload round-trips payload as JSON through readAfter", () => 
   }
 });
 
+// ── objective/initiative-scoped events (007.12 Story D) ─────────────────────
+
+test("append + readAfter round-trips an objective-scoped event with no taskId key", () => {
+  const { db, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const objectiveId = db
+      .prepare("SELECT id FROM objectives LIMIT 1")
+      .get() as { id: string };
+    const ev = newEvent("objective.integrated", {
+      objectiveId: objectiveId.id,
+    });
+    feed.append(ev);
+
+    const results = feed.readAfter("0");
+    assert.equal(results.length, 1);
+    assert.equal(results[0]?.id, ev.id);
+    assert.equal(results[0]?.type, "objective.integrated");
+    assert.equal(results[0]?.objectiveId, objectiveId.id);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(results[0], "taskId"),
+      false,
+      "round-tripped objective-scoped event has no taskId key",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test("append + readAfter round-trips an initiative-scoped event with no taskId key", () => {
+  const { db, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const initiativeId = db
+      .prepare("SELECT id FROM initiatives LIMIT 1")
+      .get() as { id: string };
+    const ev = newEvent("initiative.awaiting_pr", {
+      initiativeId: initiativeId.id,
+    });
+    feed.append(ev);
+
+    const results = feed.readAfter("0");
+    assert.equal(results.length, 1);
+    assert.equal(results[0]?.id, ev.id);
+    assert.equal(results[0]?.type, "initiative.awaiting_pr");
+    assert.equal(results[0]?.initiativeId, initiativeId.id);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(results[0], "taskId"),
+      false,
+      "round-tripped initiative-scoped event has no taskId key",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
 test("append without payload reads back without payload key", () => {
   const { db, taskId, cleanup } = setupDb();
   try {

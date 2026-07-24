@@ -362,6 +362,19 @@ export class PiAgentRunner implements AgentRunner {
     return result;
   }
 
+  /**
+   * Story A/B (007.12): build a Workspace directly from an already-provisioned
+   * initiative clone dir (a "workspace" context binding), instead of calling
+   * workspaces.prepare(). The clone already sits on
+   * kanthord/init/<initId> with any prior objective commits already made, so
+   * branch/baseCommit are read from the clone itself.
+   */
+  async #resolveClonedWorkspace(dir: string): Promise<Workspace> {
+    const branch = await gitRun(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    const baseCommit = await gitRun(dir, ["rev-parse", "HEAD"]);
+    return { dir, branch, baseCommit };
+  }
+
   async #doRun(
     task: Task,
     context: TaskContextBinding[],
@@ -410,37 +423,45 @@ export class PiAgentRunner implements AgentRunner {
     }
 
     // 4. Workspace source resolution
-    const repoBindings = context.filter((b) => b.type === "repository");
-    const fsBindings = context.filter((b) => b.type === "filesystem");
+    // Story A/B (007.12): a "workspace" binding means the task runs directly
+    // in an already-provisioned initiative clone (routed by
+    // SqliteTaskRepository.getTaskContext) — skip repository/filesystem
+    // resolution and workspaces.prepare() entirely.
+    const workspaceBinding = context.find((b) => b.type === "workspace");
 
-    if (repoBindings.length > 0 && fsBindings.length > 0) {
-      return {
-        outcome: "failed",
-        reason:
-          "InvalidContextError: task has both repository and filesystem bindings",
-      };
-    }
-    if (repoBindings.length === 0 && fsBindings.length === 0) {
-      return {
-        outcome: "failed",
-        reason:
-          "WorkspaceUnresolvableError: task has no repository or filesystem binding",
-      };
-    }
+    let workspaceSource: Repository | Filesystem | undefined;
+    if (!workspaceBinding) {
+      const repoBindings = context.filter((b) => b.type === "repository");
+      const fsBindings = context.filter((b) => b.type === "filesystem");
 
-    const repoBinding = repoBindings[0];
-    const fsBinding = fsBindings[0];
-    const workspaceSource: Repository | Filesystem = repoBinding
-      ? (this.#getResource(repoBinding.resourceId) as Repository)
-      : (this.#getResource(fsBinding!.resourceId) as Filesystem);
+      if (repoBindings.length > 0 && fsBindings.length > 0) {
+        return {
+          outcome: "failed",
+          reason:
+            "InvalidContextError: task has both repository and filesystem bindings",
+        };
+      }
+      if (repoBindings.length === 0 && fsBindings.length === 0) {
+        return {
+          outcome: "failed",
+          reason:
+            "WorkspaceUnresolvableError: task has no repository or filesystem binding",
+        };
+      }
+
+      const repoBinding = repoBindings[0];
+      const fsBinding = fsBindings[0];
+      workspaceSource = repoBinding
+        ? (this.#getResource(repoBinding.resourceId) as Repository)
+        : (this.#getResource(fsBinding!.resourceId) as Filesystem);
+    }
 
     // 5–12. Workspace prep, instruction loading, agent run, evidence, finalize
     try {
       // 5. Workspace preparation
-      const workspace: Workspace = await this.#workspaces.prepare(
-        task.id,
-        workspaceSource,
-      );
+      const workspace: Workspace = workspaceBinding
+        ? await this.#resolveClonedWorkspace(workspaceBinding.resourceId)
+        : await this.#workspaces.prepare(task.id, workspaceSource!);
 
       // Emit agent.started after workspace is ready
       this.#emit(task.id, "agent.started", { workspace: workspace.dir });

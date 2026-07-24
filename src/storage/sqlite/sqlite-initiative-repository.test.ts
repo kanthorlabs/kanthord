@@ -44,6 +44,7 @@ test("SqliteInitiativeRepository save then get round-trips the initiative", () =
     id: newId(),
     projectId,
     name: "My Initiative",
+    status: "building",
   };
   repo.save(initiative);
   const loaded = repo.get(initiative.id);
@@ -73,7 +74,12 @@ test("SqliteInitiativeRepository duplicate save (same id + same data) is a no-op
   projectRepo.save({ id: projectId, name: "P1" });
 
   const repo = new SqliteInitiativeRepository(db);
-  const initiative: Initiative = { id: newId(), projectId, name: "Dupe" };
+  const initiative: Initiative = {
+    id: newId(),
+    projectId,
+    name: "Dupe",
+    status: "building",
+  };
   repo.save(initiative);
   // upsert semantics: re-saving identical data must not throw
   assert.doesNotThrow(() => repo.save(initiative));
@@ -100,11 +106,13 @@ test("SqliteInitiativeRepository saveObjective + listObjectives round-trips in i
     id: "b-" + newId(),
     initiativeId,
     name: "Objective B",
+    status: "building",
   };
   const objA: Objective = {
     id: "a-" + newId(),
     initiativeId,
     name: "Objective A",
+    status: "building",
   };
   repo.saveObjective(objB);
   repo.saveObjective(objA);
@@ -180,6 +188,7 @@ test("SqliteInitiativeRepository getObjective returns the objective for a known 
     id: newId(),
     initiativeId,
     name: "Obj to get",
+    status: "building",
   };
   repo.saveObjective(objective);
 
@@ -196,6 +205,36 @@ test("SqliteInitiativeRepository getObjective returns undefined for unknown id",
 
   const repo = new SqliteInitiativeRepository(db);
   assert.equal(repo.getObjective("nonexistent-objective"), undefined);
+});
+
+test("SqliteInitiativeRepository saveObjective persists commitOid and parentOid; getObjective round-trips them (Story B/C persistence)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-commit-oid" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-commit-oid" });
+
+  const objective: Objective = {
+    id: newId(),
+    initiativeId,
+    name: "Obj with commitOid",
+    status: "awaiting_confirmation",
+    commitOid: "deadbeefcafef00d",
+    parentOid: "0123456789abcdef",
+  };
+  repo.saveObjective(objective);
+
+  const loaded = repo.getObjective(objective.id);
+  assert.equal(loaded?.commitOid, "deadbeefcafef00d");
+  assert.equal(loaded?.parentOid, "0123456789abcdef");
 });
 
 test("SqliteInitiativeRepository resolveInitiativeByName returns [id] for matching name in project scope", () => {
@@ -830,5 +869,280 @@ test("conditionalDeleteObjective returns non-applied result for non-empty object
   assert.ok(
     repo.getObjective(objectiveId) !== undefined,
     "objective row must still exist after failed non-empty delete",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story D (007.12): status persists on initiatives + objectives
+// ---------------------------------------------------------------------------
+
+test("save without an explicit status defaults the persisted initiative status to building", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-status-default-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  // no `status` field supplied
+  repo.save({ id: initiativeId, projectId, name: "No Status Given" });
+
+  assert.equal(repo.get(initiativeId)?.status, "building");
+});
+
+test("save persists and round-trips a non-default initiative status (awaiting_pr)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-status-persist-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Awaiting PR Initiative",
+    status: "awaiting_pr",
+  });
+
+  assert.equal(repo.get(initiativeId)?.status, "awaiting_pr");
+});
+
+test("saveObjective without an explicit status defaults the persisted objective status to building", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-status-default-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-status-default-obj" });
+
+  const objectiveId = newId();
+  // no `status` field supplied
+  repo.saveObjective({ id: objectiveId, initiativeId, name: "No Status Obj" });
+
+  assert.equal(repo.getObjective(objectiveId)?.status, "building");
+});
+
+test("saveObjective persists and round-trips a non-default objective status (integrated)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-status-persist-obj" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({ id: initiativeId, projectId, name: "I-status-persist-obj" });
+
+  const objectiveId = newId();
+  repo.saveObjective({
+    id: objectiveId,
+    initiativeId,
+    name: "Integrated Objective",
+    status: "integrated",
+  });
+
+  assert.equal(repo.getObjective(objectiveId)?.status, "integrated");
+});
+
+test("re-saving an initiative with a new status updates the persisted status (upsert, not insert)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-status-update-init" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Status Update Initiative",
+    status: "building",
+  });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Status Update Initiative",
+    status: "delivered",
+  });
+
+  assert.equal(repo.get(initiativeId)?.status, "delivered");
+});
+
+test("listObjectives + listInitiatives include the persisted status field", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-status-list" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Listed Initiative",
+    status: "awaiting_pr",
+  });
+  const objectiveId = newId();
+  repo.saveObjective({
+    id: objectiveId,
+    initiativeId,
+    name: "Listed Objective",
+    status: "conflict",
+  });
+
+  const initiatives = repo.listInitiatives(projectId);
+  assert.equal(
+    initiatives.find((i) => i.id === initiativeId)?.status,
+    "awaiting_pr",
+  );
+
+  const objectives = repo.listObjectives(initiativeId);
+  assert.equal(
+    objectives.find((o) => o.id === objectiveId)?.status,
+    "conflict",
+  );
+});
+
+test("SqliteInitiativeRepository get returns no workspace key before setWorkspace is ever called", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-workspace-absent" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  const initiative: Initiative = {
+    id: initiativeId,
+    projectId,
+    name: "Unprovisioned Initiative",
+    status: "building",
+  };
+  repo.save(initiative);
+
+  const loaded = repo.get(initiativeId);
+  assert.deepEqual(
+    loaded,
+    initiative,
+    "an initiative with no workspace set must round-trip with no workspace key present",
+  );
+});
+
+test("SqliteInitiativeRepository setWorkspace persists the clone dir; get() returns it as workspace", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-workspace" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Workspace Initiative",
+    status: "building",
+  });
+
+  repo.setWorkspace(initiativeId, "/tmp/kanthord/init/abc");
+
+  assert.equal(
+    repo.get(initiativeId)?.workspace,
+    "/tmp/kanthord/init/abc",
+    "get() must return the persisted clone dir as workspace",
+  );
+});
+
+test("SqliteInitiativeRepository re-calling setWorkspace overwrites the persisted clone dir", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-workspace-overwrite" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Reprovisioned Initiative",
+    status: "building",
+  });
+
+  repo.setWorkspace(initiativeId, "/tmp/kanthord/init/first");
+  repo.setWorkspace(initiativeId, "/tmp/kanthord/init/second");
+
+  assert.equal(repo.get(initiativeId)?.workspace, "/tmp/kanthord/init/second");
+});
+
+test("SqliteInitiativeRepository listInitiatives includes the persisted workspace field", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-workspace-list" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Listed Workspace Initiative",
+    status: "building",
+  });
+  repo.setWorkspace(initiativeId, "/tmp/kanthord/init/listed");
+
+  const initiatives = repo.listInitiatives(projectId);
+  assert.equal(
+    initiatives.find((i) => i.id === initiativeId)?.workspace,
+    "/tmp/kanthord/init/listed",
   );
 });

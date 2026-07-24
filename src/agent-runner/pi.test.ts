@@ -1905,3 +1905,53 @@ test("(S3-j-getPriorFeedback-undefined) PiAgentRunner getPriorFeedback returns u
     `prompt must not contain feedback text when getPriorFeedback returns undefined; got snippet: ${promptText.slice(0, 300)}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// (Story B — 007.12) workspace context binding routes to the initiative
+// clone dir, bypassing workspaces.prepare()
+// ---------------------------------------------------------------------------
+
+test("(Story B / 007.12) pi runner: a 'workspace' context binding routes the run to that clone dir and skips workspaces.prepare()", async () => {
+  const initCloneDir = join(tmpPiRoot, "init-clone");
+  await mkdir(initCloneDir, { recursive: true });
+  await execFileAsync("git", ["init", "-b", "kanthord/init/init-001"], {
+    cwd: initCloneDir,
+  });
+  await execFileAsync("git", ["config", "user.email", "test@localhost"], {
+    cwd: initCloneDir,
+  });
+  await execFileAsync("git", ["config", "user.name", "Test"], {
+    cwd: initCloneDir,
+  });
+  await writeFile(join(initCloneDir, "README.md"), "# init clone");
+  await execFileAsync("git", ["add", "."], { cwd: initCloneDir });
+  await execFileAsync("git", ["commit", "-m", "initial"], {
+    cwd: initCloneDir,
+  });
+
+  const wm = new FakeWorkspaceManager();
+  const runner = makeRunner({ workspaces: wm });
+
+  const ctx: TaskContextBinding[] = [
+    ...makeContext(),
+    { type: "workspace", resourceId: initCloneDir },
+  ];
+
+  const result = await runner.run(makeTask({ agent: "synthetic@1" }), ctx);
+
+  assert.equal(
+    result.outcome,
+    "completed",
+    `expected completed, got ${JSON.stringify(result)}`,
+  );
+  assert.equal(
+    wm.calls.length,
+    0,
+    "workspaces.prepare() must NOT be called when a 'workspace' context binding is present (Story A clone routing)",
+  );
+  assert.equal(
+    (result as { workspace?: string }).workspace,
+    initCloneDir,
+    "the runner must operate directly in the Story A initiative clone dir, not FakeWorkspaceManager's realGitDir",
+  );
+});

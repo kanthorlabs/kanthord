@@ -151,6 +151,78 @@ describe("src/apps/cli/commands/read.ts", () => {
     ]);
   });
 
+  test("gets an initiative with its ID and JSON boolean (Story F, 007.12)", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      getInitiative: {
+        execute: async (input: unknown) => {
+          received = input;
+          return {
+            id: "init-1",
+            name: "init-wf",
+            status: "building",
+            workspace: "/tmp/init-1-clone",
+          };
+        },
+      },
+    } as unknown as Parameters<typeof buildGetCommand>[0];
+
+    await buildGetCommand(
+      deps,
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).parseAsync(["initiative", "--id", "init-1", "--json"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { id: "init-1" });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.out.length, 1);
+    assert.deepEqual(JSON.parse(cap.out[0]!), {
+      id: "init-1",
+      name: "init-wf",
+      status: "building",
+      workspace: "/tmp/init-1-clone",
+    });
+  });
+
+  test("gets an objective with its ID and JSON boolean (Story F, 007.12)", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      getObjective: {
+        execute: async (input: unknown) => {
+          received = input;
+          return {
+            id: "obj-1",
+            name: "backend",
+            status: "integrated",
+            integrations: [{ repository: "repo-1", state: "integrated" }],
+          };
+        },
+      },
+    } as unknown as Parameters<typeof buildGetCommand>[0];
+
+    await buildGetCommand(
+      deps,
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).parseAsync(["objective", "--id", "obj-1", "--json"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { id: "obj-1" });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.out.length, 1);
+    assert.deepEqual(JSON.parse(cap.out[0]!), {
+      id: "obj-1",
+      name: "backend",
+      status: "integrated",
+      integrations: [{ repository: "repo-1", state: "integrated" }],
+    });
+  });
+
   test("documents get resource with an example that does not expose a secret", async () => {
     const cap = capture();
     const command = buildGetCommand(

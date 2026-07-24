@@ -12,6 +12,7 @@ import {
   UnknownModelError,
 } from "../../app/errors.ts";
 import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
+import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
 import { ProposalMissingError } from "../../app/task/approve-task.ts";
 import { RejectionConflictError } from "../../app/task/reject-task.ts";
 import { ImportValidationError } from "../../app/resource/import-resources.ts";
@@ -47,6 +48,7 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof CycleError ||
     err instanceof DependenciesLockedError ||
     err instanceof TaskNotRetryableError ||
+    err instanceof ObjectiveNotRetryableError ||
     err instanceof UnknownAgentError ||
     err instanceof TaskNotAwaitingConfirmationError ||
     err instanceof ProposalWorkspaceMissingError ||

@@ -21,6 +21,21 @@ export {
 } from "../landing/port.ts";
 
 import type { TaskStatus } from "../domain/task.ts";
+import type { ObjectiveStatus } from "../domain/initiative.ts";
+
+export class ObjectiveNotAwaitingConfirmationError extends Error {
+  readonly objectiveId: string;
+  readonly status: ObjectiveStatus | undefined;
+
+  constructor(objectiveId: string, status: ObjectiveStatus | undefined) {
+    super(
+      `objective ${objectiveId} is not awaiting confirmation; current status: ${status}`,
+    );
+    this.name = "ObjectiveNotAwaitingConfirmationError";
+    this.objectiveId = objectiveId;
+    this.status = status;
+  }
+}
 
 export class TaskNotAwaitingConfirmationError extends Error {
   readonly taskId: string;

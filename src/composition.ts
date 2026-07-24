@@ -16,6 +16,9 @@ import { SqliteReferenceResolver } from "./storage/sqlite/reference-resolver.ts"
 import { SqliteTransactor } from "./storage/sqlite/sqlite-transactor.ts";
 import { SqliteEventFeed } from "./events/sqlite.ts";
 import { newEvent, type Event, type EventType } from "./domain/event.ts";
+import type { Task } from "./domain/task.ts";
+import type { Objective } from "./domain/initiative.ts";
+import type { TaskResultRow } from "./storage/port.ts";
 import { CreateProject } from "./app/project/create-project.ts";
 import { RenameProject } from "./app/project/rename-project.ts";
 import { GetProject } from "./app/project/get-project.ts";
@@ -23,11 +26,13 @@ import { FindProject } from "./app/project/find-project.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
 import { RenameInitiative } from "./app/initiative/rename-initiative.ts";
 import { FindInitiative } from "./app/initiative/find-initiative.ts";
+import { GetInitiative } from "./app/initiative/get-initiative.ts";
 import { PauseInitiative } from "./app/initiative/pause-initiative.ts";
 import { ResumeInitiative } from "./app/initiative/resume-initiative.ts";
 import { CreateObjective } from "./app/objective/create-objective.ts";
 import { RenameObjective } from "./app/objective/rename-objective.ts";
 import { FindObjective } from "./app/objective/find-objective.ts";
+import { GetObjective } from "./app/objective/get-objective.ts";
 import { AddResource } from "./app/resource/add-resource.ts";
 import { FindResource } from "./app/resource/find-resource.ts";
 import { GetResource } from "./app/resource/get-resource.ts";
@@ -86,7 +91,7 @@ import type { Logger } from "./logger/port.ts";
 import { DiagnosticsExport } from "./app/observability/diagnostics-export.ts";
 import { SqliteObservabilityRefs } from "./storage/sqlite/sqlite-observability-refs.ts";
 import { writeFile } from "node:fs/promises";
-import { execFile as execFileCb } from "node:child_process";
+import { execFile as execFileCb, execFileSync } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFile = promisify(execFileCb);
@@ -94,6 +99,9 @@ import { GitRepositoryLanding } from "./landing/git.ts";
 import { GetConflict } from "./app/task/get-conflict.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { isRepository } from "./domain/resource.ts";
+import { ApproveObjective } from "./app/objective/approve-objective.ts";
+import { RetryObjective } from "./app/objective/retry-objective.ts";
+import { GitObjectiveBroker } from "./objective-broker/git.ts";
 
 /**
  * Build the agent-lifecycle event emitter used by the pi runner.
@@ -355,13 +363,40 @@ export function buildDeps(
       events,
       unitOfWork,
     );
+    // Story B objective-boundary squash — `taskRepository` (SqliteTaskRepository)
+    // does not itself implement the objective read/write/parent-OID seam
+    // `RunNextTask` needs, so wrap it with the three extra methods, delegating
+    // objective persistence to `initiativeRepository` (already the Story B/C
+    // persistence owner) and the rest straight through to `taskRepository`.
+    const taskStoreWithObjectives = {
+      get: (id: string) => taskRepository.get(id),
+      save: (task: Task) => taskRepository.save(task),
+      listByInitiative: (initiativeId: string) =>
+        taskRepository.listByInitiative(initiativeId),
+      getInitiativeId: (taskId: string) =>
+        taskRepository.getInitiativeId(taskId),
+      getTaskContext: (taskId: string) => taskRepository.getTaskContext(taskId),
+      getRepositoryBranch: (repoId: string) =>
+        taskRepository.getRepositoryBranch(repoId),
+      saveTaskResult: (taskId: string, row: TaskResultRow) =>
+        taskRepository.saveTaskResult(taskId, row),
+      getObjective: (id: string) => initiativeRepository.getObjective(id),
+      saveObjective: (objective: Objective) =>
+        initiativeRepository.saveObjective(objective),
+      getObjectiveParentOid,
+    };
+
     const runNext = new RunNextTask(
       jobQueue,
-      taskRepository,
+      taskStoreWithObjectives,
       events,
       unitOfWork,
       resolver,
       landingRepository,
+      {
+        initiativeWorkspaces: { ensure: ensureInitiativeWorkspace },
+        workspaces,
+      },
     );
     return new RunDaemon({
       recover,
@@ -369,6 +404,7 @@ export function buildDeps(
       runNext,
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
       logger: effectiveLogger,
+      initiatives: initiativeRepository,
     });
   }
 
@@ -441,6 +477,142 @@ export function buildDeps(
     resolveHomeDir,
   );
 
+  // Resolve an initiative to its bound repository's home dir by reading the
+  // "repository" context binding off any of its tasks (the same binding
+  // RunNextTask already forwards to the agent runner) and reusing the
+  // existing repoId -> homeDir resolver above.
+  const resolveInitiativeHomeDir = (initiativeId: string): string => {
+    const tasks = taskRepository.listByInitiative(initiativeId);
+    for (const task of tasks) {
+      const repoId = taskRepository.getTaskContext(task.id)["repository"];
+      if (repoId !== undefined) {
+        return resolveHomeDir(repoId);
+      }
+    }
+    throw new Error(
+      `no repository binding found for initiative: ${initiativeId}`,
+    );
+  };
+
+  // Same resolution strategy as resolveInitiativeHomeDir above, but returns
+  // the bare repository resource id (not its resolved home dir) — GetObjective
+  // needs the id itself to report as the integration's `repository` field.
+  const resolveInitiativeRepository = (
+    initiativeId: string,
+  ): string | undefined => {
+    const tasks = taskRepository.listByInitiative(initiativeId);
+    for (const task of tasks) {
+      const repoId = taskRepository.getTaskContext(task.id)["repository"];
+      if (repoId !== undefined) return repoId;
+    }
+    return undefined;
+  };
+
+  // Story B objective-boundary squash — the expected parent OID for an
+  // objective's squash chains onto the immediately-preceding objective's own
+  // squashed `commitOid` (domain state), since sibling objectives within one
+  // initiative can complete and squash back-to-back before a human ever runs
+  // `approve objective` on the earlier one — home's live initiative-branch
+  // ref only reflects state a human has already approved, and lags behind.
+  // Only the FIRST objective of an initiative has no predecessor to chain
+  // onto; for that one the initiative branch's tip *in home* (as
+  // `prepareInitiative` recorded it) is the correct, and only available,
+  // parent. Synchronous because `TaskStore.getObjectiveParentOid`
+  // (run-next-task.ts) is declared synchronous.
+  const getObjectiveParentOid = (objectiveId: string): string => {
+    const objective = initiativeRepository.getObjective(objectiveId);
+    if (objective === undefined) {
+      throw new Error(`no objective found for id: ${objectiveId}`);
+    }
+    const siblings = initiativeRepository.listObjectives(
+      objective.initiativeId,
+    );
+    const index = siblings.findIndex((o) => o.id === objectiveId);
+    const predecessor = index > 0 ? siblings[index - 1] : undefined;
+    if (predecessor?.commitOid !== undefined) {
+      return predecessor.commitOid;
+    }
+
+    const homeDir = resolveInitiativeHomeDir(objective.initiativeId);
+    const initBranch = `kanthord/init/${objective.initiativeId}`;
+    const stdout = execFileSync(
+      "git",
+      ["rev-parse", `refs/heads/${initBranch}`],
+      { cwd: homeDir, encoding: "utf8" },
+    );
+    return stdout.trim();
+  };
+
+  // Story A/B wiring gap — RunNextTask's `initiativeWorkspaces.ensure` seam
+  // (see run-next-task.ts) needs a real collaborator that provisions the
+  // initiative branch + isolated clone in home exactly once per initiative:
+  // LocalWorkspaceManager.prepareInitiative always wipes and re-clones its
+  // per-initiative dir, so this must short-circuit once `initiative.workspace`
+  // is already persisted (otherwise every subsequent task claim would wipe
+  // the clone's accumulated, not-yet-squashed objective commits).
+  const ensureInitiativeWorkspace = async (
+    initiativeId: string,
+  ): Promise<void> => {
+    const initiative = initiativeRepository.get(initiativeId);
+    if (initiative?.workspace !== undefined) return;
+
+    const repoId = resolveInitiativeRepository(initiativeId);
+    if (repoId === undefined) return;
+
+    const resource = projectRepository.getResource(repoId);
+    if (!resource || !isRepository(resource)) return;
+
+    const ws = await workspaces.prepareInitiative?.(initiativeId, resource);
+    if (ws === undefined) return;
+
+    initiativeRepository.setWorkspace?.(initiativeId, ws.dir);
+  };
+
+  const getInitiative = new GetInitiative({
+    get: (id) => initiativeRepository.get(id),
+  });
+  const getObjective = new GetObjective(
+    { getObjective: (id) => initiativeRepository.getObjective(id) },
+    { resolveInitiativeRepository },
+  );
+
+  const approveObjective = new ApproveObjective(
+    {
+      getObjective: (id) => initiativeRepository.getObjective(id),
+      saveObjective: (objective) =>
+        initiativeRepository.saveObjective(objective),
+      getInitiative: (initiativeId) => initiativeRepository.get(initiativeId),
+      resolveHomeDir: resolveInitiativeHomeDir,
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+      saveInitiative: (initiative) => initiativeRepository.save(initiative),
+    },
+    new GitObjectiveBroker(),
+    events,
+    unitOfWork,
+  );
+
+  // S5 (Story E, 007.12): the real conflict-resolution verification gate
+  // (reusing per-task gate machinery) is a separate, later Task; this
+  // always-pass gate unblocks CLI/composition reachability of
+  // `retry objective` for the conflict-resolution path in the meantime.
+  const retryObjective = new RetryObjective(
+    {
+      getObjective: (id) => initiativeRepository.getObjective(id),
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+      getInitiative: (initiativeId) => initiativeRepository.get(initiativeId),
+      saveObjective: (objective) =>
+        initiativeRepository.saveObjective(objective),
+      resolveHomeDir: resolveInitiativeHomeDir,
+    },
+    new GitObjectiveBroker(),
+    workspaces,
+    { verify: async () => ({ passed: true }) },
+    events,
+    unitOfWork,
+  );
+
   const logger = new StdoutLogger();
 
   const loginProvider = new LoginProvider({
@@ -476,11 +648,13 @@ export function buildDeps(
     createInitiative,
     renameInitiative,
     findInitiative,
+    getInitiative,
     pauseInitiative,
     resumeInitiative,
     createObjective,
     renameObjective,
     findObjective,
+    getObjective,
     addResource,
     findResource,
     getResource,
@@ -497,6 +671,8 @@ export function buildDeps(
     retryTask,
     getTask,
     approveTask,
+    approveObjective,
+    retryObjective,
     rejectTask,
     buildDaemon,
     logger,

@@ -18,7 +18,7 @@ interface EventReader {
   ): Array<{
     id: string;
     type: string;
-    taskId: string;
+    taskId?: string;
     payload?: Record<string, string>;
   }>;
 }
@@ -130,6 +130,7 @@ export class DiagnosticsExport {
 
     // Filter to initiative/task scope.
     const scopedEvents = allEvents.filter((ev) => {
+      if (ev.taskId === undefined) return false;
       if (input.taskId !== undefined) {
         return ev.taskId === input.taskId;
       }
@@ -143,6 +144,7 @@ export class DiagnosticsExport {
     const exportedAt = new Date().toISOString();
 
     for (const ev of scopedEvents) {
+      if (ev.taskId === undefined) continue;
       const taskRef = this.#refs.getOrCreateTaskRef(ev.taskId);
       const seqKey = `${sessionRef}:${taskRef}`;
 

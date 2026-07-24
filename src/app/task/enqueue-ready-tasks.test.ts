@@ -151,7 +151,7 @@ test("EnqueueReadyTasks execute enqueues ready pending tasks and emits task.read
   for (const ev of feed.events) {
     assert.equal(ev.type, "task.ready");
     assert.ok(
-      [T_LEFT, T_RIGHT].includes(ev.taskId),
+      ev.taskId !== undefined && [T_LEFT, T_RIGHT].includes(ev.taskId),
       `event taskId ${ev.taskId} must be left or right`,
     );
   }
