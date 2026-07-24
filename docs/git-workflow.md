@@ -3,36 +3,36 @@
 How kanthord moves code from an agent's edits to your remote.
 
 This covers the objective-branch workflow (EPICs 007.11–007.13). An initiative
-targets a single repository. The planned per-task landing and EPIC 007.14
-transplant are in §6.
+targets a single repository. Per-task candidate landing and the EPIC 007.14
+transplant recovery are in §6.
 
 ---
 
 ## 1. Glossary
 
-| Term                                           | Meaning                                                                                                                                                                                            |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Remote (origin)**                            | The upstream git server. The source of truth for _delivered_ work. Only `publish` writes to it.                                                                                                    |
-| **Bare managed home**                          | A kanthord-owned **bare** git repo (objects + refs, **no working tree**). A cache of landed work. Created once with `git clone --bare` from the remote.                                            |
-| **Integration tip**                            | `refs/heads/main` in the bare home — the base a new initiative branches from.                                                                                                                      |
-| **Initiative branch**                          | `refs/heads/kanthord/init/<initId>` in the bare home. One branch per initiative.                                                                                                                   |
-| **Isolated clone**                             | The agent's working copy: `git clone --no-hardlinks --single-branch --branch <initBranch> <home>`, then **`origin` removed**. The agent edits here — it has no configured git remote back to home. |
-| **Initiative**                                 | A feature. Maps to one initiative branch and one isolated clone.                                                                                                                                   |
-| **Objective**                                  | A unit of an initiative that becomes **exactly one commit** on the initiative branch.                                                                                                              |
-| **Task**                                       | A working unit inside an objective. Tasks of an objective run **sequentially** in the clone.                                                                                                       |
-| **Squash**                                     | At the objective boundary: `git reset --soft <parentOid>` + `git commit` — collapses the objective's commits into one, in the clone.                                                               |
-| **Broker**                                     | The daemon-side step of `approve objective`: fetch the squashed commit from the clone into home, check it is exactly one commit past the parent, then CAS-advance the initiative branch.           |
-| **CAS (compare-and-swap)**                     | `git update-ref <ref> <newOID> <expectedOID>` — advances a ref only if it still points where we expect. Guards against concurrent moves.                                                           |
-| **Land (locally landed)**                      | Work whose commit is on a ref **in the bare home**. It is _not_ on the remote yet.                                                                                                                 |
-| **Publish / publication**                      | The explicit operator step that pushes a landed branch to the remote. Distinct from landing.                                                                                                       |
-| **Publication state**                          | Per (repository, branch): `unpublished` (no record) / `published@<remoteOID>` / `diverged`.                                                                                                        |
-| **Fast-forward push**                          | `publish` pushes fast-forward. When a prior remote OID is known it adds a `--force-with-lease=<ref>:<oid>` guard so an unexpectedly-moved remote is **rejected**, not clobbered.                   |
-| **Scope-filtered claim**                       | The queue hands out the next task only if its initiative has no task already running. Serializes tasks per initiative (per clone) while letting different initiatives/projects run in parallel.    |
-| **Approval gate**                              | Human step. In the objective workflow this is `approve objective`.                                                                                                                                 |
-| **Objective conflict**                         | Broker found the squash was not exactly one commit onto the tip, or the CAS failed → objective goes to `conflict` for re-resolution.                                                               |
-| **Runner candidate output**                    | The runner's internal `outcome: "candidate"` for a changed run. In the objective workflow this completes the task — it does **not** create a durable landing record.                               |
-| **Durable landing candidate** _(planned path)_ | A persisted `landing_candidates` row created only for a repository-bound task **without** a workspace binding. Basis for `approve task` and 007.14 transplant.                                     |
-| **Transplant** _(planned, 007.14)_             | Deterministic 3-way replay (`git merge-tree`, no model) of a stale candidate onto a moved base.                                                                                                    |
+| Term                          | Meaning                                                                                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Remote (origin)**           | The upstream git server. The source of truth for _delivered_ work. Only `publish` writes to it.                                                                                                    |
+| **Bare managed home**         | A kanthord-owned **bare** git repo (objects + refs, **no working tree**). A cache of landed work. Created once with `git clone --bare` from the remote.                                            |
+| **Integration tip**           | `refs/heads/main` in the bare home — the base a new initiative branches from.                                                                                                                      |
+| **Initiative branch**         | `refs/heads/kanthord/init/<initId>` in the bare home. One branch per initiative.                                                                                                                   |
+| **Isolated clone**            | The agent's working copy: `git clone --no-hardlinks --single-branch --branch <initBranch> <home>`, then **`origin` removed**. The agent edits here — it has no configured git remote back to home. |
+| **Initiative**                | A feature. Maps to one initiative branch and one isolated clone.                                                                                                                                   |
+| **Objective**                 | A unit of an initiative that becomes **exactly one commit** on the initiative branch.                                                                                                              |
+| **Task**                      | A working unit inside an objective. Tasks of an objective run **sequentially** in the clone.                                                                                                       |
+| **Squash**                    | At the objective boundary: `git reset --soft <parentOid>` + `git commit` — collapses the objective's commits into one, in the clone.                                                               |
+| **Broker**                    | The daemon-side step of `approve objective`: fetch the squashed commit from the clone into home, check it is exactly one commit past the parent, then CAS-advance the initiative branch.           |
+| **CAS (compare-and-swap)**    | `git update-ref <ref> <newOID> <expectedOID>` — advances a ref only if it still points where we expect. Guards against concurrent moves.                                                           |
+| **Land (locally landed)**     | Work whose commit is on a ref **in the bare home**. It is _not_ on the remote yet.                                                                                                                 |
+| **Publish / publication**     | The explicit operator step that pushes a landed branch to the remote. Distinct from landing.                                                                                                       |
+| **Publication state**         | Per (repository, branch): `unpublished` (no record) / `published@<remoteOID>` / `diverged`.                                                                                                        |
+| **Fast-forward push**         | `publish` pushes fast-forward. When a prior remote OID is known it adds a `--force-with-lease=<ref>:<oid>` guard so an unexpectedly-moved remote is **rejected**, not clobbered.                   |
+| **Scope-filtered claim**      | The queue hands out the next task only if its initiative has no task already running. Serializes tasks per initiative (per clone) while letting different initiatives/projects run in parallel.    |
+| **Approval gate**             | Human step: `approve objective` (objective workflow) or `approve task` (per-task landing).                                                                                                         |
+| **Objective conflict**        | Broker found the squash was not exactly one commit onto the tip, or the CAS failed → objective goes to `conflict` for re-resolution.                                                               |
+| **Runner candidate output**   | The runner's internal `outcome: "candidate"` for a changed run. In the objective workflow this completes the task — it does **not** create a durable landing record.                               |
+| **Durable landing candidate** | A persisted `landing_candidates` row created for a repository-bound task **without** a workspace binding. Basis for `approve task` and the 007.14 transplant.                                      |
+| **Transplant**                | Deterministic 3-way replay (`git merge-tree`, no model) of a stale candidate onto a moved base.                                                                                                    |
 
 ---
 
@@ -281,15 +281,16 @@ advances only when the delivered branch is merged on the remote and that merged
 
 ---
 
-## 6. Planned — per-task candidate landing & transplant (007.14)
+## 6. Per-task candidate landing & transplant recovery (007.14)
 
-This per-task path is not wired into the initiative workflow. It exists in the
-`approve task` and `retry task` use cases, but the daemon provisions an isolated
-clone for any initiative with a repository binding, which routes initiative
-tasks to the objective workflow. EPIC 007.14 (transplant) is specified against
-this per-task path.
+A repository-bound task that runs without a workspace binding produces a
+**landing candidate**: the task holds at `awaiting_confirmation`, and
+`approve task` lands the candidate onto its target branch by advancing the ref
+(CAS `update-ref`). An initiative task carries a workspace binding and takes the
+objective workflow instead (§3–§5).
 
-The planned recovery:
+If the base moves before approval, the candidate is stale. `retry task --refresh`
+recovers it deterministically, without the model:
 
 ```mermaid
 sequenceDiagram
@@ -297,7 +298,7 @@ sequenceDiagram
     participant CLI
     participant D as Daemon
 
-    Note over H,D: PLANNED — stale durable landing candidate (base moved after it was built)
+    Note over H,D: stale landing candidate — base moved after it was built
     H->>CLI: retry task --refresh
     CLI->>D: deterministic 3-way transplant (git merge-tree, NO model) onto moved base
     alt zero conflicts AND verification gate passes
