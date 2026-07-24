@@ -1,17 +1,10 @@
 # Kanthord Git Workflow
 
-How kanthord moves code from an agent's edits to your remote, safely.
+How kanthord moves code from an agent's edits to your remote.
 
-> **Scope — as-built.** This describes the workflow that actually runs today
-> (EPICs 007.11 → 007.13): the **objective-branch workflow**. The per-task
-> candidate/land model and the EPIC 007.14 **deterministic transplant** are
-> **planned, not yet wired** into the initiative pipeline; they are shown at the
-> end, clearly marked, so this document is not mistaken for their spec.
->
-> **One repository per initiative.** The current wiring provisions a single
-> isolated clone per initiative, resolved from the _first_ repository binding it
-> finds. An initiative must therefore target exactly **one** repository;
-> multi-repository initiatives are undefined and not supported yet.
+This covers the objective-branch workflow (EPICs 007.11–007.13). An initiative
+targets a single repository. The planned per-task landing and EPIC 007.14
+transplant are in §6.
 
 ---
 
@@ -166,10 +159,9 @@ stateDiagram-v2
     awaiting_pr --> delivered: defined, but not driven by publish yet
 ```
 
-> `awaiting_pr` is the practical end state today: the branch is complete in
-> home and ready to publish. The `delivered` transition exists in the domain but
-> nothing in production drives it — `publish` records **publication** state, it
-> does not move the initiative.
+`awaiting_pr` means the branch is complete in home and ready to publish. The
+`delivered` transition is defined in the domain but not driven in production:
+`publish` records **publication** state and does not move the initiative.
 
 **Publication** (per repository + branch):
 
@@ -282,25 +274,22 @@ sequenceDiagram
     Note over D,C2: same objective → squash → broker → publish cycle, isolated per initiative
 ```
 
-> Each initiative gets its **own** branch and its **own** isolated clone.
-> Initiative #2 branches from whatever `main` points to in home at provision
-> time. Home `main` advances only when the delivered branch is merged on the
-> remote (PR) and that merged `main` is fetched back — both outside this
-> workflow today.
+Each initiative gets its own branch and its own isolated clone. A new initiative
+branches from whatever `main` points to in home at provision time. Home `main`
+advances only when the delivered branch is merged on the remote and that merged
+`main` is fetched back.
 
 ---
 
 ## 6. Planned — per-task candidate landing & transplant (007.14)
 
-> **Not yet wired.** Today, initiative tasks always take the objective path
-> (§3–§5). The path below exists in older use cases (`approve task`,
-> `retry task`) but is **not reachable for initiative work** under current
-> wiring, because the daemon provisions an isolated clone for any initiative
-> with a repository binding, which routes tasks to the objective workflow.
-> EPIC 007.14 (transplant) is specified against this per-task path and must be
-> reconciled with the objective wiring before it runs end to end.
+This per-task path is not wired into the initiative workflow. It exists in the
+`approve task` and `retry task` use cases, but the daemon provisions an isolated
+clone for any initiative with a repository binding, which routes initiative
+tasks to the objective workflow. EPIC 007.14 (transplant) is specified against
+this per-task path.
 
-The intended recovery, for reference:
+The planned recovery:
 
 ```mermaid
 sequenceDiagram
@@ -322,7 +311,7 @@ sequenceDiagram
 
 ---
 
-## 7. Constraints & notes
+## 7. Constraints
 
 - **One repository per initiative.** Provisioning uses the first repository
   binding for the whole initiative; a mixed/multi-repository initiative would
@@ -338,6 +327,5 @@ sequenceDiagram
   implemented.
 - **Publish does not force by default.** The first publish is a plain
   fast-forward push. A `--force-with-lease` guard is added only to reject a
-  remote that moved off a known OID. (After a _recorded_ divergence, a later
-  publish leases against that recorded OID — treat a `diverged` state as a stop
-  sign and reconcile before retrying.)
+  remote that moved off a known OID. After a recorded divergence, a later
+  publish leases against that recorded OID.
