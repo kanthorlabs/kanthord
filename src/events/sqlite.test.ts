@@ -244,7 +244,7 @@ test("append + readAfter round-trips an initiative-scoped event with no taskId k
     const initiativeId = db
       .prepare("SELECT id FROM initiatives LIMIT 1")
       .get() as { id: string };
-    const ev = newEvent("initiative.awaiting_pr", {
+    const ev = newEvent("initiative.landed", {
       initiativeId: initiativeId.id,
     });
     feed.append(ev);
@@ -252,7 +252,7 @@ test("append + readAfter round-trips an initiative-scoped event with no taskId k
     const results = feed.readAfter("0");
     assert.equal(results.length, 1);
     assert.equal(results[0]?.id, ev.id);
-    assert.equal(results[0]?.type, "initiative.awaiting_pr");
+    assert.equal(results[0]?.type, "initiative.landed");
     assert.equal(results[0]?.initiativeId, initiativeId.id);
     assert.equal(
       Object.prototype.hasOwnProperty.call(results[0], "taskId"),

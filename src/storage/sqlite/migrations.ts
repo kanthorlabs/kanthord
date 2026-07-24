@@ -379,4 +379,52 @@ DROP TABLE events;
 ALTER TABLE events_new6 RENAME TO events;
 `),
   },
+  {
+    version: 17,
+    name: "007.15-s2-initiative-landed-status",
+    // `initiatives` is an FK parent (objectives.initiativeId REFERENCES
+    // initiatives(id)); the DROP+RENAME rebuild trips FK enforcement even
+    // though the final state is consistent — disable it around this migration.
+    disableForeignKeys: true,
+    up: (db) =>
+      db.exec(`
+CREATE TABLE initiatives_new (
+  id        TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id),
+  name      TEXT NOT NULL,
+  paused    INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+  sha256    TEXT NOT NULL DEFAULT '',
+  status    TEXT NOT NULL DEFAULT 'building' CHECK (status IN ('building','landed')),
+  workspace TEXT
+);
+INSERT INTO initiatives_new (id, projectId, name, paused, sha256, status, workspace)
+  SELECT id, projectId, name, paused, sha256,
+    CASE WHEN status = 'awaiting_pr' THEN 'landed' ELSE status END,
+    workspace
+  FROM initiatives;
+DROP TABLE initiatives;
+ALTER TABLE initiatives_new RENAME TO initiatives;
+CREATE TABLE events_new7 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id)
+);
+INSERT INTO events_new7 (id, type, taskId, payload, objectiveId, initiativeId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new7 RENAME TO events;
+`),
+  },
 ];

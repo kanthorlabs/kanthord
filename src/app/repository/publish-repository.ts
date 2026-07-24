@@ -12,7 +12,9 @@ import { isRepository } from "../../domain/resource.ts";
 import type { Resource } from "../../domain/resource.ts";
 import { PublishDivergedError } from "../../publication/port.ts";
 import type { RepositoryPublisher } from "../../publication/port.ts";
-import type { PublicationRepository } from "../../storage/port.ts";
+import type { PublicationRepository, UnitOfWork } from "../../storage/port.ts";
+import { newEvent } from "../../domain/event.ts";
+import type { EventFeed } from "../../events/port.ts";
 
 interface ResourceStore {
   getResource(id: string): Resource | undefined;
@@ -37,6 +39,8 @@ export class PublishRepository {
     homeDir: string,
     branch: string,
   ) => string | Promise<string>;
+  readonly #feed: EventFeed;
+  readonly #uow: UnitOfWork;
 
   constructor(
     store: ResourceStore,
@@ -47,12 +51,16 @@ export class PublishRepository {
       homeDir: string,
       branch: string,
     ) => string | Promise<string>,
+    feed: EventFeed,
+    uow: UnitOfWork,
   ) {
     this.#store = store;
     this.#publisher = publisher;
     this.#publicationRepository = publicationRepository;
     this.#resolveHomeDir = resolveHomeDir;
     this.#resolveTargetOID = resolveTargetOID;
+    this.#feed = feed;
+    this.#uow = uow;
   }
 
   async execute(input: PublishRepositoryInput): Promise<PublishOutcome> {
@@ -71,9 +79,11 @@ export class PublishRepository {
     // Confirms the branch is landed locally before publishing; the port
     // itself re-reads the local tip when building the push (Story A).
     await this.#resolveTargetOID(homeDir, branch);
-    const expectedRemoteOID =
-      this.#publicationRepository.getPublication(repositoryId, branch)
-        ?.remoteOID ?? null;
+    const previous = this.#publicationRepository.getPublication(
+      repositoryId,
+      branch,
+    );
+    const expectedRemoteOID = previous?.remoteOID ?? null;
 
     try {
       const result = await this.#publisher.publish({
@@ -83,9 +93,22 @@ export class PublishRepository {
         auth: resource.auth,
         expectedRemoteOID,
       });
-      this.#publicationRepository.setPublication(repositoryId, branch, {
-        state: "published",
-        remoteOID: result.remoteOID,
+      const isRealTransition = !(
+        previous?.state === "published" &&
+        previous.remoteOID === result.remoteOID
+      );
+      this.#uow.transaction(() => {
+        this.#publicationRepository.setPublication(repositoryId, branch, {
+          state: "published",
+          remoteOID: result.remoteOID,
+        });
+        if (isRealTransition) {
+          this.#feed.append(
+            newEvent("repository.published", {
+              payload: { repositoryId, branch, remoteOID: result.remoteOID },
+            }),
+          );
+        }
       });
       return { kind: "published", repositoryId, remoteOID: result.remoteOID };
     } catch (err) {

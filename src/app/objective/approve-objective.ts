@@ -98,13 +98,10 @@ export class ApproveObjective {
       const siblings = this.#store.listObjectives(objective.initiativeId);
       const allIntegrated = siblings.every((o) => o.status === "integrated");
       if (allIntegrated && initiative !== undefined) {
-        const updatedInitiative = transitionInitiative(
-          initiative,
-          "awaiting_pr",
-        );
+        const updatedInitiative = transitionInitiative(initiative, "landed");
         this.#store.saveInitiative(updatedInitiative);
         this.#feed.append(
-          newEvent("initiative.awaiting_pr", {
+          newEvent("initiative.landed", {
             initiativeId: objective.initiativeId,
           }),
         );

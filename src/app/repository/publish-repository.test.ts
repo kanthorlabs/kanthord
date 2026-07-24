@@ -20,6 +20,25 @@ import type {
 } from "../../storage/port.ts";
 import { UnknownReferenceError, WrongTypeReferenceError } from "../errors.ts";
 import type { Resource } from "../../domain/resource.ts";
+import type { Event } from "../../domain/event.ts";
+import type { EventFeed } from "../../events/port.ts";
+import type { UnitOfWork } from "../../storage/port.ts";
+
+class FakeFeed implements EventFeed {
+  readonly events: Event[] = [];
+  append(event: Event): void {
+    this.events.push(event);
+  }
+  readAfter(): Event[] {
+    return [];
+  }
+}
+
+class FakeUow implements UnitOfWork {
+  transaction<T>(fn: () => T): T {
+    return fn();
+  }
+}
 
 function makeStore(resources: Record<string, Resource>) {
   return {
@@ -105,6 +124,8 @@ describe("src/app/repository/publish-repository.ts", () => {
     }));
     const resolveHomeDir = (repoId: string) => `/home/${repoId}`;
     const resolveTargetOID = async () => "new456";
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
 
     const uc = new PublishRepository(
       store,
@@ -112,6 +133,8 @@ describe("src/app/repository/publish-repository.ts", () => {
       publicationRepo,
       resolveHomeDir,
       resolveTargetOID,
+      feed,
+      uow,
     );
 
     const outcome = await uc.execute({
@@ -139,6 +162,55 @@ describe("src/app/repository/publish-repository.ts", () => {
         record: { state: "published", remoteOID: "new456" },
       },
     ]);
+    assert.equal(feed.events.length, 1);
+    assert.equal(feed.events[0]!.type, "repository.published");
+    assert.deepEqual(feed.events[0]!.payload, {
+      repositoryId: "repo-1",
+      branch: "main",
+      remoteOID: "new456",
+    });
+  });
+
+  test("idempotent: re-publishing the same remoteOID that is already published appends no event", async () => {
+    const store = makeStore({ "repo-1": REPO });
+    const publicationRepo = makeFakePublicationRepo({
+      key: "repo-1:main",
+      record: { state: "published", remoteOID: "same123" },
+    });
+    const publisher = makeMockPublisher(async () => ({
+      pushedOID: "same123",
+      remoteOID: "same123",
+    }));
+    const resolveHomeDir = (repoId: string) => `/home/${repoId}`;
+    const resolveTargetOID = async () => "same123";
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
+
+    const uc = new PublishRepository(
+      store,
+      publisher,
+      publicationRepo,
+      resolveHomeDir,
+      resolveTargetOID,
+      feed,
+      uow,
+    );
+
+    const outcome = await uc.execute({
+      repositoryId: "repo-1",
+      branch: "main",
+    });
+
+    assert.deepEqual(outcome, {
+      kind: "published",
+      repositoryId: "repo-1",
+      remoteOID: "same123",
+    });
+    assert.equal(
+      feed.events.length,
+      0,
+      "no-op re-publish of the same remoteOID must not append a second event",
+    );
   });
 
   test("PublishDivergedError: persists diverged state with the observed remote OID, non-zero outcome, no force retry", async () => {
@@ -152,6 +224,8 @@ describe("src/app/repository/publish-repository.ts", () => {
     });
     const resolveHomeDir = (repoId: string) => `/home/${repoId}`;
     const resolveTargetOID = async () => "new456";
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
 
     const uc = new PublishRepository(
       store,
@@ -159,6 +233,8 @@ describe("src/app/repository/publish-repository.ts", () => {
       publicationRepo,
       resolveHomeDir,
       resolveTargetOID,
+      feed,
+      uow,
     );
 
     const outcome = await uc.execute({
@@ -183,6 +259,11 @@ describe("src/app/repository/publish-repository.ts", () => {
         record: { state: "diverged", remoteOID: "moved789" },
       },
     ]);
+    assert.equal(
+      feed.events.length,
+      0,
+      "diverged outcome must not append a repository.published event",
+    );
   });
 
   test("unknown repository id throws UnknownReferenceError and never calls the publisher", async () => {
@@ -192,12 +273,16 @@ describe("src/app/repository/publish-repository.ts", () => {
       pushedOID: "x",
       remoteOID: "x",
     }));
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
     const uc = new PublishRepository(
       store,
       publisher,
       publicationRepo,
       () => "/home/repo-1",
       async () => "x",
+      feed,
+      uow,
     );
 
     await assert.rejects(
@@ -208,6 +293,7 @@ describe("src/app/repository/publish-repository.ts", () => {
       },
     );
     assert.equal(publisher.calls.length, 0);
+    assert.equal(feed.events.length, 0);
   });
 
   test("non-repository resource id throws WrongTypeReferenceError and never calls the publisher", async () => {
@@ -225,12 +311,16 @@ describe("src/app/repository/publish-repository.ts", () => {
       pushedOID: "x",
       remoteOID: "x",
     }));
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
     const uc = new PublishRepository(
       store,
       publisher,
       publicationRepo,
       () => "/home/cred-1",
       async () => "x",
+      feed,
+      uow,
     );
 
     await assert.rejects(
@@ -241,5 +331,6 @@ describe("src/app/repository/publish-repository.ts", () => {
       },
     );
     assert.equal(publisher.calls.length, 0);
+    assert.equal(feed.events.length, 0);
   });
 });

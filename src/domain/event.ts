@@ -22,9 +22,9 @@ export const EVENT_TYPES = [
   "objective.awaiting_confirmation",
   "objective.integrated",
   "objective.conflict",
-  "initiative.awaiting_pr",
-  "initiative.delivered",
+  "initiative.landed",
   "candidate.transplanted",
+  "repository.published",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

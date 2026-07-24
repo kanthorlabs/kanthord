@@ -27,10 +27,23 @@ test("EVENT_TYPES lists exactly the twenty-four literals in order", () => {
     "objective.awaiting_confirmation", // 007.12 Story D — new
     "objective.integrated", // 007.12 Story D — new
     "objective.conflict", // 007.12 Story D — new
-    "initiative.awaiting_pr", // 007.12 Story D — new
-    "initiative.delivered", // 007.12 Story D — new
+    "initiative.landed", // 007.15 Story B — new (replaces initiative.awaiting_pr)
     "candidate.transplanted", // 007.14 Story D — new
+    "repository.published", // 007.15 Story A — new
   ]);
+});
+
+test("EVENT_TYPES no longer includes the removed initiative.awaiting_pr / initiative.delivered types", () => {
+  assert.equal(
+    (EVENT_TYPES as readonly string[]).includes("initiative.awaiting_pr"),
+    false,
+    "initiative.awaiting_pr must be removed from EVENT_TYPES",
+  );
+  assert.equal(
+    (EVENT_TYPES as readonly string[]).includes("initiative.delivered"),
+    false,
+    "initiative.delivered must be removed from EVENT_TYPES",
+  );
 });
 
 test("EVENT_TYPES includes task.verification as a valid EventType", () => {
@@ -99,9 +112,9 @@ test("newEvent constructs an objective-scoped event with objectiveId and no task
 
 test("newEvent constructs an initiative-scoped event with initiativeId and no taskId key", () => {
   const initiativeId = "some-initiative-id";
-  const ev = newEvent("initiative.awaiting_pr", { initiativeId });
+  const ev = newEvent("initiative.landed", { initiativeId });
   assert.match(ev.id, ULID_RE);
-  assert.equal(ev.type, "initiative.awaiting_pr");
+  assert.equal(ev.type, "initiative.landed");
   assert.equal(ev.initiativeId, initiativeId);
   assert.equal(Object.prototype.hasOwnProperty.call(ev, "taskId"), false);
 });

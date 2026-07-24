@@ -1,11 +1,7 @@
 import type { Entity } from "./entity.ts";
 import { newId } from "./entity.ts";
 
-export const INITIATIVE_STATUSES = [
-  "building",
-  "awaiting_pr",
-  "delivered",
-] as const;
+export const INITIATIVE_STATUSES = ["building", "landed"] as const;
 
 export type InitiativeStatus = (typeof INITIATIVE_STATUSES)[number];
 
@@ -56,8 +52,7 @@ const LEGAL_OBJECTIVE_TRANSITIONS: ReadonlySet<string> = new Set([
 ]);
 
 const LEGAL_INITIATIVE_TRANSITIONS: ReadonlySet<string> = new Set([
-  "building->awaiting_pr",
-  "awaiting_pr->delivered",
+  "building->landed",
 ]);
 
 export class IllegalObjectiveTransitionError extends Error {

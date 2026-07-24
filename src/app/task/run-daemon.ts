@@ -30,7 +30,7 @@ interface RunNextTask {
 /**
  * Story F (007.12) — narrow read seam for the once-per-`execute()` daemon
  * summary: objectives awaiting brokering (`awaiting_confirmation`) and
- * initiatives awaiting PR (`awaiting_pr`). Optional so pre-existing fakes
+ * initiatives that have landed (`landed`). Optional so pre-existing fakes
  * that construct `RunDaemon` without it keep compiling; when absent both
  * counts are reported as 0.
  */
@@ -70,7 +70,7 @@ export class RunDaemon {
     exitCode: 0 | 1;
     escalatedCount: number;
     objectivesAwaitingConfirmation: number;
-    initiativesAwaitingPr: number;
+    initiativesLanded: number;
   }> {
     let hasFailed = false;
     let escalatedCount = 0;
@@ -82,7 +82,7 @@ export class RunDaemon {
         exitCode: 0,
         escalatedCount: 0,
         objectivesAwaitingConfirmation: 0,
-        initiativesAwaitingPr: 0,
+        initiativesLanded: 0,
       };
     }
     this.#deps.recover.execute();
@@ -139,14 +139,14 @@ export class RunDaemon {
     }
 
     // Step 4: once per execute() (not per loop iteration), summarise
-    // objectives awaiting brokering and initiatives awaiting PR (Story F).
+    // objectives awaiting brokering and initiatives landed (Story F).
     let objectivesAwaitingConfirmation = 0;
-    let initiativesAwaitingPr = 0;
+    let initiativesLanded = 0;
     if (this.#deps.initiatives) {
       for (const { id } of this.#deps.initiatives.listAllInitiatives()) {
         const initiative = this.#deps.initiatives.get(id);
-        if (initiative?.status === "awaiting_pr") {
-          initiativesAwaitingPr += 1;
+        if (initiative?.status === "landed") {
+          initiativesLanded += 1;
         }
         for (const objective of this.#deps.initiatives.listObjectives(id)) {
           if (objective.status === "awaiting_confirmation") {
@@ -160,7 +160,7 @@ export class RunDaemon {
       exitCode: hasFailed ? 1 : 0,
       escalatedCount,
       objectivesAwaitingConfirmation,
-      initiativesAwaitingPr,
+      initiativesLanded,
     };
   }
 }

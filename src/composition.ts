@@ -474,6 +474,8 @@ export function buildDeps(
     publicationRepository,
     resolveHomeDir,
     resolveTargetOID,
+    events,
+    unitOfWork,
   );
 
   // Shared workspace manager — used by both the daemon runner and the

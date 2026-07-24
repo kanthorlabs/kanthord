@@ -895,7 +895,7 @@ test("save without an explicit status defaults the persisted initiative status t
   assert.equal(repo.get(initiativeId)?.status, "building");
 });
 
-test("save persists and round-trips a non-default initiative status (awaiting_pr)", () => {
+test("save persists and round-trips a non-default initiative status (landed)", () => {
   const { db, dir } = makeTempDb();
   after(() => {
     db.close();
@@ -911,11 +911,11 @@ test("save persists and round-trips a non-default initiative status (awaiting_pr
   repo.save({
     id: initiativeId,
     projectId,
-    name: "Awaiting PR Initiative",
-    status: "awaiting_pr",
+    name: "Landed Initiative",
+    status: "landed",
   });
 
-  assert.equal(repo.get(initiativeId)?.status, "awaiting_pr");
+  assert.equal(repo.get(initiativeId)?.status, "landed");
 });
 
 test("saveObjective without an explicit status defaults the persisted objective status to building", () => {
@@ -989,10 +989,10 @@ test("re-saving an initiative with a new status updates the persisted status (up
     id: initiativeId,
     projectId,
     name: "Status Update Initiative",
-    status: "delivered",
+    status: "landed",
   });
 
-  assert.equal(repo.get(initiativeId)?.status, "delivered");
+  assert.equal(repo.get(initiativeId)?.status, "landed");
 });
 
 test("listObjectives + listInitiatives include the persisted status field", () => {
@@ -1012,7 +1012,7 @@ test("listObjectives + listInitiatives include the persisted status field", () =
     id: initiativeId,
     projectId,
     name: "Listed Initiative",
-    status: "awaiting_pr",
+    status: "landed",
   });
   const objectiveId = newId();
   repo.saveObjective({
@@ -1025,7 +1025,7 @@ test("listObjectives + listInitiatives include the persisted status field", () =
   const initiatives = repo.listInitiatives(projectId);
   assert.equal(
     initiatives.find((i) => i.id === initiativeId)?.status,
-    "awaiting_pr",
+    "landed",
   );
 
   const objectives = repo.listObjectives(initiativeId);

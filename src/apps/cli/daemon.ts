@@ -74,8 +74,8 @@ export async function runDaemon(
     const objectivesAwaitingConfirmation =
       (result as { objectivesAwaitingConfirmation?: number })
         .objectivesAwaitingConfirmation ?? 0;
-    const initiativesAwaitingPr =
-      (result as { initiativesAwaitingPr?: number }).initiativesAwaitingPr ?? 0;
+    const initiativesLanded =
+      (result as { initiativesLanded?: number }).initiativesLanded ?? 0;
     const stderr: string[] = [];
     if (result.escalatedCount > 0) {
       stderr.push(`${result.escalatedCount} task(s) awaiting confirmation`);
@@ -85,8 +85,8 @@ export async function runDaemon(
         `${objectivesAwaitingConfirmation} objective(s) awaiting confirmation`,
       );
     }
-    if (initiativesAwaitingPr > 0) {
-      stderr.push(`${initiativesAwaitingPr} initiative(s) awaiting PR`);
+    if (initiativesLanded > 0) {
+      stderr.push(`${initiativesLanded} initiative(s) landed`);
     }
     return { exitCode: result.exitCode, stdout: [], stderr };
   } finally {

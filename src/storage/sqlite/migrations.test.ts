@@ -62,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 16 and creates exactly seventeen core tables", () => {
+test("migrates to version 17 and creates exactly seventeen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 16);
+    assert.equal(userVersion(db), 17);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -326,7 +326,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 16);
+    assert.equal(second.version, 17);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -739,8 +739,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      16,
-      "schema version must be 16 after all migrations",
+      17,
+      "schema version must be 17 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -804,24 +804,26 @@ test("migration 11 adds status column to initiatives and objectives, defaulting 
   }
 });
 
-test("migration 11 initiatives.status CHECK accepts building|awaiting_pr|delivered and rejects other values", () => {
+test("migration 17 initiatives.status CHECK accepts building|landed and rejects other values (including the removed awaiting_pr/delivered)", () => {
   withMigratedDb((db) => {
     db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
       "proj-m11-check",
       "P",
     );
-    for (const status of ["building", "awaiting_pr", "delivered"]) {
+    for (const status of ["building", "landed"]) {
       assert.doesNotThrow(() => {
         db.prepare(
           "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
         ).run(`init-${status}`, "proj-m11-check", "I", status);
       }, `initiatives.status = ${status} must be accepted`);
     }
-    assert.throws(() => {
-      db.prepare(
-        "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
-      ).run("init-bad-status", "proj-m11-check", "I", "invalid");
-    }, "initiatives.status CHECK should reject invalid value");
+    for (const status of ["awaiting_pr", "delivered", "invalid"]) {
+      assert.throws(() => {
+        db.prepare(
+          "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
+        ).run(`init-bad-${status}`, "proj-m11-check", "I", status);
+      }, `initiatives.status CHECK should reject '${status}'`);
+    }
   });
 });
 
@@ -870,7 +872,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 16);
+    assert.equal(userVersion(db), 17);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -914,7 +916,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
   }
 });
 
-test("migration 12 events.type CHECK accepts the six new objective/initiative event types", () => {
+test("migration 17 events.type CHECK accepts the objective/initiative event types plus initiative.landed and repository.published, and rejects the removed initiative.awaiting_pr/initiative.delivered", () => {
   withMigratedDb((db) => {
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-m12-types', 'P');
@@ -933,13 +935,24 @@ test("migration 12 events.type CHECK accepts the six new objective/initiative ev
         ).run(`ev-${type}`, type, "obj-m12-types");
       }, `event type '${type}' must be accepted by the events CHECK constraint`);
     }
-    for (const type of ["initiative.awaiting_pr", "initiative.delivered"]) {
+    for (const type of ["initiative.landed", "repository.published"]) {
       assert.doesNotThrow(() => {
         db.prepare(
           "INSERT INTO events(id, type, initiativeId) VALUES (?, ?, ?)",
         ).run(`ev-${type}`, type, "init-m12-types");
       }, `event type '${type}' must be accepted by the events CHECK constraint`);
     }
+    for (const type of ["initiative.awaiting_pr", "initiative.delivered"]) {
+      assert.throws(() => {
+        db.prepare(
+          "INSERT INTO events(id, type, initiativeId) VALUES (?, ?, ?)",
+        ).run(`ev-bad-${type}`, type, "init-m12-types");
+      }, `event type '${type}' must now be rejected by the events CHECK constraint`);
+    }
+    assert.ok(
+      (EVENT_TYPES as readonly string[]).includes("repository.published"),
+      "repository.published must be in EVENT_TYPES",
+    );
   });
 });
 
@@ -959,7 +972,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 16);
+    assert.equal(userVersion(db), 17);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -996,7 +1009,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 16);
+    assert.equal(report.version, 17);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",

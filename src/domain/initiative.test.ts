@@ -74,15 +74,24 @@ test("transitionObjective rejects integrated -> anything (immutable once integra
   assert.throws(() => transitionObjective(integrated, "conflict"));
 });
 
-test("transitionInitiative allows building -> awaiting_pr -> delivered", () => {
+test("transitionInitiative allows building -> landed", () => {
   const ini = newInitiative("proj-01", "init alpha");
-  const awaitingPr = transitionInitiative(ini, "awaiting_pr");
-  assert.equal(awaitingPr.status, "awaiting_pr");
-  const delivered = transitionInitiative(awaitingPr, "delivered");
-  assert.equal(delivered.status, "delivered");
+  const landed = transitionInitiative(ini, "landed");
+  assert.equal(landed.status, "landed");
 });
 
-test("transitionInitiative rejects building -> delivered directly", () => {
+test("transitionInitiative rejects building -> awaiting_pr (removed status)", () => {
   const ini = newInitiative("proj-01", "init alpha");
-  assert.throws(() => transitionInitiative(ini, "delivered"));
+  assert.throws(() =>
+    // @ts-expect-error — "awaiting_pr" is no longer a valid InitiativeStatus
+    transitionInitiative(ini, "awaiting_pr"),
+  );
+});
+
+test("transitionInitiative rejects building -> delivered (removed status)", () => {
+  const ini = newInitiative("proj-01", "init alpha");
+  assert.throws(() =>
+    // @ts-expect-error — "delivered" is no longer a valid InitiativeStatus
+    transitionInitiative(ini, "delivered"),
+  );
 });
