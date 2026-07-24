@@ -2,9 +2,9 @@
 
 How kanthord moves code from an agent's edits to your remote.
 
-This covers the objective-branch workflow (EPICs 007.11–007.13). An initiative
-targets a single repository. Per-task candidate landing and the EPIC 007.14
-transplant recovery are in §6.
+This covers the objective-branch workflow (EPICs 007.11–007.13, plus the 007.15
+`landed` initiative state). An initiative targets a single repository. Per-task
+candidate landing and the EPIC 007.14 transplant recovery are in §6.
 
 ---
 
@@ -96,8 +96,8 @@ flowchart TB
     BROKER["Broker: fetch commit into home<br/>count == 1 ? CAS update-ref initBranch"]
     CONFLICT["Objective → conflict<br/>(resolve in clone, re-squash, re-broker)"]
     MORE{"More objectives?"}
-    PR["All integrated → initiative awaiting_pr<br/>(branch complete in home)"]
-    PUB["Human: publish repository --branch initBranch<br/>fast-forward push (+ lease guard)"]
+    LANDED["All objectives integrated → initiative landed<br/>(local work done; branch complete in home)<br/>emits initiative.landed"]
+    PUB["Human: publish repository --branch initBranch<br/>fast-forward push (+ lease guard)<br/>emits repository.published"]
     REMOTE[("Remote: initiative branch delivered<br/>publication = published@remoteOID")]
 
     START --> PROV --> CLONE --> TASKS --> SQUASH --> AWAIT --> APPROVE
@@ -106,7 +106,7 @@ flowchart TB
     BROKER -->|"count!=1 or CAS mismatch"| CONFLICT
     CONFLICT --> AWAIT
     MORE -->|"yes (next objective builds on this tip)"| TASKS
-    MORE -->|no| PR --> PUB --> REMOTE
+    MORE -->|no| LANDED --> PUB --> REMOTE
 ```
 
 Result: **one commit per objective**, linear history on the initiative branch,
@@ -150,18 +150,23 @@ stateDiagram-v2
 An **integrated non-tip objective is immutable** — `retry objective` on it is
 refused with corrective-objective / restart guidance.
 
-**Initiative:**
+**Initiative** (EPIC 007.15):
 
 ```mermaid
 stateDiagram-v2
     [*] --> building
-    building --> awaiting_pr: all objectives integrated
-    awaiting_pr --> delivered: defined, but not driven by publish yet
+    building --> landed: all objectives integrated (emits initiative.landed)
+    landed --> [*]
 ```
 
-`awaiting_pr` means the branch is complete in home and ready to publish. The
-`delivered` transition is defined in the domain but not driven in production:
-`publish` records **publication** state and does not move the initiative.
+`landed` is the terminal-for-now state: all objectives are integrated, so the
+initiative's work is **locally done** in the bare home and its branch is ready
+to publish. There is no further initiative transition — remote delivery is
+tracked entirely by per-`(repository, branch)` **publication** state, and
+`publish` records that without moving the initiative. (`awaiting_pr` /
+`delivered` were removed in 007.15 as defined-but-undriven; a future `pr@1`
+agent will introduce its own PR/delivery states — likely per target — when it
+is built.)
 
 **Publication** (per repository + branch):
 
@@ -210,11 +215,11 @@ sequenceDiagram
     D->>C: fetch objective commit into Home
     D->>Home: count==1 ? CAS update-ref initBranch OID PARENT
     D-->>H: objective A → integrated (initBranch = 1 commit ahead of main)
-    Note over D: all objectives integrated → initiative awaiting_pr
+    Note over D: all objectives integrated → initiative landed
     H->>CLI: publish repository --branch initBranch
     CLI->>Home: read landed local tip
     CLI->>Rem: fast-forward push initBranch (+ lease guard if prior OID known)
-    Rem-->>CLI: ok → publication = published@remoteOID
+    Rem-->>CLI: ok → publication = published@remoteOID (emits repository.published)
 ```
 
 ### 5b. Process the next task after finishing one (within an objective)
@@ -251,7 +256,7 @@ sequenceDiagram
     H->>D: approve objective B (broker)
     D->>Home: count==1 ? CAS update-ref initBranch B_OID A_OID
     D-->>H: objective B → integrated (initBranch = 2 commits ahead, linear)
-    Note over D: all objectives integrated → initiative awaiting_pr
+    Note over D: all objectives integrated → initiative landed
 ```
 
 ### 5d. Process the next initiative after finishing one
