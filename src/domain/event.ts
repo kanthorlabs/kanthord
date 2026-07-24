@@ -24,6 +24,7 @@ export const EVENT_TYPES = [
   "objective.conflict",
   "initiative.awaiting_pr",
   "initiative.delivered",
+  "candidate.transplanted",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

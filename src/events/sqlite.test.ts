@@ -264,6 +264,31 @@ test("append + readAfter round-trips an initiative-scoped event with no taskId k
   }
 });
 
+// ── candidate.transplanted (007.14 Story D) ─────────────────────────────────
+
+test("append + readAfter round-trips a candidate.transplanted event with its SHA payload", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const payload = {
+      oldCandidateSHA: "aaa111",
+      newCandidateSHA: "bbb222",
+      newBaseSHA: "ccc333",
+    };
+    const ev = newEvent("candidate.transplanted", { taskId, payload });
+    feed.append(ev);
+
+    const results = feed.readAfter("0");
+    assert.equal(results.length, 1);
+    assert.equal(results[0]?.id, ev.id);
+    assert.equal(results[0]?.type, "candidate.transplanted");
+    assert.equal(results[0]?.taskId, taskId);
+    assert.deepEqual(results[0]?.payload, payload);
+  } finally {
+    cleanup();
+  }
+});
+
 test("append without payload reads back without payload key", () => {
   const { db, taskId, cleanup } = setupDb();
   try {

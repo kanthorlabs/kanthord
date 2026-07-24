@@ -62,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 15 and creates exactly seventeen core tables", () => {
+test("migrates to version 16 and creates exactly seventeen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 15);
+    assert.equal(userVersion(db), 16);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -326,7 +326,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 15);
+    assert.equal(second.version, 16);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -739,8 +739,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      15,
-      "schema version must be 15 after all migrations",
+      16,
+      "schema version must be 16 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -870,7 +870,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 15);
+    assert.equal(userVersion(db), 16);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -959,7 +959,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 15);
+    assert.equal(userVersion(db), 16);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -996,7 +996,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 15);
+    assert.equal(report.version, 16);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",

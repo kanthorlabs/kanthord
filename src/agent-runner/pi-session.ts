@@ -37,8 +37,19 @@ export type ProviderSession = {
 // Port interface
 // ---------------------------------------------------------------------------
 
+/**
+ * Optional per-task context passed to `for()`. The real adapter ignores it; the
+ * `KANTHORD_FAKE_AGENT` seam uses `taskTitle` to select per-task scripted turns
+ * (see fake-session.ts), which the deterministic transplant Proof relies on.
+ */
+export type SessionContext = { taskTitle?: string };
+
 export interface ProviderSessionFactory {
-  for(aiProvider: AIProvider, credential: Credential): Promise<ProviderSession>;
+  for(
+    aiProvider: AIProvider,
+    credential: Credential,
+    context?: SessionContext,
+  ): Promise<ProviderSession>;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,7 +117,10 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
   async for(
     aiProvider: AIProvider,
     credential: Credential,
+    _context?: SessionContext,
   ): Promise<ProviderSession> {
+    // _context (per-task selection) is a fake-seam concern; the real adapter
+    // builds one session per (aiProvider, credential) and ignores it.
     // (d) empty value
     if (!credential.value) {
       throw new CredentialError(

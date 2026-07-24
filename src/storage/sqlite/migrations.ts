@@ -350,4 +350,33 @@ CREATE TABLE publications (
 );
 `),
   },
+  {
+    version: 16,
+    name: "007.14-s4-candidate-transplanted-event",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new6 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.awaiting_pr','initiative.delivered',
+                 'candidate.transplanted'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id)
+);
+INSERT INTO events_new6 (id, type, taskId, payload, objectiveId, initiativeId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new6 RENAME TO events;
+`),
+  },
 ];

@@ -416,7 +416,9 @@ export class PiAgentRunner implements AgentRunner {
     // 3. Session factory — errors here mean task fails, no workspace prepared
     let session: ProviderSession;
     try {
-      session = await this.#sessions.for(aiProvider, credential);
+      session = await this.#sessions.for(aiProvider, credential, {
+        taskTitle: task.title,
+      });
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       return { outcome: "failed", reason: redact(`${e.name}: ${e.message}`) };

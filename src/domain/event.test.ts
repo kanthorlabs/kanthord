@@ -4,7 +4,7 @@ import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the twenty-three literals in order", () => {
+test("EVENT_TYPES lists exactly the twenty-four literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -29,6 +29,7 @@ test("EVENT_TYPES lists exactly the twenty-three literals in order", () => {
     "objective.conflict", // 007.12 Story D — new
     "initiative.awaiting_pr", // 007.12 Story D — new
     "initiative.delivered", // 007.12 Story D — new
+    "candidate.transplanted", // 007.14 Story D — new
   ]);
 });
 
@@ -36,6 +37,13 @@ test("EVENT_TYPES includes task.verification as a valid EventType", () => {
   assert.ok(
     (EVENT_TYPES as readonly string[]).includes("task.verification"),
     "task.verification must be in EVENT_TYPES",
+  );
+});
+
+test("EVENT_TYPES includes candidate.transplanted as a valid EventType", () => {
+  assert.ok(
+    (EVENT_TYPES as readonly string[]).includes("candidate.transplanted"),
+    "candidate.transplanted must be in EVENT_TYPES",
   );
 });
 
@@ -96,4 +104,20 @@ test("newEvent constructs an initiative-scoped event with initiativeId and no ta
   assert.equal(ev.type, "initiative.awaiting_pr");
   assert.equal(ev.initiativeId, initiativeId);
   assert.equal(Object.prototype.hasOwnProperty.call(ev, "taskId"), false);
+});
+
+// ── candidate.transplanted (007.14 Story D) ─────────────────────────────────
+
+test("newEvent constructs a candidate.transplanted event carrying the old/new candidate + base SHAs", () => {
+  const taskId = "some-task-id";
+  const payload = {
+    oldCandidateSHA: "aaa111",
+    newCandidateSHA: "bbb222",
+    newBaseSHA: "ccc333",
+  };
+  const ev = newEvent("candidate.transplanted", { taskId, payload });
+  assert.match(ev.id, ULID_RE);
+  assert.equal(ev.type, "candidate.transplanted");
+  assert.equal(ev.taskId, taskId);
+  assert.deepEqual(ev.payload, payload);
 });

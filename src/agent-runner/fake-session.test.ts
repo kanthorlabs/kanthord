@@ -8,10 +8,15 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FakeSessionFactory } from "./fake-session.ts";
+import {
+  FakeSessionFactory,
+  fakeSessionFactoryFromTurns,
+} from "./fake-session.ts";
+import type { FakeTurnMap } from "./fake-session.ts";
 import { Agent } from "@earendil-works/pi-agent-core";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool, StreamFn } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
+import type { AIProvider, Credential } from "../domain/resource.ts";
 
 test("FakeSessionFactory drives real Agent: scripted tool call is executed with its arguments and final text is the last assistant message", async () => {
   const capturedArgs: unknown[] = [];
@@ -65,4 +70,76 @@ test("FakeSessionFactory drives real Agent: scripted tool call is executed with 
   );
   assert.ok(textContent, "expected text content in last assistant message");
   assert.equal(textContent.text, "task complete");
+});
+
+// ---------------------------------------------------------------------------
+// fakeSessionFactoryFromTurns — per-task turn selection (EPIC 007.14 Story D)
+// ---------------------------------------------------------------------------
+
+/** Drive a real Agent with `streamFn` and a recording "mark" tool; return the
+ * `region` argument the scripted turn passed to it (or undefined if none). */
+async function runMark(streamFn: StreamFn): Promise<string | undefined> {
+  let captured: string | undefined;
+  const agent = new Agent({ streamFn });
+  const params = Type.Object({ region: Type.String() });
+  const markTool: AgentTool<typeof params> = {
+    name: "mark",
+    label: "Mark",
+    description: "Record a region",
+    parameters: params,
+    execute: async (_id, p) => {
+      captured = String(p.region);
+      return { content: [{ type: "text" as const, text: "" }], details: {} };
+    },
+  };
+  agent.state.tools = [markTool];
+  await agent.prompt("x");
+  await agent.waitForIdle();
+  return captured;
+}
+
+const AI = {} as AIProvider;
+const CRED = {} as Credential;
+const markTurn = (region: string): FakeTurnMap[string] => [
+  { toolCalls: [{ name: "mark", arguments: { region } }] },
+  { text: "done" },
+];
+
+test("fakeSessionFactoryFromTurns keyed map serves each task title its own turns", async () => {
+  const factory = fakeSessionFactoryFromTurns({
+    "Sibling — top region": markTurn("top"),
+    "Sibling — overlap region": markTurn("overlap"),
+  });
+
+  const top = await factory.for(AI, CRED, {
+    taskTitle: "Sibling — top region",
+  });
+  const overlap = await factory.for(AI, CRED, {
+    taskTitle: "Sibling — overlap region",
+  });
+
+  assert.equal(await runMark(top.streamFn), "top");
+  assert.equal(await runMark(overlap.streamFn), "overlap");
+});
+
+test("fakeSessionFactoryFromTurns keyed map falls back to the '*' default for an unknown title", async () => {
+  const factory = fakeSessionFactoryFromTurns({
+    "Known task": markTurn("known"),
+    "*": markTurn("default"),
+  });
+
+  const session = await factory.for(AI, CRED, { taskTitle: "Unlisted task" });
+  assert.equal(await runMark(session.streamFn), "default");
+});
+
+test("fakeSessionFactoryFromTurns plain array serves the same turns regardless of task title (backward compatible)", async () => {
+  const factory = fakeSessionFactoryFromTurns(markTurn("same"));
+
+  const a = await factory.for(AI, CRED, { taskTitle: "Task A" });
+  const b = await factory.for(AI, CRED, { taskTitle: "Task B" });
+  const none = await factory.for(AI, CRED);
+
+  assert.equal(await runMark(a.streamFn), "same");
+  assert.equal(await runMark(b.streamFn), "same");
+  assert.equal(await runMark(none.streamFn), "same");
 });
