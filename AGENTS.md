@@ -161,3 +161,7 @@ distinguishable from a completed remote delivery. The deferred `pr@1` agent
   expected and correct — do not panic or revert them.
 
 - No backward-compatible needs because we are in local development only
+
+- During `/work` the tree may hold other concurrent agents' changes. Stage only
+  the current epic's intended files by explicit path — never `git add -A` — and
+  check `git diff --cached` (content, not just names) before committing.
