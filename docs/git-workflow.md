@@ -109,8 +109,8 @@ flowchart TB
 
     START --> PROV --> CLONE --> TASKS --> SQUASH --> AWAIT --> APPROVE
     APPROVE -->|yes| BROKER
-    BROKER -->|count==1 & CAS ok| MORE
-    BROKER -->|count!=1 or CAS mismatch| CONFLICT
+    BROKER -->|"count==1 & CAS ok"| MORE
+    BROKER -->|"count!=1 or CAS mismatch"| CONFLICT
     CONFLICT --> AWAIT
     MORE -->|"yes (next objective builds on this tip)"| TASKS
     MORE -->|no| PR --> PUB --> REMOTE
@@ -205,7 +205,7 @@ sequenceDiagram
     H->>CLI: import graph (initiative, objectives, tasks) --bind source=REPO
     H->>CLI: run daemon
     D->>Home: provision refs/heads/kanthord/init/ID from main tip
-    D->>C: clone --no-hardlinks --single-branch --branch initBranch; remote remove origin
+    D->>C: clone --no-hardlinks --single-branch --branch initBranch, then remote remove origin
     loop objective A tasks (sequential)
         D->>A: run task in clone
         A->>C: edit files + commit
@@ -272,11 +272,11 @@ sequenceDiagram
     participant C2 as New clone
     participant Home as Home
 
-    Note over H,Home: previous initiative published to the remote; its branch is complete in Home
+    Note over H,Home: previous initiative published to the remote — its branch is complete in Home
     opt bring Home main up to date
         H->>CLI: refresh Home main from the remote (after the PR merges — out of scope)
     end
-    H->>CLI: import graph (initiative #2, ONE repository) ; run daemon
+    H->>CLI: import graph (initiative 2, ONE repository), then run daemon
     D->>Home: provision refs/heads/kanthord/init/ID2 from CURRENT main tip
     D->>C2: fresh clone of the new initiative branch (origin removed)
     Note over D,C2: same objective → squash → broker → publish cycle, isolated per initiative
