@@ -70,6 +70,13 @@ describe("runGetInitiative", () => {
     assert.ok(
       r.stdout.some(
         (l) =>
+          l.startsWith("branch:") && l.includes(`kanthord/init/${INIT_ID}`),
+      ),
+      "stdout must have branch: line with the publishable init branch",
+    );
+    assert.ok(
+      r.stdout.some(
+        (l) =>
           l.startsWith("workspace:") && l.includes("/tmp/kanthord-init-clone"),
       ),
       "stdout must have workspace: line with the clone dir",
@@ -102,7 +109,7 @@ describe("runGetInitiative", () => {
       id: INIT_ID,
       projectId: "proj-1",
       name: "oauth-rollout",
-      status: "awaiting_pr",
+      status: "building",
       workspace: "/tmp/kanthord-init-clone",
     };
     const getInitiative = makeGetInitiative(initiative);
@@ -118,7 +125,8 @@ describe("runGetInitiative", () => {
     assert.deepEqual(parsed, {
       id: INIT_ID,
       name: "oauth-rollout",
-      status: "awaiting_pr",
+      status: "building",
+      branch: `kanthord/init/${INIT_ID}`,
       workspace: "/tmp/kanthord-init-clone",
     });
   });

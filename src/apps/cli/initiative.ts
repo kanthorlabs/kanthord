@@ -82,6 +82,7 @@ export async function runGetInitiative(
       `id: ${output.id}`,
       `name: ${output.name}`,
       `status: ${output.status}`,
+      `branch: ${output.branch}`,
     ];
     if (output.workspace !== undefined) {
       lines.push(`workspace: ${output.workspace}`);

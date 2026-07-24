@@ -4,8 +4,10 @@
 # Replaces the ad-hoc `list task --json | node -e …` + raw `landing_candidates`
 # SQLite queries that get repeated dozens of times during an E2E run. Prints, in
 # one call: each task's status / declared dependencies / runtime waiting set, the
-# landing-candidate lifecycle state per task (the internal field no CLI exposes),
-# and an event-feed tally.
+# per-objective + initiative status (the objective-branch workflow's real gate,
+# 007.12), the landing-candidate lifecycle state per task (legacy — only
+# populated on the no-model/candidate path, `candidate:none` otherwise), and an
+# event-feed tally.
 #
 # Usage:  KANTHORD_DB=<path> scripts/e2e/e2e-status.sh <initiative-id>
 #   (KANTHORD_DB defaults to .data/kanthord.db if unset — matches the CLI.)
@@ -48,6 +50,15 @@ for(const t of tasks){
     c?`candidate:${c.state} (${c.base}->${c.cand})`:"candidate:none"
   );
 }
+
+// objective-branch gate (007.12): initiative + per-objective status
+console.log("\n=== OBJECTIVES / INITIATIVE ===");
+try {
+  const ini=db.prepare("SELECT status FROM initiatives WHERE id=?").get(process.argv[1]);
+  console.log(`initiative: ${ini?ini.status:"(unknown)"}`);
+  const objs=db.prepare("SELECT name,status FROM objectives WHERE initiativeId=? ORDER BY id").all(process.argv[1]);
+  for(const o of objs) console.log("  "+(o.status||"").padEnd(24)+(o.name||""));
+} catch(e) { console.log(`(objective/initiative read failed: ${e.message})`); }
 
 console.log("\n=== EVENTS ===");
 const total=db.prepare("SELECT COUNT(*) n FROM events").get().n;

@@ -51,6 +51,7 @@ test("execute returns { id, name, status, workspace } for a provisioned initiati
     id: INIT_ID,
     name: "init-wf",
     status: "building",
+    branch: `kanthord/init/${INIT_ID}`,
     workspace: "/tmp/kanthord-init-clone",
   });
 });
@@ -69,5 +70,6 @@ test("execute omits workspace when the initiative has not been provisioned yet",
     id: INIT_ID,
     name: "init-wf",
     status: "building",
+    branch: `kanthord/init/${INIT_ID}`,
   });
 });

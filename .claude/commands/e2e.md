@@ -22,10 +22,11 @@ any bugs. Prefer the `scripts/e2e/*` helpers over re-deriving state by hand.
   `.fake-agent.json` so the **no-model** daemon can produce candidates
   deterministically (for wiring proofs).
 - `e2e-status.sh <initiative-id>` — **the workhorse.** One call prints every
-  task's status / deps / waiting, the per-task landing-candidate `state`
-  (the internal lifecycle field no CLI exposes — `pending`/`conflict`/`landed`),
-  and an event tally. Run it instead of `list task --json | node -e …` +
-  raw `landing_candidates` SQL. Read-only.
+  task's status / deps / waiting, the initiative + per-objective status (the
+  objective-branch workflow's real gate, 007.12), a legacy per-task
+  landing-candidate `state` (only populated on the no-model/candidate path,
+  `candidate:none` under the real-model objective-branch flow), and an event
+  tally. Run it instead of `list task --json | node -e …`. Read-only.
 - `e2e-smoke-todo.sh <todo.mjs> [port]` — boot the built server and assert the
   full CRUD cycle (POST 201, GET 200, PUT 200, unknown 404, DELETE 204,
   get-after-delete 404). This is the program-level proof the feature works.
@@ -86,34 +87,50 @@ node src/main.ts run daemon --until-idle --poll-interval 2000   # build (backgro
 scripts/e2e/e2e-status.sh <initiative-id>                       # see where everything stands
 ```
 
-The candidate gate holds each finished task at `awaiting_confirmation`. `approve
-task --id <id>` lands it and unblocks dependents. Re-run the daemon to build the
-newly-unblocked tasks. Repeat until `e2e-status.sh` shows N/N completed.
+Objective-branch workflow (007.12): the daemon builds **all** ready tasks in one
+run onto a single objective branch `kanthord/init/<initiative-id>`, unblocking
+dependents inline as their deps complete. There is **no** per-task approve gate.
+When every task is done the objective sits at `awaiting_confirmation`. Approve at
+the **objective** level:
 
-**Conflict recovery** (siblings that edit one file conflict once the base moves):
-`approve` reports the conflict, then `get conflict --id` → `retry task --id
-[--note "…"]` → re-run daemon (rebuilds on the fresh base) → `approve`.
+```bash
+node src/main.ts approve objective --id <objective-id>   # brokers the commit into the bare home → objective integrated
+```
+
+The objective's tasks all edit the shared branch serially, so **no sibling
+conflicts** occur (that was the old per-task-candidate failure mode). If the
+objective reports a conflict (its base moved), use `retry objective --id
+[--note "…"]` → re-run daemon → `approve objective`.
+
+After integration the initiative reaches its local-done terminal state (see
+EPIC 007.15) with an event. Delivering to the remote is a separate step:
+
+```bash
+node src/main.ts publish repository --repository <repo-id> --branch kanthord/init/<initiative-id>
+```
+
+(`get initiative --id <id>` prints the publishable `branch:` line.)
 
 ## Verify the real program
 
+The landed code is on the objective branch `kanthord/init/<initiative-id>` in the
+bare home, **not** on home `HEAD`/`main` (main moves only on publish):
+
 ```bash
-git -C .data/e2e-<tag>/home show HEAD:src/todo.mjs > /tmp/todo.mjs
+git -C .data/e2e-<tag>/home show kanthord/init/<initiative-id>:src/todo.mjs > /tmp/todo.mjs
 scripts/e2e/e2e-smoke-todo.sh /tmp/todo.mjs
 ```
 
 ## Gotchas (learned from prior runs — check these before filing a bug)
 
-- **Help:** `node src/main.ts <cmd> help <sub>` shows subcommand help;
-  `<cmd> <sub> --help` prints the ROOT help (known minor bug).
 - **Conflict message prints to stderr** — capture `2>&1` when asserting it.
-- **`approve` does not (yet) persist the candidate `state`** — see EPIC 007.8.
-  Until fixed, `e2e-status.sh` shows completed tasks with `candidate:pending`,
-  and the `get conflict`/`retry` recovery loop is a dead end via `approve`.
-- **`list event`** silently caps at ~100 rows; pass `--limit 1000` or follow the
-  `{"nextCursor":…}` sentinel (007.7). `e2e-status.sh` counts from the DB, so it
-  is not affected.
-- **Sibling serialization:** N siblings editing one file each need a full re-run
-  on the moved base — expected cost, not a bug.
+- **The landed code is on the objective branch** `kanthord/init/<initiative-id>`,
+  not home `HEAD`/`main`. Extract from that ref (see Verify above).
+- **`list event`** needs `--after <cursor>` (e.g. `--after 0`) and caps at ~100
+  rows without `--limit`; pass `--limit 1000` or follow the `{"nextCursor":…}`
+  sentinel (007.7). `e2e-status.sh` counts from the DB, so it is not affected.
+- **`get resource`, not `get repository` for arbitrary resources** — though
+  `get repository --id` now works as an alias (007.15).
 
 ## Record findings
 
