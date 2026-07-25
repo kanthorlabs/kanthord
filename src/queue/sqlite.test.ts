@@ -179,6 +179,14 @@ test("two tasks enqueued in order are claimed oldest-first", () => {
 interface WorkerResult {
   exitCode: number;
   lines: string[];
+  /**
+   * The child's stderr. Captured because a worker that dies inside
+   * `openDatabase` exits before printing "ready", and without its stderr the
+   * only signal is a bare exit code — undiagnosable after the fact.
+   * See the FINDING comment in `src/storage/sqlite/open.ts` for the leading
+   * suspect if this test ever fails again.
+   */
+  stderr: string;
 }
 
 function spawnWorker(
@@ -196,6 +204,7 @@ function spawnWorker(
   });
 
   const lines: string[] = [];
+  let stderr = "";
   let readyResolve!: () => void;
   let readyReject!: (e: Error) => void;
   const ready = new Promise<void>((res, rej) => {
@@ -215,12 +224,22 @@ function spawnWorker(
       });
   });
 
+  // Drain stderr. Without this the pipe is opened and never read, so the reason
+  // a worker exited non-zero is discarded and every failure looks identical.
+  child.stderr.on("data", (chunk: Buffer) => {
+    stderr += chunk.toString();
+  });
+
   const done = new Promise<WorkerResult>((resolve, reject) => {
     child.on("close", (code) => {
       const exitCode = code ?? 1;
       if (exitCode !== 0)
-        readyReject(new Error(`worker exited with code ${exitCode}`));
-      resolve({ exitCode, lines });
+        readyReject(
+          new Error(
+            `worker exited with code ${exitCode} before signalling ready; stderr: ${stderr.trim() || "(empty)"}`,
+          ),
+        );
+      resolve({ exitCode, lines, stderr });
     });
     child.on("error", (err) => {
       readyReject(err);
@@ -256,8 +275,16 @@ test(
     writeFileSync(barrierFile, "go");
 
     const [r1, r2] = await Promise.all([w1.done, w2.done]);
-    assert.equal(r1.exitCode, 0, `worker 1 exited with ${r1.exitCode}`);
-    assert.equal(r2.exitCode, 0, `worker 2 exited with ${r2.exitCode}`);
+    assert.equal(
+      r1.exitCode,
+      0,
+      `worker 1 exited with ${r1.exitCode}; stderr: ${r1.stderr.trim() || "(empty)"}`,
+    );
+    assert.equal(
+      r2.exitCode,
+      0,
+      `worker 2 exited with ${r2.exitCode}; stderr: ${r2.stderr.trim() || "(empty)"}`,
+    );
 
     const allLines = [...r1.lines, ...r2.lines];
     const claimed = allLines.filter((l) => l.startsWith("claimed "));
@@ -561,8 +588,16 @@ test(
     writeFileSync(barrierFile, "go");
 
     const [r1, r2] = await Promise.all([w1.done, w2.done]);
-    assert.equal(r1.exitCode, 0, `worker 1 exited with ${r1.exitCode}`);
-    assert.equal(r2.exitCode, 0, `worker 2 exited with ${r2.exitCode}`);
+    assert.equal(
+      r1.exitCode,
+      0,
+      `worker 1 exited with ${r1.exitCode}; stderr: ${r1.stderr.trim() || "(empty)"}`,
+    );
+    assert.equal(
+      r2.exitCode,
+      0,
+      `worker 2 exited with ${r2.exitCode}; stderr: ${r2.stderr.trim() || "(empty)"}`,
+    );
 
     const set1 = new Set(r1.lines);
     const set2 = new Set(r2.lines);
