@@ -2,7 +2,12 @@
 # landing-proof.sh — EPIC 007.3 Proof Part A (deterministic, no model, no network).
 # Proves the full candidate→approve→land lifecycle through the REAL CLI against
 # real git in temp dirs, using the KANTHORD_FAKE_AGENT executor seam.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
 node src/main.ts db migrate >/dev/null
 PROJECT=$(node src/main.ts create project --name demo)

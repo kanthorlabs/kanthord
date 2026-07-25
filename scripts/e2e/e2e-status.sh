@@ -13,7 +13,12 @@
 #   (KANTHORD_DB defaults to .data/kanthord.db if unset — matches the CLI.)
 #
 # Read-only: never mutates the DB or the tree. Safe to run any time.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 INIT="${1:?usage: e2e-status.sh <initiative-id>}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

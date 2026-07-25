@@ -21,7 +21,12 @@
 # and the import needs `--bind source=… --bind provider=… --bind cred=…`. Under
 # the fake-agent seam the provider/credential values are ignored (they only
 # satisfy the runner's context-binding check) — a dummy pair suffices.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 OUT="${1:?usage: make-discard-graph.sh <out-dir>}"
 mkdir -p "$OUT"

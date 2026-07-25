@@ -36,7 +36,12 @@
 #
 # Every task's Verification is `test -f src/marker.mjs`, which the single scripted
 # turn satisfies, so each task gates as a `candidate` deterministically.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 OUT="${1:?usage: make-sequencing-graph.sh <out-dir>}"
 

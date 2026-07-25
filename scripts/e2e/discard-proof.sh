@@ -20,7 +20,12 @@
 # Assertion wording follows the REAL program: `UnknownReferenceError` renders
 # uniformly as `no <kind> with id <ref>` (src/app/errors.ts:71), and the publish
 # command writes its human line to stderr (commands/publish/repository.ts:33).
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
 node src/main.ts db migrate >/dev/null

@@ -18,7 +18,12 @@
 # stdout and its human line on STDERR (commands/publish/repository.ts:28-37),
 # while the `already published @<oid>` line goes to stdout (:43). Counts are
 # compared with `test`, not `wc -l | grep -qx`, because BSD `wc` left-pads.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
 node src/main.ts db migrate >/dev/null

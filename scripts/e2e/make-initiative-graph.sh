@@ -32,7 +32,12 @@
 # line to src/todo.mjs (which exists on the integration tip the clone was cut
 # from), accumulating in order across the run. Verification is deliberately
 # lightweight (`test -f src/todo.mjs`) so the same package runs with no model.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 OUT="${1:?usage: make-initiative-graph.sh <out-dir>}"
 mkdir -p "$OUT"
