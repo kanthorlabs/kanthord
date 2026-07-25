@@ -11,7 +11,10 @@ export function buildListEventCommand(deps: CliDeps, io: CliIo): Command {
     .configureHelp({ commandUsage: () => "kanthord list event" })
     .requiredOption("--after <cursor>", "event cursor to start after")
     .option("--limit <count>", "maximum events to read per page")
-    .option("--json", "print events as newline-delimited JSON")
+    .option(
+      "--json",
+      'print the events page as a single JSON object: {"events":[…],"nextCursor":"…"}',
+    )
     .option("--follow", "keep polling for new events")
     .option("--poll-interval <ms>", "milliseconds to wait between polls")
     .addHelpText(

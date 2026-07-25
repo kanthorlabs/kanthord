@@ -12,6 +12,10 @@
  * T2 additions:
  *   (g) completed result is logged via the logger port
  *   (h) failed result is logged via the logger port
+ * Story 07 (run-scoped daemon accounting) additions:
+ *   (i) landedInitiativeIds contains only the initiative(s) this run touched
+ *   (j) a failed task appears in failedTasks with its persisted result reason
+ *   (k) a task retried twice within one run yields a single initiative-id entry
  */
 
 import { test } from "node:test";
@@ -505,5 +509,134 @@ test("RunDaemon execute: failed result is logged via the logger port", async () 
   assert.ok(
     captureLogger.lines.some((l) => /task T1.*failed/.test(l)),
     `logger must capture a 'task T1: failed' line; got: ${JSON.stringify(captureLogger.lines)}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 07 — run-scoped daemon accounting
+//
+// A `store` dependency lets RunDaemon learn, per dispatched task, which
+// initiative it belongs to (`getInitiativeId`) and its persisted result
+// (`getTaskResult`, for the failure `reason`). `initiatives` (already used
+// for the objectives-awaiting count) supplies each touched initiative's
+// current `status` — no `listAllInitiatives()` scan is used any more.
+// ---------------------------------------------------------------------------
+
+function makeTaskStore(initiativeByTask: Record<string, string>) {
+  return {
+    getInitiativeId(taskId: string): string | undefined {
+      return initiativeByTask[taskId];
+    },
+    getTaskResult(taskId: string): { reason: string | null } | undefined {
+      const reasons: Record<string, string> = {
+        t1: "VerificationFailedError: npm test (exit 1)",
+      };
+      return taskId in reasons
+        ? { reason: reasons[taskId]! }
+        : { reason: null };
+    },
+  };
+}
+
+function makeInitiativesByStatus(statusById: Record<string, string>) {
+  return {
+    listAllInitiatives(): Array<{ id: string }> {
+      return Object.keys(statusById).map((id) => ({ id }));
+    },
+    get(id: string): { status?: string } | undefined {
+      return statusById[id] !== undefined
+        ? { status: statusById[id] }
+        : undefined;
+    },
+    listObjectives(_initiativeId: string): Array<{ status?: string }> {
+      return [];
+    },
+  };
+}
+
+// (i) landedInitiativeIds contains only the touched initiative, not a
+//     pre-existing unrelated `landed` initiative the run never dispatched.
+test("RunDaemon execute: landedInitiativeIds contains only the initiative(s) this run touched (Story 07 i)", async () => {
+  const log: string[] = [];
+
+  const daemon = new RunDaemon({
+    recover: makeRecoverUC(log),
+    enqueueReady: makeEnqueueUC(log, [["t1"], []]),
+    runNext: makeRunNextUC(log, [{ outcome: "completed", taskId: "t1" }]),
+    sleep: makeSleep(),
+    logger: new NullLogger(),
+    store: makeTaskStore({ t1: "init-A" }),
+    initiatives: makeInitiativesByStatus({
+      "init-A": "landed",
+      "init-B": "landed", // untouched by this run — must NOT be counted
+    }),
+  } as ConstructorParameters<typeof RunDaemon>[0]);
+
+  const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  const landed = (result as { landedInitiativeIds?: string[] })
+    .landedInitiativeIds;
+  assert.deepEqual(
+    landed,
+    ["init-A"],
+    `landedInitiativeIds must contain only the touched initiative; got: ${JSON.stringify(landed)}`,
+  );
+});
+
+// (j) a failed task appears in failedTasks with the reason from its
+//     persisted task_results row.
+test("RunDaemon execute: a failed task appears in failedTasks with its persisted result reason (Story 07 j)", async () => {
+  const log: string[] = [];
+
+  const daemon = new RunDaemon({
+    recover: makeRecoverUC(log),
+    enqueueReady: makeEnqueueUC(log, [["t1"], []]),
+    runNext: makeRunNextUC(log, [{ outcome: "failed", taskId: "t1" }]),
+    sleep: makeSleep(),
+    logger: new NullLogger(),
+    store: makeTaskStore({ t1: "init-A" }),
+    initiatives: makeInitiativesByStatus({ "init-A": "building" }),
+  } as ConstructorParameters<typeof RunDaemon>[0]);
+
+  const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  const failedTasks = (
+    result as {
+      failedTasks?: Array<{ id: string; reason: string }>;
+    }
+  ).failedTasks;
+  assert.deepEqual(
+    failedTasks,
+    [{ id: "t1", reason: "VerificationFailedError: npm test (exit 1)" }],
+    `failedTasks must contain the failed task with its persisted reason; got: ${JSON.stringify(failedTasks)}`,
+  );
+});
+
+// (k) a task retried twice within one run yields a single initiative-id
+//     entry in landedInitiativeIds (Set semantics, not a per-dispatch count).
+test("RunDaemon execute: a task retried twice within one run yields a single initiative-id entry (Story 07 k)", async () => {
+  const log: string[] = [];
+
+  const daemon = new RunDaemon({
+    recover: makeRecoverUC(log),
+    enqueueReady: makeEnqueueUC(log, [["t1"], ["t1"], []]),
+    runNext: makeRunNextUC(log, [
+      { outcome: "failed", taskId: "t1" }, // first attempt fails
+      { outcome: "completed", taskId: "t1" }, // retried and completes
+    ]),
+    sleep: makeSleep(),
+    logger: new NullLogger(),
+    store: makeTaskStore({ t1: "init-A" }),
+    initiatives: makeInitiativesByStatus({ "init-A": "landed" }),
+  } as ConstructorParameters<typeof RunDaemon>[0]);
+
+  const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  const landed = (result as { landedInitiativeIds?: string[] })
+    .landedInitiativeIds;
+  assert.deepEqual(
+    landed,
+    ["init-A"],
+    `landedInitiativeIds must list init-A exactly once, not once per dispatch; got: ${JSON.stringify(landed)}`,
   );
 });

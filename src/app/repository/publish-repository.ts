@@ -27,6 +27,7 @@ export interface PublishRepositoryInput {
 
 export type PublishOutcome =
   | { kind: "published"; repositoryId: string; remoteOID: string }
+  | { kind: "already_published"; repositoryId: string; remoteOID: string }
   | { kind: "diverged"; repositoryId: string; remoteOID: string }
   | { kind: "failed"; repositoryId: string; message: string; cause: unknown };
 
@@ -78,7 +79,11 @@ export class PublishRepository {
     const homeDir = this.#resolveHomeDir(repositoryId);
     // Confirms the branch is landed locally before publishing; the port
     // itself re-reads the local tip when building the push (Story A).
-    await this.#resolveTargetOID(homeDir, branch);
+    try {
+      await this.#resolveTargetOID(homeDir, branch);
+    } catch {
+      throw new UnknownReferenceError("branch", branch);
+    }
     const previous = this.#publicationRepository.getPublication(
       repositoryId,
       branch,
@@ -105,12 +110,17 @@ export class PublishRepository {
         if (isRealTransition) {
           this.#feed.append(
             newEvent("repository.published", {
-              payload: { repositoryId, branch, remoteOID: result.remoteOID },
+              repositoryId,
+              payload: { branch, remoteOID: result.remoteOID },
             }),
           );
         }
       });
-      return { kind: "published", repositoryId, remoteOID: result.remoteOID };
+      return {
+        kind: isRealTransition ? "published" : "already_published",
+        repositoryId,
+        remoteOID: result.remoteOID,
+      };
     } catch (err) {
       if (err instanceof PublishDivergedError) {
         this.#publicationRepository.setPublication(repositoryId, branch, {

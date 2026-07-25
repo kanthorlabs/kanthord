@@ -94,6 +94,8 @@ const LEGAL_TRANSITIONS: ReadonlySet<string> = new Set([
   "awaiting_confirmation->completed",
   "awaiting_confirmation->pending",
   "awaiting_confirmation->discarded",
+  "failed->discarded",
+  "pending->discarded",
 ]);
 
 export class IllegalTransitionError extends Error {

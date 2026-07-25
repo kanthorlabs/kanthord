@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { Event } from "../../domain/event.ts";
 import { runEvents } from "./events.ts";
+import { buildListEventCommand } from "./commands/list/event.ts";
 
 /** Fake `ListEvents` backed by a mutable in-process array. */
 class FakeListEvents {
@@ -475,6 +476,28 @@ test("human + --json: an objective-scoped event with no taskId round-trips (line
   assert.deepEqual(envelope.events, [objEvent]);
 });
 
+test("human + --json: a repository.published event renders the repository id and no 'undefined' (Story 04)", async () => {
+  const repoEvent: Event = {
+    id: "REPO1",
+    type: "repository.published",
+    repositoryId: "some-repository-id",
+    payload: { branch: "main", remoteOID: "deadbeef" },
+  };
+  const feed = new FakeListEvents([repoEvent]);
+
+  const human = await runEvents({ after: "0" }, feed, noopSleep, neverAbort);
+  assert.equal(human.exitCode, 0);
+  assert.equal(human.stderr.length, 1, "one human line for the one event");
+  assert.ok(
+    human.stderr[0]!.includes("some-repository-id"),
+    "line contains the repository id",
+  );
+  assert.ok(
+    !human.stderr[0]!.includes("undefined"),
+    "line must not print the literal 'undefined' for a repository-scoped event",
+  );
+});
+
 test("events --limit 0 exits 1 with a one-line error", async () => {
   const feed = new FakeListEvents([E1]);
 
@@ -511,4 +534,20 @@ test("events --limit abc (non-integer string) exits 1 with a one-line error", as
     result.stderr[0]!.startsWith("error:"),
     "error line starts with 'error:'",
   );
+});
+
+test("list event --json help text describes the {events,nextCursor} envelope, not newline-delimited JSON (Story 06 b)", () => {
+  const io = {
+    out: (_: string) => {},
+    err: (_: string) => {},
+    setExitCode: (_: number) => {},
+  };
+  const command = buildListEventCommand(
+    {} as Parameters<typeof buildListEventCommand>[0],
+    io,
+  );
+  const help = command.helpInformation();
+
+  assert.match(help, /nextCursor/);
+  assert.doesNotMatch(help, /newline-delimited/);
 });

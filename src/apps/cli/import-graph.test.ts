@@ -532,6 +532,224 @@ test("--dry-run: prints all classification types from applyGraph result; writes 
   );
 });
 
+// ─── Story 03 D (007.16) — apply must not report success when it wrote nothing ─
+
+test("--apply with a non-empty conflict set (drifted) exits non-zero, first stderr line is 'refused: N drifted node(s)', and no stdout line starts with 'created:' (Story 03 D)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(
+    result.exitCode,
+    0,
+    "a blocked apply (non-empty conflict set) must exit non-zero",
+  );
+  assert.ok(
+    result.stderr.length > 0,
+    "must print at least one stderr line explaining the refusal",
+  );
+  assert.match(
+    result.stderr[0]!,
+    /^refused: \d+ drifted node\(s\)/,
+    `first stderr line must match /^refused: N drifted node\\(s\\)/; got: ${JSON.stringify(result.stderr)}`,
+  );
+  assert.ok(
+    !result.stdout.some((l) => l.startsWith("created:")),
+    `no stdout line may claim 'created:' when nothing was written; got: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test("--apply with conflicts: the summary counters include the drifted count (Story 03 D)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  // Locate the summary counter line specifically (the one that already
+  // reports "N created, N updated, N unchanged, N missing") — NOT the
+  // per-node classification lines, which already say "drifted: <id>" today
+  // and would make this assertion pass vacuously.
+  const summaryLine = result.stdout.find((l) => /\d+ created,/.test(l));
+  assert.ok(
+    summaryLine,
+    `expected a summary counter line in stdout; got: ${JSON.stringify(result.stdout)}`,
+  );
+  assert.match(
+    summaryLine!,
+    /\b1 drifted\b/,
+    `the summary counter line must include the drifted count; got: ${summaryLine}`,
+  );
+});
+
+test("--apply --dry-run with the same conflicts still exits 0 and uses 'would create:' wording (Story 03 D)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const plannedCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK2_ID,
+    class: "created",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls, plannedCls],
+    summary: { created: 1, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, dryRun: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    "--dry-run always exits 0, even with conflicts",
+  );
+  assert.ok(
+    result.stdout.some((l) => l.startsWith("would create:")),
+    `a planned-but-not-written node must be reported as 'would create:'; got: ${JSON.stringify(result.stdout)}`,
+  );
+  assert.ok(
+    !result.stdout.some((l) => l.startsWith("created:")),
+    `--dry-run must never claim 'created:' (no write happened); got: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test("--apply with a non-empty conflict set (locked only) exits non-zero, refusal reads 'refused: N locked node(s)' with no drifted clause (S3 regression)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "locked",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(
+    result.exitCode,
+    0,
+    "a locked-only refusal must exit non-zero",
+  );
+  assert.equal(
+    result.stderr[0],
+    "refused: 1 locked node(s)",
+    `refusal must not name a zero-count drifted clause; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("--apply with both drifted and locked conflicts: refusal stays byte-identical 'refused: X drifted node(s) and Y locked node(s)' (S3 regression)", async () => {
+  const dir = await makeExportedDir();
+
+  const driftedCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const lockedCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK2_ID,
+    id: DR_TASK2_ID,
+    class: "locked",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [driftedCls, lockedCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [driftedCls, lockedCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.equal(
+    result.stderr[0],
+    "refused: 1 drifted node(s) and 1 locked node(s)",
+    `both-non-zero refusal must stay byte-identical to the original message; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
 // ─── Story 08 T2 — --delete-missing eligibility + plan + confirmation gate ────
 
 /**

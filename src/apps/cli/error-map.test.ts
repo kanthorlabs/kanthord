@@ -6,6 +6,7 @@ import {
   WrongTypeReferenceError,
   DuplicateNameError,
   AmbiguousNameError,
+  ObjectiveNotAwaitingConfirmationError,
 } from "../../app/errors.ts";
 import {
   CrossInitiativeError,
@@ -54,6 +55,32 @@ test("MissingFlagError maps to exit 1 with locked message on stderr", () => {
   const result = toResult(err);
   assert.equal(result.exitCode, 1);
   assert.deepEqual(result.stderr, ["error: missing required flag --title"]);
+});
+
+// ---------------------------------------------------------------------------
+// Review blocker B1 (007.16) — `approve objective` on an `integrated`
+// objective, and `reject objective --resolution retry` from `building`, both
+// throw ObjectiveNotAwaitingConfirmationError today, but toResult's
+// instanceof chain doesn't map it, so the CLI dies with a raw Node stack
+// trace instead of Story 03 B's single-line error at non-zero exit.
+// ---------------------------------------------------------------------------
+
+test("ObjectiveNotAwaitingConfirmationError maps to exit 1 with a single-line message on stderr (B1)", () => {
+  const err = new ObjectiveNotAwaitingConfirmationError(
+    "01JZZZZZZZZZZZZZZZZZZZOBJ001",
+    "integrated",
+  );
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(
+    result.stderr.length,
+    1,
+    "exactly one error line, not a stack trace",
+  );
+  assert.ok(
+    result.stderr[0]!.startsWith("error:"),
+    `expected 'error:' prefix; got: ${result.stderr[0]}`,
+  );
 });
 
 test("unexpected Error rethrows from toResult", () => {

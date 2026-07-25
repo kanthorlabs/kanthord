@@ -5,7 +5,11 @@ import {
   newObjective,
   transitionInitiative,
   transitionObjective,
+  IllegalObjectiveTransitionError,
+  IllegalInitiativeTransitionError,
+  canRetryObjective,
 } from "./initiative.ts";
+import type { ObjectiveStatus } from "./initiative.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
@@ -94,4 +98,67 @@ test("transitionInitiative rejects building -> delivered (removed status)", () =
     // @ts-expect-error — "delivered" is no longer a valid InitiativeStatus
     transitionInitiative(ini, "delivered"),
   );
+});
+
+// Story 05 (007.16) — discarded objective/initiative status
+
+test("transitionObjective allows building -> discarded", () => {
+  const obj = newObjective("ini-01", "obj beta");
+  const discarded = transitionObjective(obj, "discarded");
+  assert.equal(discarded.status, "discarded");
+});
+
+test("transitionObjective rejects discarded -> anything (terminal, no outbound edge)", () => {
+  const obj = newObjective("ini-01", "obj beta");
+  const discarded = transitionObjective(obj, "discarded");
+  assert.throws(
+    () => transitionObjective(discarded, "awaiting_confirmation"),
+    (err) => {
+      assert.ok(err instanceof IllegalObjectiveTransitionError);
+      assert.equal((err as IllegalObjectiveTransitionError).from, "discarded");
+      return true;
+    },
+  );
+});
+
+test("transitionInitiative allows building -> discarded", () => {
+  const ini = newInitiative("proj-01", "init alpha");
+  const discarded = transitionInitiative(ini, "discarded");
+  assert.equal(discarded.status, "discarded");
+});
+
+test("transitionInitiative rejects discarded -> anything (terminal, no outbound edge)", () => {
+  const ini = newInitiative("proj-01", "init alpha");
+  const discarded = transitionInitiative(ini, "discarded");
+  assert.throws(
+    () => transitionInitiative(discarded, "landed"),
+    (err) => {
+      assert.ok(err instanceof IllegalInitiativeTransitionError);
+      assert.equal((err as IllegalInitiativeTransitionError).from, "discarded");
+      return true;
+    },
+  );
+});
+
+// B3.1 (007.16 review blocker fix) — canRetryObjective: the shared
+// retry-eligibility rule moved into domain/, true for exactly
+// awaiting_confirmation and conflict.
+
+test("canRetryObjective is true for exactly awaiting_confirmation and conflict, false for building/integrated/discarded", () => {
+  const expected: Record<ObjectiveStatus, boolean> = {
+    building: false,
+    awaiting_confirmation: true,
+    conflict: true,
+    integrated: false,
+    discarded: false,
+  };
+  for (const [status, want] of Object.entries(expected) as Array<
+    [ObjectiveStatus, boolean]
+  >) {
+    assert.equal(
+      canRetryObjective(status),
+      want,
+      `canRetryObjective(${status}) must be ${want}`,
+    );
+  }
 });

@@ -372,15 +372,25 @@ export class ApplyGraph {
         dependencies: dbTask.dependencies,
       });
     }
+    // A dependency entry may reference an existing/new node by its package
+    // `ref` rather than its ULID (Story 03 E) — resolve refs to ids first so
+    // ref and ULID are interchangeable for validation.
+    const refToId = new Map<string, string>();
+    for (const pkgTask of pkg.tasks) {
+      refToId.set(pkgTask.ref, pkgTask.id ?? pkgTask.ref);
+    }
     for (const pkgTask of pkg.tasks) {
       const nodeId = pkgTask.id ?? pkgTask.ref;
       const liveTask =
         pkgTask.id !== undefined ? this.#deps.tasks.get(pkgTask.id) : undefined;
       const liveStatus = liveTask?.status ?? "pending";
+      const resolvedDependencies = pkgTask.dependencies.map(
+        (dep) => refToId.get(dep) ?? dep,
+      );
       mergedMap.set(nodeId, {
         id: nodeId,
         status: liveStatus,
-        dependencies: pkgTask.dependencies,
+        dependencies: resolvedDependencies,
       });
     }
     validateGraph([...mergedMap.values()]);

@@ -46,10 +46,6 @@ export class ApproveObjective {
       throw new UnknownReferenceError("objective", objectiveId);
     }
 
-    if (objective.status === "integrated") {
-      return;
-    }
-
     if (objective.status !== "awaiting_confirmation") {
       throw new ObjectiveNotAwaitingConfirmationError(
         objectiveId,

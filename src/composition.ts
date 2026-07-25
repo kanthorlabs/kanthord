@@ -104,6 +104,7 @@ import { PublishRepository } from "./app/repository/publish-repository.ts";
 import { isRepository } from "./domain/resource.ts";
 import { ApproveObjective } from "./app/objective/approve-objective.ts";
 import { RetryObjective } from "./app/objective/retry-objective.ts";
+import { RejectObjective } from "./app/objective/reject-objective.ts";
 import { GitObjectiveBroker } from "./objective-broker/git.ts";
 
 /**
@@ -289,7 +290,22 @@ export function buildDeps(
     landingRepository,
   );
   const rejectTask = new RejectTask(
-    taskRepository,
+    {
+      get: (id) => taskRepository.get(id),
+      save: (task) => taskRepository.save(task),
+      getTaskResult: (id) => taskRepository.getTaskResult(id),
+      saveTaskResult: (id, row) => taskRepository.saveTaskResult(id, row),
+      listByInitiative: (initiativeId) =>
+        taskRepository.listByInitiative(initiativeId),
+      getInitiativeId: (id) => taskRepository.getInitiativeId(id),
+      getObjective: (id) => initiativeRepository.getObjective(id),
+      saveObjective: (objective) =>
+        initiativeRepository.saveObjective(objective),
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+      getInitiative: (initiativeId) => initiativeRepository.get(initiativeId),
+      saveInitiative: (initiative) => initiativeRepository.save(initiative),
+    },
     jobQueue,
     events,
     unitOfWork,
@@ -409,6 +425,11 @@ export function buildDeps(
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
       logger: effectiveLogger,
       initiatives: initiativeRepository,
+      store: {
+        getInitiativeId: (taskId: string) =>
+          taskRepository.getInitiativeId(taskId),
+        getTaskResult: (taskId: string) => taskRepository.getTaskResult(taskId),
+      },
     });
   }
 
@@ -632,10 +653,30 @@ export function buildDeps(
       saveObjective: (objective) =>
         initiativeRepository.saveObjective(objective),
       resolveHomeDir: resolveInitiativeHomeDir,
+      listTasksByObjective: (objectiveId) =>
+        taskRepository.listTasksByObjective(objectiveId),
+      saveTask: (task) => taskRepository.save(task),
     },
     new GitObjectiveBroker(),
     workspaces,
     { verify: async () => ({ passed: true }) },
+    events,
+    unitOfWork,
+  );
+
+  const rejectObjective = new RejectObjective(
+    {
+      getObjective: (id) => initiativeRepository.getObjective(id),
+      saveObjective: (objective) =>
+        initiativeRepository.saveObjective(objective),
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+      getInitiative: (initiativeId) => initiativeRepository.get(initiativeId),
+      saveInitiative: (initiative) => initiativeRepository.save(initiative),
+      listTasksByObjective: (objectiveId) =>
+        taskRepository.listTasksByObjective(objectiveId),
+      saveTask: (task) => taskRepository.save(task),
+    },
     events,
     unitOfWork,
   );
@@ -700,6 +741,7 @@ export function buildDeps(
     approveTask,
     approveObjective,
     retryObjective,
+    rejectObjective,
     rejectTask,
     buildDaemon,
     logger,

@@ -5,6 +5,7 @@ import {
   runRenameObjective,
   runApproveObjective,
   runRetryObjective,
+  runRejectObjective,
 } from "./objective.ts";
 import type {
   InitiativeRepository,
@@ -15,6 +16,7 @@ import { CreateObjective } from "../../app/objective/create-objective.ts";
 import { RenameObjective } from "../../app/objective/rename-objective.ts";
 import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
 import type { RetryObjective } from "../../app/objective/retry-objective.ts";
+import type { RejectObjective } from "../../app/objective/reject-objective.ts";
 import { UnknownReferenceError } from "../../app/errors.ts";
 import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
 
@@ -239,15 +241,15 @@ describe("runApproveObjective handler", () => {
 });
 
 class FakeRetryObjective {
-  readonly calls: string[] = [];
+  readonly calls: Array<{ objectiveId: string; note?: string }> = [];
   #error: unknown;
 
   constructor(error?: unknown) {
     this.#error = error;
   }
 
-  async execute(input: { objectiveId: string }): Promise<void> {
-    this.calls.push(input.objectiveId);
+  async execute(input: { objectiveId: string; note?: string }): Promise<void> {
+    this.calls.push(input);
     if (this.#error !== undefined) {
       throw this.#error;
     }
@@ -261,7 +263,7 @@ describe("runRetryObjective handler", () => {
       { id: "obj-1" },
       fake as unknown as RetryObjective,
     );
-    assert.deepEqual(fake.calls, ["obj-1"]);
+    assert.deepEqual(fake.calls, [{ objectiveId: "obj-1" }]);
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["obj-1"]);
   });
@@ -291,5 +293,134 @@ describe("runRetryObjective handler", () => {
       result.stderr[0]!,
       /non-tip|not rewritable|already integrated/i,
     );
+  });
+
+  test("runRetryObjective --id <id> --note <text>: passes {objectiveId, note} through (Story 06 a)", async () => {
+    const fake = new FakeRetryObjective();
+    const result = await runRetryObjective(
+      { id: "obj-1", note: "guidance" },
+      fake as unknown as RetryObjective,
+    );
+    assert.deepEqual(fake.calls, [{ objectiveId: "obj-1", note: "guidance" }]);
+    assert.equal(result.exitCode, 0);
+  });
+
+  test("runRetryObjective --id <id> without --note: passes no note key (Story 06 a)", async () => {
+    const fake = new FakeRetryObjective();
+    await runRetryObjective({ id: "obj-1" }, fake as unknown as RetryObjective);
+    assert.deepEqual(fake.calls, [{ objectiveId: "obj-1" }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runRejectObjective handler — Story 05 (10): mirrors runRejectTask's flag
+// validation (`--id`, `--resolution retry|discard`).
+//
+// B3.4 (review blocker fix): `RejectObjective` is discard-only now (no
+// `resolution` field on its own input); `runRejectObjective` itself routes
+// the validated `--resolution` to one of two independent use cases —
+// `retryObjective` (3rd param) for `retry`, `rejectObjective` (2nd param) for
+// `discard`. These tests assert each branch calls exactly the one use case
+// it should and never the other.
+// ---------------------------------------------------------------------------
+
+class FakeRejectObjective {
+  readonly calls: Array<{ objectiveId: string; reason?: string }> = [];
+  #error: unknown;
+
+  constructor(error?: unknown) {
+    this.#error = error;
+  }
+
+  async execute(input: {
+    objectiveId: string;
+    reason?: string;
+  }): Promise<void> {
+    this.calls.push(input);
+    if (this.#error !== undefined) {
+      throw this.#error;
+    }
+  }
+}
+
+describe("runRejectObjective handler", () => {
+  test("runRejectObjective --id <id> --resolution discard: calls RejectObjective (discard use case), never RetryObjective", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1", resolution: "discard", reason: "unachievable" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.stdout, ["obj-1"]);
+    assert.deepEqual(fakeDiscard.calls, [
+      { objectiveId: "obj-1", reason: "unachievable" },
+    ]);
+    assert.deepEqual(
+      fakeRetry.calls,
+      [],
+      "RetryObjective must not be called for --resolution discard",
+    );
+  });
+
+  test("runRejectObjective --id <id> --resolution retry: calls RetryObjective (retry use case), never RejectObjective", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1", resolution: "retry" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.stdout, ["obj-1"]);
+    assert.deepEqual(fakeRetry.calls, [{ objectiveId: "obj-1" }]);
+    assert.deepEqual(
+      fakeDiscard.calls,
+      [],
+      "RejectObjective must not be called for --resolution retry",
+    );
+  });
+
+  test("runRejectObjective missing --id: returns exitCode 1, no use-case call", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { resolution: "discard" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fakeDiscard.calls, []);
+    assert.deepEqual(fakeRetry.calls, []);
+  });
+
+  test("runRejectObjective missing --resolution: returns exitCode 1, no use-case call", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fakeDiscard.calls, []);
+    assert.deepEqual(fakeRetry.calls, []);
+  });
+
+  test("runRejectObjective invalid --resolution value: returns exitCode 1, no use-case call", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1", resolution: "badval" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fakeDiscard.calls, []);
+    assert.deepEqual(fakeRetry.calls, []);
   });
 });

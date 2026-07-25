@@ -367,6 +367,46 @@ test("RunNextTask execute scripted failure records failed outcome with reason pa
   );
 });
 
+test("RunNextTask execute verification failure persists a task_results row with the reason and a null summary (Story 02)", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_PARENT.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore(
+    [{ ...TASK_PARENT }, { ...TASK_CHILD }],
+    INI_ID,
+  );
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const verificationFailingRunner: AgentRunner = {
+    calls: [] as Array<{ taskId: string; context: TaskContextBinding[] }>,
+    async run(): Promise<TaskResult> {
+      return {
+        outcome: "failed",
+        reason: "VerificationFailedError: npm test (exit 1)",
+      };
+    },
+  } as unknown as AgentRunner;
+  const resolver: AgentRunnerResolver = {
+    for: () => verificationFailingRunner,
+  };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "failed", taskId: TASK_PARENT.id });
+
+  assert.equal(
+    store.taskResults.length,
+    1,
+    "a task_results row must be persisted on the failure path",
+  );
+  const row = store.taskResults[0]!;
+  assert.ok(
+    row.reason?.startsWith("VerificationFailedError"),
+    `row.reason must start with 'VerificationFailedError'; got: ${row.reason}`,
+  );
+  assert.equal(row.summary, null, "row.summary must be null on failure");
+});
+
 test("RunNextTask execute skips stale job when claimed task has unsatisfied dependencies", async () => {
   // T_CHILD depends on T_PARENT which is still pending → child is blocked
   const claimed: ClaimedJob = { id: JOB_ID, taskId: T_CHILD_ID };

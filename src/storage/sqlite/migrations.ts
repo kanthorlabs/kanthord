@@ -427,4 +427,97 @@ DROP TABLE events;
 ALTER TABLE events_new7 RENAME TO events;
 `),
   },
+  {
+    version: 18,
+    name: "007.16-s4-event-repository-subject",
+    // `events` is not an FK parent (nothing references it), so no need to
+    // disable FK enforcement for this rebuild.
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new8 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id),
+  repositoryId TEXT
+);
+INSERT INTO events_new8 (id, type, taskId, payload, objectiveId, initiativeId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new8 RENAME TO events;
+`),
+  },
+  {
+    version: 19,
+    name: "007.16-s5-discarded-status",
+    // `initiatives` is an FK parent (objectives.initiativeId REFERENCES
+    // initiatives(id)); the DROP+RENAME rebuild trips FK enforcement even
+    // though the final state is consistent — disable it around this migration
+    // (same reasoning as the version-17 migration).
+    disableForeignKeys: true,
+    up: (db) =>
+      db.exec(`
+CREATE TABLE objectives_new (
+  id           TEXT PRIMARY KEY,
+  initiativeId TEXT NOT NULL REFERENCES initiatives(id),
+  name         TEXT NOT NULL,
+  sha256       TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'building'
+               CHECK (status IN ('building','awaiting_confirmation','conflict','integrated','discarded')),
+  commitOid    TEXT,
+  parentOid    TEXT
+);
+INSERT INTO objectives_new (id, initiativeId, name, sha256, status, commitOid, parentOid)
+  SELECT id, initiativeId, name, sha256, status, commitOid, parentOid FROM objectives;
+DROP TABLE objectives;
+ALTER TABLE objectives_new RENAME TO objectives;
+CREATE TABLE initiatives_new2 (
+  id        TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id),
+  name      TEXT NOT NULL,
+  paused    INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+  sha256    TEXT NOT NULL DEFAULT '',
+  status    TEXT NOT NULL DEFAULT 'building' CHECK (status IN ('building','landed','discarded')),
+  workspace TEXT
+);
+INSERT INTO initiatives_new2 (id, projectId, name, paused, sha256, status, workspace)
+  SELECT id, projectId, name, paused, sha256, status, workspace FROM initiatives;
+DROP TABLE initiatives;
+ALTER TABLE initiatives_new2 RENAME TO initiatives;
+CREATE TABLE events_new9 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published',
+                 'objective.discarded','initiative.discarded'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id),
+  repositoryId TEXT
+);
+INSERT INTO events_new9 (id, type, taskId, payload, objectiveId, initiativeId, repositoryId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new9 RENAME TO events;
+`),
+  },
 ];

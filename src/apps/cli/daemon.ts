@@ -74,9 +74,18 @@ export async function runDaemon(
     const objectivesAwaitingConfirmation =
       (result as { objectivesAwaitingConfirmation?: number })
         .objectivesAwaitingConfirmation ?? 0;
-    const initiativesLanded =
-      (result as { initiativesLanded?: number }).initiativesLanded ?? 0;
+    const failedTasks =
+      (result as { failedTasks?: Array<{ id: string; reason: string }> })
+        .failedTasks ?? [];
+    const landedInitiativeIds =
+      (result as { landedInitiativeIds?: string[] }).landedInitiativeIds ?? [];
     const stderr: string[] = [];
+    for (const { id, reason } of failedTasks) {
+      stderr.push(`task failed: ${id} — ${reason}`);
+    }
+    if (failedTasks.length > 0) {
+      stderr.push(`${failedTasks.length} task(s) failed`);
+    }
     if (result.escalatedCount > 0) {
       stderr.push(`${result.escalatedCount} task(s) awaiting confirmation`);
     }
@@ -85,8 +94,8 @@ export async function runDaemon(
         `${objectivesAwaitingConfirmation} objective(s) awaiting confirmation`,
       );
     }
-    if (initiativesLanded > 0) {
-      stderr.push(`${initiativesLanded} initiative(s) landed`);
+    if (landedInitiativeIds.length > 0) {
+      stderr.push(`${landedInitiativeIds.length} initiative(s) landed`);
     }
     return { exitCode: result.exitCode, stdout: [], stderr };
   } finally {

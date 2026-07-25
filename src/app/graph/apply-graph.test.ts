@@ -809,6 +809,77 @@ describe("Story 07 T2 — merged-graph validation", () => {
       "dep absent from both package and DB must throw UnknownDependencyError",
     );
   });
+
+  /**
+   * Story 03 E (007.16) — a new (id-less) node may declare a dependency on an
+   * EXISTING node by its package `ref`, not only by ULID. TASK1 already
+   * exists in the DB (id TASK1_ID); its package node is re-aliased to a
+   * human ref ("create-task") distinct from its ULID. A brand-new task node
+   * ("health-task") depends on ["create-task"] — the ref, not the ULID.
+   * Fails today: dependencies are resolved as raw ids before validateGraph,
+   * so "create-task" resolves to neither a package id nor a DB id and
+   * validateGraph throws UnknownDependencyError.
+   */
+  test("new node depends on an existing node by package ref (not ULID) — applies without UnknownDependencyError (Story 03 E)", async () => {
+    const deps = makeDeps();
+    const pkg = makeBasePackage();
+    pkg.tasks[0]!.ref = "create-task"; // TASK1 aliased by ref; id stays TASK1_ID
+
+    pkg.tasks.push({
+      ref: "health-task", // brand-new, id-less node
+      objectiveRef: OBJ1_ID,
+      title: "Health check",
+      instructions: "check health",
+      ac: ["healthy"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: ["create-task"], // depends on TASK1 by REF, not ULID
+      sourcePath: "backend/health-task.md",
+    });
+
+    const uc = new ApplyGraph(deps);
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+    assert.ok(result !== undefined, "execute must resolve without throwing");
+    const healthClass = result.classifications.find(
+      (c) => c.ref === "health-task",
+    );
+    assert.ok(healthClass, "the new node must appear in classifications");
+    assert.equal(healthClass.class, "created");
+  });
+
+  /**
+   * Story 03 E — a dependency that resolves to neither a package ref nor an
+   * existing DB id must surface as a typed error (UnknownDependencyError),
+   * never a raw stack trace escaping past validateGraph.
+   */
+  test("new node with an unresolvable dependency ref throws a typed UnknownDependencyError (Story 03 E)", async () => {
+    const deps = makeDeps();
+    const pkg = makeBasePackage();
+    pkg.tasks.push({
+      ref: "health-task",
+      objectiveRef: OBJ1_ID,
+      title: "Health check",
+      instructions: "check health",
+      ac: ["healthy"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: ["totally-unresolvable-ref"],
+      sourcePath: "backend/health-task.md",
+    });
+
+    const uc = new ApplyGraph(deps);
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UnknownDependencyError,
+          `expected UnknownDependencyError, got ${String(err)}`,
+        );
+        return true;
+      },
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

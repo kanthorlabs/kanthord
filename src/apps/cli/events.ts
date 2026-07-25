@@ -5,6 +5,7 @@ type CliEvent = {
   taskId?: string;
   objectiveId?: string;
   initiativeId?: string;
+  repositoryId?: string;
   payload?: Record<string, string>;
 };
 
@@ -106,7 +107,11 @@ export async function runEvents(
           }
           lastProgressMs.set(event.taskId, Date.now());
         }
-        const scopeId = event.taskId ?? event.objectiveId ?? event.initiativeId;
+        const scopeId =
+          event.taskId ??
+          event.objectiveId ??
+          event.initiativeId ??
+          event.repositoryId;
         let line = `${event.id} ${event.type} ${scopeId}`;
         if (event.payload !== undefined) {
           line += ` ${JSON.stringify(event.payload)}`;

@@ -94,6 +94,32 @@ describe("src/apps/cli/commands/publish/repository.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
+  test("already_published outcome prints the remote OID on stdout and 'already published @<oid>' on stderr, exit 0 (S2 regression)", async () => {
+    const mock = makeMockPublishRepository(async () => ({
+      kind: "already_published",
+      repositoryId: "repo-1",
+      remoteOID: "deadbeef",
+    }));
+    const cap = capture();
+    const deps = { publishRepository: mock } as unknown as CliDeps;
+
+    await buildPublishRepositoryCommand(deps, cap.io).parseAsync(
+      ["--repository", "repo-1", "--branch", "main"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(
+      cap.out,
+      ["deadbeef\n"],
+      `stdout must be exactly the remote OID (matching the 'published' branch's convention); got ${JSON.stringify(cap.out)}`,
+    );
+    assert.ok(
+      cap.err.some((l) => l === "already published @deadbeef\n"),
+      `stderr must contain the exact 'already published @deadbeef' line; got ${JSON.stringify(cap.err)}`,
+    );
+    assert.equal(cap.code(), 0);
+  });
+
   test("divergence prints nothing on stdout, a friendly divergence note on stderr, and exits non-zero", async () => {
     const mock = makeMockPublishRepository(async () => ({
       kind: "diverged",

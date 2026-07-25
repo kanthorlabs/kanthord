@@ -32,6 +32,7 @@ import type { AddDependency } from "../../app/task/add-dependency.ts";
 import type { ApproveTask } from "../../app/task/approve-task.ts";
 import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
 import type { RetryObjective } from "../../app/objective/retry-objective.ts";
+import type { RejectObjective } from "../../app/objective/reject-objective.ts";
 import type { GetTask } from "../../app/task/get-task.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
@@ -152,6 +153,7 @@ export interface CliDeps {
   approveTask: ApproveTask;
   approveObjective: ApproveObjective;
   retryObjective: RetryObjective;
+  rejectObjective: RejectObjective;
   rejectTask: RejectTask;
   buildDaemon: (
     failTaskIds: string[],

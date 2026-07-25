@@ -202,8 +202,16 @@ export async function runRejectTask(
   const reason =
     typeof args["reason"] === "string" ? args["reason"] : undefined;
   try {
-    await rejectTask.execute({ taskId: id, resolution, reason });
-    return { exitCode: 0, stdout: [id], stderr: [] };
+    const outcome = await rejectTask.execute({
+      taskId: id,
+      resolution,
+      reason,
+    });
+    const stdout = [
+      id,
+      ...(outcome?.skipped ?? []).map((skippedId) => `skipped: ${skippedId}`),
+    ];
+    return { exitCode: 0, stdout, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
   }
@@ -306,6 +314,7 @@ export async function runGetTask(
       if (r.branch !== null) lines.push(`branch: ${r.branch}`);
       if (r.commitSha !== null) lines.push(`commit_sha: ${r.commitSha}`);
       if (r.summary !== null) lines.push(`summary: ${r.summary}`);
+      if (r.reason !== null) lines.push(`reason: ${r.reason}`);
 
       if (r.evidence !== null && r.evidence !== undefined) {
         for (const entry of r.evidence) {

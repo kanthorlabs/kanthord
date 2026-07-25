@@ -280,6 +280,36 @@ describe("runGetTask", () => {
     );
   });
 
+  test("runGetTask failed task with a result reason prints a reason: line and no attempts: line (Story 02)", async () => {
+    const FAILED_TASK: Task = { ...COMPLETED_TASK, status: "failed" };
+    const RESULT_WITH_REASON: TaskResultRow = {
+      workspace: null,
+      branch: null,
+      baseCommit: null,
+      proposalCommit: null,
+      commitSha: null,
+      summary: null,
+      reason: "VerificationFailedError: x (exit 1)",
+      rejectionResolution: null,
+      rejectionReason: null,
+      evidence: null,
+    };
+    const getTask = makeGetTask(FAILED_TASK, RESULT_WITH_REASON);
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      r.stdout.some(
+        (l: string) => l === "reason: VerificationFailedError: x (exit 1)",
+      ),
+      `expected exact 'reason: VerificationFailedError: x (exit 1)' line; got: ${JSON.stringify(r.stdout)}`,
+    );
+    assert.ok(
+      !r.stdout.some((l: string) => l.startsWith("attempts:")),
+      "no attempts: line must be printed",
+    );
+  });
+
   test("runGetTask unknown id returns exit 1 with one error line starting error:", async () => {
     const getTask = makeGetTask(undefined, undefined);
     const r: HandlerResult = await runGetTask(

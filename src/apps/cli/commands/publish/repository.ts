@@ -36,6 +36,15 @@ export function buildPublishRepositoryCommand(
             },
             io,
           );
+        } else if (outcome.kind === "already_published") {
+          emitResult(
+            {
+              exitCode: 0,
+              stdout: [outcome.remoteOID],
+              stderr: [`already published @${outcome.remoteOID}`],
+            },
+            io,
+          );
         } else if (outcome.kind === "diverged") {
           emitResult(
             {

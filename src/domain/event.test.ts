@@ -4,7 +4,7 @@ import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the twenty-four literals in order", () => {
+test("EVENT_TYPES lists exactly the twenty-six literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -30,6 +30,8 @@ test("EVENT_TYPES lists exactly the twenty-four literals in order", () => {
     "initiative.landed", // 007.15 Story B — new (replaces initiative.awaiting_pr)
     "candidate.transplanted", // 007.14 Story D — new
     "repository.published", // 007.15 Story A — new
+    "objective.discarded", // 007.16 Story 05 — new
+    "initiative.discarded", // 007.16 Story 05 — new
   ]);
 });
 
@@ -120,6 +122,29 @@ test("newEvent constructs an initiative-scoped event with initiativeId and no ta
 });
 
 // ── candidate.transplanted (007.14 Story D) ─────────────────────────────────
+
+// ── discard events (007.16 Story 05) ────────────────────────────────────────
+
+test("newEvent constructs an objective.discarded event with objectiveId and a reason payload", () => {
+  const objectiveId = "some-objective-id";
+  const ev = newEvent("objective.discarded", {
+    objectiveId,
+    payload: { reason: "unachievable" },
+  });
+  assert.match(ev.id, ULID_RE);
+  assert.equal(ev.type, "objective.discarded");
+  assert.equal(ev.objectiveId, objectiveId);
+  assert.deepEqual(ev.payload, { reason: "unachievable" });
+});
+
+test("newEvent constructs an initiative.discarded event with initiativeId and no payload key", () => {
+  const initiativeId = "some-initiative-id";
+  const ev = newEvent("initiative.discarded", { initiativeId });
+  assert.match(ev.id, ULID_RE);
+  assert.equal(ev.type, "initiative.discarded");
+  assert.equal(ev.initiativeId, initiativeId);
+  assert.equal(Object.prototype.hasOwnProperty.call(ev, "payload"), false);
+});
 
 test("newEvent constructs a candidate.transplanted event carrying the old/new candidate + base SHAs", () => {
   const taskId = "some-task-id";

@@ -4,6 +4,7 @@ import {
   validateGraph,
   readiness,
   serialOrder,
+  dependentClosure,
   DuplicateTaskError,
   UnknownDependencyError,
   CycleError,
@@ -197,4 +198,36 @@ test("serialOrder: includes nodes regardless of status (full build order, not ju
   const nodes = [node("a", "completed", []), node("b", "pending", ["a"])];
   const order = serialOrder(nodes);
   assert.deepEqual(order, ["a", "b"]);
+});
+
+// ---------------------------------------------------------------------------
+// Story 05 (007.16) — dependentClosure (cascade discard)
+// ---------------------------------------------------------------------------
+
+test("dependentClosure: root with 4 direct dependents returns them in ascending id order, excluding root", () => {
+  const nodes = [
+    node("root", "failed", []),
+    node("d3", "pending", ["root"]),
+    node("d1", "pending", ["root"]),
+    node("d4", "pending", ["root"]),
+    node("d2", "pending", ["root"]),
+  ];
+  const closure = dependentClosure(nodes, "root");
+  assert.deepEqual(closure, ["d1", "d2", "d3", "d4"]);
+});
+
+test("dependentClosure: chain a→b→c returns [b, c] in visit order, excluding a", () => {
+  const nodes = [
+    node("a", "failed", []),
+    node("b", "pending", ["a"]),
+    node("c", "pending", ["b"]),
+  ];
+  const closure = dependentClosure(nodes, "a");
+  assert.deepEqual(closure, ["b", "c"]);
+});
+
+test("dependentClosure: a node with no dependents returns an empty array", () => {
+  const nodes = [node("a", "failed", []), node("b", "pending", [])];
+  const closure = dependentClosure(nodes, "a");
+  assert.deepEqual(closure, []);
 });

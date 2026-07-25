@@ -393,6 +393,18 @@ export class RunNextTask {
             payload: { reason, attempts: String(attempts) },
           }),
         );
+        this.#store.saveTaskResult(taskId, {
+          workspace: null,
+          branch: null,
+          baseCommit: null,
+          proposalCommit: null,
+          commitSha: null,
+          summary: null,
+          reason,
+          rejectionResolution: null,
+          rejectionReason: null,
+          evidence: null,
+        });
         resultOutcome = "failed";
       }
     });

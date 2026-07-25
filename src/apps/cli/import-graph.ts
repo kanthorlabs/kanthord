@@ -177,24 +177,41 @@ async function runApply(
     confirmDelete,
   });
 
+  // A node was not actually written this pass when this is a dry-run, or
+  // when nothing was applied at all (e.g. blocked by conflicts) — in either
+  // case "created"/"updated" would claim a write that never happened.
+  const nothingWritten = dryRun || !result.applied;
+
   // Format each classification line for stdout
   const stdout: string[] = [];
   for (const cls of result.classifications) {
     const label = cls.name ?? cls.id ?? cls.ref;
+    const className =
+      nothingWritten && (cls.class === "created" || cls.class === "updated")
+        ? `would ${cls.class === "created" ? "create" : "update"}`
+        : cls.class;
     if (cls.class === "missing" && cls.reason !== undefined) {
       stdout.push(`missing (${cls.reason}): ${label}`);
     } else if (cls.sourcePath !== undefined) {
-      stdout.push(`${cls.class}: ${label} (${join(args.dir, cls.sourcePath)})`);
+      stdout.push(`${className}: ${label} (${join(args.dir, cls.sourcePath)})`);
     } else {
-      stdout.push(`${cls.class}: ${label}`);
+      stdout.push(`${className}: ${label}`);
     }
   }
 
-  // Print summary
+  // Print summary — append drifted/locked counts when there are conflicts,
+  // so a blocked apply's counter line does not look like "0 created, ...".
   const s = result.summary;
-  stdout.push(
-    `${s.created} created, ${s.updated} updated, ${s.unchanged} unchanged, ${s.missing} missing`,
-  );
+  const driftedCount = result.conflicts.filter(
+    (c) => c.class === "drifted",
+  ).length;
+  const lockedCount = result.conflicts.filter(
+    (c) => c.class === "locked",
+  ).length;
+  let summaryLine = `${s.created} created, ${s.updated} updated, ${s.unchanged} unchanged, ${s.missing} missing`;
+  if (driftedCount > 0) summaryLine += `, ${driftedCount} drifted`;
+  if (lockedCount > 0) summaryLine += `, ${lockedCount} locked`;
+  stdout.push(summaryLine);
 
   // When --delete-missing is set but --confirm-delete was NOT given, print a
   // delete plan for each eligible (reason: undefined) missing node and exit 0.
@@ -269,10 +286,19 @@ async function runApply(
   }
 
   // Dry-run always exits 0; a live apply that committed also exits 0.
-  // A live apply that was blocked by conflicts exits 1.
+  // A live apply that was blocked by conflicts exits 1, and explains the
+  // refusal on stderr rather than letting the "created:" lines above imply
+  // a write that never happened.
   const exitCode = dryRun || result.applied ? 0 : 1;
+  const stderr: string[] = [];
+  if (!dryRun && result.conflicts.length > 0) {
+    const clauses: string[] = [];
+    if (driftedCount > 0) clauses.push(`${driftedCount} drifted node(s)`);
+    if (lockedCount > 0) clauses.push(`${lockedCount} locked node(s)`);
+    stderr.push(`refused: ${clauses.join(" and ")}`);
+  }
 
-  return { exitCode, stdout, stderr: [] };
+  return { exitCode, stdout, stderr };
 }
 
 // ---------------------------------------------------------------------------

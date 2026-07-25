@@ -147,6 +147,36 @@ export function serialOrder(nodes: GraphNode[]): string[] {
   return result;
 }
 
+export function dependentClosure(nodes: GraphNode[], rootId: string): string[] {
+  const dependents = new Map<string, string[]>();
+  for (const node of nodes) {
+    for (const dep of node.dependencies) {
+      const list = dependents.get(dep) ?? [];
+      list.push(node.id);
+      dependents.set(dep, list);
+    }
+  }
+  for (const list of dependents.values()) {
+    list.sort();
+  }
+
+  const visited = new Set<string>([rootId]);
+  const result: string[] = [];
+  const queue: string[] = [rootId];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    for (const dependent of dependents.get(current) ?? []) {
+      if (visited.has(dependent)) continue;
+      visited.add(dependent);
+      result.push(dependent);
+      queue.push(dependent);
+    }
+  }
+
+  return result;
+}
+
 export interface ReadinessEntry {
   id: string;
   state: "ready" | "blocked";

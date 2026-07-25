@@ -778,7 +778,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
   }
 });
 
-test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon still exits 0", async () => {
+test("Phase 3b: discard rejection — task discarded, pending dependent cascade-discarded, daemon still exits 0 (S8)", async () => {
   const tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-agent-smoke-"));
   const sandboxDir = join(tmpRoot, "sandbox");
   const dbPath = join(tmpRoot, "kanthord.db");
@@ -873,7 +873,11 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
     const discardData = JSON.parse(gd.stdout[0]!) as { status: string };
     assert.equal(discardData.status, "discarded", "TASK_DISCARD is discarded");
 
-    // events: task.discarded + task.blocked for TASK_DEP
+    // events: task.discarded for TASK_DISCARD, and a cascaded task.discarded
+    // for TASK_DEP — TASK_DEP is `pending` (never dispatched), so Story 5's
+    // cascade discards it directly rather than merely blocking it; per S8,
+    // task.blocked is reserved for direct dependents the cascade does NOT
+    // discard, so no task.blocked event is emitted for TASK_DEP here.
     const ev = await dispatch(
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
@@ -883,22 +887,30 @@ test("Phase 3b: discard rejection — task discarded, dependent blocked, daemon 
       (e) => e.taskId === TASK_DISCARD && e.type === "task.discarded",
     );
     assert.ok(discardedEvent !== undefined, "task.discarded event emitted");
+    const cascadedDiscardEvent = allEvents.find(
+      (e) => e.taskId === TASK_DEP && e.type === "task.discarded",
+    );
+    assert.ok(
+      cascadedDiscardEvent !== undefined,
+      "task.discarded (cascade) event emitted for the pending dependent",
+    );
+    assert.equal(
+      cascadedDiscardEvent?.payload?.["reason"],
+      "cascade",
+      "cascaded task.discarded payload.reason must be 'cascade'",
+    );
     const blockedEvent = allEvents.find(
       (e) => e.taskId === TASK_DEP && e.type === "task.blocked",
     );
-    assert.ok(
-      blockedEvent !== undefined,
-      "task.blocked event emitted for dependent",
-    );
     assert.equal(
-      blockedEvent?.payload?.["dependencyId"],
-      TASK_DISCARD,
-      "task.blocked names the discarded dependency",
+      blockedEvent,
+      undefined,
+      "no task.blocked event for a dependent the cascade already discarded (S8)",
     );
 
     // daemon run — exits 0, dependent never runs
     const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
-    assert.equal(d2.exitCode, 0, "daemon exits 0 when dependent is blocked");
+    assert.equal(d2.exitCode, 0, "daemon exits 0 when dependent is discarded");
 
     // TASK_DEP dependencyStatus shows the discarded dependency
     const gdep = await dispatch(

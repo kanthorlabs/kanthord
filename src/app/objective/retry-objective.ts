@@ -1,9 +1,16 @@
 import type { Objective, Initiative } from "../../domain/initiative.ts";
-import { transitionObjective } from "../../domain/initiative.ts";
+import {
+  transitionObjective,
+  canRetryObjective,
+} from "../../domain/initiative.ts";
+import type { Task } from "../../domain/task.ts";
 import { newEvent } from "../../domain/event.ts";
 import type { Event } from "../../domain/event.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
-import { UnknownReferenceError } from "../errors.ts";
+import {
+  UnknownReferenceError,
+  ObjectiveNotAwaitingConfirmationError,
+} from "../errors.ts";
 
 export class ObjectiveNotRetryableError extends Error {
   readonly objectiveId: string;
@@ -24,6 +31,8 @@ interface ObjectiveStore {
   getInitiative(initiativeId: string): Initiative | undefined;
   saveObjective(objective: Objective): void;
   resolveHomeDir(initiativeId: string): string;
+  listTasksByObjective(objectiveId: string): Task[];
+  saveTask(task: Task): void;
 }
 
 interface ObjectiveTipReader {
@@ -70,8 +79,8 @@ export class RetryObjective {
     this.#uow = uow;
   }
 
-  async execute(input: { objectiveId: string }): Promise<void> {
-    const { objectiveId } = input;
+  async execute(input: { objectiveId: string; note?: string }): Promise<void> {
+    const { objectiveId, note } = input;
 
     const objective = this.#store.getObjective(objectiveId);
     if (objective === undefined) {
@@ -90,6 +99,13 @@ export class RetryObjective {
       return;
     }
 
+    if (!canRetryObjective(objective.status ?? "building")) {
+      throw new ObjectiveNotAwaitingConfirmationError(
+        objectiveId,
+        objective.status,
+      );
+    }
+
     if (
       objective.status === "conflict" &&
       this.#broker !== undefined &&
@@ -105,6 +121,7 @@ export class RetryObjective {
         this.#gate,
         this.#feed,
         this.#uow,
+        note,
       );
       return;
     }
@@ -120,6 +137,7 @@ export class RetryObjective {
     gate: ObjectiveGate,
     feed: EventAppender,
     uow: UnitOfWork,
+    note?: string,
   ): Promise<void> {
     const { initiativeId, id: objectiveId } = objective;
     const homeDir = this.#store.resolveHomeDir(initiativeId);
@@ -146,6 +164,14 @@ export class RetryObjective {
         feed.append(
           newEvent("objective.awaiting_confirmation", { objectiveId }),
         );
+        if (note !== undefined) {
+          for (const task of this.#store.listTasksByObjective(objectiveId)) {
+            if (task.status === "completed" || task.status === "discarded") {
+              continue;
+            }
+            this.#store.saveTask({ ...task, note });
+          }
+        }
       });
       return;
     }

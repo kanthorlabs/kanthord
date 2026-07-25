@@ -1201,4 +1201,35 @@ describe("runRejectTask", () => {
     );
     assert.equal(result.stdout.length, 0, "no stdout on error");
   });
+
+  // -------------------------------------------------------------------------
+  // Review blocker B2 (007.16) — RejectTask.execute resolves with
+  // { skipped: string[] } (the cascade's dependents left untouched because
+  // they were not `pending`); runRejectTask must surface those ids in the
+  // command output. contract.md §3: skipped dependents are "reported in the
+  // command output as skipped".
+  // -------------------------------------------------------------------------
+
+  test("runRejectTask --resolution discard: reports cascade-skipped dependents in the command output (B2)", async () => {
+    const skippedIds = [
+      "01JZZZZZZZZZZZZZZZZZZZSKIP001",
+      "01JZZZZZZZZZZZZZZZZZZZSKIP002",
+    ];
+    const uc = {
+      execute: async (): Promise<{ skipped: string[] } | undefined> => ({
+        skipped: skippedIds,
+      }),
+    };
+    const result = await runRejectTask(
+      { id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT", resolution: "discard" },
+      uc as unknown as Parameters<typeof runRejectTask>[1],
+    );
+    assert.equal(result.exitCode, 0, "exit 0 on success");
+    for (const skippedId of skippedIds) {
+      assert.ok(
+        result.stdout.some((line) => line.includes(skippedId)),
+        `expected skipped dependent ${skippedId} to be reported in the output; got: ${JSON.stringify(result.stdout)}`,
+      );
+    }
+  });
 });

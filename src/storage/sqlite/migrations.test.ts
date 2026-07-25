@@ -62,9 +62,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 17 and creates exactly seventeen core tables", () => {
+test("migrates to version 19 and creates exactly seventeen core tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 17);
+    assert.equal(userVersion(db), 19);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
@@ -150,6 +150,7 @@ test("schema columns match locked DDL for all sixteen tables", () => {
       "payload",
       "objectiveId",
       "initiativeId",
+      "repositoryId",
     ]);
     assert.deepEqual(columnNames(db, "task_context"), [
       "task_id",
@@ -326,7 +327,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 17);
+    assert.equal(second.version, 19);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -739,8 +740,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      17,
-      "schema version must be 17 after all migrations",
+      19,
+      "schema version must be 19 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -872,7 +873,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 17);
+    assert.equal(userVersion(db), 19);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -880,6 +881,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
       "payload",
       "objectiveId",
       "initiativeId",
+      "repositoryId",
     ]);
 
     const taskRow = db
@@ -956,6 +958,88 @@ test("migration 17 events.type CHECK accepts the objective/initiative event type
   });
 });
 
+// ── (t) migration 18 — repositoryId subject column on events (007.16 S4) ────
+
+test("migration 18 adds a repositoryId column to events and preserves a pre-existing event row", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m18-events-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 17 only (pre-repositoryId state) and seed one
+    // existing event row using only the pre-migration-18 columns.
+    migrate(db, MIGRATIONS.slice(0, 17));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m18', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m18', 'proj-m18', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m18', 'init-m18', 'O');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-m18', 'obj-m18', 'T', 'pending');
+      INSERT INTO events(id, type, taskId) VALUES ('ev-m18', 'task.created', 'task-m18');
+    `);
+
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 19);
+    assert.ok(
+      columnNames(db, "events").includes("repositoryId"),
+      "events table must gain a repositoryId column after migration 18",
+    );
+
+    const row = db
+      .prepare("SELECT taskId, repositoryId FROM events WHERE id = ?")
+      .get("ev-m18") as { taskId: string; repositoryId: string | null };
+    assert.equal(
+      row.taskId,
+      "task-m18",
+      "pre-existing event row survives the migration-18 rebuild",
+    );
+    assert.equal(row.repositoryId, null);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (u) migration 19 — widen objectives/initiatives status CHECK to allow
+//        'discarded' (007.16 S5) ───────────────────────────────────────────
+
+test("migration 19: a fresh migrated DB accepts UPDATE objectives SET status='discarded' without a CHECK violation", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m19-obj', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m19-obj', 'proj-m19-obj', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m19', 'init-m19-obj', 'O');
+    `);
+    assert.doesNotThrow(() => {
+      db.prepare("UPDATE objectives SET status = 'discarded' WHERE id = ?").run(
+        "obj-m19",
+      );
+    }, "objectives.status = 'discarded' must be accepted after migration 19");
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objectives(id, initiativeId, name, status) VALUES (?, ?, ?, ?)",
+      ).run("obj-m19-bad", "init-m19-obj", "O", "abandoned");
+    }, "objectives.status CHECK should still reject an unknown value");
+  });
+});
+
+test("migration 19: a fresh migrated DB accepts UPDATE initiatives SET status='discarded' without a CHECK violation", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m19-init', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m19', 'proj-m19-init', 'I');
+    `);
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "UPDATE initiatives SET status = 'discarded' WHERE id = ?",
+      ).run("init-m19");
+    }, "initiatives.status = 'discarded' must be accepted after migration 19");
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
+      ).run("init-m19-bad", "proj-m19-init", "I", "abandoned");
+    }, "initiatives.status CHECK should still reject an unknown value");
+  });
+});
+
 // ── (s) migration 13 — initiative workspace (clone dir) column ──────────────
 
 test("migration 13 adds a nullable workspace column to initiatives, defaulting existing rows to null", () => {
@@ -972,7 +1056,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 17);
+    assert.equal(userVersion(db), 19);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1009,7 +1093,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 17);
+    assert.equal(report.version, 19);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",

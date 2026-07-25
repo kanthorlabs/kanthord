@@ -164,14 +164,22 @@ describe("src/app/repository/publish-repository.ts", () => {
     ]);
     assert.equal(feed.events.length, 1);
     assert.equal(feed.events[0]!.type, "repository.published");
+    assert.equal(
+      feed.events[0]!.repositoryId,
+      "repo-1",
+      "repositoryId must be the event subject column (Story 04)",
+    );
     assert.deepEqual(feed.events[0]!.payload, {
-      repositoryId: "repo-1",
       branch: "main",
       remoteOID: "new456",
     });
+    assert.ok(
+      !("repositoryId" in (feed.events[0]!.payload ?? {})),
+      "payload must not also carry repositoryId (Story 04)",
+    );
   });
 
-  test("idempotent: re-publishing the same remoteOID that is already published appends no event", async () => {
+  test("idempotent: re-publishing the same remoteOID that is already published returns kind:already_published and appends no event (Story 03 C)", async () => {
     const store = makeStore({ "repo-1": REPO });
     const publicationRepo = makeFakePublicationRepo({
       key: "repo-1:main",
@@ -202,7 +210,7 @@ describe("src/app/repository/publish-repository.ts", () => {
     });
 
     assert.deepEqual(outcome, {
-      kind: "published",
+      kind: "already_published",
       repositoryId: "repo-1",
       remoteOID: "same123",
     });
@@ -211,6 +219,95 @@ describe("src/app/repository/publish-repository.ts", () => {
       0,
       "no-op re-publish of the same remoteOID must not append a second event",
     );
+  });
+
+  test("publishing twice with an unchanged remote OID: first call returns kind:published (one event), second call returns kind:already_published (still exactly one event total) (Story 03 C)", async () => {
+    const store = makeStore({ "repo-1": REPO });
+    const publicationRepo = makeFakePublicationRepo();
+    const publisher = makeMockPublisher(async () => ({
+      pushedOID: "stable789",
+      remoteOID: "stable789",
+    }));
+    const resolveHomeDir = (repoId: string) => `/home/${repoId}`;
+    const resolveTargetOID = async () => "stable789";
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
+
+    const uc = new PublishRepository(
+      store,
+      publisher,
+      publicationRepo,
+      resolveHomeDir,
+      resolveTargetOID,
+      feed,
+      uow,
+    );
+
+    const first = await uc.execute({ repositoryId: "repo-1", branch: "main" });
+    assert.deepEqual(first, {
+      kind: "published",
+      repositoryId: "repo-1",
+      remoteOID: "stable789",
+    });
+
+    const second = await uc.execute({
+      repositoryId: "repo-1",
+      branch: "main",
+    });
+    assert.deepEqual(second, {
+      kind: "already_published",
+      repositoryId: "repo-1",
+      remoteOID: "stable789",
+    });
+
+    assert.equal(
+      feed.events.filter((e) => e.type === "repository.published").length,
+      1,
+      "the second, no-op publish must not append a second repository.published event",
+    );
+  });
+
+  test("an unknown ref (resolveTargetOID rejects) throws UnknownReferenceError('branch', ...) and never calls the publisher (Story 03 B)", async () => {
+    const store = makeStore({ "repo-1": REPO });
+    const publicationRepo = makeFakePublicationRepo();
+    const publisher = makeMockPublisher(async () => ({
+      pushedOID: "x",
+      remoteOID: "x",
+    }));
+    const resolveHomeDir = (repoId: string) => `/home/${repoId}`;
+    const resolveTargetOID = async (): Promise<string> => {
+      throw new Error(
+        "fatal: unknown revision or path not in the working tree.",
+      );
+    };
+    const feed = new FakeFeed();
+    const uow = new FakeUow();
+
+    const uc = new PublishRepository(
+      store,
+      publisher,
+      publicationRepo,
+      resolveHomeDir,
+      resolveTargetOID,
+      feed,
+      uow,
+    );
+
+    await assert.rejects(
+      () => uc.execute({ repositoryId: "repo-1", branch: "nope/missing" }),
+      (err: unknown) => {
+        assert.ok(err instanceof UnknownReferenceError);
+        assert.equal(err.kind, "branch");
+        assert.equal(err.id, "nope/missing");
+        return true;
+      },
+    );
+    assert.equal(
+      publisher.calls.length,
+      0,
+      "an unresolvable ref must never reach the publisher",
+    );
+    assert.equal(feed.events.length, 0);
   });
 
   test("PublishDivergedError: persists diverged state with the observed remote OID, non-zero outcome, no force retry", async () => {
