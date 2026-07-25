@@ -11,8 +11,9 @@ moves into an explicit CAS status predicate with a typed failure reason.
 
 1 → 2 → 3 → 4 → 5, strictly sequential.
 
-- **Story 1 is the epic's bullets 1 and 2 merged.** They cannot ship apart: after
-  bullet 1 alone `npm run verify` is green while no lifecycle guard exists at all,
+- **Story 1 merges what were originally two epic bullets** (the epic now carries
+  them as its single bullet 1). They cannot ship apart: after the hash change
+  alone `npm run verify` is green while no lifecycle guard exists at all,
   and an `--apply` against a running task overwrites its instructions. A "coupled
   pair" note is not a mechanism, so they are one story.
 - **2 must follow 1** (it freezes the new canonical form).

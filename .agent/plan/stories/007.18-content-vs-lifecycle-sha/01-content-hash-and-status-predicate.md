@@ -2,8 +2,9 @@
 
 Epic: `.agent/plan/epics/007.18-content-vs-lifecycle-sha.md`
 
-Covers the epic's Story bullets 1 **and** 2 as one unit. They are not separable:
-bullet 1 removes the implicit race guard and bullet 2 replaces it. Shipping them
+Delivers the epic's Story bullet 1, which merges what were originally two bullets.
+They are not separable: removing `status` from the hash deletes the implicit race
+guard, and the explicit predicate replaces it. Shipping them
 apart leaves a tree where `npm run verify` is green, `canonicalTask` no longer
 hashes `status`, and `compareAndApply` still guards on sha alone — so an `--apply`
 against a task the daemon is running overwrites its instructions mid-execution.

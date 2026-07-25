@@ -14,7 +14,8 @@ script. In 'Verification Gate' section, must write bash script to setup validati
 instead of using inline bash."_ The EPIC's Verification Gate must then shrink to
 invoking it — that edit is the human's, not this story's (see the report's B5).
 
-Three corrections to the epic's Story 6 text and Proof block, all forced by code:
+Three corrections now folded into the epic's Story bullet 5 and its Verification
+Gate, all forced by code:
 
 - **`agent: fake@1`, no bindings, no `.fake-agent.json`, no repository.**
   `generic@1` is in `EXECUTOR_BINDING_SPECS` (`binding-resolver.ts:17`) and
