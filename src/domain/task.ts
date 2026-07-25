@@ -42,6 +42,16 @@ function assertSingleLineNonEmpty(field: string, value: string): void {
   }
 }
 
+export class InvalidObjectiveIdError extends Error {
+  readonly objectiveId: string;
+
+  constructor(objectiveId: string) {
+    super(`Invalid objectiveId (not found): ${objectiveId}`);
+    this.name = "InvalidObjectiveIdError";
+    this.objectiveId = objectiveId;
+  }
+}
+
 export function newTask(input: {
   id?: string;
   objectiveId: string;

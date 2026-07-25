@@ -1,12 +1,17 @@
-# Story 2 — Migration 20: re-stamp both sha stores, preserving real drift
+# Story 2 — Migration 21: re-stamp both sha stores, preserving real drift
 
 Epic: `.agent/plan/epics/007.18-content-vs-lifecycle-sha.md`
 Depends on: Story 1 (the new canonical form must exist first).
 
-**The epic calls this "Migration 21". The real next version is 20.** The highest
-registered version is 19 (`migrations.ts:462`), and `validateSequence`
-(`migrate.ts:56-62`) throws unless versions are contiguous `1..n` by array index —
-a migration numbered 21 breaks every DB open.
+**CORRECTION (applied at implementation time — this story shipped as version 21,
+not 20).** The reasoning below was written when the highest registered version was 19. EPIC 007.17 then landed and registered version **20**, so the real next
+version for this story is **21**. `validateSequence` (`migrate.ts:56-62`) throws
+unless versions are contiguous `1..n` by array index, so a migration numbered 20
+would now collide and a 22 would break every DB open. The frozen canonical
+helpers therefore shipped as `canonicalTaskV20` (the OLD status-bearing form) and
+`canonicalTaskV21` (the new content-only form) — one number higher than every
+`V19`/`V20` name written below. Read every "20" in this file as "21", and every
+"19" that names a frozen form or a pre-migration schema version as "20".
 
 **Two frozen canonical forms are required, not one.** Re-stamping
 `graph_import_map.creation_sha` from live content for _every_ task row would erase
@@ -194,7 +199,7 @@ tables"` → `20`; `:67` `assert.equal(userVersion(db), 19)` → `20`. The
 
 ## Constraints
 
-- Version **20**. Do not write 21.
+- Version **21** (see the CORRECTION at the top: 007.17 took 20). Do not write 22.
 - Both stores move in one migration. A DB where `tasks.sha256` was re-stamped but
   `graph_import_map.creation_sha` was not is the exact bug this epic fixes.
 - Never re-stamp a `creation_sha` that does not equal `undriftedBaseline` — that

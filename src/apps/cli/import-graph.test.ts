@@ -25,6 +25,11 @@ import type {
 } from "../../app/graph/create-graph.ts";
 import type { ApplyGraphResult } from "../../app/graph/apply-graph.ts";
 import { newId } from "../../domain/entity.ts";
+import { GRAPH_FORMAT_VERSION } from "../../app/graph/format.ts";
+import {
+  StaleManifestError,
+  UnknownNodeError,
+} from "../../app/graph/import-errors.ts";
 
 // ─── stable test IDs (valid 26-char uppercase Crockford — all-digit, YAML-quoted by serializer) ───
 const INIT_ID = "00000000000000000000000001";
@@ -750,6 +755,78 @@ test("--apply with both drifted and locked conflicts: refusal stays byte-identic
   );
 });
 
+test("EPIC 007.18 Story 4 — a status CAS conflict prints the per-node lifecycle refusal, not the aggregate wording", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "locked",
+    casReason: { kind: "status", currentStatus: "running" },
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(result.exitCode, 0);
+  assert.equal(
+    result.stderr[0],
+    `refused: task ${DR_TASK1_ID} is no longer pending (status: running)`,
+    `expected a per-node lifecycle refusal; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("EPIC 007.18 Story 4 — a sha CAS conflict prints the per-node content-change refusal, not the aggregate wording", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+    casReason: { kind: "sha" },
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(result.exitCode, 0);
+  assert.equal(
+    result.stderr[0],
+    `refused: task ${DR_TASK1_ID} changed outside this package`,
+    `expected a per-node content-change refusal; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
 // ─── Story 08 T2 — --delete-missing eligibility + plan + confirmation gate ────
 
 /**
@@ -1173,7 +1250,7 @@ async function makeBindingsAuthoredDir(): Promise<string> {
   return dir;
 }
 
-test("(f) --create with initiative that has bindings writes manifest with formatVersion 2", async () => {
+test("(f) --create with initiative that has bindings writes manifest with formatVersion 3", async () => {
   const dir = await makeBindingsAuthoredDir();
   const fake = new FakeCreateGraph();
   const T2_REPO_ID = "00000000000000000000000020";
@@ -1209,9 +1286,91 @@ test("(f) --create with initiative that has bindings writes manifest with format
   const manifest = JSON.parse(raw) as Record<string, unknown>;
   assert.equal(
     manifest["formatVersion"],
-    2,
-    `manifest.formatVersion must be 2 when package has bindings; got: ${manifest["formatVersion"]}`,
+    3,
+    `manifest.formatVersion must be 3 when package has bindings; got: ${manifest["formatVersion"]}`,
   );
+});
+
+test("EPIC 007.18 Story 3 — --create with an initiative WITHOUT bindings still writes manifest with the current formatVersion", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-t00718-nobindings-"));
+  await writeFile(
+    join(dir, "oauth.md"),
+    ["---", "kind: initiative", "ref: oauth", "name: oauth", "---", ""].join(
+      "\n",
+    ),
+  );
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: true, apply: false, project: PROJ_ID },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async () => [],
+      getResource: async () => undefined,
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `exit 0; stderr: ${result.stderr.join(" ")}`,
+  );
+
+  const raw = await readFile(join(dir, ".kanthord-export.json"), "utf8");
+  const manifest = JSON.parse(raw) as Record<string, unknown>;
+  assert.equal(
+    manifest["formatVersion"],
+    GRAPH_FORMAT_VERSION,
+    `a --create manifest must never be pre-stale; got: ${manifest["formatVersion"]}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.18 Story 3 — the CLI error boundary around applyGraph.execute
+// ---------------------------------------------------------------------------
+
+/** A fake ApplyGraph whose execute() rejects with a fixed error. */
+class FakeApplyGraphThatThrows {
+  readonly err: Error;
+
+  constructor(err: Error) {
+    this.err = err;
+  }
+
+  async execute(): Promise<ApplyGraphResult> {
+    throw this.err;
+  }
+}
+
+test("EPIC 007.18 Story 3 — a stale manifest returns exitCode 1 with the single stale-manifest stderr line, not an unhandled rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new StaleManifestError(2, GRAPH_FORMAT_VERSION, DR_INIT_ID);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.deepEqual(result.stderr, [`error: ${err.message}`]);
+});
+
+test("EPIC 007.18 Story 3 — an UnknownNodeError from ApplyGraph returns exitCode 1 with a single stderr line, not a rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new UnknownNodeError("backend/impl-api.md", "ghost-ref");
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.deepEqual(result.stderr, [`error: ${err.message}`]);
 });
 
 // ---------------------------------------------------------------------------

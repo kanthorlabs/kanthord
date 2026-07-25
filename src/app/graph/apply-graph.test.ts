@@ -23,11 +23,18 @@ import type {
   UnitOfWork,
   GraphImportMap,
   CasResult,
+  TaskCasResult,
 } from "../../storage/port.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
-import { newTask, type Task } from "../../domain/task.ts";
+import {
+  newTask,
+  InvalidObjectiveIdError,
+  type Task,
+} from "../../domain/task.ts";
 import { StoreGraph } from "./store-graph.ts";
 import { CycleError, UnknownDependencyError } from "../../domain/graph.ts";
+import { StaleManifestError } from "./import-errors.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 // Real SQLite adapters — used in Story 07 T3d integration test only.
 import { openDatabase } from "../../storage/sqlite/open.ts";
 import { migrate } from "../../storage/sqlite/migrate.ts";
@@ -38,6 +45,12 @@ import { SqliteTaskRepository } from "../../storage/sqlite/sqlite-task-repositor
 import { SqliteGraphImportMap } from "../../storage/sqlite/sqlite-graph-import-map.ts";
 import { SqliteUnitOfWork } from "../../storage/sqlite/sqlite-unit-of-work.ts";
 import { newId } from "../../domain/entity.ts";
+import {
+  sha256Hex,
+  canonicalTask,
+  canonicalObjective,
+  canonicalInitiative,
+} from "../../domain/sha.ts";
 
 // ---------------------------------------------------------------------------
 // Test-constant ULIDs (26-char uppercase Crockford)
@@ -53,20 +66,41 @@ const OBJ2_ID = "01JQVBZ3MHKP4FTGWR5XYENSD3"; // second objective (for reparent 
 const TASK3_ID = "01JQVBZ3MHKP4FTGWR5XYENSD7"; // DB-only task (never in package)
 const UNKNOWN_ID = "01JQVBZ3MHKP4FTGWR5XYENSD9"; // absent from both package and DB
 
-// Pre-computed sha256Hex(canonicalTask/Objective/Initiative) values.
-// Computed via the same canonicalizer used by SqliteTaskRepository so the
-// test wires exact real-world values, not arbitrary sentinels.
-const TASK1_BASE_SHA =
-  "f5243bca8b5c1723ca06d27e0faba375e327f101fffbd9a1a82eba8bc596f1c4";
-const TASK2_BASE_SHA =
-  "02936a45c644b0df6ef5898e9f62aa6eeb0dff9e8f6e3cc096504339325c3bcf";
-const INIT_BASE_SHA =
-  "941ad3bbcb3cce09e70653a64140afa6abb968a5e8eaa50720ef77d476d2b81f";
-const OBJ1_BASE_SHA =
-  "17f2caf8ad732ac8ad6942fe36ff32f41a2adaaff519536cd1135335a992825d";
-// sha256Hex(JSON.stringify({ name: "frontend", initiativeId: INIT_ID }))
-const OBJ2_BASE_SHA =
-  "001e8e27a4d916464fd6a502d882f3014b881c5c7ff308c1c9bdac803432962f";
+// Computed via the same canonicalizers used by the real repositories, from
+// the exact field values the fixtures below encode — never hand-computed
+// hex, so a hash-shape change (e.g. dropping status) cannot silently
+// desync the test's baseline from the fixture content.
+const TASK1_BASE_SHA = sha256Hex(
+  canonicalTask({
+    title: "Implement API",
+    instructions: "do it",
+    ac: ["returns 200"],
+    agent: "generic@1",
+    verification: undefined,
+    dependencies: [],
+    objectiveId: OBJ1_ID,
+  }),
+);
+const TASK2_BASE_SHA = sha256Hex(
+  canonicalTask({
+    title: "Deploy",
+    instructions: "deploy it",
+    ac: ["health check green"],
+    agent: "generic@1",
+    verification: undefined,
+    dependencies: [TASK1_ID],
+    objectiveId: OBJ1_ID,
+  }),
+);
+const INIT_BASE_SHA = sha256Hex(
+  canonicalInitiative({ name: "oauth", projectId: PROJ_ID }),
+);
+const OBJ1_BASE_SHA = sha256Hex(
+  canonicalObjective({ name: "backend", initiativeId: INIT_ID }),
+);
+const OBJ2_BASE_SHA = sha256Hex(
+  canonicalObjective({ name: "frontend", initiativeId: INIT_ID }),
+);
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -193,6 +227,7 @@ class FakeTaskRepository implements TaskRepository {
   compareAndApply(
     _id: string,
     _expectedSha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -201,8 +236,13 @@ class FakeTaskRepository implements TaskRepository {
       verification: string[] | null;
       dependencies: string[];
     },
-  ): CasResult {
-    return { status: "conflict", currentSha: "" };
+  ): TaskCasResult {
+    return {
+      status: "conflict",
+      currentSha: "",
+      currentStatus: "pending",
+      reason: "sha",
+    };
   }
   conditionalReparent(
     _id: string,
@@ -211,8 +251,17 @@ class FakeTaskRepository implements TaskRepository {
   ): CasResult {
     return { status: "conflict", currentSha: "" };
   }
-  conditionalDeleteTask(_id: string, _expectedSha: string): CasResult {
-    return { status: "conflict", currentSha: "" };
+  conditionalDeleteTask(
+    _id: string,
+    _expectedSha: string,
+    _expectedStatus: string,
+  ): TaskCasResult {
+    return {
+      status: "conflict",
+      currentSha: "",
+      currentStatus: "pending",
+      reason: "sha",
+    };
   }
 }
 
@@ -268,12 +317,15 @@ class FakeGraphImportMap implements GraphImportMap {
 class FakeTaskRepositoryWithCas extends FakeTaskRepository {
   compareAndApplyCount = 0;
   compareAndApplyIds: string[] = [];
+  compareAndApplyStatuses: string[] = [];
   conditionalReparentCount = 0;
   conditionalReparentArgs: Array<{ id: string; objectiveId: string }> = [];
+  conditionalDeleteTaskStatuses: string[] = [];
 
   override compareAndApply(
     id: string,
     _expectedSha: string,
+    expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -282,9 +334,10 @@ class FakeTaskRepositoryWithCas extends FakeTaskRepository {
       verification: string[] | null;
       dependencies: string[];
     },
-  ): CasResult {
+  ): TaskCasResult {
     this.compareAndApplyCount++;
     this.compareAndApplyIds.push(id);
+    this.compareAndApplyStatuses.push(expectedStatus);
     return { status: "applied", freshSha: "spy-fresh-sha-" + id };
   }
 
@@ -298,8 +351,57 @@ class FakeTaskRepositoryWithCas extends FakeTaskRepository {
     return { status: "applied", freshSha: "spy-reparent-sha-" + id };
   }
 
-  override conditionalDeleteTask(_id: string, _expectedSha: string): CasResult {
+  override conditionalDeleteTask(
+    _id: string,
+    _expectedSha: string,
+    expectedStatus: string,
+  ): TaskCasResult {
+    this.conditionalDeleteTaskStatuses.push(expectedStatus);
     return { status: "applied", freshSha: "" };
+  }
+}
+
+/**
+ * Race-guard fake: for the one task named `raceTargetId`, compareAndApply
+ * asserts its expectedStatus argument equals `expectedStatusArg` and
+ * returns a status conflict — simulating a daemon that advanced the row's
+ * status between preflight and write. Every other task applies normally.
+ */
+class FakeTaskRepositoryWithRaceGuard extends FakeTaskRepository {
+  readonly #raceTargetId: string;
+  readonly #expectedStatusArg: string;
+  compareAndApplyCalledForTarget = false;
+
+  constructor(raceTargetId: string, expectedStatusArg: string) {
+    super();
+    this.#raceTargetId = raceTargetId;
+    this.#expectedStatusArg = expectedStatusArg;
+  }
+
+  override compareAndApply(
+    id: string,
+    _expectedSha: string,
+    expectedStatus: string,
+    _spec: {
+      title: string;
+      instructions: string;
+      ac: string[];
+      agent: string;
+      verification: string[] | null;
+      dependencies: string[];
+    },
+  ): TaskCasResult {
+    if (id === this.#raceTargetId) {
+      this.compareAndApplyCalledForTarget = true;
+      assert.equal(expectedStatus, this.#expectedStatusArg);
+      return {
+        status: "conflict",
+        currentSha: "baseline-sha-" + id,
+        currentStatus: "running",
+        reason: "status",
+      };
+    }
+    return { status: "applied", freshSha: "spy-fresh-sha-" + id };
   }
 }
 
@@ -329,7 +431,7 @@ function makeBaseManifest(
   return {
     initiativeId: INIT_ID,
     packageId: PKG_ID,
-    formatVersion: 1,
+    formatVersion: 3,
     digestAlgorithm: "sha256",
     nodes: {
       [INIT_ID]: INIT_BASE_SHA,
@@ -679,6 +781,72 @@ test("ApplyGraph — id-less task with importMap hit (creationSha matches) → u
   );
 });
 
+test("EPIC 007.18 Story 2 — id-less map-hit path: a progressed, untouched task classifies unchanged (creation_sha re-stamped by migration 21)", async () => {
+  // Same shape as the id-less map-hit test above, but the live task has
+  // ALREADY RUN (status: "completed") and the importMap's creationSha is what
+  // migration 21 re-stamps it to for an untouched row: the content-only sha of
+  // the task's declarative fields (no status). This is the one classification
+  // path the Proof script cannot reach (--create always stamps `id:` back into
+  // the files), so it is covered here as a unit instead.
+  const { initiatives } = makeBaseDb();
+  const tasks = new FakeTaskRepository();
+  tasks.seed(
+    {
+      id: TASK1_ID,
+      objectiveId: OBJ1_ID,
+      title: "Implement API",
+      instructions: "do it",
+      ac: ["returns 200"],
+      agent: "generic@1",
+      status: "completed",
+      dependencies: [],
+    },
+    TASK1_BASE_SHA, // content-only sha — unaffected by status per Story 1
+  );
+  tasks.seed(
+    {
+      id: TASK2_ID,
+      objectiveId: OBJ1_ID,
+      title: "Deploy",
+      instructions: "deploy it",
+      ac: ["health check green"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [TASK1_ID],
+    },
+    TASK2_BASE_SHA,
+  );
+  const importMap = new FakeGraphImportMap();
+  importMap.seed(PKG_ID, "task", "write-tests", TASK1_ID, TASK1_BASE_SHA);
+
+  const deps = makeDeps({ initiatives, tasks, importMap });
+
+  const pkg = makeBasePackage();
+  pkg.tasks[0] = {
+    ref: "write-tests", // no id — id-less, resolved via the importMap
+    objectiveRef: OBJ1_ID,
+    title: "Implement API",
+    instructions: "do it",
+    ac: ["returns 200"],
+    agent: "generic@1",
+    verification: undefined,
+    dependencies: [],
+    sourcePath: "backend/implement-api.md",
+  };
+
+  const uc = new ApplyGraph(deps);
+  const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+  const task1Class = result.classifications.find(
+    (c) => c.ref === "write-tests" || c.id === TASK1_ID,
+  );
+  assert.equal(
+    task1Class?.class,
+    "unchanged",
+    `expected a progressed, untouched, id-less-mapped task to classify unchanged, got: ${task1Class?.class}`,
+  );
+});
+
 test("ApplyGraph — manifest.files node absent from package → classified as missing", async () => {
   // task2 is in manifest.files but NOT in the package tasks array.
   // It must be reported as missing (informational; Story 08 will delete if requested).
@@ -746,6 +914,21 @@ describe("Story 07 T2 — merged-graph validation", () => {
     const pkg = makeBasePackage();
     pkg.tasks[1]!.dependencies = [TASK3_ID];
 
+    // This test characterises merged-graph dependency resolution only (does
+    // validateGraph accept TASK3 via the DB-merged node set?) — it is not
+    // about the write-phase CAS outcome. The base FakeTaskRepository's
+    // compareAndApply is an unconditional-conflict stub (see its own comment);
+    // since EPIC 007.18 Story 4 now correctly relabels a sha CAS conflict as
+    // `drifted` (previously it kept the stale preflight `updated` class,
+    // which incidentally slipped past this test's conflict-class check), that
+    // stub's always-conflict behavior would otherwise leak into this
+    // assertion. Give TASK2's compareAndApply a succeeding override so the
+    // test still isolates the concern it names.
+    tasks.compareAndApply = (id, _expectedSha, _expectedStatus, _spec) => ({
+      status: "applied",
+      freshSha: "merged-graph-test-fresh-sha-" + id,
+    });
+
     const uc = new ApplyGraph(makeDeps({ initiatives, tasks }));
     // Must NOT throw — TASK3 is found in the merged (DB) node set.
     const result = await uc.execute({ pkg, initiativeId: INIT_ID });
@@ -796,6 +979,130 @@ describe("Story 07 T2 — merged-graph validation", () => {
         return true;
       },
       "cycle through an omitted DB task must throw CycleError",
+    );
+  });
+
+  /**
+   * EPIC 007.18 Story 3 — a manifest whose formatVersion predates the
+   * content-hash change must be rejected before any classification, not
+   * silently reported as universal drift.
+   */
+  test("EPIC 007.18 Story 3 — manifest.formatVersion 2 (stale) throws StaleManifestError with the fixture's fields", async () => {
+    const pkg = makeBasePackage({ formatVersion: 2 });
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      (err: unknown) => {
+        if (!(err instanceof StaleManifestError)) {
+          assert.fail(`expected StaleManifestError, got ${String(err)}`);
+        }
+        assert.equal(err.formatVersion, 2);
+        assert.equal(err.expectedVersion, GRAPH_FORMAT_VERSION);
+        assert.equal(err.initiativeId, INIT_ID);
+        return true;
+      },
+      "a formatVersion:2 manifest must be rejected as stale",
+    );
+  });
+
+  test("EPIC 007.18 regression — StaleManifestError names the MANIFEST's initiativeId, not the applied one", async () => {
+    // Package exported from INIT_ID's manifest, but applied against a
+    // DIFFERENT initiative (e.g. `--initiative <other>`). The remedy line
+    // must tell the user to re-export the manifest's own initiative
+    // (INIT_ID), not the initiative the apply happened to target.
+    const OTHER_INIT_ID = "01JQVBZ3MHKP4FTGWR5XYENSDA";
+    const pkg = makeBasePackage({ formatVersion: 2 });
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: OTHER_INIT_ID }),
+      (err: unknown) => {
+        if (!(err instanceof StaleManifestError)) {
+          assert.fail(`expected StaleManifestError, got ${String(err)}`);
+        }
+        assert.equal(
+          err.initiativeId,
+          INIT_ID,
+          "must name the manifest's initiativeId, not input.initiativeId",
+        );
+        return true;
+      },
+      "a stale manifest applied against a different initiative must still name the manifest's own initiative",
+    );
+  });
+
+  test("EPIC 007.18 Story 3 — manifest.formatVersion === GRAPH_FORMAT_VERSION classifies normally (no throw)", async () => {
+    const pkg = makeBasePackage({ formatVersion: GRAPH_FORMAT_VERSION });
+    const uc = new ApplyGraph(makeDeps());
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+    assert.equal(
+      result.applied,
+      true,
+      "a current-format manifest must classify and apply normally",
+    );
+  });
+
+  test("EPIC 007.18 Story 3 — a package with no manifest (create mode) does not throw the stale gate", async () => {
+    const pkg = makeBasePackage();
+    // Simulate --create: no manifest at all.
+    (pkg as { manifest?: unknown }).manifest = undefined;
+    pkg.tasks.forEach((t) => {
+      t.id = undefined;
+    });
+    pkg.objectives.forEach((o) => {
+      o.id = undefined;
+    });
+    pkg.initiative.id = undefined;
+    const uc = new ApplyGraph(makeDeps());
+    // Must not throw StaleManifestError — a manifest-less package is create mode.
+    await uc.execute({ pkg, initiativeId: INIT_ID });
+  });
+
+  test("EPIC 007.18 Story 3 — the stale-manifest throw happens before any classification or write (CAS spy count stays 0)", async () => {
+    const { initiatives } = makeBaseDb();
+    const tasks = new FakeTaskRepositoryWithCas();
+    tasks.seed(
+      {
+        id: TASK1_ID,
+        objectiveId: OBJ1_ID,
+        title: "Implement API",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [],
+      },
+      TASK1_BASE_SHA,
+    );
+    tasks.seed(
+      {
+        id: TASK2_ID,
+        objectiveId: OBJ1_ID,
+        title: "Deploy",
+        instructions: "deploy it",
+        ac: ["health check green"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [TASK1_ID],
+      },
+      TASK2_BASE_SHA,
+    );
+    const pkg = makeBasePackage({ formatVersion: 2 });
+    // Edit a task so it WOULD classify updated, if the gate did not fire first.
+    pkg.tasks[0]!.ac = ["returns 200", "rejects bad creds with 401"];
+    const deps = {
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    };
+    const uc = new ApplyGraph(deps);
+    await assert.rejects(() => uc.execute({ pkg, initiativeId: INIT_ID }));
+    assert.equal(
+      tasks.compareAndApplyCount,
+      0,
+      "the stale gate must throw before any CAS write is attempted",
     );
   });
 
@@ -977,6 +1284,11 @@ describe("Story 08 T2 — delete-missing eligibility", () => {
       missingClass.reason,
       "non-pending",
       `running task → reason must be "non-pending"; got: ${missingClass.reason}`,
+    );
+    assert.equal(
+      missingClass.casReason,
+      undefined,
+      "a preflight 'missing' classification must never carry a casReason — the two channels stay separate",
     );
   });
 
@@ -1252,7 +1564,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
       manifest: {
         initiativeId: INIT_ID,
         packageId: PKG_ID,
-        formatVersion: 1,
+        formatVersion: 3,
         digestAlgorithm: "sha256",
         // manifest only covers initiative + objective; new task has no baseline
         nodes: { [INIT_ID]: INIT_BASE_SHA, [OBJ1_ID]: OBJ1_BASE_SHA },
@@ -1325,7 +1637,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const manifest: ExportManifest = {
       initiativeId,
       packageId: pkgId,
-      formatVersion: 1,
+      formatVersion: 3,
       digestAlgorithm: "sha256",
       nodes: { [initiativeId]: initSha, [objectiveId]: objSha },
       files: [initiativeId, objectiveId],
@@ -1401,6 +1713,466 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
   });
 
   /**
+   * EPIC 007.18 — regression: a brand-new (id-less) task whose frontmatter
+   * `objective:` field is a package-local REF SLUG (not the objective's live
+   * ULID) — the shape a freshly-authored task file actually has, per
+   * `graph-package.ts:9` ("a ULID (exported) or a slug (created)") — must be
+   * persisted with the RESOLVED LIVE objective id, and the creationSha
+   * recorded for it must match what a second, immediately-following apply
+   * recomputes, so the new task classifies `unchanged`, not `drifted`.
+   *
+   * Real SqliteTaskRepository is used deliberately: `tasks.objectiveId` is
+   * `TEXT NOT NULL REFERENCES objectives(id)`, so passing the raw ref slug
+   * as `objectiveId` reproduces the actual `FOREIGN KEY constraint failed`
+   * crash (`ApplyGraph.execute` → `SqliteTaskRepository.save`), not merely a
+   * value mismatch a fake could paper over.
+   */
+  test("EPIC 007.18: a new task's objectiveRef ref-slug resolves to the live objective id on save, and reclassifies unchanged next apply", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kanthord-apply-007.18-new-task-"));
+    const dbPath = join(dir, "test.db");
+    const db = openDatabase(dbPath);
+    migrate(db, MIGRATIONS);
+    after(() => {
+      db.close();
+      rmSync(dir, { recursive: true });
+    });
+
+    const projRepo = new SqliteProjectRepository(db);
+    const initRepo = new SqliteInitiativeRepository(db);
+    const taskRepo = new SqliteTaskRepository(db);
+    const importMapRepo = new SqliteGraphImportMap(db);
+    const uow = new SqliteUnitOfWork(db);
+
+    const projectId = newId();
+    const initiativeId = newId();
+    const objectiveId = newId();
+    projRepo.save({ id: projectId, name: "test-project" });
+    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.saveObjective({ id: objectiveId, initiativeId, name: "backend" });
+
+    const initSha = initRepo.getSha256(initiativeId)!;
+    const objSha = initRepo.getSha256(objectiveId)!;
+
+    const pkgId = newId();
+    const manifest: ExportManifest = {
+      initiativeId,
+      packageId: pkgId,
+      formatVersion: 3,
+      digestAlgorithm: "sha256",
+      nodes: { [initiativeId]: initSha, [objectiveId]: objSha },
+      files: [initiativeId, objectiveId],
+      // Package-local slug "sha-obj" is the ref for the live objective —
+      // distinct from its ULID, exactly as a freshly-authored task file
+      // would reference it via `objective: sha-obj`.
+      refToId: { objectives: { "sha-obj": objectiveId }, tasks: {} },
+    };
+
+    const pkg: GraphPackage = {
+      packageId: pkgId,
+      formatVersion: 1,
+      initiative: {
+        id: initiativeId,
+        ref: initiativeId,
+        name: "oauth",
+        sourcePath: "oauth.md",
+      },
+      objectives: [
+        {
+          id: objectiveId,
+          ref: "sha-obj",
+          name: "backend",
+          initiativeRef: initiativeId,
+          sourcePath: "backend/backend.md",
+        },
+      ],
+      tasks: [
+        {
+          ref: "new-task", // id-less: a brand-new task
+          objectiveRef: "sha-obj", // frontmatter `objective:` slug, NOT the ULID
+          title: "Added after work already ran",
+          instructions: "do it",
+          ac: ["returns 200"],
+          agent: "fake@1",
+          verification: undefined,
+          dependencies: [],
+          sourcePath: "backend/task-new.md",
+        },
+      ],
+      manifest,
+    };
+
+    const uc = new ApplyGraph({
+      initiatives: initRepo,
+      tasks: taskRepo,
+      storeGraph: new StoreGraph(taskRepo),
+      importMap: importMapRepo,
+      uow,
+      newId,
+    });
+
+    const result1 = await uc.execute({ pkg, initiativeId });
+    assert.equal(
+      result1.summary.created,
+      1,
+      "the new task must be classified created",
+    );
+
+    const created = result1.createdNodes?.find((n) => n.ref === "new-task");
+    assert.ok(created, "createdNodes must report the new task's minted id");
+
+    const savedTask = taskRepo.get(created!.id);
+    assert.ok(
+      savedTask,
+      "the new task must be persisted and readable by its minted id",
+    );
+    assert.equal(
+      savedTask!.objectiveId,
+      objectiveId,
+      `the persisted task's objectiveId must be the resolved live objective ULID, not the package ref slug (actual: ${savedTask?.objectiveId})`,
+    );
+
+    // A second apply of the same package must see the just-created task as
+    // unchanged — not drifted — proving the creationSha recorded for it was
+    // computed from the SAME resolved objectiveId that was actually persisted.
+    const result2 = await uc.execute({ pkg, initiativeId });
+    const secondPassClass = result2.classifications.find(
+      (c) => c.ref === "new-task",
+    );
+    assert.ok(
+      secondPassClass,
+      "the created task must be classified again on the second pass",
+    );
+    assert.equal(
+      secondPassClass!.class,
+      "unchanged",
+      `the freshly-created task must classify unchanged on the immediately following apply (actual: ${secondPassClass?.class})`,
+    );
+  });
+
+  /**
+   * EPIC 007.18 regression (human-B1-followup, related still-open case) — a
+   * task's `objective:` field names a package-local objective ref that does
+   * NOT exist anywhere in this package's `objectives` list (a typo, or an
+   * objective the author forgot to author) and is not a live DB row either.
+   * `resolveObjectiveId` falls through unchanged to the bare ref slug (per
+   * `apply-graph.ts`'s `objRefToId.get(ref) ?? ref`), and the write phase
+   * creates the task but never creates the missing objective — so today this
+   * reaches `SqliteTaskRepository.save` with a bare, unresolved slug as
+   * `objectiveId`, crashing with a raw `FOREIGN KEY constraint failed`. The
+   * repository-boundary guard must turn this into the SAME typed,
+   * diagnosable error as the direct repository test, propagated out of
+   * `ApplyGraph.execute`, rather than an opaque SQLite crash.
+   *
+   * The ref stays a plain slug ("ghost-obj"), deliberately NOT ULID-shaped:
+   * `apply-graph.ts` (:457-466) already has a separate, pre-existing
+   * existence check that only runs for ULID-SHAPED `objectiveRef` values (it
+   * throws `UnknownNodeError`, a different error, before reaching the write
+   * phase at all). A non-ULID slug is the case that check does not cover,
+   * so it is this test's only path to the repository-boundary guard this
+   * blocker is about. Either way the assertion is about EXISTENCE — the ref
+   * names no objective, in the package or the DB — never about string shape.
+   */
+  test("EPIC 007.18 regression — a task naming a nonexistent package-local objective ref fails with a typed error, not a raw FK crash", async () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), "kanthord-apply-007.18-ghost-objective-"),
+    );
+    const dbPath = join(dir, "test.db");
+    const db = openDatabase(dbPath);
+    migrate(db, MIGRATIONS);
+    after(() => {
+      db.close();
+      rmSync(dir, { recursive: true });
+    });
+
+    const projRepo = new SqliteProjectRepository(db);
+    const initRepo = new SqliteInitiativeRepository(db);
+    const taskRepo = new SqliteTaskRepository(db);
+    const importMapRepo = new SqliteGraphImportMap(db);
+    const uow = new SqliteUnitOfWork(db);
+
+    const projectId = newId();
+    const initiativeId = newId();
+    projRepo.save({ id: projectId, name: "test-project" });
+    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+
+    const initSha = initRepo.getSha256(initiativeId)!;
+
+    const pkgId = newId();
+    const manifest: ExportManifest = {
+      initiativeId,
+      packageId: pkgId,
+      formatVersion: 3,
+      digestAlgorithm: "sha256",
+      nodes: { [initiativeId]: initSha },
+      files: [initiativeId],
+      refToId: { objectives: {}, tasks: {} },
+    };
+
+    const pkg: GraphPackage = {
+      packageId: pkgId,
+      formatVersion: 1,
+      initiative: {
+        id: initiativeId,
+        ref: initiativeId,
+        name: "oauth",
+        sourcePath: "oauth.md",
+      },
+      // Deliberately NO objectives in this package — "ghost-obj" is not
+      // authored anywhere, unlike the sibling test where the ref resolves
+      // to a real, pre-existing live objective.
+      objectives: [],
+      tasks: [
+        {
+          ref: "new-task",
+          objectiveRef: "ghost-obj", // names an objective that exists nowhere
+          title: "Task naming a nonexistent objective",
+          instructions: "do it",
+          ac: ["returns 200"],
+          agent: "fake@1",
+          verification: undefined,
+          dependencies: [],
+          sourcePath: "backend/task-new.md",
+        },
+      ],
+      manifest,
+    };
+
+    const uc = new ApplyGraph({
+      initiatives: initRepo,
+      tasks: taskRepo,
+      storeGraph: new StoreGraph(taskRepo),
+      importMap: importMapRepo,
+      uow,
+      newId,
+    });
+
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId }),
+      (err: unknown) => {
+        if (!(err instanceof InvalidObjectiveIdError)) {
+          assert.fail(`expected InvalidObjectiveIdError, got ${String(err)}`);
+        }
+        assert.equal(err.objectiveId, "ghost-obj");
+        return true;
+      },
+      "a task naming a nonexistent package-local objective must fail with a typed error, not a raw FOREIGN KEY crash",
+    );
+  });
+
+  /**
+   * EPIC 007.18 — regression (proof case 3): a task whose package
+   * `objectiveRef` is a package-local REF SLUG that resolves to the task's
+   * CURRENT live objective (not a different one) must NOT be treated as a
+   * reparent. Today `objectiveChanged` compares the unresolved
+   * `pkgTask.objectiveRef` ("sha-obj") directly against the live
+   * `liveTask.objectiveId` (a ULID) — always unequal for a slug ref, so the
+   * pure-reparent branch fires and calls `conditionalReparent` with the raw
+   * slug as the new `objectiveId`, which is a FOREIGN KEY violation once a
+   * real SQLite repo is behind it (see the sibling real-SQLite regression
+   * test below). Here the same defect is pinned hermetically via the CAS
+   * spy fake: a correct fix resolves the ref before comparing, finds it
+   * equal to the live id, and calls neither `conditionalReparent` nor
+   * `compareAndApply` for this unchanged task.
+   */
+  test("EPIC 007.18 regression — a task's objectiveRef ref-slug that resolves to its OWN live objective must not spuriously reparent", async () => {
+    const { initiatives } = makeBaseDb();
+    const tasks = new FakeTaskRepositoryWithCas();
+    tasks.seed(
+      {
+        id: TASK1_ID,
+        objectiveId: OBJ1_ID,
+        title: "Implement API",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [],
+      },
+      TASK1_BASE_SHA,
+    );
+    tasks.seed(
+      {
+        id: TASK2_ID,
+        objectiveId: OBJ1_ID,
+        title: "Deploy",
+        instructions: "deploy it",
+        ac: ["health check green"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [TASK1_ID],
+      },
+      TASK2_BASE_SHA,
+    );
+
+    const pkg = makeBasePackage();
+    // The objective's package-local ref is a slug ("sha-obj"), distinct from
+    // its ULID — but its `id` still points at the SAME live objective
+    // (OBJ1_ID), exactly as a re-applied task file's `objective: sha-obj`
+    // frontmatter would, per graph-package.ts:9's doc comment.
+    pkg.objectives[0]!.ref = "sha-obj";
+    pkg.tasks[0]!.objectiveRef = "sha-obj";
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    });
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+    assert.equal(
+      result.applied,
+      true,
+      "a ref-slug resolving to the task's own live objective must apply cleanly, not conflict",
+    );
+    assert.equal(
+      tasks.conditionalReparentCount,
+      0,
+      `a ref-slug resolving to the SAME live objective must NOT trigger a reparent (actual conditionalReparent calls: ${tasks.conditionalReparentCount}, args: ${JSON.stringify(tasks.conditionalReparentArgs)})`,
+    );
+    assert.equal(
+      tasks.compareAndApplyCount,
+      0,
+      "no spec change either — compareAndApply must not be called",
+    );
+  });
+
+  /**
+   * EPIC 007.18 — regression (proof case 3, real SQLite): the same defect as
+   * above, but through the real SqliteTaskRepository so the actual failure
+   * mode reproduces exactly — `tasks.objectiveId` is
+   * `TEXT NOT NULL REFERENCES objectives(id)` (migrations.ts:102), so
+   * passing the raw ref slug into `conditionalReparent`'s `objectiveId`
+   * parameter is a genuine `FOREIGN KEY constraint failed`, not merely a
+   * value mismatch a fake could paper over.
+   */
+  test("EPIC 007.18: reparent path — a ref-slug objectiveRef for the task's OWN live objective applies without FK violation", async () => {
+    const dir = mkdtempSync(
+      join(tmpdir(), "kanthord-apply-007.18-reparent-slug-"),
+    );
+    const dbPath = join(dir, "test.db");
+    const db = openDatabase(dbPath);
+    migrate(db, MIGRATIONS);
+    after(() => {
+      db.close();
+      rmSync(dir, { recursive: true });
+    });
+
+    const projRepo = new SqliteProjectRepository(db);
+    const initRepo = new SqliteInitiativeRepository(db);
+    const taskRepo = new SqliteTaskRepository(db);
+    const importMapRepo = new SqliteGraphImportMap(db);
+    const uow = new SqliteUnitOfWork(db);
+
+    const projectId = newId();
+    const initiativeId = newId();
+    const objectiveId = newId();
+    projRepo.save({ id: projectId, name: "test-project" });
+    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.saveObjective({ id: objectiveId, initiativeId, name: "backend" });
+
+    const initSha = initRepo.getSha256(initiativeId)!;
+    const objSha = initRepo.getSha256(objectiveId)!;
+
+    const taskId = newId();
+    taskRepo.save(
+      newTask({
+        id: taskId,
+        objectiveId,
+        title: "Added after work already ran",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "fake@1",
+        dependencies: [],
+      }),
+    );
+    const taskSha = taskRepo.getSha256(taskId)!;
+
+    const pkgId = newId();
+    const manifest: ExportManifest = {
+      initiativeId,
+      packageId: pkgId,
+      formatVersion: 3,
+      digestAlgorithm: "sha256",
+      nodes: {
+        [initiativeId]: initSha,
+        [objectiveId]: objSha,
+        [taskId]: taskSha,
+      },
+      files: [initiativeId, objectiveId, taskId],
+      // Same shape as a re-applied `--apply` package: the manifest's
+      // refToId still names the objective by its ULID, but the task file
+      // on disk carries the package-local slug in its `objective:` field
+      // (exactly the `task-new.md` shape from the reported crash).
+      refToId: {
+        objectives: { "sha-obj": objectiveId },
+        tasks: { [taskId]: taskId },
+      },
+    };
+
+    const pkg: GraphPackage = {
+      packageId: pkgId,
+      formatVersion: 1,
+      initiative: {
+        id: initiativeId,
+        ref: initiativeId,
+        name: "oauth",
+        sourcePath: "oauth.md",
+      },
+      objectives: [
+        {
+          id: objectiveId,
+          ref: "sha-obj",
+          name: "backend",
+          initiativeRef: initiativeId,
+          sourcePath: "backend/backend.md",
+        },
+      ],
+      tasks: [
+        {
+          id: taskId,
+          ref: taskId,
+          objectiveRef: "sha-obj", // frontmatter `objective:` slug, NOT the ULID
+          title: "Added after work already ran",
+          instructions: "do it",
+          ac: ["returns 200"],
+          agent: "fake@1",
+          verification: undefined,
+          dependencies: [],
+          sourcePath: "backend/task-new.md",
+        },
+      ],
+      manifest,
+    };
+
+    const uc = new ApplyGraph({
+      initiatives: initRepo,
+      tasks: taskRepo,
+      storeGraph: new StoreGraph(taskRepo),
+      importMap: importMapRepo,
+      uow,
+      newId,
+    });
+
+    // Must not throw FOREIGN KEY constraint failed.
+    const result = await uc.execute({ pkg, initiativeId });
+    assert.equal(
+      result.applied,
+      true,
+      "a ref-slug resolving to the task's own live objective must apply cleanly",
+    );
+
+    const readBack = taskRepo.get(taskId);
+    assert.equal(
+      readBack!.objectiveId,
+      objectiveId,
+      "the task's objectiveId must remain the resolved live ULID after apply",
+    );
+  });
+
+  /**
    * Test (e): reparent via changed objectiveRef → routes through conditionalReparent,
    * NOT compareAndApply (spec unchanged; only the parent reference changed).
    *
@@ -1459,7 +2231,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const reparentManifest: ExportManifest = {
       initiativeId: INIT_ID,
       packageId: PKG_ID,
-      formatVersion: 1,
+      formatVersion: 3,
       digestAlgorithm: "sha256",
       nodes: {
         [INIT_ID]: INIT_BASE_SHA,
@@ -1576,7 +2348,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const combinedManifest: ExportManifest = {
       initiativeId: INIT_ID,
       packageId: PKG_ID,
-      formatVersion: 1,
+      formatVersion: 3,
       digestAlgorithm: "sha256",
       nodes: {
         [INIT_ID]: INIT_BASE_SHA,
@@ -1642,6 +2414,325 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
 });
 
 // ---------------------------------------------------------------------------
+// EPIC 007.18 Story 1 — content-only hash + explicit CAS status predicate
+// ---------------------------------------------------------------------------
+
+test("EPIC 007.18 — a completed task whose file nobody touched classifies unchanged, not drifted", async () => {
+  const initiatives = new FakeInitiativeRepository();
+  initiatives.seed(
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    INIT_BASE_SHA,
+    [
+      {
+        obj: { id: OBJ1_ID, initiativeId: INIT_ID, name: "backend" },
+        sha: OBJ1_BASE_SHA,
+      },
+    ],
+  );
+  const tasks = new FakeTaskRepository();
+  // Live task has RUN (status completed) but its sha still equals the
+  // baseline the manifest recorded at import time — content untouched.
+  tasks.seed(
+    {
+      id: TASK1_ID,
+      objectiveId: OBJ1_ID,
+      title: "Implement API",
+      instructions: "do it",
+      ac: ["returns 200"],
+      agent: "generic@1",
+      status: "completed",
+      dependencies: [],
+    },
+    TASK1_BASE_SHA,
+  );
+  tasks.seed(
+    {
+      id: TASK2_ID,
+      objectiveId: OBJ1_ID,
+      title: "Deploy",
+      instructions: "deploy it",
+      ac: ["health check green"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [TASK1_ID],
+    },
+    TASK2_BASE_SHA,
+  );
+
+  const uc = new ApplyGraph({
+    initiatives,
+    tasks,
+    storeGraph: new StoreGraph(tasks),
+    importMap: new FakeGraphImportMap(),
+    uow: new FakeUnitOfWork(),
+    newId: () => "01NEWID0000000000000000001",
+  });
+
+  const result = await uc.execute({
+    pkg: makeBasePackage(),
+    initiativeId: INIT_ID,
+  });
+
+  assert.equal(result.conflicts.length, 0, "no conflicts expected");
+  assert.equal(result.applied, true);
+  const task1Class = result.classifications.find((c) => c.id === TASK1_ID);
+  assert.equal(
+    task1Class?.class,
+    "unchanged",
+    `expected TASK1 unchanged, got ${task1Class?.class}`,
+  );
+});
+
+test("EPIC 007.18 — race guard: a lifecycle change between preflight and write is refused, not silently applied", async () => {
+  const { initiatives } = makeBaseDb();
+  const tasks = new FakeTaskRepositoryWithRaceGuard(TASK1_ID, "pending");
+  tasks.seed(
+    {
+      id: TASK1_ID,
+      objectiveId: OBJ1_ID,
+      title: "Implement API",
+      instructions: "do it",
+      ac: ["returns 200"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [],
+    },
+    TASK1_BASE_SHA,
+  );
+  tasks.seed(
+    {
+      id: TASK2_ID,
+      objectiveId: OBJ1_ID,
+      title: "Deploy",
+      instructions: "deploy it",
+      ac: ["health check green"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [TASK1_ID],
+    },
+    TASK2_BASE_SHA,
+  );
+
+  const pkg = makeBasePackage();
+  pkg.tasks[0]!.ac = ["returns 200", "rejects bad creds with 401"]; // task1 edited → classified "updated"
+
+  const uc = new ApplyGraph({
+    initiatives,
+    tasks,
+    storeGraph: new StoreGraph(tasks),
+    importMap: new FakeGraphImportMap(),
+    uow: new FakeUnitOfWork(),
+    newId: () => "01NEWID0000000000000000001",
+  });
+
+  const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+  assert.equal(
+    tasks.compareAndApplyCalledForTarget,
+    true,
+    "compareAndApply must have been invoked for TASK1",
+  );
+  assert.equal(
+    result.applied,
+    false,
+    "a late status change must refuse the apply, not silently write",
+  );
+  assert.equal(
+    result.conflicts.length,
+    1,
+    `expected exactly one conflict; got: ${JSON.stringify(result.conflicts)}`,
+  );
+  const conflict = result.conflicts[0]!;
+  assert.equal(conflict.kind, "task");
+  assert.equal(conflict.id, TASK1_ID);
+  assert.equal(
+    conflict.class,
+    "locked",
+    `a status CAS conflict must classify "locked", not "drifted"; got: ${conflict.class}`,
+  );
+  assert.deepEqual(
+    conflict.casReason,
+    { kind: "status", currentStatus: "running" },
+    `casReason must carry the status conflict shape; got: ${JSON.stringify(conflict.casReason)}`,
+  );
+});
+
+test("EPIC 007.18 Story 4 — a sha conflict from compareAndApply classifies drifted with casReason kind:sha", async () => {
+  const { initiatives } = makeBaseDb();
+  const tasks = new FakeTaskRepositoryWithLateCasConflict();
+  tasks.seed(
+    {
+      id: TASK1_ID,
+      objectiveId: OBJ1_ID,
+      title: "Implement API",
+      instructions: "do it",
+      ac: ["returns 200"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [],
+    },
+    TASK1_BASE_SHA,
+  );
+  tasks.seed(
+    {
+      id: TASK2_ID,
+      objectiveId: OBJ1_ID,
+      title: "Deploy",
+      instructions: "deploy it",
+      ac: ["health check green"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [TASK1_ID],
+    },
+    TASK2_BASE_SHA,
+  );
+
+  const pkg = makeBasePackage();
+  pkg.tasks[0]!.ac = ["returns 200", "sha-conflict-extra-ac"];
+
+  const uc = new ApplyGraph({
+    initiatives,
+    tasks,
+    storeGraph: new StoreGraph(tasks),
+    importMap: new FakeGraphImportMap(),
+    uow: new FakeUnitOfWork(),
+    newId: () => "01NEWID0000000000000000001",
+  });
+
+  const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+  assert.equal(result.applied, false);
+  assert.equal(
+    result.conflicts.length,
+    1,
+    `expected exactly one conflict; got: ${JSON.stringify(result.conflicts)}`,
+  );
+  const conflict = result.conflicts[0]!;
+  assert.equal(conflict.id, TASK1_ID);
+  assert.equal(
+    conflict.class,
+    "drifted",
+    `a sha CAS conflict must classify "drifted"; got: ${conflict.class}`,
+  );
+  assert.deepEqual(
+    conflict.casReason,
+    { kind: "sha" },
+    `casReason must carry the sha conflict shape; got: ${JSON.stringify(conflict.casReason)}`,
+  );
+});
+
+test("EPIC 007.18 — compareAndApply receives the preflight-observed status (pending) for an updated task", async () => {
+  const { initiatives } = makeBaseDb();
+  const tasks = new FakeTaskRepositoryWithCas();
+  tasks.seed(
+    {
+      id: TASK1_ID,
+      objectiveId: OBJ1_ID,
+      title: "Implement API",
+      instructions: "do it",
+      ac: ["returns 200"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [],
+    },
+    TASK1_BASE_SHA,
+  );
+  tasks.seed(
+    {
+      id: TASK2_ID,
+      objectiveId: OBJ1_ID,
+      title: "Deploy",
+      instructions: "deploy it",
+      ac: ["health check green"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [TASK1_ID],
+    },
+    TASK2_BASE_SHA,
+  );
+
+  const pkg = makeBasePackage();
+  pkg.tasks[0]!.ac = ["returns 200", "rejects bad creds with 401"]; // task1 edited
+
+  const uc = new ApplyGraph({
+    initiatives,
+    tasks,
+    storeGraph: new StoreGraph(tasks),
+    importMap: new FakeGraphImportMap(),
+    uow: new FakeUnitOfWork(),
+    newId: () => "01NEWID0000000000000000001",
+  });
+  await uc.execute({ pkg, initiativeId: INIT_ID });
+
+  assert.deepEqual(tasks.compareAndApplyStatuses, ["pending"]);
+});
+
+test("EPIC 007.18 — conditionalDeleteTask receives the missing task's real preflight status", async () => {
+  const initiatives = new FakeInitiativeRepository();
+  initiatives.seed(
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    INIT_BASE_SHA,
+    [
+      {
+        obj: { id: OBJ1_ID, initiativeId: INIT_ID, name: "backend" },
+        sha: OBJ1_BASE_SHA,
+      },
+    ],
+  );
+  const tasks = new FakeTaskRepositoryWithDelete();
+  tasks.seed(
+    {
+      id: TASK1_ID,
+      objectiveId: OBJ1_ID,
+      title: "Implement API",
+      instructions: "do it",
+      ac: ["returns 200"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [],
+    },
+    TASK1_BASE_SHA,
+  );
+  tasks.seed(
+    {
+      id: TASK2_ID,
+      objectiveId: OBJ1_ID,
+      title: "Deploy",
+      instructions: "deploy it",
+      ac: ["health check green"],
+      agent: "generic@1",
+      status: "pending",
+      dependencies: [TASK1_ID],
+    },
+    TASK2_BASE_SHA, // sha matches baseline → eligible
+  );
+
+  // TASK2 removed from package (file deleted) — it's in manifest.files → missing.
+  // deleteMissing: false, confirmDelete: true — the missing-node preflight
+  // status read still happens, it just isn't gated on deleteMissing.
+  const pkg = makeBasePackage();
+  pkg.tasks = pkg.tasks.filter((t) => t.id !== TASK2_ID);
+
+  const uc = new ApplyGraph({
+    initiatives,
+    tasks,
+    storeGraph: new StoreGraph(tasks),
+    importMap: new FakeGraphImportMap(),
+    uow: new FakeUnitOfWork(),
+    newId: () => "01NEWID0000000000000000001",
+  });
+
+  await uc.execute({
+    pkg,
+    initiativeId: INIT_ID,
+    deleteMissing: false,
+    confirmDelete: true,
+  });
+
+  assert.deepEqual(tasks.deleteTaskStatuses, ["pending"]);
+});
+
+// ---------------------------------------------------------------------------
 // Story 08 T3 — confirmed delete execution + objective emptiness
 // ---------------------------------------------------------------------------
 
@@ -1653,11 +2744,46 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
 class FakeTaskRepositoryWithDelete extends FakeTaskRepositoryWithCas {
   deleteTaskCount = 0;
   deleteTaskIds: string[] = [];
+  deleteTaskStatuses: string[] = [];
 
-  override conditionalDeleteTask(id: string, _expectedSha: string): CasResult {
+  override conditionalDeleteTask(
+    id: string,
+    _expectedSha: string,
+    expectedStatus: string,
+  ): TaskCasResult {
     this.deleteTaskCount++;
     this.deleteTaskIds.push(id);
+    this.deleteTaskStatuses.push(expectedStatus);
     return { status: "applied", freshSha: "" };
+  }
+}
+
+/**
+ * Fake `conditionalDeleteTask` that always returns a conflict of the
+ * configured reason — for EPIC 007.18 Story 4's delete-path conflict-shape
+ * tests.
+ */
+class FakeTaskRepositoryWithDeleteConflict extends FakeTaskRepositoryWithDelete {
+  readonly #reason: "sha" | "status";
+
+  constructor(reason: "sha" | "status") {
+    super();
+    this.#reason = reason;
+  }
+
+  override conditionalDeleteTask(
+    id: string,
+    _expectedSha: string,
+    _expectedStatus: string,
+  ): TaskCasResult {
+    this.deleteTaskCount++;
+    this.deleteTaskIds.push(id);
+    return {
+      status: "conflict",
+      currentSha: "post-preflight-drift-sha-" + id,
+      currentStatus: "running",
+      reason: this.#reason,
+    };
   }
 }
 
@@ -1761,6 +2887,154 @@ describe("Story 08 T3 — confirmed delete execution", () => {
     // summary.deleted must reflect the deletion
     const deleted = (result.summary as Record<string, number>)["deleted"] ?? -1;
     assert.equal(deleted, 1, `summary.deleted must be 1; got: ${deleted}`);
+  });
+
+  test("EPIC 007.18 Story 4 — conditionalDeleteTask status conflict classifies locked with casReason", async () => {
+    const initiatives = new FakeInitiativeRepository();
+    initiatives.seed(
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      INIT_BASE_SHA,
+      [
+        {
+          obj: { id: OBJ1_ID, initiativeId: INIT_ID, name: "backend" },
+          sha: OBJ1_BASE_SHA,
+        },
+      ],
+    );
+    const tasks = new FakeTaskRepositoryWithDeleteConflict("status");
+    tasks.seed(
+      {
+        id: TASK1_ID,
+        objectiveId: OBJ1_ID,
+        title: "Implement API",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [],
+      },
+      TASK1_BASE_SHA,
+    );
+    tasks.seed(
+      {
+        id: TASK2_ID,
+        objectiveId: OBJ1_ID,
+        title: "Deploy",
+        instructions: "deploy it",
+        ac: ["health check green"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [TASK1_ID],
+      },
+      TASK2_BASE_SHA,
+    );
+
+    const pkg = makeBasePackage();
+    pkg.tasks = pkg.tasks.filter((t) => t.id !== TASK2_ID);
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    });
+
+    const result = await uc.execute({
+      pkg,
+      initiativeId: INIT_ID,
+      deleteMissing: true,
+      confirmDelete: true,
+    });
+
+    assert.equal(result.applied, false);
+    const conflict = result.conflicts.find((c) => c.id === TASK2_ID);
+    assert.ok(conflict, "TASK2 must appear in conflicts");
+    assert.equal(
+      conflict.class,
+      "locked",
+      `a status delete-conflict must classify "locked"; got: ${conflict.class}`,
+    );
+    assert.deepEqual(
+      conflict.casReason,
+      { kind: "status", currentStatus: "running" },
+      `casReason must carry the status conflict shape; got: ${JSON.stringify(conflict.casReason)}`,
+    );
+  });
+
+  test("EPIC 007.18 Story 4 — conditionalDeleteTask sha conflict classifies drifted with casReason", async () => {
+    const initiatives = new FakeInitiativeRepository();
+    initiatives.seed(
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      INIT_BASE_SHA,
+      [
+        {
+          obj: { id: OBJ1_ID, initiativeId: INIT_ID, name: "backend" },
+          sha: OBJ1_BASE_SHA,
+        },
+      ],
+    );
+    const tasks = new FakeTaskRepositoryWithDeleteConflict("sha");
+    tasks.seed(
+      {
+        id: TASK1_ID,
+        objectiveId: OBJ1_ID,
+        title: "Implement API",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [],
+      },
+      TASK1_BASE_SHA,
+    );
+    tasks.seed(
+      {
+        id: TASK2_ID,
+        objectiveId: OBJ1_ID,
+        title: "Deploy",
+        instructions: "deploy it",
+        ac: ["health check green"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [TASK1_ID],
+      },
+      TASK2_BASE_SHA,
+    );
+
+    const pkg = makeBasePackage();
+    pkg.tasks = pkg.tasks.filter((t) => t.id !== TASK2_ID);
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    });
+
+    const result = await uc.execute({
+      pkg,
+      initiativeId: INIT_ID,
+      deleteMissing: true,
+      confirmDelete: true,
+    });
+
+    assert.equal(result.applied, false);
+    const conflict = result.conflicts.find((c) => c.id === TASK2_ID);
+    assert.ok(conflict, "TASK2 must appear in conflicts");
+    assert.equal(
+      conflict.class,
+      "drifted",
+      `a sha delete-conflict must classify "drifted"; got: ${conflict.class}`,
+    );
+    assert.deepEqual(
+      conflict.casReason,
+      { kind: "sha" },
+      `casReason must carry the sha conflict shape; got: ${JSON.stringify(conflict.casReason)}`,
+    );
   });
 
   /**
@@ -1968,7 +3242,7 @@ describe("Story 08 T3 — confirmed delete execution", () => {
       manifest: {
         initiativeId,
         packageId: pkgId,
-        formatVersion: 1,
+        formatVersion: 3,
         digestAlgorithm: "sha256",
         nodes: {
           [initiativeId]: initSha,
@@ -2048,6 +3322,7 @@ class FakeTaskRepositoryWithLateCasConflict extends FakeTaskRepository {
   override compareAndApply(
     _id: string,
     _expectedSha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -2056,8 +3331,13 @@ class FakeTaskRepositoryWithLateCasConflict extends FakeTaskRepository {
       verification: string[] | null;
       dependencies: string[];
     },
-  ): CasResult {
-    return { status: "conflict", currentSha: "post-preflight-drift-sha" };
+  ): TaskCasResult {
+    return {
+      status: "conflict",
+      currentSha: "post-preflight-drift-sha",
+      currentStatus: "pending",
+      reason: "sha",
+    };
   }
 }
 

@@ -31,6 +31,7 @@ import type {
   PkgTask,
   GraphPackage,
 } from "../../app/graph/graph-package.ts";
+import { toResult } from "./error-map.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -172,13 +173,18 @@ async function runApply(
   const deleteMissing = args.deleteMissing ?? false;
   const confirmDelete = args.confirmDelete ?? false;
 
-  const result = await applyGraph.execute({
-    pkg,
-    initiativeId: args.initiative,
-    dryRun,
-    deleteMissing,
-    confirmDelete,
-  });
+  let result: ApplyGraphResult;
+  try {
+    result = await applyGraph.execute({
+      pkg,
+      initiativeId: args.initiative,
+      dryRun,
+      deleteMissing,
+      confirmDelete,
+    });
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
 
   // A node was not actually written this pass when this is a dry-run, or
   // when nothing was applied at all (e.g. blocked by conflicts) — in either
@@ -314,10 +320,23 @@ async function runApply(
   const exitCode = dryRun || result.applied ? 0 : 1;
   const stderr: string[] = [];
   if (!dryRun && result.conflicts.length > 0) {
-    const clauses: string[] = [];
-    if (driftedCount > 0) clauses.push(`${driftedCount} drifted node(s)`);
-    if (lockedCount > 0) clauses.push(`${lockedCount} locked node(s)`);
-    stderr.push(`refused: ${clauses.join(" and ")}`);
+    const casConflicts = result.conflicts.filter(
+      (c) => c.kind === "task" && c.casReason !== undefined,
+    );
+    if (casConflicts.length > 0) {
+      for (const c of casConflicts) {
+        stderr.push(
+          c.casReason!.kind === "status"
+            ? `refused: task ${c.id} is no longer pending (status: ${c.casReason!.currentStatus})`
+            : `refused: task ${c.id} changed outside this package`,
+        );
+      }
+    } else {
+      const clauses: string[] = [];
+      if (driftedCount > 0) clauses.push(`${driftedCount} drifted node(s)`);
+      if (lockedCount > 0) clauses.push(`${lockedCount} locked node(s)`);
+      stderr.push(`refused: ${clauses.join(" and ")}`);
+    }
   }
   if (
     !dryRun &&
@@ -503,8 +522,7 @@ async function runCreate(
 
   const manifest = {
     packageId,
-    formatVersion:
-      pkg.initiative.bindings !== undefined ? GRAPH_FORMAT_VERSION : 1,
+    formatVersion: GRAPH_FORMAT_VERSION,
     digestAlgorithm: "sha256" as const,
     initiativeId,
     nodes: result.nodes,

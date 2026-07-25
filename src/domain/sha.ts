@@ -13,7 +13,6 @@ export function canonicalTask(t: {
   verification: string[] | undefined;
   dependencies: string[];
   objectiveId: string;
-  status: string;
 }): string {
   return JSON.stringify({
     title: t.title,
@@ -23,7 +22,6 @@ export function canonicalTask(t: {
     verification: t.verification ?? null,
     dependencies: [...t.dependencies].sort(),
     objectiveId: t.objectiveId,
-    status: t.status,
   });
 }
 

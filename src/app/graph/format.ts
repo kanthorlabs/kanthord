@@ -6,8 +6,10 @@
 /**
  * Current graph package format version.
  * Bumped to 2 for EPIC 007.1 C1: bindings + context fields now round-trip.
+ * Bumped to 3 for EPIC 007.18: node shas are content-only (status removed),
+ * so a pre-007.18 manifest's baselines predate the hash change.
  */
-export const GRAPH_FORMAT_VERSION = 2;
+export const GRAPH_FORMAT_VERSION = 3;
 
 /** Default agent when frontmatter `agent:` is absent. */
 export const DEFAULT_AGENT = "generic@1";

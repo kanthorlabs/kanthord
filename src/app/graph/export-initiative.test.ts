@@ -13,6 +13,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ExportInitiative } from "./export-initiative.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 import type {
   TaskRepository,
   InitiativeRepository,
@@ -139,6 +140,7 @@ class FakeTaskRepository implements TaskRepository {
   compareAndApply(
     _id: string,
     _expectedSha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -153,7 +155,11 @@ class FakeTaskRepository implements TaskRepository {
   conditionalReparent(_id: string, _expectedSha: string, _objectiveId: string) {
     return { status: "applied" as const, freshSha: "" };
   }
-  conditionalDeleteTask(_id: string, _expectedSha: string) {
+  conditionalDeleteTask(
+    _id: string,
+    _expectedSha: string,
+    _expectedStatus: string,
+  ) {
     return { status: "applied" as const, freshSha: "" };
   }
 }
@@ -238,6 +244,20 @@ test("ExportInitiative returns only pending tasks in .tasks; running task exclud
   assert.ok(ids.includes(TASK1_ID), "pending task1 present");
   assert.ok(ids.includes(TASK2_ID), "pending task2 present");
   assert.ok(!ids.includes(TASK3_ID), "running task3 absent from .tasks");
+});
+
+test("EPIC 007.18 Story 3 — ExportInitiative stamps manifest.formatVersion with the current GRAPH_FORMAT_VERSION", async () => {
+  const uc = new ExportInitiative({
+    tasks: new FakeTaskRepository(),
+    initiatives: new FakeInitiativeRepository(),
+  });
+  const pkg = await uc.execute(INIT_ID);
+
+  assert.equal(
+    pkg.manifest?.formatVersion,
+    GRAPH_FORMAT_VERSION,
+    "a freshly exported manifest must never be stale",
+  );
 });
 
 test("ExportInitiative manifest.nodes covers EVERY node; sha COPIED from repo (not recomputed)", async () => {

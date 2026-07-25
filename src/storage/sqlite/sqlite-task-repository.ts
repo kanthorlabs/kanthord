@@ -1,7 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 
-import type { TaskRepository, TaskResultRow, CasResult } from "../port.ts";
+import type {
+  TaskRepository,
+  TaskResultRow,
+  CasResult,
+  TaskCasResult,
+} from "../port.ts";
 import type { Task, TaskStatus } from "../../domain/task.ts";
+import { InvalidObjectiveIdError } from "../../domain/task.ts";
 import { canonicalTask, sha256Hex } from "./node-sha.ts";
 
 type TaskRow = {
@@ -34,7 +40,6 @@ export class SqliteTaskRepository implements TaskRepository {
     verification?: string[];
     dependencies: string[];
     objectiveId: string;
-    status: TaskStatus;
   }): string {
     return sha256Hex(
       canonicalTask({
@@ -45,7 +50,6 @@ export class SqliteTaskRepository implements TaskRepository {
         verification: task.verification,
         dependencies: task.dependencies,
         objectiveId: task.objectiveId,
-        status: task.status,
       }),
     );
   }
@@ -57,7 +61,7 @@ export class SqliteTaskRepository implements TaskRepository {
   #stampSha(taskId: string): void {
     const row = this.#db
       .prepare(
-        "SELECT objectiveId, title, status, agent, instructions, ac, verification FROM tasks WHERE id = ?",
+        "SELECT objectiveId, title, agent, instructions, ac, verification FROM tasks WHERE id = ?",
       )
       .get(taskId) as TaskRow | undefined;
     if (row === undefined) return;
@@ -77,14 +81,29 @@ export class SqliteTaskRepository implements TaskRepository {
           : undefined,
       dependencies: deps.map((d) => d.dependency),
       objectiveId: row.objectiveId,
-      status: row.status,
     });
     this.#db
       .prepare("UPDATE tasks SET sha256 = ? WHERE id = ?")
       .run(sha, taskId);
   }
 
+  /**
+   * Repository-boundary guard: `objectiveId` must name an existing objective
+   * row before it is persisted. Rejects an unresolved package ref slug (or
+   * any other id naming no real objective) loudly and readably instead of
+   * letting it reach SQLite as a raw `FOREIGN KEY constraint failed`.
+   */
+  #assertObjectiveExists(objectiveId: string): void {
+    const row = this.#db
+      .prepare("SELECT 1 FROM objectives WHERE id = ?")
+      .get(objectiveId);
+    if (row === undefined) {
+      throw new InvalidObjectiveIdError(objectiveId);
+    }
+  }
+
   save(task: Task): void {
+    this.#assertObjectiveExists(task.objectiveId);
     const sha = this.#computeTaskSha(task);
     this.#db
       .prepare(
@@ -122,6 +141,9 @@ export class SqliteTaskRepository implements TaskRepository {
   }
 
   saveAll(tasks: Task[]): void {
+    for (const task of tasks) {
+      this.#assertObjectiveExists(task.objectiveId);
+    }
     this.#db.exec("SAVEPOINT saveAll");
     try {
       const insertTask = this.#db.prepare(
@@ -324,13 +346,35 @@ export class SqliteTaskRepository implements TaskRepository {
   }
 
   /**
-   * Conditionally update a task's spec + dependency list.
-   * Returns `applied` with a fresh sha on success, or `conflict` with the
-   * current stored sha when `expectedSha` does not match.
+   * Read the row's actual sha + status and attribute a CAS failure to the sha
+   * predicate when the sha differs, otherwise to the status predicate.
+   * A row that no longer exists reports reason "sha" with empty values.
+   */
+  #taskCasConflict(id: string, expectedSha: string): TaskCasResult {
+    type Row = { sha256: string; status: string };
+    const row = this.#db
+      .prepare("SELECT sha256, status FROM tasks WHERE id = ?")
+      .get(id) as Row | undefined;
+    const currentSha = row?.sha256 ?? "";
+    const currentStatus = row?.status ?? "";
+    return {
+      status: "conflict",
+      currentSha,
+      currentStatus,
+      reason: currentSha !== expectedSha ? "sha" : "status",
+    };
+  }
+
+  /**
+   * Conditionally update a task's spec + dependency list when its sha AND
+   * status both match. `expectedStatus` is the status observed at preflight —
+   * a lifecycle change between preflight and write is a conflict, not a
+   * silent overwrite.
    */
   compareAndApply(
     id: string,
     expectedSha: string,
+    expectedStatus: TaskStatus,
     spec: {
       title: string;
       instructions: string;
@@ -339,18 +383,11 @@ export class SqliteTaskRepository implements TaskRepository {
       verification: string[] | null;
       dependencies: string[];
     },
-  ): CasResult {
-    type ShaRow = { sha256: string };
-    const shaRow = this.#db
-      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
-      .get(id) as ShaRow | undefined;
-    const currentSha = shaRow?.sha256 ?? "";
-    if (currentSha !== expectedSha) {
-      return { status: "conflict", currentSha };
-    }
-    this.#db
+  ): TaskCasResult {
+    const result = this.#db
       .prepare(
-        "UPDATE tasks SET title = ?, instructions = ?, ac = ?, agent = ?, verification = ? WHERE id = ?",
+        "UPDATE tasks SET title = ?, instructions = ?, ac = ?, agent = ?, verification = ?" +
+          " WHERE id = ? AND sha256 = ? AND status = ?",
       )
       .run(
         spec.title,
@@ -359,7 +396,10 @@ export class SqliteTaskRepository implements TaskRepository {
         spec.agent,
         spec.verification !== null ? JSON.stringify(spec.verification) : null,
         id,
+        expectedSha,
+        expectedStatus,
       );
+    if (!(result.changes > 0)) return this.#taskCasConflict(id, expectedSha);
     this.#db.prepare("DELETE FROM task_dependencies WHERE taskId = ?").run(id);
     const insertDep = this.#db.prepare(
       "INSERT INTO task_dependencies (taskId, dependency, position) VALUES (?, ?, ?)",
@@ -368,6 +408,7 @@ export class SqliteTaskRepository implements TaskRepository {
       insertDep.run(id, dep, i);
     }
     this.#stampSha(id);
+    type ShaRow = { sha256: string };
     const freshRow = this.#db
       .prepare("SELECT sha256 FROM tasks WHERE id = ?")
       .get(id) as ShaRow | undefined;
@@ -403,18 +444,29 @@ export class SqliteTaskRepository implements TaskRepository {
   }
 
   /**
-   * Conditionally delete a task (and cascade its graph_import_map row via FK).
-   * Returns `applied` if the sha matched and the row was deleted, or `conflict`
-   * if the sha has drifted.
+   * Conditionally delete a task (and cascade its graph_import_map row via FK)
+   * when its sha AND status both match.
+   * Read-then-delete rather than a guarded DELETE: the five non-cascading
+   * child tables must be cleared before the tasks row, so the predicate has
+   * to be checked before any statement runs. `node:sqlite` is synchronous and
+   * the caller holds `BEGIN IMMEDIATE` (apply-graph.ts:438), so nothing can
+   * interleave between this read and the deletes.
    */
-  conditionalDeleteTask(id: string, expectedSha: string): CasResult {
-    type ShaRow = { sha256: string };
-    const shaRow = this.#db
-      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
-      .get(id) as ShaRow | undefined;
-    const currentSha = shaRow?.sha256 ?? "";
-    if (currentSha !== expectedSha) {
-      return { status: "conflict", currentSha };
+  conditionalDeleteTask(
+    id: string,
+    expectedSha: string,
+    expectedStatus: TaskStatus,
+  ): TaskCasResult {
+    type Row = { sha256: string; status: string };
+    const row = this.#db
+      .prepare("SELECT sha256, status FROM tasks WHERE id = ?")
+      .get(id) as Row | undefined;
+    if (
+      row === undefined ||
+      row.sha256 !== expectedSha ||
+      row.status !== expectedStatus
+    ) {
+      return this.#taskCasConflict(id, expectedSha);
     }
     this.#db.prepare("DELETE FROM task_dependencies WHERE taskId = ?").run(id);
     this.#db

@@ -103,7 +103,7 @@ test("context-preservation: apply(spec+dep edit) leaves task_context byte-identi
   const manifest: ExportManifest = {
     initiativeId,
     packageId,
-    formatVersion: 1,
+    formatVersion: 3,
     digestAlgorithm: "sha256",
     nodes: {
       [initiativeId]: initSha,

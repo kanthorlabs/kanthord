@@ -20,7 +20,6 @@ const baseTask = {
   verification: undefined as string[] | undefined,
   dependencies: ["DEP1", "DEP2"],
   objectiveId: "OBJ1",
-  status: "pending",
 };
 
 test("canonicalTask is stable — same input twice yields identical string", () => {
@@ -67,6 +66,19 @@ test("canonicalTask JSON-escapes title with embedded quote — no collision with
   const t3 = canonicalTask({ ...baseTask, title: "line1\nline2" });
   const t4 = canonicalTask({ ...baseTask, title: "line1", ac: ["line2"] });
   assert.notEqual(t3, t4);
+});
+
+test("canonicalTask never hashes status — the digest carries declarative content only", () => {
+  assert.ok(!canonicalTask(baseTask).includes('"status"'));
+});
+
+test("canonicalTask pins the exact string and key order", () => {
+  assert.equal(
+    canonicalTask(baseTask),
+    '{"title":"implement api","instructions":"Implement POST /oauth/token",' +
+      '"ac":["returns 200 for valid creds"],"agent":"generic@1",' +
+      '"verification":null,"dependencies":["DEP1","DEP2"],"objectiveId":"OBJ1"}',
+  );
 });
 
 test("sha256Hex matches a known node:crypto sha256 vector", () => {

@@ -310,7 +310,6 @@ export class CreateGraph {
             verification: task.verification,
             dependencies: task.dependencies,
             objectiveId: task.objectiveId,
-            status: task.status,
           }),
         );
         nodes[task.id] = sha;

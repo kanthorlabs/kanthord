@@ -10,6 +10,7 @@ import type {
   PkgTask,
   ExportManifest,
 } from "./graph-package.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 
 /**
  * Story 04 T1 — query use case that returns a `GraphPackage`.
@@ -52,7 +53,7 @@ export class ExportInitiative {
     const pendingTasks = allTasks.filter((t) => t.status === "pending");
 
     const packageId = newId();
-    const formatVersion = 1;
+    const formatVersion = GRAPH_FORMAT_VERSION;
 
     // Build manifest: nodes = full snapshot; files = initiative + objectives + pending tasks
     const nodes: Record<string, string> = {};

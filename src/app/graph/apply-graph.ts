@@ -28,7 +28,13 @@ import {
   type DagNode,
 } from "../../domain/graph.ts";
 import { newTask } from "../../domain/task.ts";
-import { CrossInitiativeError, UnknownNodeError } from "./import-errors.ts";
+import type { Task, TaskStatus } from "../../domain/task.ts";
+import {
+  CrossInitiativeError,
+  UnknownNodeError,
+  StaleManifestError,
+} from "./import-errors.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 
 // 26-char uppercase Crockford base-32 (B6) — inline to avoid importing from apps/.
 const ULID_RE_APPLY = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -48,6 +54,10 @@ export interface ApplyClassification {
   class: NodeClass;
   reason?: string; // expected-vs-actual context (B15)
   name?: string; // human-readable label (task title for missing nodes)
+  /** Task status observed during preflight; the CAS status predicate. Tasks only. */
+  liveStatus?: string;
+  /** Set only when a write-phase task CAS failed; says which predicate refused. */
+  casReason?: { kind: "sha" } | { kind: "status"; currentStatus: string };
 }
 
 export interface EdgeChange {
@@ -84,7 +94,7 @@ export interface ApplyGraphResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Given an intended new sha (from the package's content + live DB status),
+ * Given an intended new sha (from the package's declarative content),
  * a baseline sha (from the manifest), a live DB sha, and the live status,
  * return the classification for the node.
  *
@@ -149,6 +159,24 @@ class LateCasConflict extends Error {
   }
 }
 
+/**
+ * Turn a task CAS conflict into the classification reported to the caller.
+ * A failed status predicate is a lifecycle refusal (`locked`); a failed sha
+ * predicate is an out-of-band content change (`drifted`).
+ */
+function casConflictClassification(
+  cls: ApplyClassification,
+  conflict: { reason: "sha" | "status"; currentStatus: string },
+): ApplyClassification {
+  return conflict.reason === "status"
+    ? {
+        ...cls,
+        class: "locked",
+        casReason: { kind: "status", currentStatus: conflict.currentStatus },
+      }
+    : { ...cls, class: "drifted", casReason: { kind: "sha" } };
+}
+
 // ---------------------------------------------------------------------------
 // Use case
 // ---------------------------------------------------------------------------
@@ -199,7 +227,28 @@ export class ApplyGraph {
   }): Promise<ApplyGraphResult> {
     const { pkg } = input;
     const manifest = pkg.manifest;
+    if (
+      manifest !== undefined &&
+      manifest.formatVersion < GRAPH_FORMAT_VERSION
+    ) {
+      throw new StaleManifestError(
+        manifest.formatVersion,
+        GRAPH_FORMAT_VERSION,
+        manifest.initiativeId,
+      );
+    }
     const classifications: ApplyClassification[] = [];
+
+    // A task's objectiveRef may be a package-local ref slug (new objective
+    // authored in this apply) or already the live objective ULID (exported
+    // task, or a ULID pointing at a pre-existing DB objective) — resolve it
+    // to the live id the same way create-graph.ts does, so classify, write,
+    // and creation-sha phases all digest the same value.
+    const objRefToId = new Map(
+      pkg.objectives.map((o) => [o.ref, o.id ?? o.ref]),
+    );
+    const resolveObjectiveId = (ref: string): string =>
+      objRefToId.get(ref) ?? ref;
 
     // --- Classify initiative ---
     if (pkg.initiative.id !== undefined) {
@@ -272,8 +321,7 @@ export class ApplyGraph {
               agent: task.agent,
               verification: task.verification ?? undefined,
               dependencies: task.dependencies,
-              objectiveId: task.objectiveRef,
-              status: liveStatus,
+              objectiveId: resolveObjectiveId(task.objectiveRef),
             }),
           );
           classifications.push({
@@ -282,6 +330,7 @@ export class ApplyGraph {
             id: task.id,
             sourcePath: task.sourcePath,
             class: classifyNode(intendedSha, baselineSha, liveSha, liveStatus),
+            liveStatus,
           });
         }
       } else {
@@ -306,8 +355,7 @@ export class ApplyGraph {
               agent: task.agent,
               verification: task.verification ?? undefined,
               dependencies: task.dependencies,
-              objectiveId: task.objectiveRef,
-              status: liveStatus,
+              objectiveId: resolveObjectiveId(task.objectiveRef),
             }),
           );
           classifications.push({
@@ -316,6 +364,7 @@ export class ApplyGraph {
             id: nodeId,
             sourcePath: task.sourcePath,
             class: classifyNode(intendedSha, creationSha, liveSha, liveStatus),
+            liveStatus,
           });
         } else {
           // No map hit → new node to create
@@ -357,11 +406,17 @@ export class ApplyGraph {
             kind = "task";
           }
 
+          let liveStatus: string | undefined;
+          let liveTask: Task | undefined;
+          if (kind === "task") {
+            liveTask = this.#deps.tasks.get(fileId);
+            liveStatus = liveTask?.status ?? "pending";
+          }
+
           // When --delete-missing is set, enrich the reason for ineligible nodes.
           let reason: string | undefined = undefined;
           if (input.deleteMissing === true) {
             if (kind === "task") {
-              const liveTask = this.#deps.tasks.get(fileId);
               const liveSha = this.#deps.tasks.getSha256(fileId);
               if (liveTask !== undefined && liveTask.status !== "pending") {
                 reason = "non-pending";
@@ -376,8 +431,7 @@ export class ApplyGraph {
             }
           }
 
-          const taskName =
-            kind === "task" ? this.#deps.tasks.get(fileId)?.title : undefined;
+          const taskName = liveTask?.title;
 
           classifications.push({
             kind,
@@ -386,6 +440,7 @@ export class ApplyGraph {
             class: "missing",
             reason,
             ...(taskName !== undefined ? { name: taskName } : {}),
+            ...(liveStatus !== undefined ? { liveStatus } : {}),
           });
         }
       }
@@ -630,6 +685,8 @@ export class ApplyGraph {
       const pkgObjById = new Map(
         pkg.objectives.filter((o) => o.id !== undefined).map((o) => [o.id!, o]),
       );
+      // resolveObjectiveId is hoisted above the classify pass so both phases
+      // agree on one resolution.
 
       let deletedCount = 0;
       const createdNodesList: Array<{
@@ -666,19 +723,21 @@ export class ApplyGraph {
                     verification: pkgTask.verification ?? undefined,
                     dependencies: pkgTask.dependencies,
                     objectiveId: liveTask.objectiveId,
-                    status: liveTask.status,
                   }),
                 );
                 const specChanged = intendedShaWithOrigObj !== baselineSha;
+                const resolvedObjectiveId = resolveObjectiveId(
+                  pkgTask.objectiveRef,
+                );
                 const objectiveChanged =
-                  pkgTask.objectiveRef !== liveTask.objectiveId;
+                  resolvedObjectiveId !== liveTask.objectiveId;
 
                 if (!specChanged && objectiveChanged) {
                   // Pure reparent — only the parent reference changed.
                   const reparentResult = this.#deps.tasks.conditionalReparent(
                     cls.id,
                     baselineSha,
-                    pkgTask.objectiveRef,
+                    resolvedObjectiveId,
                   );
                   if (reparentResult.status === "conflict") {
                     throw new LateCasConflict(cls);
@@ -688,6 +747,7 @@ export class ApplyGraph {
                   const casResult = this.#deps.tasks.compareAndApply(
                     cls.id,
                     baselineSha,
+                    (cls.liveStatus ?? "pending") as TaskStatus,
                     {
                       title: pkgTask.title,
                       instructions: pkgTask.instructions,
@@ -698,7 +758,9 @@ export class ApplyGraph {
                     },
                   );
                   if (casResult.status === "conflict") {
-                    throw new LateCasConflict(cls);
+                    throw new LateCasConflict(
+                      casConflictClassification(cls, casResult),
+                    );
                   }
                   // If the objectiveRef also changed, reparent using the fresh sha
                   // returned by compareAndApply (the row's sha changed after the update).
@@ -706,7 +768,7 @@ export class ApplyGraph {
                     const reparentResult = this.#deps.tasks.conditionalReparent(
                       cls.id,
                       casResult.freshSha,
-                      pkgTask.objectiveRef,
+                      resolvedObjectiveId,
                     );
                     if (reparentResult.status === "conflict") {
                       throw new LateCasConflict(cls);
@@ -754,9 +816,12 @@ export class ApplyGraph {
               if (pkgTask === undefined) continue;
 
               const newTaskId = this.#deps.newId();
+              const resolvedObjectiveId = resolveObjectiveId(
+                pkgTask.objectiveRef,
+              );
               const task = newTask({
                 id: newTaskId,
-                objectiveId: pkgTask.objectiveRef,
+                objectiveId: resolvedObjectiveId,
                 title: pkgTask.title,
                 instructions: pkgTask.instructions,
                 ac: pkgTask.ac,
@@ -768,6 +833,8 @@ export class ApplyGraph {
 
               // Compute the creation sha from the canonical formula (same formula
               // as the SQLite write-hook) so it matches what the repo will stamp.
+              // Must use the SAME resolved objectiveId just persisted, or the
+              // freshly created task classifies `drifted` on the very next apply.
               const creationSha = sha256Hex(
                 canonicalTask({
                   title: pkgTask.title,
@@ -776,8 +843,7 @@ export class ApplyGraph {
                   agent: pkgTask.agent,
                   verification: pkgTask.verification ?? undefined,
                   dependencies: pkgTask.dependencies,
-                  objectiveId: pkgTask.objectiveRef,
-                  status: "pending",
+                  objectiveId: resolvedObjectiveId,
                 }),
               );
               this.#deps.importMap.reserve(
@@ -809,11 +875,14 @@ export class ApplyGraph {
                 const casResult = this.#deps.tasks.conditionalDeleteTask(
                   cls.id,
                   baselineSha,
+                  (cls.liveStatus ?? "pending") as TaskStatus,
                 );
                 if (casResult.status === "applied") {
                   deletedCount++;
                 } else if (casResult.status === "conflict") {
-                  throw new LateCasConflict(cls);
+                  throw new LateCasConflict(
+                    casConflictClassification(cls, casResult),
+                  );
                 }
               }
             }

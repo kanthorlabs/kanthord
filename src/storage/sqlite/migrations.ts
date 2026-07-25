@@ -1,4 +1,61 @@
+import { createHash } from "node:crypto";
+
 import type { Migration } from "./migrate.ts";
+
+/**
+ * FROZEN snapshot of `canonicalTask` as it stood at schema version 20 — status
+ * still part of the content hash. Used by migration 21 to recompute what a
+ * stored `creation_sha` would have been, so status-only drift can be told apart
+ * from genuine content drift. Never edit: it describes the past, not the present.
+ */
+export function canonicalTaskV20(t: {
+  title: string;
+  instructions: string;
+  ac: string[];
+  agent: string;
+  verification: string[] | undefined;
+  dependencies: string[];
+  objectiveId: string;
+  status: string;
+}): string {
+  return JSON.stringify({
+    title: t.title,
+    instructions: t.instructions,
+    ac: t.ac,
+    agent: t.agent,
+    verification: t.verification ?? null,
+    dependencies: [...t.dependencies].sort(),
+    objectiveId: t.objectiveId,
+    status: t.status,
+  });
+}
+
+/**
+ * FROZEN snapshot of `canonicalTask` as of migration 21 (EPIC 007.18: `status`
+ * removed). Migrations must be immutable, so this must never be edited to track
+ * later changes to `src/domain/sha.ts` — a future change to the canonical form
+ * gets its own migration with its own snapshot. Deliberately not imported from
+ * domain/, which no migration does.
+ */
+export function canonicalTaskV21(t: {
+  title: string;
+  instructions: string;
+  ac: string[];
+  agent: string;
+  verification: string[] | undefined;
+  dependencies: string[];
+  objectiveId: string;
+}): string {
+  return JSON.stringify({
+    title: t.title,
+    instructions: t.instructions,
+    ac: t.ac,
+    agent: t.agent,
+    verification: t.verification ?? null,
+    dependencies: [...t.dependencies].sort(),
+    objectiveId: t.objectiveId,
+  });
+}
 
 /**
  * The ordered migration registry. Later epics append their migrations here —
@@ -536,5 +593,88 @@ CREATE TABLE objective_dependencies (
   PRIMARY KEY (objectiveId, dependency)
 );
 `),
+  },
+  {
+    version: 21,
+    name: "007.18-s2-content-sha-restamp",
+    // First JS-looping migration in this registry: the task content digest is a
+    // sha256 over canonical JSON and cannot be computed in SQL.
+    //
+    // `tasks.sha256` is always rewritten to the new status-less digest — it is
+    // derived from live content by definition.
+    //
+    // `graph_import_map.creation_sha` is rewritten ONLY when the row's content
+    // has not drifted since the baseline was minted, tested by recomputing the
+    // old status-bearing digest at status "pending" (the status every baseline
+    // was created with). Rewriting unconditionally would erase real drift;
+    // rewriting nothing would leave every progressed task permanently drifted.
+    // Each package's row is judged on its own stored baseline.
+    //
+    // Objective and initiative shas are untouched: their canonical forms never
+    // included status.
+    up: (db) => {
+      type TaskRow = {
+        id: string;
+        objectiveId: string;
+        title: string;
+        agent: string;
+        instructions: string;
+        ac: string;
+        verification: string | null;
+      };
+      const sha = (canonical: string): string =>
+        createHash("sha256").update(canonical, "utf8").digest("hex");
+
+      const rows = db
+        .prepare(
+          "SELECT id, objectiveId, title, agent, instructions, ac, verification FROM tasks",
+        )
+        .all() as TaskRow[];
+      const depsStmt = db.prepare(
+        "SELECT dependency FROM task_dependencies WHERE taskId = ? ORDER BY position ASC",
+      );
+      const mapStmt = db.prepare(
+        "SELECT rowid AS rid, creation_sha FROM graph_import_map WHERE task_id = ?",
+      );
+      const updTask = db.prepare("UPDATE tasks SET sha256 = ? WHERE id = ?");
+      const updMap = db.prepare(
+        "UPDATE graph_import_map SET creation_sha = ? WHERE rowid = ?",
+      );
+
+      for (const row of rows) {
+        const deps = (
+          depsStmt.all(row.id) as Array<{ dependency: string }>
+        ).map((d) => d.dependency);
+        const fields = {
+          title: row.title,
+          instructions: row.instructions,
+          ac: JSON.parse(row.ac) as string[],
+          agent: row.agent,
+          verification:
+            row.verification != null
+              ? (JSON.parse(row.verification) as string[])
+              : undefined,
+          dependencies: deps,
+          objectiveId: row.objectiveId,
+        };
+        const newSha = sha(canonicalTaskV21(fields));
+        // What `creation_sha` would hold if content never changed since import.
+        const undriftedBaseline = sha(
+          canonicalTaskV20({ ...fields, status: "pending" }),
+        );
+
+        updTask.run(newSha, row.id);
+
+        const mapRows = mapStmt.all(row.id) as Array<{
+          rid: number;
+          creation_sha: string;
+        }>;
+        for (const m of mapRows) {
+          if (m.creation_sha === undriftedBaseline) updMap.run(newSha, m.rid);
+          // else: genuine content drift — leave the baseline so it still
+          // classifies `drifted` on the next apply.
+        }
+      }
+    },
   },
 ];

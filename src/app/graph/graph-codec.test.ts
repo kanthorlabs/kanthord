@@ -413,8 +413,8 @@ describe("src/app/graph/graph-codec.ts — Story 10 T2: bindings/context codec r
 // ---------------------------------------------------------------------------
 
 describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + format version", () => {
-  test("GRAPH_FORMAT_VERSION === 2 (bumped for C1 bindings + context)", () => {
-    assert.strictEqual(GRAPH_FORMAT_VERSION, 2);
+  test("GRAPH_FORMAT_VERSION === 3 (bumped for EPIC 007.18 — status left the task content digest)", () => {
+    assert.strictEqual(GRAPH_FORMAT_VERSION, 3);
   });
 
   test("PkgInitiative accepts bindings field (compile + runtime: field present on object)", () => {

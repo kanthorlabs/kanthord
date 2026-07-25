@@ -122,6 +122,34 @@ export class DriftConflictError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// StaleManifestError — the manifest's formatVersion predates the current
+// content-hash change (EPIC 007.18 Story 3); its node shas were computed
+// under the old status-bearing canonicalTask and cannot be trusted.
+// ---------------------------------------------------------------------------
+
+export class StaleManifestError extends Error {
+  readonly formatVersion: number;
+  readonly expectedVersion: number;
+  readonly initiativeId: string;
+
+  constructor(
+    formatVersion: number,
+    expectedVersion: number,
+    initiativeId: string,
+  ) {
+    super(
+      `manifest formatVersion ${formatVersion} is stale (expected ${expectedVersion}) — ` +
+        `its node shas predate the content-hash change; re-export with: ` +
+        `kanthord export initiative ${initiativeId} --out <dir>`,
+    );
+    this.name = "StaleManifestError";
+    this.formatVersion = formatVersion;
+    this.expectedVersion = expectedVersion;
+    this.initiativeId = initiativeId;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Story 10 C1 — binding alias errors
 // ---------------------------------------------------------------------------
 
