@@ -21,7 +21,10 @@ import {
   AmbiguousBindingNameError,
   IncompatibleBindingTypeError,
 } from "../../app/graph/import-errors.ts";
-import type { ApplyGraphResult } from "../../app/graph/apply-graph.ts";
+import type {
+  ApplyGraphResult,
+  EdgeChange,
+} from "../../app/graph/apply-graph.ts";
 import type {
   PkgInitiative,
   PkgObjective,
@@ -199,6 +202,25 @@ async function runApply(
     }
   }
 
+  // Render edge changes — when nothing was written, committed-edge labels
+  // ("removed", "added") must use the "would ..." prefix so the output does
+  // not claim a write that a refusal prevented (B3).
+  if (result.edgeChanges !== undefined) {
+    for (const ec of result.edgeChanges) {
+      if (ec.change === "would-remove") {
+        stdout.push(`would remove edge: ${ec.id} -> ${ec.dependency}`);
+      } else if (ec.change === "removed") {
+        stdout.push(
+          `${nothingWritten ? "would remove" : "removed"} edge: ${ec.id} -> ${ec.dependency}`,
+        );
+      } else if (ec.change === "added") {
+        stdout.push(
+          `${nothingWritten ? "would add" : "added"} edge: ${ec.id} -> ${ec.dependency}`,
+        );
+      }
+    }
+  }
+
   // Print summary — append drifted/locked counts when there are conflicts,
   // so a blocked apply's counter line does not look like "0 created, ...".
   const s = result.summary;
@@ -296,6 +318,15 @@ async function runApply(
     if (driftedCount > 0) clauses.push(`${driftedCount} drifted node(s)`);
     if (lockedCount > 0) clauses.push(`${lockedCount} locked node(s)`);
     stderr.push(`refused: ${clauses.join(" and ")}`);
+  }
+  if (
+    !dryRun &&
+    result.refusedEdgeRemovals !== undefined &&
+    result.refusedEdgeRemovals.length > 0
+  ) {
+    stderr.push(
+      `refused: ${result.refusedEdgeRemovals.length} edge removal(s) need --confirm-delete`,
+    );
   }
 
   return { exitCode, stdout, stderr };
@@ -422,11 +453,16 @@ async function runCreate(
   for (const obj of pkg.objectives) {
     const assignedId = objectiveRefToId[obj.ref];
     if (assignedId === undefined) continue;
+    // Resolve after refs from slugs → ULIDs (Story 5b)
+    const resolvedAfter = (obj.after ?? [])
+      .map((ref) => objectiveRefToId[ref] ?? ref)
+      .sort();
     const updatedObjective: PkgObjective = {
       ...obj,
       id: assignedId,
       // Resolve initiative ref from slug → ULID (B1 — all refs become ULIDs post-handoff)
       initiativeRef: initiativeId,
+      after: resolvedAfter,
     };
     await atomicWrite(
       join(dir, obj.sourcePath),

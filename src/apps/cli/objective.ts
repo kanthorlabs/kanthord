@@ -13,8 +13,9 @@ export async function runCreateObjective(
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const initiativeId = args["initiative"] as string;
   const name = args["name"] as string;
+  const after = (args["after"] as string[]) ?? [];
   try {
-    const id = await createObjective.execute({ initiativeId, name });
+    const id = await createObjective.execute({ initiativeId, name, after });
     return {
       exitCode: 0,
       stdout: [id],
@@ -71,10 +72,22 @@ export async function runGetObjective(
       `id: ${output.id}`,
       `name: ${output.name}`,
       `status: ${output.status}`,
+    ];
+    if (output.after.length > 0) {
+      lines.push(`after: ${output.after.join(" ")}`);
+    }
+    for (const w of output.waiting) {
+      if (w.neverSatisfies) {
+        lines.push(`waiting on: ${w.id} (discarded — will never satisfy)`);
+      } else {
+        lines.push(`waiting on: ${w.id}`);
+      }
+    }
+    lines.push(
       ...output.integrations.map(
         (i) => `integration: ${i.repository} ${i.state}`,
       ),
-    ];
+    );
     return { exitCode: 0, stdout: lines, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };

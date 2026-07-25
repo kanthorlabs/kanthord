@@ -12,6 +12,7 @@ import { GetDbStatus } from "./app/db/get-db-status.ts";
 import { SqliteProjectRepository } from "./storage/sqlite/sqlite-project-repository.ts";
 import { SqliteInitiativeRepository } from "./storage/sqlite/sqlite-initiative-repository.ts";
 import { SqliteTaskRepository } from "./storage/sqlite/sqlite-task-repository.ts";
+import { SqliteSequencingRepository } from "./storage/sqlite/sqlite-sequencing-repository.ts";
 import { SqliteReferenceResolver } from "./storage/sqlite/reference-resolver.ts";
 import { SqliteTransactor } from "./storage/sqlite/sqlite-transactor.ts";
 import { SqliteEventFeed } from "./events/sqlite.ts";
@@ -24,12 +25,16 @@ import { RenameProject } from "./app/project/rename-project.ts";
 import { GetProject } from "./app/project/get-project.ts";
 import { FindProject } from "./app/project/find-project.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
+import { AddInitiativeDependency } from "./app/initiative/add-initiative-dependency.ts";
+import { RemoveInitiativeDependency } from "./app/initiative/remove-initiative-dependency.ts";
 import { RenameInitiative } from "./app/initiative/rename-initiative.ts";
 import { FindInitiative } from "./app/initiative/find-initiative.ts";
 import { GetInitiative } from "./app/initiative/get-initiative.ts";
 import { PauseInitiative } from "./app/initiative/pause-initiative.ts";
 import { ResumeInitiative } from "./app/initiative/resume-initiative.ts";
 import { CreateObjective } from "./app/objective/create-objective.ts";
+import { AddObjectiveDependency } from "./app/objective/add-objective-dependency.ts";
+import { RemoveObjectiveDependency } from "./app/objective/remove-objective-dependency.ts";
 import { RenameObjective } from "./app/objective/rename-objective.ts";
 import { FindObjective } from "./app/objective/find-objective.ts";
 import { GetObjective } from "./app/objective/get-objective.ts";
@@ -157,6 +162,7 @@ export function buildDeps(
   const transactor = new SqliteTransactor(db);
   const jobQueue = new SqliteJobQueue(db);
   const unitOfWork = new SqliteUnitOfWork(db);
+  const sequencingRepository = new SqliteSequencingRepository(db);
 
   const createProject = new CreateProject(projectRepository);
   const renameProject = new RenameProject(projectRepository);
@@ -165,6 +171,8 @@ export function buildDeps(
   const createInitiative = new CreateInitiative(
     initiativeRepository,
     referenceResolver,
+    sequencingRepository,
+    transactor,
   );
   const renameInitiative = new RenameInitiative(initiativeRepository);
   const findInitiative = new FindInitiative(initiativeRepository);
@@ -179,6 +187,8 @@ export function buildDeps(
   const createObjective = new CreateObjective(
     initiativeRepository,
     referenceResolver,
+    sequencingRepository,
+    transactor,
   );
   const renameObjective = new RenameObjective(initiativeRepository);
   const findObjective = new FindObjective(initiativeRepository);
@@ -251,13 +261,44 @@ export function buildDeps(
     events,
     transactor,
   );
+  const addInitiativeDependency = new AddInitiativeDependency(
+    initiativeRepository,
+    taskRepository,
+    sequencingRepository,
+    referenceResolver,
+    transactor,
+  );
+  const removeInitiativeDependency = new RemoveInitiativeDependency(
+    initiativeRepository,
+    taskRepository,
+    sequencingRepository,
+    referenceResolver,
+    transactor,
+  );
+  const addObjectiveDependency = new AddObjectiveDependency(
+    initiativeRepository,
+    taskRepository,
+    sequencingRepository,
+    referenceResolver,
+    transactor,
+  );
+  const removeObjectiveDependency = new RemoveObjectiveDependency(
+    initiativeRepository,
+    taskRepository,
+    sequencingRepository,
+    referenceResolver,
+    transactor,
+  );
   const listTasks = new ListTasks(taskRepository);
   const listInitiatives = new ListInitiatives(initiativeRepository);
   const listObjectives = new ListObjectives(initiativeRepository);
-  const exportInitiative = new ExportInitiative({
-    tasks: taskRepository,
-    initiatives: initiativeRepository,
-  });
+  const exportInitiative = new ExportInitiative(
+    {
+      tasks: taskRepository,
+      initiatives: initiativeRepository,
+    },
+    sequencingRepository,
+  );
   const importMap = new SqliteGraphImportMap(db);
   const storeGraph = new StoreGraph(taskRepository);
   const createGraph = new CreateGraph({
@@ -268,6 +309,7 @@ export function buildDeps(
     importMap,
     uow: unitOfWork,
     newId,
+    sequencing: sequencingRepository,
   });
   const applyGraph = new ApplyGraph({
     initiatives: initiativeRepository,
@@ -276,6 +318,7 @@ export function buildDeps(
     importMap,
     uow: unitOfWork,
     newId,
+    sequencing: sequencingRepository,
   });
   const listEvents = new ListEvents(events);
   // Constructed here (above GetTask/RetryTask) so it can be passed as the 4th
@@ -376,6 +419,7 @@ export function buildDeps(
       jobQueue,
       events,
       unitOfWork,
+      sequencingRepository,
     );
     const recover = new RecoverInterruptedTasks(
       jobQueue,
@@ -404,6 +448,8 @@ export function buildDeps(
       saveObjective: (objective: Objective) =>
         initiativeRepository.saveObjective(objective),
       getObjectiveParentOid,
+      listObjectiveAfter: (objectiveId: string) =>
+        sequencingRepository.listObjectiveAfter(objectiveId),
     };
 
     const runNext = new RunNextTask(
@@ -416,6 +462,10 @@ export function buildDeps(
       {
         initiativeWorkspaces: { ensure: ensureInitiativeWorkspace },
         workspaces,
+        sequencing: {
+          listObjectiveAfter: (id: string) =>
+            sequencingRepository.listObjectiveAfter(id),
+        },
       },
     );
     return new RunDaemon({
@@ -513,8 +563,24 @@ export function buildDeps(
   // Wire the real ApproveTask WITH landing: the RepositoryLanding adapter
   // (Story 05 T3) plus the persisted candidate store + workspace manager so a
   // repository-bound approve lands onto the configured branch of the home repo.
+  // Objective-level after edges (007.17) are gated through the sequencing param;
+  // the store still carries listObjectiveAfter and getObjective for backward compat.
+  const approveTaskStore = {
+    get: (id: string) => taskRepository.get(id),
+    save: (task: Task) => taskRepository.save(task),
+    getTaskResult: (taskId: string) => taskRepository.getTaskResult(taskId),
+    saveTaskResult: (taskId: string, row: TaskResultRow) =>
+      taskRepository.saveTaskResult(taskId, row),
+    listByInitiative: (initiativeId: string) =>
+      taskRepository.listByInitiative(initiativeId),
+    getInitiativeId: (taskId: string) => taskRepository.getInitiativeId(taskId),
+    getTaskContext: (taskId: string) => taskRepository.getTaskContext(taskId),
+    listObjectiveAfter: (objectiveId: string) =>
+      sequencingRepository.listObjectiveAfter(objectiveId),
+    getObjective: (id: string) => initiativeRepository.getObjective(id),
+  };
   const approveTask = new ApproveTask(
-    taskRepository,
+    approveTaskStore,
     jobQueue,
     events,
     unitOfWork,
@@ -523,6 +589,10 @@ export function buildDeps(
     landingRepository,
     workspaces,
     resolveHomeDir,
+    {
+      listObjectiveAfter: (id: string) =>
+        sequencingRepository.listObjectiveAfter(id),
+    },
   );
 
   // Resolve an initiative to its bound repository's home dir by reading the
@@ -616,12 +686,14 @@ export function buildDeps(
     initiativeRepository.setWorkspace?.(initiativeId, ws.dir);
   };
 
-  const getInitiative = new GetInitiative({
-    get: (id) => initiativeRepository.get(id),
-  });
+  const getInitiative = new GetInitiative(
+    { get: (id) => initiativeRepository.get(id) },
+    sequencingRepository,
+  );
   const getObjective = new GetObjective(
     { getObjective: (id) => initiativeRepository.getObjective(id) },
     { resolveInitiativeRepository },
+    sequencingRepository,
   );
 
   const approveObjective = new ApproveObjective(
@@ -735,6 +807,10 @@ export function buildDeps(
     createTask,
     addDependency,
     removeDependency,
+    addInitiativeDependency,
+    removeInitiativeDependency,
+    addObjectiveDependency,
+    removeObjectiveDependency,
     listTasks,
     retryTask,
     getTask,

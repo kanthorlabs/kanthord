@@ -22,10 +22,17 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
   }
 
   save(initiative: Initiative): void {
+    const after = this.#db
+      .prepare(
+        "SELECT dependency FROM initiative_dependencies WHERE initiativeId = ? ORDER BY dependency",
+      )
+      .all(initiative.id) as Array<{ dependency: string }>;
+    const afterList = after.map((r) => r.dependency);
     const sha256 = sha256Hex(
       canonicalInitiative({
         name: initiative.name,
         projectId: initiative.projectId,
+        after: afterList,
       }),
     );
     const status = initiative.status ?? "building";
@@ -68,10 +75,17 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
   }
 
   saveObjective(objective: Objective): void {
+    const after = this.#db
+      .prepare(
+        "SELECT dependency FROM objective_dependencies WHERE objectiveId = ? ORDER BY dependency",
+      )
+      .all(objective.id) as Array<{ dependency: string }>;
+    const afterList = after.map((r) => r.dependency);
     const sha256 = sha256Hex(
       canonicalObjective({
         name: objective.name,
         initiativeId: objective.initiativeId,
+        after: afterList,
       }),
     );
     const status = objective.status ?? "building";
@@ -233,8 +247,18 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
     if (currentSha !== expectedSha) {
       return { status: "conflict", currentSha };
     }
+    const after = this.#db
+      .prepare(
+        "SELECT dependency FROM initiative_dependencies WHERE initiativeId = ? ORDER BY dependency",
+      )
+      .all(id) as Array<{ dependency: string }>;
+    const afterList = after.map((r) => r.dependency);
     const freshSha = sha256Hex(
-      canonicalInitiative({ name, projectId: row!.projectId }),
+      canonicalInitiative({
+        name,
+        projectId: row!.projectId,
+        after: afterList,
+      }),
     );
     this.#db
       .prepare("UPDATE initiatives SET name = ?, sha256 = ? WHERE id = ?")
@@ -260,8 +284,18 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
     if (currentSha !== expectedSha) {
       return { status: "conflict", currentSha };
     }
+    const after = this.#db
+      .prepare(
+        "SELECT dependency FROM objective_dependencies WHERE objectiveId = ? ORDER BY dependency",
+      )
+      .all(id) as Array<{ dependency: string }>;
+    const afterList = after.map((r) => r.dependency);
     const freshSha = sha256Hex(
-      canonicalObjective({ name, initiativeId: row!.initiativeId }),
+      canonicalObjective({
+        name,
+        initiativeId: row!.initiativeId,
+        after: afterList,
+      }),
     );
     this.#db
       .prepare("UPDATE objectives SET name = ?, sha256 = ? WHERE id = ?")

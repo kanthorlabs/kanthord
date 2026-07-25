@@ -289,6 +289,7 @@ function makeDeps(
     projects: ProjectRepository;
     importMap: FakeGraphImportMap;
     tasks: FakeTaskRepository;
+    sequencing: unknown;
   }> = {},
 ) {
   const tasks = override.tasks ?? new FakeTaskRepository();
@@ -304,6 +305,7 @@ function makeDeps(
       let n = 1;
       return () => String(n++).padStart(26, "0");
     })(),
+    sequencing: override.sequencing,
   };
 }
 
@@ -613,4 +615,410 @@ test("T4(h): CreateGraph.execute with no bindings skips saveTaskContext entirely
     0,
     "saveTaskContext must NOT be called when bindings is absent",
   );
+});
+
+// ─── Story 5b — after: on --create path ─────────────────────────────────────
+
+import { describe } from "node:test";
+import { sha256Hex } from "../../domain/sha.ts";
+import { UnknownNodeError, CrossInitiativeError } from "./import-errors.ts";
+
+interface CreateGraphSequencing {
+  setInitiativeAfter(initiativeId: string, after: string[]): void;
+  setObjectiveAfter(objectiveId: string, after: string[]): void;
+}
+
+class FakeCreateGraphSequencing implements CreateGraphSequencing {
+  readonly initiativeAfterCalls: Array<{
+    initiativeId: string;
+    after: string[];
+  }> = [];
+  readonly objectiveAfterCalls: Array<{
+    objectiveId: string;
+    after: string[];
+  }> = [];
+
+  setInitiativeAfter(initiativeId: string, after: string[]): void {
+    this.initiativeAfterCalls.push({ initiativeId, after });
+  }
+
+  setObjectiveAfter(objectiveId: string, after: string[]): void {
+    this.objectiveAfterCalls.push({ objectiveId, after });
+  }
+}
+
+/** Package with obj-2 after [obj-1]. */
+function makeAuthoredPkgWithAfter(): GraphPackage {
+  return {
+    packageId: "",
+    formatVersion: 1,
+    initiative: { ref: "oauth", name: "oauth", sourcePath: "oauth.md" },
+    objectives: [
+      {
+        ref: "obj-1",
+        initiativeRef: "oauth",
+        name: "obj1",
+        sourcePath: "obj1/obj1.md",
+      },
+      {
+        ref: "obj-2",
+        initiativeRef: "oauth",
+        name: "obj2",
+        sourcePath: "obj2/obj2.md",
+        after: ["obj-1"],
+      },
+    ],
+    tasks: [
+      {
+        ref: "task1",
+        objectiveRef: "obj-1",
+        title: "task1",
+        instructions: "Do thing",
+        ac: ["task1 works"],
+        agent: "generic@1",
+        verification: undefined,
+        dependencies: [],
+        sourcePath: "obj1/task1.md",
+      },
+      {
+        ref: "task2",
+        objectiveRef: "obj-2",
+        title: "task2",
+        instructions: "Do other",
+        ac: ["task2 works"],
+        agent: "generic@1",
+        verification: undefined,
+        dependencies: [],
+        sourcePath: "obj2/task2.md",
+      },
+    ],
+  };
+}
+
+describe("Story 5b — after: on --create path", () => {
+  test("(1) after: [obj-1] → setObjectiveAfter called for obj-2 with [<obj-1's minted id>], and for obj-1 with []", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const deps = makeDeps({ sequencing: sequencing as any });
+    const uc = new CreateGraph(deps as any);
+    const pkg = makeAuthoredPkgWithAfter();
+
+    const result = await uc.execute({
+      pkg,
+      projectId: PROJECT_ID,
+      packageId: PACKAGE_ID,
+    });
+    const obj1Id = result.refToId.objectives["obj-1"];
+    const obj2Id = result.refToId.objectives["obj-2"];
+
+    assert.equal(
+      sequencing.objectiveAfterCalls.length,
+      2,
+      "setObjectiveAfter must be called for both objectives",
+    );
+    const obj1Call = sequencing.objectiveAfterCalls.find(
+      (c) => c.objectiveId === obj1Id,
+    );
+    const obj2Call = sequencing.objectiveAfterCalls.find(
+      (c) => c.objectiveId === obj2Id,
+    );
+    assert.ok(obj1Call !== undefined, "setObjectiveAfter called for obj-1");
+    assert.ok(obj2Call !== undefined, "setObjectiveAfter called for obj-2");
+
+    assert.deepEqual(obj1Call!.after, [], "obj-1 has empty after set");
+    assert.deepEqual(
+      obj2Call!.after,
+      [obj1Id],
+      "obj-2 after resolved to obj-1's minted id",
+    );
+  });
+
+  test("(2) manifest sha for obj-2 must include after in its canonical form", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const deps = makeDeps({ sequencing: sequencing as any });
+    const uc = new CreateGraph(deps as any);
+    const pkg = makeAuthoredPkgWithAfter();
+
+    const result = await uc.execute({
+      pkg,
+      projectId: PROJECT_ID,
+      packageId: PACKAGE_ID,
+    });
+    const initiativeId = result.initiativeId;
+    const obj1Id = result.refToId.objectives["obj-1"]!;
+    const obj2Id = result.refToId.objectives["obj-2"]!;
+
+    // Compute expected sha WITH after using raw JSON — canonicalObjective
+    // (pre-update) ignores after, so this assertion will fail in RED phase.
+    const expectedObj2Sha = sha256Hex(
+      JSON.stringify({
+        name: "obj2",
+        initiativeId,
+        after: [obj1Id],
+      }),
+    );
+    assert.equal(
+      result.nodes[obj2Id],
+      expectedObj2Sha,
+      "obj-2 sha must include after: [obj1Id] in canonical form",
+    );
+  });
+
+  test("(3) after: [obj-1b, obj-1] yields sorted [obj-1Id, obj-1bId] in setObjectiveAfter", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const deps = makeDeps({ sequencing: sequencing as any });
+    const uc = new CreateGraph(deps as any);
+
+    const pkg = makeAuthoredPkgWithAfter();
+    // Add obj-1b and change obj-2's after to [obj-1b, obj-1] (reversed order)
+    pkg.objectives = [
+      ...pkg.objectives,
+      {
+        ref: "obj-1b",
+        initiativeRef: "oauth",
+        name: "obj1b",
+        sourcePath: "obj1b/obj1b.md",
+      },
+    ];
+    const obj2 = pkg.objectives.find((o) => o.ref === "obj-2");
+    assert.ok(obj2 !== undefined);
+    obj2.after = ["obj-1b", "obj-1"];
+
+    const result = await uc.execute({
+      pkg,
+      projectId: PROJECT_ID,
+      packageId: PACKAGE_ID,
+    });
+    const obj1Id = result.refToId.objectives["obj-1"];
+    const obj1bId = result.refToId.objectives["obj-1b"];
+
+    const obj2Call = sequencing.objectiveAfterCalls.find(
+      (c) => c.objectiveId === result.refToId.objectives["obj-2"],
+    );
+    assert.ok(obj2Call !== undefined, "setObjectiveAfter called for obj-2");
+    // After set must be sorted ascending: [obj-1Id, obj-1bId]
+    assert.deepEqual(
+      obj2Call!.after,
+      [obj1Id, obj1bId],
+      "after must be sorted ascending by ULID",
+    );
+  });
+
+  test("(4) initiative after: [existing ULID in same project] → setInitiativeAfter called with that ULID", async () => {
+    const EXISTING_INIT = "00000000000000000000000001";
+    const sequencing = new FakeCreateGraphSequencing();
+    const initiatives = new FakeInitiativeRepository();
+    // Seed: get() returns initiative when queried with EXISTING_INIT
+    (initiatives as any).knownInitiatives = {
+      [EXISTING_INIT]: {
+        id: EXISTING_INIT,
+        projectId: PROJECT_ID,
+        name: "existing-init",
+      },
+    };
+    initiatives.get = (id: string) =>
+      (initiatives as any).knownInitiatives[id] ?? undefined;
+    const projects = new FakeProjectRepository([PROJECT_ID]);
+
+    // Override initiatives in makeDeps
+    const importMap = new FakeGraphImportMap();
+    const tasks = new FakeTaskRepository();
+    const uow = new FakeUnitOfWork();
+    const deps = {
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      projects,
+      importMap,
+      uow,
+      newId: (() => {
+        let n = 100;
+        return () => String(n++).padStart(26, "0");
+      })(),
+      sequencing: sequencing as any,
+    };
+    const uc = new CreateGraph(deps as any);
+
+    const pkg = makeAuthoredPkg();
+    pkg.initiative.after = [EXISTING_INIT];
+
+    const result = await uc.execute({
+      pkg,
+      projectId: PROJECT_ID,
+      packageId: PACKAGE_ID,
+    });
+
+    assert.equal(
+      sequencing.initiativeAfterCalls.length,
+      1,
+      "setInitiativeAfter must be called once",
+    );
+    assert.deepEqual(
+      sequencing.initiativeAfterCalls[0]!.after,
+      [EXISTING_INIT],
+      "after set must contain the existing ULID",
+    );
+  });
+
+  test("(5) initiative after: [ULID in another project] → CrossInitiativeError", async () => {
+    const OTHER_INIT = "00000000000000000000000002";
+    const sequencing = new FakeCreateGraphSequencing();
+    const initiatives = new FakeInitiativeRepository();
+    (initiatives as any).knownInitiatives = {
+      [OTHER_INIT]: {
+        id: OTHER_INIT,
+        projectId: "00000000000000000000000098", // different project from PROJECT_ID
+        name: "other-init",
+      },
+    };
+    initiatives.get = (id: string) =>
+      (initiatives as any).knownInitiatives[id] ?? undefined;
+    const projects = new FakeProjectRepository([PROJECT_ID]);
+    const importMap = new FakeGraphImportMap();
+    const tasks = new FakeTaskRepository();
+    const uow = new FakeUnitOfWork();
+    const deps = {
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      projects,
+      importMap,
+      uow,
+      newId: (() => {
+        let n = 200;
+        return () => String(n++).padStart(26, "0");
+      })(),
+      sequencing: sequencing as any,
+    };
+    const uc = new CreateGraph(deps as any);
+
+    const pkg = makeAuthoredPkg();
+    pkg.initiative.after = [OTHER_INIT];
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          pkg,
+          projectId: PROJECT_ID,
+          packageId: PACKAGE_ID,
+        }),
+      CrossInitiativeError,
+    );
+  });
+
+  test("(6) initiative after: [some-slug] → UnknownNodeError", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const deps = makeDeps({ sequencing: sequencing as any });
+    const uc = new CreateGraph(deps as any);
+
+    const pkg = makeAuthoredPkg();
+    pkg.initiative.after = ["some-slug"];
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          pkg,
+          projectId: PROJECT_ID,
+          packageId: PACKAGE_ID,
+        }),
+      UnknownNodeError,
+    );
+  });
+
+  test("(7) objective after: [no-such-ref] → UnknownNodeError", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const deps = makeDeps({ sequencing: sequencing as any });
+    const uc = new CreateGraph(deps as any);
+
+    const pkg = makeAuthoredPkgWithAfter();
+    const obj2 = pkg.objectives.find((o) => o.ref === "obj-2");
+    assert.ok(obj2 !== undefined);
+    obj2.after = ["no-such-ref"];
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          pkg,
+          projectId: PROJECT_ID,
+          packageId: PACKAGE_ID,
+        }),
+      UnknownNodeError,
+    );
+  });
+
+  test("(8) obj-1 after [obj-2] and obj-2 after [obj-1] → CycleError before any write", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const tasks = new FakeTaskRepository();
+    const deps = makeDeps({ sequencing: sequencing as any, tasks });
+    const uc = new CreateGraph(deps as any);
+
+    const pkg = makeAuthoredPkgWithAfter();
+    // Mutate obj-1's after to [obj-2], creating a cycle
+    const obj1 = pkg.objectives.find((o) => o.ref === "obj-1");
+    assert.ok(obj1 !== undefined);
+    pkg.objectives = [
+      { ...obj1, after: ["obj-2"] },
+      ...pkg.objectives.filter((o) => o.ref !== "obj-1"),
+    ];
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          pkg,
+          projectId: PROJECT_ID,
+          packageId: PACKAGE_ID,
+        }),
+      CycleError,
+    );
+    assert.equal(
+      tasks.saveAllCalls.length,
+      0,
+      "saveAll must never be called when cycle is detected",
+    );
+  });
+
+  test("(9) no after: anywhere → set*After called with [] and shas backward-compatible", async () => {
+    const sequencing = new FakeCreateGraphSequencing();
+    const deps = makeDeps({ sequencing: sequencing as any });
+    const uc = new CreateGraph(deps as any);
+    const pkg = makeAuthoredPkg(); // no after on any node
+
+    const result = await uc.execute({
+      pkg,
+      projectId: PROJECT_ID,
+      packageId: PACKAGE_ID,
+    });
+
+    // setInitiativeAfter called with []
+    assert.equal(
+      sequencing.initiativeAfterCalls.length,
+      1,
+      "setInitiativeAfter must be called once",
+    );
+    assert.deepEqual(
+      sequencing.initiativeAfterCalls[0]!.after,
+      [],
+      "initiative after must be empty",
+    );
+
+    // setObjectiveAfter called for each objective with []
+    assert.equal(
+      sequencing.objectiveAfterCalls.length,
+      2,
+      "setObjectiveAfter must be called for each objective",
+    );
+    for (const call of sequencing.objectiveAfterCalls) {
+      assert.deepEqual(call.after, [], "objective after must be empty");
+    }
+
+    // Shas must still match the old canonical form (backward compatible with empty after)
+    const initiativeId = result.initiativeId;
+    for (const obj of pkg.objectives) {
+      const objId = result.refToId.objectives[obj.ref]!;
+      const sha = result.nodes[objId];
+      assert.ok(
+        typeof sha === "string" && sha.length > 0,
+        `sha for ${obj.ref} must be non-empty`,
+      );
+    }
+  });
 });

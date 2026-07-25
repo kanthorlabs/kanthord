@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { parseTask, parseGraphPackage, serializeNode } from "./graph-codec.ts";
 import { GRAPH_FORMAT_VERSION } from "./format.ts";
 import type { PkgInitiative, PkgObjective, PkgTask } from "./graph-package.ts";
+import { MalformedReferenceError } from "./refs.ts";
 
 // ---------------------------------------------------------------------------
 // parseTask — RF1 (single task, string → value)
@@ -225,6 +226,7 @@ describe("src/app/graph/graph-codec.ts — serializeNode", () => {
       ref: "oauth",
       name: "OAuth",
       sourcePath: "init.md",
+      after: [],
     });
     assert.ok(
       out.includes("kind: initiative"),
@@ -369,6 +371,7 @@ describe("src/app/graph/graph-codec.ts — Story 10 T2: bindings/context codec r
       ref: "todo",
       name: "Todo",
       sourcePath: "todo.md",
+      after: [],
       bindings: { source: "repository" },
     };
     const serialized = serializeNode(initiative);
@@ -420,6 +423,7 @@ describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + 
       ref: "test",
       name: "Test",
       sourcePath: "p.md",
+      after: [],
       bindings: { source: "repository" },
     };
     assert.deepEqual(_a.bindings, { source: "repository" });
@@ -432,6 +436,7 @@ describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + 
       initiativeRef: "init",
       name: "Obj",
       sourcePath: "obj.md",
+      after: [],
       context: { source: "source" },
     };
     assert.deepEqual(_b.context, { source: "source" });
@@ -452,5 +457,261 @@ describe("src/app/graph/graph-codec.ts — Story 10 T1: GraphPackage bindings + 
       context: { model: "model" },
     };
     assert.deepEqual(_c.context, { model: "model" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 5a — after: in the graph codec (types, parse, serialize)
+// ---------------------------------------------------------------------------
+
+describe("src/app/graph/graph-codec.ts — Story 5a: after codec", () => {
+  const ULID_A = "01JQVBZ3MHKP4FTGWR5XYSRZ04";
+  const ULID_B = "01JQVBZ3MHKP4FTGWR5XYSRZ05";
+
+  test("(1) initiative.md with after: [B, A] parses to after deep-equal ascending-sorted [A, B]", () => {
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      `after: [${ULID_B}, ${ULID_A}]`,
+      "---",
+      "",
+    ].join("\n");
+    const pkg = parseGraphPackage([{ sourcePath: "init.md", content: initMd }]);
+    assert.deepEqual(pkg.initiative.after, [ULID_A, ULID_B]);
+  });
+
+  test("(2) objective.md with block form (after: / - obj-1) parses to ['obj-1']", () => {
+    const objMd = [
+      "---",
+      "kind: objective",
+      "ref: obj1",
+      "initiative: test",
+      "name: Obj1",
+      "after:",
+      "  - obj-1",
+      "---",
+      "",
+    ].join("\n");
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      "---",
+      "",
+    ].join("\n");
+    const pkg = parseGraphPackage([
+      { sourcePath: "init.md", content: initMd },
+      { sourcePath: "obj1.md", content: objMd },
+    ]);
+    const obj = pkg.objectives[0];
+    assert.ok(obj, "objective must be parsed");
+    assert.deepEqual(obj.after, ["obj-1"]);
+  });
+
+  test("(3) initiative.md with no after: key parses to after: []", () => {
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      "---",
+      "",
+    ].join("\n");
+    const pkg = parseGraphPackage([{ sourcePath: "init.md", content: initMd }]);
+    assert.deepEqual(pkg.initiative.after, []);
+  });
+
+  test("(3b) objective.md with no after: key parses to after: []", () => {
+    const objMd = [
+      "---",
+      "kind: objective",
+      "ref: obj1",
+      "initiative: test",
+      "name: Obj1",
+      "---",
+      "",
+    ].join("\n");
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      "---",
+      "",
+    ].join("\n");
+    const pkg = parseGraphPackage([
+      { sourcePath: "init.md", content: initMd },
+      { sourcePath: "obj1.md", content: objMd },
+    ]);
+    assert.deepEqual(pkg.objectives[0]!.after, []);
+  });
+
+  test("(4) after: ['  BAD VALUE  '] throws MalformedReferenceError", () => {
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      "after: ['  BAD VALUE  ']",
+      "---",
+      "",
+    ].join("\n");
+    assert.throws(
+      () => parseGraphPackage([{ sourcePath: "init.md", content: initMd }]),
+      MalformedReferenceError,
+    );
+  });
+
+  test("(5) duplicate entries parse to deduped array", () => {
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      "after: [a, a]",
+      "---",
+      "",
+    ].join("\n");
+    const pkg = parseGraphPackage([{ sourcePath: "init.md", content: initMd }]);
+    assert.deepEqual(pkg.initiative.after, ["a"]);
+  });
+
+  test("(6) serializeInitiative: after: [b,a] emits after: [a, b] after name: and before bindings:", () => {
+    const initiative: PkgInitiative = {
+      ref: "test",
+      name: "Test",
+      sourcePath: "init.md",
+      bindings: { source: "repo" },
+      after: ["b", "a"],
+    };
+    const out = serializeNode(initiative);
+    const nameIdx = out.indexOf("name: Test");
+    const afterIdx = out.indexOf("after: [a, b]");
+    const bindingsIdx = out.indexOf("bindings:");
+    assert.ok(nameIdx >= 0, "name: must be present");
+    assert.ok(afterIdx >= 0, "after: line must be present");
+    assert.ok(bindingsIdx >= 0, "bindings: must be present");
+    assert.ok(afterIdx > nameIdx, "after: must appear after name:");
+    assert.ok(bindingsIdx > afterIdx, "bindings: must appear after after:");
+  });
+
+  test("(6b) serializeInitiative with after: [] emits no after: line", () => {
+    const initiative: PkgInitiative = {
+      ref: "test",
+      name: "Test",
+      sourcePath: "init.md",
+      after: [],
+    };
+    const out = serializeNode(initiative);
+    assert.ok(
+      !out.includes("after:"),
+      "empty after must not produce after: line",
+    );
+  });
+
+  test("(6c) serializeObjective: after: [b,a] emits after: [a, b] after name: and before context:", () => {
+    const objective: PkgObjective = {
+      ref: "obj1",
+      initiativeRef: "test",
+      name: "Obj1",
+      sourcePath: "obj.md",
+      context: { source: "repo" },
+      after: ["b", "a"],
+    };
+    const out = serializeNode(objective);
+    const nameIdx = out.indexOf("name: Obj1");
+    const afterIdx = out.indexOf("after: [a, b]");
+    const contextIdx = out.indexOf("context:");
+    assert.ok(nameIdx >= 0, "name: must be present");
+    assert.ok(afterIdx >= 0, "after: line must be present");
+    assert.ok(contextIdx >= 0, "context: must be present");
+    assert.ok(afterIdx > nameIdx, "after: must appear after name:");
+    assert.ok(contextIdx > afterIdx, "context: must appear after after:");
+  });
+
+  test("(6d) serializeObjective with after: [] emits no after: line", () => {
+    const objective: PkgObjective = {
+      ref: "obj1",
+      initiativeRef: "test",
+      name: "Obj1",
+      sourcePath: "obj.md",
+      after: [],
+    };
+    const out = serializeNode(objective);
+    assert.ok(
+      !out.includes("after:"),
+      "empty after must not produce after: line",
+    );
+  });
+
+  test("(7) round trip: parse → serialize → parse yields identical after for both node kinds", () => {
+    // Initiative
+    const initMd = [
+      "---",
+      "kind: initiative",
+      "ref: test",
+      "name: Test",
+      "after: [b, a]",
+      "---",
+      "",
+    ].join("\n");
+    const pkg1 = parseGraphPackage([
+      { sourcePath: "init.md", content: initMd },
+    ]);
+    const serialized = serializeNode(pkg1.initiative);
+    const pkg2 = parseGraphPackage([
+      { sourcePath: "init.md", content: serialized },
+    ]);
+    assert.deepEqual(pkg2.initiative.after, ["a", "b"]);
+
+    // Objective
+    const objMd = [
+      "---",
+      "kind: objective",
+      "ref: obj1",
+      "initiative: test",
+      "name: Obj1",
+      "after: [obj-2, obj-1]",
+      "---",
+      "",
+    ].join("\n");
+    const pkg3 = parseGraphPackage([
+      { sourcePath: "init.md", content: initMd },
+      { sourcePath: "obj1.md", content: objMd },
+    ]);
+    const serialized2 = serializeNode(pkg3.objectives[0]!);
+    const pkg4 = parseGraphPackage([
+      { sourcePath: "init.md", content: initMd },
+      { sourcePath: "obj1.md", content: serialized2 },
+    ]);
+    assert.deepEqual(pkg4.objectives[0]!.after, ["obj-1", "obj-2"]);
+  });
+
+  test("(8) serializeNode dispatches correctly with after present on both kinds", () => {
+    const initOut = serializeNode({
+      ref: "test",
+      name: "Test",
+      sourcePath: "init.md",
+      after: ["a"],
+    });
+    assert.ok(
+      initOut.includes("kind: initiative"),
+      "initiative serializeNode must include kind: initiative",
+    );
+
+    const objOut = serializeNode({
+      ref: "obj1",
+      initiativeRef: "test",
+      name: "Obj1",
+      sourcePath: "obj.md",
+      after: ["a"],
+    });
+    assert.ok(
+      objOut.includes("kind: objective"),
+      "objective serializeNode must include kind: objective",
+    );
   });
 });

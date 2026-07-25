@@ -372,6 +372,121 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
+  test("(16) adds initiative-dependency from --initiative and --after inputs", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      addInitiativeDependency: {
+        execute: async (input: unknown) => {
+          received = input;
+        },
+      },
+    } as Parameters<typeof buildAddCommand>[0];
+
+    await buildAddCommand(
+      deps,
+      cap.io as Parameters<typeof buildAddCommand>[1],
+    ).parseAsync(
+      ["initiative-dependency", "--initiative", "i1", "--after", "i2"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, { initiativeId: "i1", dependencyId: "i2" });
+    assert.deepEqual(cap.out, []);
+    assert.deepEqual(cap.err, ["initiative dependency added: i1 after i2\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(17) adds objective-dependency from --objective and --after inputs", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      addObjectiveDependency: {
+        execute: async (input: unknown) => {
+          received = input;
+        },
+      },
+    } as Parameters<typeof buildAddCommand>[0];
+
+    await buildAddCommand(
+      deps,
+      cap.io as Parameters<typeof buildAddCommand>[1],
+    ).parseAsync(
+      ["objective-dependency", "--objective", "o1", "--after", "o2"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, { objectiveId: "o1", dependencyId: "o2" });
+    assert.deepEqual(cap.out, []);
+    assert.deepEqual(cap.err, ["objective dependency added: o1 after o2\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(18) removes initiative-dependency and objective-dependency with empty stderr", async () => {
+    let initReceived: unknown;
+    const cap1 = capture();
+    const deps1 = {
+      removeInitiativeDependency: {
+        execute: async (input: unknown) => {
+          initReceived = input;
+        },
+      },
+    } as Parameters<typeof buildRemoveCommand>[0];
+
+    await buildRemoveCommand(
+      deps1,
+      cap1.io as Parameters<typeof buildRemoveCommand>[1],
+    ).parseAsync(
+      ["initiative-dependency", "--initiative", "i1", "--after", "i2"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(initReceived, { initiativeId: "i1", dependencyId: "i2" });
+    assert.deepEqual(cap1.out, []);
+    assert.deepEqual(cap1.err, []);
+    assert.equal(cap1.code(), 0);
+
+    let objReceived: unknown;
+    const cap2 = capture();
+    const deps2 = {
+      removeObjectiveDependency: {
+        execute: async (input: unknown) => {
+          objReceived = input;
+        },
+      },
+    } as Parameters<typeof buildRemoveCommand>[0];
+
+    await buildRemoveCommand(
+      deps2,
+      cap2.io as Parameters<typeof buildRemoveCommand>[1],
+    ).parseAsync(
+      ["objective-dependency", "--objective", "o1", "--after", "o2"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(objReceived, { objectiveId: "o1", dependencyId: "o2" });
+    assert.deepEqual(cap2.out, []);
+    assert.deepEqual(cap2.err, []);
+    assert.equal(cap2.code(), 0);
+  });
+
+  test("(19) omitting --after on initiative-dependency exits non-zero", async () => {
+    const cap = capture();
+    const command = buildAddCommand(
+      {} as Parameters<typeof buildAddCommand>[0],
+      cap.io as Parameters<typeof buildAddCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["initiative-dependency", "--initiative", "i1"], {
+        from: "user",
+      }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+  });
+
   test("documents reject resolution values in canonical help", async () => {
     const cap = capture();
     const command = buildRejectCommand(

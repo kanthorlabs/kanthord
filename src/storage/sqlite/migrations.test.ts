@@ -62,16 +62,18 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 19 and creates exactly seventeen core tables", () => {
+test("migrates to version 20 and creates all tables including edge tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 19);
+    assert.equal(userVersion(db), 20);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
+      "initiative_dependencies",
       "initiatives",
       "jobs",
       "landing_candidates",
       "landing_integrations",
+      "objective_dependencies",
       "objectives",
       "observability_refs",
       "projects",
@@ -89,7 +91,7 @@ test("migrates to version 19 and creates exactly seventeen core tables", () => {
 
 // ── (b) columns per table ────────────────────────────────────────────────────
 
-test("schema columns match locked DDL for all sixteen tables", () => {
+test("schema columns match locked DDL for all tables", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "projects"), ["id", "name"]);
     assert.deepEqual(columnNames(db, "observability_refs"), [
@@ -207,6 +209,14 @@ test("schema columns match locked DDL for all sixteen tables", () => {
       "fetch_time",
       "base_sha",
     ]);
+    assert.deepEqual(columnNames(db, "initiative_dependencies"), [
+      "initiativeId",
+      "dependency",
+    ]);
+    assert.deepEqual(columnNames(db, "objective_dependencies"), [
+      "objectiveId",
+      "dependency",
+    ]);
   });
 });
 
@@ -218,6 +228,34 @@ test("foreign key constraint rejects task with unknown objectiveId", () => {
       db.prepare(
         "INSERT INTO tasks(id, objectiveId, title, status) VALUES (?, ?, ?, ?)",
       ).run("t1", "nonexistent", "title", "pending");
+    });
+  });
+});
+
+test("foreign key constraint rejects initiative_dependencies row with unknown dependency", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-fk', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-fk', 'proj-fk', 'I');
+    `);
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiative_dependencies(initiativeId, dependency) VALUES (?, ?)",
+      ).run("init-fk", "nonexistent-init");
+    });
+  });
+});
+
+test("foreign key constraint rejects objective_dependencies row with unknown objectiveId", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-fk-obj', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-fk-obj', 'proj-fk-obj', 'I');
+    `);
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objective_dependencies(objectiveId, dependency) VALUES (?, ?)",
+      ).run("nonexistent-obj", "nonexistent-dep");
     });
   });
 });
@@ -318,6 +356,49 @@ test("composite primary key rejects duplicate task_dependencies row", () => {
   });
 });
 
+test("composite primary key rejects duplicate initiative_dependencies row", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-pk', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-a', 'proj-pk', 'A');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-b', 'proj-pk', 'B');
+    `);
+
+    db.prepare(
+      "INSERT INTO initiative_dependencies(initiativeId, dependency) VALUES (?, ?)",
+    ).run("init-b", "init-a");
+
+    // duplicate (initiativeId, dependency) → rejected by composite PK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiative_dependencies(initiativeId, dependency) VALUES (?, ?)",
+      ).run("init-b", "init-a");
+    });
+  });
+});
+
+test("composite primary key rejects duplicate objective_dependencies row", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-pk-obj', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-pk-obj', 'proj-pk-obj', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-a', 'init-pk-obj', 'A');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-b', 'init-pk-obj', 'B');
+    `);
+
+    db.prepare(
+      "INSERT INTO objective_dependencies(objectiveId, dependency) VALUES (?, ?)",
+    ).run("obj-b", "obj-a");
+
+    // duplicate (objectiveId, dependency) → rejected by composite PK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objective_dependencies(objectiveId, dependency) VALUES (?, ?)",
+      ).run("obj-b", "obj-a");
+    });
+  });
+});
+
 // ── (g) idempotency ──────────────────────────────────────────────────────────
 
 test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
@@ -327,7 +408,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 19);
+    assert.equal(second.version, 20);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -740,8 +821,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      19,
-      "schema version must be 19 after all migrations",
+      20,
+      "schema version must be 20 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -873,7 +954,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 19);
+    assert.equal(userVersion(db), 20);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -977,7 +1058,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 19);
+    assert.equal(userVersion(db), 20);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1056,7 +1137,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 19);
+    assert.equal(userVersion(db), 20);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1093,7 +1174,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 19);
+    assert.equal(report.version, 20);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",

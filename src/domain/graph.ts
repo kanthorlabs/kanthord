@@ -1,9 +1,12 @@
 import type { TaskStatus } from "./task.ts";
 
-export interface GraphNode {
+export interface DagNode {
   id: string;
-  status: TaskStatus;
   dependencies: string[];
+}
+
+export interface GraphNode extends DagNode {
+  status: TaskStatus;
 }
 
 export class DuplicateTaskError extends Error {
@@ -38,7 +41,7 @@ export class CycleError extends Error {
   }
 }
 
-export function validateGraph(nodes: GraphNode[]): void {
+export function validateDag(nodes: readonly DagNode[]): void {
   // 1. Duplicates first (highest precedence)
   const seen = new Set<string>();
   for (const node of nodes) {
@@ -103,6 +106,10 @@ export function validateGraph(nodes: GraphNode[]): void {
       dfs(node.id);
     }
   }
+}
+
+export function validateGraph(nodes: GraphNode[]): void {
+  validateDag(nodes);
 }
 
 export function serialOrder(nodes: GraphNode[]): string[] {

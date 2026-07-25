@@ -23,6 +23,7 @@ export interface PkgObjective {
   initiativeRef: string;
   name: string;
   sourcePath: string;
+  after?: string[];
   context?: Record<string, string>; // C1: objective-level context (alias → resolved resource id)
 }
 
@@ -31,6 +32,7 @@ export interface PkgInitiative {
   ref: string;
   name: string;
   sourcePath: string;
+  after?: string[];
   bindings?: Record<string, string>; // C1: alias → resource type map (e.g. { source: "repository" })
 }
 

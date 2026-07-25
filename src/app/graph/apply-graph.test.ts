@@ -121,21 +121,35 @@ class FakeInitiativeRepository implements InitiativeRepository {
   }
   // CAS stubs — will satisfy InitiativeRepository once SE adds these to the interface.
   conditionalRenameInitiative(
-    _id: string,
-    _expectedSha: string,
+    id: string,
+    expectedSha: string,
     _name: string,
   ): CasResult {
-    return { status: "conflict", currentSha: "" };
+    const storedSha = this.#shas.get(id);
+    if (storedSha === expectedSha) {
+      return { status: "applied", freshSha: "applied-fake-" + id };
+    }
+    return { status: "conflict", currentSha: storedSha ?? "" };
   }
   conditionalRenameObjective(
-    _id: string,
-    _expectedSha: string,
+    id: string,
+    expectedSha: string,
     _name: string,
   ): CasResult {
-    return { status: "conflict", currentSha: "" };
+    const storedSha = this.#shas.get(id);
+    if (storedSha === expectedSha) {
+      return { status: "applied", freshSha: "applied-fake-" + id };
+    }
+    return { status: "conflict", currentSha: storedSha ?? "" };
   }
-  conditionalDeleteObjective(_id: string, _expectedSha: string): CasResult {
-    return { status: "conflict", currentSha: "" };
+  conditionalDeleteObjective(id: string, expectedSha: string): CasResult {
+    const storedSha = this.#shas.get(id);
+    if (storedSha === expectedSha) {
+      this.#objectives.delete(id);
+      this.#shas.delete(id);
+      return { status: "applied", freshSha: "deleted-fake-" + id };
+    }
+    return { status: "conflict", currentSha: storedSha ?? "" };
   }
 }
 
@@ -2237,5 +2251,241 @@ describe("RB regressions — classify-order + late-CAS-rollback", () => {
       false,
       "late CAS conflict (compareAndApply returned conflict) must make applied:false",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Story 5c — apply-path after edge handling
+// ---------------------------------------------------------------------------
+
+class FakeSequencingRepository {
+  readonly #initiativeEdges = new Map<string, string[]>();
+  readonly #objectiveEdges = new Map<string, string[]>();
+
+  seedInitiativeAfter(initiativeId: string, after: string[]): void {
+    this.#initiativeEdges.set(initiativeId, [...after]);
+  }
+  seedObjectiveAfter(objectiveId: string, after: string[]): void {
+    this.#objectiveEdges.set(objectiveId, [...after]);
+  }
+  listInitiativeAfter(initiativeId: string): string[] {
+    return this.#initiativeEdges.get(initiativeId) ?? [];
+  }
+  listObjectiveAfter(objectiveId: string): string[] {
+    return this.#objectiveEdges.get(objectiveId) ?? [];
+  }
+}
+
+function makeTwoObjPackage(): GraphPackage {
+  const base = makeBasePackage();
+  base.objectives.push({
+    id: OBJ2_ID,
+    ref: OBJ2_ID,
+    name: "frontend",
+    initiativeRef: INIT_ID,
+    sourcePath: "frontend/frontend.md",
+  });
+  base.manifest = {
+    ...base.manifest!,
+    nodes: {
+      ...base.manifest!.nodes,
+      [OBJ2_ID]: OBJ2_BASE_SHA,
+    },
+    files: [...base.manifest!.files, OBJ2_ID],
+    refToId: {
+      ...base.manifest!.refToId,
+      objectives: { ...base.manifest!.refToId.objectives, [OBJ2_ID]: OBJ2_ID },
+    },
+  };
+  return base;
+}
+
+function makeTwoObjDb(): {
+  initiatives: FakeInitiativeRepository;
+  tasks: FakeTaskRepository;
+} {
+  const { initiatives, tasks } = makeBaseDb();
+  initiatives.seed(
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    INIT_BASE_SHA,
+    [
+      {
+        obj: { id: OBJ1_ID, initiativeId: INIT_ID, name: "backend" },
+        sha: OBJ1_BASE_SHA,
+      },
+      {
+        obj: { id: OBJ2_ID, initiativeId: INIT_ID, name: "frontend" },
+        sha: OBJ2_BASE_SHA,
+      },
+    ],
+  );
+  return { initiatives, tasks };
+}
+
+describe("Story 5c — apply-path after edge handling", () => {
+  test("(S5c-1) no edge changes when package and DB agree → applied:true, no edge classifications", async () => {
+    const { initiatives, tasks } = makeTwoObjDb();
+    const sequencing = new FakeSequencingRepository();
+    sequencing.seedObjectiveAfter(OBJ1_ID, []);
+    sequencing.seedObjectiveAfter(OBJ2_ID, []);
+    const pkg = makeTwoObjPackage();
+    pkg.objectives[0]!.after = [];
+    pkg.objectives[1]!.after = [];
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+      sequencing,
+    } as any);
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+    assert.equal(result.applied, true);
+  });
+
+  test("(S5c-2) edge added in package (DB lacks it) → edge added, applied:true", async () => {
+    const { initiatives, tasks } = makeTwoObjDb();
+    const sequencing = new FakeSequencingRepository();
+    sequencing.seedObjectiveAfter(OBJ1_ID, []);
+    sequencing.seedObjectiveAfter(OBJ2_ID, []); // DB has no edge between OBJ2 and OBJ1
+    const pkg = makeTwoObjPackage();
+    pkg.objectives[0]!.after = [];
+    pkg.objectives[1]!.after = [OBJ1_ID]; // package says OBJ2 after: [OBJ1]
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+      sequencing,
+    } as any);
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+    assert.equal(result.applied, true);
+    // After the apply, the sequencing repo must have OBJ2 after: [OBJ1]
+    assert.deepEqual(sequencing.listObjectiveAfter(OBJ1_ID), []);
+    assert.deepEqual(sequencing.listObjectiveAfter(OBJ2_ID), [OBJ1_ID]);
+  });
+
+  test("(S5c-3) edge removed from package without confirmDelete → gated, edge survives", async () => {
+    const { initiatives, tasks } = makeTwoObjDb();
+    const sequencing = new FakeSequencingRepository();
+    sequencing.seedObjectiveAfter(OBJ1_ID, []);
+    sequencing.seedObjectiveAfter(OBJ2_ID, [OBJ1_ID]); // DB has edge
+    const pkg = makeTwoObjPackage();
+    pkg.objectives[0]!.after = [];
+    pkg.objectives[1]!.after = []; // package dropped the edge
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+      sequencing,
+    } as any);
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+    // Must be applied:false — refused because edges would be removed without --confirm-delete
+    assert.equal(result.applied, false);
+    // Edge must survive in the DB (gated removal — nothing was written)
+    assert.deepEqual(sequencing.listObjectiveAfter(OBJ2_ID), [OBJ1_ID]);
+    // The result must carry the would-remove edge change
+    assert.ok(result.edgeChanges !== undefined);
+    const wouldRemove = result.edgeChanges!.filter(
+      (ec) => ec.change === "would-remove",
+    );
+    assert.equal(wouldRemove.length, 1);
+    assert.equal(wouldRemove[0]!.id, OBJ2_ID);
+    assert.equal(wouldRemove[0]!.dependency, OBJ1_ID);
+    // The result must carry refused edge removals
+    assert.ok(result.refusedEdgeRemovals !== undefined);
+    assert.equal(result.refusedEdgeRemovals!.length, 1);
+  });
+
+  test("(S5c-4) edge removed from package with confirmDelete → edge removed, applied:true", async () => {
+    const { initiatives, tasks } = makeTwoObjDb();
+    const sequencing = new FakeSequencingRepository();
+    sequencing.seedObjectiveAfter(OBJ1_ID, []);
+    sequencing.seedObjectiveAfter(OBJ2_ID, [OBJ1_ID]); // DB has edge
+    const pkg = makeTwoObjPackage();
+    pkg.objectives[0]!.after = [];
+    pkg.objectives[1]!.after = []; // package dropped the edge
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+      sequencing,
+    } as any);
+    const result = await uc.execute({
+      pkg,
+      initiativeId: INIT_ID,
+      confirmDelete: true,
+    });
+
+    assert.equal(result.applied, true);
+    // Edge must be removed after confirmDelete
+    assert.deepEqual(sequencing.listObjectiveAfter(OBJ2_ID), []);
+  });
+
+  test("(S5c-5) cycle in objective after set → CycleError before any write", async () => {
+    const { initiatives, tasks } = makeTwoObjDb();
+    const sequencing = new FakeSequencingRepository();
+    sequencing.seedObjectiveAfter(OBJ1_ID, []); // DB has no edge for OBJ1
+    sequencing.seedObjectiveAfter(OBJ2_ID, []);
+    const pkg = makeTwoObjPackage();
+    // OBJ1 after: [OBJ2] and OBJ2 after: [OBJ1] → cycle
+    pkg.objectives[0]!.after = [OBJ2_ID];
+    pkg.objectives[1]!.after = [OBJ1_ID];
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+      sequencing,
+    } as any);
+
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      CycleError,
+    );
+  });
+
+  test("(S5c-6) add edge to initiative level → edge added, applied:true", async () => {
+    const { initiatives, tasks } = makeTwoObjDb();
+    const sequencing = new FakeSequencingRepository();
+    sequencing.seedInitiativeAfter(INIT_ID, []);
+    const pkg = makeTwoObjPackage();
+    pkg.initiative.after = []; // no initiative-level edge in package
+    pkg.objectives[0]!.after = [];
+    pkg.objectives[1]!.after = [];
+    // Package says initiative after: [] → no edge change
+
+    const uc = new ApplyGraph({
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+      sequencing,
+    } as any);
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+
+    assert.equal(result.applied, true);
+    assert.deepEqual(sequencing.listInitiativeAfter(INIT_ID), []);
   });
 });

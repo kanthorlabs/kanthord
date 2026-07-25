@@ -11,6 +11,8 @@ import {
   EmbeddedCredentialError,
   UnknownModelError,
   ObjectiveNotAwaitingConfirmationError,
+  SequencingLockedError,
+  SequencingScopeError,
 } from "../../app/errors.ts";
 import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
 import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
@@ -64,6 +66,8 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof DriftConflictError ||
     err instanceof EmbeddedCredentialError ||
     err instanceof UnknownModelError ||
+    err instanceof SequencingLockedError ||
+    err instanceof SequencingScopeError ||
     err instanceof ImmutableFieldError ||
     err instanceof CacheConflictError
   ) {

@@ -128,6 +128,8 @@ describe("runGetInitiative", () => {
       status: "building",
       branch: `kanthord/init/${INIT_ID}`,
       workspace: "/tmp/kanthord-init-clone",
+      after: [],
+      waiting: [],
     });
   });
 
@@ -145,5 +147,152 @@ describe("runGetInitiative", () => {
       r.stderr[0]!.startsWith("error:"),
       `expected 'error:' prefix, got: ${r.stderr[0]}`,
     );
+  });
+});
+
+// Story 6 — after / waiting rendering
+const S6_X = "01JZZZZZZZZZZZZZZZZZZZX001";
+const S6_Y = "01JZZZZZZZZZZZZZZZZZZZY002";
+
+describe("runGetInitiative Story 6 — after/waiting rendering", () => {
+  test("(S6-6) after: [] → no after: or waiting on: line", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "p1",
+      name: "test",
+      status: "building",
+    };
+    const getInitiative = makeGetInitiative(initiative);
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID },
+      getInitiative,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("after:")),
+      "no after: line when empty",
+    );
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("waiting on:")),
+      "no waiting on: line when empty",
+    );
+  });
+
+  test("(S6-7) after: [X] with X building → stdout has after: X and waiting on: X before branch:", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "p1",
+      name: "test",
+      status: "building",
+    };
+    const other: Initiative = {
+      id: S6_X,
+      projectId: "p1",
+      name: "other",
+      status: "building",
+    };
+    const source = new MemInitiativeSource([initiative, other]);
+    const sequencing = { listInitiativeAfter: () => [S6_X] };
+    const getInitiative = new GetInitiative(source, sequencing);
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID },
+      getInitiative,
+    );
+    assert.equal(r.exitCode, 0);
+    const afterIdx = r.stdout.findIndex((l) => l.startsWith("after:"));
+    const waitIdx = r.stdout.findIndex((l) => l.startsWith("waiting on:"));
+    const branchIdx = r.stdout.findIndex((l) => l.startsWith("branch:"));
+    assert.ok(afterIdx >= 0, "stdout must have after: line");
+    assert.ok(waitIdx >= 0, "stdout must have waiting on: line");
+    assert.ok(afterIdx < branchIdx, "after: must appear before branch:");
+  });
+
+  test("(S6-8) after: [X] with X discarded → stdout has waiting on: X (discarded — will never satisfy)", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "p1",
+      name: "test",
+      status: "building",
+    };
+    const other: Initiative = {
+      id: S6_X,
+      projectId: "p1",
+      name: "other",
+      status: "discarded",
+    };
+    const source = new MemInitiativeSource([initiative, other]);
+    const sequencing = { listInitiativeAfter: () => [S6_X] };
+    const getInitiative = new GetInitiative(source, sequencing);
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID },
+      getInitiative,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      r.stdout.some((l) => l.includes("(discarded — will never satisfy)")),
+      "discarded warning must be in output",
+    );
+  });
+
+  test("(S6-9) after: [A, B] → stdout has after: A B (space-joined)", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "p1",
+      name: "test",
+      status: "building",
+    };
+    const a: Initiative = {
+      id: S6_Y,
+      projectId: "p1",
+      name: "A",
+      status: "landed",
+    };
+    const b: Initiative = {
+      id: S6_X,
+      projectId: "p1",
+      name: "B",
+      status: "landed",
+    };
+    const source = new MemInitiativeSource([initiative, a, b]);
+    const sequencing = { listInitiativeAfter: () => [S6_Y, S6_X] };
+    const getInitiative = new GetInitiative(source, sequencing);
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID },
+      getInitiative,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      r.stdout.some(
+        (l) => l.startsWith("after:") && l.includes(S6_Y) && l.includes(S6_X),
+      ),
+      "after: line must contain both ids space-joined",
+    );
+  });
+
+  test("(S6-10) --json: parsed stdout has after and waiting matching the DTO", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "p1",
+      name: "test",
+      status: "building",
+    };
+    const other: Initiative = {
+      id: S6_X,
+      projectId: "p1",
+      name: "other",
+      status: "building",
+    };
+    const source = new MemInitiativeSource([initiative, other]);
+    const sequencing = { listInitiativeAfter: () => [S6_X] };
+    const getInitiative = new GetInitiative(source, sequencing);
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID, json: true },
+      getInitiative,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.stdout.length, 1, "--json prints exactly one line");
+    const parsed = JSON.parse(r.stdout[0]!);
+    assert.deepEqual(parsed.after, [S6_X]);
+    assert.deepEqual(parsed.waiting, [{ id: S6_X, neverSatisfies: false }]);
   });
 });

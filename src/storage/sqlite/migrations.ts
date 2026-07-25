@@ -520,4 +520,21 @@ DROP TABLE events;
 ALTER TABLE events_new9 RENAME TO events;
 `),
   },
+  {
+    version: 20,
+    name: "007.17-s2-initiative-objective-dependencies",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE initiative_dependencies (
+  initiativeId TEXT NOT NULL REFERENCES initiatives(id),
+  dependency   TEXT NOT NULL REFERENCES initiatives(id),
+  PRIMARY KEY (initiativeId, dependency)
+);
+CREATE TABLE objective_dependencies (
+  objectiveId TEXT NOT NULL REFERENCES objectives(id),
+  dependency  TEXT NOT NULL REFERENCES objectives(id),
+  PRIMARY KEY (objectiveId, dependency)
+);
+`),
+  },
 ];

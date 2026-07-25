@@ -72,6 +72,8 @@ test("execute returns integrations=[{ repository, state }] with state=integrated
     name: "backend",
     status: "integrated",
     integrations: [{ repository: REPO_ID, state: "integrated" }],
+    after: [],
+    waiting: [],
   });
 });
 
@@ -86,4 +88,147 @@ test("execute returns an empty integrations array when the initiative has no res
   const useCase = new GetObjective(objectives, repos);
   const output = await useCase.execute({ id: OBJ_ID });
   assert.deepEqual(output.integrations, []);
+});
+
+// Story 6 — after / waiting rendering
+const S6_X = "01JZZZZZZZZZZZZZZZZZZZX001";
+const S6_Y = "01JZZZZZZZZZZZZZZZZZZZY002";
+
+interface FakeObjectiveSequencingSource {
+  listObjectiveAfter(objectiveId: string): string[];
+}
+
+function makeObjStoreMap(objectives: Objective[]): FakeObjectiveSource {
+  const map = new Map(objectives.map((o) => [o.id, o]));
+  return { getObjective: (id) => map.get(id) };
+}
+
+test("(S6-1) no edges → after and waiting are empty arrays", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "test",
+    status: "building",
+  };
+  const objectives = makeObjStoreMap([objective]);
+  const repos: FakeRepositoryResolver = {
+    resolveInitiativeRepository: () => undefined,
+  };
+  const sequencing: FakeObjectiveSequencingSource = {
+    listObjectiveAfter: () => [],
+  };
+  const useCase = new GetObjective(objectives, repos, sequencing);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.deepEqual(output.after, []);
+  assert.deepEqual(output.waiting, []);
+});
+
+test("(S6-2) after: [X] with X integrated → after is [X], waiting is []", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "test",
+    status: "building",
+  };
+  const other: Objective = {
+    id: S6_X,
+    initiativeId: INIT_ID,
+    name: "other",
+    status: "integrated",
+  };
+  const objectives = makeObjStoreMap([objective, other]);
+  const repos: FakeRepositoryResolver = {
+    resolveInitiativeRepository: () => undefined,
+  };
+  const sequencing: FakeObjectiveSequencingSource = {
+    listObjectiveAfter: () => [S6_X],
+  };
+  const useCase = new GetObjective(objectives, repos, sequencing);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.deepEqual(output.after, [S6_X]);
+  assert.deepEqual(output.waiting, []);
+});
+
+test("(S6-3) after: [X] with X awaiting_confirmation → waiting includes X with neverSatisfies=false", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "test",
+    status: "building",
+  };
+  const other: Objective = {
+    id: S6_X,
+    initiativeId: INIT_ID,
+    name: "other",
+    status: "awaiting_confirmation",
+  };
+  const objectives = makeObjStoreMap([objective, other]);
+  const repos: FakeRepositoryResolver = {
+    resolveInitiativeRepository: () => undefined,
+  };
+  const sequencing: FakeObjectiveSequencingSource = {
+    listObjectiveAfter: () => [S6_X],
+  };
+  const useCase = new GetObjective(objectives, repos, sequencing);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.deepEqual(output.after, [S6_X]);
+  assert.deepEqual(output.waiting, [{ id: S6_X, neverSatisfies: false }]);
+});
+
+test("(S6-4) after: [X] with X discarded → waiting includes X with neverSatisfies=true", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "test",
+    status: "building",
+  };
+  const other: Objective = {
+    id: S6_X,
+    initiativeId: INIT_ID,
+    name: "other",
+    status: "discarded",
+  };
+  const objectives = makeObjStoreMap([objective, other]);
+  const repos: FakeRepositoryResolver = {
+    resolveInitiativeRepository: () => undefined,
+  };
+  const sequencing: FakeObjectiveSequencingSource = {
+    listObjectiveAfter: () => [S6_X],
+  };
+  const useCase = new GetObjective(objectives, repos, sequencing);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.deepEqual(output.after, [S6_X]);
+  assert.deepEqual(output.waiting, [{ id: S6_X, neverSatisfies: true }]);
+});
+
+test("(S6-5) after: [B, A] from repo → after and waiting preserve repo order", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "test",
+    status: "building",
+  };
+  const a: Objective = {
+    id: S6_Y,
+    initiativeId: INIT_ID,
+    name: "A",
+    status: "building",
+  };
+  const b: Objective = {
+    id: S6_X,
+    initiativeId: INIT_ID,
+    name: "B",
+    status: "integrated",
+  };
+  const objectives = makeObjStoreMap([objective, a, b]);
+  const repos: FakeRepositoryResolver = {
+    resolveInitiativeRepository: () => undefined,
+  };
+  const sequencing: FakeObjectiveSequencingSource = {
+    listObjectiveAfter: () => [S6_Y, S6_X],
+  };
+  const useCase = new GetObjective(objectives, repos, sequencing);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.deepEqual(output.after, [S6_Y, S6_X]);
+  assert.deepEqual(output.waiting, [{ id: S6_Y, neverSatisfies: false }]);
 });

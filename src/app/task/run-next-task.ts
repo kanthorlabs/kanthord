@@ -2,6 +2,7 @@ import type { Task } from "../../domain/task.ts";
 import { transitionTask } from "../../domain/task.ts";
 import { readiness } from "../../domain/graph.ts";
 import { newEvent } from "../../domain/event.ts";
+import { unsatisfiedObjectiveEdges } from "../../domain/sequencing.ts";
 import { newId } from "../../domain/entity.ts";
 import { newChangeCandidate } from "../../domain/landing.ts";
 import type { Objective } from "../../domain/initiative.ts";
@@ -34,6 +35,9 @@ interface TaskStore {
   getObjective?(id: string): Objective | undefined;
   saveObjective?(objective: Objective): void;
   getObjectiveParentOid?(objectiveId: string): string;
+  // Story 3 — objective-level sequencing gate: list prerequisites (deprecated;
+  // prefer the `sequencing` constructor param). Kept for test backward compat.
+  listObjectiveAfter?(objectiveId: string): string[];
 }
 
 interface WorkspaceSquasher {
@@ -96,6 +100,7 @@ export class RunNextTask {
   readonly #sleep: (ms: number) => Promise<void>;
   readonly #workspaces?: WorkspaceSquasher;
   readonly #initiativeWorkspaces?: InitiativeWorkspaces;
+  readonly #sequencing?: { listObjectiveAfter: (id: string) => string[] };
 
   constructor(
     queue: JobQueue,
@@ -109,6 +114,7 @@ export class RunNextTask {
       sleep?: (ms: number) => Promise<void>;
       workspaces?: WorkspaceSquasher;
       initiativeWorkspaces?: InitiativeWorkspaces;
+      sequencing?: { listObjectiveAfter: (id: string) => string[] };
     },
   ) {
     this.#queue = queue;
@@ -124,6 +130,43 @@ export class RunNextTask {
       ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.#workspaces = opts?.workspaces;
     this.#initiativeWorkspaces = opts?.initiativeWorkspaces;
+    this.#sequencing = opts?.sequencing;
+  }
+
+  /**
+   * Re-scan the initiative and enqueue newly-ready tasks, gating on
+   * objective-level after sets so a blocked objective's tasks are not enqueued.
+   */
+  #enqueueNewlyReady(initiativeId: string | undefined): void {
+    const refreshed = initiativeId
+      ? this.#store.listByInitiative(initiativeId)
+      : [];
+    for (const entry of readiness(refreshed)) {
+      if (entry.state !== "ready") continue;
+
+      // Objective-level gate: check after edges before enqueuing
+      const task = this.#store.get(entry.id);
+      if (task !== undefined && task.objectiveId) {
+        const listAfter: ((id: string) => string[]) | undefined =
+          this.#sequencing?.listObjectiveAfter ??
+          this.#store.listObjectiveAfter;
+        if (listAfter !== undefined) {
+          const after = listAfter(task.objectiveId);
+          if (after.length > 0) {
+            const deps = after.map((depId) => ({
+              id: depId,
+              status: this.#store.getObjective?.(depId)?.status,
+            }));
+            if (unsatisfiedObjectiveEdges(deps).length > 0) continue;
+          }
+        }
+      }
+
+      const inserted = this.#queue.enqueue(entry.id);
+      if (inserted) {
+        this.#feed.append(newEvent("task.ready", { taskId: entry.id }));
+      }
+    }
   }
 
   async execute(): Promise<RunResult> {
@@ -255,17 +298,7 @@ export class RunNextTask {
         });
 
         // Re-scan the initiative for newly-ready tasks.
-        const refreshed = initiativeId
-          ? this.#store.listByInitiative(initiativeId)
-          : [];
-        for (const entry of readiness(refreshed)) {
-          if (entry.state === "ready") {
-            const inserted = this.#queue.enqueue(entry.id);
-            if (inserted) {
-              this.#feed.append(newEvent("task.ready", { taskId: entry.id }));
-            }
-          }
-        }
+        this.#enqueueNewlyReady(initiativeId);
       } else if (escalatedResult !== undefined) {
         const escalatedTask = transitionTask(
           runningTask,
@@ -331,17 +364,7 @@ export class RunNextTask {
             evidence: candidateResult.evidence ?? null,
           });
           // Re-scan the initiative for newly-ready tasks.
-          const refreshed = initiativeId
-            ? this.#store.listByInitiative(initiativeId)
-            : [];
-          for (const entry of readiness(refreshed)) {
-            if (entry.state === "ready") {
-              const inserted = this.#queue.enqueue(entry.id);
-              if (inserted) {
-                this.#feed.append(newEvent("task.ready", { taskId: entry.id }));
-              }
-            }
-          }
+          this.#enqueueNewlyReady(initiativeId);
           resultOutcome = "completed";
         } else {
           // Persist a fresh candidate id that identifies THIS execution attempt

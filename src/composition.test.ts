@@ -1050,3 +1050,140 @@ test("(007.13-credential-resolver) composition: resolveCredential reads the stor
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// 007.17 review-blocker regression — composition must wire listObjectiveAfter
+// /getObjective delegates into ApproveTask so the objective-level sequencing
+// gate actually runs in production.
+//
+// RED today: buildDeps constructs ApproveTask with bare SqliteTaskRepository,
+// which lacks listObjectiveAfter/getObjective. The gate at
+// approve-task.ts:372-387 tests `this.#store.listObjectiveAfter !== undefined`
+// and silently skips when absent. After the SE wraps taskRepository with the
+// two delegates, the gate will block T2's enqueue while OBJ1 is building.
+// ---------------------------------------------------------------------------
+test("(007.17-approve-gate-regression) composition: approveTask respects objective-level after edges through the real wiring", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-0717-ap-gate-"));
+  const dbPath = join(dir, "kanthord.db");
+  try {
+    const deps = buildDeps(dbPath);
+    await dispatch(["db", "migrate"], deps);
+
+    // Create project
+    const rp = await dispatch(
+      ["create", "project", "--name", "gate0717"],
+      deps,
+    );
+    assert.equal(rp.exitCode, 0, "create project exits 0");
+    const PROJECT = rp.stdout[0]!;
+
+    // Create initiative
+    const ri = await dispatch(
+      ["create", "initiative", "--project", PROJECT, "--name", "init"],
+      deps,
+    );
+    assert.equal(ri.exitCode, 0, "create initiative exits 0");
+    const INI = ri.stdout[0]!;
+
+    // Create two objectives under the same initiative
+    const ro1 = await dispatch(
+      ["create", "objective", "--initiative", INI, "--name", "o1"],
+      deps,
+    );
+    assert.equal(ro1.exitCode, 0, "create objective O1 exits 0");
+    const OBJ1 = ro1.stdout[0]!;
+
+    const ro2 = await dispatch(
+      ["create", "objective", "--initiative", INI, "--name", "o2"],
+      deps,
+    );
+    assert.equal(ro2.exitCode, 0, "create objective O2 exits 0");
+    const OBJ2 = ro2.stdout[0]!;
+
+    // Create one task per objective
+    const rt1 = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJ1,
+        "--title",
+        "t1",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+        "--agent",
+        "fake@1",
+      ],
+      deps,
+    );
+    assert.equal(rt1.exitCode, 0, "create task T1 exits 0");
+    const T1 = rt1.stdout[0]!;
+
+    const rt2 = await dispatch(
+      [
+        "create",
+        "task",
+        "--objective",
+        OBJ2,
+        "--title",
+        "t2",
+        "--instructions",
+        "do it",
+        "--ac",
+        "done",
+        "--agent",
+        "fake@1",
+      ],
+      deps,
+    );
+    assert.equal(rt2.exitCode, 0, "create task T2 exits 0");
+    const T2 = rt2.stdout[0]!;
+
+    // Inject objective-level sequencing edge via direct DB (CLI for this does
+    // not exist yet — Stories 4-6 are pending expansion).
+    const db = new DatabaseSync(dbPath);
+    db.exec(
+      `INSERT INTO objective_dependencies(objectiveId, dependency) VALUES('${OBJ2}', '${OBJ1}')`,
+    );
+
+    // Mark T1 as awaiting_confirmation with an empty task_result row.
+    // No proposalCommit means promote+landing are skipped; the task transitions
+    // to completed and the re-scan runs the gate.
+    db.prepare(
+      "UPDATE tasks SET status = 'awaiting_confirmation' WHERE id = ?",
+    ).run(T1);
+    db.prepare(
+      `INSERT INTO task_results(task_id, workspace, branch, base_commit, proposal_commit, commit_sha, summary, reason, rejection_resolution, rejection_reason, evidence)
+       VALUES(?, '/tmp/ws', 'branch', 'BASE', NULL, NULL, 'summary', NULL, NULL, NULL, NULL)`,
+    ).run(T1);
+    db.close();
+
+    // Approve T1 through the wired composition's ApproveTask.
+    const result = await deps.approveTask.execute({ taskId: T1 });
+    assert.equal(
+      result.kind,
+      "approved",
+      "T1 must be approved (awaiting_confirmation with valid result)",
+    );
+
+    // The KEY assertion: T2 must NOT be enqueued because its objective is
+    // blocked (OBJ2 depends on OBJ1, and OBJ1 is still "building").
+    // In the BROKEN state (no listObjectiveAfter/getObjective delegates), the
+    // gate is silently skipped and T2 IS enqueued — this assertion fails.
+    // In the FIXED state (delegates wired), the gate blocks and the assertion
+    // passes.
+    const events = deps.listEvents.execute({ after: "" });
+    const t2Ready = events.filter(
+      (e) => e.type === "task.ready" && e.taskId === T2,
+    );
+    assert.equal(
+      t2Ready.length,
+      0,
+      "T2 must NOT be enqueued when OBJ1 is building (objective-level gate)",
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

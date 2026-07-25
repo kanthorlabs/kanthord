@@ -21,7 +21,12 @@ import {
 } from "../../domain/sha.ts";
 import type { GraphPackage } from "./graph-package.ts";
 import type { StoreGraph } from "./store-graph.ts";
-import { validateGraph, type GraphNode } from "../../domain/graph.ts";
+import {
+  validateGraph,
+  validateDag,
+  type GraphNode,
+  type DagNode,
+} from "../../domain/graph.ts";
 import { newTask } from "../../domain/task.ts";
 import { CrossInitiativeError, UnknownNodeError } from "./import-errors.ts";
 
@@ -45,6 +50,13 @@ export interface ApplyClassification {
   name?: string; // human-readable label (task title for missing nodes)
 }
 
+export interface EdgeChange {
+  kind: "initiative" | "objective";
+  id: string; // owner id
+  dependency: string; // the prerequisite id
+  change: "added" | "removed" | "would-remove";
+}
+
 export interface ApplyGraphResult {
   applied: boolean;
   classifications: ApplyClassification[]; // ALL node types (B14/TS1)
@@ -60,6 +72,11 @@ export interface ApplyGraphResult {
   freshNodeShas?: Record<string, string>;
   /** Newly created nodes (absent on dry-run or when no nodes were created). */
   createdNodes?: Array<{ ref: string; id: string; sourcePath?: string }>;
+  /** Edge changes detected (absent when no sequencing is configured). */
+  edgeChanges?: EdgeChange[];
+  /** Edge removals blocked by the gate — present only when the apply was refused
+   *  because edges would be removed without --confirm-delete. */
+  refusedEdgeRemovals?: EdgeChange[];
 }
 
 // ---------------------------------------------------------------------------
@@ -90,6 +107,37 @@ function classifyNode(
 }
 
 // ---------------------------------------------------------------------------
+// Edge change helpers (Story 5c)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the resolved after set for an owner.
+ * When `confirmDelete` is false, edges in the DB but absent from the package
+ * are preserved (gated removal). When true, the package's intent is taken.
+ */
+function computeResolvedAfter(
+  pkgAfter: string[],
+  dbAfter: string[],
+  confirmDelete: boolean,
+): string[] {
+  if (confirmDelete) {
+    return [...new Set(pkgAfter)]; // package intent accepted
+  }
+  // Gate: preserve DB edges that the package tried to drop
+  const pkgSet = new Set(pkgAfter);
+  const preserved = dbAfter.filter((id) => !pkgSet.has(id));
+  return [...new Set([...pkgAfter, ...preserved])].sort();
+}
+
+/** True if two edge sets differ (treated as sets, ignoring order). */
+function setsDiffer(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return true;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.some((v, i) => v !== sortedB[i]);
+}
+
+// ---------------------------------------------------------------------------
 // Late-CAS sentinel — thrown inside the UoW transaction to force rollback.
 // ---------------------------------------------------------------------------
 
@@ -105,6 +153,20 @@ class LateCasConflict extends Error {
 // Use case
 // ---------------------------------------------------------------------------
 
+/**
+ * Sequencing operations needed by ApplyGraph for edge handling.
+ * Mutation methods are optional — ApplyGraph tries `set*After` first,
+ * then falls back to `seed*After` (for fake/test compatibility).
+ */
+export interface ApplyGraphSequencing {
+  listInitiativeAfter(initiativeId: string): string[];
+  listObjectiveAfter(objectiveId: string): string[];
+  setInitiativeAfter?(initiativeId: string, after: string[]): void;
+  setObjectiveAfter?(objectiveId: string, after: string[]): void;
+  seedInitiativeAfter?(initiativeId: string, after: string[]): void;
+  seedObjectiveAfter?(objectiveId: string, after: string[]): void;
+}
+
 export class ApplyGraph {
   readonly #deps: {
     initiatives: InitiativeRepository;
@@ -113,6 +175,7 @@ export class ApplyGraph {
     importMap: GraphImportMap;
     uow: UnitOfWork;
     newId: () => string;
+    sequencing?: ApplyGraphSequencing;
   };
 
   constructor(deps: {
@@ -122,6 +185,7 @@ export class ApplyGraph {
     importMap: GraphImportMap;
     uow: UnitOfWork;
     newId: () => string;
+    sequencing?: ApplyGraphSequencing;
   }) {
     this.#deps = deps;
   }
@@ -148,6 +212,7 @@ export class ApplyGraph {
           canonicalInitiative({
             name: pkg.initiative.name,
             projectId: dbInit.projectId,
+            after: pkg.initiative.after ?? [],
           }),
         );
         classifications.push({
@@ -172,6 +237,7 @@ export class ApplyGraph {
             canonicalObjective({
               name: obj.name,
               initiativeId: obj.initiativeRef,
+              after: obj.after ?? [],
             }),
           );
           classifications.push({
@@ -359,6 +425,143 @@ export class ApplyGraph {
       }
     }
 
+    // --- Edge classification + gating + objective DAG validation (Story 5c) ---
+    const resolvedEdgeChanges: Array<{
+      kind: "initiative" | "objective";
+      id: string;
+      after: string[];
+      dbAfter: string[];
+    }> = [];
+    const edgeChanges: EdgeChange[] = [];
+
+    if (this.#deps.sequencing !== undefined) {
+      const seq = this.#deps.sequencing;
+      const confirmDelete = input.confirmDelete === true;
+
+      // 1. Classify initiative-level edge changes
+      if (pkg.initiative.id !== undefined) {
+        const pkgAfter = pkg.initiative.after ?? [];
+        const dbAfter = seq.listInitiativeAfter(pkg.initiative.id);
+        const resolvedAfter = computeResolvedAfter(
+          pkgAfter,
+          dbAfter,
+          confirmDelete,
+        );
+        // Build per-dependency edge changes
+        const pkgSet = new Set(pkgAfter);
+        const dbSet = new Set(dbAfter);
+        for (const dep of dbAfter) {
+          if (!pkgSet.has(dep)) {
+            edgeChanges.push({
+              kind: "initiative",
+              id: pkg.initiative.id,
+              dependency: dep,
+              change: confirmDelete ? "removed" : "would-remove",
+            });
+          }
+        }
+        for (const dep of pkgAfter) {
+          if (!dbSet.has(dep)) {
+            edgeChanges.push({
+              kind: "initiative",
+              id: pkg.initiative.id,
+              dependency: dep,
+              change: "added",
+            });
+          }
+        }
+        if (setsDiffer(resolvedAfter, dbAfter)) {
+          resolvedEdgeChanges.push({
+            kind: "initiative",
+            id: pkg.initiative.id,
+            after: resolvedAfter,
+            dbAfter,
+          });
+        }
+      }
+
+      // 2. Classify objective-level edge changes
+      for (const obj of pkg.objectives) {
+        if (obj.id !== undefined) {
+          const pkgAfter = obj.after ?? [];
+          const dbAfter = seq.listObjectiveAfter(obj.id);
+          const resolvedAfter = computeResolvedAfter(
+            pkgAfter,
+            dbAfter,
+            confirmDelete,
+          );
+          // Build per-dependency edge changes
+          const pkgSet = new Set(pkgAfter);
+          const dbSet = new Set(dbAfter);
+          for (const dep of dbAfter) {
+            if (!pkgSet.has(dep)) {
+              edgeChanges.push({
+                kind: "objective",
+                id: obj.id,
+                dependency: dep,
+                change: confirmDelete ? "removed" : "would-remove",
+              });
+            }
+          }
+          for (const dep of pkgAfter) {
+            if (!dbSet.has(dep)) {
+              edgeChanges.push({
+                kind: "objective",
+                id: obj.id,
+                dependency: dep,
+                change: "added",
+              });
+            }
+          }
+          if (setsDiffer(resolvedAfter, dbAfter)) {
+            resolvedEdgeChanges.push({
+              kind: "objective",
+              id: obj.id,
+              after: resolvedAfter,
+              dbAfter,
+            });
+          }
+        }
+      }
+
+      // 3. Validate merged objective DAG (package edges override DB edges)
+      const mergedDagNodes: DagNode[] = [];
+      const processedObjIds = new Set<string>();
+      for (const obj of pkg.objectives) {
+        if (obj.id !== undefined) {
+          const pkgAfter = obj.after ?? [];
+          const dbAfter = seq.listObjectiveAfter(obj.id);
+          // The effective after set: package intent, gated by confirmDelete
+          const effectiveAfter = computeResolvedAfter(
+            pkgAfter,
+            dbAfter,
+            confirmDelete,
+          );
+          mergedDagNodes.push({ id: obj.id, dependencies: effectiveAfter });
+          processedObjIds.add(obj.id);
+        }
+      }
+      // Include DB-only objectives (present in DB but absent from package → their edges are unchanged)
+      for (const cls of classifications) {
+        if (
+          cls.kind === "objective" &&
+          cls.id !== undefined &&
+          cls.class === "missing" &&
+          !processedObjIds.has(cls.id)
+        ) {
+          const dbAfter = seq.listObjectiveAfter(cls.id);
+          mergedDagNodes.push({ id: cls.id, dependencies: dbAfter });
+          processedObjIds.add(cls.id);
+        }
+      }
+      validateDag(mergedDagNodes);
+    }
+
+    // Collect edge removals that would be refused (without --confirm-delete).
+    const refusedEdgeRemovals = edgeChanges.filter(
+      (ec) => ec.change === "would-remove",
+    );
+
     // --- Merged-graph validation (B10) ---
     // Load all DB tasks for this initiative and build a merged node set.
     // Package nodes override DB nodes for the same id.
@@ -412,7 +615,11 @@ export class ApplyGraph {
     let createdNodes:
       Array<{ ref: string; id: string; sourcePath?: string }> | undefined;
 
-    if (conflicts.length === 0 && !input.dryRun) {
+    if (
+      conflicts.length === 0 &&
+      refusedEdgeRemovals.length === 0 &&
+      !input.dryRun
+    ) {
       // Build fast lookups into the package for the apply pass.
       const pkgTaskById = new Map(
         pkg.tasks.filter((t) => t.id !== undefined).map((t) => [t.id!, t]),
@@ -638,6 +845,29 @@ export class ApplyGraph {
               }
             }
           }
+
+          // --- Write sequencing edges (Story 5c) ---
+          if (
+            this.#deps.sequencing !== undefined &&
+            resolvedEdgeChanges.length > 0
+          ) {
+            const seq = this.#deps.sequencing;
+            for (const change of resolvedEdgeChanges) {
+              if (change.kind === "initiative") {
+                if (typeof seq.setInitiativeAfter === "function") {
+                  seq.setInitiativeAfter(change.id, change.after);
+                } else if (typeof seq.seedInitiativeAfter === "function") {
+                  seq.seedInitiativeAfter(change.id, change.after);
+                }
+              } else {
+                if (typeof seq.setObjectiveAfter === "function") {
+                  seq.setObjectiveAfter(change.id, change.after);
+                } else if (typeof seq.seedObjectiveAfter === "function") {
+                  seq.seedObjectiveAfter(change.id, change.after);
+                }
+              }
+            }
+          }
         });
       } catch (err) {
         if (err instanceof LateCasConflict) {
@@ -694,12 +924,15 @@ export class ApplyGraph {
     }
 
     return {
-      applied: conflicts.length === 0,
+      applied: conflicts.length === 0 && refusedEdgeRemovals.length === 0,
       classifications,
       summary,
       conflicts,
       freshNodeShas,
       createdNodes,
+      edgeChanges: edgeChanges.length > 0 ? edgeChanges : undefined,
+      refusedEdgeRemovals:
+        refusedEdgeRemovals.length > 0 ? refusedEdgeRemovals : undefined,
     };
   }
 }

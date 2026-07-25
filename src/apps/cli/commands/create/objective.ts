@@ -11,17 +11,29 @@ export function buildCreateObjectiveCommand(deps: CliDeps, io: CliIo): Command {
     .configureHelp({ commandUsage: () => "kanthord create objective" })
     .requiredOption("--initiative <id>", "initiative ID for the new objective")
     .requiredOption("--name <name>", "name for the new objective")
+    .option(
+      "--after <id>",
+      "sequence this node after an existing one; repeat for each prerequisite",
+      (value: string, values: string[]) => (values.push(value), values),
+      [] as string[],
+    )
     .addHelpText(
       "after",
       "\nExample:\n  kanthord create objective --initiative initiative-1 --name routing\n",
     )
-    .action(async (opts: { initiative: string; name: string }) => {
-      emitResult(
-        await runCreateObjective(
-          { initiative: opts.initiative, name: opts.name },
-          deps.createObjective,
-        ),
-        io,
-      );
-    });
+    .action(
+      async (opts: { initiative: string; name: string; after: string[] }) => {
+        emitResult(
+          await runCreateObjective(
+            {
+              initiative: opts.initiative,
+              name: opts.name,
+              after: opts.after,
+            },
+            deps.createObjective,
+          ),
+          io,
+        );
+      },
+    );
 }

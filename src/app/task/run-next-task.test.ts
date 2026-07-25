@@ -37,6 +37,8 @@ interface TaskStore {
   getTaskContext(taskId: string): Record<string, string>;
   getRepositoryBranch(repoId: string): string | undefined;
   saveTaskResult(taskId: string, row: TaskResultRow): void;
+  /** Optional — absent means "no edges" (identical to today's behaviour). */
+  listObjectiveAfter?(objectiveId: string): string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -1149,5 +1151,239 @@ test("RunNextTask ensures the claimed task's initiative workspace is provisioned
     ensureCalls,
     [INI_ID],
     "initiativeWorkspaces.ensure(initiativeId) must be called exactly once, with the claimed task's initiative id, before the task runs",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 3 — Readiness gate: objective-level sequencing in inline re-scan
+// ---------------------------------------------------------------------------
+
+const OBJ_A = "01JZZZZZZZZZZZZZZZZZZZOBJA1";
+const OBJ_B = "01JZZZZZZZZZZZZZZZZZZZOBJB1";
+const T_O1 = "01JZZZZZZZZZZZZZZZZZZZTSO1";
+const T_O2 = "01JZZZZZZZZZZZZZZZZZZZTSO2";
+
+test("(9) completing task unblocks only its own objective — O2 with after: [O1] and O1 building → O2's task not enqueued", async () => {
+  // O1 has T_O1 (pending, no deps) and O2 has T_O2 (pending, no deps).
+  // O2 has after: [O1]; O1 is building.
+  // Claim T_O1 (it is ready), execute → T_O1 completes, re-scan gates O2.
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: T_O1 };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore(
+    [
+      {
+        id: T_O1,
+        objectiveId: OBJ_A,
+        title: "o1-task",
+        status: "pending",
+        dependencies: [],
+      },
+      {
+        id: T_O2,
+        objectiveId: OBJ_B,
+        title: "o2-task",
+        status: "pending",
+        dependencies: [],
+      },
+    ],
+    INI_ID,
+  );
+  // Add listObjectiveAfter support — O2's after set includes O1
+  (store as unknown as Record<string, unknown>).listObjectiveAfter = (
+    id: string,
+  ) => {
+    if (id === OBJ_B) return [OBJ_A];
+    return [];
+  };
+  // getObjective for O1 returns building (the gating condition)
+  const origGetObj = store.getObjective.bind(store);
+  store.getObjective = (id: string) => {
+    if (id === OBJ_A)
+      return {
+        id: OBJ_A,
+        initiativeId: INI_ID,
+        name: "o1",
+        status: "building",
+      };
+    return origGetObj(id);
+  };
+
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.equal(result.outcome, "completed", "T_O1 must complete");
+
+  // O2's task must NOT be enqueued
+  assert.ok(
+    !queue.enqueued.includes(T_O2),
+    "O2's task must NOT be enqueued when O1 is building",
+  );
+  const readyForO2 = feed.events.filter(
+    (e) => e.type === "task.ready" && e.taskId === T_O2,
+  );
+  assert.equal(readyForO2.length, 0, "no task.ready event for O2's task");
+});
+
+test("(10) completing task — O2 with after: [O1] and O1 integrated → O2's task is enqueued with task.ready", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: T_O1 };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore(
+    [
+      {
+        id: T_O1,
+        objectiveId: OBJ_A,
+        title: "o1-task",
+        status: "pending",
+        dependencies: [],
+      },
+      {
+        id: T_O2,
+        objectiveId: OBJ_B,
+        title: "o2-task",
+        status: "pending",
+        dependencies: [],
+      },
+    ],
+    INI_ID,
+  );
+  (store as unknown as Record<string, unknown>).listObjectiveAfter = (
+    id: string,
+  ) => {
+    if (id === OBJ_B) return [OBJ_A];
+    return [];
+  };
+  // O1 is integrated (satisfies the edge)
+  const origGetObj2 = store.getObjective.bind(store);
+  store.getObjective = (id: string) => {
+    if (id === OBJ_A)
+      return {
+        id: OBJ_A,
+        initiativeId: INI_ID,
+        name: "o1",
+        status: "integrated",
+      };
+    return origGetObj2(id);
+  };
+
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.equal(result.outcome, "completed", "T_O1 must complete");
+  assert.ok(
+    queue.enqueued.includes(T_O2),
+    "O2's task must be enqueued when O1 is integrated",
+  );
+  const readyForO2 = feed.events.filter(
+    (e) => e.type === "task.ready" && e.taskId === T_O2,
+  );
+  assert.equal(readyForO2.length, 1, "one task.ready event for O2's task");
+});
+
+test("(11) regression: existing parent-completes-child-enqueued test passes unchanged without listObjectiveAfter", async () => {
+  // Exact copy of the test at line 298-327: parent completes, child enqueued.
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: T_PARENT_ID };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore(
+    [{ ...TASK_PARENT }, { ...TASK_CHILD }],
+    INI_ID,
+  );
+  // Ensure listObjectiveAfter is NOT set (undefined on SimpleTaskStore)
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.equal(result.outcome, "completed");
+  assert.ok(
+    queue.enqueued.includes(T_CHILD_ID),
+    `newly-ready child must be enqueued; enqueued: ${JSON.stringify(queue.enqueued)}`,
+  );
+  const readyEvents = feed.events.filter((e) => e.type === "task.ready");
+  assert.ok(
+    readyEvents.some((e) => e.taskId === T_CHILD_ID),
+    "task.ready event emitted for the newly-unblocked child",
+  );
+});
+
+test("(12) candidate-completes-directly branch also gates: filesystem-bound changed task with blocked O2 must not enqueue O2's task", async () => {
+  // Drive the candidate-completes-directly branch (filesystem-bound changed work
+  // with no repository binding) with an O2 that has unsatisfied after set.
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: T_O1 };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore(
+    [
+      {
+        id: T_O1,
+        objectiveId: OBJ_A,
+        title: "o1-task",
+        status: "pending",
+        dependencies: [],
+      },
+      {
+        id: T_O2,
+        objectiveId: OBJ_B,
+        title: "o2-task",
+        status: "pending",
+        dependencies: [],
+      },
+    ],
+    INI_ID,
+  );
+  (store as unknown as Record<string, unknown>).listObjectiveAfter = (
+    id: string,
+  ) => {
+    if (id === OBJ_B) return [OBJ_A];
+    return [];
+  };
+  const origGetObj3 = store.getObjective.bind(store);
+  store.getObjective = (id: string) => {
+    if (id === OBJ_A)
+      return {
+        id: OBJ_A,
+        initiativeId: INI_ID,
+        name: "o1",
+        status: "building",
+      };
+    return origGetObj3(id);
+  };
+
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  // A candidate-returning runner without repository binding → completes directly
+  const resolver: AgentRunnerResolver = { for: () => candidateRunner() };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.equal(
+    result.outcome,
+    "completed",
+    "filesystem-bound changed task must complete directly",
+  );
+  // O2's task must NOT be enqueued
+  assert.ok(
+    !queue.enqueued.includes(T_O2),
+    "O2's task must NOT be enqueued via candidate-completes-directly re-scan",
+  );
+  const readyForO2 = feed.events.filter(
+    (e) => e.type === "task.ready" && e.taskId === T_O2,
+  );
+  assert.equal(
+    readyForO2.length,
+    0,
+    "no task.ready event for O2's task from candidate-completes-directly",
   );
 });

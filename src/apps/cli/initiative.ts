@@ -12,8 +12,9 @@ export async function runCreateInitiative(
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const projectId = args["project"] as string;
   const name = args["name"] as string;
+  const after = (args["after"] as string[]) ?? [];
   try {
-    const id = await createInitiative.execute({ projectId, name });
+    const id = await createInitiative.execute({ projectId, name, after });
     return {
       exitCode: 0,
       stdout: [id],
@@ -82,8 +83,18 @@ export async function runGetInitiative(
       `id: ${output.id}`,
       `name: ${output.name}`,
       `status: ${output.status}`,
-      `branch: ${output.branch}`,
     ];
+    if (output.after.length > 0) {
+      lines.push(`after: ${output.after.join(" ")}`);
+    }
+    for (const w of output.waiting) {
+      if (w.neverSatisfies) {
+        lines.push(`waiting on: ${w.id} (discarded — will never satisfy)`);
+      } else {
+        lines.push(`waiting on: ${w.id}`);
+      }
+    }
+    lines.push(`branch: ${output.branch}`);
     if (output.workspace !== undefined) {
       lines.push(`workspace: ${output.workspace}`);
     }

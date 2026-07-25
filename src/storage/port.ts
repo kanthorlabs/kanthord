@@ -236,3 +236,23 @@ export interface GraphImportMap {
     ref: string,
   ): { nodeId: string; creationSha: string } | undefined;
 }
+
+/**
+ * Repository for reading and writing initiative-level and objective-level
+ * sequencing edges. The six methods beyond the read-only query interface
+ * support the Story 4 use cases (add/remove edge, DAG queries).
+ */
+export interface SequencingRepository {
+  listInitiativeAfter(initiativeId: string): string[];
+  listObjectiveAfter(objectiveId: string): string[];
+  addInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  removeInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  listInitiativeDag(
+    projectId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  listObjectiveDag(
+    initiativeId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  addObjectiveAfter(objectiveId: string, dependencyId: string): void;
+  removeObjectiveAfter(objectiveId: string, dependencyId: string): void;
+}

@@ -20,6 +20,7 @@ import {
   ProposalMissingError,
 } from "./approve-task.ts";
 import { ProposalWorkspaceMissingError } from "../errors.ts";
+import type { Objective } from "../../domain/initiative.ts";
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow, LandingRepository } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
@@ -118,6 +119,10 @@ interface ApproveTaskStore {
   getInitiativeId(taskId: string): string | undefined;
   /** Returns the resolved task context: resource-type → resource-id. */
   getTaskContext(taskId: string): Record<string, string>;
+  /** Optional — absent means "no edges" (identical to today's behaviour). */
+  listObjectiveAfter?(objectiveId: string): string[];
+  /** Optional — absent means unknown status (treated as building). */
+  getObjective?(id: string): Objective | undefined;
 }
 
 class MemStore implements ApproveTaskStore {
@@ -2619,4 +2624,203 @@ test("(S1-non-repo-bound) filesystem-bound approve → no updateCandidateState c
     "completed",
     "non-repo-bound task must complete normally",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Story 3 — Readiness gate: objective-level sequencing in ApproveTask re-scan
+// ---------------------------------------------------------------------------
+
+const OBJ_S3_1 = "01JZZZZZZZZZZZZZZZZZZZS3O1";
+const OBJ_S3_2 = "01JZZZZZZZZZZZZZZZZZZZS3O2";
+const T_S3_O1 = "01JZZZZZZZZZZZZZZZZZZZS3T1";
+const T_S3_O2 = "01JZZZZZZZZZZZZZZZZZZZS3T2";
+
+function makeS3TaskAwaiting(
+  taskId: string,
+  objectiveId: string,
+  proposalCommit: string,
+): Task {
+  return {
+    id: taskId,
+    objectiveId,
+    title: "s3 task",
+    status: "awaiting_confirmation" as const,
+    dependencies: [],
+  };
+}
+
+function makeS3gTaskResult(proposalCommit: string): TaskResultRow {
+  return {
+    workspace: "/tmp/s3-ws",
+    branch: `kanthord/${proposalCommit}`,
+    baseCommit: "BASE",
+    proposalCommit,
+    commitSha: null,
+    summary: "s3",
+    reason: "needs review",
+    rejectionResolution: null,
+    rejectionReason: null,
+    evidence: null,
+  };
+}
+
+test("(15) approving a task in O1 does not enqueue O2's ready task when O2's after set is unsatisfied", async () => {
+  const taskId = T_S3_O1;
+  const o1Task = makeS3TaskAwaiting(taskId, OBJ_S3_1, "PROP_S3_1");
+  const o2Task = {
+    id: T_S3_O2,
+    objectiveId: OBJ_S3_2,
+    title: "o2 ready",
+    status: "pending" as const,
+    dependencies: [],
+  };
+  const o2ReadyTask = { ...o2Task };
+
+  const store = new MemStore(
+    [o1Task, o2ReadyTask],
+    new Map([[taskId, makeS3gTaskResult("PROP_S3_1")]]),
+    INI_ID,
+  );
+  // Add listObjectiveAfter — O2 depends on O1
+  (store as unknown as Record<string, unknown>).listObjectiveAfter = (
+    id: string,
+  ) => {
+    if (id === OBJ_S3_2) return [OBJ_S3_1];
+    return [];
+  };
+  // getObjective returns building for O1 (unsatisfied)
+  const origGet = store.get.bind(store);
+  (store as unknown as Record<string, unknown>).getObjective = (id: string) => {
+    if (id === OBJ_S3_1)
+      return {
+        id: OBJ_S3_1,
+        initiativeId: INI_ID,
+        name: "o1",
+        status: "building",
+      };
+    return undefined;
+  };
+
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote);
+  await uc.execute({ taskId });
+
+  assert.ok(
+    !queue.enqueued.includes(T_S3_O2),
+    "O2's ready task must NOT be enqueued when O2's after set is unsatisfied",
+  );
+  const o2ReadyEvt = feed.events.filter(
+    (e) => e.type === "task.ready" && e.taskId === T_S3_O2,
+  );
+  assert.equal(o2ReadyEvt.length, 0, "no task.ready event for O2's task");
+});
+
+test("(16) approving a task in O1 enqueues O2's ready task when O2's prerequisite is integrated", async () => {
+  const taskId = T_S3_O1;
+  const o1Task = makeS3TaskAwaiting(taskId, OBJ_S3_1, "PROP_S3_1");
+  const o2Task = {
+    id: T_S3_O2,
+    objectiveId: OBJ_S3_2,
+    title: "o2 ready",
+    status: "pending" as const,
+    dependencies: [],
+  };
+
+  const store = new MemStore(
+    [o1Task, o2Task],
+    new Map([[taskId, makeS3gTaskResult("PROP_S3_1")]]),
+    INI_ID,
+  );
+  (store as unknown as Record<string, unknown>).listObjectiveAfter = (
+    id: string,
+  ) => {
+    if (id === OBJ_S3_2) return [OBJ_S3_1];
+    return [];
+  };
+  // getObjective returns integrated for O1 (satisfied)
+  (store as unknown as Record<string, unknown>).getObjective = (id: string) => {
+    if (id === OBJ_S3_1)
+      return {
+        id: OBJ_S3_1,
+        initiativeId: INI_ID,
+        name: "o1",
+        status: "integrated",
+      };
+    return undefined;
+  };
+
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote);
+  await uc.execute({ taskId });
+
+  assert.ok(
+    queue.enqueued.includes(T_S3_O2),
+    "O2's ready task must be enqueued when O1 is integrated",
+  );
+  const o2ReadyEvt = feed.events.filter(
+    (e) => e.type === "task.ready" && e.taskId === T_S3_O2,
+  );
+  assert.equal(o2ReadyEvt.length, 1, "one task.ready event for O2's task");
+});
+
+test("(17) regression: approval in initiative with no sequencing edges enqueues newly-ready dependents as before", async () => {
+  // O1 task approved; O2 depends on O1 (task-level, not after set) → O2's task enqueued.
+  const taskId = T_S3_O1;
+  const childId = "01JZZZZZZZZZZZZZZZZZZZS3CH";
+  const o1Task = makeS3TaskAwaiting(taskId, OBJ_S3_1, "PROP_S3_1");
+  const childTask = {
+    id: childId,
+    objectiveId: OBJ_S3_1,
+    title: "child",
+    status: "pending" as const,
+    dependencies: [taskId],
+  };
+
+  const store = new MemStore(
+    [o1Task, childTask],
+    new Map([[taskId, makeS3gTaskResult("PROP_S3_1")]]),
+    INI_ID,
+    new Map([[taskId, { repository: "repo-s3" }]]),
+  );
+  // No listObjectiveAfter set — store that does not implement the optional member.
+  const queue = new MemQueue();
+  const feed = new MemFeed();
+  const uow = new MemUow();
+  const noopPromote = async (_d: string, _t: string, _p: string) => {};
+  const result: LandingResult = {
+    candidate: {
+      id: "lc-s3-reg",
+      taskId,
+      repoId: "repo-s3",
+      baseSHA: "BASE",
+      candidateSHA: "PROP_S3_1",
+      ref: "kanthord/s3-task",
+      target: "main",
+      workspace: "/tmp/s3-ws",
+    },
+    outcome: { kind: "fast-forward" },
+    canonicalSHA: "PROP_S3_1",
+  };
+  const fakeLanding = new FakeLanding(result);
+
+  const uc = new ApproveTask(store, queue, feed, uow, noopPromote, fakeLanding);
+  await uc.execute({ taskId });
+
+  // Child task (task-level dependent) must be enqueued — no sequencing edges to block it
+  assert.ok(
+    queue.enqueued.includes(childId),
+    "child task must be enqueued when no sequencing edges exist",
+  );
+  const childReady = feed.events.filter(
+    (e) => e.type === "task.ready" && e.taskId === childId,
+  );
+  assert.equal(childReady.length, 1, "one task.ready event for the child task");
 });

@@ -13,7 +13,13 @@ export const GRAPH_FORMAT_VERSION = 2;
 export const DEFAULT_AGENT = "generic@1";
 
 /** Canonical frontmatter key order for initiative nodes. */
-export const INITIATIVE_KEY_ORDER = ["kind", "id", "ref", "name"] as const;
+export const INITIATIVE_KEY_ORDER = [
+  "kind",
+  "id",
+  "ref",
+  "name",
+  "after",
+] as const;
 
 /** Canonical frontmatter key order for objective nodes. */
 export const OBJECTIVE_KEY_ORDER = [
@@ -22,6 +28,7 @@ export const OBJECTIVE_KEY_ORDER = [
   "ref",
   "initiative",
   "name",
+  "after",
 ] as const;
 
 /**

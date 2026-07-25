@@ -13,7 +13,7 @@
  * (g) --dry-run missing: pending removed file vs non-pending not-exported are distinct in output
  */
 
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
@@ -1507,4 +1507,213 @@ test("T4(f): --bind source=<id> with wrong resource type → exitCode 1 (type mi
     1,
     `expected exitCode 1 (type mismatch for source alias); got 0; stderr: ${result.stderr.join(" ")}`,
   );
+});
+
+// ─── Story 5b — after: id handoff on --create path ──────────────────────────
+
+const CLI_INIT_ID = "01JTEST00000000000000000A2";
+const CLI_OBJ1_ID = "01JTEST00000000000000000B3";
+const CLI_OBJ2_ID = "01JTEST00000000000000000C4";
+const CLI_TASK1_ID = "01JTEST00000000000000000D5";
+
+/** Package dir with `after: [backend, backend-frontend]` on obj-2. */
+async function makeAuthoredDirWithAfter(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-after-t5b-"));
+  await mkdir(join(dir, "backend"), { recursive: true });
+  await mkdir(join(dir, "backend-frontend"), { recursive: true });
+  await mkdir(join(dir, "frontend"), { recursive: true });
+
+  await writeFile(
+    join(dir, "oauth.md"),
+    "---\nkind: initiative\nref: oauth\nname: oauth\n---\n",
+  );
+  await writeFile(
+    join(dir, "backend-frontend", "backend-frontend.md"),
+    "---\nkind: objective\nref: backend-frontend\ninitiative: oauth\nname: backend-frontend\n---\n",
+  );
+  await writeFile(
+    join(dir, "backend", "backend.md"),
+    "---\nkind: objective\nref: backend\ninitiative: oauth\nname: backend\n---\n",
+  );
+  await writeFile(
+    join(dir, "frontend", "frontend.md"),
+    [
+      "---",
+      "kind: objective",
+      "ref: frontend",
+      "initiative: oauth",
+      "name: frontend",
+      "after: [backend-frontend, backend]", // reversed order — must sort
+      "---",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "frontend", "fe-task.md"),
+    [
+      "---",
+      "kind: task",
+      "ref: fe-task",
+      "objective: frontend",
+      "title: implement frontend",
+      "agent: generic@1",
+      "---",
+      "# Instructions",
+      "Build UI.",
+      "# Acceptance Criteria",
+      "- [ ] app renders",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "backend", "be-task.md"),
+    [
+      "---",
+      "kind: task",
+      "ref: be-task",
+      "objective: backend",
+      "title: implement backend",
+      "agent: generic@1",
+      "---",
+      "# Instructions",
+      "Build API.",
+      "# Acceptance Criteria",
+      "- [ ] api responds",
+      "",
+    ].join("\n"),
+  );
+
+  return dir;
+}
+
+/** FakeCreateGraph variant that returns after-compatible ULID mappings. */
+class FakeCreateGraphWithAfter {
+  calls: Array<{ pkg: unknown; projectId: string }> = [];
+
+  async execute(input: {
+    pkg: unknown;
+    projectId: string;
+  }): Promise<CreateGraphResult> {
+    this.calls.push({ pkg: input.pkg, projectId: input.projectId });
+    return {
+      initiativeId: CLI_INIT_ID,
+      refToId: {
+        objectives: {
+          backend: CLI_OBJ1_ID,
+          "backend-frontend": CLI_OBJ2_ID,
+          frontend: "01JTEST00000000000000000E6",
+        },
+        tasks: {
+          "be-task": CLI_TASK1_ID,
+          "fe-task": "01JTEST00000000000000000F7",
+        },
+      },
+      nodes: {
+        [CLI_INIT_ID]: "a".repeat(64),
+        [CLI_OBJ1_ID]: "b".repeat(64),
+        [CLI_OBJ2_ID]: "c".repeat(64),
+        ["01JTEST00000000000000000E6"]: "d".repeat(64),
+        [CLI_TASK1_ID]: "e".repeat(64),
+        ["01JTEST00000000000000000F7"]: "f".repeat(64),
+      },
+    };
+  }
+}
+
+describe("Story 5b — after: id handoff on --create", () => {
+  test("(10) create-mode id handoff rewrites objective after from slugs to sorted ULIDs", async () => {
+    const dir = await makeAuthoredDirWithAfter();
+    const fake = new FakeCreateGraphWithAfter();
+
+    const result = await runImportGraph(
+      { dir, create: true, apply: false, project: PROJ_ID },
+      { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
+    );
+
+    assert.equal(
+      result.exitCode,
+      0,
+      `--create with after must exit 0; stderr: ${result.stderr.join(" ")}`,
+    );
+
+    // Read the rewritten frontend objective file
+    const frontendContent = await readFile(
+      join(dir, "frontend", "frontend.md"),
+      "utf8",
+    );
+
+    // Both after entries must be ULIDs (26-char), not slugs
+    const afterMatch = frontendContent.match(/after:\s*\[([^\]]+)\]/);
+    assert.ok(
+      afterMatch !== null,
+      `frontend.md must contain after: [...] line; got:\n${frontendContent}`,
+    );
+    const afterValues = afterMatch![1]!
+      .split(",")
+      .map((s) => s.trim().replace(/^['"]|['"]$/g, ""));
+
+    assert.equal(
+      afterValues.length,
+      2,
+      `after must have 2 entries; got ${JSON.stringify(afterValues)}`,
+    );
+
+    // Both must be ULIDs (26 char uppercase Crockford)
+    for (const v of afterValues) {
+      assert.match(
+        v,
+        /^[0-9A-HJKMNP-TV-Z]{26}$/,
+        `after entry must be a ULID; got: ${v}`,
+      );
+    }
+
+    // Must be sorted ascending
+    const sorted = [...afterValues].sort();
+    assert.deepEqual(
+      afterValues,
+      sorted,
+      `after entries must be sorted ascending; got ${JSON.stringify(afterValues)}`,
+    );
+  });
+
+  test("(11) the rewritten initiative file's after: is emitted sorted", async () => {
+    const dir = await makeAuthoredDirWithAfter();
+    const fake = new FakeCreateGraphWithAfter();
+
+    const result = await runImportGraph(
+      { dir, create: true, apply: false, project: PROJ_ID },
+      { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
+    );
+
+    assert.equal(result.exitCode, 0);
+
+    const initContent = await readFile(join(dir, "oauth.md"), "utf8");
+    // Initiative in this fixture has no after (empty), so no after: line should appear
+    assert.ok(
+      !initContent.includes("after:"),
+      `initiative file with empty after must NOT contain after: line; got:\n${initContent}`,
+    );
+  });
+
+  test("(12) a package with no after: round-trips with no after: line added", async () => {
+    const dir = await makeAuthoredDir(); // this fixture has no after anywhere
+    const fake = new FakeCreateGraphWithAfter();
+
+    const result = await runImportGraph(
+      { dir, create: true, apply: false, project: PROJ_ID },
+      { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
+    );
+
+    assert.equal(result.exitCode, 0);
+
+    // No file should have an after: line after rewrite
+    const files = ["oauth.md", "backend/backend.md", "frontend/frontend.md"];
+    for (const f of files) {
+      const content = await readFile(join(dir, f), "utf8");
+      assert.ok(
+        !content.includes("after:"),
+        `${f} must NOT contain after: line when original had none; got:\n${content}`,
+      );
+    }
+  });
 });

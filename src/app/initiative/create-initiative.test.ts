@@ -12,6 +12,10 @@ import {
   DuplicateNameError,
 } from "../errors.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
+import type { SequencingRepository } from "../../storage/sqlite/sqlite-sequencing-repository.ts";
+import type { Transactor } from "../../storage/port.ts";
+import { SequencingScopeError } from "../errors.ts";
+import { CycleError } from "../../domain/graph.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
@@ -162,6 +166,204 @@ describe("CreateInitiative", () => {
         return true;
       },
     );
+  });
+});
+
+// --- Fakes for `after` tests ---
+
+interface SequencingRepositoryExtended extends SequencingRepository {
+  addInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  addObjectiveAfter(objectiveId: string, dependencyId: string): void;
+  listInitiativeDag(
+    projectId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  listObjectiveDag(
+    initiativeId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  removeInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  removeObjectiveAfter(objectiveId: string, dependencyId: string): void;
+}
+
+class FakeSequencingRepo implements SequencingRepositoryExtended {
+  readonly addedCalls: Array<{
+    initiativeId: string;
+    dependencyId: string;
+  }> = [];
+  dag: Array<{ id: string; dependencies: string[] }> = [];
+
+  listInitiativeAfter(_id: string): string[] {
+    return [];
+  }
+  listObjectiveAfter(_id: string): string[] {
+    return [];
+  }
+  addInitiativeAfter(initiativeId: string, dependencyId: string): void {
+    this.addedCalls.push({ initiativeId, dependencyId });
+  }
+  addObjectiveAfter(_oid: string, _did: string): void {}
+  listInitiativeDag(
+    _pid: string,
+  ): Array<{ id: string; dependencies: string[] }> {
+    return this.dag;
+  }
+  listObjectiveDag(
+    _iid: string,
+  ): Array<{ id: string; dependencies: string[] }> {
+    return [];
+  }
+  removeInitiativeAfter(_iid: string, _did: string): void {}
+  removeObjectiveAfter(_oid: string, _did: string): void {}
+}
+
+class FakeTx implements Transactor {
+  runCount = 0;
+  run<T>(work: () => T): T {
+    this.runCount += 1;
+    return work();
+  }
+}
+
+// Pre-seeded initiatives for after edge resolution
+const EXISTING_A = "01JZZZZZZZZZZZZZZZZZZZEXA0";
+const EXISTING_B = "01JZZZZZZZZZZZZZZZZZZZEXB0";
+const EXISTING_CROSS = "01JZZZZZZZZZZZZZZZZZZZEXC0";
+const PROJ_ID_AFTER = "01JZZZZZZZZZZZZZZZZZZZPRJ1";
+
+describe("CreateInitiative with after", () => {
+  test("(12) after absent → behaviour identical to today (no sequencing call)", async () => {
+    const repo = new FakeInitiativeRepository();
+    const resolver = new MockReferenceResolver(
+      new Map([["proj-1", "project"]]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    const tx = new FakeTx();
+    const uc = new CreateInitiative(repo, resolver, sequencing, tx);
+    const id = await uc.execute({ projectId: "proj-1", name: "alone" });
+
+    assert.ok(id.length > 0, "returns an id");
+    assert.equal(sequencing.addedCalls.length, 0, "no after edges written");
+    assert.equal(tx.runCount, 0, "no transaction");
+  });
+
+  test("(13) after: [B, A, B] → deduped + sorted, addInitiativeAfter called twice with A then B", async () => {
+    const repo = new FakeInitiativeRepository();
+    repo.save({
+      id: EXISTING_A,
+      projectId: PROJ_ID_AFTER,
+      name: "existing-a",
+    });
+    repo.save({
+      id: EXISTING_B,
+      projectId: PROJ_ID_AFTER,
+      name: "existing-b",
+    });
+    const resolver = new MockReferenceResolver(
+      new Map([
+        [PROJ_ID_AFTER, "project"],
+        [EXISTING_A, "initiative"],
+        [EXISTING_B, "initiative"],
+      ]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    sequencing.dag = [
+      { id: EXISTING_A, dependencies: [] },
+      { id: EXISTING_B, dependencies: [] },
+    ];
+    const tx = new FakeTx();
+    const uc = new CreateInitiative(repo, resolver, sequencing, tx);
+
+    const id = await uc.execute({
+      projectId: PROJ_ID_AFTER,
+      name: "new-init",
+      after: [EXISTING_B, EXISTING_A, EXISTING_B],
+    });
+
+    assert.equal(
+      sequencing.addedCalls.length,
+      2,
+      "two after edges written (deduped)",
+    );
+    // Sorted ascending: A before B
+    assert.deepEqual(sequencing.addedCalls[0], {
+      initiativeId: id,
+      dependencyId: EXISTING_A,
+    });
+    assert.deepEqual(sequencing.addedCalls[1], {
+      initiativeId: id,
+      dependencyId: EXISTING_B,
+    });
+    assert.equal(tx.runCount, 1, "all writes in one transaction");
+  });
+
+  test("(14) after naming initiative in another project → SequencingScopeError, nothing saved", async () => {
+    const repo = new FakeInitiativeRepository();
+    repo.save({
+      id: EXISTING_CROSS,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRX0",
+      name: "other-project",
+    });
+    repo.save({
+      id: EXISTING_A,
+      projectId: PROJ_ID_AFTER,
+      name: "existing-a",
+    });
+    const resolver = new MockReferenceResolver(
+      new Map([
+        [PROJ_ID_AFTER, "project"],
+        [EXISTING_A, "initiative"],
+        [EXISTING_CROSS, "initiative"],
+      ]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    const tx = new FakeTx();
+    const uc = new CreateInitiative(repo, resolver, sequencing, tx);
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          projectId: PROJ_ID_AFTER,
+          name: "new-init",
+          after: [EXISTING_CROSS],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof SequencingScopeError);
+        assert.equal((err as SequencingScopeError).scope, "project");
+        return true;
+      },
+    );
+    assert.equal(sequencing.addedCalls.length, 0, "no edges written");
+    assert.equal(
+      repo.resolveInitiativeByName(PROJ_ID_AFTER, "new-init").length,
+      0,
+      "initiative not saved",
+    );
+  });
+
+  test("(15) after naming a non-existent id → UnknownReferenceError", async () => {
+    const repo = new FakeInitiativeRepository();
+    const resolver = new MockReferenceResolver(
+      new Map([
+        [PROJ_ID_AFTER, "project"],
+        // EXISTING_A not a valid reference kind
+      ]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    const tx = new FakeTx();
+    const uc = new CreateInitiative(repo, resolver, sequencing, tx);
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          projectId: PROJ_ID_AFTER,
+          name: "new-init",
+          after: ["no-such-id"],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        return true;
+      },
+    );
+    assert.equal(sequencing.addedCalls.length, 0, "no edges written");
   });
 });
 
