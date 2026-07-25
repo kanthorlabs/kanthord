@@ -28,6 +28,14 @@ The canonical TDD cycle:
 - `software-engineer` makes that test green by editing production sources (RED flow), or implements the forwarded Task(s) directly from the Story spec (GREEN-ONLY flow).
 - `test-engineer` runs the test (GREEN), then either opens the next RED or — when every Task is green and the EPIC's Verification Gate runs clean — appends `IMPLEMENTATION_READY_FOR_REVIEW:`. For GREEN-ONLY Tasks, the TE runs a build-only check instead of a test.
 
+**The ready marker has three preconditions, all of them mandatory.** The EPIC's `## Verification Gate` has **two** parts — `Gates:` and `Proof:` — and running only the `Gates:` is the single most common way this loop reports work that is not done:
+
+1. **Every `### Task` in every Story file is green** — not "the stories expanded so far". A partial implementation cannot satisfy a whole-epic Proof, so a marker emitted with stories outstanding is invalid.
+2. **The `Gates:` command runs green** (typically `npm run verify`).
+3. **The `Proof:` command has actually been run**, and its real output — including the string the EPIC says it must print — is pasted into the turn.
+
+A marker missing any of the three is premature: the orchestrator must **reject it** and dispatch the next engineer turn instead of advancing to Step 6. `Proof:` scripts live under `scripts/`, which is lane-forbidden to **modify** and always allowed to **run** (see AGENTS.md). "Lane-forbidden" is never a valid reason to skip the Proof.
+
 After the TDD loop completes (`IMPLEMENTATION_READY_FOR_REVIEW:` detected), the orchestrator runs the **reviewer-engineer gate** and auto-routes its `action:YES` findings back through the TDD loop (once per cycle), leaving only `action:NO` findings for the human. It then **pauses for the human operator's review**. The human reviews the implementation and records the verdict in the discussion file as `HUMAN_REVIEW: PASS` or `HUMAN_REVIEW: FAIL` (with `BLOCKER:` lines). On `PASS`, the EPIC is done. On `FAIL`, the orchestrator routes the `BLOCKER:` lines back through the TDD loop until the next `IMPLEMENTATION_READY_FOR_REVIEW:`.
 
 Separately, while the TDD loop runs, the orchestrator counts `ATTEMPT-FAILED: <task-id>` lines emitted by the engineers. When any single Task accumulates **3** failed attempts, the orchestrator stops the loop and escalates that Task to the human — the implementation cannot self-resolve it.
@@ -107,7 +115,13 @@ FAIL_LINE=$(grep -nE '^(HUMAN_REVIEW: FAIL|AUTO_REVIEW: FAIL)' '<discussion-file
 awk -v s="${FAIL_LINE:-0}" 'NR>s && /^IMPLEMENTATION_READY_FOR_REVIEW:/' '<discussion-file>'
 ```
 
-If that prints any line: report `implementation ready for review` and jump to Step 6 (final review phase).
+If that prints any line, **validate the LATEST such marker before honouring it** (append `| tail -1` — a rejected marker stays in the file, so always judge the most recent one). Read the turn that carries it and confirm it evidences all three preconditions from "The ready marker has three preconditions" above: every Story Task green, the `Gates:` command green, and the `Proof:` command run with its real output and the EPIC's success string present. A marker that admits outstanding work ("Stories 4-6 remain pending", "not yet expanded") or that never ran the Proof is **premature**:
+
+- Print `premature ready marker rejected: <what is missing>`.
+- Do **not** jump to Step 6. Continue the loop at 5c so the next engineer turn finishes the work.
+- Do not edit the discussion file to remove the marker — the next real marker supersedes it (Step 5b already scopes markers to the latest review failure, and rejection is not a failure verdict).
+
+Otherwise: report `implementation ready for review` and jump to Step 6 (final review phase).
 
 ### 5c. Read the tail marker
 
@@ -121,6 +135,19 @@ grep -E '^END:[[:space:]]+(TEST-ENGINEER|SOFTWARE-ENGINEER)[[:space:]]*$' '<disc
 Capture the result as `tail_actor` (may be empty if no marker exists yet).
 
 ### 5d. Decide next role
+
+**Post-failure override — check this first.** If the last review verdict (`HUMAN_REVIEW: FAIL` or `AUTO_REVIEW: FAIL`) has no engineer turn after it, `next = test-engineer` **regardless of `tail_actor`**:
+
+```bash
+FAIL_LINE=$(grep -nE '^(HUMAN_REVIEW: FAIL|AUTO_REVIEW: FAIL)' '<discussion-file>' | tail -1 | cut -d: -f1)
+awk -v s="${FAIL_LINE:-0}" 'NR>s && /^END:[[:space:]]+(TEST-ENGINEER|SOFTWARE-ENGINEER)/' '<discussion-file>'
+```
+
+If `FAIL_LINE` is non-empty and that prints nothing → `next = test-engineer`; skip the alternation table below.
+
+Strict alternation is wrong at this boundary. Blockers need a failing regression test **before** anyone fixes them, so the test engineer always takes the first turn after a review failure — that is what Step 6d means by "the test engineer turns testable blockers into failing regression tests". Following the tail marker instead (last = TE → next = SE) sends the software engineer in to fix a blocker with no test guarding the fix.
+
+Otherwise use the alternation table:
 
 - `tail_actor` empty → `next = test-engineer` (test engineer always opens; matches `opener: test-engineer` in the header)
 - `tail_actor` is `TEST-ENGINEER` → `next = software-engineer`
@@ -162,7 +189,7 @@ SINGLE-TURN CONTRACT (OVERRIDES everything below):
 - ONE turn = ONE role = ONE append (ONE "END: <ROLE>") = ONE `cat >>`, then STOP and return your one-sentence summary.
 - Do NOT switch/impersonate the other role.
 - Do NOT spawn or dispatch any sub-agent.
-- Append "IMPLEMENTATION_READY_FOR_REVIEW:" ONLY when this turn IS it (test-engineer, every Task already green).
+- Append "IMPLEMENTATION_READY_FOR_REVIEW:" ONLY when this turn IS it (test-engineer, EVERY Task in EVERY Story green, Gates: green, AND the Proof: command run with its real output pasted in). Stories still unexpanded or unimplemented means NOT ready.
 
 Follow your discussion-channel protocol exactly:
 1. Read the EPIC file and the discussion file for full context. The EPIC's `## Verification Gate` is binding. The `## Architecture` section of AGENTS.md (repo root) is binding for all production code. The discussion file's last turn (if any) tells you what was just done.
@@ -180,6 +207,8 @@ Do NOT edit files outside your lane (see the lane table in your persona).
 Do NOT edit the EPIC or Story files — those are locked by planning. Do NOT touch the build/project config files (see the always-forbidden list in your persona).
 
 If you are test-engineer and you have just confirmed that every Task is green AND the Verification Gate runs green end-to-end, append an IMPLEMENTATION_READY_FOR_REVIEW turn (still ending with END: TEST-ENGINEER). /work greps "^IMPLEMENTATION_READY_FOR_REVIEW:" to stop the TDD loop and hand the cycle to the human for review.
+
+"The Verification Gate runs green end-to-end" means BOTH of its parts: the `Gates:` command AND the `Proof:` command, each actually executed this turn, with the Proof's real output (including the exact success string the EPIC names) pasted into your turn. A Proof script under `scripts/` is lane-forbidden to EDIT and always allowed to RUN — never skip it on lane grounds. If the Proof fails, you are not ready: report the failure as your turn instead. If any Story Task is still unimplemented or its story file still unexpanded, you are not ready either — open the next Task.
 ```
 
 Also append:
@@ -265,8 +294,15 @@ grep -E '^HUMAN_REVIEW: (PASS|FAIL)' '<discussion-file>' | tail -1
 ```
 
 - Latest line is `HUMAN_REVIEW: PASS` → jump to Step 7 (close lifecycle).
-- Latest line is `HUMAN_REVIEW: FAIL` → jump to Step 6d (review failure routing).
+- Latest line is `HUMAN_REVIEW: FAIL` → **only** jump to Step 6d if that verdict has not been processed yet. It has already been processed when an `^IMPLEMENTATION_READY_FOR_REVIEW:` line appears **after** it — the engineers already fixed its blockers and re-signalled. In that case the verdict is spent: proceed to Step 6b for a fresh reviewer gate instead, or 6d would re-route the same blockers forever.
 - No `HUMAN_REVIEW:` line yet → proceed to Step 6b (reviewer-engineer pre-gate).
+
+```bash
+FAIL_LINE=$(grep -n '^HUMAN_REVIEW: FAIL' '<discussion-file>' | tail -1 | cut -d: -f1)
+awk -v s="${FAIL_LINE:-0}" 'NR>s && /^IMPLEMENTATION_READY_FOR_REVIEW:/' '<discussion-file>'   # non-empty ⇒ verdict spent ⇒ 6b
+```
+
+A `HUMAN_REVIEW:` verdict is scoped to **one** review cycle, not to the whole run; a cycle may therefore hold several verdicts, each answered by its own ready marker.
 
 ### 6b. Reviewer-engineer review gate + auto-routing of `action:YES` findings
 

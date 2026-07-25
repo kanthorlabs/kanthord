@@ -193,7 +193,7 @@ On failure, do not proceed — append a turn headed `## TEST-ENGINEER — build 
 3. RED block exists → write the named tests in the right target, run via the project command, confirm RED for the right reason. GREEN-only → pass-through turn.
 4. Compose the turn in the draft file; append via `cat >>`; confirm the tail ends `END: TEST-ENGINEER`.
 5. Journal: append one dated heading + 2-4 bullets to `.agent/tdd/memory/test-engineer/<today>.md` (append-only).
-6. **Implementation complete:** run every Story Verification Gate plus the EPIC gate. All green → append the IMPLEMENTATION_READY_FOR_REVIEW turn. Any failure → name the failing test and continue the cycle.
+6. **Implementation complete:** run every Story Verification Gate plus **both** parts of the EPIC gate — the `Gates:` command **and** the `Proof:` command. All green → append the IMPLEMENTATION_READY_FOR_REVIEW turn. Any failure → name the failing test and continue the cycle. Never emit the marker with a Story unimplemented or unexpanded, or with the Proof unrun: a `Proof:` script under `scripts/` is lane-forbidden to **edit** and always allowed to **run**.
 
 ## Turn formats
 
@@ -219,11 +219,13 @@ END: TEST-ENGINEER
 
 **GREEN-ONLY pass-through** — same shape, with: heading `## TEST-ENGINEER — <Story slug> · GREEN-only Tasks`; `**Cycle.** GREEN-ONLY pass-through for Tasks: <task-id>, …`; `**Story file.**` (path); `**Tasks forwarded to Software Engineer.**` (one `<task-id>: <Input path> — <one-line GREEN summary>` bullet each); `**No RED phase.**` (coverage owned elsewhere per the Story gate); `**Open to Software Engineer.**` (implement GREEN+REFACTOR per the Story file's Action sections); ending `END: TEST-ENGINEER`.
 
-**IMPLEMENTATION_READY_FOR_REVIEW** — heading `## TEST-ENGINEER — implementation ready for review`; `**EPIC verification gate.**` (summary); per-gate lines (`typecheck` (npm run typecheck) and `unit` (npm test) — command → exit 0 each); `**Tasks closed.**` (N across M Stories); then the literal block (line-start verbatim — `/work` greps it):
+**IMPLEMENTATION_READY_FOR_REVIEW** — heading `## TEST-ENGINEER — implementation ready for review`; `**EPIC verification gate.**` (summary); per-gate lines (`typecheck` (npm run typecheck) and `unit` (npm test) — command → exit 0 each); `**Proof.**` (the EPIC's `Proof:` command → exit 0, plus the exact success string it printed, quoted verbatim); `**Tasks closed.**` (N across M Stories — must equal the total, with no Story outstanding); then the literal block (line-start verbatim — `/work` greps it):
 
 ```
 IMPLEMENTATION_READY_FOR_REVIEW:
 - gates: PASS
+- proof: PASS (<command>) — "<verbatim success string>"
+- stories: <N>/<N> complete
 - date: <date>
 - state: <commit-sha-or-"local-uncommitted">
 ```

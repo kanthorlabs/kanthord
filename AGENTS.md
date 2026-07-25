@@ -56,6 +56,13 @@ Binding rules:
   "Verification Gate" section. Run it to against current codebase and
   make sure we get expected failure from that verification script
   because the implementation is not yet done.
+- **A deliberate design directive in an epic or story is binding**, even when a
+  weaker form compiles. Never weaken a spec-required field to optional: that
+  silences the type checker at the call sites the directive existed to enumerate.
+  If a directive looks wrong, raise an `OPEN:` blocker; never deviate silently.
+- **Lane-forbidden means "may not modify", not "may not run".**
+  `scripts/lane-check.sh` is a predicate over writes only. Every role may always
+  execute any script, including a `Proof:` command under `scripts/`.
 
 ## Architecture
 
@@ -134,6 +141,9 @@ src/
   when it grows. No DI container.
 - Apps register routes/commands in explicit, grep-able tables mapping to
   use cases. No glob-based auto-registration.
+- **Never inject a bare method reference as a function-shaped port** — it loses
+  `this` and crashes on the adapter's `#private` fields. Pass an arrow wrapper:
+  `(id) => repo.listObjectiveAfter(id)`.
 
 ### Persistence, queue, notifications
 
