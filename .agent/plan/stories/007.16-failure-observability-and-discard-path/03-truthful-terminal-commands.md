@@ -4,7 +4,7 @@ Epic: `.agent/plan/epics/007.16-failure-observability-and-discard-path.md`
 
 Five independent acceptance criteria. Implement all five; each has its own test.
 A–C cover `approve` / `publish`; D–E cover `import graph --apply` and were folded in
-from `.agent/plan/epics/007.17-midway-insertion-findings.md` (`F1`, `F2`) because
+from `.agent/findings/007.17-midway-insertion-findings.md` (`F1`, `F2`) because
 they are the same defect class: a command that reports an outcome it did not
 achieve, or lets a raw error escape.
 
