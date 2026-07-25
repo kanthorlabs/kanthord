@@ -50,6 +50,12 @@ Binding rules:
 - An epic that mostly edits lane-forbidden files (toolchain, configs,
   `scripts/`, `package.json`) is a **maintainer epic**: executed directly by
   the human + assistant in normal sessions, not dispatched through `/work`.
+- **Deterministic verification script.** In "Verification Gate" section,
+  must write bash script to setup validation instead of using inline bash.
+  The agent who author the epic must write it to put it into
+  "Verification Gate" section. Run it to against current codebase and
+  make sure we get expected failure from that verification script
+  because the implementation is not yet done.
 
 ## Architecture
 
