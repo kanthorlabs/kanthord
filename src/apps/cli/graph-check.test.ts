@@ -45,9 +45,13 @@ test("runGraphCheck on invalid-unknown-dep.yaml returns exit 1 and locked unknow
 // --- regression: B3 — unreadable-file branch uses locked AC message ---
 
 test("runGraphCheck on a path that does not exist returns exit 1 with locked cannot-read-file stderr", async () => {
-  const result = await runGraphCheck("/nonexistent/path/that/does/not-exist.yaml");
+  const result = await runGraphCheck(
+    "/nonexistent/path/that/does/not-exist.yaml",
+  );
   assert.equal(result.exitCode, 1);
-  assert.deepEqual(result.stderr, ["error: invalid graph file: cannot read file"]);
+  assert.deepEqual(result.stderr, [
+    "error: invalid graph file: cannot read file",
+  ]);
   assert.deepEqual(result.stdout, []);
 });
 
@@ -60,7 +64,9 @@ test("runGraphCheck on a non-YAML file returns exit 1 with invalid YAML error", 
     await writeFile(file, "{unclosed bracket that fails YAML parse");
     const result = await runGraphCheck(file);
     assert.equal(result.exitCode, 1);
-    assert.deepEqual(result.stderr, ["error: invalid graph file: invalid YAML"]);
+    assert.deepEqual(result.stderr, [
+      "error: invalid graph file: invalid YAML",
+    ]);
   } finally {
     await rm(dir, { recursive: true });
   }

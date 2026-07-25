@@ -30,7 +30,7 @@ dependencies only.
 - `remove dependency` for an edge that does not exist is a no-op success (exit
   0, no event) — idempotent.
 - Handlers `runAddDependency` / `runRemoveDependency` → `{ exitCode: 0, stdout:
-  [], stderr: ["dependency added: <task> → <dependsOn>"] }` on success; every
+[], stderr: ["dependency added: <task> → <dependsOn>"] }` on success; every
   rejection → exit 1 + one `error:` line, graph unchanged.
 
 ## Constraints

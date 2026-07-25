@@ -31,7 +31,7 @@ ALTER TABLE initiatives ADD COLUMN paused INTEGER NOT NULL DEFAULT 0 CHECK (paus
   `transaction()` throws.
 - `JobQueue` port (`src/queue/port.ts`) extended per the capability map:
   `enqueue → boolean` (index B2, resolved), `finish(jobId,
-  'completed'|'failed')`, `discard(jobId)` (DELETE), `listRunningJobs()`.
+'completed'|'failed')`, `discard(jobId)` (DELETE), `listRunningJobs()`.
   `claim()` keeps its signature but the SQL now joins
   tasks→objectives→initiatives and skips `paused = 1` initiatives.
 - `TaskRepository` gains `getInitiativeId(taskId)`

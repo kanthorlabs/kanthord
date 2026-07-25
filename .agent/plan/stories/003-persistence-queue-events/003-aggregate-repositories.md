@@ -13,14 +13,14 @@ temp databases.
 
 - Ports (owned by the core, `storage/port.ts`):
   - `ProjectRepository { save(project: Project): void; get(id: string):
-    Project | undefined; addResource(projectId: string, resource:
-    Resource): void; listResources(projectId: string): Resource[] }`
+Project | undefined; addResource(projectId: string, resource:
+Resource): void; listResources(projectId: string): Resource[] }`
   - `InitiativeRepository { save(initiative: Initiative): void; get(id:
-    string): Initiative | undefined; saveObjective(objective: Objective):
-    void; listObjectives(initiativeId: string): Objective[] }`
+string): Initiative | undefined; saveObjective(objective: Objective):
+void; listObjectives(initiativeId: string): Objective[] }`
   - `TaskRepository { save(task: Task): void; saveAll(tasks: Task[]):
-    void; get(id: string): Task | undefined; listByInitiative(
-    initiativeId: string): Task[] }`
+void; get(id: string): Task | undefined; listByInitiative(
+initiativeId: string): Task[] }`
 - `save` inserts (duplicate id throws); updates arrive with the epic that
   needs them (EPIC 004/005). `get` returns `undefined` when absent.
 - `saveAll` is one transaction: all task rows first, then all dependency

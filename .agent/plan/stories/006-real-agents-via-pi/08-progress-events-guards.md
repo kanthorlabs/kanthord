@@ -11,8 +11,8 @@ crash the daemon.
 ## Acceptance Criteria
 
 - PiAgentRunner ctor gains `{ emit: (taskId: string, type: EventType,
-  payload: Record<string, string>) => void; clock: () => number; maxTurns?:
-  number }` (defaults: no-op, `Date.now`, 50). Per-run emissions:
+payload: Record<string, string>) => void; clock: () => number; maxTurns?:
+number }` (defaults: no-op, `Date.now`, 50). Per-run emissions:
   - `agent.started { workspace }` after workspace prep;
   - `agent.progress { tool, summary }` from subscribed tool-call events —
     `summary` = tool name + its primary path argument only (NEVER raw tool
@@ -31,7 +31,7 @@ crash the daemon.
   abort) → failed `BudgetExceededError: exceeded <n> turns`, with
   `agent.finished { outcome: 'failed' }` still emitted.
 - main.ts: `emit` wired to `EventFeed.append(newEvent(type, { taskId },
-  payload))` — synchronous append, so event order holds; the runner never
+payload))` — synchronous append, so event order holds; the runner never
   imports storage. `KANTHORD_MAX_TURNS` parsed at startup (invalid → one
   stderr line, exit 1; unset → 50).
 

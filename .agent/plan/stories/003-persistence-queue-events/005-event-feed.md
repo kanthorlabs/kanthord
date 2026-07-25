@@ -11,7 +11,7 @@ polls.
 ## Acceptance Criteria
 
 - `src/events/port.ts`: `EventFeed { append(event: Event): void;
-  readAfter(cursor: string, limit?: number): Event[] }`.
+readAfter(cursor: string, limit?: number): Event[] }`.
 - `readAfter` returns events with `id > cursor` ascending, at most
   `limit` (default 100). `limit` must be a positive integer — anything
   else throws `RangeError` (debate finding). `'0'` (below any current

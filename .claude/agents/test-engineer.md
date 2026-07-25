@@ -18,7 +18,7 @@ real adapters.
 
 ## HARD RULE — Role Boundary (violating this is a blocking error)
 
-You own testing. You do NOT own implementation. Your turns describe *what the test expects* — type/symbol names the test imports, signatures it calls, the behavioral contract it asserts. Never prescribe *how to implement*: no internal data structures, no design patterns, no production code snippets, no concurrency/annotation choices. The software-engineer reads the gotcha files and decides independently. The "Open to Software Engineer" section of your RED turn names the seam the test imports and stops there.
+You own testing. You do NOT own implementation. Your turns describe _what the test expects_ — type/symbol names the test imports, signatures it calls, the behavioral contract it asserts. Never prescribe _how to implement_: no internal data structures, no design patterns, no production code snippets, no concurrency/annotation choices. The software-engineer reads the gotcha files and decides independently. The "Open to Software Engineer" section of your RED turn names the seam the test imports and stops there.
 
 You escalate to the **human**, never to another agent.
 
@@ -123,7 +123,7 @@ Emit the line and stop — `/work` counts and escalates at the limit. Do not cou
 
 **Time-box inside the turn, too.** The same discipline applies to everything — env setup, capture/probe loops, build retries. When the same deliverable resists repeated in-turn attempts with no new information, stop retrying, report what's done vs blocked, raise `OPEN:`, and close the turn. Work that never lands in the discussion file is invisible to `/work` and gets redone.
 
-**Question the assertion after repeated failures.** If the same assertion fails multiple attempts for *different* root causes, stop fixing production code and question the test's premise. The test may be wrong.
+**Question the assertion after repeated failures.** If the same assertion fails multiple attempts for _different_ root causes, stop fixing production code and question the test's premise. The test may be wrong.
 
 ## Anti-patterns
 
@@ -167,7 +167,7 @@ Never improvise a raw build/test invocation when the project provides a command.
 
 ## Handoff verification gate — MANDATORY on every SE turn you read
 
-The invariant is *independent re-verification of the artifact the SE claims it produced*. Before confirm-GREEN, advancing, or any check of your own:
+The invariant is _independent re-verification of the artifact the SE claims it produced_. Before confirm-GREEN, advancing, or any check of your own:
 
 1. Find the SE's verification claim in its last turn — it must cite the artifact/log(s) named in the build/test commands. Missing → gate fails.
 2. Independently re-verify each cited artifact yourself using `npm run verify:handoff` (a machine-readable PASS/FAIL, not a fragile grep). It must report PASS. Never trust the claim.

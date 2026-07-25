@@ -1,42 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KanthorD Docs</title>
+    <meta name="description" content="KanthorD documentation" />
+    <link
+      rel="stylesheet"
+      href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css"
+    />
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KanthorD Docs</title>
-  <meta name="description" content="KanthorD documentation" />
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css" />
-</head>
-
-<body>
-  <div id="app"></div>
-  <script>
-    window.$docsify = {
-      name: 'KanthorD',
-      loadSidebar: true,
-      subMaxLevel: 3,
-      auto2top: true,
-      markdown: {
-        renderer: {
-          code(code, lang) {
-            if (lang === 'mermaid') {
-              return `<div class="mermaid">${code}</div>`;
-            }
-            return this.origin.code.apply(this, arguments);
-          }
-        }
-      },
-      plugins: [
-        (hook) => hook.doneEach(() => window.mermaid?.run({ querySelector: '.mermaid' }))
-      ]
-    };
-  </script>
-  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  <script src="//cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-  <script>
-    mermaid.initialize({ startOnLoad: false });
-  </script>
-</body>
-
+  <body>
+    <div id="app"></div>
+    <script>
+      window.$docsify = {
+        name: "KanthorD",
+        loadSidebar: true,
+        subMaxLevel: 3,
+        auto2top: true,
+        markdown: {
+          renderer: {
+            code(code, lang) {
+              if (lang === "mermaid") {
+                return `<div class="mermaid">${code}</div>`;
+              }
+              return this.origin.code.apply(this, arguments);
+            },
+          },
+        },
+        plugins: [
+          (hook) =>
+            hook.doneEach(() =>
+              window.mermaid?.run({ querySelector: ".mermaid" }),
+            ),
+        ],
+      };
+    </script>
+    <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
+    <script src="//cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({ startOnLoad: false });
+    </script>
+  </body>
 </html>

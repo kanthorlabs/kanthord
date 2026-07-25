@@ -21,7 +21,7 @@ Proof critical path; /work schedules it after stories 01–08.
 - CLI `import resource <path>`: the handler reads the file and parses YAML
   (`yaml` dep, already installed); shape
   `{ project: <ref>, resources: [ { type, name, <verbatim vendor
-  fields> } ] }` — field names are the exact domain names (`value`,
+fields> } ] }` — field names are the exact domain names (`value`,
   `baseUrl`, `organization`, `path`, `branch`; exact-entity-names rule);
   success → stdout one ULID per created resource in file order, stderr
   `imported N resources`; missing file / parse error / invalid entry →

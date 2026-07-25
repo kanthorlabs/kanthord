@@ -25,7 +25,7 @@ that is both the `--runner fake` implementation and the test double.
   - records every call on a public
     `calls: Array<{ taskId: string; context: TaskContextBinding[] }>`.
 - `src/agent-runner/resolver.ts` exports `RegistryRunnerResolver implements
-  AgentRunnerResolver`, constructor `{ defaultRunner: AgentRunner }`:
+AgentRunnerResolver`, constructor `{ defaultRunner: AgentRunner }`:
   - context contains an `ai_provider` binding → throw
     `RunnerNotResolvableError` naming the task and the binding's resourceId
     (no AI runner exists in this epic; EPIC 006 adds a registry keyed by

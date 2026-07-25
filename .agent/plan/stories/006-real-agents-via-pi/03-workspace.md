@@ -13,24 +13,24 @@ workspace has a `baseCommit`.
 ## Acceptance Criteria
 
 - `src/workspace/port.ts`: `Workspace = { dir: string; branch: string;
-  baseCommit: string }`; `WorkspaceManager { prepare(taskId: string, source:
-  Repository | Filesystem): Promise<Workspace> }` (domain imports only);
+baseCommit: string }`; `WorkspaceManager { prepare(taskId: string, source:
+Repository | Filesystem): Promise<Workspace> }` (domain imports only);
   `WorkspacePreparationError { message }`.
 - `src/workspace/local.ts` `LocalWorkspaceManager` ctor `{ root: string;
-  buildRemoteUrl?: (repo: Repository, name: string) => string }` (default
+buildRemoteUrl?: (repo: Repository, name: string) => string }` (default
   builder: `https://github.com/<organization>/<name>.git` — injectable per
   the D1 debate so hermetic tests use local paths without weakening
   production):
   - **Home ensure (repository sources):** `source.path` missing → `git
-    clone <url> <path>.tmp-<random>` then rename into place (atomic;
+clone <url> <path>.tmp-<random>` then rename into place (atomic;
     partial-clone safe); exists and is a git repo → `git remote get-url
-    origin` must equal the constructed URL, else
+origin` must equal the constructed URL, else
     `WorkspacePreparationError` naming both; exists and is not a git repo →
     `WorkspacePreparationError` naming the path. No fetch ever (snapshot
     semantics, documented). The home is never written to after the initial
     clone.
   - **Task workspace:** `git clone --branch <source.branch> <path>
-    <root>/<taskId>` then `git switch -c kanthord/<taskId>`;
+<root>/<taskId>` then `git switch -c kanthord/<taskId>`;
     `baseCommit = git rev-parse HEAD`. Missing branch in the home →
     `WorkspacePreparationError`.
   - **Filesystem sources:** `fs.cp` recursive into `<root>/<taskId>`, then

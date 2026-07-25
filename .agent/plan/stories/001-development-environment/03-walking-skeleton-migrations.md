@@ -14,6 +14,7 @@ Proof runs.
 prefix, one use case per file, `import type` for ports).
 
 **Action.** Test-first:
+
 1. Write `src/app/status/get-status.test.ts` first, with a hand-written
    `FakeStatusStore` implementing the port — assert `GetStatus.execute()`
    returns the four fields from the faked port. Run `npm test` → RED.
@@ -39,6 +40,7 @@ core→port half of the architecture path, hermetically tested.
 in-code list, idempotent, once at bootstrap; `node:sqlite` `DatabaseSync`.
 
 **Action.** Test-first:
+
 1. Write `src/storage/sqlite/migrate.test.ts` first, against a temp DB with
    **toy migrations defined in the test** (do not depend on the real registry).
    RED tests covering: applies pending migrations in order; **skips
@@ -52,7 +54,7 @@ in-code list, idempotent, once at bootstrap; `node:sqlite` `DatabaseSync`.
      sequence, applies each migration with `version > current` in order,
      **each in its own transaction** (bump `user_version` inside it; rollback
      on throw), returns the final version.
-   Run `npm test` → GREEN.
+     Run `npm test` → GREEN.
 
 **Output.** `src/storage/sqlite/migrate.ts` + `migrate.test.ts` — the reusable
 migration infrastructure every later epic registers into.
@@ -71,13 +73,14 @@ decision: migration 1 = `CREATE TABLE tasks(id TEXT PRIMARY KEY)` (plain
 idempotency mechanism; a plain create fails loud on unexpected state).
 
 **Action.** Test-first:
+
 1. Write `src/storage/sqlite/sqlite-status-store.test.ts` first, against a temp
    DB file with deterministic cleanup (`finally`/teardown removes it). RED
    asserts: `journalMode()` === `"wal"`; `schemaVersion()` === 1 after open;
    `taskCount()` === 0; `close()` releases the handle; re-open of the same file
    is a no-op (idempotent bootstrap). Run `npm test` → RED.
 2. Implement `src/storage/sqlite/migrations.ts` — `MIGRATIONS: readonly
-   Migration[]` with migration 1 `create tasks table`. Later epics append here.
+Migration[]` with migration 1 `create tasks table`. Later epics append here.
 3. Implement `src/storage/sqlite/sqlite-status-store.ts` — `SqliteStatusStore`
    implements `StatusStore`: opens/creates the DB file, sets
    `PRAGMA journal_mode=WAL`, runs `migrate(db, migrations)` on open,
@@ -102,6 +105,7 @@ contract (index.md): four `key: value` lines `db:` / `schema:` /
 default.
 
 **Action.**
+
 1. Implement `src/apps/cli/` — parse argv, map `status` → `GetStatus`, format
    the four locked output lines. Thin: parse input, call use case, format
    output — nothing else.

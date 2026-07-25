@@ -30,6 +30,7 @@ flag(s) added).
 `node:assert/strict` (built-in, no dependency).
 
 **Action.** Test-first:
+
 1. Write `src/domain/greeting.test.ts` first — imports `./greeting.ts` (explicit
    `.ts` extension), asserts the observable return value.
 2. Run `npm test` → confirm RED for the right reason (module missing).

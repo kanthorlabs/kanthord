@@ -3,12 +3,8 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "target": "esnext",
-    "lib": [
-      "esnext"
-    ],
-    "types": [
-      "node"
-    ],
+    "lib": ["esnext"],
+    "types": ["node"],
     "strict": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
@@ -17,8 +13,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    "src/**/*.ts"
-  ],
+  "include": ["src/**/*.ts"],
   "exclude": []
 }

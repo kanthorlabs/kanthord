@@ -20,7 +20,7 @@ other flag accepts a name.
 - Each prints the matching ULID as sole stdout (exit 0). No match →
   `UnknownReferenceError` → exit 1 one line. Multiple matches →
   `AmbiguousNameError{ids}` → exit 1 `error: multiple <kind> named <n>: <id>,
-  <id>`.
+<id>`.
 
 ## Constraints
 

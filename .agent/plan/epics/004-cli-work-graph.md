@@ -27,7 +27,7 @@ the canonical rendering, e.g. `--secret-ref` → `secretRef`); no aliases.
 
 ## Verification Gate
 
-Gates:  `npm run typecheck && npm test`
+Gates: `npm run typecheck && npm test`
 Proof:
 
 ```bash
@@ -76,7 +76,7 @@ node src/main.ts create task --objective "$TASK_API" --title "bad parent"
   flags accept ULIDs only and reject unknown or wrong-type ids with a named
   error via a `resolveKind(id)` read port (`undefined` → unknown; found but
   different aggregate → wrong-type); `find <aggregate> --<scope> <id> --name
-  <name>` resolves a name to an id within an explicit scope (ambiguity →
+<name>` resolves a name to an id within an explicit scope (ambiguity →
   error listing candidates).
 - **Typed resource commands.** `create repository|credential|notification|ai-provider|filesystem`
   — all carry `--project --name`, plus the per-type vendor flags from the
@@ -91,7 +91,7 @@ node src/main.ts create task --objective "$TASK_API" --title "bad parent"
   `TaskContext` resolver stays EPIC 005 and the domain `Task` entity is
   unchanged (no `context` field). `--depends-on` is repeatable.
 - **Graph mutation (insert / re-arrange).** `add dependency --task <id>
-  --depends-on <id>` and `remove dependency --task <id> --depends-on <id>`
+--depends-on <id>` and `remove dependency --task <id> --depends-on <id>`
   edit the DAG after creation (rows in EPIC 003's `task_dependencies`) — the
   model has no positions, so re-arranging work is edge editing and inserting
   work is just `create task`. Both reject a mutation that would form a cycle

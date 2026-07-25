@@ -32,6 +32,7 @@ installed plugins from S2-T1.
 
 **Action.** Write `eslint.config.js` expressing allowed dependency edges
 **by source glob**, not broad prose:
+
 - `src/domain/**` → imports only `src/domain/**` + `node:*`.
 - `src/app/**` → imports `src/domain/**`, `*/port.ts`, `node:*`
   (per `AGENTS.md`: no use-case-calls-use-case).

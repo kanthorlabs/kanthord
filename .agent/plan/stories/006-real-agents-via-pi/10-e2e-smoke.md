@@ -19,13 +19,13 @@ credential failure path.
   `create ai-provider --provider openai --model gpt-5.5` +
   `create credential --provider openai --value test-key` +
   `create repository --organization kanthorlabs --branch main --path
-  <sandbox>`; task (default `--agent generic@1`) with the three context
+<sandbox>`; task (default `--agent generic@1`) with the three context
   bindings; scripted session edits README then finishes → `daemon run
-  --until-idle` exit 0; `get task --id` shows completed +
+--until-idle` exit 0; `get task --id` shows completed +
   workspace/branch/commit_sha/summary; the commit exists on
   `kanthord/<task-id>` in the workspace clone and the sandbox home is
   untouched; `events --after 0` shows per-task order `task.started →
-  agent.started → agent.progress ≥ 1 → agent.finished → task.completed`.
+agent.started → agent.progress ≥ 1 → agent.finished → task.completed`.
 - **Phase 2 (escalation round trip — agent-decided):** a second task with
   a dependent third task; the scripted session edits a file then calls
   `escalate({ reason: 'need human review' })` → `daemon run --until-idle`
@@ -34,7 +34,7 @@ credential failure path.
   `kanthord/proposal/<id>`, the `task.escalated` payload carries the
   reason, the dependent is still `pending`; `approve task <id>` →
   completed, `kanthord/<id>` at the proposal commit; a second `daemon run
-  --until-idle` runs the dependent to completion; events show
+--until-idle` runs the dependent to completion; events show
   `task.escalated → task.approved → task.completed`.
 - **Phase 3 (rejection, both resolutions):** (a) an escalated task
   rejected `--resolution retry` → it is `pending` with NO `task.failed`
@@ -43,7 +43,7 @@ credential failure path.
   completes; (b) another escalated task with a dependent, rejected
   `--resolution discard` → `discarded`, `task.discarded` +
   `task.blocked` events, the dependent never runs, `daemon run
-  --until-idle` still exits 0, and `get task --id` on the dependent names
+--until-idle` still exits 0, and `get task --id` on the dependent names
   the discarded dependency.
 - **Phase 4 (credential failure):** a task whose credential's `provider`
   mismatches the ai-provider's → `daemon run --until-idle` exit 1

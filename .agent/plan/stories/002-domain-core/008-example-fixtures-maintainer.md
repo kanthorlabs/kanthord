@@ -59,7 +59,7 @@ invisible to that scan. **M1 and M2 run BEFORE the /work dispatch** — Story
     section; single source of truth is story 003 + code.
   - Verify: `grep -c 'interface Task' README.md` returns 0; a repo-wide
     sweep `grep -rn -i 'README' AGENTS.md .claude .opencode .agent/plan
-    docs` shows no pointer to the removed Abstraction/union content
+docs` shows no pointer to the removed Abstraction/union content
     (baseline 2026-07-16: `.claude`/`.opencode` clean; the two `AGENTS.md`
     lines and EPIC 004 line 60 are the ones this item fixes); story 003's
     canonical-model table covers everything the deleted section defined.
