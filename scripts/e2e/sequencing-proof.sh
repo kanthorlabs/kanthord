@@ -11,7 +11,9 @@
 #   6.  a retroactive edge is refused and names what already ran
 #   7.  objective-level `after:` is read from the GRAPH PACKAGE, not just the CLI
 #   8.  reordering `after:` in the file is a NO-OP, not drift (canonicalisation)
-#   9.  an objective's task stays pending until ALL its prerequisites are integrated
+#   9.  a file that DROPS an edge never removes it implicitly — refused, edge survives
+#   10. with --confirm-delete the edge removal IS applied (before any task runs)
+#   11. an objective's task stays pending until ALL its prerequisites are integrated
 #
 # Usage: scripts/e2e/sequencing-proof.sh
 #
@@ -25,7 +27,12 @@
 # the daemon runs (nothing started) the cycle check is what fires, and after the
 # daemon + approve (a task has completed) the started check fires first. One
 # command, two distinct refusals, no extra packages.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing claim is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 export KANTHORD_DB="$(mktemp -d)/kanthord.db"
 node src/main.ts db migrate >/dev/null
@@ -99,8 +106,11 @@ read_manifest() { # $1 = package dir, $2 = dotted path into the manifest
 status_of() { node src/main.ts get "$1" --id "$2" | sed -n 's/^status: //p'; }
 
 ready_count() { # $1 = task id — number of task.ready events for that task
+  # ZERO matches is a legitimate answer here (claim 4 asserts exactly that), but
+  # `grep` exits 1 on no match and `pipefail` propagates it — which reads as a
+  # failure to the ERR trap. Guard it so only real failures are reported.
   node src/main.ts list event --after 0 --limit 1000 --json 2>/dev/null \
-    | grep -o "\"type\":\"task.ready\",\"taskId\":\"$1\"" | wc -l | tr -d ' '
+    | { grep -o "\"type\":\"task.ready\",\"taskId\":\"$1\"" || true; } | wc -l | tr -d ' '
 }
 
 export KANTHORD_FAKE_AGENT="$GRAPH/init-a/.fake-agent.json"
@@ -189,7 +199,25 @@ printf '%s' "$DROP_OUT" | grep -q 'edge removal(s) need --confirm-delete'
 ! apply_variant "$GRAPH/two-obj-removed" >/dev/null 2>&1
 node src/main.ts get objective --id "$O2" | grep -q "^after: .*$O1B"
 
-# 10) O2's task stays pending until ALL of its prerequisites are integrated.
+# 10) with --confirm-delete the edge removal IS applied, and reported.
+#     This MUST run before the daemon executes any task. A task that has run
+#     differs from its create-time manifest baseline and is therefore permanently
+#     `drifted` (findings F1; root cause owned by EPIC 007.18), and a drifted node
+#     refuses the WHOLE apply — so once tasks have completed this claim can never
+#     pass. Capture with `|| true`: a non-zero exit must fail the grep below by
+#     name, not abort the run through `pipefail` with no message.
+CONFIRM_OUT="$(apply_variant "$GRAPH/two-obj-removed" --confirm-delete || true)"
+printf '%s' "$CONFIRM_OUT" | grep -q "removed edge: $O2 -> $O1B"
+node src/main.ts get objective --id "$O2" | grep -q "^after: $O1$"
+
+# Restore the edge claim 10 just consumed: claim 11 needs TWO prerequisites to
+# prove `after` is a SET (with one member, "all satisfied" is unprovable). Safe
+# to add now — O2's task is still `pending`, so the retroactive refusal (claim 6)
+# does not apply.
+node src/main.ts add objective-dependency --objective "$O2" --after "$O1B" >/dev/null
+node src/main.ts get objective --id "$O2" | grep -q "^after: .*$O1B"
+
+# 11) O2's task stays pending until ALL of its prerequisites are integrated.
 node src/main.ts run daemon --until-idle --poll-interval 200 || true
 test "$(status_of task "$T2")" = "pending"
 test "$(ready_count "$T2")" -eq 0
@@ -203,10 +231,5 @@ test "$(status_of task "$T2")" = "pending"
 node src/main.ts approve objective --id "$O1B" >/dev/null
 node src/main.ts run daemon --until-idle --poll-interval 200 || true
 test "$(status_of task "$T2")" = "completed"
-
-# 11) with --confirm-delete the edge removal IS applied, and reported.
-CONFIRM_OUT="$(apply_variant "$GRAPH/two-obj-removed" --confirm-delete)"
-printf '%s' "$CONFIRM_OUT" | grep -q "removed edge: $O2 -> $O1B"
-node src/main.ts get objective --id "$O2" | grep -q "^after: $O1$"
 
 echo "007.17 PROOF OK (sequencing)"
