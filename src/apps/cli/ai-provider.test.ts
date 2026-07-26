@@ -3,6 +3,9 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { PassThrough } from "node:stream";
 import type { CliDeps } from "./deps.ts";
 import {
@@ -12,6 +15,8 @@ import {
   ConflictingDefaultChoiceError,
   AssignedProviderError,
   DuplicateAssignmentError,
+  InsecureEndpointError,
+  MissingCustomProviderIdError,
 } from "../../app/ai-provider/errors.ts";
 import { buildRegisterAiProviderCommand } from "./commands/register/ai-provider.ts";
 import { buildGetAiProviderCommand } from "./commands/get/ai-provider.ts";
@@ -22,6 +27,7 @@ import { buildRemoveAiProviderCommand } from "./commands/remove/ai-provider.ts";
 import { buildAssignAiProviderCommand } from "./commands/assign/ai-provider.ts";
 import { buildUnassignAiProviderCommand } from "./commands/unassign/ai-provider.ts";
 import { CommanderError } from "commander";
+import { buildTestAiProviderCommand } from "./commands/test/ai-provider.ts";
 import { UnknownReferenceError } from "../../app/errors.ts";
 
 function capture() {
@@ -1072,4 +1078,258 @@ test("remove ai-provider --id of non-default assigned provider with --replacemen
     /default reassigned/i,
     "must NOT print default reassigned when removed provider was not the default",
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Story B — custom OpenAI-compatible provider CLI tests
+// ═══════════════════════════════════════════════════════════════════
+
+test("register ai-provider --api openai-completions with required custom flags returns an id on stdout", async () => {
+  let received: unknown;
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-test-"));
+  writeFileSync(join(dir, "key"), "sk-custom-key");
+  const cap = capture();
+  const deps = {
+    registerAiProvider: {
+      execute: (inp: unknown) => {
+        received = inp;
+        return "aip-custom-1";
+      },
+    },
+  } as unknown as Parameters<typeof buildRegisterAiProviderCommand>[0];
+
+  const command = buildRegisterAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRegisterAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(
+    [
+      "--name",
+      "custom-qwen",
+      "--provider",
+      "ignored", // custom path uses --custom-provider-id
+      "--api",
+      "openai-completions",
+      "--custom-provider-id",
+      "qwen-token-plan",
+      "--base-url",
+      "http://localhost:8080/v1",
+      "--model",
+      "qwen-max",
+      "--value-file",
+      join(dir, "key"),
+    ],
+    { from: "user" },
+  );
+
+  assert.deepEqual(cap.out, ["aip-custom-1\n"]);
+  assert.equal(cap.err[0], "ai-provider registered: aip-custom-1\n");
+  assert.equal(cap.code(), 0);
+});
+
+test("register ai-provider --api openai-completions without --custom-provider-id exits 1", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-test-"));
+  writeFileSync(join(dir, "key"), "sk-custom-key");
+  const cap = capture();
+  const deps = {
+    registerAiProvider: {
+      execute: (_inp: unknown) => {
+        throw new MissingCustomProviderIdError();
+      },
+    },
+  } as unknown as Parameters<typeof buildRegisterAiProviderCommand>[0];
+
+  const command = buildRegisterAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRegisterAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(
+    [
+      "--name",
+      "custom-no-id",
+      "--provider",
+      "ignored",
+      "--api",
+      "openai-completions",
+      "--model",
+      "qwen-max",
+      "--value-file",
+      join(dir, "key"),
+    ],
+    { from: "user" },
+  );
+
+  assert.equal(cap.code(), 1);
+  assert.ok(cap.err.length > 0, "stderr must contain error message");
+  assert.match(cap.err[0]!, /custom-provider-id/i);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Story E — endpoint trust controls
+// ═══════════════════════════════════════════════════════════════════
+
+test("register ai-provider --api --base-url http:// without --allow-insecure exits 1", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-test-"));
+  writeFileSync(join(dir, "key"), "sk-custom-key");
+  const cap = capture();
+  const deps = {
+    registerAiProvider: {
+      execute: () => {
+        throw new InsecureEndpointError("http://localhost:8080/v1");
+      },
+    },
+  } as unknown as Parameters<typeof buildRegisterAiProviderCommand>[0];
+
+  const command = buildRegisterAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRegisterAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(
+    [
+      "--name",
+      "custom-e",
+      "--provider",
+      "ignored",
+      "--api",
+      "openai-completions",
+      "--custom-provider-id",
+      "custom-one",
+      "--base-url",
+      "http://localhost:8080/v1",
+      "--model",
+      "qwen-max",
+      "--value-file",
+      join(dir, "key"),
+    ],
+    { from: "user" },
+  );
+
+  assert.equal(cap.code(), 1);
+  assert.ok(cap.err.length > 0, "stderr must contain error message");
+  assert.match(cap.err[0]!, /allow-insecure/i);
+});
+
+test("register ai-provider --api --base-url http:// with --allow-insecure exits 0", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-test-"));
+  writeFileSync(join(dir, "key"), "sk-custom-key");
+  const cap = capture();
+  const deps = {
+    registerAiProvider: {
+      execute: (_inp: unknown) => "aip-custom-e",
+    },
+  } as unknown as Parameters<typeof buildRegisterAiProviderCommand>[0];
+
+  const command = buildRegisterAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRegisterAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(
+    [
+      "--name",
+      "custom-e",
+      "--provider",
+      "ignored",
+      "--api",
+      "openai-completions",
+      "--custom-provider-id",
+      "custom-one",
+      "--base-url",
+      "http://localhost:8080/v1",
+      "--model",
+      "qwen-max",
+      "--allow-insecure",
+      "--value-file",
+      join(dir, "key"),
+    ],
+    { from: "user" },
+  );
+
+  assert.equal(cap.code(), 0);
+  assert.ok(cap.out.length > 0, "stdout must contain the id");
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Story D — test ai-provider CLI
+// ═══════════════════════════════════════════════════════════════════
+
+test("test ai-provider --id <id> prints the collected text on stdout", async () => {
+  const cap = capture();
+  const deps = {
+    testAiProvider: {
+      execute: ({ id, prompt }: { id: string; prompt: string }) => {
+        assert.equal(id, "aip-test-1");
+        assert.equal(prompt, "What is today's datetime?");
+        return "DATETIME-OK 2026-07-24";
+      },
+    },
+  } as unknown as CliDeps;
+
+  const command = buildTestAiProviderCommand(
+    deps as unknown as Parameters<typeof buildTestAiProviderCommand>[0],
+    cap.io as Parameters<typeof buildTestAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "aip-test-1"], { from: "user" });
+
+  assert.deepEqual(cap.out, ["DATETIME-OK 2026-07-24\n"]);
+  assert.equal(cap.code(), 0);
+});
+
+test("test ai-provider --id <id> --prompt <text> passes the custom prompt", async () => {
+  let receivedPrompt: string | undefined;
+  const cap = capture();
+  const deps = {
+    testAiProvider: {
+      execute: ({ id, prompt }: { id: string; prompt: string }) => {
+        receivedPrompt = prompt;
+        return "Custom reply";
+      },
+    },
+  } as unknown as CliDeps;
+
+  const command = buildTestAiProviderCommand(
+    deps as unknown as Parameters<typeof buildTestAiProviderCommand>[0],
+    cap.io as Parameters<typeof buildTestAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "aip-test-2", "--prompt", "Say hello"], {
+    from: "user",
+  });
+
+  assert.equal(receivedPrompt, "Say hello");
+  assert.deepEqual(cap.out, ["Custom reply\n"]);
+  assert.equal(cap.code(), 0);
+});
+
+test("test ai-provider --id of unknown provider: exits 1 with error mentioning the id", async () => {
+  const cap = capture();
+  const deps = {
+    testAiProvider: {
+      execute: (_args: { id: string; prompt: string }) => {
+        throw new UnknownReferenceError("ai_provider", "no-such");
+      },
+    },
+  } as unknown as CliDeps;
+
+  const command = buildTestAiProviderCommand(
+    deps as unknown as Parameters<typeof buildTestAiProviderCommand>[0],
+    cap.io as Parameters<typeof buildTestAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "no-such"], { from: "user" });
+
+  assert.equal(cap.code(), 1);
+  assert.ok(cap.err.length > 0, "stderr must contain error message");
+  assert.match(cap.err[0]!, /error:/);
 });

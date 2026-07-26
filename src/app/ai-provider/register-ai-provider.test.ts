@@ -12,10 +12,15 @@ import { RegisterAiProvider } from "./register-ai-provider.ts";
 import { DuplicateNameError, UnknownModelError } from "../errors.ts";
 import {
   EmptyValueError,
+  InsecureEndpointError,
+  InvalidApiFlavorError,
   InvalidBaseUrlError,
   InvalidEffortError,
+  MissingBaseUrlError,
+  MissingCustomProviderIdError,
   UnknownProviderError,
 } from "./errors.ts";
+import { EmbeddedCredentialError } from "../errors.ts";
 import { FakeModelCatalog } from "../../model-catalog/fake.ts";
 
 // ------------------------------------------------------------------ fakes
@@ -31,6 +36,9 @@ class FakeRegistry implements AiProviderRegistry {
     baseUrl?: string;
     effort?: string;
     value: string;
+    api?: "openai-completions" | "openai-responses";
+    contextWindow?: number;
+    maxTokens?: number;
   }): GlobalAiProvider {
     for (const p of this.#store.values()) {
       if (p.name === input.name) {
@@ -60,6 +68,9 @@ class FakeRegistry implements AiProviderRegistry {
       value: input.value,
       state: "active",
       credentialVersion: 1,
+      api: input.api ?? null,
+      contextWindow: input.contextWindow ?? null,
+      maxTokens: input.maxTokens ?? null,
     };
     this.#store.set(id, record);
     return { ...record };
@@ -445,4 +456,382 @@ test("RegisterAiProvider: rejects empty value string", () => {
   // Nothing was inserted.
   assert.equal(registry.list().length, 0);
   assert.equal(registry.getDefault()?.id, undefined);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Story B — custom OpenAI-compatible provider path
+// ═══════════════════════════════════════════════════════════════════
+
+test("RegisterAiProvider: custom with api inserts custom record with defaults, first-wins default, and skips catalog", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const catalog = new FakeModelCatalog([]); // empty = nothing valid
+  const uc = new RegisterAiProvider(registry, uow, catalog);
+
+  const id = uc.execute({
+    name: "custom-qwen",
+    provider: "ignored-provider", // custom must use customProviderId instead
+    model: "qwen-max",
+    baseUrl: "https://api.example.com/v1",
+    value: "sk-key",
+    api: "openai-completions",
+    customProviderId: "qwen-token-plan",
+  });
+
+  const stored = registry.get(id)!;
+  // Custom fields stored with defaults
+  assert.equal(stored.api, "openai-completions");
+  assert.equal(stored.contextWindow, 32768);
+  assert.equal(stored.maxTokens, 4096);
+  // provider is customProviderId, not the input.provider
+  assert.equal(stored.provider, "qwen-token-plan");
+  // Model passed through
+  assert.equal(stored.model, "qwen-max");
+  // Catalog validation was skipped despite empty catalog
+  assert.equal(stored.name, "custom-qwen");
+  assert.equal(stored.state, "active");
+  // First-wins default
+  assert.equal(registry.getDefault()?.id, id, "first custom becomes default");
+});
+
+test("RegisterAiProvider: custom branch skips catalog validation even with real catalog", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const catalog = new FakeModelCatalog([]); // nothing is valid
+  const uc = new RegisterAiProvider(registry, uow, catalog);
+
+  // Should NOT throw UnknownProviderError — catalog is skipped
+  assert.doesNotThrow(() =>
+    uc.execute({
+      name: "custom-skip",
+      provider: "nonexistent",
+      model: "phantom-model",
+      baseUrl: "https://api.example.com/v1",
+      value: "sk-key",
+      api: "openai-completions",
+      customProviderId: "custom-one",
+    }),
+  );
+});
+
+test("RegisterAiProvider: custom rejects missing customProviderId", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-no-id",
+        provider: "some-provider",
+        model: "qwen-max",
+        baseUrl: "http://localhost:8080/v1",
+        value: "sk-key",
+        api: "openai-completions",
+        // no customProviderId
+      }),
+    MissingCustomProviderIdError,
+  );
+});
+
+test("RegisterAiProvider: custom rejects missing baseUrl", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-no-url",
+        provider: "some-provider",
+        model: "qwen-max",
+        value: "sk-key",
+        api: "openai-completions",
+        customProviderId: "qwen-token-plan",
+        // no baseUrl
+      }),
+    MissingBaseUrlError,
+  );
+});
+
+test("RegisterAiProvider: custom rejects bogus api flavor", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-bogus",
+        provider: "qwen-token-plan",
+        model: "qwen-max",
+        baseUrl: "http://localhost:8080/v1",
+        value: "sk-key",
+        // @ts-expect-error — testing runtime InvalidApiFlavorError; the strict union rejects "bogus" at compile time
+        api: "bogus",
+        customProviderId: "qwen-token-plan",
+      }),
+    InvalidApiFlavorError,
+  );
+});
+
+test("RegisterAiProvider: builtin branch (no api) still catalog-validates", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const catalog = new FakeModelCatalog([]); // empty = nothing valid
+  const uc = new RegisterAiProvider(registry, uow, catalog);
+
+  // Builtin path without api must still validate against the catalog
+  assert.throws(
+    () =>
+      uc.execute(
+        makeInput({ provider: "openai-codex", model: "gpt-5.6-terra" }),
+      ),
+    UnknownProviderError,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Story E — endpoint trust controls
+// ═══════════════════════════════════════════════════════════════════
+
+function customInput(
+  overrides: Partial<{
+    name: string;
+    provider: string;
+    model: string;
+    baseUrl: string;
+    value: string;
+    api: "openai-completions" | "openai-responses";
+    customProviderId: string;
+    allowInsecure?: boolean;
+  }> = {},
+): {
+  name: string;
+  provider: string;
+  model: string;
+  baseUrl: string;
+  value: string;
+  api: "openai-completions" | "openai-responses";
+  customProviderId: string;
+  allowInsecure?: boolean;
+} {
+  return {
+    name: "custom-e",
+    provider: "ignored",
+    model: "qwen-max",
+    baseUrl: "https://api.example.com/v1",
+    value: "sk-key",
+    api: "openai-completions",
+    customProviderId: "custom-one",
+    ...overrides,
+  };
+}
+
+test("RegisterAiProvider: custom rejects plain http:// without allowInsecure", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () => uc.execute(customInput({ baseUrl: "http://localhost:8080/v1" })),
+    InsecureEndpointError,
+  );
+});
+
+test("RegisterAiProvider: custom rejects 127.0.0.1 loopback without allowInsecure", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () => uc.execute(customInput({ baseUrl: "http://127.0.0.1:8080/v1" })),
+    InsecureEndpointError,
+  );
+});
+
+test("RegisterAiProvider: custom allows http:// with allowInsecure:true", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const catalog = new FakeModelCatalog([]);
+  const uc = new RegisterAiProvider(registry, uow, catalog);
+
+  assert.doesNotThrow(() =>
+    uc.execute(
+      customInput({
+        baseUrl: "http://localhost:8080/v1",
+        allowInsecure: true,
+      }),
+    ),
+  );
+});
+
+test("RegisterAiProvider: custom rejects baseUrl with embedded userinfo", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute(
+        customInput({
+          baseUrl: "https://user:pass@api.example.com/v1",
+        }),
+      ),
+    EmbeddedCredentialError,
+  );
+});
+
+test("RegisterAiProvider: custom allows public https:// host without allowInsecure", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const catalog = new FakeModelCatalog([]);
+  const uc = new RegisterAiProvider(registry, uow, catalog);
+
+  assert.doesNotThrow(() =>
+    uc.execute(
+      customInput({
+        baseUrl: "https://api.openai.com/v1",
+      }),
+    ),
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// B3 — Custom path base-url shape validation
+// ═══════════════════════════════════════════════════════════════════
+
+test("RegisterAiProvider: custom rejects garbage baseUrl with InvalidBaseUrlError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () => uc.execute(customInput({ baseUrl: "not-a-url" })),
+    InvalidBaseUrlError,
+  );
+});
+
+test("RegisterAiProvider: custom rejects scheme-less loopback with InvalidBaseUrlError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () => uc.execute(customInput({ baseUrl: "localhost:8080/v1" })),
+    InvalidBaseUrlError,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// S1 — Custom path: reasoning-effort validation
+// ═══════════════════════════════════════════════════════════════════
+
+test("RegisterAiProvider: custom rejects bogus effort value with InvalidEffortError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-s1",
+        provider: "ignored",
+        model: "qwen-max",
+        baseUrl: "https://api.example.com/v1",
+        value: "sk-key",
+        api: "openai-completions",
+        customProviderId: "custom-one",
+        effort: "bogus",
+      }),
+    InvalidEffortError,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// S2 — Numeric flag validation (NaN / negative)
+// ═══════════════════════════════════════════════════════════════════
+
+test("RegisterAiProvider: custom rejects NaN contextWindow with InvalidNumericFlagError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-s2a",
+        provider: "ignored",
+        model: "qwen-max",
+        baseUrl: "https://api.example.com/v1",
+        value: "sk-key",
+        api: "openai-completions",
+        customProviderId: "custom-one",
+        contextWindow: NaN,
+      }),
+    (err: unknown) => (err as Error).name === "InvalidNumericFlagError",
+  );
+});
+
+test("RegisterAiProvider: custom rejects NaN maxTokens with InvalidNumericFlagError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-s2b",
+        provider: "ignored",
+        model: "qwen-max",
+        baseUrl: "https://api.example.com/v1",
+        value: "sk-key",
+        api: "openai-completions",
+        customProviderId: "custom-one",
+        maxTokens: NaN,
+      }),
+    (err: unknown) => (err as Error).name === "InvalidNumericFlagError",
+  );
+});
+
+test("RegisterAiProvider: custom rejects negative contextWindow with InvalidNumericFlagError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-s2c",
+        provider: "ignored",
+        model: "qwen-max",
+        baseUrl: "https://api.example.com/v1",
+        value: "sk-key",
+        api: "openai-completions",
+        customProviderId: "custom-one",
+        contextWindow: -1,
+      }),
+    (err: unknown) => (err as Error).name === "InvalidNumericFlagError",
+  );
+});
+
+test("RegisterAiProvider: custom rejects negative maxTokens with InvalidNumericFlagError", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const uc = new RegisterAiProvider(registry, uow);
+
+  assert.throws(
+    () =>
+      uc.execute({
+        name: "custom-s2d",
+        provider: "ignored",
+        model: "qwen-max",
+        baseUrl: "https://api.example.com/v1",
+        value: "sk-key",
+        api: "openai-completions",
+        customProviderId: "custom-one",
+        maxTokens: -1,
+      }),
+    (err: unknown) => (err as Error).name === "InvalidNumericFlagError",
+  );
 });

@@ -67,17 +67,7 @@ export class ProposalWorkspaceMissingError extends Error {
   }
 }
 
-export class UnknownReferenceError extends Error {
-  readonly kind: string;
-  readonly id: string;
-
-  constructor(kind: string, id: string) {
-    super(`no ${kind} with id ${id}`);
-    this.name = "UnknownReferenceError";
-    this.kind = kind;
-    this.id = id;
-  }
-}
+export { UnknownReferenceError } from "../domain/errors.ts";
 
 export class WrongTypeReferenceError extends Error {
   readonly expected: string;

@@ -16,6 +16,9 @@ type GlobalAiProviderRow = {
   value: string | null;
   state: string;
   credentialVersion: number;
+  api: string | null;
+  contextWindow: number | null;
+  maxTokens: number | null;
 };
 
 function rowToProvider(row: GlobalAiProviderRow): GlobalAiProvider {
@@ -29,6 +32,9 @@ function rowToProvider(row: GlobalAiProviderRow): GlobalAiProvider {
     value: row.value,
     state: row.state as "active" | "logged_out",
     credentialVersion: row.credentialVersion,
+    api: row.api as "openai-completions" | "openai-responses" | null,
+    contextWindow: row.contextWindow,
+    maxTokens: row.maxTokens,
   };
 }
 
@@ -46,6 +52,9 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
     baseUrl?: string;
     effort?: string;
     value: string;
+    api?: "openai-completions" | "openai-responses";
+    contextWindow?: number;
+    maxTokens?: number;
   }): GlobalAiProvider {
     const existing = this.#getByName(input.name);
 
@@ -67,8 +76,8 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
     const id = newId();
     this.#db
       .prepare(
-        `INSERT INTO ai_providers (id, name, provider, model, baseUrl, effort, value, state, credentialVersion)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1)`,
+        `INSERT INTO ai_providers (id, name, provider, model, baseUrl, effort, value, state, credentialVersion, api, contextWindow, maxTokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, ?)`,
       )
       .run(
         id,
@@ -78,6 +87,9 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
         input.baseUrl ?? null,
         input.effort ?? null,
         input.value,
+        input.api ?? null,
+        input.contextWindow ?? null,
+        input.maxTokens ?? null,
       );
     return this.get(id)!;
   }
@@ -85,7 +97,7 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
   get(id: string): GlobalAiProvider | undefined {
     const row = this.#db
       .prepare(
-        `SELECT id, name, provider, model, baseUrl, effort, value, state, credentialVersion
+        `SELECT id, name, provider, model, baseUrl, effort, value, state, credentialVersion, api, contextWindow, maxTokens
          FROM ai_providers WHERE id = ?`,
       )
       .get(id) as GlobalAiProviderRow | undefined;
@@ -96,7 +108,7 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
   #getByName(name: string): GlobalAiProvider | undefined {
     const row = this.#db
       .prepare(
-        `SELECT id, name, provider, model, baseUrl, effort, value, state, credentialVersion
+        `SELECT id, name, provider, model, baseUrl, effort, value, state, credentialVersion, api, contextWindow, maxTokens
          FROM ai_providers WHERE name = ?`,
       )
       .get(name) as GlobalAiProviderRow | undefined;
@@ -107,7 +119,7 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
   list(): GlobalAiProvider[] {
     const rows = this.#db
       .prepare(
-        `SELECT id, name, provider, model, baseUrl, effort, value, state, credentialVersion
+        `SELECT id, name, provider, model, baseUrl, effort, value, state, credentialVersion, api, contextWindow, maxTokens
          FROM ai_providers ORDER BY name`,
       )
       .all() as GlobalAiProviderRow[];
@@ -117,7 +129,7 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
   getDefault(): GlobalAiProvider | undefined {
     const row = this.#db
       .prepare(
-        `SELECT p.id, p.name, p.provider, p.model, p.baseUrl, p.effort, p.value, p.state, p.credentialVersion
+        `SELECT p.id, p.name, p.provider, p.model, p.baseUrl, p.effort, p.value, p.state, p.credentialVersion, p.api, p.contextWindow, p.maxTokens
          FROM ai_provider_default d
          JOIN ai_providers p ON p.id = d.providerId
          WHERE d.id = 1`,

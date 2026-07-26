@@ -11,6 +11,10 @@ import {
   ResourceValidationError,
   UnknownResourceTypeError,
   EmbeddedCredentialError,
+  hasEmbeddedUserinfo,
+  isInsecureEndpoint,
+  CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW,
+  CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS,
 } from "./resource.ts";
 import type {
   Repository,
@@ -418,4 +422,73 @@ test("Repository type has remoteUrl and auth; organization is absent (compile-ti
   const _org = r.organization;
   void _org;
   assert.ok(true, "Repository compiles without organization field");
+});
+
+// ── Story E — endpoint trust controls ──
+
+test("isInsecureEndpoint: plain http:// is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://example.com/v1"), true);
+});
+
+test("isInsecureEndpoint: http://127.0.0.1 loopback is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://127.0.0.1:8080/v1"), true);
+});
+
+test("isInsecureEndpoint: http://localhost is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://localhost/v1"), true);
+});
+
+test("isInsecureEndpoint: http://10.x.x.x private range is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://10.0.0.1/v1"), true);
+});
+
+test("isInsecureEndpoint: http://192.168.x.x private range is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://192.168.1.1/v1"), true);
+});
+
+test("isInsecureEndpoint: http://172.16-31.x.x private range is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://172.16.0.1/v1"), true);
+  assert.equal(isInsecureEndpoint("http://172.31.255.255/v1"), true);
+});
+
+test("isInsecureEndpoint: https:// public host is NOT insecure", () => {
+  assert.equal(isInsecureEndpoint("https://api.openai.com/v1"), false);
+});
+
+test("isInsecureEndpoint: https://127.0.0.1 with loopback host is insecure", () => {
+  assert.equal(isInsecureEndpoint("https://127.0.0.1:8080/v1"), true);
+});
+
+// Story E, BLOCKER S1: coverage gap — ::1 and 0.0.0.0 loopback hosts
+test("isInsecureEndpoint: http://[::1] loopback is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://[::1]/v1"), true);
+});
+
+test("isInsecureEndpoint: http://0.0.0.0 is insecure", () => {
+  assert.equal(isInsecureEndpoint("http://0.0.0.0/v1"), true);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// B4 — Bracketed IPv6 loopback (https://[::1] extracts host as "[")
+// ═══════════════════════════════════════════════════════════════════
+
+test("isInsecureEndpoint: https://[::1]:8080 bracketed IPv6 loopback is insecure", () => {
+  // BUG: current code extracts host as "[" instead of "::1"
+  assert.equal(isInsecureEndpoint("https://[::1]:8080/v1"), true);
+});
+
+test("isInsecureEndpoint: https://[::1] without port is insecure", () => {
+  assert.equal(isInsecureEndpoint("https://[::1]/v1"), true);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// S3 — Custom provider default constants
+// ═══════════════════════════════════════════════════════════════════
+
+test("CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW is exported and equals 32768", () => {
+  assert.equal(CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW, 32768);
+});
+
+test("CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS is exported and equals 4096", () => {
+  assert.equal(CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS, 4096);
 });

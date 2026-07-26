@@ -15,11 +15,18 @@ import type {
   Credential as PiCredential,
   OAuthCredential as PiOAuthCredential,
 } from "@earendil-works/pi-ai";
+import { createModels, createProvider } from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
 import type {
   AIProvider,
   Credential,
   ReasoningEffort,
+} from "../domain/resource.ts";
+import {
+  CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW,
+  CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS,
 } from "../domain/resource.ts";
 
 // ---------------------------------------------------------------------------
@@ -195,6 +202,72 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
       // (a) API key path
       const apiKey = credential.value;
       getApiKey = () => apiKey;
+    }
+
+    // ── Custom provider branch (api != null) ──
+    // When the aiProvider has api set, it is a custom OpenAI-compatible
+    // provider that is not in pi's builtin catalog. Build a session-local
+    // model catalog via createModels + createProvider instead.
+    if (aiProvider.api != null) {
+      const runtimeId = "custom:" + aiProvider.id;
+      const contextWindow =
+        aiProvider.contextWindow ?? CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW;
+      const maxTokens =
+        aiProvider.maxTokens ?? CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS;
+
+      // Build a pi Model from the custom record data + documented defaults
+      const model: Model<Api> = {
+        id: aiProvider.model,
+        name: aiProvider.model,
+        api: aiProvider.api as Api,
+        provider: runtimeId,
+        baseUrl: aiProvider.baseUrl ?? "",
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow,
+        maxTokens,
+      };
+
+      // Session-local models — no builtin catalog
+      const models = createModels(
+        credentialStore ? { credentials: credentialStore } : undefined,
+      );
+
+      const streams =
+        aiProvider.api === "openai-completions"
+          ? openAICompletionsApi()
+          : openAIResponsesApi();
+
+      models.setProvider(
+        createProvider({
+          id: runtimeId,
+          name: aiProvider.name,
+          baseUrl: aiProvider.baseUrl,
+          auth: {
+            apiKey: {
+              name: "Custom OpenAI-compatible API key",
+              resolve: async () => {
+                const key = getApiKey();
+                if (key) return { auth: { apiKey: key } };
+                return undefined;
+              },
+            },
+          },
+          models: [model],
+          api: streams,
+        }),
+      );
+
+      const found = models.getModel(runtimeId, aiProvider.model);
+      if (!found) {
+        throw new UnknownModelError(runtimeId, aiProvider.model);
+      }
+
+      const baseStream = models.streamSimple.bind(models) as StreamFunction;
+      const streamFn = withReasoning(baseStream, aiProvider.effort);
+
+      return { model: found, streamFn, getApiKey, credentialStore };
     }
 
     // Build the model catalog. For OAuth, pass the credential store so

@@ -714,4 +714,15 @@ CREATE TABLE project_ai_providers (
 );
 `),
   },
+  {
+    version: 24,
+    name: "008.1-custom-openai-compatible",
+    up: (db) => {
+      db.exec(`
+ALTER TABLE ai_providers ADD COLUMN api TEXT CHECK (api IN ('openai-completions','openai-responses'));
+ALTER TABLE ai_providers ADD COLUMN contextWindow INTEGER;
+ALTER TABLE ai_providers ADD COLUMN maxTokens INTEGER;
+`);
+    },
+  },
 ];

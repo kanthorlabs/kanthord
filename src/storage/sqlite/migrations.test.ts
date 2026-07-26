@@ -67,9 +67,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 23 and creates all tables including project_ai_providers", () => {
+test("migrates to version 24 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
     assert.deepEqual(userTables(db), [
       "ai_provider_default",
       "ai_providers",
@@ -235,6 +235,9 @@ test("schema columns match locked DDL for all tables", () => {
       "value",
       "state",
       "credentialVersion",
+      "api",
+      "contextWindow",
+      "maxTokens",
     ]);
     assert.deepEqual(columnNames(db, "ai_provider_default"), [
       "id",
@@ -443,7 +446,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 23);
+    assert.equal(second.version, 24);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -857,7 +860,7 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     assert.equal(
       userVersion(db),
       23,
-      "schema version must be 23 after all migrations",
+      "schema version must be 24 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -989,7 +992,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1093,7 +1096,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1172,7 +1175,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1209,7 +1212,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 23);
+    assert.equal(report.version, 24);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1504,7 +1507,7 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
@@ -1519,7 +1522,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,providerId) rejects dup
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-uniq', 'P');
@@ -1560,7 +1563,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two membe
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 23);
+    assert.equal(userVersion(db), 24);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-rank', 'P');
@@ -1584,4 +1587,59 @@ test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two membe
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── (v) migration 23 — custom openai-compatible provider columns ──────────
+
+test("migration 24 ai_providers.api CHECK rejects bogus flavor while accepting valid flavors and null", () => {
+  withMigratedDb((db) => {
+    // openai-completions must be accepted
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO ai_providers(id, name, provider, model, value, api) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cust-v1",
+        "Cust-V1",
+        "qwen-token-plan",
+        "qwen-max",
+        "sk-key",
+        "openai-completions",
+      );
+    }, "api='openai-completions' must be accepted by CHECK");
+
+    // openai-responses must be accepted
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO ai_providers(id, name, provider, model, value, api) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cust-v2",
+        "Cust-V2",
+        "qwen-token-plan",
+        "qwen-max",
+        "sk-key",
+        "openai-responses",
+      );
+    }, "api='openai-responses' must be accepted by CHECK");
+
+    // NULL api must be accepted (builtin provider)
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO ai_providers(id, name, provider, model, value, api) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run("cust-v3", "Cust-V3", "openai-codex", "gpt-5", "sk-key", null);
+    }, "api=NULL must be accepted (builtin provider)");
+
+    // bogus flavor must be rejected
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO ai_providers(id, name, provider, model, value, api) VALUES (?, ?, ?, ?, ?, ?)",
+      ).run(
+        "cust-v4",
+        "Cust-V4",
+        "qwen-token-plan",
+        "qwen-max",
+        "sk-key",
+        "bogus",
+      );
+    }, /CHECK/i);
+  });
 });

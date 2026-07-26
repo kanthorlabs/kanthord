@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { TaskResult } from "./port.ts";
+// B1 refactor: ProviderProbe replaces the import from sibling adapter pi-session.ts.
+// BLOCKER B1: this import fails typecheck until ProviderProbe is declared in port.ts.
+import type { ProviderProbe } from "./port.ts";
 
 // (F3 T1) The `candidate` outcome is an executor-neutral arm of TaskResult
 // carrying the landing metadata. This is a type-level contract test: it fails
@@ -53,4 +56,17 @@ test("(F3 T1) candidate arm: required fields are typed and present", () => {
       assert.equal(candidate.summary, "changed work ready to land");
       break;
   }
+});
+
+// ---------------------------------------------------------------------------
+// B1 — ProviderProbe port
+// ---------------------------------------------------------------------------
+
+test("(B1) ProviderProbe is a port interface declared in port.ts", () => {
+  // Type-level contract test: fails to type-check when ProviderProbe is not
+  // exported from port.ts. At runtime (types stripped), the import resolves
+  // cleanly and the test verifies the module shape.
+  // After BLOCKER B1, this test passes both typecheck and runtime.
+  const _probe: ProviderProbe = undefined as unknown as ProviderProbe;
+  assert.equal(_probe, undefined);
 });

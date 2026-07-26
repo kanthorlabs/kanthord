@@ -273,6 +273,8 @@ export interface GraphImportMap {
  * A record in the global ai_providers table.
  * The `id` is the stable account identity; `value` holds the folded secret,
  * excluded from every read-path output by use-case redaction.
+ * `api`, `contextWindow`, `maxTokens` are non-null for custom OpenAI-compatible
+ * providers (008.1 Story A) and null for builtin/pinned providers.
  */
 export interface GlobalAiProvider {
   id: string;
@@ -284,6 +286,12 @@ export interface GlobalAiProvider {
   value: string | null;
   state: "active" | "logged_out";
   credentialVersion: number;
+  /** The API flavour for a custom OpenAI-compatible provider, or null for builtin. */
+  api: "openai-completions" | "openai-responses" | null;
+  /** Static context window (tokens) for a custom provider, or null for builtin. */
+  contextWindow: number | null;
+  /** Static max output tokens for a custom provider, or null for builtin. */
+  maxTokens: number | null;
 }
 
 /**
@@ -298,6 +306,9 @@ export interface AiProviderRegistry {
     baseUrl?: string;
     effort?: string;
     value: string;
+    api?: "openai-completions" | "openai-responses";
+    contextWindow?: number;
+    maxTokens?: number;
   }): GlobalAiProvider;
   list(): GlobalAiProvider[];
   get(id: string): GlobalAiProvider | undefined;

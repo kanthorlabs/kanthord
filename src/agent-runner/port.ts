@@ -3,6 +3,10 @@ import type { VerificationEvidence } from "./verification.ts";
 
 export type { VerificationEvidence };
 
+export interface ProviderProbe {
+  probe(providerId: string, prompt: string): Promise<string>;
+}
+
 export interface AgentCatalog {
   has(ref: string): boolean;
 }

@@ -11,6 +11,7 @@ import type { AssignAiProvider } from "../../app/ai-provider/assign-ai-provider.
 import type { UnassignAiProvider } from "../../app/ai-provider/unassign-ai-provider.ts";
 import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-chain.ts";
 import { InvalidRankError } from "../../app/ai-provider/errors.ts";
+import type { TestAiProvider } from "../../app/ai-provider/test-ai-provider.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 import { readCredentialValue } from "./credential-input.ts";
 
@@ -30,7 +31,16 @@ export async function runRegisterAiProvider(
 ): Promise<HandlerResult> {
   try {
     const name = requireFlag(args, "name");
-    const provider = requireFlag(args, "provider");
+    const api: "openai-completions" | "openai-responses" | undefined =
+      typeof args["api"] === "string" && args["api"] !== ""
+        ? (args["api"] as "openai-completions" | "openai-responses")
+        : undefined;
+    const provider =
+      api !== undefined
+        ? typeof args["provider"] === "string"
+          ? args["provider"]
+          : ""
+        : requireFlag(args, "provider");
     const model = requireFlag(args, "model");
     const valueFile =
       typeof args["valueFile"] === "string" && args["valueFile"] !== ""
@@ -40,6 +50,20 @@ export async function runRegisterAiProvider(
       typeof args["baseUrl"] === "string" ? args["baseUrl"] : undefined;
     const effort =
       typeof args["effort"] === "string" ? args["effort"] : undefined;
+    const customProviderId =
+      typeof args["customProviderId"] === "string" &&
+      args["customProviderId"] !== ""
+        ? args["customProviderId"]
+        : undefined;
+    const contextWindow =
+      typeof args["contextWindow"] === "string" && args["contextWindow"] !== ""
+        ? parseInt(args["contextWindow"] as string, 10)
+        : undefined;
+    const maxTokens =
+      typeof args["maxTokens"] === "string" && args["maxTokens"] !== ""
+        ? parseInt(args["maxTokens"] as string, 10)
+        : undefined;
+    const allowInsecure = args["allowInsecure"] === true;
 
     const value = await readCredentialValue({
       valuefile: valueFile,
@@ -52,6 +76,11 @@ export async function runRegisterAiProvider(
       model,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
       ...(effort !== undefined ? { effort } : {}),
+      ...(api !== undefined ? { api } : {}),
+      ...(customProviderId !== undefined ? { customProviderId } : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(allowInsecure ? { allowInsecure } : {}),
       value,
     });
 
@@ -266,6 +295,24 @@ export function runResolveProjectChain(
       stdout: views.map((v) => `${v.id}  ${v.name}`),
       stderr: [],
     };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export async function runTestAiProvider(
+  args: Record<string, unknown>,
+  testAiProvider: TestAiProvider,
+): Promise<HandlerResult> {
+  try {
+    const id = requireFlag(args, "id");
+    const prompt =
+      typeof args["prompt"] === "string" && args["prompt"] !== ""
+        ? args["prompt"]
+        : "What is today's datetime?";
+    const result = await testAiProvider.execute({ id, prompt });
+    return { exitCode: 0, stdout: [result], stderr: [] };
   } catch (err) {
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };

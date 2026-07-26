@@ -17,10 +17,33 @@ export function buildRegisterAiProviderCommand(
     .description("Register a global AI provider.")
     .configureHelp({ commandUsage: () => "kanthord register ai-provider" })
     .requiredOption("--name <name>", "Name for the AI provider")
-    .requiredOption("--provider <provider>", "Provider identifier")
+    .option(
+      "--provider <provider>",
+      "Provider identifier (required for builtin providers; optional when --api is set)",
+    )
     .requiredOption("--model <model>", "Model identifier")
     .option("--base-url <url>", "Base URL for the provider API")
     .option("--effort <effort>", "Reasoning effort")
+    .option(
+      "--api <flavor>",
+      "API flavor for custom OpenAI-compatible providers (openai-completions|openai-responses)",
+    )
+    .option(
+      "--custom-provider-id <id>",
+      "Provider id override for custom providers (effective provider in the registry)",
+    )
+    .option(
+      "--context-window <n>",
+      "Context window token count for custom providers (default 32768)",
+    )
+    .option(
+      "--max-tokens <n>",
+      "Max output tokens for custom providers (default 4096)",
+    )
+    .option(
+      "--allow-insecure",
+      "Allow plain HTTP or private-network base URL for custom providers",
+    )
     .requiredOption(
       "--value-file <path>",
       "Path to file containing the credential value (use - for stdin)",
@@ -37,6 +60,11 @@ export function buildRegisterAiProviderCommand(
         baseUrl?: string;
         effort?: string;
         valueFile: string;
+        api?: string;
+        customProviderId?: string;
+        contextWindow?: string;
+        maxTokens?: string;
+        allowInsecure?: boolean;
       }) => {
         emitResult(
           await runRegisterAiProvider(
@@ -46,6 +74,17 @@ export function buildRegisterAiProviderCommand(
               model: opts.model,
               ...(opts.baseUrl ? { baseUrl: opts.baseUrl } : {}),
               ...(opts.effort ? { effort: opts.effort } : {}),
+              ...(opts.api ? { api: opts.api } : {}),
+              ...(opts.customProviderId
+                ? { customProviderId: opts.customProviderId }
+                : {}),
+              ...(opts.contextWindow
+                ? { contextWindow: opts.contextWindow }
+                : {}),
+              ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
+              ...(opts.allowInsecure
+                ? { allowInsecure: opts.allowInsecure }
+                : {}),
               valueFile: opts.valueFile,
             },
             deps.registerAiProvider,

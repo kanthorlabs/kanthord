@@ -62,6 +62,7 @@ import {
   PiProviderSessionFactory,
   type ProviderSessionFactory,
 } from "./agent-runner/pi-session.ts";
+import { PiProviderProbe } from "./agent-runner/pi-provider-probe.ts";
 import { genericProfile } from "./agent-runner/pi-profile.ts";
 import { RegistryRunnerResolver } from "./agent-runner/resolver.ts";
 import { LocalWorkspaceManager } from "./workspace/local.ts";
@@ -114,6 +115,7 @@ import { RemoveAiProvider } from "./app/ai-provider/remove-ai-provider.ts";
 import { AssignAiProvider } from "./app/ai-provider/assign-ai-provider.ts";
 import { UnassignAiProvider } from "./app/ai-provider/unassign-ai-provider.ts";
 import { ResolveProjectChain } from "./app/ai-provider/resolve-project-chain.ts";
+import { TestAiProvider } from "./app/ai-provider/test-ai-provider.ts";
 import { GitRepositoryPublisher } from "./publication/git.ts";
 import { PublishRepository } from "./app/repository/publish-repository.ts";
 import { isRepository } from "./domain/resource.ts";
@@ -245,6 +247,25 @@ export function buildDeps(
     aiProviderRegistry,
     referenceResolver,
   );
+
+  // Save updated credential value (for OAuth refresh) directly into the resources table.
+  const saveCredentialValue = (credentialId: string, value: string): void => {
+    const existing = projectRepository.getResource(credentialId);
+    if (!existing) return;
+    const { id: _id, type: _type, name: _name, ...attrs } = existing;
+    const newAttrs = JSON.stringify({ ...attrs, value });
+    db.prepare("UPDATE resources SET attributes = ? WHERE id = ?").run(
+      newAttrs,
+      credentialId,
+    );
+  };
+
+  const sessions: ProviderSessionFactory =
+    opts?.sessionFactory ??
+    new PiProviderSessionFactory({ saveCredentialValue });
+
+  const probe = new PiProviderProbe(aiProviderRegistry, sessions);
+  const testAiProvider = new TestAiProvider(probe);
   const getResource = new GetResource(projectRepository, publicationRepository);
   const listResources = new ListResources(projectRepository);
   const homePathExists = async (path: string): Promise<boolean> => {
@@ -416,22 +437,6 @@ export function buildDeps(
   ): RunDaemon {
     const effectiveLogger: Logger = logger ?? new NullLogger();
     const fakeRunner = new FakeRunner({ failTaskIds, failTransient });
-
-    // Save updated credential value (for OAuth refresh) directly into the resources table.
-    const saveCredentialValue = (credentialId: string, value: string): void => {
-      const existing = projectRepository.getResource(credentialId);
-      if (!existing) return;
-      const { id: _id, type: _type, name: _name, ...attrs } = existing;
-      const newAttrs = JSON.stringify({ ...attrs, value });
-      db.prepare("UPDATE resources SET attributes = ? WHERE id = ?").run(
-        newAttrs,
-        credentialId,
-      );
-    };
-
-    const sessions =
-      opts?.sessionFactory ??
-      new PiProviderSessionFactory({ saveCredentialValue });
     const piRunner = new PiAgentRunner({
       sessions,
       workspaces,
@@ -877,6 +882,7 @@ export function buildDeps(
     assignAiProvider,
     unassignAiProvider,
     resolveProjectChain,
+    testAiProvider,
     resolveHomeDir,
     workspaces,
     newId,

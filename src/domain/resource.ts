@@ -50,6 +50,11 @@ export const REASONING_EFFORTS = [
 
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
+/** Default context window (tokens) for custom OpenAI-compatible providers. */
+export const CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW = 32768;
+/** Default max output tokens for custom OpenAI-compatible providers. */
+export const CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS = 4096;
+
 export interface AIProvider extends Entity {
   type: "ai_provider";
   name: string;
@@ -57,6 +62,12 @@ export interface AIProvider extends Entity {
   model: string;
   baseUrl?: string;
   effort?: ReasoningEffort;
+  /** API flavor for custom OpenAI-compatible providers; undefined for builtin. */
+  api?: "openai-completions" | "openai-responses";
+  /** Static context window (tokens) for a custom provider. */
+  contextWindow?: number;
+  /** Static max output tokens for a custom provider. */
+  maxTokens?: number;
 }
 
 export interface Filesystem extends Entity {
@@ -113,6 +124,59 @@ export class UnknownResourceTypeError extends Error {
     this.name = "UnknownResourceTypeError";
     this.resourceType = resourceType;
   }
+}
+
+/**
+ * Pure string check — no `new URL()`. Detects endpoints whose transport or
+ * destination is inherently insecure: plain http://, loopback hosts, or
+ * private IP ranges. Returns true when any condition matches.
+ */
+export function isInsecureEndpoint(url: string): boolean {
+  const schemeEnd = url.indexOf("://");
+  if (schemeEnd === -1) return false;
+  const scheme = url.slice(0, schemeEnd);
+  const authorityStart = schemeEnd + 3;
+  const slashPos = url.indexOf("/", authorityStart);
+  const authority =
+    slashPos === -1
+      ? url.slice(authorityStart)
+      : url.slice(authorityStart, slashPos);
+  // Extract host before any port delimiter.
+  const hostEnd = authority.indexOf(":");
+  let host = hostEnd === -1 ? authority : authority.slice(0, hostEnd);
+
+  // Handle bracketed IPv6 literals — extract inner address from [::1] etc.
+  if (host.startsWith("[")) {
+    const closeBracket = authority.indexOf("]");
+    if (closeBracket !== -1) {
+      host = authority.slice(1, closeBracket);
+    }
+  }
+
+  // plain http:// is always insecure regardless of host
+  if (scheme === "http") return true;
+
+  // loopback hosts
+  const lower = host.toLowerCase();
+  if (
+    lower === "localhost" ||
+    lower === "127.0.0.1" ||
+    lower === "::1" ||
+    lower === "0.0.0.0"
+  ) {
+    return true;
+  }
+
+  // private IP ranges
+  if (lower.startsWith("10.")) return true;
+  if (lower.startsWith("192.168.")) return true;
+  const match = lower.match(/^172\.(\d+)\./);
+  if (match) {
+    const second = parseInt(match[1]!, 10);
+    if (second >= 16 && second <= 31) return true;
+  }
+
+  return false;
 }
 
 /** Pure string check — no `new URL()`. Returns true when the URL authority contains `@`. */
@@ -201,6 +265,22 @@ export function buildResource(input: Record<string, unknown>): Resource {
       }
       effort = effortRaw as ReasoningEffort;
     }
+    const apiRaw = input["api"];
+    const api =
+      typeof apiRaw === "string" &&
+      (apiRaw === "openai-completions" || apiRaw === "openai-responses")
+        ? apiRaw
+        : undefined;
+    const contextWindowRaw = input["contextWindow"];
+    const contextWindow =
+      typeof contextWindowRaw === "number" && Number.isFinite(contextWindowRaw)
+        ? contextWindowRaw
+        : undefined;
+    const maxTokensRaw = input["maxTokens"];
+    const maxTokens =
+      typeof maxTokensRaw === "number" && Number.isFinite(maxTokensRaw)
+        ? maxTokensRaw
+        : undefined;
     return {
       id,
       type: "ai_provider",
@@ -209,6 +289,9 @@ export function buildResource(input: Record<string, unknown>): Resource {
       model,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
       ...(effort !== undefined ? { effort } : {}),
+      ...(api !== undefined ? { api } : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
     };
   }
 

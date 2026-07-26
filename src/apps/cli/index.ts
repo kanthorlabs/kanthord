@@ -27,6 +27,7 @@ import { buildRenameCommand } from "./commands/rename.ts";
 import { buildResumeCommand } from "./commands/resume.ts";
 import { buildRetryCommand } from "./commands/retry.ts";
 import { buildRunCommand } from "./commands/run.ts";
+import { buildTestCommand } from "./commands/test.ts";
 import { buildSetDefaultCommand } from "./commands/set-default.ts";
 import { buildUnassignCommand } from "./commands/unassign.ts";
 import { buildUpdateCommand } from "./commands/update.ts";
@@ -64,6 +65,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const run = buildRunCommand(deps, io).name("run");
   const land = buildLandCommand(deps, io).name("land");
   const publish = buildPublishCommand(deps, io).name("publish");
+  const test = buildTestCommand(deps, io).name("test");
 
   return new Command()
     .name("kanthord")
@@ -97,5 +99,6 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(setDefault)
     .addCommand(run)
     .addCommand(land)
-    .addCommand(publish);
+    .addCommand(publish)
+    .addCommand(test);
 }

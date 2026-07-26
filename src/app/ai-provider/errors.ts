@@ -1,16 +1,8 @@
 // src/app/ai-provider/errors.ts — AI-provider specific errors (008.1 Story C/D).
 
-export class LoggedOutProviderError extends Error {
-  readonly id: string;
-  readonly operation: string;
+export { UnknownReferenceError } from "../../app/errors.ts";
 
-  constructor(id: string, operation: string) {
-    super(`${operation}: provider ${id} is logged_out`);
-    this.name = "LoggedOutProviderError";
-    this.id = id;
-    this.operation = operation;
-  }
-}
+export { LoggedOutProviderError } from "../../domain/errors.ts";
 
 /**
  * Thrown when an operation on the default ai-provider requires a replacement
@@ -167,6 +159,22 @@ export class DuplicateAssignmentError extends Error {
 }
 
 /**
+ * Thrown when the base-url targets an insecure endpoint (plain http://,
+ * loopback, or private IP) and --allow-insecure was not passed.
+ */
+export class InsecureEndpointError extends Error {
+  readonly baseUrl: string;
+
+  constructor(baseUrl: string) {
+    super(
+      `insecure endpoint ${baseUrl} — pass --allow-insecure to register a custom provider at a private or plain-http URL`,
+    );
+    this.name = "InsecureEndpointError";
+    this.baseUrl = baseUrl;
+  }
+}
+
+/**
  * Thrown when a provider is assigned to one or more projects and is removed
  * without --cascade or --replacement (008.2 Story E).
  */
@@ -185,6 +193,20 @@ export class AssignedProviderError extends Error {
 }
 
 /**
+ * Thrown when an invalid api flavor is provided for a custom OpenAI-compatible
+ * provider. The allowlist is "openai-completions" / "openai-responses".
+ */
+export class InvalidApiFlavorError extends Error {
+  readonly flavor: string;
+
+  constructor(flavor: string) {
+    super(`invalid api flavor: "${flavor}"`);
+    this.name = "InvalidApiFlavorError";
+    this.flavor = flavor;
+  }
+}
+
+/**
  * Thrown when --rank is invalid (e.g. negative or NaN) (008.2 HUMAN_REVIEW B3).
  */
 export class InvalidRankError extends Error {
@@ -194,6 +216,16 @@ export class InvalidRankError extends Error {
     super("invalid rank: --rank must be a non-negative integer");
     this.name = "InvalidRankError";
     this.rank = rank;
+  }
+}
+
+/**
+ * Thrown when a custom register call has no --custom-provider-id.
+ */
+export class MissingCustomProviderIdError extends Error {
+  constructor() {
+    super("custom-provider-id is required for custom providers");
+    this.name = "MissingCustomProviderIdError";
   }
 }
 
@@ -214,5 +246,31 @@ export class AmbiguousFlagsError extends Error {
     this.id = id;
     this.flag1 = flag1;
     this.flag2 = flag2;
+  }
+}
+
+/**
+ * Thrown when a custom register call has no --base-url.
+ */
+export class MissingBaseUrlError extends Error {
+  constructor() {
+    super("base-url is required for custom providers");
+    this.name = "MissingBaseUrlError";
+  }
+}
+
+/**
+ * Thrown when a numeric CLI flag (e.g. --context-window, --max-tokens)
+ * receives a non-numeric or non-positive value.
+ */
+export class InvalidNumericFlagError extends Error {
+  readonly flag: string;
+  readonly value: unknown;
+
+  constructor(flag: string, value: unknown) {
+    super(`invalid numeric flag --${flag}: "${value}"`);
+    this.name = "InvalidNumericFlagError";
+    this.flag = flag;
+    this.value = value;
   }
 }

@@ -33,6 +33,9 @@ class FakeRegistry implements AiProviderRegistry {
       value: input.value,
       state: "active",
       credentialVersion: 1,
+      api: null,
+      contextWindow: null,
+      maxTokens: null,
     };
     this.#store.set(id, record);
     return { ...record };
@@ -96,6 +99,9 @@ test("ListAiProviders: returns all providers with correct isDefault", () => {
     value: "sk-1",
     state: "active",
     credentialVersion: 1,
+    api: null,
+    contextWindow: null,
+    maxTokens: null,
   });
   registry.add({
     id: "p2",
@@ -107,6 +113,9 @@ test("ListAiProviders: returns all providers with correct isDefault", () => {
     value: "sk-2",
     state: "active",
     credentialVersion: 1,
+    api: null,
+    contextWindow: null,
+    maxTokens: null,
   });
   registry.setDefault("p1");
 
@@ -134,6 +143,9 @@ test("ListAiProviders: views do NOT contain value field", () => {
     value: "sk-secret",
     state: "active",
     credentialVersion: 1,
+    api: null,
+    contextWindow: null,
+    maxTokens: null,
   });
   registry.setDefault("p1");
 

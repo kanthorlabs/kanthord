@@ -47,6 +47,11 @@ import {
   AssignedProviderError,
   InvalidRankError,
   AmbiguousFlagsError,
+  InvalidApiFlavorError,
+  InsecureEndpointError,
+  MissingCustomProviderIdError,
+  MissingBaseUrlError,
+  InvalidNumericFlagError,
 } from "../../app/ai-provider/errors.ts";
 
 export class MissingFlagError extends Error {
@@ -103,7 +108,12 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof EmptyValueError ||
     err instanceof AssignedProviderError ||
     err instanceof InvalidRankError ||
-    err instanceof AmbiguousFlagsError
+    err instanceof AmbiguousFlagsError ||
+    err instanceof InvalidApiFlavorError ||
+    err instanceof InsecureEndpointError ||
+    err instanceof MissingCustomProviderIdError ||
+    err instanceof MissingBaseUrlError ||
+    err instanceof InvalidNumericFlagError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

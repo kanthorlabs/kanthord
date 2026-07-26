@@ -357,6 +357,8 @@ test("SqliteAiProviderRegistry: assign two providers at ranks 0 and 1, listAssig
     rmSync(dir, { recursive: true, force: true });
   });
 
+
+
   const projectId = "test-proj";
   db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
     projectId,
@@ -593,4 +595,54 @@ test("SqliteAiProviderRegistry: listProjectsAssigning returns every project that
 
   const assigningP2 = registry.listProjectsAssigning(p2.id);
   assert.deepEqual(assigningP2, [projA]);
+});
+
+// ── 008.1 — custom openai-compatible provider tests ──────────────────────────
+
+test("SqliteAiProviderRegistry: custom record with api/contextWindow/maxTokens round-trips", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const record = registry.register({
+    name: "custom-qwen",
+    provider: "qwen-token-plan",
+    model: "qwen-max",
+    baseUrl: "https://custom.api.com",
+    api: "openai-completions",
+    contextWindow: 32768,
+    maxTokens: 4096,
+    value: "sk-custom-key",
+  });
+
+  const loaded = registry.get(record.id)!;
+  assert.equal(loaded.name, "custom-qwen");
+
+  assert.equal(loaded.api, "openai-completions");
+  assert.equal(loaded.contextWindow, 32768);
+  assert.equal(loaded.maxTokens, 4096);
+});
+
+test("SqliteAiProviderRegistry: builtin record has null for custom fields", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const record = registry.register({
+    name: "builtin",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-secret",
+  });
+
+  const loaded = registry.get(record.id)!;
+  assert.equal(loaded.name, "builtin");
+
+  assert.equal(loaded.api, null);
+  assert.equal(loaded.contextWindow, null);
+  assert.equal(loaded.maxTokens, null);
 });

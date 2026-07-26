@@ -15,3 +15,27 @@ export class DuplicateNameError extends Error {
     this.errorName = errorName;
   }
 }
+
+export class UnknownReferenceError extends Error {
+  readonly kind: string;
+  readonly id: string;
+
+  constructor(kind: string, id: string) {
+    super(`no ${kind} with id ${id}`);
+    this.name = "UnknownReferenceError";
+    this.kind = kind;
+    this.id = id;
+  }
+}
+
+export class LoggedOutProviderError extends Error {
+  readonly id: string;
+  readonly operation: string;
+
+  constructor(id: string, operation: string) {
+    super(`${operation}: provider ${id} is logged_out`);
+    this.name = "LoggedOutProviderError";
+    this.id = id;
+    this.operation = operation;
+  }
+}
