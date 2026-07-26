@@ -27,7 +27,7 @@ sole stdout. (Task create is story 05.)
   unique globally; initiative unique per project; objective unique per
   initiative).
 - Handlers `runCreateProject` / … return `{ exitCode: 0, stdout: [<ulid>],
-  stderr: ["<kind> created: <name>"] }` on success; a known error → exit 1 +
+stderr: ["<kind> created: <name>"] }` on success; a known error → exit 1 +
   one line via `toResult`.
 
 ## Constraints

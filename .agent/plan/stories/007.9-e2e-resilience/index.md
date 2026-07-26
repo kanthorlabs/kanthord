@@ -1,7 +1,7 @@
 # EPIC 007.9 — E2E resilience — stories
 
 Epic: `.agent/plan/epics/007.9-e2e-resilience.md`
-Findings + debate: `.agent/plan/epics/007.9-e2e-findings.md` (run `e2e-0079`),
+Findings + debate: `.agent/findings/007.10-e2e-findings.md` (run `e2e-0079`),
 debate hardening folded into the epic ("Debate deltas").
 
 Three stories that make the daemon survive the two failure modes the

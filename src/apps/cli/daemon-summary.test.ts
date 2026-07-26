@@ -78,8 +78,8 @@ test("(c) runDaemon prints no summary line when escalatedCount is 0", async () =
 
 /**
  * Story F (007.12) — daemon summary lines for objectives awaiting brokering
- * (`objectivesAwaitingConfirmation`) and initiatives awaiting PR
- * (`initiativesAwaitingPr`).
+ * (`objectivesAwaitingConfirmation`) and initiatives landed
+ * (`initiativesLanded`).
  *
  * Fails today: `runDaemon` only reads `escalatedCount` off `daemon.execute()`'s
  * result — the two new counts are silently dropped, so no summary line is
@@ -87,7 +87,7 @@ test("(c) runDaemon prints no summary line when escalatedCount is 0", async () =
  */
 function makeFakeDaemonWithBrokerCounts(counts: {
   objectivesAwaitingConfirmation: number;
-  initiativesAwaitingPr: number;
+  initiativesLanded: number;
 }): RunDaemonClass {
   return {
     execute(_opts: {
@@ -97,7 +97,16 @@ function makeFakeDaemonWithBrokerCounts(counts: {
       return Promise.resolve({
         exitCode: 0 as const,
         escalatedCount: 0,
-        ...counts,
+        objectivesAwaitingConfirmation: counts.objectivesAwaitingConfirmation,
+        failedTasks: [],
+        // post-Story-07 `runDaemon` reads `landedInitiativeIds`, not the old
+        // whole-DB `initiativesLanded` number — synthesize an array of that
+        // length so this pre-existing (007.12 Story F) test still exercises
+        // the "N initiative(s) landed" rendering path under the new contract.
+        landedInitiativeIds: Array.from(
+          { length: counts.initiativesLanded },
+          (_, i) => `init-${i}`,
+        ),
       } as unknown as { exitCode: 0 | 1 });
     },
     stop(): void {},
@@ -108,7 +117,7 @@ test("(007.12 Story F) runDaemon prints '1 objective(s) awaiting confirmation' w
   const result = await runDaemon({ "until-idle": true }, () =>
     makeFakeDaemonWithBrokerCounts({
       objectivesAwaitingConfirmation: 1,
-      initiativesAwaitingPr: 0,
+      initiativesLanded: 0,
     }),
   );
 
@@ -119,18 +128,18 @@ test("(007.12 Story F) runDaemon prints '1 objective(s) awaiting confirmation' w
   );
 });
 
-test("(007.12 Story F) runDaemon prints '2 initiative(s) awaiting PR' when initiativesAwaitingPr is 2", async () => {
+test("(007.12 Story F) runDaemon prints '2 initiative(s) landed' when initiativesLanded is 2", async () => {
   const result = await runDaemon({ "until-idle": true }, () =>
     makeFakeDaemonWithBrokerCounts({
       objectivesAwaitingConfirmation: 0,
-      initiativesAwaitingPr: 2,
+      initiativesLanded: 2,
     }),
   );
 
   assert.equal(result.exitCode, 0, "exit code must be 0");
   assert.ok(
-    result.stderr.some((l) => l === "2 initiative(s) awaiting PR"),
-    `stderr must include '2 initiative(s) awaiting PR'; got: ${JSON.stringify(result.stderr)}`,
+    result.stderr.some((l) => l === "2 initiative(s) landed"),
+    `stderr must include '2 initiative(s) landed'; got: ${JSON.stringify(result.stderr)}`,
   );
 });
 
@@ -138,7 +147,7 @@ test("(007.12 Story F) runDaemon prints no objective/initiative summary lines wh
   const result = await runDaemon({ "until-idle": true }, () =>
     makeFakeDaemonWithBrokerCounts({
       objectivesAwaitingConfirmation: 0,
-      initiativesAwaitingPr: 0,
+      initiativesLanded: 0,
     }),
   );
 
@@ -147,8 +156,68 @@ test("(007.12 Story F) runDaemon prints no objective/initiative summary lines wh
     !result.stderr.some(
       (l) =>
         l.includes("objective(s) awaiting confirmation") ||
-        l.includes("initiative(s) awaiting PR"),
+        l.includes("initiative(s) landed"),
     ),
     `stderr must not include objective/initiative summary lines when both are 0; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+/**
+ * Story 07 — run-scoped daemon summary: failures come first, and only the
+ * touched initiatives are counted (`landedInitiativeIds`, not a whole-DB
+ * `initiativesLanded` count).
+ *
+ * Fails today: `runDaemon` never reads `failedTasks`/`landedInitiativeIds` —
+ * it only reads the whole-DB `initiativesLanded` number, so a run whose only
+ * task failed still prints "1 initiative(s) landed" from an unrelated
+ * pre-existing initiative, with no explanation of the failure at all.
+ */
+function makeFakeDaemonRunScoped(result: {
+  exitCode: 0 | 1;
+  escalatedCount: number;
+  objectivesAwaitingConfirmation: number;
+  failedTasks: Array<{ id: string; reason: string }>;
+  landedInitiativeIds: string[];
+}): RunDaemonClass {
+  return {
+    execute(_opts: {
+      untilIdle: boolean;
+      pollIntervalMs?: number;
+    }): Promise<{ exitCode: 0 | 1 }> {
+      return Promise.resolve(result as unknown as { exitCode: 0 | 1 });
+    },
+    stop(): void {},
+  } as unknown as RunDaemonClass;
+}
+
+test("(Story 07) runDaemon: a run whose only task failed reports the failure first and prints no 'initiative(s) landed' line, even with a pre-existing unrelated landed initiative in the DB", async () => {
+  const result = await runDaemon({ "until-idle": true }, () =>
+    makeFakeDaemonRunScoped({
+      exitCode: 1,
+      escalatedCount: 0,
+      objectivesAwaitingConfirmation: 0,
+      failedTasks: [
+        { id: "t1", reason: "VerificationFailedError: npm test (exit 1)" },
+      ],
+      // The whole-DB count would have been >0 (a pre-existing unrelated
+      // initiative landed before this run started) — but this run touched
+      // no initiative that landed, so landedInitiativeIds must be [].
+      landedInitiativeIds: [],
+    }),
+  );
+
+  assert.equal(result.exitCode, 1, "exit code must be 1 — a task failed");
+  assert.equal(
+    result.stderr[0],
+    "task failed: t1 — VerificationFailedError: npm test (exit 1)",
+    `stderr line 1 must report the failure first; got: ${JSON.stringify(result.stderr)}`,
+  );
+  assert.ok(
+    result.stderr.some((l) => l === "1 task(s) failed"),
+    `stderr must include a '1 task(s) failed' count line; got: ${JSON.stringify(result.stderr)}`,
+  );
+  assert.ok(
+    !result.stderr.some((l) => l.includes("initiative(s) landed")),
+    `stderr must NOT print an 'initiative(s) landed' line — this run landed nothing; got: ${JSON.stringify(result.stderr)}`,
   );
 });

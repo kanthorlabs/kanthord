@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { describe, test } from "node:test";
 
 import { buildProgram } from "./index.ts";
+import { buildRetryObjectiveCommand } from "./commands/retry/objective.ts";
 
 function capture() {
   const out: string[] = [];
@@ -346,5 +347,15 @@ describe("src/apps/cli/index.ts", () => {
       buildProgram({} as Parameters<typeof buildProgram>[0]).version(),
       packageJson.version,
     );
+  });
+
+  test("retry objective --help lists --note (Story 06 a)", () => {
+    const cap = capture();
+    const command = buildRetryObjectiveCommand(
+      {} as Parameters<typeof buildRetryObjectiveCommand>[0],
+      cap.io,
+    );
+
+    assert.match(command.helpInformation(), /--note/);
   });
 });

@@ -1,7 +1,7 @@
 # EPIC 007.1 — E2E hardening · story index
 
 Epic: `.agent/plan/epics/007.1-e2e-hardening.md`
-Findings (input): `.agent/plan/epics/007.1-e2e-findings.md`
+Findings (input): `.agent/findings/007.1-e2e-findings.md`
 
 **Authoring status (2026-07-19 — EXPANDED).** One coupled bug-fix epic (Groups
 **A** observability + safe export, **C** import-context + local landing, **D**

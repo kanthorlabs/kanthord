@@ -27,7 +27,7 @@ persists bindings — the domain `Task` entity is **not** changed; the
   - persists `newTask({objectiveId, title, dependencies})` + its dependency
     edges + context rows; returns the ULID.
 - `create task --objective <id> --title "x" [--depends-on <id> …]
-  [--context <type>=<id> …]` → stdout `[ulid]`.
+[--context <type>=<id> …]` → stdout `[ulid]`.
 
 ## Constraints
 

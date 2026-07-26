@@ -129,6 +129,8 @@ describe("runGetObjective", () => {
       name: "backend-slice",
       status: "integrated",
       integrations: [{ repository: "repo-1", state: "integrated" }],
+      after: [],
+      waiting: [],
     });
   });
 
@@ -146,5 +148,157 @@ describe("runGetObjective", () => {
       r.stderr[0]!.startsWith("error:"),
       `expected 'error:' prefix, got: ${r.stderr[0]}`,
     );
+  });
+});
+
+// Story 6 — after / waiting rendering
+const S6_X = "01JZZZZZZZZZZZZZZZZZZZX001";
+const S6_Y = "01JZZZZZZZZZZZZZZZZZZZY002";
+
+describe("runGetObjective Story 6 — after/waiting rendering", () => {
+  test("(S6-6) after: [] → no after: or waiting on: line", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "test",
+      status: "building",
+    };
+    const getObjective = makeGetObjective(objective, undefined);
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("after:")),
+      "no after: line when empty",
+    );
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("waiting on:")),
+      "no waiting on: line when empty",
+    );
+  });
+
+  test("(S6-7) after: [X] with X awaiting_confirmation → stdout has after: X and waiting on: X before integration:", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "test",
+      status: "building",
+    };
+    const other: Objective = {
+      id: S6_X,
+      initiativeId: "init-1",
+      name: "other",
+      status: "awaiting_confirmation",
+    };
+    const source = new MemObjectiveSource([objective, other]);
+    const repos = new MockRepositoryResolver("repo-42");
+    const sequencing = { listObjectiveAfter: () => [S6_X] };
+    const getObjective = new GetObjective(source, repos, sequencing);
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    const afterIdx = r.stdout.findIndex((l) => l.startsWith("after:"));
+    const waitIdx = r.stdout.findIndex((l) => l.startsWith("waiting on:"));
+    const intIdx = r.stdout.findIndex((l) => l.startsWith("integration:"));
+    assert.ok(afterIdx >= 0, "stdout must have after: line");
+    assert.ok(waitIdx >= 0, "stdout must have waiting on: line");
+    assert.ok(intIdx >= 0, "stdout must have integration: line");
+    assert.ok(afterIdx < intIdx, "after: must appear before integration:");
+  });
+
+  test("(S6-8) after: [X] with X discarded → stdout has waiting on: X (discarded — will never satisfy)", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "test",
+      status: "building",
+    };
+    const other: Objective = {
+      id: S6_X,
+      initiativeId: "init-1",
+      name: "other",
+      status: "discarded",
+    };
+    const source = new MemObjectiveSource([objective, other]);
+    const repos = new MockRepositoryResolver(undefined);
+    const sequencing = { listObjectiveAfter: () => [S6_X] };
+    const getObjective = new GetObjective(source, repos, sequencing);
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      r.stdout.some((l) => l.includes("(discarded — will never satisfy)")),
+      "discarded warning must be in output",
+    );
+  });
+
+  test("(S6-9) after: [A, B] → stdout has after: A B (space-joined)", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "test",
+      status: "building",
+    };
+    const a: Objective = {
+      id: S6_Y,
+      initiativeId: "init-1",
+      name: "A",
+      status: "integrated",
+    };
+    const b: Objective = {
+      id: S6_X,
+      initiativeId: "init-1",
+      name: "B",
+      status: "integrated",
+    };
+    const source = new MemObjectiveSource([objective, a, b]);
+    const repos = new MockRepositoryResolver(undefined);
+    const sequencing = { listObjectiveAfter: () => [S6_Y, S6_X] };
+    const getObjective = new GetObjective(source, repos, sequencing);
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      r.stdout.some(
+        (l) => l.startsWith("after:") && l.includes(S6_Y) && l.includes(S6_X),
+      ),
+      "after: line must contain both ids space-joined",
+    );
+  });
+
+  test("(S6-10) --json: parsed stdout has after and waiting matching the DTO", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "test",
+      status: "building",
+    };
+    const other: Objective = {
+      id: S6_X,
+      initiativeId: "init-1",
+      name: "other",
+      status: "awaiting_confirmation",
+    };
+    const source = new MemObjectiveSource([objective, other]);
+    const repos = new MockRepositoryResolver(undefined);
+    const sequencing = { listObjectiveAfter: () => [S6_X] };
+    const getObjective = new GetObjective(source, repos, sequencing);
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID, json: true },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.stdout.length, 1, "--json prints exactly one line");
+    const parsed = JSON.parse(r.stdout[0]!);
+    assert.deepEqual(parsed.after, [S6_X]);
+    assert.deepEqual(parsed.waiting, [{ id: S6_X, neverSatisfies: false }]);
   });
 });

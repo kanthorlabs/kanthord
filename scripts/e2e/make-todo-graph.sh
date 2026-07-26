@@ -14,7 +14,12 @@
 # same package is usable by the deterministic no-model landing proof
 # (make-landing-graph.sh) as well as a real-model run; the endpoint specifics
 # live in each task's Instructions + Acceptance Criteria.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 OUT="${1:?usage: make-todo-graph.sh <out-dir>}"
 mkdir -p "$OUT"

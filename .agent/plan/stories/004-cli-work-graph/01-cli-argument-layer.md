@@ -14,7 +14,7 @@ this; the EPIC 002/003 pre-existing commands (`check graph`, `db migrate`,
 
 - `src/apps/cli/router.ts` exports `dispatch(argv, deps)` and a `COMMANDS`
   table keyed by `"<verb> <object>"` (e.g. `"create project"`) → `{ handler,
-  usage, parse }`. The key maps 1:1 to a use-case class name.
+usage, parse }`. The key maps 1:1 to a use-case class name.
 - Unknown command → exit 1, stderr `error: unknown command: <verb> <object>`,
   plus a one-line list of known commands.
 - `--help`/`-h` on any command → exit 0, usage text to stdout.

@@ -15,7 +15,15 @@ test("boundary rule fires on a forbidden app -> adapter import", () => {
     cwd: root,
     encoding: "utf8",
   });
-  assert.notEqual(res.status, 0, "eslint must exit non-zero on the illegal import");
+  assert.notEqual(
+    res.status,
+    0,
+    "eslint must exit non-zero on the illegal import",
+  );
   const output = `${res.stdout ?? ""}${res.stderr ?? ""}`;
-  assert.match(output, /boundaries\/dependencies/, "boundary rule id must appear");
+  assert.match(
+    output,
+    /boundaries\/dependencies/,
+    "boundary rule id must appear",
+  );
 });

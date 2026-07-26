@@ -29,9 +29,14 @@ import type { UpdateFilesystem } from "../../app/resource/update-filesystem.ts";
 import type { UpdateNotification } from "../../app/resource/update-notification.ts";
 import type { UpdateRepository } from "../../app/resource/update-repository.ts";
 import type { AddDependency } from "../../app/task/add-dependency.ts";
+import type { AddInitiativeDependency } from "../../app/initiative/add-initiative-dependency.ts";
+import type { RemoveInitiativeDependency } from "../../app/initiative/remove-initiative-dependency.ts";
+import type { AddObjectiveDependency } from "../../app/objective/add-objective-dependency.ts";
+import type { RemoveObjectiveDependency } from "../../app/objective/remove-objective-dependency.ts";
 import type { ApproveTask } from "../../app/task/approve-task.ts";
 import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
 import type { RetryObjective } from "../../app/objective/retry-objective.ts";
+import type { RejectObjective } from "../../app/objective/reject-objective.ts";
 import type { GetTask } from "../../app/task/get-task.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
@@ -145,6 +150,10 @@ export interface CliDeps {
   createTask: CreateTask;
   addDependency: AddDependency;
   removeDependency: RemoveDependency;
+  addInitiativeDependency: AddInitiativeDependency;
+  removeInitiativeDependency: RemoveInitiativeDependency;
+  addObjectiveDependency: AddObjectiveDependency;
+  removeObjectiveDependency: RemoveObjectiveDependency;
   listTasks: ListTasks;
   retryTask: RetryTask;
   getTask: GetTask;
@@ -152,6 +161,7 @@ export interface CliDeps {
   approveTask: ApproveTask;
   approveObjective: ApproveObjective;
   retryObjective: RetryObjective;
+  rejectObjective: RejectObjective;
   rejectTask: RejectTask;
   buildDaemon: (
     failTaskIds: string[],

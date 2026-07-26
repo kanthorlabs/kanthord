@@ -541,45 +541,45 @@ app-maintained - Supersedes the earlier "single whole-package baseDigest,
 no migration" outcome. The counter stays REJECTED (bump-on-every-path is
 convention, not enforcement; a missed bump fails unsafe). New model:
 (a) A per-row sha256 column on initiatives, objectives, tasks
-    (migration 6 — this OVERTURNS the earlier "no migration" note).
-    sha256 is a DB-internal version token: the hash of the node's
-    canonical aggregate INCLUDING status, so a pending->running change
-    bumps the token (hence NO separate status predicate is needed in the
-    CAS WHERE). For a Task the hashed aggregate spans TWO tables — the
-    tasks spec columns + task_dependencies (task_context is EXCLUDED —
-    resource bindings are out of 007's scope, Ulrich 2026-07-18).
+(migration 6 — this OVERTURNS the earlier "no migration" note).
+sha256 is a DB-internal version token: the hash of the node's
+canonical aggregate INCLUDING status, so a pending->running change
+bumps the token (hence NO separate status predicate is needed in the
+CAS WHERE). For a Task the hashed aggregate spans TWO tables — the
+tasks spec columns + task_dependencies (task_context is EXCLUDED —
+resource bindings are out of 007's scope, Ulrich 2026-07-18).
 (b) The token is maintained by an APPLICATION write hook in the
-    repository/UnitOfWork, NOT by DB triggers (S1, Ulrich 2026-07-17).
-    Reason: the hashed Task aggregate spans 2 tables; a tasks-row trigger
-    does not fire on task_dependencies changes, so a correct trigger
-    design needs a multi-trigger web reaching back to the parent,
-    which fails UNSAFE if any trigger is missing/wrong (stale token ->
-    CAS matches -> silent override). The repo already assembles the whole
-    aggregate on every write, so it computes ONE canonical string and
-    stamps sha256 in the same transaction — one place, fails safe. May
-    reuse a registered db.function("sha256", …) UDF invoked explicitly
-    (UPDATE … SET sha256 = sha256(?)) or node:crypto; equivalent.
+repository/UnitOfWork, NOT by DB triggers (S1, Ulrich 2026-07-17).
+Reason: the hashed Task aggregate spans 2 tables; a tasks-row trigger
+does not fire on task_dependencies changes, so a correct trigger
+design needs a multi-trigger web reaching back to the parent,
+which fails UNSAFE if any trigger is missing/wrong (stale token ->
+CAS matches -> silent override). The repo already assembles the whole
+aggregate on every write, so it computes ONE canonical string and
+stamps sha256 in the same transaction — one place, fails safe. May
+reuse a registered db.function("sha256", …) UDF invoked explicitly
+(UPDATE … SET sha256 = sha256(?)) or node:crypto; equivalent.
 (c) .kanthord-export.json = { initiativeId, formatVersion,
-    digestAlgorithm: "sha256", nodes: { <id>: <sha256> } } — a per-node
-    map, not one whole-package digest. The exporter COPIES each row's
-    current sha256 into the manifest; it NEVER recomputes the hash (so the
-    token is produced in exactly one place — the repo hook — killing any
-    two-canonicalizer divergence).
+digestAlgorithm: "sha256", nodes: { <id>: <sha256> } } — a per-node
+map, not one whole-package digest. The exporter COPIES each row's
+current sha256 into the manifest; it NEVER recomputes the hash (so the
+token is produced in exactly one place — the repo hook — killing any
+two-canonicalizer divergence).
 (d) Import-to-update (--apply): per node, optimistic CAS
-    UPDATE … SET …, sha256=<new> WHERE id=? AND sha256=<import-sha256>
-    RETURNING sha256. A 0-row result means the row drifted since export
-    (spec OR status changed). ANY 0-row update aborts: run a full scan
-    comparing manifest shas vs current DB shas + live values to CLASSIFY
-    each conflict (drifted / locked / missing / new), roll back the whole
-    UnitOfWork, print an itemized conflict report, exit 1. The user
-    decides (re-export to refresh the baseline, drop the edit, or wait) —
-    never auto-merged.
+UPDATE … SET …, sha256=<new> WHERE id=? AND sha256=<import-sha256>
+RETURNING sha256. A 0-row result means the row drifted since export
+(spec OR status changed). ANY 0-row update aborts: run a full scan
+comparing manifest shas vs current DB shas + live values to CLASSIFY
+each conflict (drifted / locked / missing / new), roll back the whole
+UnitOfWork, print an itemized conflict report, exit 1. The user
+decides (re-export to refresh the baseline, drop the edit, or wait) —
+never auto-merged.
 (e) No conflicts -> apply all in one transaction, rewrite the manifest
-    with the fresh per-node shas. Idempotent: unchanged content ->
-    unchanged sha -> CAS matches -> "N unchanged". Format changes bump
-    formatVersion (explicit, rare re-export). Manifest-write failure
-    AFTER commit: warn; the stale manifest then fails SAFE next time
-    (StaleExportError; re-export is the fix).`
+with the fresh per-node shas. Idempotent: unchanged content ->
+unchanged sha -> CAS matches -> "N unchanged". Format changes bump
+formatVersion (explicit, rare re-export). Manifest-write failure
+AFTER commit: warn; the stale manifest then fails SAFE next time
+(StaleExportError; re-export is the fix).`
 - `B6 - resolved (AMENDED 2026-07-17 by Ulrich: case-sensitive
 disambiguation) - typed refs, strict grammar - Two package-scoped
 namespaces (objective refs, task refs); a duplicate ref names both files.

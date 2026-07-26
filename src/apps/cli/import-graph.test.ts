@@ -13,7 +13,7 @@
  * (g) --dry-run missing: pending removed file vs non-pending not-exported are distinct in output
  */
 
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
@@ -25,6 +25,12 @@ import type {
 } from "../../app/graph/create-graph.ts";
 import type { ApplyGraphResult } from "../../app/graph/apply-graph.ts";
 import { newId } from "../../domain/entity.ts";
+import { GRAPH_FORMAT_VERSION } from "../../app/graph/format.ts";
+import {
+  StaleManifestError,
+  UncreatableObjectiveError,
+  UnknownNodeError,
+} from "../../app/graph/import-errors.ts";
 
 // ─── stable test IDs (valid 26-char uppercase Crockford — all-digit, YAML-quoted by serializer) ───
 const INIT_ID = "00000000000000000000000001";
@@ -532,6 +538,296 @@ test("--dry-run: prints all classification types from applyGraph result; writes 
   );
 });
 
+// ─── Story 03 D (007.16) — apply must not report success when it wrote nothing ─
+
+test("--apply with a non-empty conflict set (drifted) exits non-zero, first stderr line is 'refused: N drifted node(s)', and no stdout line starts with 'created:' (Story 03 D)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(
+    result.exitCode,
+    0,
+    "a blocked apply (non-empty conflict set) must exit non-zero",
+  );
+  assert.ok(
+    result.stderr.length > 0,
+    "must print at least one stderr line explaining the refusal",
+  );
+  assert.match(
+    result.stderr[0]!,
+    /^refused: \d+ drifted node\(s\)/,
+    `first stderr line must match /^refused: N drifted node\\(s\\)/; got: ${JSON.stringify(result.stderr)}`,
+  );
+  assert.ok(
+    !result.stdout.some((l) => l.startsWith("created:")),
+    `no stdout line may claim 'created:' when nothing was written; got: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test("--apply with conflicts: the summary counters include the drifted count (Story 03 D)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  // Locate the summary counter line specifically (the one that already
+  // reports "N created, N updated, N unchanged, N missing") — NOT the
+  // per-node classification lines, which already say "drifted: <id>" today
+  // and would make this assertion pass vacuously.
+  const summaryLine = result.stdout.find((l) => /\d+ created,/.test(l));
+  assert.ok(
+    summaryLine,
+    `expected a summary counter line in stdout; got: ${JSON.stringify(result.stdout)}`,
+  );
+  assert.match(
+    summaryLine!,
+    /\b1 drifted\b/,
+    `the summary counter line must include the drifted count; got: ${summaryLine}`,
+  );
+});
+
+test("--apply --dry-run with the same conflicts still exits 0 and uses 'would create:' wording (Story 03 D)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const plannedCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK2_ID,
+    class: "created",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls, plannedCls],
+    summary: { created: 1, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, dryRun: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    "--dry-run always exits 0, even with conflicts",
+  );
+  assert.ok(
+    result.stdout.some((l) => l.startsWith("would create:")),
+    `a planned-but-not-written node must be reported as 'would create:'; got: ${JSON.stringify(result.stdout)}`,
+  );
+  assert.ok(
+    !result.stdout.some((l) => l.startsWith("created:")),
+    `--dry-run must never claim 'created:' (no write happened); got: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test("--apply with a non-empty conflict set (locked only) exits non-zero, refusal reads 'refused: N locked node(s)' with no drifted clause (S3 regression)", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "locked",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(
+    result.exitCode,
+    0,
+    "a locked-only refusal must exit non-zero",
+  );
+  assert.equal(
+    result.stderr[0],
+    "refused: 1 locked node(s)",
+    `refusal must not name a zero-count drifted clause; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("--apply with both drifted and locked conflicts: refusal stays byte-identical 'refused: X drifted node(s) and Y locked node(s)' (S3 regression)", async () => {
+  const dir = await makeExportedDir();
+
+  const driftedCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+  };
+  const lockedCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK2_ID,
+    id: DR_TASK2_ID,
+    class: "locked",
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [driftedCls, lockedCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [driftedCls, lockedCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.equal(
+    result.stderr[0],
+    "refused: 1 drifted node(s) and 1 locked node(s)",
+    `both-non-zero refusal must stay byte-identical to the original message; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("EPIC 007.18 Story 4 — a status CAS conflict prints the per-node lifecycle refusal, not the aggregate wording", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "locked",
+    casReason: { kind: "status", currentStatus: "running" },
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(result.exitCode, 0);
+  assert.equal(
+    result.stderr[0],
+    `refused: task ${DR_TASK1_ID} is no longer pending (status: running)`,
+    `expected a per-node lifecycle refusal; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("EPIC 007.18 Story 4 — a sha CAS conflict prints the per-node content-change refusal, not the aggregate wording", async () => {
+  const dir = await makeExportedDir();
+
+  const conflictCls: ApplyGraphResult["classifications"][number] = {
+    kind: "task",
+    ref: DR_TASK1_ID,
+    id: DR_TASK1_ID,
+    class: "drifted",
+    casReason: { kind: "sha" },
+  };
+  const fakeResult: ApplyGraphResult = {
+    applied: false,
+    classifications: [conflictCls],
+    summary: { created: 0, updated: 0, unchanged: 0, missing: 0 },
+    conflicts: [conflictCls],
+  };
+  const fakeApply = new FakeApplyGraph(fakeResult);
+  const fakeCreate = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    {
+      createGraph: fakeCreate,
+      applyGraph: fakeApply,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.notEqual(result.exitCode, 0);
+  assert.equal(
+    result.stderr[0],
+    `refused: task ${DR_TASK1_ID} changed outside this package`,
+    `expected a per-node content-change refusal; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
 // ─── Story 08 T2 — --delete-missing eligibility + plan + confirmation gate ────
 
 /**
@@ -955,7 +1251,7 @@ async function makeBindingsAuthoredDir(): Promise<string> {
   return dir;
 }
 
-test("(f) --create with initiative that has bindings writes manifest with formatVersion 2", async () => {
+test("(f) --create with initiative that has bindings writes manifest with formatVersion 3", async () => {
   const dir = await makeBindingsAuthoredDir();
   const fake = new FakeCreateGraph();
   const T2_REPO_ID = "00000000000000000000000020";
@@ -991,8 +1287,164 @@ test("(f) --create with initiative that has bindings writes manifest with format
   const manifest = JSON.parse(raw) as Record<string, unknown>;
   assert.equal(
     manifest["formatVersion"],
-    2,
-    `manifest.formatVersion must be 2 when package has bindings; got: ${manifest["formatVersion"]}`,
+    3,
+    `manifest.formatVersion must be 3 when package has bindings; got: ${manifest["formatVersion"]}`,
+  );
+});
+
+test("EPIC 007.18 Story 3 — --create with an initiative WITHOUT bindings still writes manifest with the current formatVersion", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-t00718-nobindings-"));
+  await writeFile(
+    join(dir, "oauth.md"),
+    ["---", "kind: initiative", "ref: oauth", "name: oauth", "---", ""].join(
+      "\n",
+    ),
+  );
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: true, apply: false, project: PROJ_ID },
+    {
+      createGraph: fake,
+      newId,
+      findResourcesByName: async () => [],
+      getResource: async () => undefined,
+    },
+  );
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `exit 0; stderr: ${result.stderr.join(" ")}`,
+  );
+
+  const raw = await readFile(join(dir, ".kanthord-export.json"), "utf8");
+  const manifest = JSON.parse(raw) as Record<string, unknown>;
+  assert.equal(
+    manifest["formatVersion"],
+    GRAPH_FORMAT_VERSION,
+    `a --create manifest must never be pre-stale; got: ${manifest["formatVersion"]}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.18 Story 3 — the CLI error boundary around applyGraph.execute
+// ---------------------------------------------------------------------------
+
+/** A fake ApplyGraph whose execute() rejects with a fixed error. */
+class FakeApplyGraphThatThrows {
+  readonly err: Error;
+
+  constructor(err: Error) {
+    this.err = err;
+  }
+
+  async execute(): Promise<ApplyGraphResult> {
+    throw this.err;
+  }
+}
+
+test("EPIC 007.18 Story 3 — a stale manifest returns exitCode 1 with the single stale-manifest stderr line, not an unhandled rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new StaleManifestError(2, GRAPH_FORMAT_VERSION, DR_INIT_ID);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.deepEqual(result.stderr, [`error: ${err.message}`]);
+});
+
+test("EPIC 007.18 Story 3 — an UnknownNodeError from ApplyGraph returns exitCode 1 with a single stderr line, not a rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new UnknownNodeError("backend/impl-api.md", "ghost-ref");
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.deepEqual(result.stderr, [`error: ${err.message}`]);
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.19 Story 2 — CLI maps UncreatableObjectiveError to one stderr line
+// ---------------------------------------------------------------------------
+
+test("EPIC 007.19 Story 2 — UncreatableObjectiveError maps to exitCode 1, one stderr line, empty stdout", async () => {
+  const dir = await makeExportedDir();
+  const err = new UncreatableObjectiveError(DR_INIT_ID, [
+    { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+  ]);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.deepEqual(result.stderr, [`error: ${err.message}`]);
+});
+
+test("EPIC 007.19 Story 2 — the stderr message names the objective ref and the remedy command", async () => {
+  const dir = await makeExportedDir();
+  const err = new UncreatableObjectiveError(DR_INIT_ID, [
+    { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+  ]);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.ok(
+    result.stderr[0]!.includes("orphan-obj"),
+    `stderr must name the objective ref "orphan-obj"; got: ${result.stderr[0]}`,
+  );
+  assert.ok(
+    result.stderr[0]!.includes("kanthord create objective --initiative"),
+    `stderr must include the remedy command; got: ${result.stderr[0]}`,
+  );
+});
+
+test("EPIC 007.19 Story 2 — UncreatableObjectiveError is handled, not an unhandled rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new UncreatableObjectiveError(DR_INIT_ID, [
+    { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+  ]);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  // Must resolve (not reject) — the error is mapped by toResult, not re-thrown
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+});
+
+test("EPIC 007.19 Story 2 — regression: an unregistered error still re-throws as an unhandled rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new Error("boom");
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  await assert.rejects(
+    () =>
+      runImportGraph(
+        { dir, create: false, apply: true, initiative: DR_INIT_ID },
+        { createGraph: new FakeCreateGraph(), applyGraph, newId },
+      ),
+    { message: "boom" },
   );
 });
 
@@ -1289,4 +1741,213 @@ test("T4(f): --bind source=<id> with wrong resource type → exitCode 1 (type mi
     1,
     `expected exitCode 1 (type mismatch for source alias); got 0; stderr: ${result.stderr.join(" ")}`,
   );
+});
+
+// ─── Story 5b — after: id handoff on --create path ──────────────────────────
+
+const CLI_INIT_ID = "01JTEST00000000000000000A2";
+const CLI_OBJ1_ID = "01JTEST00000000000000000B3";
+const CLI_OBJ2_ID = "01JTEST00000000000000000C4";
+const CLI_TASK1_ID = "01JTEST00000000000000000D5";
+
+/** Package dir with `after: [backend, backend-frontend]` on obj-2. */
+async function makeAuthoredDirWithAfter(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "kanthord-after-t5b-"));
+  await mkdir(join(dir, "backend"), { recursive: true });
+  await mkdir(join(dir, "backend-frontend"), { recursive: true });
+  await mkdir(join(dir, "frontend"), { recursive: true });
+
+  await writeFile(
+    join(dir, "oauth.md"),
+    "---\nkind: initiative\nref: oauth\nname: oauth\n---\n",
+  );
+  await writeFile(
+    join(dir, "backend-frontend", "backend-frontend.md"),
+    "---\nkind: objective\nref: backend-frontend\ninitiative: oauth\nname: backend-frontend\n---\n",
+  );
+  await writeFile(
+    join(dir, "backend", "backend.md"),
+    "---\nkind: objective\nref: backend\ninitiative: oauth\nname: backend\n---\n",
+  );
+  await writeFile(
+    join(dir, "frontend", "frontend.md"),
+    [
+      "---",
+      "kind: objective",
+      "ref: frontend",
+      "initiative: oauth",
+      "name: frontend",
+      "after: [backend-frontend, backend]", // reversed order — must sort
+      "---",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "frontend", "fe-task.md"),
+    [
+      "---",
+      "kind: task",
+      "ref: fe-task",
+      "objective: frontend",
+      "title: implement frontend",
+      "agent: generic@1",
+      "---",
+      "# Instructions",
+      "Build UI.",
+      "# Acceptance Criteria",
+      "- [ ] app renders",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    join(dir, "backend", "be-task.md"),
+    [
+      "---",
+      "kind: task",
+      "ref: be-task",
+      "objective: backend",
+      "title: implement backend",
+      "agent: generic@1",
+      "---",
+      "# Instructions",
+      "Build API.",
+      "# Acceptance Criteria",
+      "- [ ] api responds",
+      "",
+    ].join("\n"),
+  );
+
+  return dir;
+}
+
+/** FakeCreateGraph variant that returns after-compatible ULID mappings. */
+class FakeCreateGraphWithAfter {
+  calls: Array<{ pkg: unknown; projectId: string }> = [];
+
+  async execute(input: {
+    pkg: unknown;
+    projectId: string;
+  }): Promise<CreateGraphResult> {
+    this.calls.push({ pkg: input.pkg, projectId: input.projectId });
+    return {
+      initiativeId: CLI_INIT_ID,
+      refToId: {
+        objectives: {
+          backend: CLI_OBJ1_ID,
+          "backend-frontend": CLI_OBJ2_ID,
+          frontend: "01JTEST00000000000000000E6",
+        },
+        tasks: {
+          "be-task": CLI_TASK1_ID,
+          "fe-task": "01JTEST00000000000000000F7",
+        },
+      },
+      nodes: {
+        [CLI_INIT_ID]: "a".repeat(64),
+        [CLI_OBJ1_ID]: "b".repeat(64),
+        [CLI_OBJ2_ID]: "c".repeat(64),
+        ["01JTEST00000000000000000E6"]: "d".repeat(64),
+        [CLI_TASK1_ID]: "e".repeat(64),
+        ["01JTEST00000000000000000F7"]: "f".repeat(64),
+      },
+    };
+  }
+}
+
+describe("Story 5b — after: id handoff on --create", () => {
+  test("(10) create-mode id handoff rewrites objective after from slugs to sorted ULIDs", async () => {
+    const dir = await makeAuthoredDirWithAfter();
+    const fake = new FakeCreateGraphWithAfter();
+
+    const result = await runImportGraph(
+      { dir, create: true, apply: false, project: PROJ_ID },
+      { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
+    );
+
+    assert.equal(
+      result.exitCode,
+      0,
+      `--create with after must exit 0; stderr: ${result.stderr.join(" ")}`,
+    );
+
+    // Read the rewritten frontend objective file
+    const frontendContent = await readFile(
+      join(dir, "frontend", "frontend.md"),
+      "utf8",
+    );
+
+    // Both after entries must be ULIDs (26-char), not slugs
+    const afterMatch = frontendContent.match(/after:\s*\[([^\]]+)\]/);
+    assert.ok(
+      afterMatch !== null,
+      `frontend.md must contain after: [...] line; got:\n${frontendContent}`,
+    );
+    const afterValues = afterMatch![1]!
+      .split(",")
+      .map((s) => s.trim().replace(/^['"]|['"]$/g, ""));
+
+    assert.equal(
+      afterValues.length,
+      2,
+      `after must have 2 entries; got ${JSON.stringify(afterValues)}`,
+    );
+
+    // Both must be ULIDs (26 char uppercase Crockford)
+    for (const v of afterValues) {
+      assert.match(
+        v,
+        /^[0-9A-HJKMNP-TV-Z]{26}$/,
+        `after entry must be a ULID; got: ${v}`,
+      );
+    }
+
+    // Must be sorted ascending
+    const sorted = [...afterValues].sort();
+    assert.deepEqual(
+      afterValues,
+      sorted,
+      `after entries must be sorted ascending; got ${JSON.stringify(afterValues)}`,
+    );
+  });
+
+  test("(11) the rewritten initiative file's after: is emitted sorted", async () => {
+    const dir = await makeAuthoredDirWithAfter();
+    const fake = new FakeCreateGraphWithAfter();
+
+    const result = await runImportGraph(
+      { dir, create: true, apply: false, project: PROJ_ID },
+      { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
+    );
+
+    assert.equal(result.exitCode, 0);
+
+    const initContent = await readFile(join(dir, "oauth.md"), "utf8");
+    // Initiative in this fixture has no after (empty), so no after: line should appear
+    assert.ok(
+      !initContent.includes("after:"),
+      `initiative file with empty after must NOT contain after: line; got:\n${initContent}`,
+    );
+  });
+
+  test("(12) a package with no after: round-trips with no after: line added", async () => {
+    const dir = await makeAuthoredDir(); // this fixture has no after anywhere
+    const fake = new FakeCreateGraphWithAfter();
+
+    const result = await runImportGraph(
+      { dir, create: true, apply: false, project: PROJ_ID },
+      { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
+    );
+
+    assert.equal(result.exitCode, 0);
+
+    // No file should have an after: line after rewrite
+    const files = ["oauth.md", "backend/backend.md", "frontend/frontend.md"];
+    for (const f of files) {
+      const content = await readFile(join(dir, f), "utf8");
+      assert.ok(
+        !content.includes("after:"),
+        `${f} must NOT contain after: line when original had none; got:\n${content}`,
+      );
+    }
+  });
 });

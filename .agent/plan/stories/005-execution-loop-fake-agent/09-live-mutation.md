@@ -14,8 +14,8 @@ while the daemon runs are honored on the next iteration.
 
 All on a real temp DB, driving `RunDaemon` (until-idle) with an
 **instrumented runner** — a thin wrapper around `FakeRunner` whose
-per-task callback performs the mutation *while the daemon is
-mid-execution*, exactly like a concurrent CLI process (same DB
+per-task callback performs the mutation _while the daemon is
+mid-execution_, exactly like a concurrent CLI process (same DB
 reads/writes; single event loop interleaving is equivalent here because
 every loop decision reads the DB inside a transaction):
 

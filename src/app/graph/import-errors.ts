@@ -122,6 +122,34 @@ export class DriftConflictError extends Error {
 }
 
 // ---------------------------------------------------------------------------
+// StaleManifestError — the manifest's formatVersion predates the current
+// content-hash change (EPIC 007.18 Story 3); its node shas were computed
+// under the old status-bearing canonicalTask and cannot be trusted.
+// ---------------------------------------------------------------------------
+
+export class StaleManifestError extends Error {
+  readonly formatVersion: number;
+  readonly expectedVersion: number;
+  readonly initiativeId: string;
+
+  constructor(
+    formatVersion: number,
+    expectedVersion: number,
+    initiativeId: string,
+  ) {
+    super(
+      `manifest formatVersion ${formatVersion} is stale (expected ${expectedVersion}) — ` +
+        `its node shas predate the content-hash change; re-export with: ` +
+        `kanthord export initiative ${initiativeId} --out <dir>`,
+    );
+    this.name = "StaleManifestError";
+    this.formatVersion = formatVersion;
+    this.expectedVersion = expectedVersion;
+    this.initiativeId = initiativeId;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Story 10 C1 — binding alias errors
 // ---------------------------------------------------------------------------
 
@@ -197,6 +225,40 @@ export class IncompatibleProviderCredentialError extends Error {
     this.name = "IncompatibleProviderCredentialError";
     this.aiProviderId = aiProviderId;
     this.credentialId = credentialId;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EPIC 007.19 Story 1 — preflight refusal of uncreatable objective refs.
+// An objective ref is unresolvable when a task's objectiveRef resolves to an
+// id that does not correspond to an existing objective in the DB and cannot
+// be created through --apply.
+// ---------------------------------------------------------------------------
+
+export class UncreatableObjectiveError extends Error {
+  readonly initiativeId: string;
+  readonly unresolvable: ReadonlyArray<{
+    objectiveRef: string;
+    taskRefs: string[];
+  }>;
+
+  constructor(
+    initiativeId: string,
+    unresolvable: ReadonlyArray<{
+      objectiveRef: string;
+      taskRefs: string[];
+    }>,
+  ) {
+    const refsList = unresolvable
+      .map((u) => `${u.objectiveRef} (blocked tasks: ${u.taskRefs.join(", ")})`)
+      .join("; ");
+    super(
+      `Cannot apply: uncreatable objective(s) — ${refsList}. ` +
+        `To create them, run: kanthord create objective --initiative ${initiativeId}`,
+    );
+    this.name = "UncreatableObjectiveError";
+    this.initiativeId = initiativeId;
+    this.unresolvable = unresolvable;
   }
 }
 

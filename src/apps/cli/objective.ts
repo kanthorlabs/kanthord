@@ -3,6 +3,7 @@ import type { RenameObjective } from "../../app/objective/rename-objective.ts";
 import type { ListObjectives } from "../../app/objective/list-objectives.ts";
 import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
 import type { RetryObjective } from "../../app/objective/retry-objective.ts";
+import type { RejectObjective } from "../../app/objective/reject-objective.ts";
 import type { GetObjective } from "../../app/objective/get-objective.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 
@@ -12,8 +13,9 @@ export async function runCreateObjective(
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const initiativeId = args["initiative"] as string;
   const name = args["name"] as string;
+  const after = (args["after"] as string[]) ?? [];
   try {
-    const id = await createObjective.execute({ initiativeId, name });
+    const id = await createObjective.execute({ initiativeId, name, after });
     return {
       exitCode: 0,
       stdout: [id],
@@ -70,10 +72,22 @@ export async function runGetObjective(
       `id: ${output.id}`,
       `name: ${output.name}`,
       `status: ${output.status}`,
+    ];
+    if (output.after.length > 0) {
+      lines.push(`after: ${output.after.join(" ")}`);
+    }
+    for (const w of output.waiting) {
+      if (w.neverSatisfies) {
+        lines.push(`waiting on: ${w.id} (discarded — will never satisfy)`);
+      } else {
+        lines.push(`waiting on: ${w.id}`);
+      }
+    }
+    lines.push(
       ...output.integrations.map(
         (i) => `integration: ${i.repository} ${i.state}`,
       ),
-    ];
+    );
     return { exitCode: 0, stdout: lines, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
@@ -108,8 +122,55 @@ export async function runRetryObjective(
   if (typeof id !== "string" || id === "") {
     return { ...toResult(new MissingFlagError("--id")), stdout: [] };
   }
+  const note =
+    typeof args["note"] === "string" && args["note"] !== ""
+      ? args["note"]
+      : undefined;
   try {
-    await retryObjective.execute({ objectiveId: id });
+    await retryObjective.execute(
+      note !== undefined ? { objectiveId: id, note } : { objectiveId: id },
+    );
+    return { exitCode: 0, stdout: [id], stderr: [] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runRejectObjective(
+  args: Record<string, unknown>,
+  rejectObjective: RejectObjective,
+  retryObjective: RetryObjective,
+): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const id = args["id"];
+  if (typeof id !== "string" || id === "") {
+    return { ...toResult(new MissingFlagError("--id")), stdout: [] };
+  }
+  const rawResolution = args["resolution"];
+  if (typeof rawResolution !== "string" || rawResolution === "") {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: missing required flag --resolution"],
+    };
+  }
+  if (rawResolution !== "retry" && rawResolution !== "discard") {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: [
+        `error: invalid --resolution value "${rawResolution}": must be "retry" or "discard"`,
+      ],
+    };
+  }
+  const resolution = rawResolution as "retry" | "discard";
+  const reason =
+    typeof args["reason"] === "string" ? args["reason"] : undefined;
+  try {
+    if (resolution === "retry") {
+      await retryObjective.execute({ objectiveId: id });
+    } else {
+      await rejectObjective.execute({ objectiveId: id, reason });
+    }
     return { exitCode: 0, stdout: [id], stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };

@@ -26,8 +26,9 @@ reference; this story implements the Resource branch).
   repo's local home; `Credential { provider, secretRef }` — `secretRef`
   (env-var name) replaced by `value` (the stored secret: API key or OAuth
   JSON), because OAuth tokens force storage; `AIProvider { provider,
-  model }` — gained `baseUrl?` for OpenAI-compatible endpoints. See
+model }` — gained `baseUrl?` for OpenAI-compatible endpoints. See
   `.agent/plan/stories/006-real-agents-via-pi/01-resource-contracts.md`.)
+
 - One guard per variant (`isRepository(r)`, …) that narrows and returns true
   only for its own variant. No constructors — instances are built by later
   epics' use cases.

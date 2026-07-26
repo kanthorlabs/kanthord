@@ -21,7 +21,7 @@ registry, unitOfWork, modelCatalog, listModels, newId }` (drop `projects`,
   `resolver`; `listModels: (provider: string) => string[]` enumerates the
   provider's pinned-catalog model ids). Flow in `execute`: 0. **OAuth-only guard**: `if (!this.#oauth.has(input.providerId)) throw` a typed
   `NonOAuthProviderError(providerId)` (message: use `register ai-provider
-   --value-file` for API-key providers). `oauth.has()` already exists
+ --value-file` for API-key providers). `oauth.has()` already exists
   (`src/oauth/port.ts:31`; pi registers OAuth for `anthropic` /
   `github-copilot` / `openai-codex` only — `deepseek`/`opencode`/`openrouter`
   are API-key-only and go through `register`, 008.1).

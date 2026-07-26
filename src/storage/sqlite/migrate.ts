@@ -10,6 +10,14 @@ export interface Migration {
   version: number;
   name: string;
   up(db: DatabaseSync): void;
+  /**
+   * Set when `up` rebuilds a table that is an FK *parent* (e.g. dropping and
+   * recreating `initiatives` while `objectives.initiativeId` references it).
+   * SQLite's FK violation counters survive `PRAGMA defer_foreign_keys` across
+   * a DROP+RENAME even when the final state is consistent, so enforcement
+   * must be disabled before `BEGIN` and restored after `COMMIT`/`ROLLBACK`.
+   */
+  disableForeignKeys?: boolean;
 }
 
 /**
@@ -62,6 +70,7 @@ function userVersion(db: DatabaseSync): number {
 }
 
 function applyOne(db: DatabaseSync, m: Migration): void {
+  if (m.disableForeignKeys) db.exec("PRAGMA foreign_keys=OFF");
   db.exec("BEGIN");
   try {
     m.up(db);
@@ -70,5 +79,7 @@ function applyOne(db: DatabaseSync, m: Migration): void {
   } catch (err) {
     db.exec("ROLLBACK");
     throw err;
+  } finally {
+    if (m.disableForeignKeys) db.exec("PRAGMA foreign_keys=ON");
   }
 }

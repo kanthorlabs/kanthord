@@ -21,13 +21,17 @@ import {
   AmbiguousBindingNameError,
   IncompatibleBindingTypeError,
 } from "../../app/graph/import-errors.ts";
-import type { ApplyGraphResult } from "../../app/graph/apply-graph.ts";
+import type {
+  ApplyGraphResult,
+  EdgeChange,
+} from "../../app/graph/apply-graph.ts";
 import type {
   PkgInitiative,
   PkgObjective,
   PkgTask,
   GraphPackage,
 } from "../../app/graph/graph-package.ts";
+import { toResult } from "./error-map.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -169,32 +173,73 @@ async function runApply(
   const deleteMissing = args.deleteMissing ?? false;
   const confirmDelete = args.confirmDelete ?? false;
 
-  const result = await applyGraph.execute({
-    pkg,
-    initiativeId: args.initiative,
-    dryRun,
-    deleteMissing,
-    confirmDelete,
-  });
+  let result: ApplyGraphResult;
+  try {
+    result = await applyGraph.execute({
+      pkg,
+      initiativeId: args.initiative,
+      dryRun,
+      deleteMissing,
+      confirmDelete,
+    });
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+
+  // A node was not actually written this pass when this is a dry-run, or
+  // when nothing was applied at all (e.g. blocked by conflicts) — in either
+  // case "created"/"updated" would claim a write that never happened.
+  const nothingWritten = dryRun || !result.applied;
 
   // Format each classification line for stdout
   const stdout: string[] = [];
   for (const cls of result.classifications) {
     const label = cls.name ?? cls.id ?? cls.ref;
+    const className =
+      nothingWritten && (cls.class === "created" || cls.class === "updated")
+        ? `would ${cls.class === "created" ? "create" : "update"}`
+        : cls.class;
     if (cls.class === "missing" && cls.reason !== undefined) {
       stdout.push(`missing (${cls.reason}): ${label}`);
     } else if (cls.sourcePath !== undefined) {
-      stdout.push(`${cls.class}: ${label} (${join(args.dir, cls.sourcePath)})`);
+      stdout.push(`${className}: ${label} (${join(args.dir, cls.sourcePath)})`);
     } else {
-      stdout.push(`${cls.class}: ${label}`);
+      stdout.push(`${className}: ${label}`);
     }
   }
 
-  // Print summary
+  // Render edge changes — when nothing was written, committed-edge labels
+  // ("removed", "added") must use the "would ..." prefix so the output does
+  // not claim a write that a refusal prevented (B3).
+  if (result.edgeChanges !== undefined) {
+    for (const ec of result.edgeChanges) {
+      if (ec.change === "would-remove") {
+        stdout.push(`would remove edge: ${ec.id} -> ${ec.dependency}`);
+      } else if (ec.change === "removed") {
+        stdout.push(
+          `${nothingWritten ? "would remove" : "removed"} edge: ${ec.id} -> ${ec.dependency}`,
+        );
+      } else if (ec.change === "added") {
+        stdout.push(
+          `${nothingWritten ? "would add" : "added"} edge: ${ec.id} -> ${ec.dependency}`,
+        );
+      }
+    }
+  }
+
+  // Print summary — append drifted/locked counts when there are conflicts,
+  // so a blocked apply's counter line does not look like "0 created, ...".
   const s = result.summary;
-  stdout.push(
-    `${s.created} created, ${s.updated} updated, ${s.unchanged} unchanged, ${s.missing} missing`,
-  );
+  const driftedCount = result.conflicts.filter(
+    (c) => c.class === "drifted",
+  ).length;
+  const lockedCount = result.conflicts.filter(
+    (c) => c.class === "locked",
+  ).length;
+  let summaryLine = `${s.created} created, ${s.updated} updated, ${s.unchanged} unchanged, ${s.missing} missing`;
+  if (driftedCount > 0) summaryLine += `, ${driftedCount} drifted`;
+  if (lockedCount > 0) summaryLine += `, ${lockedCount} locked`;
+  stdout.push(summaryLine);
 
   // When --delete-missing is set but --confirm-delete was NOT given, print a
   // delete plan for each eligible (reason: undefined) missing node and exit 0.
@@ -269,10 +314,41 @@ async function runApply(
   }
 
   // Dry-run always exits 0; a live apply that committed also exits 0.
-  // A live apply that was blocked by conflicts exits 1.
+  // A live apply that was blocked by conflicts exits 1, and explains the
+  // refusal on stderr rather than letting the "created:" lines above imply
+  // a write that never happened.
   const exitCode = dryRun || result.applied ? 0 : 1;
+  const stderr: string[] = [];
+  if (!dryRun && result.conflicts.length > 0) {
+    const casConflicts = result.conflicts.filter(
+      (c) => c.kind === "task" && c.casReason !== undefined,
+    );
+    if (casConflicts.length > 0) {
+      for (const c of casConflicts) {
+        stderr.push(
+          c.casReason!.kind === "status"
+            ? `refused: task ${c.id} is no longer pending (status: ${c.casReason!.currentStatus})`
+            : `refused: task ${c.id} changed outside this package`,
+        );
+      }
+    } else {
+      const clauses: string[] = [];
+      if (driftedCount > 0) clauses.push(`${driftedCount} drifted node(s)`);
+      if (lockedCount > 0) clauses.push(`${lockedCount} locked node(s)`);
+      stderr.push(`refused: ${clauses.join(" and ")}`);
+    }
+  }
+  if (
+    !dryRun &&
+    result.refusedEdgeRemovals !== undefined &&
+    result.refusedEdgeRemovals.length > 0
+  ) {
+    stderr.push(
+      `refused: ${result.refusedEdgeRemovals.length} edge removal(s) need --confirm-delete`,
+    );
+  }
 
-  return { exitCode, stdout, stderr: [] };
+  return { exitCode, stdout, stderr };
 }
 
 // ---------------------------------------------------------------------------
@@ -396,11 +472,16 @@ async function runCreate(
   for (const obj of pkg.objectives) {
     const assignedId = objectiveRefToId[obj.ref];
     if (assignedId === undefined) continue;
+    // Resolve after refs from slugs → ULIDs (Story 5b)
+    const resolvedAfter = (obj.after ?? [])
+      .map((ref) => objectiveRefToId[ref] ?? ref)
+      .sort();
     const updatedObjective: PkgObjective = {
       ...obj,
       id: assignedId,
       // Resolve initiative ref from slug → ULID (B1 — all refs become ULIDs post-handoff)
       initiativeRef: initiativeId,
+      after: resolvedAfter,
     };
     await atomicWrite(
       join(dir, obj.sourcePath),
@@ -441,8 +522,7 @@ async function runCreate(
 
   const manifest = {
     packageId,
-    formatVersion:
-      pkg.initiative.bindings !== undefined ? GRAPH_FORMAT_VERSION : 1,
+    formatVersion: GRAPH_FORMAT_VERSION,
     digestAlgorithm: "sha256" as const,
     initiativeId,
     nodes: result.nodes,

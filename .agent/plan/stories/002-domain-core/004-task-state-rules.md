@@ -35,8 +35,8 @@ task. Dependencies are task-level only.
   `{ from, to }`.
 - `setDependencies(task, dependencies)` returns a **new** task with the given
   `dependencies` array (input not mutated) **only when `task.status ===
-  'pending'`**; otherwise it throws `DependenciesLockedError { taskId,
-  status }`. It performs no cycle/unknown validation — that is `validateGraph`
+'pending'`**; otherwise it throws `DependenciesLockedError { taskId,
+status }`. It performs no cycle/unknown validation — that is `validateGraph`
   (story 005), run by the EPIC 004 use case over the whole graph.
 
 ## Constraints

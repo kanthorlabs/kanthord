@@ -14,7 +14,7 @@ failed task to `pending` and re-enqueues it.
   - id must resolve to `task` (`resolveKind`) — else the EPIC 004 named
     errors;
   - status must be `failed` — else `TaskNotRetryableError { taskId,
-    status }` (use-case guard; see index);
+status }` (use-case guard; see index);
   - in one transaction: `transitionTask(task, 'pending')`
     (**`failed→pending` — index B1, resolved**), save, `enqueue` (its
     dependencies completed before it first ran and were locked since —
@@ -23,7 +23,7 @@ failed task to `pending` and re-enqueues it.
   stderr `task re-queued: <id>`; non-failed task or bad reference →
   exit 1, one `error:` line.
 - Failure-semantics regression (integration, real temp DB + `FakeRunner
-  { failTaskIds }`): graph A→B (B depends on A), C independent; run until
+{ failTaskIds }`): graph A→B (B depends on A), C independent; run until
   idle with A scripted to fail → A `failed` (+ `task.failed` with reason),
   B still `pending` and never enqueued, C `completed` (the daemon moved
   on); then `RetryTask(A)` + run until idle → A and B `completed`.

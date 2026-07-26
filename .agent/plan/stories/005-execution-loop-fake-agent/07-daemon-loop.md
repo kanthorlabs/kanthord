@@ -12,8 +12,8 @@ the in-flight task, and the daemon-owned `SQLITE_BUSY` retry policy.
 ## Acceptance Criteria
 
 - `app/task/run-daemon.ts` — `RunDaemon` with injected `{ recover,
-  enqueueReady, runNext, sleep }` (use-case instances + `sleep(ms):
-  Promise<void>`), options `{ untilIdle: boolean; pollIntervalMs: number }`
+enqueueReady, runNext, sleep }` (use-case instances + `sleep(ms):
+Promise<void>`), options `{ untilIdle: boolean; pollIntervalMs: number }`
   (default poll 1000):
   1. `RecoverInterruptedTasks` once.
   2. Each iteration: `EnqueueReadyTasks`, then `RunNextTask` (**scan
@@ -32,7 +32,7 @@ the in-flight task, and the daemon-owned `SQLITE_BUSY` retry policy.
   - returns `{ exitCode: 0 | 1 }` — 1 iff any `RunNextTask` this run
     returned `failed`.
 - `apps/cli/daemon.ts` — `daemon run [--runner <name>] [--fail <task-id> …]
-  [--until-idle] [--poll-interval <ms>]`:
+[--until-idle] [--poll-interval <ms>]`:
   - `--runner` defaults to `fake`; any other value → `UnknownRunnerError`,
     exit 1 (this epic registers only the fake);
   - repeatable `--fail` builds the `FakeRunner` with `failTaskIds`

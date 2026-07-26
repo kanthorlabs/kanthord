@@ -30,7 +30,7 @@ interface RunNextTask {
 /**
  * Story F (007.12) — narrow read seam for the once-per-`execute()` daemon
  * summary: objectives awaiting brokering (`awaiting_confirmation`) and
- * initiatives awaiting PR (`awaiting_pr`). Optional so pre-existing fakes
+ * initiatives that have landed (`landed`). Optional so pre-existing fakes
  * that construct `RunDaemon` without it keep compiling; when absent both
  * counts are reported as 0.
  */
@@ -40,6 +40,17 @@ interface InitiativeCounts {
   listObjectives(initiativeId: string): Array<{ status?: string }>;
 }
 
+/**
+ * Story 07 — run-scoped daemon accounting. Lets `RunDaemon` learn, per
+ * dispatched task, which initiative it belongs to and its persisted result
+ * (for the failure `reason`), without scanning the whole DB. Optional so
+ * pre-existing fakes that construct `RunDaemon` without it keep compiling.
+ */
+interface RunDaemonStore {
+  getInitiativeId(taskId: string): string | undefined;
+  getTaskResult(taskId: string): { reason: string | null } | undefined;
+}
+
 interface RunDaemonDeps {
   recover: Recover;
   enqueueReady: EnqueueReady;
@@ -47,6 +58,7 @@ interface RunDaemonDeps {
   sleep: (ms: number) => Promise<void>;
   logger: Logger;
   initiatives?: InitiativeCounts;
+  store?: RunDaemonStore;
 }
 
 export class RunDaemon {
@@ -70,10 +82,13 @@ export class RunDaemon {
     exitCode: 0 | 1;
     escalatedCount: number;
     objectivesAwaitingConfirmation: number;
-    initiativesAwaitingPr: number;
+    landedInitiativeIds: string[];
+    failedTasks: Array<{ id: string; reason: string }>;
   }> {
     let hasFailed = false;
     let escalatedCount = 0;
+    const touchedInitiatives = new Set<string>();
+    const failedTasks: Array<{ id: string; reason: string }> = [];
 
     // Step 1: recover interrupted tasks exactly once at startup.
     // Skip everything if stop() was already called before execute().
@@ -82,7 +97,8 @@ export class RunDaemon {
         exitCode: 0,
         escalatedCount: 0,
         objectivesAwaitingConfirmation: 0,
-        initiativesAwaitingPr: 0,
+        landedInitiativeIds: [],
+        failedTasks: [],
       };
     }
     this.#deps.recover.execute();
@@ -120,6 +136,20 @@ export class RunDaemon {
         this.#logger.info(`task ${runResult.taskId}: ${runResult.outcome}`);
       }
 
+      // Story 07 — run-scoped accounting: record which initiative this
+      // dispatch touched, and capture the persisted failure reason.
+      if (runResult.outcome !== "idle" && this.#deps.store) {
+        const initiativeId = this.#deps.store.getInitiativeId(runResult.taskId);
+        if (initiativeId !== undefined) {
+          touchedInitiatives.add(initiativeId);
+        }
+        if (runResult.outcome === "failed") {
+          const reason =
+            this.#deps.store.getTaskResult(runResult.taskId)?.reason ?? "";
+          failedTasks.push({ id: runResult.taskId, reason });
+        }
+      }
+
       // Honour stop() — always checked after runNext finishes (never mid-task).
       if (this.#stopped) break;
 
@@ -139,14 +169,16 @@ export class RunDaemon {
     }
 
     // Step 4: once per execute() (not per loop iteration), summarise
-    // objectives awaiting brokering and initiatives awaiting PR (Story F).
+    // objectives awaiting brokering and initiatives landed (Story F),
+    // scoped to only the initiatives this run touched (Story 07).
     let objectivesAwaitingConfirmation = 0;
-    let initiativesAwaitingPr = 0;
+    const landedInitiativeIds: string[] = [];
     if (this.#deps.initiatives) {
-      for (const { id } of this.#deps.initiatives.listAllInitiatives()) {
+      const ids = [...touchedInitiatives].sort();
+      for (const id of ids) {
         const initiative = this.#deps.initiatives.get(id);
-        if (initiative?.status === "awaiting_pr") {
-          initiativesAwaitingPr += 1;
+        if (initiative?.status === "landed") {
+          landedInitiativeIds.push(id);
         }
         for (const objective of this.#deps.initiatives.listObjectives(id)) {
           if (objective.status === "awaiting_confirmation") {
@@ -160,7 +192,8 @@ export class RunDaemon {
       exitCode: hasFailed ? 1 : 0,
       escalatedCount,
       objectivesAwaitingConfirmation,
-      initiativesAwaitingPr,
+      landedInitiativeIds,
+      failedTasks,
     };
   }
 }

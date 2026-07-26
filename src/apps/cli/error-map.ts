@@ -10,6 +10,9 @@ import {
   ProposalWorkspaceMissingError,
   EmbeddedCredentialError,
   UnknownModelError,
+  ObjectiveNotAwaitingConfirmationError,
+  SequencingLockedError,
+  SequencingScopeError,
 } from "../../app/errors.ts";
 import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
 import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
@@ -22,6 +25,8 @@ import {
   DuplicateRefError,
   CreateModeIdError,
   DriftConflictError,
+  StaleManifestError,
+  UncreatableObjectiveError,
 } from "../../app/graph/import-errors.ts";
 import {
   ImmutableFieldError,
@@ -51,6 +56,7 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof ObjectiveNotRetryableError ||
     err instanceof UnknownAgentError ||
     err instanceof TaskNotAwaitingConfirmationError ||
+    err instanceof ObjectiveNotAwaitingConfirmationError ||
     err instanceof ProposalWorkspaceMissingError ||
     err instanceof ProposalMissingError ||
     err instanceof RejectionConflictError ||
@@ -60,8 +66,12 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof DuplicateRefError ||
     err instanceof CreateModeIdError ||
     err instanceof DriftConflictError ||
+    err instanceof StaleManifestError ||
+    err instanceof UncreatableObjectiveError ||
     err instanceof EmbeddedCredentialError ||
     err instanceof UnknownModelError ||
+    err instanceof SequencingLockedError ||
+    err instanceof SequencingScopeError ||
     err instanceof ImmutableFieldError ||
     err instanceof CacheConflictError
   ) {

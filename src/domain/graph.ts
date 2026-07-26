@@ -1,9 +1,12 @@
 import type { TaskStatus } from "./task.ts";
 
-export interface GraphNode {
+export interface DagNode {
   id: string;
-  status: TaskStatus;
   dependencies: string[];
+}
+
+export interface GraphNode extends DagNode {
+  status: TaskStatus;
 }
 
 export class DuplicateTaskError extends Error {
@@ -38,7 +41,7 @@ export class CycleError extends Error {
   }
 }
 
-export function validateGraph(nodes: GraphNode[]): void {
+export function validateDag(nodes: readonly DagNode[]): void {
   // 1. Duplicates first (highest precedence)
   const seen = new Set<string>();
   for (const node of nodes) {
@@ -105,6 +108,10 @@ export function validateGraph(nodes: GraphNode[]): void {
   }
 }
 
+export function validateGraph(nodes: GraphNode[]): void {
+  validateDag(nodes);
+}
+
 export function serialOrder(nodes: GraphNode[]): string[] {
   const indexOf = new Map<string, number>();
   nodes.forEach((node, i) => indexOf.set(node.id, i));
@@ -141,6 +148,36 @@ export function serialOrder(nodes: GraphNode[]): string[] {
       if (remaining === 0) {
         ready.push(dependent);
       }
+    }
+  }
+
+  return result;
+}
+
+export function dependentClosure(nodes: GraphNode[], rootId: string): string[] {
+  const dependents = new Map<string, string[]>();
+  for (const node of nodes) {
+    for (const dep of node.dependencies) {
+      const list = dependents.get(dep) ?? [];
+      list.push(node.id);
+      dependents.set(dep, list);
+    }
+  }
+  for (const list of dependents.values()) {
+    list.sort();
+  }
+
+  const visited = new Set<string>([rootId]);
+  const result: string[] = [];
+  const queue: string[] = [rootId];
+
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    for (const dependent of dependents.get(current) ?? []) {
+      if (visited.has(dependent)) continue;
+      visited.add(dependent);
+      result.push(dependent);
+      queue.push(dependent);
     }
   }
 

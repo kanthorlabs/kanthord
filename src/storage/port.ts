@@ -1,7 +1,7 @@
 import type { Project } from "../domain/project.ts";
 import type { Resource, ResourceType } from "../domain/resource.ts";
 import type { Initiative, Objective } from "../domain/initiative.ts";
-import type { Task } from "../domain/task.ts";
+import type { Task, TaskStatus } from "../domain/task.ts";
 import type {
   ChangeCandidate,
   CandidateState,
@@ -118,10 +118,15 @@ export interface TaskRepository {
   getInitiativeId(taskId: string): string | undefined;
   /** Returns the stored sha256 token for a task row, or undefined if not found. */
   getSha256(id: string): string | undefined;
-  /** Conditionally update a task's spec fields when its sha matches the expected value. */
+  /**
+   * Conditionally update a task's spec fields when its sha AND status both
+   * match. `expectedStatus` is the status observed at preflight — a lifecycle
+   * change between preflight and write is a conflict, not a silent overwrite.
+   */
   compareAndApply(
     id: string,
     expectedSha: string,
+    expectedStatus: TaskStatus,
     spec: {
       title: string;
       instructions: string;
@@ -130,15 +135,25 @@ export interface TaskRepository {
       verification: string[] | null;
       dependencies: string[];
     },
-  ): CasResult;
-  /** Conditionally move a task to a different objective when its sha matches. */
+  ): TaskCasResult;
+  /**
+   * Conditionally move a task to a different objective when its sha matches.
+   * No status predicate: EPIC 007.18 scoped the explicit guard to the two paths
+   * that rewrite a task's instructions or remove the row. A reparent of a
+   * running task changes only its parent reference and cannot corrupt an
+   * in-flight run.
+   */
   conditionalReparent(
     id: string,
     expectedSha: string,
     objectiveId: string,
   ): CasResult;
-  /** Conditionally delete a task when its sha matches the expected value. */
-  conditionalDeleteTask(id: string, expectedSha: string): CasResult;
+  /** Conditionally delete a task when its sha AND status both match. */
+  conditionalDeleteTask(
+    id: string,
+    expectedSha: string,
+    expectedStatus: TaskStatus,
+  ): TaskCasResult;
 }
 
 /**
@@ -165,6 +180,23 @@ export interface ReferenceResolver {
     id: string,
   ): "project" | "resource" | "initiative" | "objective" | "task" | undefined;
 }
+
+/** Which predicate of a task CAS failed. */
+export type TaskCasConflictReason = "sha" | "status";
+
+/**
+ * Result of a task conditional-write guarded by BOTH sha and status.
+ * `conflict` carries the row's actual sha + status and says which predicate
+ * failed, so the caller can report "content changed" vs "no longer pending".
+ */
+export type TaskCasResult =
+  | { status: "applied"; freshSha: string }
+  | {
+      status: "conflict";
+      currentSha: string;
+      currentStatus: string;
+      reason: TaskCasConflictReason;
+    };
 
 /**
  * Result of a conditional-write (CAS) operation on a repository row.
@@ -235,4 +267,24 @@ export interface GraphImportMap {
     kind: string,
     ref: string,
   ): { nodeId: string; creationSha: string } | undefined;
+}
+
+/**
+ * Repository for reading and writing initiative-level and objective-level
+ * sequencing edges. The six methods beyond the read-only query interface
+ * support the Story 4 use cases (add/remove edge, DAG queries).
+ */
+export interface SequencingRepository {
+  listInitiativeAfter(initiativeId: string): string[];
+  listObjectiveAfter(objectiveId: string): string[];
+  addInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  removeInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  listInitiativeDag(
+    projectId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  listObjectiveDag(
+    initiativeId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  addObjectiveAfter(objectiveId: string, dependencyId: string): void;
+  removeObjectiveAfter(objectiveId: string, dependencyId: string): void;
 }

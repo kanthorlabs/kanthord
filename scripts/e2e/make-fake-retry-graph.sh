@@ -11,7 +11,12 @@
 # `completed` (it produces no landing candidate), so the proof asserts the task
 # reaches `completed` — the shipped fake-runner contract exercised by
 # `--fail-transient` (see src/apps/cli/daemon.test.ts, 007.9 S2 end-to-end).
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 OUT="${1:?usage: make-fake-retry-graph.sh <out-dir>}"
 mkdir -p "$OUT"

@@ -46,10 +46,6 @@ export class ApproveObjective {
       throw new UnknownReferenceError("objective", objectiveId);
     }
 
-    if (objective.status === "integrated") {
-      return;
-    }
-
     if (objective.status !== "awaiting_confirmation") {
       throw new ObjectiveNotAwaitingConfirmationError(
         objectiveId,
@@ -98,13 +94,10 @@ export class ApproveObjective {
       const siblings = this.#store.listObjectives(objective.initiativeId);
       const allIntegrated = siblings.every((o) => o.status === "integrated");
       if (allIntegrated && initiative !== undefined) {
-        const updatedInitiative = transitionInitiative(
-          initiative,
-          "awaiting_pr",
-        );
+        const updatedInitiative = transitionInitiative(initiative, "landed");
         this.#store.saveInitiative(updatedInitiative);
         this.#feed.append(
-          newEvent("initiative.awaiting_pr", {
+          newEvent("initiative.landed", {
             initiativeId: objective.initiativeId,
           }),
         );

@@ -9,7 +9,12 @@
 # Usage:  scripts/e2e/e2e-smoke-todo.sh <path-to-todo.mjs> [port]
 #   e.g.  git -C <mirror> show HEAD:src/todo.mjs > /tmp/todo.mjs
 #         scripts/e2e/e2e-smoke-todo.sh /tmp/todo.mjs
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 MJS="${1:?usage: e2e-smoke-todo.sh <path-to-todo.mjs> [port]}"
 PORT="${2:-3999}"

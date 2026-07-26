@@ -1,4 +1,61 @@
+import { createHash } from "node:crypto";
+
 import type { Migration } from "./migrate.ts";
+
+/**
+ * FROZEN snapshot of `canonicalTask` as it stood at schema version 20 — status
+ * still part of the content hash. Used by migration 21 to recompute what a
+ * stored `creation_sha` would have been, so status-only drift can be told apart
+ * from genuine content drift. Never edit: it describes the past, not the present.
+ */
+export function canonicalTaskV20(t: {
+  title: string;
+  instructions: string;
+  ac: string[];
+  agent: string;
+  verification: string[] | undefined;
+  dependencies: string[];
+  objectiveId: string;
+  status: string;
+}): string {
+  return JSON.stringify({
+    title: t.title,
+    instructions: t.instructions,
+    ac: t.ac,
+    agent: t.agent,
+    verification: t.verification ?? null,
+    dependencies: [...t.dependencies].sort(),
+    objectiveId: t.objectiveId,
+    status: t.status,
+  });
+}
+
+/**
+ * FROZEN snapshot of `canonicalTask` as of migration 21 (EPIC 007.18: `status`
+ * removed). Migrations must be immutable, so this must never be edited to track
+ * later changes to `src/domain/sha.ts` — a future change to the canonical form
+ * gets its own migration with its own snapshot. Deliberately not imported from
+ * domain/, which no migration does.
+ */
+export function canonicalTaskV21(t: {
+  title: string;
+  instructions: string;
+  ac: string[];
+  agent: string;
+  verification: string[] | undefined;
+  dependencies: string[];
+  objectiveId: string;
+}): string {
+  return JSON.stringify({
+    title: t.title,
+    instructions: t.instructions,
+    ac: t.ac,
+    agent: t.agent,
+    verification: t.verification ?? null,
+    dependencies: [...t.dependencies].sort(),
+    objectiveId: t.objectiveId,
+  });
+}
 
 /**
  * The ordered migration registry. Later epics append their migrations here —
@@ -378,5 +435,246 @@ INSERT INTO events_new6 (id, type, taskId, payload, objectiveId, initiativeId)
 DROP TABLE events;
 ALTER TABLE events_new6 RENAME TO events;
 `),
+  },
+  {
+    version: 17,
+    name: "007.15-s2-initiative-landed-status",
+    // `initiatives` is an FK parent (objectives.initiativeId REFERENCES
+    // initiatives(id)); the DROP+RENAME rebuild trips FK enforcement even
+    // though the final state is consistent — disable it around this migration.
+    disableForeignKeys: true,
+    up: (db) =>
+      db.exec(`
+CREATE TABLE initiatives_new (
+  id        TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id),
+  name      TEXT NOT NULL,
+  paused    INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+  sha256    TEXT NOT NULL DEFAULT '',
+  status    TEXT NOT NULL DEFAULT 'building' CHECK (status IN ('building','landed')),
+  workspace TEXT
+);
+INSERT INTO initiatives_new (id, projectId, name, paused, sha256, status, workspace)
+  SELECT id, projectId, name, paused, sha256,
+    CASE WHEN status = 'awaiting_pr' THEN 'landed' ELSE status END,
+    workspace
+  FROM initiatives;
+DROP TABLE initiatives;
+ALTER TABLE initiatives_new RENAME TO initiatives;
+CREATE TABLE events_new7 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id)
+);
+INSERT INTO events_new7 (id, type, taskId, payload, objectiveId, initiativeId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new7 RENAME TO events;
+`),
+  },
+  {
+    version: 18,
+    name: "007.16-s4-event-repository-subject",
+    // `events` is not an FK parent (nothing references it), so no need to
+    // disable FK enforcement for this rebuild.
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new8 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id),
+  repositoryId TEXT
+);
+INSERT INTO events_new8 (id, type, taskId, payload, objectiveId, initiativeId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new8 RENAME TO events;
+`),
+  },
+  {
+    version: 19,
+    name: "007.16-s5-discarded-status",
+    // `initiatives` is an FK parent (objectives.initiativeId REFERENCES
+    // initiatives(id)); the DROP+RENAME rebuild trips FK enforcement even
+    // though the final state is consistent — disable it around this migration
+    // (same reasoning as the version-17 migration).
+    disableForeignKeys: true,
+    up: (db) =>
+      db.exec(`
+CREATE TABLE objectives_new (
+  id           TEXT PRIMARY KEY,
+  initiativeId TEXT NOT NULL REFERENCES initiatives(id),
+  name         TEXT NOT NULL,
+  sha256       TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'building'
+               CHECK (status IN ('building','awaiting_confirmation','conflict','integrated','discarded')),
+  commitOid    TEXT,
+  parentOid    TEXT
+);
+INSERT INTO objectives_new (id, initiativeId, name, sha256, status, commitOid, parentOid)
+  SELECT id, initiativeId, name, sha256, status, commitOid, parentOid FROM objectives;
+DROP TABLE objectives;
+ALTER TABLE objectives_new RENAME TO objectives;
+CREATE TABLE initiatives_new2 (
+  id        TEXT PRIMARY KEY,
+  projectId TEXT NOT NULL REFERENCES projects(id),
+  name      TEXT NOT NULL,
+  paused    INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+  sha256    TEXT NOT NULL DEFAULT '',
+  status    TEXT NOT NULL DEFAULT 'building' CHECK (status IN ('building','landed','discarded')),
+  workspace TEXT
+);
+INSERT INTO initiatives_new2 (id, projectId, name, paused, sha256, status, workspace)
+  SELECT id, projectId, name, paused, sha256, status, workspace FROM initiatives;
+DROP TABLE initiatives;
+ALTER TABLE initiatives_new2 RENAME TO initiatives;
+CREATE TABLE events_new9 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published',
+                 'objective.discarded','initiative.discarded'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id),
+  repositoryId TEXT
+);
+INSERT INTO events_new9 (id, type, taskId, payload, objectiveId, initiativeId, repositoryId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new9 RENAME TO events;
+`),
+  },
+  {
+    version: 20,
+    name: "007.17-s2-initiative-objective-dependencies",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE initiative_dependencies (
+  initiativeId TEXT NOT NULL REFERENCES initiatives(id),
+  dependency   TEXT NOT NULL REFERENCES initiatives(id),
+  PRIMARY KEY (initiativeId, dependency)
+);
+CREATE TABLE objective_dependencies (
+  objectiveId TEXT NOT NULL REFERENCES objectives(id),
+  dependency  TEXT NOT NULL REFERENCES objectives(id),
+  PRIMARY KEY (objectiveId, dependency)
+);
+`),
+  },
+  {
+    version: 21,
+    name: "007.18-s2-content-sha-restamp",
+    // First JS-looping migration in this registry: the task content digest is a
+    // sha256 over canonical JSON and cannot be computed in SQL.
+    //
+    // `tasks.sha256` is always rewritten to the new status-less digest — it is
+    // derived from live content by definition.
+    //
+    // `graph_import_map.creation_sha` is rewritten ONLY when the row's content
+    // has not drifted since the baseline was minted, tested by recomputing the
+    // old status-bearing digest at status "pending" (the status every baseline
+    // was created with). Rewriting unconditionally would erase real drift;
+    // rewriting nothing would leave every progressed task permanently drifted.
+    // Each package's row is judged on its own stored baseline.
+    //
+    // Objective and initiative shas are untouched: their canonical forms never
+    // included status.
+    up: (db) => {
+      type TaskRow = {
+        id: string;
+        objectiveId: string;
+        title: string;
+        agent: string;
+        instructions: string;
+        ac: string;
+        verification: string | null;
+      };
+      const sha = (canonical: string): string =>
+        createHash("sha256").update(canonical, "utf8").digest("hex");
+
+      const rows = db
+        .prepare(
+          "SELECT id, objectiveId, title, agent, instructions, ac, verification FROM tasks",
+        )
+        .all() as TaskRow[];
+      const depsStmt = db.prepare(
+        "SELECT dependency FROM task_dependencies WHERE taskId = ? ORDER BY position ASC",
+      );
+      const mapStmt = db.prepare(
+        "SELECT rowid AS rid, creation_sha FROM graph_import_map WHERE task_id = ?",
+      );
+      const updTask = db.prepare("UPDATE tasks SET sha256 = ? WHERE id = ?");
+      const updMap = db.prepare(
+        "UPDATE graph_import_map SET creation_sha = ? WHERE rowid = ?",
+      );
+
+      for (const row of rows) {
+        const deps = (
+          depsStmt.all(row.id) as Array<{ dependency: string }>
+        ).map((d) => d.dependency);
+        const fields = {
+          title: row.title,
+          instructions: row.instructions,
+          ac: JSON.parse(row.ac) as string[],
+          agent: row.agent,
+          verification:
+            row.verification != null
+              ? (JSON.parse(row.verification) as string[])
+              : undefined,
+          dependencies: deps,
+          objectiveId: row.objectiveId,
+        };
+        const newSha = sha(canonicalTaskV21(fields));
+        // What `creation_sha` would hold if content never changed since import.
+        const undriftedBaseline = sha(
+          canonicalTaskV20({ ...fields, status: "pending" }),
+        );
+
+        updTask.run(newSha, row.id);
+
+        const mapRows = mapStmt.all(row.id) as Array<{
+          rid: number;
+          creation_sha: string;
+        }>;
+        for (const m of mapRows) {
+          if (m.creation_sha === undriftedBaseline) updMap.run(newSha, m.rid);
+          // else: genuine content drift — leave the baseline so it still
+          // classifies `drifted` on the next apply.
+        }
+      }
+    },
   },
 ];

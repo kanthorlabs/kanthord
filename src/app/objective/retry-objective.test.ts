@@ -5,9 +5,13 @@ import {
   ObjectiveNotRetryableError,
 } from "./retry-objective.ts";
 import type { Objective, Initiative } from "../../domain/initiative.ts";
+import type { Task } from "../../domain/task.ts";
 import { newEvent } from "../../domain/event.ts";
 import type { Event } from "../../domain/event.ts";
-import { UnknownReferenceError } from "../errors.ts";
+import {
+  UnknownReferenceError,
+  ObjectiveNotAwaitingConfirmationError,
+} from "../errors.ts";
 
 // ---------------------------------------------------------------------------
 // Narrow interface the use case depends on
@@ -19,6 +23,8 @@ interface ObjectiveStore {
   getInitiative(initiativeId: string): Initiative | undefined;
   saveObjective(objective: Objective): void;
   resolveHomeDir(initiativeId: string): string;
+  listTasksByObjective(objectiveId: string): Task[];
+  saveTask(task: Task): void;
 }
 
 // ---------------------------------------------------------------------------
@@ -28,11 +34,18 @@ interface ObjectiveStore {
 class FakeObjectiveStore implements ObjectiveStore {
   readonly #objectives: Objective[];
   readonly #initiative: Initiative | undefined;
+  readonly #tasks: Task[];
   readonly savedObjectives: Objective[] = [];
+  readonly savedTasks: Task[] = [];
 
-  constructor(objectives: Objective[], initiative?: Initiative) {
+  constructor(
+    objectives: Objective[],
+    initiative?: Initiative,
+    tasks: Task[] = [],
+  ) {
     this.#objectives = objectives;
     this.#initiative = initiative;
+    this.#tasks = tasks;
   }
 
   getObjective(id: string): Objective | undefined {
@@ -53,6 +66,14 @@ class FakeObjectiveStore implements ObjectiveStore {
 
   resolveHomeDir(_initiativeId: string): string {
     return "/home/init-1.git";
+  }
+
+  listTasksByObjective(objectiveId: string): Task[] {
+    return this.#tasks.filter((t) => t.objectiveId === objectiveId);
+  }
+
+  saveTask(task: Task): void {
+    this.savedTasks.push(task);
   }
 }
 
@@ -160,6 +181,64 @@ test("execute refuses retry on a non-tip integrated objective, guiding to a corr
       );
       return true;
     },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// B3.2 (review blocker fix) — RetryObjective now owns the retry-eligibility
+// guard: a non-retryable status (only `awaiting_confirmation`/`conflict` are
+// retryable, per domain `canRetryObjective`) throws
+// ObjectiveNotAwaitingConfirmationError instead of silently no-oping. This
+// replaces the dead fallthrough Story 03 A's defect class also hit.
+// ---------------------------------------------------------------------------
+
+test("execute throws ObjectiveNotAwaitingConfirmationError for a non-retryable status (building) instead of silently no-oping (B3.2)", async () => {
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "building",
+  };
+  const store = new FakeObjectiveStore([OBJ]);
+  const useCase = new RetryObjective(store);
+
+  await assert.rejects(
+    () => useCase.execute({ objectiveId: OBJ.id }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof ObjectiveNotAwaitingConfirmationError,
+        `must be ObjectiveNotAwaitingConfirmationError; got: ${(err as Error).constructor.name}`,
+      );
+      assert.equal(err.objectiveId, OBJ.id);
+      assert.equal(err.status, "building");
+      return true;
+    },
+  );
+  assert.equal(
+    store.savedObjectives.length,
+    0,
+    "a rejected retry must not save the objective",
+  );
+});
+
+test("execute on a conflict objective without the resolution dependency set (broker/workspaces/gate/feed/uow) stays a no-op (unchanged)", async () => {
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "STALE_OID",
+    parentOid: "OLD_TIP",
+  };
+  const store = new FakeObjectiveStore([OBJ]);
+  const useCase = new RetryObjective(store);
+
+  await useCase.execute({ objectiveId: OBJ.id });
+
+  assert.equal(
+    store.savedObjectives.length,
+    0,
+    "a conflict objective with no resolution deps must not be saved",
   );
 });
 
@@ -275,5 +354,136 @@ test("execute resolves a conflict objective when the gate fails: stays conflict,
     feed.events.some((e) => e.type === "objective.awaiting_confirmation"),
     false,
     "must not surface awaiting_confirmation when the gate failed",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// B5 regression — `--note` must NOT re-queue tasks (no `failed->pending`
+// transition invented). It only writes `note` onto every non-terminal task
+// of the objective (status untouched); terminal tasks (`completed`,
+// `discarded`) are left untouched; with no `--note`, nothing is rewritten.
+// ---------------------------------------------------------------------------
+
+function makeTask(overrides: Partial<Task>): Task {
+  return {
+    id: "task-a",
+    objectiveId: "obj-a",
+    title: "do the thing",
+    status: "failed",
+    dependencies: [],
+    ...overrides,
+  };
+}
+
+test("execute resolves a conflict objective with a note: writes the note onto every non-terminal task without changing status; completed/discarded tasks are untouched (B5 regression)", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "STALE_OID",
+    parentOid: "OLD_TIP",
+  };
+  const taskFailed = makeTask({ id: "task-failed", status: "failed" });
+  const taskPending = makeTask({ id: "task-pending", status: "pending" });
+  const taskCompleted = makeTask({ id: "task-completed", status: "completed" });
+  const taskDiscarded = makeTask({ id: "task-discarded", status: "discarded" });
+  const store = new FakeObjectiveStore([OBJ], initiative, [
+    taskFailed,
+    taskPending,
+    taskCompleted,
+    taskDiscarded,
+  ]);
+  const broker = new FakeBroker("NEW_TIP");
+  const squasher = new FakeSquasher("RESQUASHED_OID");
+  const gate = new FakeGate({ passed: true });
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await useCase.execute({ objectiveId: OBJ.id, note: "guidance" });
+
+  const savedFailed = store.savedTasks.find((t) => t.id === "task-failed");
+  assert.ok(savedFailed, "the failed task must have the note written onto it");
+  assert.equal(
+    savedFailed!.status,
+    "failed",
+    "the failed task's status must NOT be re-queued to pending",
+  );
+  assert.equal(savedFailed!.note, "guidance");
+
+  const savedPending = store.savedTasks.find((t) => t.id === "task-pending");
+  assert.ok(savedPending, "a non-terminal pending task must also get the note");
+  assert.equal(savedPending!.status, "pending");
+  assert.equal(savedPending!.note, "guidance");
+
+  assert.ok(
+    !store.savedTasks.some((t) => t.id === "task-completed"),
+    "a completed (terminal) task must not be touched",
+  );
+  assert.ok(
+    !store.savedTasks.some((t) => t.id === "task-discarded"),
+    "a discarded (terminal) task must not be touched",
+  );
+});
+
+test("execute resolves a conflict objective without a note: no task is rewritten at all (B5 regression)", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "STALE_OID",
+    parentOid: "OLD_TIP",
+  };
+  const taskFailed = makeTask({
+    id: "task-failed",
+    status: "failed",
+    note: "prior",
+  });
+  const taskPending = makeTask({ id: "task-pending", status: "pending" });
+  const store = new FakeObjectiveStore([OBJ], initiative, [
+    taskFailed,
+    taskPending,
+  ]);
+  const broker = new FakeBroker("NEW_TIP");
+  const squasher = new FakeSquasher("RESQUASHED_OID");
+  const gate = new FakeGate({ passed: true });
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await useCase.execute({ objectiveId: OBJ.id });
+
+  assert.equal(
+    store.savedTasks.length,
+    0,
+    "with no --note, no task should be saved/rewritten",
   );
 });

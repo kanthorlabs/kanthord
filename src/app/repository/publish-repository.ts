@@ -12,7 +12,9 @@ import { isRepository } from "../../domain/resource.ts";
 import type { Resource } from "../../domain/resource.ts";
 import { PublishDivergedError } from "../../publication/port.ts";
 import type { RepositoryPublisher } from "../../publication/port.ts";
-import type { PublicationRepository } from "../../storage/port.ts";
+import type { PublicationRepository, UnitOfWork } from "../../storage/port.ts";
+import { newEvent } from "../../domain/event.ts";
+import type { EventFeed } from "../../events/port.ts";
 
 interface ResourceStore {
   getResource(id: string): Resource | undefined;
@@ -25,6 +27,7 @@ export interface PublishRepositoryInput {
 
 export type PublishOutcome =
   | { kind: "published"; repositoryId: string; remoteOID: string }
+  | { kind: "already_published"; repositoryId: string; remoteOID: string }
   | { kind: "diverged"; repositoryId: string; remoteOID: string }
   | { kind: "failed"; repositoryId: string; message: string; cause: unknown };
 
@@ -37,6 +40,8 @@ export class PublishRepository {
     homeDir: string,
     branch: string,
   ) => string | Promise<string>;
+  readonly #feed: EventFeed;
+  readonly #uow: UnitOfWork;
 
   constructor(
     store: ResourceStore,
@@ -47,12 +52,16 @@ export class PublishRepository {
       homeDir: string,
       branch: string,
     ) => string | Promise<string>,
+    feed: EventFeed,
+    uow: UnitOfWork,
   ) {
     this.#store = store;
     this.#publisher = publisher;
     this.#publicationRepository = publicationRepository;
     this.#resolveHomeDir = resolveHomeDir;
     this.#resolveTargetOID = resolveTargetOID;
+    this.#feed = feed;
+    this.#uow = uow;
   }
 
   async execute(input: PublishRepositoryInput): Promise<PublishOutcome> {
@@ -70,10 +79,16 @@ export class PublishRepository {
     const homeDir = this.#resolveHomeDir(repositoryId);
     // Confirms the branch is landed locally before publishing; the port
     // itself re-reads the local tip when building the push (Story A).
-    await this.#resolveTargetOID(homeDir, branch);
-    const expectedRemoteOID =
-      this.#publicationRepository.getPublication(repositoryId, branch)
-        ?.remoteOID ?? null;
+    try {
+      await this.#resolveTargetOID(homeDir, branch);
+    } catch {
+      throw new UnknownReferenceError("branch", branch);
+    }
+    const previous = this.#publicationRepository.getPublication(
+      repositoryId,
+      branch,
+    );
+    const expectedRemoteOID = previous?.remoteOID ?? null;
 
     try {
       const result = await this.#publisher.publish({
@@ -83,11 +98,29 @@ export class PublishRepository {
         auth: resource.auth,
         expectedRemoteOID,
       });
-      this.#publicationRepository.setPublication(repositoryId, branch, {
-        state: "published",
-        remoteOID: result.remoteOID,
+      const isRealTransition = !(
+        previous?.state === "published" &&
+        previous.remoteOID === result.remoteOID
+      );
+      this.#uow.transaction(() => {
+        this.#publicationRepository.setPublication(repositoryId, branch, {
+          state: "published",
+          remoteOID: result.remoteOID,
+        });
+        if (isRealTransition) {
+          this.#feed.append(
+            newEvent("repository.published", {
+              repositoryId,
+              payload: { branch, remoteOID: result.remoteOID },
+            }),
+          );
+        }
       });
-      return { kind: "published", repositoryId, remoteOID: result.remoteOID };
+      return {
+        kind: isRealTransition ? "published" : "already_published",
+        repositoryId,
+        remoteOID: result.remoteOID,
+      };
     } catch (err) {
       if (err instanceof PublishDivergedError) {
         this.#publicationRepository.setPublication(repositoryId, branch, {

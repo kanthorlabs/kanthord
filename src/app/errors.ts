@@ -7,6 +7,10 @@ export type { TaskStatus } from "../domain/task.ts";
 // EmbeddedCredentialError lives in domain; re-exported here so apps/ can
 // catch it without importing domain directly.
 export { EmbeddedCredentialError } from "../domain/resource.ts";
+export {
+  SequencingLockedError,
+  SequencingScopeError,
+} from "../domain/sequencing.ts";
 // Agent errors are owned by the agent-runner port; re-exported here so
 // `apps/` (which may not import adapter ports directly) can reference them.
 export { UnknownAgentError } from "../agent-runner/port.ts";

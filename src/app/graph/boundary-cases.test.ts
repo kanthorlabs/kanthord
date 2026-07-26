@@ -27,6 +27,7 @@ import type {
   GraphImportMap,
   ProjectRepository,
   CasResult,
+  TaskCasResult,
 } from "../../storage/port.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import type { Task } from "../../domain/task.ts";
@@ -67,7 +68,6 @@ const TASK_DB_OBJ_SHA = sha256(
     verification: null,
     dependencies: [],
     objectiveId: DB_OBJ_ONLY_ID,
-    status: "pending",
   }),
 );
 
@@ -190,6 +190,7 @@ class FakeBCTaskRepository implements TaskRepository {
   compareAndApply(
     _id: string,
     _sha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -198,14 +199,28 @@ class FakeBCTaskRepository implements TaskRepository {
       verification: string[] | null;
       dependencies: string[];
     },
-  ): CasResult {
-    return { status: "conflict", currentSha: "" };
+  ): TaskCasResult {
+    return {
+      status: "conflict",
+      currentSha: "",
+      currentStatus: "pending",
+      reason: "sha",
+    };
   }
   conditionalReparent(_id: string, _sha: string, _objId: string): CasResult {
     return { status: "conflict", currentSha: "" };
   }
-  conditionalDeleteTask(_id: string, _sha: string): CasResult {
-    return { status: "conflict", currentSha: "" };
+  conditionalDeleteTask(
+    _id: string,
+    _sha: string,
+    _expectedStatus: string,
+  ): TaskCasResult {
+    return {
+      status: "conflict",
+      currentSha: "",
+      currentStatus: "pending",
+      reason: "sha",
+    };
   }
 }
 
@@ -409,7 +424,7 @@ describe("Story 09 T2 — task with DB-persisted objective absent from package",
     const manifest: ExportManifest = {
       initiativeId: INIT_ID,
       packageId: PKG_ID,
-      formatVersion: 1,
+      formatVersion: 3,
       digestAlgorithm: "sha256",
       nodes: {
         [INIT_ID]: INIT_SHA,
@@ -495,7 +510,7 @@ describe("Story 09 T2 — unknown objectiveRef (neither package nor DB)", () => 
     const manifest: ExportManifest = {
       initiativeId: INIT_ID,
       packageId: PKG_ID,
-      formatVersion: 1,
+      formatVersion: 3,
       digestAlgorithm: "sha256",
       nodes: { [INIT_ID]: INIT_SHA },
       files: [INIT_ID],
@@ -569,7 +584,7 @@ describe("Story 09 T2 — dep ULID from a different initiative", () => {
     const manifest: ExportManifest = {
       initiativeId: INIT_ID,
       packageId: PKG_ID,
-      formatVersion: 1,
+      formatVersion: 3,
       digestAlgorithm: "sha256",
       nodes: { [INIT_ID]: INIT_SHA },
       files: [INIT_ID],

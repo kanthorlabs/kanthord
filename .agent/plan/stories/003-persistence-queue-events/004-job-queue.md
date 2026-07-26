@@ -12,8 +12,8 @@ policy decided and written down.
 ## Acceptance Criteria
 
 - `src/queue/port.ts`: `JobQueue { enqueue(taskId: string): boolean;
-  claim(): ClaimedJob | undefined }`, `ClaimedJob { id: string; taskId:
-  string }`. `enqueue` returns `true` when a new `queued` job row was
+claim(): ClaimedJob | undefined }`, `ClaimedJob { id: string; taskId:
+string }`. `enqueue` returns `true` when a new `queued` job row was
   inserted, `false` on the idempotent no-op — EPIC 005 emits `task.ready`
   exactly once per actual insertion (amended for EPIC 005, Ulrich,
   2026-07-16).

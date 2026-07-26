@@ -116,14 +116,24 @@ test(
     assert.throws(
       () => {
         uow.transaction(() => {
-          const resultA = repo.compareAndApply(taskA.id, preA, specA);
+          const resultA = repo.compareAndApply(
+            taskA.id,
+            preA,
+            "pending",
+            specA,
+          );
           assert.equal(
             resultA.status,
             "applied",
             "compareAndApply on task A should succeed inside txn",
           );
 
-          const resultB = repo.compareAndApply(taskB.id, preB, specB);
+          const resultB = repo.compareAndApply(
+            taskB.id,
+            preB,
+            "pending",
+            specB,
+          );
           assert.equal(
             resultB.status,
             "applied",

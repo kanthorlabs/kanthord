@@ -55,6 +55,12 @@ BLOCKER vs SUGGESTION with an `action:` tag.
   simpler equivalent when flagging.
 - **AC coverage.** Every Story acceptance criterion is covered by a test or a
   cited proof. A gap is a BLOCKER (`action:YES` when the fix is mechanical).
+- **Spec-directive conformance.** Where the EPIC or Story states a choice _and
+  its rationale_ ("required is deliberate — the type checker then enumerates
+  every construction site"), the implementation matches it. A weakened type
+  (spec-required field made optional) is a BLOCKER `action:YES`, even when it
+  compiles. Check every such directive explicitly; it will not show up as a
+  test failure.
 - **Verification Gate (full — Gates + Proof).** Run the EPIC's `## Verification
 Gate` end-to-end from the working root, **project-wide** (not scoped to the
   changed files — a change here can break a file outside the diff):

@@ -13,7 +13,7 @@ program, not beside it.
 
 ## Verification Gate
 
-Gates:  `npm run typecheck && npm test`
+Gates: `npm run typecheck && npm test`
 Proof:
 
 ```bash

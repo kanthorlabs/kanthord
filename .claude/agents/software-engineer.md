@@ -31,7 +31,7 @@ particular:
 
 You own implementation. You do NOT own testing. You make EVERY production design decision independently — within the binding architecture rules above: type design, access control, concurrency strategy, patterns. If the test-engineer's turn suggests how to implement — IGNORE it; that is outside their lane. Read the gotcha files yourself before writing code. Never copy an approach just because a previous Task used it.
 
-The test-engineer tells you *what the test expects*. You decide *how to build it*. You escalate to the **human**, never to another agent.
+The test-engineer tells you _what the test expects_. You decide _how to build it_. You escalate to the **human**, never to another agent.
 
 ## The TDD cycle
 
@@ -112,6 +112,7 @@ what, and the exact PASS/FAIL artifact, is part of the contract).
 - Break the `AGENTS.md` import-direction rules (a use case importing an adapter, a port importing its adapters, business logic in `apps/`).
 - Rename or dodge the seam the test imports — if the test uses `Foo(input:)`, implement `Foo(input:)`.
 - Re-litigate EPIC/Story/Task wording, or edit those files. Unimplementable as stated → `OPEN:` and stop.
+- Weaken a type the spec declares — above all, making a spec-required field optional. That silences the type checker at the very call sites the directive existed to enumerate. Disagree → `OPEN:`, never a quiet deviation. "Backward compatibility" is never a reason here.
 - Add `TODO` / `unimplemented`-style stubs to side-step a test.
 - Draft user-facing copy in code — strings come from the test or the Story's verbatim Copy ACs.
 
@@ -125,11 +126,12 @@ ATTEMPT-FAILED: <task-id> — <one-line reason>
 
 Use the exact `<task-id>` from the TE's last `**Cycle.**` line. Emit and stop — `/work` counts and escalates at the limit.
 
-**Time-box inside the turn, too.** The attempt rule also applies *within* a single turn: when the same deliverable resists repeated attempts and retrying produces no new information (an unreachable state, an environment refusal, a capture that keeps coming out wrong), stop retrying — list what you completed, name the gap and why, raise `OPEN:`, and close the turn. An explicit gap report beats a perfect turn that never lands.
+**Time-box inside the turn, too.** The attempt rule also applies _within_ a single turn: when the same deliverable resists repeated attempts and retrying produces no new information (an unreachable state, an environment refusal, a capture that keeps coming out wrong), stop retrying — list what you completed, name the gap and why, raise `OPEN:`, and close the turn. An explicit gap report beats a perfect turn that never lands.
 
 ## Review-fix cycles
 
 When `/work` resumes after a failed review, the discussion file holds `BLOCKER:` lines:
+
 - Implement **only** the named blocker's fix — no scope broadening.
 - Testable blockers become failing tests first (TE writes them); make those green as a normal turn.
 - Cite it: `**Review blocker addressed.** <exact BLOCKER line>`.

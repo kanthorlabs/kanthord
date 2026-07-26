@@ -19,7 +19,7 @@ story already wired its slice; this consolidates the whole Proof).
 - Asserts: each create returns exit 0 + a single ULID line; `list task` shows
   `implement api` ready and `deploy` blocked (waiting: implement api), exit 0.
 - Re-arrange leg: `create task` (spike auth) → `add dependency --task <api>
-  --depends-on <prep>` → `list task` now shows `spike auth` ready and
+--depends-on <prep>` → `list task` now shows `spike auth` ready and
   `implement api` blocked (waiting: spike auth); then a cycle-closing
   `add dependency` → exit 1, named cycle error, graph unchanged.
 - Negative leg: `create task --objective <task-id>` → `WrongTypeReferenceError`,

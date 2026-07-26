@@ -146,6 +146,20 @@ test("failure semantics — failed task blocks dependents, daemon moves on, retr
     );
     assert.equal(bReadyEvts.length, 0, "B must never have a task.ready event");
 
+    // The persisted task_results.reason for A must be string-identical to the
+    // reason carried on the emitted task.failed event payload (Story 02
+    // regression — one value, two sinks, never divergent).
+    const persistedA = repo.getTaskResult(taskA.id);
+    assert.ok(
+      persistedA !== undefined,
+      "a task_results row must exist for the failed task",
+    );
+    assert.equal(
+      persistedA!.reason,
+      aFailedEvts[0]!.payload?.reason,
+      "persisted reason must be string-identical to the task.failed event reason",
+    );
+
     // Step 2: retry A — reset to pending, re-enqueue, then run until idle.
     const kindResolver = {
       resolveKind(id: string): string | undefined {

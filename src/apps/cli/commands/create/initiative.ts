@@ -14,17 +14,25 @@ export function buildCreateInitiativeCommand(
     .configureHelp({ commandUsage: () => "kanthord create initiative" })
     .requiredOption("--project <id>", "project ID for the new initiative")
     .requiredOption("--name <name>", "name for the new initiative")
+    .option(
+      "--after <id>",
+      "sequence this node after an existing one; repeat for each prerequisite",
+      (value: string, values: string[]) => (values.push(value), values),
+      [] as string[],
+    )
     .addHelpText(
       "after",
       "\nExample:\n  kanthord create initiative --project project-1 --name cli\n",
     )
-    .action(async (opts: { project: string; name: string }) => {
-      emitResult(
-        await runCreateInitiative(
-          { project: opts.project, name: opts.name },
-          deps.createInitiative,
-        ),
-        io,
-      );
-    });
+    .action(
+      async (opts: { project: string; name: string; after: string[] }) => {
+        emitResult(
+          await runCreateInitiative(
+            { project: opts.project, name: opts.name, after: opts.after },
+            deps.createInitiative,
+          ),
+          io,
+        );
+      },
+    );
 }

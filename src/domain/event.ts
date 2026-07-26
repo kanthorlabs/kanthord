@@ -22,9 +22,11 @@ export const EVENT_TYPES = [
   "objective.awaiting_confirmation",
   "objective.integrated",
   "objective.conflict",
-  "initiative.awaiting_pr",
-  "initiative.delivered",
+  "initiative.landed",
   "candidate.transplanted",
+  "repository.published",
+  "objective.discarded",
+  "initiative.discarded",
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
@@ -35,6 +37,7 @@ export interface Event {
   taskId?: string;
   objectiveId?: string;
   initiativeId?: string;
+  repositoryId?: string;
   payload?: Record<string, string>;
 }
 
@@ -44,6 +47,7 @@ export function newEvent(
     taskId?: string;
     objectiveId?: string;
     initiativeId?: string;
+    repositoryId?: string;
     payload?: Record<string, string>;
   },
 ): Event {
@@ -59,6 +63,9 @@ export function newEvent(
   }
   if (input.initiativeId !== undefined) {
     event.initiativeId = input.initiativeId;
+  }
+  if (input.repositoryId !== undefined) {
+    event.repositoryId = input.repositoryId;
   }
   if (input.payload !== undefined) {
     event.payload = input.payload;

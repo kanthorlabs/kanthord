@@ -28,7 +28,7 @@ file and passes plain data to the `CheckGraph` use case, which builds
   - unreadable file → exit 1, `error: invalid graph file: cannot read file`;
     YAML parse failure → `error: invalid graph file: invalid YAML`;
     wrong shape → `error: invalid graph file: tasks must be a list of
-    { id, dependencies? }`.
+{ id, dependencies? }`.
 - `node src/main.ts check graph --path <file>` prints `stdout` lines to stdout
   and `stderr` lines to stderr, exits with the returned code; the EPIC 001
   `status` command still works. Command grammar is verb-first `check graph`

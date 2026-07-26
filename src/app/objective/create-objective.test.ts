@@ -12,6 +12,10 @@ import {
   DuplicateNameError,
 } from "../errors.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
+import type { SequencingRepository } from "../../storage/sqlite/sqlite-sequencing-repository.ts";
+import type { Transactor } from "../../storage/port.ts";
+import { SequencingScopeError } from "../errors.ts";
+import { CycleError } from "../../domain/graph.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
@@ -162,6 +166,218 @@ describe("CreateObjective", () => {
         return true;
       },
     );
+  });
+});
+
+// --- Fakes for `after` tests ---
+
+interface SequencingRepositoryExtended extends SequencingRepository {
+  addObjectiveAfter(objectiveId: string, dependencyId: string): void;
+  addInitiativeAfter(initiativeId: string, dependencyId: string): void;
+  listObjectiveDag(
+    initiativeId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  listInitiativeDag(
+    projectId: string,
+  ): Array<{ id: string; dependencies: string[] }>;
+  removeObjectiveAfter(objectiveId: string, dependencyId: string): void;
+  removeInitiativeAfter(initiativeId: string, dependencyId: string): void;
+}
+
+class FakeSequencingRepo implements SequencingRepositoryExtended {
+  readonly addedCalls: Array<{
+    objectiveId: string;
+    dependencyId: string;
+  }> = [];
+  dag: Array<{ id: string; dependencies: string[] }> = [];
+
+  listObjectiveAfter(_id: string): string[] {
+    return [];
+  }
+  listInitiativeAfter(_id: string): string[] {
+    return [];
+  }
+  addObjectiveAfter(objectiveId: string, dependencyId: string): void {
+    this.addedCalls.push({ objectiveId, dependencyId });
+  }
+  addInitiativeAfter(_iid: string, _did: string): void {}
+  listObjectiveDag(
+    _iid: string,
+  ): Array<{ id: string; dependencies: string[] }> {
+    return this.dag;
+  }
+  listInitiativeDag(
+    _pid: string,
+  ): Array<{ id: string; dependencies: string[] }> {
+    return [];
+  }
+  removeObjectiveAfter(_oid: string, _did: string): void {}
+  removeInitiativeAfter(_iid: string, _did: string): void {}
+}
+
+class FakeTx implements Transactor {
+  runCount = 0;
+  run<T>(work: () => T): T {
+    this.runCount += 1;
+    return work();
+  }
+}
+
+// Pre-seeded objectives for after edge resolution
+const INIT_ID_AFTER = "01JZZZZZZZZZZZZZZZZZZZINA0";
+const EXISTING_OBJ_A = "01JZZZZZZZZZZZZZZZZZZZEXA0";
+const EXISTING_OBJ_B = "01JZZZZZZZZZZZZZZZZZZZEXB0";
+const EXISTING_OBJ_DIFF = "01JZZZZZZZZZZZZZZZZZZZEXC0";
+
+describe("CreateObjective with after", () => {
+  test("(12) after absent → behaviour identical to today (no sequencing call)", async () => {
+    const repo = new FakeInitiativeRepository();
+    repo.save({
+      id: INIT_ID_AFTER,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
+      name: "init",
+    });
+    const resolver = new MockReferenceResolver(
+      new Map([[INIT_ID_AFTER, "initiative"]]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    const tx = new FakeTx();
+    const uc = new CreateObjective(repo, resolver, sequencing, tx);
+    const id = await uc.execute({
+      initiativeId: INIT_ID_AFTER,
+      name: "alone",
+    });
+
+    assert.ok(id.length > 0, "returns an id");
+    assert.equal(sequencing.addedCalls.length, 0, "no after edges written");
+    assert.equal(tx.runCount, 0, "no transaction");
+  });
+
+  test("(13) after: [B, A, B] → deduped + sorted, addObjectiveAfter called twice with A then B", async () => {
+    const repo = new FakeInitiativeRepository();
+    repo.save({
+      id: INIT_ID_AFTER,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
+      name: "init",
+    });
+    repo.saveObjective({
+      id: EXISTING_OBJ_A,
+      initiativeId: INIT_ID_AFTER,
+      name: "obj-a",
+    });
+    repo.saveObjective({
+      id: EXISTING_OBJ_B,
+      initiativeId: INIT_ID_AFTER,
+      name: "obj-b",
+    });
+    const resolver = new MockReferenceResolver(
+      new Map([
+        [INIT_ID_AFTER, "initiative"],
+        [EXISTING_OBJ_A, "objective"],
+        [EXISTING_OBJ_B, "objective"],
+      ]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    sequencing.dag = [
+      { id: EXISTING_OBJ_A, dependencies: [] },
+      { id: EXISTING_OBJ_B, dependencies: [] },
+    ];
+    const tx = new FakeTx();
+    const uc = new CreateObjective(repo, resolver, sequencing, tx);
+
+    const id = await uc.execute({
+      initiativeId: INIT_ID_AFTER,
+      name: "new-obj",
+      after: [EXISTING_OBJ_B, EXISTING_OBJ_A, EXISTING_OBJ_B],
+    });
+
+    assert.equal(
+      sequencing.addedCalls.length,
+      2,
+      "two after edges written (deduped)",
+    );
+    assert.deepEqual(sequencing.addedCalls[0], {
+      objectiveId: id,
+      dependencyId: EXISTING_OBJ_A,
+    });
+    assert.deepEqual(sequencing.addedCalls[1], {
+      objectiveId: id,
+      dependencyId: EXISTING_OBJ_B,
+    });
+    assert.equal(tx.runCount, 1, "all writes in one transaction");
+  });
+
+  test("(14) after naming objective in different initiative → SequencingScopeError with scope 'initiative'", async () => {
+    const repo = new FakeInitiativeRepository();
+    repo.save({
+      id: INIT_ID_AFTER,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
+      name: "init",
+    });
+    repo.saveObjective({
+      id: EXISTING_OBJ_A,
+      initiativeId: INIT_ID_AFTER,
+      name: "obj-a",
+    });
+    repo.saveObjective({
+      id: EXISTING_OBJ_DIFF,
+      initiativeId: "01JZZZZZZZZZZZZZZZZZZZINX0",
+      name: "obj-diff",
+    });
+    const resolver = new MockReferenceResolver(
+      new Map([
+        [INIT_ID_AFTER, "initiative"],
+        [EXISTING_OBJ_A, "objective"],
+        [EXISTING_OBJ_DIFF, "objective"],
+      ]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    const tx = new FakeTx();
+    const uc = new CreateObjective(repo, resolver, sequencing, tx);
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          initiativeId: INIT_ID_AFTER,
+          name: "new-obj",
+          after: [EXISTING_OBJ_DIFF],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof SequencingScopeError);
+        assert.equal((err as SequencingScopeError).scope, "initiative");
+        return true;
+      },
+    );
+    assert.equal(sequencing.addedCalls.length, 0, "no edges written");
+  });
+
+  test("(15) after naming a non-existent id → UnknownReferenceError", async () => {
+    const repo = new FakeInitiativeRepository();
+    repo.save({
+      id: INIT_ID_AFTER,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
+      name: "init",
+    });
+    const resolver = new MockReferenceResolver(
+      new Map([[INIT_ID_AFTER, "initiative"]]),
+    );
+    const sequencing = new FakeSequencingRepo();
+    const tx = new FakeTx();
+    const uc = new CreateObjective(repo, resolver, sequencing, tx);
+
+    await assert.rejects(
+      () =>
+        uc.execute({
+          initiativeId: INIT_ID_AFTER,
+          name: "new-obj",
+          after: ["no-such-id"],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        return true;
+      },
+    );
+    assert.equal(sequencing.addedCalls.length, 0, "no edges written");
   });
 });
 

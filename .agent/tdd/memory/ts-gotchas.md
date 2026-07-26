@@ -15,7 +15,7 @@ verified during EPIC 001 planning on Node 24.12 with type stripping + ESM.
 
 - **Builtins use the `node:` prefix form.** `import { test } from "node:test"`,
   `import assert from "node:assert/strict"`, `import { DatabaseSync } from
-  "node:sqlite"`. The bare form (`"test"`) is not resolved the same way.
+"node:sqlite"`. The bare form (`"test"`) is not resolved the same way.
 
 - **Top-level `await` is fine in ESM.** No IIFE wrapper needed in `main.ts`.
 

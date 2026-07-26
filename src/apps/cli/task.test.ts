@@ -147,6 +147,7 @@ class FakeTaskRepository implements TaskRepository {
   compareAndApply(
     _id: string,
     _expectedSha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -161,7 +162,11 @@ class FakeTaskRepository implements TaskRepository {
   conditionalReparent(_id: string, _expectedSha: string, _objectiveId: string) {
     return { status: "applied" as const, freshSha: "" };
   }
-  conditionalDeleteTask(_id: string, _expectedSha: string) {
+  conditionalDeleteTask(
+    _id: string,
+    _expectedSha: string,
+    _expectedStatus: string,
+  ) {
     return { status: "applied" as const, freshSha: "" };
   }
 }
@@ -1200,5 +1205,36 @@ describe("runRejectTask", () => {
       `expected 'error:' prefix; got: ${result.stderr[0]}`,
     );
     assert.equal(result.stdout.length, 0, "no stdout on error");
+  });
+
+  // -------------------------------------------------------------------------
+  // Review blocker B2 (007.16) — RejectTask.execute resolves with
+  // { skipped: string[] } (the cascade's dependents left untouched because
+  // they were not `pending`); runRejectTask must surface those ids in the
+  // command output. contract.md §3: skipped dependents are "reported in the
+  // command output as skipped".
+  // -------------------------------------------------------------------------
+
+  test("runRejectTask --resolution discard: reports cascade-skipped dependents in the command output (B2)", async () => {
+    const skippedIds = [
+      "01JZZZZZZZZZZZZZZZZZZZSKIP001",
+      "01JZZZZZZZZZZZZZZZZZZZSKIP002",
+    ];
+    const uc = {
+      execute: async (): Promise<{ skipped: string[] } | undefined> => ({
+        skipped: skippedIds,
+      }),
+    };
+    const result = await runRejectTask(
+      { id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT", resolution: "discard" },
+      uc as unknown as Parameters<typeof runRejectTask>[1],
+    );
+    assert.equal(result.exitCode, 0, "exit 0 on success");
+    for (const skippedId of skippedIds) {
+      assert.ok(
+        result.stdout.some((line) => line.includes(skippedId)),
+        `expected skipped dependent ${skippedId} to be reported in the output; got: ${JSON.stringify(result.stdout)}`,
+      );
+    }
   });
 });

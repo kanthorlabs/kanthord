@@ -15,7 +15,7 @@ the wiring lesson encoded, as in EPIC 004 story 09.
   dispatch, temp `KANTHORD_DB`):
   - **Phase 1:** EPIC 004 Proof setup (project → repository → initiative →
     objective → tasks with dependencies) → `daemon run --runner fake
-    --until-idle` exits 0 → `list task --initiative` shows every task
+--until-idle` exits 0 → `list task --initiative` shows every task
     `completed` → `events --after 0` shows `ready → started → completed`
     per task, ids strictly ascending, dependency order respected
     (`implement api` completes before `deploy` starts).
@@ -23,7 +23,7 @@ the wiring lesson encoded, as in EPIC 004 story 09.
     0 → only the new task ran (previously completed tasks' event counts
     unchanged).
   - **Phase 3 (fresh DB):** re-run the setup → `daemon run --runner fake
-    --fail $TASK_DEPLOY --until-idle` exits non-zero → `deploy` is
+--fail $TASK_DEPLOY --until-idle` exits non-zero → `deploy` is
     `failed`, its dependents `pending`/blocked, the `task.failed` event
     carries the reason.
 

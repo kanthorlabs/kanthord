@@ -11,7 +11,7 @@ proven with two real connections, not mocks.
 
 ## Verification Gate
 
-Gates:  `npm run typecheck && npm test`
+Gates: `npm run typecheck && npm test`
 Proof:
 
 ```bash

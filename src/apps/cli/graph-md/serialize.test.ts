@@ -121,6 +121,29 @@ const CANONICAL_TASK_DEPS = [
   "",
 ].join("\n");
 
+/** Canonical bytes for an initiative with after (sorted). DEP1_ID < DEP2_ID lexicographically. */
+const CANONICAL_INIT_AFTER = [
+  "---",
+  "kind: initiative",
+  `id: ${INIT_ID}`,
+  "name: OAuth",
+  `after: [${DEP1_ID}, ${DEP2_ID}]`,
+  "---",
+  "",
+].join("\n");
+
+/** Canonical bytes for an objective with after (sorted). */
+const CANONICAL_OBJ_AFTER = [
+  "---",
+  "kind: objective",
+  `id: ${OBJ_ID}`,
+  `initiative: ${INIT_ID}`,
+  "name: Backend",
+  `after: [${DEP1_ID}, ${DEP2_ID}]`,
+  "---",
+  "",
+].join("\n");
+
 // ---------------------------------------------------------------------------
 // Helper: build a minimal package directory containing a given file
 // ---------------------------------------------------------------------------
@@ -215,6 +238,62 @@ describe("src/apps/cli/graph-md/serialize.ts", () => {
       serialized,
       CANONICAL_TASK_AUTHORED,
       `authored task round-trip failed.\nExpected:\n${CANONICAL_TASK_AUTHORED}\nGot:\n${serialized}`,
+    );
+  });
+
+  test("initiative after: serializes as sorted set — REVERSED input becomes sorted output", async () => {
+    const reversedAfterInit = [
+      "---",
+      "kind: initiative",
+      `id: ${INIT_ID}`,
+      "name: OAuth",
+      `after: [${DEP2_ID}, ${DEP1_ID}]`,
+      "---",
+      "",
+    ].join("\n");
+    const dir = await buildPkgDir({ "oauth.md": reversedAfterInit });
+    dirs.push(dir);
+    const pkg = await parseGraphPackage(dir);
+    const serialized = serializeNode(pkg.initiative);
+    assert.strictEqual(
+      serialized,
+      CANONICAL_INIT_AFTER,
+      `initiative after must be sorted in serialized output.\nExpected:\n${CANONICAL_INIT_AFTER}\nGot:\n${serialized}`,
+    );
+  });
+
+  test("objective after: serializes as sorted set — REVERSED input becomes sorted output", async () => {
+    const initMd = [
+      "---",
+      "kind: initiative",
+      `id: ${INIT_ID}`,
+      "name: OAuth",
+      "---",
+      "",
+    ].join("\n");
+    const reversedAfterObj = [
+      "---",
+      "kind: objective",
+      `id: ${OBJ_ID}`,
+      `initiative: ${INIT_ID}`,
+      "name: Backend",
+      `after: [${DEP2_ID}, ${DEP1_ID}]`,
+      "---",
+      "",
+    ].join("\n");
+    const dir = await buildPkgDir({
+      "oauth.md": initMd,
+      "backend/backend.md": reversedAfterObj,
+    });
+    dirs.push(dir);
+    const pkg = await parseGraphPackage(dir);
+    const obj = pkg.objectives[0];
+    assert.ok(obj, "objective must be parsed");
+    const serialized = serializeNode(obj);
+    assert.strictEqual(
+      serialized,
+      CANONICAL_OBJ_AFTER,
+      `objective after must be sorted in serialized output.\nExpected:\n${CANONICAL_OBJ_AFTER}\nGot:\n${serialized}`,
     );
   });
 

@@ -1,5 +1,9 @@
-import type { Objective } from "../../domain/initiative.ts";
+import type { Objective, ObjectiveStatus } from "../../domain/initiative.ts";
 import { UnknownReferenceError } from "../errors.ts";
+import {
+  unsatisfiedObjectiveEdges,
+  type UnsatisfiedEdge,
+} from "../../domain/sequencing.ts";
 
 interface ObjectiveSource {
   getObjective(id: string): Objective | undefined;
@@ -14,15 +18,23 @@ export interface GetObjectiveOutput {
   name: string;
   status: string;
   integrations: Array<{ repository: string; state: string }>;
+  after: string[];
+  waiting: UnsatisfiedEdge[];
 }
 
 export class GetObjective {
   readonly #objectives: ObjectiveSource;
   readonly #repos: RepositoryResolver;
+  readonly #sequencing?: { listObjectiveAfter(id: string): string[] };
 
-  constructor(objectives: ObjectiveSource, repos: RepositoryResolver) {
+  constructor(
+    objectives: ObjectiveSource,
+    repos: RepositoryResolver,
+    sequencing?: { listObjectiveAfter(id: string): string[] },
+  ) {
     this.#objectives = objectives;
     this.#repos = repos;
+    this.#sequencing = sequencing;
   }
 
   async execute(input: { id: string }): Promise<GetObjectiveOutput> {
@@ -36,6 +48,14 @@ export class GetObjective {
     );
     const status = objective.status ?? "building";
 
+    const after = this.#sequencing?.listObjectiveAfter(input.id) ?? [];
+    const afterWithStatus: Array<{ id: string; status?: ObjectiveStatus }> =
+      after.map((id) => ({
+        id,
+        status: this.#objectives.getObjective(id)?.status,
+      }));
+    const waiting = unsatisfiedObjectiveEdges(afterWithStatus);
+
     return {
       id: objective.id,
       name: objective.name,
@@ -44,6 +64,8 @@ export class GetObjective {
         repositoryId !== undefined
           ? [{ repository: repositoryId, state: status }]
           : [],
+      after,
+      waiting,
     };
   }
 }

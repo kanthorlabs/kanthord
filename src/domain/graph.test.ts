@@ -2,8 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   validateGraph,
+  validateDag,
   readiness,
   serialOrder,
+  dependentClosure,
   DuplicateTaskError,
   UnknownDependencyError,
   CycleError,
@@ -197,4 +199,83 @@ test("serialOrder: includes nodes regardless of status (full build order, not ju
   const nodes = [node("a", "completed", []), node("b", "pending", ["a"])];
   const order = serialOrder(nodes);
   assert.deepEqual(order, ["a", "b"]);
+});
+
+// ---------------------------------------------------------------------------
+// Story 05 (007.16) — dependentClosure (cascade discard)
+// ---------------------------------------------------------------------------
+
+test("dependentClosure: root with 4 direct dependents returns them in ascending id order, excluding root", () => {
+  const nodes = [
+    node("root", "failed", []),
+    node("d3", "pending", ["root"]),
+    node("d1", "pending", ["root"]),
+    node("d4", "pending", ["root"]),
+    node("d2", "pending", ["root"]),
+  ];
+  const closure = dependentClosure(nodes, "root");
+  assert.deepEqual(closure, ["d1", "d2", "d3", "d4"]);
+});
+
+test("dependentClosure: chain a→b→c returns [b, c] in visit order, excluding a", () => {
+  const nodes = [
+    node("a", "failed", []),
+    node("b", "pending", ["a"]),
+    node("c", "pending", ["b"]),
+  ];
+  const closure = dependentClosure(nodes, "a");
+  assert.deepEqual(closure, ["b", "c"]);
+});
+
+test("dependentClosure: a node with no dependents returns an empty array", () => {
+  const nodes = [node("a", "failed", []), node("b", "pending", [])];
+  const closure = dependentClosure(nodes, "a");
+  assert.deepEqual(closure, []);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 (007.17) — validateDag extraction
+// ---------------------------------------------------------------------------
+
+test("validateDag: throws DuplicateTaskError on duplicate id with plain {id,dependencies} (no status)", () => {
+  assert.throws(
+    () =>
+      validateDag([
+        { id: "a", dependencies: [] },
+        { id: "b", dependencies: [] },
+        { id: "a", dependencies: [] },
+      ]),
+    (err: unknown) => {
+      assert.ok(err instanceof DuplicateTaskError);
+      assert.equal(err.taskId, "a");
+      return true;
+    },
+  );
+});
+
+test("validateDag: throws UnknownDependencyError on unknown dep with plain {id,dependencies} (no status)", () => {
+  assert.throws(
+    () => validateDag([{ id: "a", dependencies: ["missing"] }]),
+    (err: unknown) => {
+      assert.ok(err instanceof UnknownDependencyError);
+      assert.equal(err.taskId, "a");
+      assert.equal(err.dependency, "missing");
+      return true;
+    },
+  );
+});
+
+test("validateDag: throws CycleError with path ['a','b','a'] for two-node cycle with plain {id,dependencies} (no status)", () => {
+  assert.throws(
+    () =>
+      validateDag([
+        { id: "a", dependencies: ["b"] },
+        { id: "b", dependencies: ["a"] },
+      ]),
+    (err: unknown) => {
+      assert.ok(err instanceof CycleError);
+      assert.deepEqual(err.path, ["a", "b", "a"]);
+      return true;
+    },
+  );
 });

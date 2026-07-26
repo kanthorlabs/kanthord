@@ -7,6 +7,7 @@ import type { Event } from "../../domain/event.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
 import { UnknownReferenceError } from "../errors.ts";
+import { ObjectiveNotAwaitingConfirmationError } from "../errors.ts";
 import { LandingCASMismatchError } from "../../landing/port.ts";
 
 const INIT_ID = "init-1";
@@ -190,7 +191,7 @@ test("execute throws when the objective is not awaiting_confirmation", async () 
   );
 });
 
-test("execute is a no-op success when the objective is already integrated", async () => {
+test("execute throws ObjectiveNotAwaitingConfirmationError (not a silent no-op) when the objective is already integrated (Story 03 A)", async () => {
   const objective = baseObjective({ status: "integrated" });
   const store = new FakeStore({
     objective,
@@ -200,12 +201,17 @@ test("execute is a no-op success when the objective is already integrated", asyn
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-1" });
+  await assert.rejects(
+    () => useCase.execute({ objectiveId: "obj-1" }),
+    (err: unknown) =>
+      err instanceof ObjectiveNotAwaitingConfirmationError &&
+      err.status === "integrated",
+  );
 
   assert.equal(
     broker.fetchCalls.length,
     0,
-    "already-integrated must not re-broker",
+    "already-integrated must not touch git before reporting the conflict",
   );
   assert.equal(
     store.savedObjectives.length,
@@ -284,7 +290,7 @@ test("execute moves the objective to conflict (no CAS attempt) when more than on
   assert.equal(conflictEvent?.objectiveId, "obj-1");
 });
 
-test("execute transitions the initiative to awaiting_pr and appends initiative.awaiting_pr when this was the last building objective to integrate (Story F delivery hook)", async () => {
+test("execute transitions the initiative to landed and appends initiative.landed when this was the last building objective to integrate (Story F delivery hook)", async () => {
   const objA = baseObjective({ id: "obj-a", status: "integrated" });
   const objB = baseObjective({ id: "obj-b" });
   const store = new FakeStore({
@@ -303,12 +309,15 @@ test("execute transitions the initiative to awaiting_pr and appends initiative.a
     1,
     "must persist the initiative status transition",
   );
-  assert.equal(store.savedInitiatives[0]?.status, "awaiting_pr");
+  assert.equal(store.savedInitiatives[0]?.status, "landed");
 
-  const awaitingPrEvent = feed.events.find(
-    (e) => e.type === "initiative.awaiting_pr",
+  const landedEvent = feed.events.find((e) => e.type === "initiative.landed");
+  assert.ok(landedEvent, "must append an initiative.landed event");
+  assert.equal(
+    feed.events.some((e) => (e.type as string) === "initiative.awaiting_pr"),
+    false,
+    "must never append the removed initiative.awaiting_pr event",
   );
-  assert.ok(awaitingPrEvent, "must append an initiative.awaiting_pr event");
 });
 
 test("execute does NOT transition the initiative when another sibling objective is still building (delivery hook only fires when ALL objectives are integrated)", async () => {
@@ -331,7 +340,7 @@ test("execute does NOT transition the initiative when another sibling objective 
     "must not touch initiative status while a sibling objective is still building",
   );
   assert.equal(
-    feed.events.some((e) => e.type === "initiative.awaiting_pr"),
+    feed.events.some((e) => e.type === "initiative.landed"),
     false,
   );
 });

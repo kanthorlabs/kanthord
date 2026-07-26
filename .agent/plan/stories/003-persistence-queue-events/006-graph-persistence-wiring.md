@@ -14,7 +14,7 @@ reuse.
 ## Acceptance Criteria
 
 - `StoreGraph.execute({ objectiveId, tasks: [{ id, title?,
-  dependencies? }] })` (plain data, same row shape as EPIC 002's
+dependencies? }] })` (plain data, same row shape as EPIC 002's
   `CheckGraph`; `id` is the caller's label): builds pending
   label-`GraphNode`s, runs `validateGraph` **first** (domain errors
   propagate; nothing is stored on failure), then creates real `Task`s via

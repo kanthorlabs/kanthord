@@ -14,7 +14,7 @@ export class SqliteEventFeed implements EventFeed {
       event.payload !== undefined ? JSON.stringify(event.payload) : null;
     this.#db
       .prepare(
-        "INSERT INTO events(id, type, taskId, payload, objectiveId, initiativeId) VALUES(?, ?, ?, ?, ?, ?)",
+        "INSERT INTO events(id, type, taskId, payload, objectiveId, initiativeId, repositoryId) VALUES(?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         event.id,
@@ -23,6 +23,7 @@ export class SqliteEventFeed implements EventFeed {
         payload,
         event.objectiveId ?? null,
         event.initiativeId ?? null,
+        event.repositoryId ?? null,
       );
   }
 
@@ -35,7 +36,7 @@ export class SqliteEventFeed implements EventFeed {
 
     const rows = this.#db
       .prepare(
-        "SELECT id, type, taskId, payload, objectiveId, initiativeId FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
+        "SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId FROM events WHERE id > ? ORDER BY id ASC LIMIT ?",
       )
       .all(cursor, effectiveLimit) as Array<{
       id: string;
@@ -44,6 +45,7 @@ export class SqliteEventFeed implements EventFeed {
       payload: string | null;
       objectiveId: string | null;
       initiativeId: string | null;
+      repositoryId: string | null;
     }>;
 
     return rows.map((r) => {
@@ -59,6 +61,9 @@ export class SqliteEventFeed implements EventFeed {
       }
       if (r.initiativeId !== null) {
         event.initiativeId = r.initiativeId;
+      }
+      if (r.repositoryId !== null) {
+        event.repositoryId = r.repositoryId;
       }
       if (r.payload !== null) {
         event.payload = JSON.parse(r.payload) as Record<string, string>;

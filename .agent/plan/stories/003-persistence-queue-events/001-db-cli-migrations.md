@@ -34,7 +34,7 @@ the real database. Opening the database no longer migrates; the skeleton
 - `openDatabase(path)` returns a `DatabaseSync` with parent dir created,
   `journal_mode=wal`, `foreign_keys=on`, `busy_timeout=5000`.
 - `migrate(db, migrations)` returns `{ version: number, applied:
-  Array<{ version: number, name: string }> }`; re-run returns
+Array<{ version: number, name: string }> }`; re-run returns
   `applied: []`.
 - `db migrate` stdout: one `applied: <version> <name>` line per applied
   migration, in order; nothing pending → single line `up to date`. Exit 0.

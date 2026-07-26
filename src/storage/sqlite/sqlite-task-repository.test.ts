@@ -14,8 +14,8 @@ import { SqliteGraphImportMap } from "./sqlite-graph-import-map.ts";
 import { SqliteUnitOfWork } from "./sqlite-unit-of-work.ts";
 import { sha256Hex, canonicalTask } from "./node-sha.ts";
 import { newId } from "../../domain/entity.ts";
-import type { Task } from "../../domain/task.ts";
-import type { CasResult } from "../port.ts";
+import { InvalidObjectiveIdError, type Task } from "../../domain/task.ts";
+import type { CasResult, TaskCasResult } from "../port.ts";
 
 function makeTempDb() {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-task-repo-test-"));
@@ -130,6 +130,106 @@ test("SqliteTaskRepository save with nonexistent dep throws FK error and leaves 
   assert.ok(loaded, "task row must exist after the partial save");
   // bad dep was not recorded
   assert.deepEqual(loaded!.dependencies, []);
+});
+
+/**
+ * EPIC 007.18 regression (human-B1-followup) — an `objectiveId` that names
+ * NO real objective (e.g. a package-local ref slug reaching this call
+ * unresolved) must fail loudly and readably, not surface as a raw SQLite
+ * `FOREIGN KEY constraint failed`. This is an EXISTENCE guard, not a shape
+ * guard: the repository has never required a strict ULID, so the check must
+ * reject on "no such objective row", never on "this string doesn't look like
+ * a ULID". The guard must run BEFORE issuing any write, so the row is never
+ * even partially persisted — unlike the sibling FK test above, where the
+ * task row IS persisted before the dependency insert fails.
+ */
+test("SqliteTaskRepository save with an objectiveId that names no existing objective throws InvalidObjectiveIdError and persists nothing", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const repo = new SqliteTaskRepository(db);
+
+  // A well-formed ULID-shaped id — proves the guard checks EXISTENCE, not
+  // format: this id is never saved as an objective, so it names nothing.
+  const unknownObjectiveId = newId();
+
+  const task: Task = {
+    id: newId(),
+    objectiveId: unknownObjectiveId,
+    title: "Task with unresolved objective ref",
+    status: "pending",
+    dependencies: [],
+  };
+
+  assert.throws(
+    () => repo.save(task),
+    (err: unknown) => {
+      if (!(err instanceof InvalidObjectiveIdError)) {
+        assert.fail(`expected InvalidObjectiveIdError, got ${String(err)}`);
+      }
+      assert.equal(err.objectiveId, unknownObjectiveId);
+      return true;
+    },
+    "an objectiveId naming no existing objective must be rejected with a typed error, not a raw FK crash",
+  );
+
+  assert.equal(
+    repo.get(task.id),
+    undefined,
+    "the task row must not be persisted when objectiveId is rejected",
+  );
+});
+
+/**
+ * EPIC 007.18 regression (human-B1-followup) — the counter-case: an
+ * `objectiveId` of ANY shape must succeed as long as it names an objective
+ * that genuinely exists. This pins the case a format check would have
+ * broken: `sqlite-task-repository.test.ts`'s own
+ * `listByInitiative` test builds objective ids like `"a-" + newId()` and
+ * persists them via `saveObjective` first — a non-ULID id is a legitimate
+ * existing row, and the guard must not reject it.
+ */
+test("SqliteTaskRepository save with a non-ULID objectiveId succeeds when that objective actually exists", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const projectId = newId();
+  const initiativeId = newId();
+  const syntheticObjectiveId = "a-" + newId();
+
+  projectRepo.save({ id: projectId, name: "Proj" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.saveObjective({
+    id: syntheticObjectiveId,
+    initiativeId,
+    name: "Obj",
+  });
+
+  const task: Task = {
+    id: newId(),
+    objectiveId: syntheticObjectiveId,
+    title: "Task against a synthetic-but-real objective id",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+
+  repo.save(task);
+
+  const loaded = repo.get(task.id);
+  assert.deepEqual(loaded, task);
 });
 
 test("SqliteTaskRepository saveAll succeeds when second task depends on first regardless of array order", () => {
@@ -942,7 +1042,6 @@ test("save stamps sha256 equal to sha256Hex(canonicalTask(...))", () => {
       verification: task.verification,
       dependencies: task.dependencies,
       objectiveId: task.objectiveId,
-      status: task.status,
     }),
   );
   assert.equal(readSha(db, task.id), expected);
@@ -990,7 +1089,6 @@ test("saveAll stamps sha256 on each row", () => {
       verification: taskA.verification,
       dependencies: taskA.dependencies,
       objectiveId: taskA.objectiveId,
-      status: taskA.status,
     }),
   );
   const expectedB = sha256Hex(
@@ -1002,7 +1100,6 @@ test("saveAll stamps sha256 on each row", () => {
       verification: taskB.verification,
       dependencies: taskB.dependencies,
       objectiveId: taskB.objectiveId,
-      status: taskB.status,
     }),
   );
   assert.equal(readSha(db, taskA.id), expectedA);
@@ -1056,7 +1153,6 @@ test("addDependency bumps sha256 to a different value matching the recomputed ag
       verification: task.verification,
       dependencies: [dep.id],
       objectiveId: task.objectiveId,
-      status: task.status,
     }),
   );
   assert.equal(shaAfterAdd, expectedAfterAdd);
@@ -1109,13 +1205,12 @@ test("removeDependency bumps sha256 back after removing the dependency", () => {
       verification: task.verification,
       dependencies: [],
       objectiveId: task.objectiveId,
-      status: task.status,
     }),
   );
   assert.equal(shaWithoutDep, expectedWithoutDep);
 });
 
-test("save after status transition produces a different sha256 than the pending token", () => {
+test("save after a status-only transition leaves sha256 unchanged — status is not content", () => {
   const { db, dir } = makeTempDb();
   after(() => {
     db.close();
@@ -1142,21 +1237,12 @@ test("save after status transition produces a different sha256 than the pending 
   repo.save(runningTask);
   const shaRunning = readSha(db, task.id);
 
-  assert.notEqual(shaRunning, shaPending);
+  assert.equal(shaRunning, shaPending);
 
-  const expectedRunning = sha256Hex(
-    canonicalTask({
-      title: runningTask.title,
-      instructions: runningTask.instructions ?? "",
-      ac: runningTask.ac ?? [],
-      agent: runningTask.agent ?? "generic@1",
-      verification: runningTask.verification,
-      dependencies: runningTask.dependencies,
-      objectiveId: runningTask.objectiveId,
-      status: runningTask.status,
-    }),
-  );
-  assert.equal(shaRunning, expectedRunning);
+  const runningTask2: Task = { ...task, status: "completed" };
+  repo.save(runningTask2);
+  const shaCompleted = readSha(db, task.id);
+  assert.equal(shaCompleted, shaPending);
 });
 
 // ---------------------------------------------------------------------------
@@ -1186,14 +1272,19 @@ test("compareAndApply with matching sha applies new spec+deps and returns applie
   repo.save(task);
   const originalSha = readSha(db, task.id);
 
-  const result: CasResult = repo.compareAndApply(task.id, originalSha, {
-    title: "Updated title",
-    instructions: "updated instructions",
-    ac: ["updated ac"],
-    agent: "generic@1",
-    verification: null,
-    dependencies: [],
-  });
+  const result: TaskCasResult = repo.compareAndApply(
+    task.id,
+    originalSha,
+    "pending",
+    {
+      title: "Updated title",
+      instructions: "updated instructions",
+      ac: ["updated ac"],
+      agent: "generic@1",
+      verification: null,
+      dependencies: [],
+    },
+  );
 
   assert.equal(result.status, "applied");
   assert.ok("freshSha" in result);
@@ -1231,9 +1322,10 @@ test("compareAndApply with stale sha returns conflict+currentSha and row is unch
   repo.save(task);
   const realSha = readSha(db, task.id);
 
-  const result: CasResult = repo.compareAndApply(
+  const result: TaskCasResult = repo.compareAndApply(
     task.id,
     "staleSha00000000000000000000000000000000000000000000000000000000",
+    "pending",
     {
       title: "Should not apply",
       instructions: "should not apply",
@@ -1302,7 +1394,7 @@ test("compareAndApply replacing deps makes fresh sha equal recomputed aggregate 
   const sha0 = readSha(db, task.id);
 
   // Apply with deps in REVERSED order — CAS result sha must equal SET-sorted recompute
-  const result: CasResult = repo.compareAndApply(task.id, sha0, {
+  const result: TaskCasResult = repo.compareAndApply(task.id, sha0, "pending", {
     title: "Dep task",
     instructions: "with deps",
     ac: ["ac"],
@@ -1324,7 +1416,6 @@ test("compareAndApply replacing deps makes fresh sha equal recomputed aggregate 
       verification: undefined,
       dependencies: sortedDeps,
       objectiveId,
-      status: "pending",
     }),
   );
   assert.equal(freshSha, expected);
@@ -1431,7 +1522,11 @@ test("conditionalDeleteTask deletes on match and graph_import_map cascades", () 
   // seed an import-map row for this task
   importMap.reserve("pkg1", "task", "my-ref", task.id, sha);
 
-  const result: CasResult = repo.conditionalDeleteTask(task.id, sha);
+  const result: TaskCasResult = repo.conditionalDeleteTask(
+    task.id,
+    sha,
+    "pending",
+  );
 
   assert.equal(result.status, "applied");
   assert.equal(repo.get(task.id), undefined);
@@ -1464,15 +1559,282 @@ test("conditionalDeleteTask conflicts on stale sha and row is kept", () => {
   repo.save(task);
   const realSha = readSha(db, task.id);
 
-  const result: CasResult = repo.conditionalDeleteTask(
+  const result: TaskCasResult = repo.conditionalDeleteTask(
     task.id,
     "stale_sha_000000000000000000000000000000000000000000000000000000000",
+    "pending",
   );
 
   assert.equal(result.status, "conflict");
   assert.equal(
     (result as { status: "conflict"; currentSha: string }).currentSha,
     realSha,
+  );
+  assert.notEqual(repo.get(task.id), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 — explicit (sha, status) CAS predicate
+// ---------------------------------------------------------------------------
+
+test("compareAndApply with matching sha AND status applies and returns freshSha != expectedSha", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Predicate task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "before",
+    ac: ["ac"],
+  };
+  repo.save(task);
+  const originalSha = readSha(db, task.id);
+
+  const result: TaskCasResult = repo.compareAndApply(
+    task.id,
+    originalSha,
+    "pending",
+    {
+      title: "Predicate task updated",
+      instructions: "after",
+      ac: ["ac"],
+      agent: "generic@1",
+      verification: null,
+      dependencies: [],
+    },
+  );
+
+  assert.equal(result.status, "applied");
+  assert.ok("freshSha" in result);
+  assert.notEqual(
+    (result as { status: "applied"; freshSha: string }).freshSha,
+    originalSha,
+  );
+  assert.equal(repo.get(task.id)?.title, "Predicate task updated");
+});
+
+test("compareAndApply with matching sha but row status has advanced to running conflicts on status, title unchanged", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Race task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "before",
+    ac: ["ac"],
+  };
+  repo.save(task);
+  const sha = readSha(db, task.id);
+
+  // the daemon advances the row's status without changing content-affecting fields
+  repo.save({ ...task, status: "running" });
+
+  const result: TaskCasResult = repo.compareAndApply(task.id, sha, "pending", {
+    title: "Should not apply",
+    instructions: "should not apply",
+    ac: [],
+    agent: "generic@1",
+    verification: null,
+    dependencies: [],
+  });
+
+  assert.equal(result.status, "conflict");
+  assert.equal(
+    (result as { status: "conflict"; reason: string; currentStatus: string })
+      .reason,
+    "status",
+  );
+  assert.equal(
+    (result as { status: "conflict"; currentStatus: string }).currentStatus,
+    "running",
+  );
+  assert.equal(repo.get(task.id)?.title, "Race task");
+});
+
+test("compareAndApply with wrong sha but matching status conflicts on sha, row unchanged", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Sha guard task",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "before",
+    ac: ["ac"],
+  };
+  repo.save(task);
+
+  const result: TaskCasResult = repo.compareAndApply(
+    task.id,
+    "wrong0000000000000000000000000000000000000000000000000000000000",
+    "pending",
+    {
+      title: "Should not apply",
+      instructions: "should not apply",
+      ac: [],
+      agent: "generic@1",
+      verification: null,
+      dependencies: [],
+    },
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(
+    (result as { status: "conflict"; reason: string }).reason,
+    "sha",
+  );
+  assert.equal(repo.get(task.id)?.title, "Sha guard task");
+});
+
+test("conditionalDeleteTask with matching sha AND status deletes the row and its import-map row", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+  const importMap = new SqliteGraphImportMap(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Delete me predicate",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(task);
+  const sha = readSha(db, task.id);
+  importMap.reserve("pkg1", "task", "delete-me-ref", task.id, sha);
+
+  const result: TaskCasResult = repo.conditionalDeleteTask(
+    task.id,
+    sha,
+    "pending",
+  );
+
+  assert.equal(result.status, "applied");
+  assert.equal(repo.get(task.id), undefined);
+  assert.equal(importMap.lookup("pkg1", "task", "delete-me-ref"), undefined);
+});
+
+test("conditionalDeleteTask with matching sha but wrong status conflicts on status and keeps the row + its dependencies", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const dep: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Dep",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Guarded delete",
+    status: "pending",
+    dependencies: [dep.id],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(dep);
+  repo.save(task);
+  const sha = readSha(db, task.id);
+
+  repo.save({ ...task, status: "running" });
+
+  const result: TaskCasResult = repo.conditionalDeleteTask(
+    task.id,
+    sha,
+    "pending",
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(
+    (result as { status: "conflict"; reason: string }).reason,
+    "status",
+  );
+  const kept = repo.get(task.id);
+  assert.notEqual(kept, undefined);
+  assert.deepEqual(kept?.dependencies, [dep.id]);
+});
+
+test("conditionalDeleteTask with wrong sha conflicts on sha and keeps the row", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const { objectiveId } = seedHierarchy(db);
+  const repo = new SqliteTaskRepository(db);
+
+  const task: Task = {
+    id: newId(),
+    objectiveId,
+    title: "Sha-guarded delete",
+    status: "pending",
+    dependencies: [],
+    agent: "generic@1",
+    instructions: "",
+    ac: [],
+  };
+  repo.save(task);
+
+  const result: TaskCasResult = repo.conditionalDeleteTask(
+    task.id,
+    "wrong0000000000000000000000000000000000000000000000000000000000",
+    "pending",
+  );
+
+  assert.equal(result.status, "conflict");
+  assert.equal(
+    (result as { status: "conflict"; reason: string }).reason,
+    "sha",
   );
   assert.notEqual(repo.get(task.id), undefined);
 });

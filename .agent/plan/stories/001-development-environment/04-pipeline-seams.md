@@ -13,6 +13,7 @@ checks pass.
 
 **Action.** Create `.agent/tdd/memory/ts-gotchas.md` seeded with the verified
 pitfalls:
+
 - relative imports need explicit `.ts` extensions under type stripping;
 - `verbatimModuleSyntax` → `import type` required for type-only imports;
 - builtins imported via the `node:` prefix form;

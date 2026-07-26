@@ -1,0 +1,295 @@
+/**
+ * Story 05 (i) — RejectObjective use case (discard-only per B3/B3.3).
+ *
+ * Verify (05-terminal-discard-path.md): `discard` from each of `building` /
+ * `awaiting_confirmation` / `conflict` reaches `discarded`; `discard` from
+ * `integrated` throws. `RejectObjective` no longer accepts a `resolution`
+ * field or a `retry` path — routing between retry/discard is the CLI's job
+ * (see `src/apps/cli/objective.test.ts`), and the retry-from-non-retryable
+ * guard now lives on `RetryObjective` itself (see
+ * `src/app/objective/retry-objective.test.ts`).
+ */
+
+import { test, describe } from "node:test";
+import assert from "node:assert/strict";
+
+import { RejectObjective } from "./reject-objective.ts";
+import { ObjectiveNotAwaitingConfirmationError } from "../errors.ts";
+import type { Objective, Initiative } from "../../domain/initiative.ts";
+import type { Task } from "../../domain/task.ts";
+import type { Event } from "../../domain/event.ts";
+import type { EventFeed } from "../../events/port.ts";
+import type { UnitOfWork } from "../../storage/port.ts";
+
+const INI_ID = "01JZZZZZZZZZZZZZZZZZZZINIRO";
+const OBJ_ID = "01JZZZZZZZZZZZZZZZZZZZOBJRO";
+const TASK_PENDING = "01JZZZZZZZZZZZZZZZZZZZTPRO1";
+const TASK_FAILED = "01JZZZZZZZZZZZZZZZZZZZTFRO1";
+
+interface RejectObjectiveStore {
+  getObjective(id: string): Objective | undefined;
+  saveObjective(objective: Objective): void;
+  listObjectives(initiativeId: string): Objective[];
+  getInitiative(initiativeId: string): Initiative | undefined;
+  saveInitiative(initiative: Initiative): void;
+  listTasksByObjective(objectiveId: string): Task[];
+  saveTask(task: Task): void;
+}
+
+class MemStore implements RejectObjectiveStore {
+  readonly savedObjectives: Objective[] = [];
+  readonly savedInitiatives: Initiative[] = [];
+  readonly savedTasks: Task[] = [];
+  readonly #objectives: Map<string, Objective>;
+  readonly #initiatives: Map<string, Initiative>;
+  readonly #tasks: Map<string, Task>;
+
+  constructor(
+    objectives: Objective[],
+    initiatives: Initiative[],
+    tasks: Task[] = [],
+  ) {
+    this.#objectives = new Map(objectives.map((o) => [o.id, o]));
+    this.#initiatives = new Map(initiatives.map((i) => [i.id, i]));
+    this.#tasks = new Map(tasks.map((t) => [t.id, t]));
+  }
+
+  getObjective(id: string): Objective | undefined {
+    return this.#objectives.get(id);
+  }
+
+  saveObjective(objective: Objective): void {
+    this.#objectives.set(objective.id, objective);
+    this.savedObjectives.push(objective);
+  }
+
+  listObjectives(initiativeId: string): Objective[] {
+    return [...this.#objectives.values()].filter(
+      (o) => o.initiativeId === initiativeId,
+    );
+  }
+
+  getInitiative(initiativeId: string): Initiative | undefined {
+    return this.#initiatives.get(initiativeId);
+  }
+
+  saveInitiative(initiative: Initiative): void {
+    this.#initiatives.set(initiative.id, initiative);
+    this.savedInitiatives.push(initiative);
+  }
+
+  listTasksByObjective(objectiveId: string): Task[] {
+    return [...this.#tasks.values()].filter(
+      (t) => t.objectiveId === objectiveId,
+    );
+  }
+
+  saveTask(task: Task): void {
+    this.#tasks.set(task.id, task);
+    this.savedTasks.push(task);
+  }
+}
+
+class MemFeed implements EventFeed {
+  readonly events: Event[] = [];
+  append(event: Event): void {
+    this.events.push(event);
+  }
+  readAfter(_cursor: string, _limit?: number): Event[] {
+    return [];
+  }
+}
+
+class MemUow implements UnitOfWork {
+  transaction<T>(fn: () => T): T {
+    return fn();
+  }
+}
+
+function tasks(): Task[] {
+  return [
+    {
+      id: TASK_PENDING,
+      objectiveId: OBJ_ID,
+      title: "never ran",
+      status: "pending",
+      dependencies: [],
+    },
+    {
+      id: TASK_FAILED,
+      objectiveId: OBJ_ID,
+      title: "unachievable",
+      status: "failed",
+      dependencies: [],
+    },
+  ];
+}
+
+describe("RejectObjective — discard from building/awaiting_confirmation/conflict reaches discarded", () => {
+  for (const status of [
+    "building",
+    "awaiting_confirmation",
+    "conflict",
+  ] as const) {
+    test(`discard from ${status} reaches discarded, discards non-terminal tasks, emits objective.discarded`, async () => {
+      const objective: Objective = {
+        id: OBJ_ID,
+        initiativeId: INI_ID,
+        name: "O",
+        status,
+      };
+      const initiative: Initiative = {
+        id: INI_ID,
+        projectId: "proj-1",
+        name: "I",
+        status: "building",
+      };
+      const store = new MemStore([objective], [initiative], tasks());
+      const feed = new MemFeed();
+      const uc = new RejectObjective(store, feed, new MemUow());
+
+      await uc.execute({
+        objectiveId: OBJ_ID,
+        reason: "unachievable",
+      });
+
+      assert.equal(
+        store.getObjective(OBJ_ID)?.status,
+        "discarded",
+        `objective must be discarded from ${status}`,
+      );
+      assert.equal(
+        store.listTasksByObjective(OBJ_ID).find((t) => t.id === TASK_PENDING)
+          ?.status,
+        "discarded",
+        "pending task must be discarded",
+      );
+      assert.equal(
+        store.listTasksByObjective(OBJ_ID).find((t) => t.id === TASK_FAILED)
+          ?.status,
+        "discarded",
+        "failed task must be discarded",
+      );
+      const objDiscarded = feed.events.find(
+        (e) => e.type === "objective.discarded" && e.objectiveId === OBJ_ID,
+      );
+      assert.ok(
+        objDiscarded !== undefined,
+        "objective.discarded event must be appended",
+      );
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Review blocker S1 (007.16) — RejectObjective discards each `pending`/
+// `failed` task of the objective but currently emits no `task.discarded`
+// event for them; contract.md §7 requires each discarded task to emit
+// task.discarded with payload {reason: "cascade", origin: <originating id>}.
+// ---------------------------------------------------------------------------
+
+test("RejectObjective: discard emits task.discarded with {reason: cascade, origin} for every discarded task (S1, contract.md §7)", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INI_ID,
+    name: "O",
+    status: "building",
+  };
+  const initiative: Initiative = {
+    id: INI_ID,
+    projectId: "proj-1",
+    name: "I",
+    status: "building",
+  };
+  const store = new MemStore([objective], [initiative], tasks());
+  const feed = new MemFeed();
+  const uc = new RejectObjective(store, feed, new MemUow());
+
+  await uc.execute({
+    objectiveId: OBJ_ID,
+    reason: "unachievable",
+  });
+
+  for (const taskId of [TASK_PENDING, TASK_FAILED]) {
+    const discardedEvent = feed.events.find(
+      (e) => e.type === "task.discarded" && e.taskId === taskId,
+    );
+    assert.ok(
+      discardedEvent !== undefined,
+      `expected a task.discarded event for ${taskId}; got types: ${feed.events.map((e) => e.type).join(", ")}`,
+    );
+    assert.equal(
+      discardedEvent!.payload?.["reason"],
+      "cascade",
+      `task.discarded payload.reason must be "cascade" for ${taskId}`,
+    );
+    assert.equal(
+      discardedEvent!.payload?.["origin"],
+      OBJ_ID,
+      `task.discarded payload.origin must name the originating objective for ${taskId}`,
+    );
+  }
+});
+
+test("RejectObjective: discard from building rolls up a single-objective initiative to discarded", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INI_ID,
+    name: "O",
+    status: "building",
+  };
+  const initiative: Initiative = {
+    id: INI_ID,
+    projectId: "proj-1",
+    name: "I",
+    status: "building",
+  };
+  const store = new MemStore([objective], [initiative], tasks());
+  const feed = new MemFeed();
+  const uc = new RejectObjective(store, feed, new MemUow());
+
+  await uc.execute({ objectiveId: OBJ_ID });
+
+  assert.equal(
+    store.getInitiative(INI_ID)?.status,
+    "discarded",
+    "initiative must roll up to discarded when its sole objective discards",
+  );
+  const initDiscarded = feed.events.find(
+    (e) => e.type === "initiative.discarded" && e.initiativeId === INI_ID,
+  );
+  assert.ok(
+    initDiscarded !== undefined,
+    "initiative.discarded event must be appended",
+  );
+});
+
+test("RejectObjective: discard from integrated throws ObjectiveNotAwaitingConfirmationError", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INI_ID,
+    name: "O",
+    status: "integrated",
+  };
+  const initiative: Initiative = {
+    id: INI_ID,
+    projectId: "proj-1",
+    name: "I",
+    status: "building",
+  };
+  const store = new MemStore([objective], [initiative]);
+  const feed = new MemFeed();
+  const uc = new RejectObjective(store, feed, new MemUow());
+
+  await assert.rejects(
+    () => uc.execute({ objectiveId: OBJ_ID }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof ObjectiveNotAwaitingConfirmationError,
+        `must be ObjectiveNotAwaitingConfirmationError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+    "discard from integrated must throw ObjectiveNotAwaitingConfirmationError — integrated work is not discardable",
+  );
+});

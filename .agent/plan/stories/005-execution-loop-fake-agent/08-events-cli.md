@@ -13,7 +13,7 @@ sees every event exactly once.
 - `app/task/list-events.ts` — `ListEvents.execute({ after, limit? })` —
   CQRS-lite query straight on `EventFeed.readAfter` (no domain objects).
 - Handler `runEvents` for `events --after <cursor> [--limit <n>] [--json]
-  [--follow] [--poll-interval <ms>]`:
+[--follow] [--poll-interval <ms>]`:
   - human output (stderr, EPIC 004 convention): one line per event —
     `<id> <type> <taskId>` plus ` <payload JSON>` when present; `--json`:
     ndjson on stdout (one event object per line);
@@ -22,8 +22,7 @@ sees every event exactly once.
     id after every page; while a page comes back **full**
     (`length === limit`) the next page is read immediately — sleep only
     after a short/empty page;
-  - `--follow`: after a short/empty page, `sleep(pollIntervalMs)` (default
-    1000) and poll again from the advanced cursor, until aborted; exit 0;
+  - `--follow`: after a short/empty page, `sleep(pollIntervalMs)` (default 1000) and poll again from the advanced cursor, until aborted; exit 0;
   - **stop seam (debate finding):** the handler receives an `AbortSignal`;
     the follow loop checks it before each page and each sleep;
     `process.once('SIGINT', → abort)` is wired in the handler; tests abort

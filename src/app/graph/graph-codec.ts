@@ -166,7 +166,16 @@ function buildInitiative(
     typeof rawBindings === "object" && rawBindings !== null
       ? (rawBindings as Record<string, string>)
       : undefined;
-  return { id, ref, name, sourcePath, bindings };
+  let after: string[] = [];
+  const rawAfter = fm["after"];
+  if (Array.isArray(rawAfter)) {
+    after = rawAfter.filter((d): d is string => typeof d === "string");
+    for (const ref of after) {
+      classifyRef(ref);
+    }
+    after = [...new Set(after)].sort();
+  }
+  return { id, ref, name, sourcePath, after, bindings };
 }
 
 function buildObjective(
@@ -188,7 +197,16 @@ function buildObjective(
     typeof rawContext === "object" && rawContext !== null
       ? (rawContext as Record<string, string>)
       : undefined;
-  return { id, ref, initiativeRef, name, sourcePath, context };
+  let after: string[] = [];
+  const rawAfter = fm["after"];
+  if (Array.isArray(rawAfter)) {
+    after = rawAfter.filter((d): d is string => typeof d === "string");
+    for (const ref of after) {
+      classifyRef(ref);
+    }
+    after = [...new Set(after)].sort();
+  }
+  return { id, ref, initiativeRef, name, sourcePath, after, context };
 }
 
 function buildTask(
@@ -366,6 +384,10 @@ function serializeInitiative(node: PkgInitiative): string {
     ...identityLines(node.id, node.ref),
     `name: ${node.name}`,
   ];
+  const sortedAfter = [...(node.after ?? [])].sort();
+  if (sortedAfter.length > 0) {
+    lines.push(`after: [${sortedAfter.map(yamlScalar).join(", ")}]`);
+  }
   if (node.bindings !== undefined && Object.keys(node.bindings).length > 0) {
     lines.push("bindings:");
     for (const [k, v] of Object.entries(node.bindings)) {
@@ -384,6 +406,10 @@ function serializeObjective(node: PkgObjective): string {
     `initiative: ${yamlScalar(node.initiativeRef)}`,
     `name: ${node.name}`,
   ];
+  const sortedAfter = [...(node.after ?? [])].sort();
+  if (sortedAfter.length > 0) {
+    lines.push(`after: [${sortedAfter.map(yamlScalar).join(", ")}]`);
+  }
   if (node.context !== undefined && Object.keys(node.context).length > 0) {
     lines.push("context:");
     for (const [k, v] of Object.entries(node.context)) {

@@ -41,7 +41,7 @@ test("execute with cyclic graph throws CycleError", () => {
           { id: "b", dependencies: ["a"] },
         ],
       }),
-    (err: unknown) => err instanceof CycleError
+    (err: unknown) => err instanceof CycleError,
   );
 });
 
@@ -57,7 +57,7 @@ test("execute with unknown dependency throws UnknownDependencyError", () => {
       assert.equal(err.taskId, "a");
       assert.equal(err.dependency, "ghost");
       return true;
-    }
+    },
   );
 });
 
@@ -72,6 +72,6 @@ test("execute with duplicate id throws DuplicateTaskError", () => {
       assert.ok(err instanceof DuplicateTaskError);
       assert.equal(err.taskId, "a");
       return true;
-    }
+    },
   );
 });

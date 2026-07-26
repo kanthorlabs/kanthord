@@ -65,7 +65,10 @@ export default [
             {
               from: { element: { types: "app" } },
               allow: {
-                to: { element: { types: "adapter" }, file: { categories: "port" } },
+                to: {
+                  element: { types: "adapter" },
+                  file: { categories: "port" },
+                },
               },
             },
             // apps/ calls use cases only — no adapters, no domain internals.

@@ -43,9 +43,10 @@ node src/main.ts db migrate
 PROJECT=$(node src/main.ts create project --name todo-e2e-<tag> | head -1)
 ```
 
-1. **AI provider (ChatGPT Plus / gpt-5.6-terra, effort medium).** The OAuth
-   account lives in kanthord's OWN store `~/.kanthord/accounts.json` (provider
-   `openai-codex`) — this is isolated from any company github-copilot pi CLI.
+1. **AI provider (ChatGPT Plus / gpt-5.6-terra, effort medium).** `login
+provider` writes a **credential row in the kanthord DB** and prints its id —
+   no `~/.kanthord/accounts.json` file is ever written. That DB-backed store is
+   isolated from any company github-copilot pi CLI.
    - Preferred: `node src/main.ts login provider --provider openai-codex
 --project $PROJECT --name terra-oauth --method browser` — prints an
      `auth.openai.com` URL + waits on a `localhost:1455` callback. Run it in the
@@ -126,9 +127,9 @@ scripts/e2e/e2e-smoke-todo.sh /tmp/todo.mjs
 - **Conflict message prints to stderr** — capture `2>&1` when asserting it.
 - **The landed code is on the objective branch** `kanthord/init/<initiative-id>`,
   not home `HEAD`/`main`. Extract from that ref (see Verify above).
-- **`list event`** needs `--after <cursor>` (e.g. `--after 0`) and caps at ~100
-  rows without `--limit`; pass `--limit 1000` or follow the `{"nextCursor":…}`
-  sentinel (007.7). `e2e-status.sh` counts from the DB, so it is not affected.
+- **`list event`** needs `--after <cursor>` (e.g. `--after 0`) and pages **10**
+  rows without `--limit`, then prints a `more available — pass --after <cursor>`
+  sentinel line; pass `--limit 1000` or follow that sentinel (007.7). `e2e-status.sh` counts from the DB, so it is not affected.
 - **`get resource`, not `get repository` for arbitrary resources** — though
   `get repository --id` now works as an alias (007.15).
 

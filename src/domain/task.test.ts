@@ -305,19 +305,6 @@ test("transitionTask pending→awaiting_confirmation throws IllegalTransitionErr
   );
 });
 
-test("transitionTask pending→discarded throws IllegalTransitionError", () => {
-  const task = newTask({ ...BASE });
-  assert.throws(
-    () => transitionTask(task, "discarded"),
-    (err) => {
-      assert.ok(err instanceof IllegalTransitionError);
-      assert.equal((err as IllegalTransitionError).from, "pending");
-      assert.equal((err as IllegalTransitionError).to, "discarded");
-      return true;
-    },
-  );
-});
-
 test("transitionTask running→discarded throws IllegalTransitionError", () => {
   const pending = newTask({ ...BASE });
   const running = transitionTask(pending, "running");
@@ -428,6 +415,23 @@ test("transitionTask completed→discarded throws IllegalTransitionError", () =>
 });
 
 // Story 02 — T1: agent, instructions, ac, verification fields on Task + newTask validation
+
+// Story 05 (007.16) — discard reachable from failed/pending
+test("transitionTask failed→discarded yields discarded and does not mutate input", () => {
+  const pending = newTask({ ...BASE });
+  const running = transitionTask(pending, "running");
+  const failed = transitionTask(running, "failed");
+  const discarded = transitionTask(failed, "discarded");
+  assert.equal(discarded.status, "discarded");
+  assert.equal(failed.status, "failed"); // input not mutated
+});
+
+test("transitionTask pending→discarded (cascade edge) yields discarded", () => {
+  const pending = newTask({ ...BASE });
+  const discarded = transitionTask(pending, "discarded");
+  assert.equal(discarded.status, "discarded");
+  assert.equal(pending.status, "pending"); // input not mutated
+});
 
 test("newTask with agent, instructions, ac carries all three fields", () => {
   const task = newTask({

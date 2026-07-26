@@ -23,9 +23,18 @@ You do **not** commit; the human reviews and commits. You do **not** write to th
 A "turn" is one logical handoff, not one keystroke. A subagent may make many tool calls inside a single Task invocation (read context, edit sources / test files, build, append) and produce one substantive entry in the discussion file. Granularity below that belongs in version-control commits, not in the discussion file.
 
 The canonical TDD cycle:
+
 - `test-engineer` opens with either a failing test (RED) for the next unimplemented Task, or a GREEN-ONLY pass-through for Tasks that have no `Action — RED:` block. Tasks are `### Task` headings in the Story files — there are no checkboxes; progress is tracked from the discussion file.
 - `software-engineer` makes that test green by editing production sources (RED flow), or implements the forwarded Task(s) directly from the Story spec (GREEN-ONLY flow).
 - `test-engineer` runs the test (GREEN), then either opens the next RED or — when every Task is green and the EPIC's Verification Gate runs clean — appends `IMPLEMENTATION_READY_FOR_REVIEW:`. For GREEN-ONLY Tasks, the TE runs a build-only check instead of a test.
+
+**The ready marker has three preconditions, all of them mandatory.** The EPIC's `## Verification Gate` has **two** parts — `Gates:` and `Proof:` — and running only the `Gates:` is the single most common way this loop reports work that is not done:
+
+1. **Every `### Task` in every Story file is green** — not "the stories expanded so far". A partial implementation cannot satisfy a whole-epic Proof, so a marker emitted with stories outstanding is invalid.
+2. **The `Gates:` command runs green** (typically `npm run verify`).
+3. **The `Proof:` command has actually been run**, and its real output — including the string the EPIC says it must print — is pasted into the turn.
+
+A marker missing any of the three is premature: the orchestrator must **reject it** and dispatch the next engineer turn instead of advancing to Step 6. `Proof:` scripts live under `scripts/`, which is lane-forbidden to **modify** and always allowed to **run** (see AGENTS.md). "Lane-forbidden" is never a valid reason to skip the Proof.
 
 After the TDD loop completes (`IMPLEMENTATION_READY_FOR_REVIEW:` detected), the orchestrator runs the **reviewer-engineer gate** and auto-routes its `action:YES` findings back through the TDD loop (once per cycle), leaving only `action:NO` findings for the human. It then **pauses for the human operator's review**. The human reviews the implementation and records the verdict in the discussion file as `HUMAN_REVIEW: PASS` or `HUMAN_REVIEW: FAIL` (with `BLOCKER:` lines). On `PASS`, the EPIC is done. On `FAIL`, the orchestrator routes the `BLOCKER:` lines back through the TDD loop until the next `IMPLEMENTATION_READY_FOR_REVIEW:`.
 
@@ -34,6 +43,7 @@ Separately, while the TDD loop runs, the orchestrator counts `ATTEMPT-FAILED: <t
 ## Step 1 — Parse arguments
 
 From `$ARGUMENTS`:
+
 - **First positional** = EPIC file path (required). If missing or empty, print usage and stop.
 - **`--max-turns N`** = override turn cap. Default `128`. `0` means unlimited (use with care).
 
@@ -93,6 +103,7 @@ None needed. Tests and typecheck run in-process with no emulator, database, brow
 Initialize `turn_count = 0`. Sweep any stale draft temps left by an aborted prior run (the orchestrator owns these — see 5e/5g.1): `rm -f '<root>'/.agent/tdd/.*-response-*.md`. Then repeat:
 
 ### 5a. Stop on max-turns
+
 If `max_turns > 0` and `turn_count >= max_turns`: report `max-turns reached (<N>)` and jump to Step 8 (do **not** close the lifecycle — the work isn't done).
 
 ### 5b. Stop on IMPLEMENTATION_READY_FOR_REVIEW
@@ -104,7 +115,13 @@ FAIL_LINE=$(grep -nE '^(HUMAN_REVIEW: FAIL|AUTO_REVIEW: FAIL)' '<discussion-file
 awk -v s="${FAIL_LINE:-0}" 'NR>s && /^IMPLEMENTATION_READY_FOR_REVIEW:/' '<discussion-file>'
 ```
 
-If that prints any line: report `implementation ready for review` and jump to Step 6 (final review phase).
+If that prints any line, **validate the LATEST such marker before honouring it** (append `| tail -1` — a rejected marker stays in the file, so always judge the most recent one). Read the turn that carries it and confirm it evidences all three preconditions from "The ready marker has three preconditions" above: every Story Task green, the `Gates:` command green, and the `Proof:` command run with its real output and the EPIC's success string present. A marker that admits outstanding work ("Stories 4-6 remain pending", "not yet expanded") or that never ran the Proof is **premature**:
+
+- Print `premature ready marker rejected: <what is missing>`.
+- Do **not** jump to Step 6. Continue the loop at 5c so the next engineer turn finishes the work.
+- Do not edit the discussion file to remove the marker — the next real marker supersedes it (Step 5b already scopes markers to the latest review failure, and rejection is not a failure verdict).
+
+Otherwise: report `implementation ready for review` and jump to Step 6 (final review phase).
 
 ### 5c. Read the tail marker
 
@@ -119,12 +136,26 @@ Capture the result as `tail_actor` (may be empty if no marker exists yet).
 
 ### 5d. Decide next role
 
+**Post-failure override — check this first.** If the last review verdict (`HUMAN_REVIEW: FAIL` or `AUTO_REVIEW: FAIL`) has no engineer turn after it, `next = test-engineer` **regardless of `tail_actor`**:
+
+```bash
+FAIL_LINE=$(grep -nE '^(HUMAN_REVIEW: FAIL|AUTO_REVIEW: FAIL)' '<discussion-file>' | tail -1 | cut -d: -f1)
+awk -v s="${FAIL_LINE:-0}" 'NR>s && /^END:[[:space:]]+(TEST-ENGINEER|SOFTWARE-ENGINEER)/' '<discussion-file>'
+```
+
+If `FAIL_LINE` is non-empty and that prints nothing → `next = test-engineer`; skip the alternation table below.
+
+Strict alternation is wrong at this boundary. Blockers need a failing regression test **before** anyone fixes them, so the test engineer always takes the first turn after a review failure — that is what Step 6d means by "the test engineer turns testable blockers into failing regression tests". Following the tail marker instead (last = TE → next = SE) sends the software engineer in to fix a blocker with no test guarding the fix.
+
+Otherwise use the alternation table:
+
 - `tail_actor` empty → `next = test-engineer` (test engineer always opens; matches `opener: test-engineer` in the header)
 - `tail_actor` is `TEST-ENGINEER` → `next = software-engineer`
 - `tail_actor` is `SOFTWARE-ENGINEER` → `next = test-engineer`
 - Anything else → abort with `"unrecognized tail state: <tail_actor>"` for human review
 
 ### 5e. Mint the turn id, capture `tail_before` and a changed-file snapshot
+
 Save the raw tail line (or `<none>` if `tail_actor` was empty). Used after the Task call to verify the subagent actually wrote.
 
 Mint this turn's id and the draft-file path. The orchestrator computes them **once here** and reuses them for create (5f) and delete (5g.1), so the draft temp is always cleaned by its **exact** name regardless of what the agent does. **The timestamp is minted here, by `/work`, never inside the agent** — an agent that recomputed `date` across its separate Bash calls would produce a name `/work` could not later delete:
@@ -144,6 +175,7 @@ git -C '<root>' status --porcelain -uall | cut -c4- | sort > '/tmp/work-<epic-sl
 `-uall` is required so git lists each new file individually instead of collapsing it into a directory path; `sort` is required because Step 5g.1 feeds these snapshots to `comm`, which assumes sorted input.
 
 ### 5f. Dispatch the subagent
+
 Call the Agent tool with `subagent_type` equal to `next` (`test-engineer` or `software-engineer`) and this prompt verbatim, substituting `<root>`, `<EPIC_FILE>` (= `<root>/<epic-relative-path>`), `<DISCUSSION_FILE>`, `<DRAFT_FILE>` (from 5e), and `<ENV>` (whatever Step 4 captured):
 
 ```
@@ -157,7 +189,7 @@ SINGLE-TURN CONTRACT (OVERRIDES everything below):
 - ONE turn = ONE role = ONE append (ONE "END: <ROLE>") = ONE `cat >>`, then STOP and return your one-sentence summary.
 - Do NOT switch/impersonate the other role.
 - Do NOT spawn or dispatch any sub-agent.
-- Append "IMPLEMENTATION_READY_FOR_REVIEW:" ONLY when this turn IS it (test-engineer, every Task already green).
+- Append "IMPLEMENTATION_READY_FOR_REVIEW:" ONLY when this turn IS it (test-engineer, EVERY Task in EVERY Story green, Gates: green, AND the Proof: command run with its real output pasted in). Stories still unexpanded or unimplemented means NOT ready.
 
 Follow your discussion-channel protocol exactly:
 1. Read the EPIC file and the discussion file for full context. The EPIC's `## Verification Gate` is binding. The `## Architecture` section of AGENTS.md (repo root) is binding for all production code. The discussion file's last turn (if any) tells you what was just done.
@@ -175,6 +207,8 @@ Do NOT edit files outside your lane (see the lane table in your persona).
 Do NOT edit the EPIC or Story files — those are locked by planning. Do NOT touch the build/project config files (see the always-forbidden list in your persona).
 
 If you are test-engineer and you have just confirmed that every Task is green AND the Verification Gate runs green end-to-end, append an IMPLEMENTATION_READY_FOR_REVIEW turn (still ending with END: TEST-ENGINEER). /work greps "^IMPLEMENTATION_READY_FOR_REVIEW:" to stop the TDD loop and hand the cycle to the human for review.
+
+"The Verification Gate runs green end-to-end" means BOTH of its parts: the `Gates:` command AND the `Proof:` command, each actually executed this turn, with the Proof's real output (including the exact success string the EPIC names) pasted into your turn. A Proof script under `scripts/` is lane-forbidden to EDIT and always allowed to RUN — never skip it on lane grounds. If the Proof fails, you are not ready: report the failure as your turn instead. If any Story Task is still unimplemented or its story file still unexpanded, you are not ready either — open the next Task.
 ```
 
 Also append:
@@ -186,7 +220,9 @@ Return one short sentence summarizing what you wrote.
 ```
 
 ### 5g. Verify the subagent wrote
+
 Re-read the tail (same pipeline as 5c) and also check for any new `^IMPLEMENTATION_READY_FOR_REVIEW:` line. Compare with `tail_before`:
+
 - If the tail is unchanged AND no new `IMPLEMENTATION_READY_FOR_REVIEW:` line appeared → abort with `"subagent <next> returned but discussion file unchanged"`. Leave the file as-is for human review.
 
 ### 5g.1 Lane ownership check (git diff)
@@ -230,7 +266,7 @@ LAST_FAIL=$(grep '^ATTEMPT-FAILED:' '<discussion-file>' | tail -1)
 
 If `LAST_FAIL` is empty → no failed attempt this turn — skip to 5i.
 
-Otherwise extract its `<task-id>` (everything between `ATTEMPT-FAILED:` and the ` — ` em-dash delimiter) and count how many failed attempts that same Task has accumulated **in the current review cycle**. Splitting on the em-dash only — not on any hyphen — is load-bearing: task-ids contain hyphens, so a `[—-]` split would truncate them. Scoping the count to lines after the last review-fail boundary stops a Task that already went green in an earlier cycle from inheriting stale failures and false-escalating:
+Otherwise extract its `<task-id>` (everything between `ATTEMPT-FAILED:` and the `—` em-dash delimiter) and count how many failed attempts that same Task has accumulated **in the current review cycle**. Splitting on the em-dash only — not on any hyphen — is load-bearing: task-ids contain hyphens, so a `[—-]` split would truncate them. Scoping the count to lines after the last review-fail boundary stops a Task that already went green in an earlier cycle from inheriting stale failures and false-escalating:
 
 ```bash
 TASK_ID=$(printf '%s\n' "$LAST_FAIL" | sed -E 's/^ATTEMPT-FAILED:[[:space:]]*//; s/[[:space:]]*—.*$//')
@@ -244,6 +280,7 @@ FAIL_COUNT=$(awk -v s="${FAIL_LINE:-0}" 'NR>s' '<discussion-file>' | grep -F "AT
 (A Task that flips to GREEN simply stops emitting `ATTEMPT-FAILED:` lines, so only a Task that never goes green reaches the limit.)
 
 ### 5i. Increment and continue
+
 `turn_count += 1`. Loop back to 5a.
 
 ## Step 6 — Human review handoff
@@ -257,8 +294,15 @@ grep -E '^HUMAN_REVIEW: (PASS|FAIL)' '<discussion-file>' | tail -1
 ```
 
 - Latest line is `HUMAN_REVIEW: PASS` → jump to Step 7 (close lifecycle).
-- Latest line is `HUMAN_REVIEW: FAIL` → jump to Step 6d (review failure routing).
+- Latest line is `HUMAN_REVIEW: FAIL` → **only** jump to Step 6d if that verdict has not been processed yet. It has already been processed when an `^IMPLEMENTATION_READY_FOR_REVIEW:` line appears **after** it — the engineers already fixed its blockers and re-signalled. In that case the verdict is spent: proceed to Step 6b for a fresh reviewer gate instead, or 6d would re-route the same blockers forever.
 - No `HUMAN_REVIEW:` line yet → proceed to Step 6b (reviewer-engineer pre-gate).
+
+```bash
+FAIL_LINE=$(grep -n '^HUMAN_REVIEW: FAIL' '<discussion-file>' | tail -1 | cut -d: -f1)
+awk -v s="${FAIL_LINE:-0}" 'NR>s && /^IMPLEMENTATION_READY_FOR_REVIEW:/' '<discussion-file>'   # non-empty ⇒ verdict spent ⇒ 6b
+```
+
+A `HUMAN_REVIEW:` verdict is scoped to **one** review cycle, not to the whole run; a cycle may therefore hold several verdicts, each answered by its own ready marker.
 
 ### 6b. Reviewer-engineer review gate + auto-routing of `action:YES` findings
 
@@ -348,6 +392,7 @@ Reached when Step 6a confirms `HUMAN_REVIEW: PASS`. That line **is** the closing
 ## Step 8 — Exit
 
 When the run ends, print a one-line summary:
+
 - `done · turns=<N> · reason=<...> · human_review=<PASS|FAIL|pending> · lifecycle=<opened|closed>`
 
 `lifecycle=opened` means the discussion file was seeded this run; `closed` means a `HUMAN_REVIEW: PASS` was confirmed. Then print a short bullet list of what happened this run.

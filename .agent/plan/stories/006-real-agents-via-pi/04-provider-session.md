@@ -16,11 +16,11 @@ back).
   never enter `port.ts`, per the D2 debate):
   - `ProviderSession = { model, streamFn, getApiKey }`;
   - `ProviderSessionFactory { for(aiProvider: AIProvider, credential:
-    Credential): Promise<ProviderSession> }`;
+Credential): Promise<ProviderSession> }`;
   - `CredentialError { resourceName, provider }`,
     `UnknownModelError { provider, model }`.
 - `PiProviderSessionFactory` ctor `{ saveCredentialValue: (credentialId,
-  value) => void }`:
+value) => void }`:
   - model lookup via pi-ai `createModels()` (exact surface verified against
     the installed `.d.ts` — reuse-first rule); `aiProvider.baseUrl`
     overrides the endpoint for OpenAI-compatible providers; unknown

@@ -17,7 +17,7 @@ this same function — no separate mutation path.
 ## Acceptance Criteria
 
 - `GraphNode` is exported: `{ id: string; status: TaskStatus;
-  dependencies: string[] }`. `Task` satisfies it structurally.
+dependencies: string[] }`. `Task` satisfies it structurally.
 - `validateGraph(nodes)` checks in locked precedence — duplicates, then
   unknown dependencies, then cycles — each scanning nodes in input order:
   duplicate node id → `DuplicateTaskError { taskId }`; unknown dependency →
@@ -29,7 +29,7 @@ this same function — no separate mutation path.
   **pending** nodes only, in input order. A pending node is
   `{ id, state: 'ready', waiting: [] }` when every dependency has status
   `completed`; otherwise `{ id, state: 'blocked', waiting: <not-completed
-  dependencies, declared order> }`. Running/completed/failed nodes do not
+dependencies, declared order> }`. Running/completed/failed nodes do not
   appear. A failed dependency blocks (it is not completed).
 
 ## Constraints

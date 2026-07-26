@@ -1,11 +1,7 @@
 import type { Entity } from "./entity.ts";
 import { newId } from "./entity.ts";
 
-export const INITIATIVE_STATUSES = [
-  "building",
-  "awaiting_pr",
-  "delivered",
-] as const;
+export const INITIATIVE_STATUSES = ["building", "landed", "discarded"] as const;
 
 export type InitiativeStatus = (typeof INITIATIVE_STATUSES)[number];
 
@@ -14,6 +10,7 @@ export const OBJECTIVE_STATUSES = [
   "awaiting_confirmation",
   "conflict",
   "integrated",
+  "discarded",
 ] as const;
 
 export type ObjectiveStatus = (typeof OBJECTIVE_STATUSES)[number];
@@ -53,11 +50,14 @@ const LEGAL_OBJECTIVE_TRANSITIONS: ReadonlySet<string> = new Set([
   "awaiting_confirmation->conflict",
   "awaiting_confirmation->integrated",
   "conflict->awaiting_confirmation",
+  "building->discarded",
+  "awaiting_confirmation->discarded",
+  "conflict->discarded",
 ]);
 
 const LEGAL_INITIATIVE_TRANSITIONS: ReadonlySet<string> = new Set([
-  "building->awaiting_pr",
-  "awaiting_pr->delivered",
+  "building->landed",
+  "building->discarded",
 ]);
 
 export class IllegalObjectiveTransitionError extends Error {
@@ -82,6 +82,10 @@ export class IllegalInitiativeTransitionError extends Error {
     this.from = from;
     this.to = to;
   }
+}
+
+export function canRetryObjective(status: ObjectiveStatus): boolean {
+  return status === "awaiting_confirmation" || status === "conflict";
 }
 
 export function transitionObjective(

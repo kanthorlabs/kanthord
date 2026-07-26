@@ -11,15 +11,15 @@ The loop body as two hermetically testable use cases: `EnqueueReadyTasks`
 ## Acceptance Criteria
 
 - `app/task/enqueue-ready-tasks.ts` — `EnqueueReadyTasks.execute():
-  string[]` (enqueued task ids). In **one transaction**: for every
+string[]` (enqueued task ids). In **one transaction**: for every
   initiative from `listAllInitiatives()` with `paused = false`, run
   `readiness(listTasksByInitiative(id))`; for each `ready` node call
   `enqueue(taskId)`; **only when `enqueue` returned `true`** append a
   `task.ready` event. Re-running with nothing changed enqueues nothing and
   emits nothing.
 - `app/task/run-next-task.ts` — `RunNextTask.execute(): Promise<
-  { outcome: 'idle' } | { outcome: 'skipped' | 'completed' | 'failed';
-  taskId: string }>`:
+{ outcome: 'idle' } | { outcome: 'skipped' | 'completed' | 'failed';
+taskId: string }>`:
   - **tx1:** `claim()`; `undefined` → `idle`. Load the task, its context,
     and its initiative's task set (`getInitiativeId` +
     `listTasksByInitiative`); recompute `readiness`; if the claimed task

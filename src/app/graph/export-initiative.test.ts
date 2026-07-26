@@ -10,9 +10,10 @@
  * (e) PkgTask.dependencies / objectiveRef / initiativeRef carry parent ULIDs
  */
 
-import { test } from "node:test";
+import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ExportInitiative } from "./export-initiative.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 import type {
   TaskRepository,
   InitiativeRepository,
@@ -139,6 +140,7 @@ class FakeTaskRepository implements TaskRepository {
   compareAndApply(
     _id: string,
     _expectedSha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -153,7 +155,11 @@ class FakeTaskRepository implements TaskRepository {
   conditionalReparent(_id: string, _expectedSha: string, _objectiveId: string) {
     return { status: "applied" as const, freshSha: "" };
   }
-  conditionalDeleteTask(_id: string, _expectedSha: string) {
+  conditionalDeleteTask(
+    _id: string,
+    _expectedSha: string,
+    _expectedStatus: string,
+  ) {
     return { status: "applied" as const, freshSha: "" };
   }
 }
@@ -238,6 +244,20 @@ test("ExportInitiative returns only pending tasks in .tasks; running task exclud
   assert.ok(ids.includes(TASK1_ID), "pending task1 present");
   assert.ok(ids.includes(TASK2_ID), "pending task2 present");
   assert.ok(!ids.includes(TASK3_ID), "running task3 absent from .tasks");
+});
+
+test("EPIC 007.18 Story 3 — ExportInitiative stamps manifest.formatVersion with the current GRAPH_FORMAT_VERSION", async () => {
+  const uc = new ExportInitiative({
+    tasks: new FakeTaskRepository(),
+    initiatives: new FakeInitiativeRepository(),
+  });
+  const pkg = await uc.execute(INIT_ID);
+
+  assert.equal(
+    pkg.manifest?.formatVersion,
+    GRAPH_FORMAT_VERSION,
+    "a freshly exported manifest must never be stale",
+  );
 });
 
 test("ExportInitiative manifest.nodes covers EVERY node; sha COPIED from repo (not recomputed)", async () => {
@@ -351,4 +371,84 @@ test("ExportInitiative PkgTask.dependencies / objectiveRef / initiativeRef carry
       "each objective initiativeRef is the initiative ULID",
     );
   }
+});
+
+// ─── Story 5b — after: on export ────────────────────────────────────────────
+
+/** Sequencing interface for export — provides after lookups. */
+interface ExportSequencing {
+  listInitiativeAfter(initiativeId: string): string[];
+  listObjectiveAfter(objectiveId: string): string[];
+}
+
+class FakeExportSequencing implements ExportSequencing {
+  readonly #initAfter: Map<string, string[]> = new Map();
+  readonly #objAfter: Map<string, string[]> = new Map();
+
+  setInitiativeAfter(id: string, after: string[]) {
+    this.#initAfter.set(id, [...after].sort());
+  }
+
+  setObjectiveAfter(id: string, after: string[]) {
+    this.#objAfter.set(id, [...after].sort());
+  }
+
+  listInitiativeAfter(initiativeId: string): string[] {
+    return this.#initAfter.get(initiativeId) ?? [];
+  }
+
+  listObjectiveAfter(objectiveId: string): string[] {
+    return this.#objAfter.get(objectiveId) ?? [];
+  }
+}
+
+describe("Story 5b — after: on export", () => {
+  test("(13) initiative with after: [X] and objective with after: [Y] export after: lines", async () => {
+    const sequencing = new FakeExportSequencing();
+    sequencing.setInitiativeAfter(INIT_ID, [OBJ1_ID]); // X = obj1
+    sequencing.setObjectiveAfter(OBJ1_ID, [OBJ2_ID]); // Y = obj2
+
+    const uc = new ExportInitiative(
+      {
+        tasks: new FakeTaskRepository(),
+        initiatives: new FakeInitiativeRepository(),
+      } as any,
+      sequencing as any,
+    );
+
+    const pkg = await uc.execute(INIT_ID);
+
+    assert.deepEqual(
+      pkg.initiative.after,
+      [OBJ1_ID],
+      "initiative after must be [OBJ1_ID]",
+    );
+
+    const obj1 = pkg.objectives.find((o) => o.id === OBJ1_ID);
+    assert.ok(obj1 !== undefined, "obj1 present");
+    assert.deepEqual(obj1.after, [OBJ2_ID], "obj1 after must be [OBJ2_ID]");
+  });
+
+  test("(14) empty after exports no after: line", async () => {
+    const sequencing = new FakeExportSequencing();
+
+    const uc = new ExportInitiative(
+      {
+        tasks: new FakeTaskRepository(),
+        initiatives: new FakeInitiativeRepository(),
+      } as any,
+      sequencing as any,
+    );
+
+    const pkg = await uc.execute(INIT_ID);
+
+    assert.deepEqual(
+      pkg.initiative.after,
+      [],
+      "initiative with empty after must export []",
+    );
+    for (const obj of pkg.objectives) {
+      assert.deepEqual(obj.after, [], `objective ${obj.id} after must be []`);
+    }
+  });
 });

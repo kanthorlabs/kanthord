@@ -57,6 +57,7 @@ class StubTaskRepository implements TaskRepository {
   compareAndApply(
     _id: string,
     _expectedSha: string,
+    _expectedStatus: string,
     _spec: {
       title: string;
       instructions: string;
@@ -71,7 +72,11 @@ class StubTaskRepository implements TaskRepository {
   conditionalReparent(_id: string, _expectedSha: string, _objectiveId: string) {
     return { status: "applied" as const, freshSha: "" };
   }
-  conditionalDeleteTask(_id: string, _expectedSha: string) {
+  conditionalDeleteTask(
+    _id: string,
+    _expectedSha: string,
+    _expectedStatus: string,
+  ) {
     return { status: "applied" as const, freshSha: "" };
   }
 }

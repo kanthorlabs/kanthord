@@ -26,7 +26,7 @@ the task. Human actors only; agent actors are designed for
   stderr line `N task(s) awaiting confirmation` (B9 — idle success must not
   hide actionable work).
 - `src/workspace/local.ts` gains `promoteProposal(dir, taskId,
-  proposalCommit)`: `git branch -f kanthord/<taskId> <proposalCommit>` —
+proposalCommit)`: `git branch -f kanthord/<taskId> <proposalCommit>` —
   idempotent, creates no content.
 - `app/task/approve-task.ts` `ApproveTask` (`approve task <id>`):
   - guards: status must be `awaiting_confirmation` →
@@ -46,12 +46,12 @@ the task. Human actors only; agent actors are designed for
     escalation — the agent asked a question before changing anything)
     skips promotion entirely and completes without a `commit_sha`.
 - `app/task/reject-task.ts` `RejectTask` (`reject task <id> --resolution
-  <retry|discard> [--reason <text>]` — resolution REQUIRED; missing or
+<retry|discard> [--reason <text>]` — resolution REQUIRED; missing or
   invalid value → one-line CLI error; D4 debate: an enum flag, not two
   booleans). One DB transaction: guard → persist the decision
   (`task_results.rejection_resolution` + `rejection_reason`) →
   `task.rejected` event (payload `{ code: 'REJECTED_BY_ACTOR', resolution,
-  message, actor: 'human', proposalCommit? }`) → per resolution:
+message, actor: 'human', proposalCommit? }`) → per resolution:
   - **`retry`:** `awaiting_confirmation→pending` (direct edge — NO
     `task.failed`: a review decision is not an execution failure, debate
     B1). No job insertion — the next daemon scan enqueues it
@@ -68,7 +68,7 @@ the task. Human actors only; agent actors are designed for
   SAME persisted resolution → no-op success (safe client retry after a
   lost response); a CONFLICTING resolution, reject-after-approve, or
   approve-after-reject → `RejectionConflictError { taskId, stored,
-  requested }`; any other non-parked status without a stored decision →
+requested }`; any other non-parked status without a stored decision →
   `TaskNotAwaitingConfirmationError`.
 - `list task` gains `[--status <status>]` filtering (so
   `list task --status awaiting_confirmation` answers "what needs the
@@ -77,7 +77,7 @@ the task. Human actors only; agent actors are designed for
   its status (D4 debate B5 — a dependency shown `discarded` makes the
   permanent blockage visible without inspecting every pending task).
 - CLI: `approve task <id>` / `reject task <id> --resolution <retry|discard>
-  [--reason]` registered in `COMMANDS` (verb-first, 1:1 with the use
+[--reason]` registered in `COMMANDS` (verb-first, 1:1 with the use
   cases).
 
 ## Constraints

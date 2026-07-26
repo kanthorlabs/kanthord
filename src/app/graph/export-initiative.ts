@@ -10,6 +10,7 @@ import type {
   PkgTask,
   ExportManifest,
 } from "./graph-package.ts";
+import { GRAPH_FORMAT_VERSION } from "./format.ts";
 
 /**
  * Story 04 T1 — query use case that returns a `GraphPackage`.
@@ -19,13 +20,26 @@ import type {
 export class ExportInitiative {
   readonly #tasks: TaskRepository;
   readonly #initiatives: InitiativeRepository;
+  readonly #sequencing:
+    | {
+        listInitiativeAfter(initiativeId: string): string[];
+        listObjectiveAfter(objectiveId: string): string[];
+      }
+    | undefined;
 
-  constructor(deps: {
-    tasks: TaskRepository;
-    initiatives: InitiativeRepository;
-  }) {
+  constructor(
+    deps: {
+      tasks: TaskRepository;
+      initiatives: InitiativeRepository;
+    },
+    sequencing?: {
+      listInitiativeAfter(initiativeId: string): string[];
+      listObjectiveAfter(objectiveId: string): string[];
+    },
+  ) {
     this.#tasks = deps.tasks;
     this.#initiatives = deps.initiatives;
+    this.#sequencing = sequencing;
   }
 
   async execute(initiativeId: string): Promise<GraphPackage> {
@@ -39,7 +53,7 @@ export class ExportInitiative {
     const pendingTasks = allTasks.filter((t) => t.status === "pending");
 
     const packageId = newId();
-    const formatVersion = 1;
+    const formatVersion = GRAPH_FORMAT_VERSION;
 
     // Build manifest: nodes = full snapshot; files = initiative + objectives + pending tasks
     const nodes: Record<string, string> = {};
@@ -86,12 +100,23 @@ export class ExportInitiative {
       },
     };
 
+    // Query sequencing edges when the store is available
+    const initiativeAfter =
+      this.#sequencing?.listInitiativeAfter(initiativeId) ?? [];
+    const objAfterMap = new Map<string, string[]>();
+    if (this.#sequencing !== undefined) {
+      for (const obj of objectives) {
+        objAfterMap.set(obj.id, this.#sequencing.listObjectiveAfter(obj.id));
+      }
+    }
+
     // Build DTOs — ULID-as-ref (id === ref, no lowercase slug)
     const pkgInitiative: PkgInitiative = {
       id: initiative.id,
       ref: initiative.id,
       name: initiative.name,
       sourcePath: `${initiative.name}.md`,
+      after: initiativeAfter,
     };
 
     const pkgObjectives: PkgObjective[] = objectives.map((obj) => ({
@@ -100,6 +125,7 @@ export class ExportInitiative {
       initiativeRef: initiativeId,
       name: obj.name,
       sourcePath: `${obj.name}/${obj.name}.md`,
+      after: objAfterMap.get(obj.id) ?? [],
     }));
 
     const pkgTasks: PkgTask[] = pendingTasks.map((task) => {

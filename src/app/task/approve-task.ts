@@ -2,6 +2,8 @@ import { transitionTask } from "../../domain/task.ts";
 import type { Task } from "../../domain/task.ts";
 import { readiness } from "../../domain/graph.ts";
 import { newEvent } from "../../domain/event.ts";
+import { unsatisfiedObjectiveEdges } from "../../domain/sequencing.ts";
+import type { Objective } from "../../domain/initiative.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type {
@@ -53,6 +55,8 @@ interface ApproveTaskStore {
   listByInitiative(initiativeId: string): Task[];
   getInitiativeId(taskId: string): string | undefined;
   getTaskContext(taskId: string): Record<string, string>;
+  listObjectiveAfter?(objectiveId: string): string[];
+  getObjective?(id: string): Objective | undefined;
 }
 
 export class ApproveTask {
@@ -69,6 +73,7 @@ export class ApproveTask {
   readonly #landingRepo: LandingRepository | undefined;
   readonly #workspaceManager: WorkspaceManager | undefined;
   readonly #resolveHomeDir: ((repoId: string) => string) | undefined;
+  readonly #sequencing?: { listObjectiveAfter: (id: string) => string[] };
 
   constructor(
     store: ApproveTaskStore,
@@ -84,6 +89,7 @@ export class ApproveTask {
     landingRepo?: LandingRepository,
     workspaceManager?: WorkspaceManager,
     resolveHomeDir?: (repoId: string) => string,
+    sequencing?: { listObjectiveAfter: (id: string) => string[] },
   ) {
     this.#store = store;
     this.#queue = queue;
@@ -94,6 +100,7 @@ export class ApproveTask {
     this.#landingRepo = landingRepo;
     this.#workspaceManager = workspaceManager;
     this.#resolveHomeDir = resolveHomeDir;
+    this.#sequencing = sequencing;
   }
 
   #legacyCandidate(
@@ -363,11 +370,29 @@ export class ApproveTask {
         ? this.#store.listByInitiative(initiativeId)
         : [];
       for (const entry of readiness(allTasks)) {
-        if (entry.state === "ready") {
-          const inserted = this.#queue.enqueue(entry.id);
-          if (inserted) {
-            this.#feed.append(newEvent("task.ready", { taskId: entry.id }));
+        if (entry.state !== "ready") continue;
+
+        // Objective-level gate: skip task if its objective's after edges are unsatisfied
+        const task = allTasks.find((t) => t.id === entry.id);
+        if (task !== undefined && task.objectiveId) {
+          const listAfter: ((id: string) => string[]) | undefined =
+            this.#sequencing?.listObjectiveAfter ??
+            this.#store.listObjectiveAfter;
+          if (listAfter !== undefined) {
+            const after = listAfter(task.objectiveId);
+            if (after.length > 0) {
+              const deps = after.map((depId) => ({
+                id: depId,
+                status: this.#store.getObjective?.(depId)?.status,
+              }));
+              if (unsatisfiedObjectiveEdges(deps).length > 0) continue;
+            }
           }
+        }
+
+        const inserted = this.#queue.enqueue(entry.id);
+        if (inserted) {
+          this.#feed.append(newEvent("task.ready", { taskId: entry.id }));
         }
       }
     });

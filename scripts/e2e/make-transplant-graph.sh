@@ -35,7 +35,12 @@
 # dependent would stay blocked — run-next-task.ts). The root sorts first by file
 # name so it takes the smallest (monotonic) ULID and is the task the Proof
 # selects with `find(t => t.dependencies.length === 0)`.
-set -euo pipefail
+set -Eeuo pipefail
+
+# A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
+# failing check is invisible. This trap names it. `-E` (errtrace) is required or the
+# trap never fires for a failure inside a function.
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
 OUT="${1:?usage: make-transplant-graph.sh <out-dir>}"
 mkdir -p "$OUT"

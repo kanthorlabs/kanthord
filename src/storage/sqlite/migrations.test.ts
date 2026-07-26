@@ -7,8 +7,13 @@ import { join } from "node:path";
 
 import { openDatabase } from "./open.ts";
 import { migrate, type MigrationReport } from "./migrate.ts";
-import { MIGRATIONS } from "./migrations.ts";
+import {
+  MIGRATIONS,
+  canonicalTaskV20,
+  canonicalTaskV21,
+} from "./migrations.ts";
 import { EVENT_TYPES } from "../../domain/event.ts";
+import { canonicalTask, sha256Hex } from "../../domain/sha.ts";
 
 function userVersion(db: DatabaseSync): number {
   const row = db.prepare("PRAGMA user_version").get() as {
@@ -62,16 +67,18 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 16 and creates exactly seventeen core tables", () => {
+test("migrates to version 21 and creates all tables including edge tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 16);
+    assert.equal(userVersion(db), 21);
     assert.deepEqual(userTables(db), [
       "events",
       "graph_import_map",
+      "initiative_dependencies",
       "initiatives",
       "jobs",
       "landing_candidates",
       "landing_integrations",
+      "objective_dependencies",
       "objectives",
       "observability_refs",
       "projects",
@@ -89,7 +96,7 @@ test("migrates to version 16 and creates exactly seventeen core tables", () => {
 
 // ── (b) columns per table ────────────────────────────────────────────────────
 
-test("schema columns match locked DDL for all sixteen tables", () => {
+test("schema columns match locked DDL for all tables", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "projects"), ["id", "name"]);
     assert.deepEqual(columnNames(db, "observability_refs"), [
@@ -150,6 +157,7 @@ test("schema columns match locked DDL for all sixteen tables", () => {
       "payload",
       "objectiveId",
       "initiativeId",
+      "repositoryId",
     ]);
     assert.deepEqual(columnNames(db, "task_context"), [
       "task_id",
@@ -206,6 +214,14 @@ test("schema columns match locked DDL for all sixteen tables", () => {
       "fetch_time",
       "base_sha",
     ]);
+    assert.deepEqual(columnNames(db, "initiative_dependencies"), [
+      "initiativeId",
+      "dependency",
+    ]);
+    assert.deepEqual(columnNames(db, "objective_dependencies"), [
+      "objectiveId",
+      "dependency",
+    ]);
   });
 });
 
@@ -217,6 +233,34 @@ test("foreign key constraint rejects task with unknown objectiveId", () => {
       db.prepare(
         "INSERT INTO tasks(id, objectiveId, title, status) VALUES (?, ?, ?, ?)",
       ).run("t1", "nonexistent", "title", "pending");
+    });
+  });
+});
+
+test("foreign key constraint rejects initiative_dependencies row with unknown dependency", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-fk', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-fk', 'proj-fk', 'I');
+    `);
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiative_dependencies(initiativeId, dependency) VALUES (?, ?)",
+      ).run("init-fk", "nonexistent-init");
+    });
+  });
+});
+
+test("foreign key constraint rejects objective_dependencies row with unknown objectiveId", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-fk-obj', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-fk-obj', 'proj-fk-obj', 'I');
+    `);
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objective_dependencies(objectiveId, dependency) VALUES (?, ?)",
+      ).run("nonexistent-obj", "nonexistent-dep");
     });
   });
 });
@@ -317,6 +361,49 @@ test("composite primary key rejects duplicate task_dependencies row", () => {
   });
 });
 
+test("composite primary key rejects duplicate initiative_dependencies row", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-pk', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-a', 'proj-pk', 'A');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-b', 'proj-pk', 'B');
+    `);
+
+    db.prepare(
+      "INSERT INTO initiative_dependencies(initiativeId, dependency) VALUES (?, ?)",
+    ).run("init-b", "init-a");
+
+    // duplicate (initiativeId, dependency) → rejected by composite PK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiative_dependencies(initiativeId, dependency) VALUES (?, ?)",
+      ).run("init-b", "init-a");
+    });
+  });
+});
+
+test("composite primary key rejects duplicate objective_dependencies row", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-pk-obj', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-pk-obj', 'proj-pk-obj', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-a', 'init-pk-obj', 'A');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-b', 'init-pk-obj', 'B');
+    `);
+
+    db.prepare(
+      "INSERT INTO objective_dependencies(objectiveId, dependency) VALUES (?, ?)",
+    ).run("obj-b", "obj-a");
+
+    // duplicate (objectiveId, dependency) → rejected by composite PK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objective_dependencies(objectiveId, dependency) VALUES (?, ?)",
+      ).run("obj-b", "obj-a");
+    });
+  });
+});
+
 // ── (g) idempotency ──────────────────────────────────────────────────────────
 
 test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
@@ -326,7 +413,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 16);
+    assert.equal(second.version, 21);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -739,8 +826,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      16,
-      "schema version must be 16 after all migrations",
+      21,
+      "schema version must be 21 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -804,24 +891,26 @@ test("migration 11 adds status column to initiatives and objectives, defaulting 
   }
 });
 
-test("migration 11 initiatives.status CHECK accepts building|awaiting_pr|delivered and rejects other values", () => {
+test("migration 17 initiatives.status CHECK accepts building|landed and rejects other values (including the removed awaiting_pr/delivered)", () => {
   withMigratedDb((db) => {
     db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
       "proj-m11-check",
       "P",
     );
-    for (const status of ["building", "awaiting_pr", "delivered"]) {
+    for (const status of ["building", "landed"]) {
       assert.doesNotThrow(() => {
         db.prepare(
           "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
         ).run(`init-${status}`, "proj-m11-check", "I", status);
       }, `initiatives.status = ${status} must be accepted`);
     }
-    assert.throws(() => {
-      db.prepare(
-        "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
-      ).run("init-bad-status", "proj-m11-check", "I", "invalid");
-    }, "initiatives.status CHECK should reject invalid value");
+    for (const status of ["awaiting_pr", "delivered", "invalid"]) {
+      assert.throws(() => {
+        db.prepare(
+          "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
+        ).run(`init-bad-${status}`, "proj-m11-check", "I", status);
+      }, `initiatives.status CHECK should reject '${status}'`);
+    }
   });
 });
 
@@ -870,7 +959,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 16);
+    assert.equal(userVersion(db), 21);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -878,6 +967,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
       "payload",
       "objectiveId",
       "initiativeId",
+      "repositoryId",
     ]);
 
     const taskRow = db
@@ -914,7 +1004,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
   }
 });
 
-test("migration 12 events.type CHECK accepts the six new objective/initiative event types", () => {
+test("migration 17 events.type CHECK accepts the objective/initiative event types plus initiative.landed and repository.published, and rejects the removed initiative.awaiting_pr/initiative.delivered", () => {
   withMigratedDb((db) => {
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-m12-types', 'P');
@@ -933,13 +1023,106 @@ test("migration 12 events.type CHECK accepts the six new objective/initiative ev
         ).run(`ev-${type}`, type, "obj-m12-types");
       }, `event type '${type}' must be accepted by the events CHECK constraint`);
     }
-    for (const type of ["initiative.awaiting_pr", "initiative.delivered"]) {
+    for (const type of ["initiative.landed", "repository.published"]) {
       assert.doesNotThrow(() => {
         db.prepare(
           "INSERT INTO events(id, type, initiativeId) VALUES (?, ?, ?)",
         ).run(`ev-${type}`, type, "init-m12-types");
       }, `event type '${type}' must be accepted by the events CHECK constraint`);
     }
+    for (const type of ["initiative.awaiting_pr", "initiative.delivered"]) {
+      assert.throws(() => {
+        db.prepare(
+          "INSERT INTO events(id, type, initiativeId) VALUES (?, ?, ?)",
+        ).run(`ev-bad-${type}`, type, "init-m12-types");
+      }, `event type '${type}' must now be rejected by the events CHECK constraint`);
+    }
+    assert.ok(
+      (EVENT_TYPES as readonly string[]).includes("repository.published"),
+      "repository.published must be in EVENT_TYPES",
+    );
+  });
+});
+
+// ── (t) migration 18 — repositoryId subject column on events (007.16 S4) ────
+
+test("migration 18 adds a repositoryId column to events and preserves a pre-existing event row", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m18-events-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 17 only (pre-repositoryId state) and seed one
+    // existing event row using only the pre-migration-18 columns.
+    migrate(db, MIGRATIONS.slice(0, 17));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m18', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m18', 'proj-m18', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m18', 'init-m18', 'O');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-m18', 'obj-m18', 'T', 'pending');
+      INSERT INTO events(id, type, taskId) VALUES ('ev-m18', 'task.created', 'task-m18');
+    `);
+
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 21);
+    assert.ok(
+      columnNames(db, "events").includes("repositoryId"),
+      "events table must gain a repositoryId column after migration 18",
+    );
+
+    const row = db
+      .prepare("SELECT taskId, repositoryId FROM events WHERE id = ?")
+      .get("ev-m18") as { taskId: string; repositoryId: string | null };
+    assert.equal(
+      row.taskId,
+      "task-m18",
+      "pre-existing event row survives the migration-18 rebuild",
+    );
+    assert.equal(row.repositoryId, null);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (u) migration 19 — widen objectives/initiatives status CHECK to allow
+//        'discarded' (007.16 S5) ───────────────────────────────────────────
+
+test("migration 19: a fresh migrated DB accepts UPDATE objectives SET status='discarded' without a CHECK violation", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m19-obj', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m19-obj', 'proj-m19-obj', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m19', 'init-m19-obj', 'O');
+    `);
+    assert.doesNotThrow(() => {
+      db.prepare("UPDATE objectives SET status = 'discarded' WHERE id = ?").run(
+        "obj-m19",
+      );
+    }, "objectives.status = 'discarded' must be accepted after migration 19");
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO objectives(id, initiativeId, name, status) VALUES (?, ?, ?, ?)",
+      ).run("obj-m19-bad", "init-m19-obj", "O", "abandoned");
+    }, "objectives.status CHECK should still reject an unknown value");
+  });
+});
+
+test("migration 19: a fresh migrated DB accepts UPDATE initiatives SET status='discarded' without a CHECK violation", () => {
+  withMigratedDb((db) => {
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m19-init', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m19', 'proj-m19-init', 'I');
+    `);
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "UPDATE initiatives SET status = 'discarded' WHERE id = ?",
+      ).run("init-m19");
+    }, "initiatives.status = 'discarded' must be accepted after migration 19");
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO initiatives(id, projectId, name, status) VALUES (?, ?, ?, ?)",
+      ).run("init-m19-bad", "proj-m19-init", "I", "abandoned");
+    }, "initiatives.status CHECK should still reject an unknown value");
   });
 });
 
@@ -959,7 +1142,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 16);
+    assert.equal(userVersion(db), 21);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -996,7 +1179,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 16);
+    assert.equal(report.version, 21);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1017,6 +1200,281 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
         "INSERT INTO publications(repo_id, branch, state, remote_oid) VALUES (?, ?, ?, ?)",
       ).run("repo-m15", "other", "bogus-state", null);
     }, /CHECK/i);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (u) migration 21 — EPIC 007.18 Story 2: re-stamp both sha stores ────────
+
+const S218_FIXTURE = {
+  title: "Implement API",
+  instructions: "do it",
+  ac: ["returns 200"],
+  agent: "generic@1",
+  verification: undefined as string[] | undefined,
+  dependencies: [] as string[],
+  objectiveId: "OBJ1",
+};
+
+test("canonicalTaskV21 is byte-identical to the live canonicalTask for a status-free fixture", () => {
+  assert.equal(canonicalTaskV21(S218_FIXTURE), canonicalTask(S218_FIXTURE));
+});
+
+test("canonicalTaskV20 pins the frozen status-bearing form", () => {
+  assert.equal(
+    canonicalTaskV20({ ...S218_FIXTURE, status: "pending" }),
+    '{"title":"Implement API","instructions":"do it","ac":["returns 200"],"agent":"generic@1","verification":null,"dependencies":[],"objectiveId":"OBJ1","status":"pending"}',
+  );
+});
+
+test("migration 21 re-stamps tasks.sha256 and creation_sha in lockstep for a progressed, untouched task", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m21-lockstep-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS.slice(0, 20));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m21a', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m21a', 'proj-m21a', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m21a', 'init-m21a', 'O');
+    `);
+
+    const content = { ...S218_FIXTURE, objectiveId: "obj-m21a" };
+    const liveSha = sha256Hex(
+      canonicalTaskV20({ ...content, status: "completed" }),
+    );
+    const baselineSha = sha256Hex(
+      canonicalTaskV20({ ...content, status: "pending" }),
+    );
+
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, instructions, ac, agent, status, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "task-m21a",
+      "obj-m21a",
+      content.title,
+      content.instructions,
+      JSON.stringify(content.ac),
+      content.agent,
+      "completed",
+      liveSha,
+    );
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, task_id, creation_sha) VALUES (?, ?, ?, ?, ?)",
+    ).run("pkg-m21a", "task", "task-m21a", "task-m21a", baselineSha);
+
+    migrate(db, MIGRATIONS);
+
+    const expected = sha256Hex(canonicalTask(content));
+    const taskRow = db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get("task-m21a") as { sha256: string };
+    const mapRow = db
+      .prepare("SELECT creation_sha FROM graph_import_map WHERE task_id = ?")
+      .get("task-m21a") as { creation_sha: string };
+
+    assert.equal(
+      taskRow.sha256,
+      expected,
+      "tasks.sha256 must equal the new status-less digest",
+    );
+    assert.equal(
+      mapRow.creation_sha,
+      expected,
+      "creation_sha must be re-stamped to the same digest (lockstep)",
+    );
+    assert.equal(taskRow.sha256, mapRow.creation_sha);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 21 leaves creation_sha alone for a task whose content genuinely drifted before migrating", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m21-realdrift-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS.slice(0, 20));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m21b', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m21b', 'proj-m21b', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m21b', 'init-m21b', 'O');
+    `);
+
+    const liveContent = {
+      ...S218_FIXTURE,
+      objectiveId: "obj-m21b",
+      title: "Implement API v2",
+    };
+    const originalContent = {
+      ...S218_FIXTURE,
+      objectiveId: "obj-m21b",
+      title: "Implement API",
+    };
+    const liveSha = sha256Hex(
+      canonicalTaskV20({ ...liveContent, status: "pending" }),
+    );
+    const staleBaseline = sha256Hex(
+      canonicalTaskV20({ ...originalContent, status: "pending" }),
+    );
+
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, instructions, ac, agent, status, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "task-m21b",
+      "obj-m21b",
+      liveContent.title,
+      liveContent.instructions,
+      JSON.stringify(liveContent.ac),
+      liveContent.agent,
+      "pending",
+      liveSha,
+    );
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, task_id, creation_sha) VALUES (?, ?, ?, ?, ?)",
+    ).run("pkg-m21b", "task", "task-m21b", "task-m21b", staleBaseline);
+
+    migrate(db, MIGRATIONS);
+
+    const expectedLive = sha256Hex(canonicalTask(liveContent));
+    const taskRow = db
+      .prepare("SELECT sha256 FROM tasks WHERE id = ?")
+      .get("task-m21b") as { sha256: string };
+    const mapRow = db
+      .prepare("SELECT creation_sha FROM graph_import_map WHERE task_id = ?")
+      .get("task-m21b") as { creation_sha: string };
+
+    assert.equal(
+      taskRow.sha256,
+      expectedLive,
+      "tasks.sha256 must be re-stamped to the live content's new digest",
+    );
+    assert.equal(
+      mapRow.creation_sha,
+      staleBaseline,
+      "creation_sha must be byte-identical to its seeded value — real drift must survive",
+    );
+    assert.notEqual(
+      taskRow.sha256,
+      mapRow.creation_sha,
+      "the row must still classify drifted after migrating",
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 21 leaves an objective's graph_import_map baseline (task_id NULL) untouched", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m21-obj-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS.slice(0, 20));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m21c', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m21c', 'proj-m21c', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m21c', 'init-m21c', 'O');
+    `);
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, objective_id, creation_sha) VALUES (?, ?, ?, ?, ?)",
+    ).run(
+      "pkg-m21c",
+      "objective",
+      "obj-m21c",
+      "obj-m21c",
+      "objective-creation-sha-unchanged",
+    );
+
+    migrate(db, MIGRATIONS);
+
+    const mapRow = db
+      .prepare(
+        "SELECT creation_sha FROM graph_import_map WHERE objective_id = ?",
+      )
+      .get("obj-m21c") as { creation_sha: string };
+    assert.equal(mapRow.creation_sha, "objective-creation-sha-unchanged");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 21 re-stamps only the graph_import_map row matching the undrifted baseline when two packages point to the same task", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m21-multipkg-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS.slice(0, 20));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m21d', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m21d', 'proj-m21d', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m21d', 'init-m21d', 'O');
+    `);
+
+    const content = { ...S218_FIXTURE, objectiveId: "obj-m21d" };
+    const liveSha = sha256Hex(
+      canonicalTaskV20({ ...content, status: "pending" }),
+    );
+    const matchingBaseline = liveSha; // seeded at pending, never ran → equals live
+    const nonMatchingBaseline = "stale-baseline-from-a-different-package";
+
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, instructions, ac, agent, status, sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "task-m21d",
+      "obj-m21d",
+      content.title,
+      content.instructions,
+      JSON.stringify(content.ac),
+      content.agent,
+      "pending",
+      liveSha,
+    );
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, task_id, creation_sha) VALUES (?, ?, ?, ?, ?)",
+    ).run("pkg-m21d-1", "task", "task-m21d", "task-m21d", matchingBaseline);
+    db.prepare(
+      "INSERT INTO graph_import_map(package_id, kind, ref, task_id, creation_sha) VALUES (?, ?, ?, ?, ?)",
+    ).run("pkg-m21d-2", "task", "task-m21d", "task-m21d", nonMatchingBaseline);
+
+    migrate(db, MIGRATIONS);
+
+    const expected = sha256Hex(canonicalTask(content));
+    const rows = db
+      .prepare(
+        "SELECT package_id, creation_sha FROM graph_import_map WHERE task_id = ? ORDER BY package_id",
+      )
+      .all("task-m21d") as Array<{ package_id: string; creation_sha: string }>;
+    const byPkg = new Map(rows.map((r) => [r.package_id, r.creation_sha]));
+
+    assert.equal(
+      byPkg.get("pkg-m21d-1"),
+      expected,
+      "the matching-baseline row must be re-stamped to the new digest",
+    );
+    assert.equal(
+      byPkg.get("pkg-m21d-2"),
+      nonMatchingBaseline,
+      "the non-matching-baseline row must be left byte-identical",
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 21 migrates cleanly with an empty tasks table", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m21-empty-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS.slice(0, 20));
+    assert.doesNotThrow(() => migrate(db, MIGRATIONS));
+    assert.equal(userVersion(db), 21);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

@@ -23,7 +23,7 @@ D1), `Credential { provider, value }` (stored secret, D0), `AIProvider
 - CLI flag map (`src/apps/cli/resource.ts`):
   - `create repository` → `--organization --branch [--path]` (path
     defaulted).
-  - `create credential`  → `--provider --value`.
+  - `create credential` → `--provider --value`.
   - `create ai-provider` → `--provider --model [--base-url]`.
   - Missing required flag → `MissingFlagError{flag}`, exit 1
     `error: missing required flag --<flag>`.
