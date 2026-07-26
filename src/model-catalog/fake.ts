@@ -16,4 +16,12 @@ export class FakeModelCatalog implements ModelCatalog {
       (p) => p.provider === provider && p.model === model,
     );
   }
+
+  hasProvider(provider: string): boolean {
+    return this.#validPairs.some((p) => p.provider === provider);
+  }
+
+  getEfforts(_provider: string, _model: string): string[] {
+    return ["minimal", "low", "medium", "high", "xhigh"];
+  }
 }

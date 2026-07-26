@@ -93,19 +93,7 @@ export class WrongTypeReferenceError extends Error {
   }
 }
 
-export class DuplicateNameError extends Error {
-  readonly kind: string;
-  readonly scope: string;
-  readonly errorName: string;
-
-  constructor(kind: string, scope: string, errorName: string) {
-    super(`a ${kind} named ${errorName} already exists in ${scope}`);
-    this.name = "DuplicateNameError";
-    this.kind = kind;
-    this.scope = scope;
-    this.errorName = errorName;
-  }
-}
+export { DuplicateNameError } from "../domain/errors.ts";
 
 export class AmbiguousNameError extends Error {
   readonly kind: string;

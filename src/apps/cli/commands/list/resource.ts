@@ -3,6 +3,7 @@ import { Command } from "commander";
 import type { CliDeps } from "../../deps.ts";
 import type { ResourceType } from "../../resource.ts";
 import { runListResources } from "../../resource.ts";
+import { runListAiProviders } from "../../ai-provider.ts";
 import { emitResult } from "../action.ts";
 import type { CliIo } from "../action.ts";
 
@@ -41,7 +42,38 @@ export function buildListCredentialCommand(deps: CliDeps, io: CliIo): Command {
 }
 
 export function buildListAiProviderCommand(deps: CliDeps, io: CliIo): Command {
-  return buildListResourceCommand("ai-provider", "ai_provider", deps, io);
+  return new Command("ai-provider")
+    .description("List global AI providers.")
+    .configureHelp({ commandUsage: () => "kanthord list ai-provider" })
+    .option("--project <id>", "ID of the project to list (project-scoped)")
+    .option("--json", "print AI providers as JSON")
+    .addHelpText(
+      "after",
+      "\nExample:\n  kanthord list ai-provider --json\n  kanthord list ai-provider --project project-1 --json\n",
+    )
+    .action((opts: { project?: string; json?: boolean }) => {
+      if (opts.project) {
+        emitResult(
+          runListResources(
+            {
+              project: opts.project,
+              ...(opts.json ? { json: true } : {}),
+            },
+            "ai_provider",
+            deps.listResources,
+          ),
+          io,
+        );
+      } else {
+        emitResult(
+          runListAiProviders(
+            { ...(opts.json ? { json: true } : {}) },
+            deps.listAiProviders,
+          ),
+          io,
+        );
+      }
+    });
 }
 
 export function buildListRepositoryCommand(deps: CliDeps, io: CliIo): Command {

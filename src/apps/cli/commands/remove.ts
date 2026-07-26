@@ -5,6 +5,7 @@ import type { CliIo } from "./action.ts";
 import { buildRemoveDependencyCommand } from "./remove/dependency.ts";
 import { buildRemoveInitiativeDependencyCommand } from "./remove/initiative-dependency.ts";
 import { buildRemoveObjectiveDependencyCommand } from "./remove/objective-dependency.ts";
+import { buildRemoveAiProviderCommand } from "./remove/ai-provider.ts";
 
 export function buildRemoveCommand(deps: CliDeps, io: CliIo): Command {
   const command = new Command("remove")
@@ -18,6 +19,7 @@ export function buildRemoveCommand(deps: CliDeps, io: CliIo): Command {
   command.addCommand(buildRemoveDependencyCommand(deps, io));
   command.addCommand(buildRemoveInitiativeDependencyCommand(deps, io));
   command.addCommand(buildRemoveObjectiveDependencyCommand(deps, io));
+  command.addCommand(buildRemoveAiProviderCommand(deps, io));
 
   return command;
 }

@@ -270,6 +270,46 @@ export interface GraphImportMap {
 }
 
 /**
+ * A record in the global ai_providers table.
+ * The `id` is the stable account identity; `value` holds the folded secret,
+ * excluded from every read-path output by use-case redaction.
+ */
+export interface GlobalAiProvider {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  baseUrl: string | null;
+  effort: string | null;
+  value: string | null;
+  state: "active" | "logged_out";
+  credentialVersion: number;
+}
+
+/**
+ * Registry for the global ai_providers store + default pointer (008.1).
+ * Every method is synchronous (backed by `node:sqlite`).
+ */
+export interface AiProviderRegistry {
+  register(input: {
+    name: string;
+    provider: string;
+    model: string;
+    baseUrl?: string;
+    effort?: string;
+    value: string;
+  }): GlobalAiProvider;
+  list(): GlobalAiProvider[];
+  get(id: string): GlobalAiProvider | undefined;
+  getDefault(): GlobalAiProvider | undefined;
+  setDefault(id: string): void;
+  /** Clears the default pointer. Legal to call when no default is set. */
+  clearDefault(): void;
+  logout(id: string): void;
+  remove(id: string): void;
+}
+
+/**
  * Repository for reading and writing initiative-level and objective-level
  * sequencing edges. The six methods beyond the read-only query interface
  * support the Story 4 use cases (add/remove edge, DAG queries).

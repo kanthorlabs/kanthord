@@ -32,6 +32,18 @@ import {
   ImmutableFieldError,
   CacheConflictError,
 } from "../../app/resource/update-resource.ts";
+import {
+  LoggedOutProviderError,
+  DefaultNeedsReplacementError,
+  SelfReplacementError,
+  UnknownProviderError,
+  CorruptDefaultPointerError,
+  UnnecessaryReplacementError,
+  InvalidEffortError,
+  InvalidBaseUrlError,
+  ConflictingDefaultChoiceError,
+  EmptyValueError,
+} from "../../app/ai-provider/errors.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -73,7 +85,17 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof SequencingLockedError ||
     err instanceof SequencingScopeError ||
     err instanceof ImmutableFieldError ||
-    err instanceof CacheConflictError
+    err instanceof CacheConflictError ||
+    err instanceof LoggedOutProviderError ||
+    err instanceof DefaultNeedsReplacementError ||
+    err instanceof SelfReplacementError ||
+    err instanceof UnknownProviderError ||
+    err instanceof CorruptDefaultPointerError ||
+    err instanceof UnnecessaryReplacementError ||
+    err instanceof InvalidEffortError ||
+    err instanceof InvalidBaseUrlError ||
+    err instanceof ConflictingDefaultChoiceError ||
+    err instanceof EmptyValueError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

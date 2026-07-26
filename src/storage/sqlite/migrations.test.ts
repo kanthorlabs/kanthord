@@ -67,10 +67,12 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 21 and creates all tables including edge tables", () => {
+test("migrates to version 22 and creates all tables including ai_providers and edge tables", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 21);
+    assert.equal(userVersion(db), 22);
     assert.deepEqual(userTables(db), [
+      "ai_provider_default",
+      "ai_providers",
       "events",
       "graph_import_map",
       "initiative_dependencies",
@@ -222,6 +224,21 @@ test("schema columns match locked DDL for all tables", () => {
       "objectiveId",
       "dependency",
     ]);
+    assert.deepEqual(columnNames(db, "ai_providers"), [
+      "id",
+      "name",
+      "provider",
+      "model",
+      "baseUrl",
+      "effort",
+      "value",
+      "state",
+      "credentialVersion",
+    ]);
+    assert.deepEqual(columnNames(db, "ai_provider_default"), [
+      "id",
+      "providerId",
+    ]);
   });
 });
 
@@ -302,6 +319,13 @@ test("CHECK constraints reject invalid status and type values", () => {
         "invalid",
       );
     }, "jobs.status CHECK should reject invalid value");
+
+    // ai_providers.state CHECK
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO ai_providers(id,name,provider,model,value,state) VALUES (?,?,?,?,?,?)",
+      ).run("a", "n", "p", "m", "v", "bogus");
+    }, "ai_providers.state CHECK should reject invalid value");
   });
 });
 
@@ -413,7 +437,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 21);
+    assert.equal(second.version, 22);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -826,8 +850,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      21,
-      "schema version must be 21 after all migrations",
+      22,
+      "schema version must be 22 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -959,7 +983,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 21);
+    assert.equal(userVersion(db), 22);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1063,7 +1087,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 21);
+    assert.equal(userVersion(db), 22);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1142,7 +1166,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 21);
+    assert.equal(userVersion(db), 22);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1179,7 +1203,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 21);
+    assert.equal(report.version, 22);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1474,7 +1498,7 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 21);
+    assert.equal(userVersion(db), 22);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

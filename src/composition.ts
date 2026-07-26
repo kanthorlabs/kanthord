@@ -104,6 +104,13 @@ import { GitRepositoryLanding } from "./landing/git.ts";
 import { GetConflict } from "./app/task/get-conflict.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { SqlitePublicationRepository } from "./storage/sqlite/publication.ts";
+import { SqliteAiProviderRegistry } from "./storage/sqlite/ai-provider-registry.ts";
+import { RegisterAiProvider } from "./app/ai-provider/register-ai-provider.ts";
+import { GetAiProvider } from "./app/ai-provider/get-ai-provider.ts";
+import { ListAiProviders } from "./app/ai-provider/list-ai-providers.ts";
+import { SetDefaultAiProvider } from "./app/ai-provider/set-default-ai-provider.ts";
+import { LogoutAiProvider } from "./app/ai-provider/logout-ai-provider.ts";
+import { RemoveAiProvider } from "./app/ai-provider/remove-ai-provider.ts";
 import { GitRepositoryPublisher } from "./publication/git.ts";
 import { PublishRepository } from "./app/repository/publish-repository.ts";
 import { isRepository } from "./domain/resource.ts";
@@ -210,6 +217,17 @@ export function buildDeps(
   );
   const findResource = new FindResource(projectRepository);
   const publicationRepository = new SqlitePublicationRepository(db);
+  const aiProviderRegistry = new SqliteAiProviderRegistry(db);
+  const registerAiProvider = new RegisterAiProvider(
+    aiProviderRegistry,
+    unitOfWork,
+    modelCatalog,
+  );
+  const getAiProvider = new GetAiProvider(aiProviderRegistry);
+  const listAiProviders = new ListAiProviders(aiProviderRegistry);
+  const setDefaultAiProvider = new SetDefaultAiProvider(aiProviderRegistry);
+  const logoutAiProvider = new LogoutAiProvider(aiProviderRegistry, unitOfWork);
+  const removeAiProvider = new RemoveAiProvider(aiProviderRegistry, unitOfWork);
   const getResource = new GetResource(projectRepository, publicationRepository);
   const listResources = new ListResources(projectRepository);
   const homePathExists = async (path: string): Promise<boolean> => {
@@ -833,6 +851,12 @@ export function buildDeps(
     diagnosticsExport,
     repoLanding,
     publishRepository,
+    registerAiProvider,
+    getAiProvider,
+    listAiProviders,
+    setDefaultAiProvider,
+    logoutAiProvider,
+    removeAiProvider,
     resolveHomeDir,
     workspaces,
     newId,

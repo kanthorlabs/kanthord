@@ -9,6 +9,7 @@ import { buildGetConflictCommand } from "./get/conflict.ts";
 import { buildGetInitiativeCommand } from "./get/initiative.ts";
 import { buildGetObjectiveCommand } from "./get/objective.ts";
 import { buildGetRepositoryCommand } from "./get/repository.ts";
+import { buildGetAiProviderCommand } from "./get/ai-provider.ts";
 
 export function buildGetCommand(deps: CliDeps, io: CliIo): Command {
   const command = new Command("get")
@@ -26,6 +27,7 @@ export function buildGetCommand(deps: CliDeps, io: CliIo): Command {
   command.addCommand(buildGetInitiativeCommand(deps, io));
   command.addCommand(buildGetObjectiveCommand(deps, io));
   command.addCommand(buildGetRepositoryCommand(deps, io));
+  command.addCommand(buildGetAiProviderCommand(deps, io));
 
   return command;
 }

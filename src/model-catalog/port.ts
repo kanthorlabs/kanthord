@@ -7,6 +7,10 @@
 export interface ModelCatalog {
   /** Returns true if the (provider, model) pair is known and usable. */
   isValid(provider: string, model: string): boolean;
+  /** Returns true if the provider kind exists in the catalog. */
+  hasProvider(provider: string): boolean;
+  /** Returns the valid reasoning effort levels for the given provider/model pair. */
+  getEfforts(provider: string, model: string): string[];
 }
 
 /**

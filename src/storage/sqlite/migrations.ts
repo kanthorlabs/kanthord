@@ -677,4 +677,27 @@ CREATE TABLE objective_dependencies (
       }
     },
   },
+  {
+    version: 22,
+    name: "008.1-s-ai-provider-registry",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE ai_providers (
+  id                TEXT PRIMARY KEY,
+  name              TEXT NOT NULL UNIQUE,
+  provider          TEXT NOT NULL,
+  model             TEXT NOT NULL,
+  baseUrl           TEXT,
+  effort            TEXT,
+  value             TEXT,
+  state             TEXT NOT NULL DEFAULT 'active'
+                    CHECK (state IN ('active','logged_out')),
+  credentialVersion INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE ai_provider_default (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  providerId TEXT NOT NULL REFERENCES ai_providers(id)
+);
+`),
+  },
 ];

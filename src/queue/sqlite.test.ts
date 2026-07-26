@@ -196,6 +196,13 @@ function spawnWorker(
 ): {
   ready: Promise<void>;
   done: Promise<WorkerResult>;
+  /**
+   * Kills the child. Callers MUST invoke this before removing the barrier's temp
+   * dir: a worker still waiting on a barrier that can never appear keeps the
+   * test-file process alive, which hangs `node --test` forever — a timed-out or
+   * failed assertion must not be able to strand a child.
+   */
+  kill: () => void;
 } {
   const args = ["--db", dbPath, "--wait-for", barrierFile];
   if (batch) args.push("--batch");
@@ -247,7 +254,14 @@ function spawnWorker(
     });
   });
 
-  return { ready, done };
+  return {
+    ready,
+    done,
+    kill: () => {
+      if (child.exitCode === null && child.signalCode === null)
+        child.kill("SIGKILL");
+    },
+  };
 }
 
 test(
@@ -257,9 +271,6 @@ test(
     const dir = mkdtempSync(join(tmpdir(), "kanthord-race-test-"));
     const dbPath = join(dir, "race.db");
     const barrierFile = join(dir, "barrier");
-    after(() => {
-      rmSync(dir, { recursive: true });
-    });
 
     const db = openDatabase(dbPath);
     migrate(db, MIGRATIONS);
@@ -270,6 +281,13 @@ test(
 
     const w1 = spawnWorker(dbPath, barrierFile);
     const w2 = spawnWorker(dbPath, barrierFile);
+    // Kill the children BEFORE removing the dir — removing it first strands any
+    // still-waiting worker on a barrier that can never appear.
+    after(() => {
+      w1.kill();
+      w2.kill();
+      rmSync(dir, { recursive: true, force: true });
+    });
 
     await Promise.all([w1.ready, w2.ready]);
     writeFileSync(barrierFile, "go");
@@ -566,9 +584,6 @@ test(
     const dir = mkdtempSync(join(tmpdir(), "kanthord-batch-test-"));
     const dbPath = join(dir, "batch.db");
     const barrierFile = join(dir, "barrier");
-    after(() => {
-      rmSync(dir, { recursive: true });
-    });
 
     const db = openDatabase(dbPath);
     migrate(db, MIGRATIONS);
@@ -583,6 +598,12 @@ test(
 
     const w1 = spawnWorker(dbPath, barrierFile, true);
     const w2 = spawnWorker(dbPath, barrierFile, true);
+    // Kill the children BEFORE removing the dir — see the race test above.
+    after(() => {
+      w1.kill();
+      w2.kill();
+      rmSync(dir, { recursive: true, force: true });
+    });
 
     await Promise.all([w1.ready, w2.ready]);
     writeFileSync(barrierFile, "go");

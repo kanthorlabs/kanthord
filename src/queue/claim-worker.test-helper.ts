@@ -34,8 +34,29 @@ const queue = new SqliteJobQueue(db);
 
 process.stdout.write("ready\n");
 
+/**
+ * Bounded wait for the barrier. Two failure modes made the unbounded tight poll
+ * that used to live here hang `npm run verify` indefinitely: the parent deletes
+ * the temp dir in its `after` hook, so a worker still waiting can never see the
+ * barrier appear; and a spinning child keeps the test-file process alive, so
+ * `node --test` never exits even after the test itself has timed out.
+ * The 1ms sleep keeps the two workers waking within a millisecond of each other
+ * — still a real race for a claim — without burning a core, which under load
+ * was starving the very parent that had to write the barrier.
+ */
+const BARRIER_TIMEOUT_MS = 30_000;
+const POLL_MS = 1;
+const sleeper = new Int32Array(new SharedArrayBuffer(4));
+const barrierDeadline = Date.now() + BARRIER_TIMEOUT_MS;
+
 while (!existsSync(barrierFile)) {
-  // tight poll
+  if (Date.now() >= barrierDeadline) {
+    process.stderr.write(
+      `barrier ${barrierFile} did not appear within ${BARRIER_TIMEOUT_MS}ms; giving up\n`,
+    );
+    process.exit(2);
+  }
+  Atomics.wait(sleeper, 0, 0, POLL_MS);
 }
 
 if (batch) {

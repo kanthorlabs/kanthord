@@ -16,14 +16,17 @@ import { buildImportCommand } from "./commands/import.ts";
 import { buildLandCommand } from "./commands/land.ts";
 import { buildListCommand } from "./commands/list.ts";
 import { buildLoginCommand } from "./commands/login.ts";
+import { buildLogoutCommand } from "./commands/logout.ts";
 import { buildPauseCommand } from "./commands/pause.ts";
 import { buildPublishCommand } from "./commands/publish.ts";
 import { buildRejectCommand } from "./commands/reject.ts";
+import { buildRegisterCommand } from "./commands/register.ts";
 import { buildRemoveCommand } from "./commands/remove.ts";
 import { buildRenameCommand } from "./commands/rename.ts";
 import { buildResumeCommand } from "./commands/resume.ts";
 import { buildRetryCommand } from "./commands/retry.ts";
 import { buildRunCommand } from "./commands/run.ts";
+import { buildSetDefaultCommand } from "./commands/set-default.ts";
 import { buildUpdateCommand } from "./commands/update.ts";
 import type { CliDeps } from "./deps.ts";
 
@@ -51,6 +54,9 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const importCommand = buildImportCommand(deps, io).name("import");
   const exportCommand = buildExportCommand(deps, io).name("export");
   const login = buildLoginCommand(deps, io).name("login");
+  const logout = buildLogoutCommand(deps, io).name("logout");
+  const register = buildRegisterCommand(deps, io).name("register");
+  const setDefault = buildSetDefaultCommand(deps, io).name("set-default");
   const run = buildRunCommand(deps, io).name("run");
   const land = buildLandCommand(deps, io).name("land");
   const publish = buildPublishCommand(deps, io).name("publish");
@@ -80,6 +86,9 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(importCommand)
     .addCommand(exportCommand)
     .addCommand(login)
+    .addCommand(logout)
+    .addCommand(register)
+    .addCommand(setDefault)
     .addCommand(run)
     .addCommand(land)
     .addCommand(publish);

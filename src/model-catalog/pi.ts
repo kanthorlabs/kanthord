@@ -28,4 +28,12 @@ export class PiModelCatalog implements ModelCatalog {
     const models = this.#listModels(provider);
     return models.some((m) => m.provider === provider && m.id === model);
   }
+
+  hasProvider(provider: string): boolean {
+    return this.#listModels(provider).length > 0;
+  }
+
+  getEfforts(_provider: string, _model: string): string[] {
+    return ["minimal", "low", "medium", "high", "xhigh"];
+  }
 }
