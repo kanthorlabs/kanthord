@@ -19,6 +19,9 @@ function active(id: string): GlobalAiProvider {
     baseUrl: null,
     effort: null,
     credentialVersion: 1,
+    api: null,
+    contextWindow: null,
+    maxTokens: null,
   };
 }
 
@@ -33,6 +36,9 @@ function loggedOut(id: string): GlobalAiProvider {
     baseUrl: null,
     effort: null,
     credentialVersion: 1,
+    api: null,
+    contextWindow: null,
+    maxTokens: null,
   };
 }
 

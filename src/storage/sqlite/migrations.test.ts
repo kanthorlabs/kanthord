@@ -859,7 +859,7 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      23,
+      24,
       "schema version must be 24 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.

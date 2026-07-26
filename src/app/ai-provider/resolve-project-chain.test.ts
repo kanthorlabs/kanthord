@@ -41,6 +41,9 @@ class FakeRegistry implements AiProviderRegistry {
       value: input.value,
       state: "active",
       credentialVersion: 1,
+      api: null,
+      contextWindow: null,
+      maxTokens: null,
     };
     this.#store.set(id, record);
     return { ...record };
@@ -144,6 +147,9 @@ function makeProvider(
     value: "sk-secret",
     state: "active",
     credentialVersion: 1,
+    api: null,
+    contextWindow: null,
+    maxTokens: null,
     ...overrides,
   };
 }
