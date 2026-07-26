@@ -12,51 +12,42 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { AIProvider, Credential } from "../domain/resource.ts";
+import type { ResolvedProvider } from "./port.ts";
 import { PiProviderSessionFactory } from "./pi-session.ts";
+import type { AiProviderRegistry } from "../storage/port.ts";
 
 // ---------- fixture builders -------------------------------------------------
 
-function makeCredential(overrides: Partial<Credential> = {}): Credential {
-  return {
-    id: "cred-01",
-    type: "credential",
-    name: "custom-key",
-    provider: "qwen-token-plan",
-    value: "sk-custom-val",
-    ...overrides,
-  };
-}
-
 /**
  * Build a provider that represents a custom OpenAI-compatible record.
- * The `api` field signals custom-provier reconstruction; at the domain-type
+ * The `api` field signals custom-provider reconstruction; at the domain-type
  * level it is spliced in as an extra field the session factory will read.
  */
 function makeCustomProvider(
   id: string,
-  overrides: Partial<AIProvider> & {
+  overrides: Partial<ResolvedProvider> & {
     api?: "openai-completions" | "openai-responses";
     contextWindow?: number;
     maxTokens?: number;
   } = {},
-): AIProvider & {
+): ResolvedProvider & {
   api: "openai-completions" | "openai-responses";
   contextWindow: number;
   maxTokens: number;
 } {
   return {
     id,
-    type: "ai_provider",
     name: "custom-qwen",
     provider: "qwen-token-plan",
     model: "qwen-max",
+    value: "sk-custom-val",
+    credentialVersion: 1,
     baseUrl: "http://localhost:8080/v1",
     api: "openai-completions",
     contextWindow: 32768,
     maxTokens: 4096,
     ...overrides,
-  } as AIProvider & {
+  } as ResolvedProvider & {
     api: "openai-completions" | "openai-responses";
     contextWindow: number;
     maxTokens: number;
@@ -64,9 +55,58 @@ function makeCustomProvider(
 }
 
 function makeFactory(): PiProviderSessionFactory {
-  return new PiProviderSessionFactory({
-    saveCredentialValue: () => {},
-  });
+  const registry: AiProviderRegistry = {
+    updateCredentialCAS: () => ({ applied: false as const }),
+    register: () => {
+      throw new Error("not implemented");
+    },
+    list: () => {
+      throw new Error("not implemented");
+    },
+    get: () => {
+      throw new Error("not implemented");
+    },
+    getDefault: () => {
+      throw new Error("not implemented");
+    },
+    setDefault: () => {
+      throw new Error("not implemented");
+    },
+    clearDefault: () => {
+      throw new Error("not implemented");
+    },
+    logout: () => {
+      throw new Error("not implemented");
+    },
+    remove: () => {
+      throw new Error("not implemented");
+    },
+    assign: () => {
+      throw new Error("not implemented");
+    },
+    unassign: () => {
+      throw new Error("not implemented");
+    },
+    listAssigned: () => {
+      throw new Error("not implemented");
+    },
+    maxRank: () => {
+      throw new Error("not implemented");
+    },
+    shiftRanksFrom: () => {
+      throw new Error("not implemented");
+    },
+    compactRanks: () => {
+      throw new Error("not implemented");
+    },
+    getAssignment: () => {
+      throw new Error("not implemented");
+    },
+    listProjectsAssigning: () => {
+      throw new Error("not implemented");
+    },
+  };
+  return new PiProviderSessionFactory({ registry });
 }
 
 // ---------- custom-provider session reconstruction ---------------------------
@@ -74,7 +114,7 @@ function makeFactory(): PiProviderSessionFactory {
 test("PiProviderSessionFactory custom provider returns session with model.provider derived from record id", async () => {
   const factory = makeFactory();
   const provider = makeCustomProvider("aip-custom-1");
-  const session = await factory.for(provider, makeCredential());
+  const session = await factory.for(provider);
 
   // The runtimeId must be derived from the record id, not the bare
   // --custom-provider-id, so two accounts of the same kind never collide.
@@ -90,7 +130,7 @@ test("PiProviderSessionFactory custom provider sets model.baseUrl from the custo
   const provider = makeCustomProvider("aip-custom-2", {
     baseUrl: "https://my-gateway.example.com/v1",
   });
-  const session = await factory.for(provider, makeCredential());
+  const session = await factory.for(provider);
 
   assert.equal(
     session.model.baseUrl,
@@ -101,11 +141,10 @@ test("PiProviderSessionFactory custom provider sets model.baseUrl from the custo
 
 test("PiProviderSessionFactory custom provider getApiKey returns the credential value", async () => {
   const factory = makeFactory();
-  const provider = makeCustomProvider("aip-custom-3");
-  const session = await factory.for(
-    provider,
-    makeCredential({ value: "sk-my-folded-key" }),
-  );
+  const provider = makeCustomProvider("aip-custom-3", {
+    value: "sk-my-folded-key",
+  });
+  const session = await factory.for(provider);
 
   assert.equal(
     session.getApiKey(),
@@ -118,7 +157,7 @@ test("PiProviderSessionFactory custom provider does not throw for a valid custom
   const factory = makeFactory();
   const provider = makeCustomProvider("aip-custom-4");
   // Should resolve without UnknownModelError or CredentialError
-  const session = await factory.for(provider, makeCredential());
+  const session = await factory.for(provider);
   assert.ok(session, "session is returned for a valid custom record");
   assert.ok(session.model, "session has a model");
   assert.equal(
@@ -171,8 +210,8 @@ test("PiProviderSessionFactory custom provider streamFn produces text events thr
 
   try {
     provider.baseUrl = `http://127.0.0.1:${port}/v1`;
-    const credential = makeCredential({ value: "sk-secret-key" });
-    const session = await factory.for(provider, credential);
+    provider.value = "sk-secret-key";
+    const session = await factory.for(provider);
 
     // Drain the stream — if auth is missing, pi will error with "No API key"
     const texts: string[] = [];
@@ -212,8 +251,8 @@ test("PiProviderSessionFactory two custom records with different ids yield disti
   const provider1 = makeCustomProvider("aip-custom-5");
   const provider2 = makeCustomProvider("aip-custom-6");
 
-  const session1 = await factory.for(provider1, makeCredential());
-  const session2 = await factory.for(provider2, makeCredential());
+  const session1 = await factory.for(provider1);
+  const session2 = await factory.for(provider2);
 
   assert.notEqual(
     session1.model.provider,
@@ -233,7 +272,7 @@ test("PiProviderSessionFactory custom provider with openai-responses flavor retu
   const provider = makeCustomProvider("aip-responses-1", {
     api: "openai-responses",
   });
-  const session = await factory.for(provider, makeCredential());
+  const session = await factory.for(provider);
 
   assert.ok(
     session,

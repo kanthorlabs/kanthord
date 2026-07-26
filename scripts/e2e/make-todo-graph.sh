@@ -5,8 +5,7 @@
 # a TODO API with five REST endpoints, one task per endpoint. The four
 # read/update/delete tasks depend on the create task (the data model + server
 # land first). Every task uses agent generic@1 and binds three aliases
-# (source/provider/cred) because generic@1 requires repository + ai_provider +
-# credential context.
+# (source) because generic@1 requires repository context only.
 #
 # Usage: scripts/e2e/make-todo-graph.sh <out-dir>
 #
@@ -31,8 +30,6 @@ ref: todo-api-init
 name: TODO application API
 bindings:
   source: repository
-  provider: ai_provider
-  cred: credential
 ---
 EOF
 
@@ -57,8 +54,6 @@ title: Create Task — POST /tasks
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Implement `POST /tasks` in `src/todo.mjs` using `node:http`. Accept a JSON body
@@ -89,8 +84,6 @@ agent: generic@1
 dependencies: [create-task]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Implement `GET /tasks` in `src/todo.mjs`. Return all tasks as JSON. Support
@@ -119,8 +112,6 @@ agent: generic@1
 dependencies: [create-task]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Implement `GET /tasks/:id` in `src/todo.mjs`. Return the task as JSON, or `404`
@@ -147,8 +138,6 @@ agent: generic@1
 dependencies: [create-task]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Implement `PUT /tasks/:id` in `src/todo.mjs`. Accept a JSON body and update the
@@ -176,8 +165,6 @@ agent: generic@1
 dependencies: [create-task]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Implement `DELETE /tasks/:id` in `src/todo.mjs`. Remove the matching task and

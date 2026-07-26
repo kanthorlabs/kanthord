@@ -1,9 +1,5 @@
 /**
  * Story 05 T4 — CLI `update <type>` commands via dispatch.
- *
- * Fails today: none of "update ai-provider", "update credential",
- * "update repository" etc. exist in COMMANDS → dispatch returns
- * exitCode 1 "unknown command" for every case.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -36,80 +32,6 @@ async function bootstrapProject(
   );
   return rp.stdout[0]!;
 }
-
-// ---------------------------------------------------------------------------
-// T4a: update ai-provider with valid model → exitCode 0
-// ---------------------------------------------------------------------------
-test("T4a: dispatch update ai-provider with valid model (gpt-5.6-sol) returns exitCode 0", async () => {
-  const { dir, dbPath } = makeDb();
-  try {
-    const deps = buildDeps(dbPath);
-    const PROJECT = await bootstrapProject(deps, "t4a");
-
-    // Seed via use case directly (PiModelCatalog validates gpt-5.6-terra at create).
-    const aipId = await deps.addResource.execute({
-      type: "ai_provider",
-      projectId: PROJECT,
-      name: "gpt",
-      provider: "openai-codex",
-      model: "gpt-5.6-terra",
-    });
-
-    const result = await dispatch(
-      ["update", "ai-provider", "--id", aipId, "--model", "gpt-5.6-sol"],
-      deps,
-    );
-    assert.equal(
-      result.exitCode,
-      0,
-      `expected exitCode 0 for valid model update, got: ${result.stderr.join("")}`,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// T4b: update ai-provider with unknown model → exitCode 1 with 'list model'
-// ---------------------------------------------------------------------------
-test("T4b: dispatch update ai-provider with unknown model returns exitCode 1 with 'list model' in stderr", async () => {
-  const { dir, dbPath } = makeDb();
-  try {
-    const deps = buildDeps(dbPath);
-    const PROJECT = await bootstrapProject(deps, "t4b");
-
-    const aipId = await deps.addResource.execute({
-      type: "ai_provider",
-      projectId: PROJECT,
-      name: "gpt",
-      provider: "openai-codex",
-      model: "gpt-5.6-terra",
-    });
-
-    const result = await dispatch(
-      ["update", "ai-provider", "--id", aipId, "--model", "no-such-model-xyz"],
-      deps,
-    );
-    assert.equal(
-      result.exitCode,
-      1,
-      "unknown model update must return exitCode 1",
-    );
-    // The error must come from model validation (UnknownModelError), NOT from
-    // an "unknown command" response. "unknown command" stderr proves the
-    // command itself is missing (vacuous pass guard).
-    assert.ok(
-      !result.stderr.join("").includes("unknown command"),
-      `command must exist; got "unknown command" → add 'update ai-provider' to COMMANDS. stderr: ${result.stderr.join("")}`,
-    );
-    assert.ok(
-      result.stderr.join("").toLowerCase().includes("list model"),
-      `expected 'list model' from UnknownModelError in stderr, got: ${result.stderr.join("")}`,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 // ---------------------------------------------------------------------------
 // T4c: update credential with --value-file → exitCode 0
@@ -183,38 +105,6 @@ test("T4d: dispatch update credential with --value (old flag) returns exitCode 1
 });
 
 // ---------------------------------------------------------------------------
-// T4e: update ai-provider with --clear-effort → exitCode 0
-// ---------------------------------------------------------------------------
-test("T4e: dispatch update ai-provider with --clear-effort returns exitCode 0", async () => {
-  const { dir, dbPath } = makeDb();
-  try {
-    const deps = buildDeps(dbPath);
-    const PROJECT = await bootstrapProject(deps, "t4e");
-
-    const aipId = await deps.addResource.execute({
-      type: "ai_provider",
-      projectId: PROJECT,
-      name: "gpt",
-      provider: "openai-codex",
-      model: "gpt-5.6-terra",
-      effort: "medium",
-    });
-
-    const result = await dispatch(
-      ["update", "ai-provider", "--id", aipId, "--clear-effort"],
-      deps,
-    );
-    assert.equal(
-      result.exitCode,
-      0,
-      `expected exitCode 0 for --clear-effort, got: ${result.stderr.join("")}`,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// ---------------------------------------------------------------------------
 // T4f: update repository when home path exists → exitCode 1 (CacheConflictError)
 // ---------------------------------------------------------------------------
 test("T4f: dispatch update repository when home path exists returns exitCode 1 (CacheConflictError)", async () => {
@@ -263,6 +153,19 @@ test("T4f: dispatch update repository when home path exists returns exitCode 1 (
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BLOCKER S2 — dead runUpdateAiProvider must be removed from resource.ts
+// ══════════════════════════════════════════════════════════════════════════════
+
+test("BLOCKER S2: runUpdateAiProvider is not exported from resource.ts", async () => {
+  const mod = await import("./resource.ts");
+  assert.equal(
+    typeof (mod as Record<string, unknown>).runUpdateAiProvider,
+    "undefined",
+    "runUpdateAiProvider must be removed from exports",
+  );
 });
 
 // ---------------------------------------------------------------------------

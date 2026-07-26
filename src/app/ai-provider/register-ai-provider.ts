@@ -23,6 +23,22 @@ import {
   CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS,
 } from "../../domain/resource.ts";
 
+/**
+ * Register provider callback (BLOCKER 9): routes through registerGlobalProvider
+ * instead of inline registry.register + setDefault.
+ */
+export type RegisterProvider = (
+  registry: AiProviderRegistry,
+  params: {
+    name: string;
+    provider: string;
+    model: string;
+    value: string;
+    baseUrl?: string;
+    effort?: string;
+  },
+) => string;
+
 export interface RegisterAiProviderInput {
   name: string;
   provider: string;
@@ -47,17 +63,20 @@ export class RegisterAiProvider {
   readonly #uow: UnitOfWork;
   readonly #catalog: ModelCatalog | undefined;
   readonly #warn: ((msg: string) => void) | undefined;
+  readonly #registerProvider: RegisterProvider | undefined;
 
   constructor(
     registry: AiProviderRegistry,
     uow: UnitOfWork,
     catalog?: ModelCatalog,
     warn?: (msg: string) => void,
+    registerProvider?: RegisterProvider,
   ) {
     this.#registry = registry;
     this.#uow = uow;
     this.#catalog = catalog;
     this.#warn = warn;
+    this.#registerProvider = registerProvider;
   }
 
   execute(input: RegisterAiProviderInput): string {
@@ -177,6 +196,19 @@ export class RegisterAiProvider {
         } catch {
           throw new InvalidBaseUrlError(input.baseUrl);
         }
+      }
+
+      // BLOCKER 9: when a registerProvider helper is wired, route the builtin
+      // path through it (e.g. registerGlobalProvider) instead of inline register.
+      if (this.#registerProvider !== undefined) {
+        return this.#registerProvider(this.#registry, {
+          name: input.name,
+          provider: input.provider,
+          model: input.model,
+          value: input.value,
+          baseUrl: input.baseUrl,
+          effort: input.effort,
+        });
       }
 
       const provider = this.#registry.register({

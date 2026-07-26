@@ -165,7 +165,7 @@ class RollbackProjectRepository extends FakeProjectRepository {
 const PROJECT_ID = "proj-001";
 const PROJECT: Project = { id: PROJECT_ID, name: "test-project" };
 
-test("ImportResources (a): 3 valid entries → 3 ULIDs, all persisted", async () => {
+test("ImportResources (a): 2 valid entries → 2 ULIDs, all persisted", async () => {
   const repo = new FakeProjectRepository();
   repo.addProject(PROJECT);
   const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
@@ -175,23 +175,17 @@ test("ImportResources (a): 3 valid entries → 3 ULIDs, all persisted", async ()
   const entries = [
     { type: "credential", name: "cred-1", provider: "openai", value: "key-1" },
     { type: "credential", name: "cred-2", provider: "openai", value: "key-2" },
-    {
-      type: "ai_provider",
-      name: "gpt",
-      provider: "openai",
-      model: "gpt-4",
-    },
   ];
 
   const ids = await importer.execute({ projectId: PROJECT_ID, entries });
 
-  assert.equal(ids.length, 3, "must return 3 ULIDs");
+  assert.equal(ids.length, 2, "must return 2 ULIDs");
   for (const id of ids) {
     assert.ok(id.length > 0, "each ULID must be non-empty");
   }
-  // All 3 resources persisted
+  // Both resources persisted
   const persisted = repo.listResources(PROJECT_ID);
-  assert.equal(persisted.length, 3, "all 3 resources must be persisted");
+  assert.equal(persisted.length, 2, "both resources must be persisted");
   assert.ok(
     persisted.some((r) => r.name === "cred-1"),
     "cred-1 must be persisted",
@@ -199,10 +193,6 @@ test("ImportResources (a): 3 valid entries → 3 ULIDs, all persisted", async ()
   assert.ok(
     persisted.some((r) => r.name === "cred-2"),
     "cred-2 must be persisted",
-  );
-  assert.ok(
-    persisted.some((r) => r.name === "gpt"),
-    "gpt must be persisted",
   );
 });
 

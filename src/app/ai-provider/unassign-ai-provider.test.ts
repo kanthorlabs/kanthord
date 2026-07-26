@@ -76,6 +76,14 @@ class FakeRegistry implements AiProviderRegistry {
 
   remove(_id: string): void {}
 
+  updateCredentialCAS(
+    _id: string,
+    _value: string,
+    _expectedVersion: number,
+  ): { applied: true; newVersion: number } | { applied: false } {
+    return { applied: false };
+  }
+
   assign(projectId: string, providerId: string, rank: number): void {
     const key = `${projectId}:${providerId}`;
     if (this.#assignments.has(key)) {

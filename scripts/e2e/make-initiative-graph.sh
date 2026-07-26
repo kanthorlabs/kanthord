@@ -23,8 +23,7 @@
 # onto objective A's commit via domain state, so their commits are ordered even
 # though neither is integrated yet. Brokering into home happens later, one
 # objective at a time, via `approve objective`. Every task uses generic@1 and
-# binds three aliases (source/provider/cred) because generic@1 requires
-# repository + ai_provider + credential context.
+# binds only the source alias because generic@1 requires repository context only.
 #
 # The fake-agent turns are served identically to every `.for()` call
 # (src/agent-runner/fake-session.ts) — NOT keyed per task — so the bash turn
@@ -49,8 +48,6 @@ ref: init-wf-init
 name: Initiative-branch workflow
 bindings:
   source: repository
-  provider: ai_provider
-  cred: credential
 ---
 EOF
 
@@ -75,8 +72,6 @@ title: Objective A · step 1
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Append the objective-A step-1 marker line to `src/todo.mjs` in the initiative
@@ -99,8 +94,6 @@ agent: generic@1
 dependencies: [init-a-1]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Append the objective-A step-2 marker line to `src/todo.mjs`. Runs after
@@ -135,8 +128,6 @@ agent: generic@1
 dependencies: [init-a-2]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Append the objective-B step-1 marker line to `src/todo.mjs`. The cross-objective
@@ -160,8 +151,6 @@ agent: generic@1
 dependencies: [init-b-1]
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Append the objective-B step-2 marker line to `src/todo.mjs`. Runs after

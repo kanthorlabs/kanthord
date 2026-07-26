@@ -16,7 +16,7 @@ import type { FakeTurnMap } from "./fake-session.ts";
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentTool, StreamFn } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import type { AIProvider, Credential } from "../domain/resource.ts";
+import type { ResolvedProvider } from "./port.ts";
 
 test("FakeSessionFactory drives real Agent: scripted tool call is executed with its arguments and final text is the last assistant message", async () => {
   const capturedArgs: unknown[] = [];
@@ -98,8 +98,7 @@ async function runMark(streamFn: StreamFn): Promise<string | undefined> {
   return captured;
 }
 
-const AI = {} as AIProvider;
-const CRED = {} as Credential;
+const PROVIDER = {} as ResolvedProvider;
 const markTurn = (region: string): FakeTurnMap[string] => [
   { toolCalls: [{ name: "mark", arguments: { region } }] },
   { text: "done" },
@@ -111,10 +110,10 @@ test("fakeSessionFactoryFromTurns keyed map serves each task title its own turns
     "Sibling — overlap region": markTurn("overlap"),
   });
 
-  const top = await factory.for(AI, CRED, {
+  const top = await factory.for(PROVIDER, {
     taskTitle: "Sibling — top region",
   });
-  const overlap = await factory.for(AI, CRED, {
+  const overlap = await factory.for(PROVIDER, {
     taskTitle: "Sibling — overlap region",
   });
 
@@ -128,16 +127,16 @@ test("fakeSessionFactoryFromTurns keyed map falls back to the '*' default for an
     "*": markTurn("default"),
   });
 
-  const session = await factory.for(AI, CRED, { taskTitle: "Unlisted task" });
+  const session = await factory.for(PROVIDER, { taskTitle: "Unlisted task" });
   assert.equal(await runMark(session.streamFn), "default");
 });
 
 test("fakeSessionFactoryFromTurns plain array serves the same turns regardless of task title (backward compatible)", async () => {
   const factory = fakeSessionFactoryFromTurns(markTurn("same"));
 
-  const a = await factory.for(AI, CRED, { taskTitle: "Task A" });
-  const b = await factory.for(AI, CRED, { taskTitle: "Task B" });
-  const none = await factory.for(AI, CRED);
+  const a = await factory.for(PROVIDER, { taskTitle: "Task A" });
+  const b = await factory.for(PROVIDER, { taskTitle: "Task B" });
+  const none = await factory.for(PROVIDER);
 
   assert.equal(await runMark(a.streamFn), "same");
   assert.equal(await runMark(b.streamFn), "same");

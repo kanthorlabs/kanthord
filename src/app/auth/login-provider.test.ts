@@ -1,7 +1,7 @@
 /**
- * LoginProvider use case — validates the project before running OAuth, then
- * persists the returned credential value via AddResource. Hermetic: fakes for
- * the oauth port, resolver, and AddResource.
+ * LoginProvider use case — authenticate via OAuth, then persist as a global
+ * ai-provider via registerGlobalProvider. Hermetic: fakes for oauth, registry,
+ * modelCatalog, and listModels (008.3 Story E).
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -10,166 +10,322 @@ import type {
   OAuthLoginProvider,
   OAuthLoginPresenter,
 } from "../../oauth/port.ts";
-import type {
-  ProjectRepository,
-  ReferenceResolver,
-} from "../../storage/port.ts";
-import type { Resource } from "../../domain/resource.ts";
-import {
-  DuplicateNameError,
-  UnknownReferenceError,
-  WrongTypeReferenceError,
-} from "../errors.ts";
+import type { AiProviderRegistry, UnitOfWork } from "../../storage/port.ts";
+import type { ModelCatalog } from "../../model-catalog/port.ts";
+import { UnknownModelError } from "../errors.ts";
 
-const PROJECT = "01HPROJECT0000000000000000";
-
-const presenter: OAuthLoginPresenter = {
+const PRESENTER: OAuthLoginPresenter = {
   showAuthUrl: () => {},
   showDeviceCode: () => {},
   progress: () => {},
   promptCode: async () => "",
 };
 
-function fakeResolver(kind: string | undefined): ReferenceResolver {
-  return { resolveKind: (_id: string) => kind } as unknown as ReferenceResolver;
-}
+// ── fakes ──
 
-function fakeOAuth(
-  loginImpl: (input: {
-    providerId: string;
-    method: string;
-    presenter: OAuthLoginPresenter;
-  }) => Promise<string>,
-): { calls: number; oauth: OAuthLoginProvider } {
-  const state = { calls: 0 };
-  const oauth = {
-    has: () => true,
-    async login(input: {
-      providerId: string;
-      method: string;
-      presenter: OAuthLoginPresenter;
-    }) {
-      state.calls++;
-      return loginImpl(input);
-    },
-  };
+function fakeOAuth(hasResult: boolean): {
+  oauth: OAuthLoginProvider;
+  calls: number;
+} {
+  let calls = 0;
   return {
+    oauth: {
+      has: () => hasResult,
+      async login() {
+        calls++;
+        return '{"type":"oauth","access":"t"}';
+      },
+    } as OAuthLoginProvider,
     get calls() {
-      return state.calls;
+      return calls;
     },
-    oauth,
   };
 }
 
-function fakeProjects(
-  saved: Resource[],
-  existingNames: string[] = [],
-): ProjectRepository {
+const UNIT_OF_WORK: UnitOfWork = {
+  transaction: <T>(fn: () => T) => fn(),
+};
+
+function fakeCatalog(isValid: boolean): ModelCatalog {
   return {
-    resolveResourceByName: (_projectId: string, name: string) =>
-      existingNames.includes(name) ? ["dup-id"] : [],
-    addResource: (_projectId: string, resource: Resource) => {
-      saved.push(resource);
-    },
-  } as unknown as ProjectRepository;
+    isValid: () => isValid,
+    hasProvider: () => true,
+    getEfforts: () => [],
+  } as unknown as ModelCatalog;
 }
 
-describe("LoginProvider", () => {
-  test("happy path: runs OAuth then persists the returned value as a credential", async () => {
-    const saved: Resource[] = [];
-    const { oauth } = fakeOAuth(async () => '{"type":"oauth","access":"a"}');
+function trackRegistry(): {
+  registry: AiProviderRegistry;
+  registerInputs: Array<Record<string, unknown>>;
+} {
+  const registerInputs: Array<Record<string, unknown>> = [];
+  let idx = 0;
+  return {
+    registerInputs,
+    registry: {
+      register(input: Record<string, unknown>) {
+        const id = `prov-${++idx}`;
+        registerInputs.push({ ...input });
+        return {
+          id,
+          name: input.name,
+          provider: input.provider,
+          model: input.model,
+          baseUrl: (input.baseUrl as string) ?? null,
+          effort: (input.effort as string) ?? null,
+          value: input.value,
+          state: "active",
+          credentialVersion: 1,
+          api: null,
+          contextWindow: null,
+          maxTokens: null,
+        };
+      },
+      list: () => [],
+      get: () => undefined,
+      getDefault: () => undefined,
+      setDefault: () => {},
+      clearDefault: () => {},
+      logout: () => {},
+      remove: () => {},
+      updateCredentialCAS: () => ({ applied: false as const }),
+      assign: () => {},
+      unassign: () => {},
+      listAssigned: () => [],
+      maxRank: () => undefined,
+      shiftRanksFrom: () => {},
+      compactRanks: () => {},
+      getAssignment: () => undefined,
+      listProjectsAssigning: () => [],
+    } as AiProviderRegistry,
+  };
+}
+
+// ── tests ──
+
+describe("LoginProvider (global registry — Story E)", () => {
+  test("(Story E) happy path: OAuth succeeds → registerGlobalProvider → returns provider id", async () => {
+    const { oauth } = fakeOAuth(true);
+    const { registry, registerInputs } = trackRegistry();
     const uc = new LoginProvider({
       oauth,
-      projects: fakeProjects(saved),
-      resolver: fakeResolver("project"),
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(true),
+      listModels: () => [],
     });
 
     const id = await uc.execute({
       providerId: "openai-codex",
-      projectId: PROJECT,
-      name: "openai",
+      name: "my-acct",
       method: "browser",
-      presenter,
+      presenter: PRESENTER,
+      model: "gpt-5.6-sol",
     });
 
-    assert.equal(saved.length, 1);
-    const cred = saved[0]!;
-    assert.equal(cred.id, id, "returned id is the persisted resource id");
-    assert.deepEqual(cred, {
+    assert.equal(
       id,
-      type: "credential",
-      name: "openai",
-      provider: "openai-codex",
-      value: '{"type":"oauth","access":"a"}',
-    });
+      "prov-1",
+      "returned id must come from registry.register, not injected newId",
+    );
+    assert.equal(registerInputs.length, 1);
+    const args = registerInputs[0]!;
+    assert.equal(args.name, "my-acct");
+    assert.equal(args.provider, "openai-codex");
+    assert.equal(args.model, "gpt-5.6-sol");
+    assert.equal(args.value, '{"type":"oauth","access":"t"}');
   });
 
-  test("duplicate name: throws before OAuth runs", async () => {
-    const saved: Resource[] = [];
-    const fake = fakeOAuth(async () => "should-not-run");
+  test("(Story E) OAuth-only guard: rejects non-OAuth provider with NonOAuthProviderError", async () => {
+    const { oauth } = fakeOAuth(false); // has() returns false
+    const { registry, registerInputs } = trackRegistry();
     const uc = new LoginProvider({
-      oauth: fake.oauth,
-      projects: fakeProjects(saved, ["openai"]),
-      resolver: fakeResolver("project"),
+      oauth,
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(true),
+      listModels: () => [],
     });
+
     await assert.rejects(
       uc.execute({
-        providerId: "openai-codex",
-        projectId: PROJECT,
-        name: "openai",
+        providerId: "opencode",
+        name: "acct",
         method: "browser",
-        presenter,
+        presenter: PRESENTER,
+        selectModel: async () => "some-model",
       }),
-      DuplicateNameError,
+      (err: Error) =>
+        err.name === "NonOAuthProviderError" &&
+        err.message.includes("register"),
+    );
+
+    assert.equal(
+      registerInputs.length,
+      0,
+      "registerGlobalProvider must not be called after guard reject",
+    );
+  });
+
+  test("(Story E) --model given: selectModel not called, model passed directly", async () => {
+    let selectModelCalled = false;
+    const { oauth } = fakeOAuth(true);
+    const { registry, registerInputs } = trackRegistry();
+    const uc = new LoginProvider({
+      oauth,
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(true),
+      listModels: () => ["m1", "m2", "m3"],
+    });
+
+    await uc.execute({
+      providerId: "openai-codex",
+      name: "acct",
+      method: "browser",
+      presenter: PRESENTER,
+      model: "m2",
+      selectModel: async () => {
+        selectModelCalled = true;
+        return "m1";
+      },
+    });
+
+    assert.equal(
+      selectModelCalled,
+      false,
+      "selectModel must NOT be called when --model is given",
     );
     assert.equal(
-      fake.calls,
+      registerInputs[0]!.model,
+      "m2",
+      "the explicit --model must be used",
+    );
+  });
+
+  test("(Story E) --model absent: selectModel invoked with listModels output", async () => {
+    const { oauth } = fakeOAuth(true);
+    const { registry, registerInputs } = trackRegistry();
+    const uc = new LoginProvider({
+      oauth,
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(true),
+      listModels: (p: string) =>
+        p === "openai-codex" ? ["m1", "m2", "m3"] : [],
+    });
+
+    await uc.execute({
+      providerId: "openai-codex",
+      name: "acct",
+      method: "browser",
+      presenter: PRESENTER,
+      selectModel: async (choices: string[]) => {
+        assert.deepEqual(choices, ["m1", "m2", "m3"]);
+        return "m3";
+      },
+    });
+
+    assert.equal(
+      registerInputs[0]!.model,
+      "m3",
+      "selected model from selectModel must be used",
+    );
+  });
+
+  test("(Story E) unknown --model: modelCatalog.isValid rejects → UnknownModelError", async () => {
+    const { oauth } = fakeOAuth(true);
+    const { registry, registerInputs } = trackRegistry();
+    const uc = new LoginProvider({
+      oauth,
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(false), // isValid returns false
+      listModels: () => [],
+    });
+
+    await assert.rejects(
+      uc.execute({
+        providerId: "openai-codex",
+        name: "acct",
+        method: "browser",
+        presenter: PRESENTER,
+        model: "no-such-model",
+      }),
+      UnknownModelError,
+    );
+
+    assert.equal(
+      registerInputs.length,
       0,
-      "OAuth flow must not start on a duplicate name",
+      "register must not be called when model is invalid",
     );
-    assert.equal(saved.length, 0);
   });
 
-  test("unknown project: throws before OAuth runs (B5)", async () => {
-    const saved: Resource[] = [];
-    const fake = fakeOAuth(async () => "should-not-run");
+  test("(Story E) baseUrl/effort passthrough to registerGlobalProvider", async () => {
+    const { oauth } = fakeOAuth(true);
+    const { registry, registerInputs } = trackRegistry();
     const uc = new LoginProvider({
-      oauth: fake.oauth,
-      projects: fakeProjects(saved),
-      resolver: fakeResolver(undefined),
+      oauth,
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(true),
+      listModels: () => [],
     });
 
+    await uc.execute({
+      providerId: "openai-codex",
+      name: "acct",
+      method: "browser",
+      presenter: PRESENTER,
+      model: "gpt-5.6",
+      baseUrl: "https://custom.example/api",
+      effort: "low",
+    });
+
+    assert.equal(registerInputs[0]!.baseUrl, "https://custom.example/api");
+    assert.equal(registerInputs[0]!.effort, "low");
+  });
+
+  // ── BLOCKER 6 — guard before OAuth when no model/selectModel ──
+
+  test("(BLOCKER 6) LoginProvider: guard rejects before OAuth when no model and no selectModel", async () => {
+    let oauthCalled = false;
+    const oauth: OAuthLoginProvider = {
+      has: () => true,
+      async login() {
+        oauthCalled = true;
+        return '{"type":"oauth","access":"t"}';
+      },
+    };
+    const { registry } = trackRegistry();
+    const uc = new LoginProvider({
+      oauth,
+      registry,
+      unitOfWork: UNIT_OF_WORK,
+      modelCatalog: fakeCatalog(true),
+      listModels: () => ["m1", "m2"],
+    });
+
+    // No model AND no selectModel — should reject before touching OAuth
     await assert.rejects(
       uc.execute({
         providerId: "openai-codex",
-        projectId: "nope",
-        name: "openai",
+        name: "acct",
         method: "browser",
-        presenter,
+        presenter: PRESENTER,
+        // no model, no selectModel
       }),
-      UnknownReferenceError,
+      (err: Error) => {
+        return err.message.includes("model") || err.name === "Error";
+      },
+      "must reject with a descriptive error when no model selection mechanism exists",
     );
-    assert.equal(fake.calls, 0, "OAuth flow must not start for a bad project");
-    assert.equal(saved.length, 0);
-  });
 
-  test("reference of wrong type: throws WrongTypeReferenceError before OAuth", async () => {
-    const fake = fakeOAuth(async () => "x");
-    const uc = new LoginProvider({
-      oauth: fake.oauth,
-      projects: fakeProjects([]),
-      resolver: fakeResolver("initiative"),
-    });
-    await assert.rejects(
-      uc.execute({
-        providerId: "openai-codex",
-        projectId: PROJECT,
-        name: "openai",
-        method: "browser",
-        presenter,
-      }),
-      WrongTypeReferenceError,
+    assert.equal(
+      oauthCalled,
+      false,
+      "OAuth.login must NOT be called; guard rejected first",
     );
-    assert.equal(fake.calls, 0);
   });
 });

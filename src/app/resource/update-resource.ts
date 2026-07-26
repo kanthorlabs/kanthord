@@ -1,4 +1,4 @@
-import type { RepositoryAuth, ReasoningEffort } from "../../domain/resource.ts";
+import type { RepositoryAuth } from "../../domain/resource.ts";
 
 export interface UpdateRepositoryInput {
   [key: string]: unknown;
@@ -16,15 +16,6 @@ export interface UpdateCredentialInput {
   id: string;
   name?: string;
   value?: string; // populated by the CLI via readCredentialValue(), never from --value
-}
-
-export interface UpdateAiProviderInput {
-  [key: string]: unknown;
-  id: string;
-  name?: string;
-  model?: string;
-  effort?: ReasoningEffort | null; // null = clear
-  baseUrl?: string | null; // null = clear (explicit --clear-base-url)
 }
 
 export interface UpdateNotificationInput {

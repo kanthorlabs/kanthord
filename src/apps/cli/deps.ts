@@ -23,7 +23,6 @@ import type { FindResource } from "../../app/resource/find-resource.ts";
 import type { GetResource } from "../../app/resource/get-resource.ts";
 import type { ImportResources } from "../../app/resource/import-resources.ts";
 import type { ListResources } from "../../app/resource/list-resources.ts";
-import type { UpdateAiProvider } from "../../app/resource/update-ai-provider.ts";
 import type { UpdateCredential } from "../../app/resource/update-credential.ts";
 import type { UpdateFilesystem } from "../../app/resource/update-filesystem.ts";
 import type { UpdateNotification } from "../../app/resource/update-notification.ts";
@@ -152,7 +151,6 @@ export interface CliDeps {
   findResource: FindResource;
   getResource: GetResource;
   listResources: ListResources;
-  updateAiProvider: UpdateAiProvider;
   updateCredential: UpdateCredential;
   updateRepository: UpdateRepository;
   updateNotification: UpdateNotification;

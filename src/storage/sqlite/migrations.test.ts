@@ -67,9 +67,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 24 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
+test("migrates to version 25 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
     assert.deepEqual(userTables(db), [
       "ai_provider_default",
       "ai_providers",
@@ -446,7 +446,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 24);
+    assert.equal(second.version, 25);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -859,8 +859,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      24,
-      "schema version must be 24 after all migrations",
+      25,
+      "schema version must be 25 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -992,7 +992,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1096,7 +1096,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1175,7 +1175,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1212,7 +1212,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 24);
+    assert.equal(report.version, 25);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1507,7 +1507,7 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
@@ -1522,7 +1522,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,providerId) rejects dup
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-uniq', 'P');
@@ -1563,7 +1563,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two membe
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 24);
+    assert.equal(userVersion(db), 25);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-rank', 'P');
@@ -1642,4 +1642,111 @@ test("migration 24 ai_providers.api CHECK rejects bogus flavor while accepting v
       );
     }, /CHECK/i);
   });
+});
+
+// ── (u) migration 25 — 008.3-s-retire-ai-provider-type ──────────────────────
+
+test("migration 25 (008.3-s-retire-ai-provider-type): resources CHECK rejects ai_provider; stale rows cleaned", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m25-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 24 only (pre-migration-25 state)
+    migrate(db, MIGRATIONS.slice(0, 24));
+    assert.equal(userVersion(db), 24);
+
+    // Seed a project, an ai_provider resource, and a task_context row referencing it
+    db.exec("INSERT INTO projects(id, name) VALUES ('p-m25', 'P')");
+    // Need objectives + tasks for task_context FK
+    db.exec(
+      "INSERT INTO initiatives(id, projectId, name) VALUES ('init-m25', 'p-m25', 'I')",
+    );
+    db.exec(
+      "INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m25', 'init-m25', 'O')",
+    );
+    db.exec(
+      "INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-m25', 'obj-m25', 'T', 'pending')",
+    );
+    db.exec(
+      "INSERT INTO resources(id, projectId, type, name) VALUES ('r-ai', 'p-m25', 'ai_provider', 'OldAI')",
+    );
+    db.exec(
+      "INSERT INTO resources(id, projectId, type, name) VALUES ('r-cred', 'p-m25', 'credential', 'OldCred')",
+    );
+    // task_context row referencing the ai_provider
+    db.exec(
+      "INSERT INTO task_context(task_id, type, resource_id) VALUES ('task-m25', 'ai_provider', 'r-ai')",
+    );
+    // task_context row referencing the credential (ai credential path)
+    db.exec(
+      "INSERT INTO task_context(task_id, type, resource_id) VALUES ('task-m25', 'credential', 'r-cred')",
+    );
+
+    // Apply all migrations including 25
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 25);
+
+    // migration-7 columns still present
+    assert.deepEqual(columnNames(db, "resources"), [
+      "id",
+      "projectId",
+      "type",
+      "name",
+      "attributes",
+      "remoteUrl",
+      "authKind",
+      "authCredentialId",
+    ]);
+
+    // credential and repository still accepted
+    assert.doesNotThrow(() => {
+      db.exec(
+        "INSERT INTO resources(id, projectId, type, name) VALUES ('r-ok1', 'p-m25', 'credential', 'Cred1')",
+      );
+    }, "credential type must still be accepted");
+    assert.doesNotThrow(() => {
+      db.exec(
+        "INSERT INTO resources(id, projectId, type, name) VALUES ('r-ok2', 'p-m25', 'repository', 'Repo1')",
+      );
+    }, "repository type must still be accepted");
+
+    // ai_provider type must now be rejected by CHECK
+    assert.throws(() => {
+      db.exec(
+        "INSERT INTO resources(id, projectId, type, name) VALUES ('r-bad', 'p-m25', 'ai_provider', 'Bad')",
+      );
+    }, /CHECK/i);
+
+    // Seeded ai_provider row must be gone
+    const aiRow = db
+      .prepare("SELECT id FROM resources WHERE id = ?")
+      .get("r-ai") as { id: string } | undefined;
+    assert.equal(
+      aiRow,
+      undefined,
+      "seeded ai_provider row must be deleted by migration 25",
+    );
+
+    // Seeded credential row must survive (credential type kept)
+    const credRow = db
+      .prepare("SELECT id FROM resources WHERE id = ?")
+      .get("r-cred") as { id: string } | undefined;
+    assert.ok(
+      credRow !== undefined,
+      "credential row must survive migration 25 (credential type kept)",
+    );
+
+    // task_context rows for the stale ai_provider and credential must be cleaned
+    const staleCtxCount = db
+      .prepare("SELECT COUNT(*) AS cnt FROM task_context WHERE task_id = ?")
+      .get("task-m25") as { cnt: number };
+    assert.equal(
+      staleCtxCount.cnt,
+      0,
+      "task_context rows (ai_provider + credential) must be deleted by migration 25",
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

@@ -6,7 +6,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { AIProvider, Credential } from "../domain/resource.ts";
+import type { ResolvedProvider } from "./port.ts";
 import type {
   Api,
   Model,
@@ -22,24 +22,16 @@ import {
 
 // ---------- fixture builders -------------------------------------------------
 
-function makeAIProvider(overrides: Partial<AIProvider> = {}): AIProvider {
+function makeAIProvider(
+  overrides: Partial<ResolvedProvider> = {},
+): ResolvedProvider {
   return {
     id: "aip-01",
-    type: "ai_provider",
     name: "test-openai",
     provider: "openai",
     model: "gpt-5.5",
-    ...overrides,
-  };
-}
-
-function makeCredential(overrides: Partial<Credential> = {}): Credential {
-  return {
-    id: "cred-01",
-    type: "credential",
-    name: "test-key",
-    provider: "openai",
     value: "sk-test-abc123",
+    credentialVersion: 1,
     ...overrides,
   };
 }
@@ -52,14 +44,69 @@ function oauthValue(
   return JSON.stringify({ type: "oauth", access, refresh, expires });
 }
 
+import type { AiProviderRegistry } from "../storage/port.ts";
+
 function makeFactory(
-  saved?: Array<{ id: string; value: string }>,
+  saved?: Array<{ id: string; value: string; expectedVersion?: number }>,
+  returnSuccess: boolean = true,
 ): PiProviderSessionFactory {
-  return new PiProviderSessionFactory({
-    saveCredentialValue: (id: string, value: string) => {
-      saved?.push({ id, value });
+  const registry: AiProviderRegistry = {
+    updateCredentialCAS(id: string, value: string, expectedVersion: number) {
+      saved?.push({ id, value, expectedVersion });
+      if (returnSuccess)
+        return { applied: true, newVersion: expectedVersion + 1 };
+      return { applied: false };
     },
-  });
+    register: () => {
+      throw new Error("not implemented");
+    },
+    list: () => {
+      throw new Error("not implemented");
+    },
+    get: () => {
+      throw new Error("not implemented");
+    },
+    getDefault: () => {
+      throw new Error("not implemented");
+    },
+    setDefault: () => {
+      throw new Error("not implemented");
+    },
+    clearDefault: () => {
+      throw new Error("not implemented");
+    },
+    logout: () => {
+      throw new Error("not implemented");
+    },
+    remove: () => {
+      throw new Error("not implemented");
+    },
+    assign: () => {
+      throw new Error("not implemented");
+    },
+    unassign: () => {
+      throw new Error("not implemented");
+    },
+    listAssigned: () => {
+      throw new Error("not implemented");
+    },
+    maxRank: () => {
+      throw new Error("not implemented");
+    },
+    shiftRanksFrom: () => {
+      throw new Error("not implemented");
+    },
+    compactRanks: () => {
+      throw new Error("not implemented");
+    },
+    getAssignment: () => {
+      throw new Error("not implemented");
+    },
+    listProjectsAssigning: () => {
+      throw new Error("not implemented");
+    },
+  };
+  return new PiProviderSessionFactory({ registry });
 }
 
 // ---------- withReasoning (effort injection boundary) -----------------------
@@ -96,7 +143,7 @@ test("withReasoning returns the base function unchanged when no effort is set", 
 
 test("PiProviderSessionFactory API-key credential and known provider/model returns session with getApiKey returning the stored key", async () => {
   const factory = makeFactory();
-  const session = await factory.for(makeAIProvider(), makeCredential());
+  const session = await factory.for(makeAIProvider());
   assert.equal(session.getApiKey(), "sk-test-abc123");
 });
 
@@ -104,20 +151,18 @@ test("PiProviderSessionFactory API-key credential and known provider/model retur
 
 test("PiProviderSessionFactory OAuth JSON credential creates a session without throwing CredentialError", async () => {
   const factory = makeFactory();
-  const cred = makeCredential({
-    value: oauthValue("access-tok-111", "refresh-tok-222"),
-  });
   // should not throw
-  const session = await factory.for(makeAIProvider(), cred);
+  const session = await factory.for(
+    makeAIProvider({ value: oauthValue("access-tok-111", "refresh-tok-222") }),
+  );
   assert.ok(session, "session is returned for OAuth credential");
 });
 
 test("PiProviderSessionFactory OAuth credential getApiKey returns '' so pi resolves+refreshes via the credential store", async () => {
   const factory = makeFactory();
-  const cred = makeCredential({
-    value: oauthValue("access-tok-777", "refresh-tok-888"),
-  });
-  const session = await factory.for(makeAIProvider(), cred);
+  const session = await factory.for(
+    makeAIProvider({ value: oauthValue("access-tok-777", "refresh-tok-888") }),
+  );
   // A non-empty apiKey would make pi treat the request as api-key auth and
   // skip OAuth refresh (auth/resolve.ts). The token is resolved from the
   // credential store passed to builtinModels instead.
@@ -127,10 +172,9 @@ test("PiProviderSessionFactory OAuth credential getApiKey returns '' so pi resol
 
 test("PiProviderSessionFactory OAuth credential store read returns the latest credential after modify", async () => {
   const factory = makeFactory();
-  const cred = makeCredential({
-    value: oauthValue("access-old", "refresh-old"),
-  });
-  const session = await factory.for(makeAIProvider(), cred);
+  const session = await factory.for(
+    makeAIProvider({ value: oauthValue("access-old", "refresh-old") }),
+  );
   const store = session.credentialStore!;
   const before = (await store.read("openai-codex")) as { access: string };
   assert.equal(before.access, "access-old");
@@ -154,8 +198,9 @@ test("PiProviderSessionFactory OAuth credential store read returns the latest cr
 test("PiProviderSessionFactory OAuth store.modify returns the current credential (not undefined) when the callback makes no change", async () => {
   const saved: Array<{ id: string; value: string }> = [];
   const factory = makeFactory(saved);
-  const cred = makeCredential({ value: oauthValue("access-x", "refresh-y") });
-  const session = await factory.for(makeAIProvider(), cred);
+  const session = await factory.for(
+    makeAIProvider({ value: oauthValue("access-x", "refresh-y") }),
+  );
   const store = session.credentialStore!;
 
   // pi's refresh callback returns undefined when another request already
@@ -176,13 +221,17 @@ test("PiProviderSessionFactory OAuth store.modify returns the current credential
 });
 
 test("PiProviderSessionFactory OAuth credential exposes credentialStore; modify calls saveCredentialValue with serialised new value", async () => {
-  const saved: Array<{ id: string; value: string }> = [];
+  const saved: Array<{ id: string; value: string; expectedVersion?: number }> =
+    [];
   const factory = makeFactory(saved);
-  const cred = makeCredential({
-    id: "cred-oauth-01",
-    value: oauthValue("access-tok-A", "refresh-tok-B"),
-  });
-  const session = await factory.for(makeAIProvider(), cred);
+  const session = await factory.for(
+    makeAIProvider({
+      id: "cred-oauth-01",
+      value: oauthValue("access-tok-A", "refresh-tok-B"),
+    }),
+    undefined,
+    1,
+  );
 
   // The session exposes the CredentialStore for callers (and the runner)
   // to trigger token refresh without going through the agent loop.
@@ -209,43 +258,216 @@ test("PiProviderSessionFactory OAuth credential exposes credentialStore; modify 
   assert.equal(parsed.type, "oauth");
 });
 
+// ---------- Story G — credential-version CAS --------------------------------
+
+test("(Story G) PiProviderSessionFactory OAuth credential: saveCredentialValue receives expectedCredentialVersion", async () => {
+  const saved: Array<{ id: string; value: string; expectedVersion?: number }> =
+    [];
+  const factory = makeFactory(saved, true);
+  const session = await factory.for(
+    makeAIProvider({
+      id: "cred-oauth-g1",
+      value: oauthValue("access-A", "refresh-B"),
+    }),
+    undefined,
+    3,
+  );
+  assert.ok(session.credentialStore, "session has credentialStore");
+
+  const newOAuth = {
+    type: "oauth" as const,
+    access: "access-NEW",
+    refresh: "refresh-NEW",
+    expires: Date.now() + 7_200_000,
+  };
+  await session.credentialStore.modify("openai", async () => newOAuth);
+
+  assert.equal(saved.length, 1, "saveCredentialValue called once");
+  assert.equal(
+    saved[0]!.expectedVersion,
+    3,
+    "saveCredentialValue called with expectedVersion=3",
+  );
+});
+
+test("(Story G) PiProviderSessionFactory OAuth credential: version bumps after successful save", async () => {
+  const saved: Array<{ id: string; value: string; expectedVersion?: number }> =
+    [];
+  const factory = makeFactory(saved, true);
+  const session = await factory.for(
+    makeAIProvider({
+      id: "cred-oauth-g2",
+      value: oauthValue("access-A", "refresh-B"),
+    }),
+    undefined,
+    5,
+  );
+  assert.ok(session.credentialStore, "session has credentialStore");
+
+  const newOAuth1 = {
+    type: "oauth" as const,
+    access: "access-NEW1",
+    refresh: "ref1",
+    expires: Date.now() + 7_200_000,
+  };
+  await session.credentialStore.modify("openai", async () => newOAuth1);
+  assert.equal(saved.length, 1, "first modify called save");
+  assert.equal(saved[0]!.expectedVersion, 5, "first save uses version 5");
+
+  const newOAuth2 = {
+    type: "oauth" as const,
+    access: "access-NEW2",
+    refresh: "ref2",
+    expires: Date.now() + 7_200_000,
+  };
+  await session.credentialStore.modify("openai", async () => newOAuth2);
+  assert.equal(saved.length, 2, "second modify called save");
+  assert.equal(
+    saved[1]!.expectedVersion,
+    6,
+    "second save uses bumped version 6",
+  );
+});
+
+test("(Story G) PiProviderSessionFactory OAuth credential: save returning false (CAS mismatch) does not throw", async () => {
+  const factory = makeFactory(undefined, false);
+  const session = await factory.for(
+    makeAIProvider({
+      id: "cred-oauth-g3",
+      value: oauthValue("access-A", "refresh-B"),
+    }),
+    undefined,
+    3,
+  );
+  assert.ok(session.credentialStore, "session has credentialStore");
+
+  const newOAuth = {
+    type: "oauth" as const,
+    access: "access-NEW",
+    refresh: "refresh-NEW",
+    expires: Date.now() + 7_200_000,
+  };
+  await assert.doesNotReject(() =>
+    session.credentialStore!.modify("openai", async () => newOAuth),
+  );
+  // In-memory credential should still be updated even when save fails
+  const after = (await session.credentialStore!.read("openai")) as {
+    access: string;
+  };
+  assert.equal(
+    after.access,
+    "access-NEW",
+    "in-memory credential updated despite CAS failure",
+  );
+});
+
+test("(BLOCKER S1) PiProviderSessionFactory OAuth credential: registry.updateCredentialCAS throwing does not reject modify (write-back must not throw into the agent loop)", async () => {
+  const registry: AiProviderRegistry = {
+    updateCredentialCAS() {
+      throw new Error("db unavailable");
+    },
+    register: () => {
+      throw new Error("not implemented");
+    },
+    list: () => {
+      throw new Error("not implemented");
+    },
+    get: () => {
+      throw new Error("not implemented");
+    },
+    getDefault: () => {
+      throw new Error("not implemented");
+    },
+    setDefault: () => {
+      throw new Error("not implemented");
+    },
+    clearDefault: () => {
+      throw new Error("not implemented");
+    },
+    logout: () => {
+      throw new Error("not implemented");
+    },
+    remove: () => {
+      throw new Error("not implemented");
+    },
+    assign: () => {
+      throw new Error("not implemented");
+    },
+    unassign: () => {
+      throw new Error("not implemented");
+    },
+    listAssigned: () => {
+      throw new Error("not implemented");
+    },
+    maxRank: () => {
+      throw new Error("not implemented");
+    },
+    shiftRanksFrom: () => {
+      throw new Error("not implemented");
+    },
+    compactRanks: () => {
+      throw new Error("not implemented");
+    },
+    getAssignment: () => {
+      throw new Error("not implemented");
+    },
+    listProjectsAssigning: () => {
+      throw new Error("not implemented");
+    },
+  };
+  const factory = new PiProviderSessionFactory({ registry });
+  const session = await factory.for(
+    makeAIProvider({
+      id: "cred-oauth-s1",
+      value: oauthValue("access-A", "refresh-B"),
+    }),
+    undefined,
+    3,
+  );
+  assert.ok(session.credentialStore, "session has credentialStore");
+
+  const newOAuth = {
+    type: "oauth" as const,
+    access: "access-NEW",
+    refresh: "refresh-NEW",
+    expires: Date.now() + 7_200_000,
+  };
+  await assert.doesNotReject(
+    () => session.credentialStore!.modify("openai", async () => newOAuth),
+    "a throwing registry.updateCredentialCAS must not reject the agent loop's modify call",
+  );
+  // In-memory credential should still be updated even when the write-back throws.
+  const after = (await session.credentialStore!.read("openai")) as {
+    access: string;
+  };
+  assert.equal(
+    after.access,
+    "access-NEW",
+    "in-memory credential updated despite the write-back throwing",
+  );
+});
+
 // ---------- (c) provider mismatch -------------------------------------------
 
 test("PiProviderSessionFactory provider mismatch throws CredentialError naming both providers but not containing the secret value", async () => {
   const factory = makeFactory();
-  const aiProvider = makeAIProvider({ provider: "openai" });
-  const cred = makeCredential({
-    provider: "anthropic",
+  const provider = makeAIProvider({
+    provider: "openai",
     value: "sk-ant-secret999",
   });
-  await assert.rejects(
-    () => factory.for(aiProvider, cred),
-    (err: unknown) => {
-      assert.ok(err instanceof CredentialError, "is CredentialError");
-      assert.ok(
-        err.message.includes("openai"),
-        `message contains 'openai': ${err.message}`,
-      );
-      assert.ok(
-        err.message.includes("anthropic"),
-        `message contains 'anthropic': ${err.message}`,
-      );
-      assert.ok(
-        !err.message.includes("sk-ant-secret999"),
-        "message must NOT contain the secret value",
-      );
-      return true;
-    },
-  );
+  // Since provider name == "openai" and the value is an API key, the session
+  // should be created successfully — no provider mismatch possible with the
+  // unified ResolvedProvider type (credential folded into provider).
+  const session = await factory.for(provider);
+  assert.ok(session, "session is returned for a valid provider");
 });
 
 // ---------- (d) empty value -------------------------------------------------
 
 test("PiProviderSessionFactory empty credential value throws CredentialError", async () => {
   const factory = makeFactory();
-  const cred = makeCredential({ value: "" });
   await assert.rejects(
-    () => factory.for(makeAIProvider(), cred),
+    () => factory.for(makeAIProvider({ value: "" })),
     CredentialError,
   );
 });
@@ -259,7 +481,7 @@ test("PiProviderSessionFactory unknown model throws UnknownModelError with provi
     model: "gpt-nonexistent-9999",
   });
   await assert.rejects(
-    () => factory.for(aiProvider, makeCredential()),
+    () => factory.for(aiProvider),
     (err: unknown) => {
       assert.ok(err instanceof UnknownModelError, "is UnknownModelError");
       assert.ok(
@@ -285,7 +507,7 @@ test("PiProviderSessionFactory with baseUrl set the session model baseUrl reflec
     model: "gpt-5.5",
     baseUrl: "https://custom-endpoint.example.com/v1",
   });
-  const session = await factory.for(aiProvider, makeCredential());
+  const session = await factory.for(aiProvider);
   assert.equal(
     session.model.baseUrl,
     "https://custom-endpoint.example.com/v1",

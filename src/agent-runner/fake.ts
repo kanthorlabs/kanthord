@@ -1,5 +1,10 @@
 import type { Task } from "../domain/task.ts";
-import type { AgentRunner, TaskContextBinding, TaskResult } from "./port.ts";
+import type {
+  AgentRunner,
+  ResolvedProvider,
+  TaskContextBinding,
+  TaskResult,
+} from "./port.ts";
 
 export class FakeRunner implements AgentRunner {
   readonly calls: Array<{ taskId: string; context: TaskContextBinding[] }> = [];
@@ -15,7 +20,11 @@ export class FakeRunner implements AgentRunner {
     this.#failTransient = new Map(Object.entries(opts.failTransient ?? {}));
   }
 
-  async run(task: Task, context: TaskContextBinding[]): Promise<TaskResult> {
+  async run(
+    task: Task,
+    context: TaskContextBinding[],
+    _provider?: ResolvedProvider,
+  ): Promise<TaskResult> {
     this.calls.push({ taskId: task.id, context });
 
     if (this.#failTaskIds.has(task.id)) {

@@ -5,7 +5,6 @@ import {
   isRepository,
   isCredential,
   isNotification,
-  isAIProvider,
   isFilesystem,
   buildResource,
   ResourceValidationError,
@@ -20,7 +19,6 @@ import type {
   Repository,
   Credential,
   Notification,
-  AIProvider,
   Filesystem,
   RepositoryAuth,
 } from "./resource.ts";
@@ -51,14 +49,6 @@ const notif: Notification = {
   destination: "#general",
 };
 
-const ai: AIProvider = {
-  id: "01H000000000000000000000DD",
-  type: "ai_provider",
-  name: "openai",
-  provider: "openai",
-  model: "gpt-4o",
-};
-
 const fs: Filesystem = {
   id: "01H000000000000000000000EE",
   type: "filesystem",
@@ -66,12 +56,11 @@ const fs: Filesystem = {
   path: "/workspace",
 };
 
-test("RESOURCE_TYPES lists exactly the five literals in order", () => {
+test("RESOURCE_TYPES lists exactly the four literals in order", () => {
   assert.deepEqual(RESOURCE_TYPES, [
     "repository",
     "credential",
     "notification",
-    "ai_provider",
     "filesystem",
   ]);
 });
@@ -80,7 +69,6 @@ test("isRepository returns true only for Repository variant", () => {
   assert.equal(isRepository(repo), true);
   assert.equal(isCredential(repo), false);
   assert.equal(isNotification(repo), false);
-  assert.equal(isAIProvider(repo), false);
   assert.equal(isFilesystem(repo), false);
 });
 
@@ -88,7 +76,6 @@ test("isCredential returns true only for Credential variant", () => {
   assert.equal(isRepository(cred), false);
   assert.equal(isCredential(cred), true);
   assert.equal(isNotification(cred), false);
-  assert.equal(isAIProvider(cred), false);
   assert.equal(isFilesystem(cred), false);
 });
 
@@ -96,43 +83,14 @@ test("isNotification returns true only for Notification variant", () => {
   assert.equal(isRepository(notif), false);
   assert.equal(isCredential(notif), false);
   assert.equal(isNotification(notif), true);
-  assert.equal(isAIProvider(notif), false);
   assert.equal(isFilesystem(notif), false);
-});
-
-test("isAIProvider returns true only for AIProvider variant", () => {
-  assert.equal(isRepository(ai), false);
-  assert.equal(isCredential(ai), false);
-  assert.equal(isNotification(ai), false);
-  assert.equal(isAIProvider(ai), true);
-  assert.equal(isFilesystem(ai), false);
 });
 
 test("isFilesystem returns true only for Filesystem variant", () => {
   assert.equal(isRepository(fs), false);
   assert.equal(isCredential(fs), false);
   assert.equal(isNotification(fs), false);
-  assert.equal(isAIProvider(fs), false);
   assert.equal(isFilesystem(fs), true);
-});
-
-test("AIProvider with optional baseUrl typechecks at compile time", () => {
-  // Compile-time proof: an AIProvider WITH baseUrl must be assignable to the
-  // interface — if baseUrl? is removed from AIProvider this file won't typecheck.
-  const aiWithBase: AIProvider = {
-    id: "01H000000000000000000000FF",
-    type: "ai_provider",
-    name: "azure-openai",
-    provider: "azure",
-    model: "gpt-4o",
-    baseUrl: "https://my-azure.openai.azure.com/",
-  };
-  assert.equal(isAIProvider(aiWithBase), true);
-  if (isAIProvider(aiWithBase)) {
-    const _baseUrl: string | undefined = aiWithBase.baseUrl;
-    void _baseUrl;
-  }
-  assert.ok(true, "AIProvider with baseUrl typechecks");
 });
 
 test("guards narrow to vendor fields at compile time", () => {
@@ -157,12 +115,6 @@ test("guards narrow to vendor fields at compile time", () => {
     const _destination: string = notif.destination;
     void _provider;
     void _destination;
-  }
-  if (isAIProvider(ai)) {
-    const _provider: string = ai.provider;
-    const _model: string = ai.model;
-    void _provider;
-    void _model;
   }
   if (isFilesystem(fs)) {
     const _path: string = fs.path;
@@ -218,71 +170,6 @@ test("buildResource notification: builds correct variant from valid input", () =
   if (!isNotification(r)) assert.fail("expected Notification variant");
   assert.equal(r.provider, "slack");
   assert.equal(r.destination, "#general");
-});
-
-test("buildResource ai_provider: builds correct variant from valid input", () => {
-  const r = buildResource({
-    type: "ai_provider",
-    name: "openai",
-    provider: "openai",
-    model: "gpt-5.5",
-  });
-  assert.equal(r.type, "ai_provider");
-  assert.equal(r.name, "openai");
-  if (!isAIProvider(r)) assert.fail("expected AIProvider variant");
-  assert.equal(r.provider, "openai");
-  assert.equal(r.model, "gpt-5.5");
-  assert.equal(r.baseUrl, undefined);
-});
-
-test("buildResource ai_provider with baseUrl: builds correct variant", () => {
-  const r = buildResource({
-    type: "ai_provider",
-    name: "azure",
-    provider: "azure",
-    model: "gpt-4o",
-    baseUrl: "https://my-azure.openai.azure.com/",
-  });
-  if (!isAIProvider(r)) assert.fail("expected AIProvider variant");
-  assert.equal(r.baseUrl, "https://my-azure.openai.azure.com/");
-});
-
-test("buildResource ai_provider with valid effort: keeps the effort level", () => {
-  const r = buildResource({
-    type: "ai_provider",
-    name: "openai",
-    provider: "openai-codex",
-    model: "gpt-5.5",
-    effort: "medium",
-  });
-  if (!isAIProvider(r)) assert.fail("expected AIProvider variant");
-  assert.equal(r.effort, "medium");
-});
-
-test("buildResource ai_provider without effort: effort is undefined", () => {
-  const r = buildResource({
-    type: "ai_provider",
-    name: "openai",
-    provider: "openai-codex",
-    model: "gpt-5.5",
-  });
-  if (!isAIProvider(r)) assert.fail("expected AIProvider variant");
-  assert.equal(r.effort, undefined);
-});
-
-test("buildResource ai_provider with invalid effort: throws ResourceValidationError naming effort", () => {
-  assert.throws(
-    () =>
-      buildResource({
-        type: "ai_provider",
-        name: "openai",
-        provider: "openai-codex",
-        model: "gpt-5.5",
-        effort: "ultra",
-      }),
-    (err: unknown) =>
-      err instanceof ResourceValidationError && err.field === "effort",
-  );
 });
 
 test("buildResource filesystem: builds correct variant from valid input", () => {
@@ -491,4 +378,43 @@ test("CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW is exported and equals 32768", () =
 
 test("CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS is exported and equals 4096", () => {
   assert.equal(CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS, 4096);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// BLOCKER S1 — dead AIProvider code must be removed from resource.ts
+// ═══════════════════════════════════════════════════════════════════
+
+test("BLOCKER S1: buildResource rejects ai_provider type with UnknownResourceTypeError", () => {
+  // Currently buildResource has an ai_provider branch that succeeds and returns
+  // an AIProvider value. After dead-code removal, the ai_provider case must fall
+  // through to UnknownResourceTypeError like any other unrecognised type.
+  assert.throws(
+    () =>
+      buildResource({
+        type: "ai_provider",
+        name: "x",
+        provider: "openai",
+        model: "gpt-4",
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof UnknownResourceTypeError,
+        "ai_provider type must throw UnknownResourceTypeError after removal",
+      );
+      return true;
+    },
+  );
+});
+
+test("BLOCKER S1: isAIProvider is removed (not exported from module)", async () => {
+  // Dynamic import to check export existence without static-import crash when removed.
+  // Currently isAIProvider IS exported as a function — test fails with
+  // "function !== undefined".
+  // After removal, mod.isAIProvider is undefined — test passes.
+  const mod = await import("./resource.ts");
+  assert.equal(
+    typeof (mod as Record<string, unknown>).isAIProvider,
+    "undefined",
+    "isAIProvider must be removed from exports",
+  );
 });

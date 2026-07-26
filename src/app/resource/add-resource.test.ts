@@ -13,8 +13,6 @@ import {
 } from "../errors.ts";
 import type { Resource } from "../../domain/resource.ts";
 import type { Project } from "../../domain/project.ts";
-import { FakeModelCatalog } from "../../model-catalog/fake.ts";
-import { UnknownModelError } from "../../model-catalog/port.ts";
 
 // --- Fake ProjectRepository ---
 class FakeProjectRepository implements ProjectRepository {
@@ -102,7 +100,7 @@ describe("AddResource", () => {
   test("AddResource repository variant returns ULID and persists", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "repository",
       projectId: PROJECT_ID,
@@ -132,7 +130,7 @@ describe("AddResource", () => {
   test("AddResource repository with empty path defaults to an absolute path", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "repository",
       projectId: PROJECT_ID,
@@ -161,7 +159,7 @@ describe("AddResource", () => {
   test("AddResource repository with relative path expands to absolute", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "repository",
       projectId: PROJECT_ID,
@@ -192,7 +190,7 @@ describe("AddResource", () => {
   test("AddResource repository: remoteUrl and auth input stores resource with correct remoteUrl", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "repository",
       projectId: PROJECT_ID,
@@ -246,7 +244,7 @@ describe("AddResource", () => {
   test("AddResource credential variant returns ULID and persists", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "credential",
       projectId: PROJECT_ID,
@@ -264,7 +262,7 @@ describe("AddResource", () => {
   test("AddResource notification variant returns ULID and persists", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "notification",
       projectId: PROJECT_ID,
@@ -279,32 +277,10 @@ describe("AddResource", () => {
     assert.equal(saved.name, "alerts");
   });
 
-  test("AddResource ai_provider variant returns ULID and persists", async () => {
-    const repo = new FakeProjectRepository();
-    const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(
-      repo,
-      resolver,
-      new FakeModelCatalog([{ provider: "anthropic", model: "claude-3" }]),
-    );
-    const id = await uc.execute({
-      type: "ai_provider",
-      projectId: PROJECT_ID,
-      name: "claude",
-      provider: "anthropic",
-      model: "claude-3",
-    });
-    assert.ok(typeof id === "string" && id.length > 0);
-    const saved = repo.getResource(id);
-    assert.ok(saved !== undefined);
-    assert.equal(saved.type, "ai_provider");
-    assert.equal(saved.name, "claude");
-  });
-
   test("AddResource filesystem variant returns ULID and persists", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     const id = await uc.execute({
       type: "filesystem",
       projectId: PROJECT_ID,
@@ -321,7 +297,7 @@ describe("AddResource", () => {
   test("AddResource with unknown projectId throws UnknownReferenceError", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({});
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     await assert.rejects(
       () =>
         uc.execute({
@@ -344,7 +320,7 @@ describe("AddResource", () => {
     const resolver = new FakeReferenceResolver({
       [INITIATIVE_ID]: "initiative",
     });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     await assert.rejects(
       () =>
         uc.execute({
@@ -366,7 +342,7 @@ describe("AddResource", () => {
   test("AddResource with duplicate name in project throws DuplicateNameError", async () => {
     const repo = new FakeProjectRepository();
     const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const uc = new AddResource(repo, resolver, new FakeModelCatalog());
+    const uc = new AddResource(repo, resolver);
     await uc.execute({
       type: "filesystem",
       projectId: PROJECT_ID,
@@ -386,77 +362,6 @@ describe("AddResource", () => {
         assert.equal(err.errorName, "shared-name");
         return true;
       },
-    );
-  });
-
-  // --- Story 04 T2 D3 — ModelCatalog validation at create ---
-
-  test("AddResource ai_provider: valid pair with accepting catalog returns id", async () => {
-    const repo = new FakeProjectRepository();
-    const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const catalog = new FakeModelCatalog([
-      { provider: "openai-codex", model: "gpt-5.6-terra" },
-    ]);
-    const uc = new AddResource(repo, resolver, catalog);
-    const id = await uc.execute({
-      type: "ai_provider",
-      projectId: PROJECT_ID,
-      name: "gpt",
-      provider: "openai-codex",
-      model: "gpt-5.6-terra",
-    });
-    assert.ok(
-      typeof id === "string" && id.length > 0,
-      "returns a non-empty id for a valid (provider, model) pair",
-    );
-  });
-
-  test("AddResource ai_provider: unknown pair with rejecting catalog throws UnknownModelError", async () => {
-    const repo = new FakeProjectRepository();
-    const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    const catalog = new FakeModelCatalog(); // no args = reject all
-    const uc = new AddResource(repo, resolver, catalog);
-    await assert.rejects(
-      () =>
-        uc.execute({
-          type: "ai_provider",
-          projectId: PROJECT_ID,
-          name: "bad",
-          provider: "openai-codex",
-          model: "no-such-model",
-        }),
-      (err: unknown) => {
-        assert.ok(
-          err instanceof UnknownModelError,
-          `expected UnknownModelError, got ${String(err)}`,
-        );
-        assert.equal(err.provider, "openai-codex", "provider field must match");
-        assert.equal(err.model, "no-such-model", "model field must match");
-        assert.ok(
-          err.message.includes("list model"),
-          `message must contain 'list model', got: ${err.message}`,
-        );
-        return true;
-      },
-    );
-  });
-
-  test("AddResource credential: modelCatalog is not consulted for non-ai_provider types", async () => {
-    const repo = new FakeProjectRepository();
-    const resolver = new FakeReferenceResolver({ [PROJECT_ID]: "project" });
-    // reject-all catalog — must NOT be consulted for credential
-    const catalog = new FakeModelCatalog();
-    const uc = new AddResource(repo, resolver, catalog);
-    const id = await uc.execute({
-      type: "credential",
-      projectId: PROJECT_ID,
-      name: "cred-d3",
-      provider: "anthropic",
-      value: "sk-test",
-    });
-    assert.ok(
-      typeof id === "string" && id.length > 0,
-      "credential must succeed even with a reject-all ModelCatalog",
     );
   });
 });

@@ -24,11 +24,11 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const INDEX_SRC = join(__dirname, "index.ts");
 const COMMANDS_DIR = join(__dirname, "commands");
 
-/** Number of leaf files under commands/ subdirectories (007.17-s4 adds four: add/initiative-dependency.ts, add/objective-dependency.ts, remove/initiative-dependency.ts, remove/objective-dependency.ts; 008.1 Story D adds logout/ai-provider.ts, remove/ai-provider.ts; 008.1 Story D2 adds test/ai-provider.ts; 008.2 Story B adds assign/ai-provider.ts, unassign/ai-provider.ts). */
-const EXPECTED_LEAF_FILE_COUNT = 67;
+/** Number of leaf files under commands/ subdirectories (007.17-s4 adds four: add/initiative-dependency.ts, add/objective-dependency.ts, remove/initiative-dependency.ts, remove/objective-dependency.ts; 008.1 Story D adds logout/ai-provider.ts, remove/ai-provider.ts; 008.1 Story D2 adds test/ai-provider.ts; 008.2 Story B adds assign/ai-provider.ts, unassign/ai-provider.ts; 008.3 Story C removes create/ai-provider.ts and update/ai-provider.ts). */
+const EXPECTED_LEAF_FILE_COUNT = 65;
 
 /** Number of audited leaves in the EPIC inventory. */
-const EXPECTED_LEAF_COUNT = 69;
+const EXPECTED_LEAF_COUNT = 67;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [
@@ -137,6 +137,7 @@ describe("src/apps/cli/architecture.ts", () => {
         "login <provider> positional (→ login provider --provider)",
         ["login", "openai-codex"],
       ],
+      ["create ai-provider (retired in 008.3)", ["create", "ai-provider"]],
     ];
 
     for (const [label, argv] of OLD_SPELLINGS) {
@@ -163,7 +164,6 @@ describe("src/apps/cli/architecture.ts", () => {
   test("(Story D) '<group> <sub> --help' prints the subcommand's own help across the command matrix", async () => {
     const MATRIX: Array<[group: string, sub: string]> = [
       ["get", "conflict"],
-      ["create", "ai-provider"],
       ["run", "daemon"],
       ["retry", "task"],
       ["login", "provider"], // regression guard: this pair already works today

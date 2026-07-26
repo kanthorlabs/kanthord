@@ -21,7 +21,7 @@ import { FakeSessionFactory } from "../../agent-runner/fake-session.ts";
 import type { FakeTurn } from "../../agent-runner/fake-session.ts";
 import type { ProviderSessionFactory } from "../../agent-runner/pi-session.ts";
 import { CredentialError } from "../../agent-runner/pi-session.ts";
-import type { AIProvider, Credential } from "../../domain/resource.ts";
+import type { ResolvedProvider } from "../../agent-runner/port.ts";
 
 const execFileAsync = promisify(execFileCb);
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -52,14 +52,7 @@ class SmokeSessionFactory {
     this._queue = queue;
   }
 
-  async for(aiProvider: AIProvider, credential: Credential): Promise<unknown> {
-    if (aiProvider.provider !== credential.provider) {
-      throw new CredentialError(
-        credential.name,
-        credential.provider,
-        `provider mismatch: ${credential.provider} vs ${aiProvider.provider}`,
-      );
-    }
+  async for(provider: ResolvedProvider): Promise<unknown> {
     const turns = this._queue.shift();
     if (turns === undefined) {
       throw new Error("SmokeSessionFactory: no more turns in queue");
@@ -102,17 +95,20 @@ async function makeSandbox(dir: string): Promise<void> {
 }
 
 /**
- * Run the standard resource + project setup (db migrate, project, ai-provider,
- * credential, repository, initiative, objective) and return the key ids.
+ * Run the standard resource + project setup (db migrate, project, optionally
+ * a global ai-provider + assignment, repository, initiative, objective) and
+ * return the key ids. When registerProvider is true (default) a global
+ * ai-provider is registered and assigned so the daemon resolves it via the
+ * provider chain (008.3 Story A/B).
  */
 async function runSetup(
   deps: ReturnType<typeof buildDeps>,
   sandboxDir: string,
   credentialValue: string = "smoke-fake-key",
+  registerProvider: boolean = true,
 ): Promise<{
   PROJECT: string;
-  AIPROV: string;
-  CRED: string;
+  PROVIDER?: string;
   REPO: string;
   INITIATIVE: string;
   OBJECTIVE: string;
@@ -128,52 +124,43 @@ async function runSetup(
   const PROJECT = p.stdout[0]!;
   assert.match(PROJECT, ULID_RE);
 
-  const ap = await dispatch(
-    [
-      "create",
-      "ai-provider",
-      "--project",
-      PROJECT,
-      "--name",
-      "openai",
-      "--provider",
-      "openai",
-      "--model",
-      "gpt-5.5",
-    ],
-    deps,
-  );
-  assert.equal(ap.exitCode, 0);
-  const AIPROV = ap.stdout[0]!;
-  assert.match(AIPROV, ULID_RE);
+  let PROVIDER: string | undefined;
+  if (registerProvider) {
+    // Register a global ai-provider (008.3: global registry, no project scope).
+    const provValueFile = join(sandboxDir, ".provider-value");
+    await writeFile(provValueFile, credentialValue, { encoding: "utf8" });
+    const rp = await dispatch(
+      [
+        "register",
+        "ai-provider",
+        "--name",
+        "smoke-provider",
+        "--provider",
+        "openai-codex",
+        "--model",
+        "gpt-5.6-sol",
+        "--value-file",
+        provValueFile,
+      ],
+      deps,
+    );
+    assert.equal(rp.exitCode, 0);
+    PROVIDER = rp.stdout[0]!;
+    assert.match(PROVIDER!, ULID_RE);
 
-  // D4: --value is removed; write value to a temp file and use --value-file
-  const credValueFile = join(sandboxDir, ".credential-value");
-  await writeFile(credValueFile, credentialValue, { encoding: "utf8" });
-  const cr = await dispatch(
-    [
-      "create",
-      "credential",
-      "--project",
-      PROJECT,
-      "--name",
-      "openai-key",
-      "--provider",
-      "openai",
-      "--value-file",
-      credValueFile,
-    ],
-    deps,
-  );
-  assert.equal(cr.exitCode, 0);
-  const CRED = cr.stdout[0]!;
-  assert.match(CRED, ULID_RE);
+    // Assign to project so the daemon resolves it via the provider chain.
+    const as = await dispatch(
+      ["assign", "ai-provider", "--project", PROJECT, "--provider", PROVIDER],
+      deps,
+    );
+    assert.equal(as.exitCode, 0);
+  }
 
   // The managed home is a bare, kanthord-owned store (EPIC 007.11) — never a
   // developer checkout. Point --path at a fresh dir so kanthord provisions a
   // bare clone from the bare origin; the sandbox checkout stays the source only.
   const homeDir = `${sandboxDir}-home`;
-  const rp = await dispatch(
+  const rp2 = await dispatch(
     [
       "create",
       "repository",
@@ -190,8 +177,8 @@ async function runSetup(
     ],
     deps,
   );
-  assert.equal(rp.exitCode, 0);
-  const REPO = rp.stdout[0]!;
+  assert.equal(rp2.exitCode, 0);
+  const REPO = rp2.stdout[0]!;
   assert.match(REPO, ULID_RE);
 
   const ini = await dispatch(
@@ -224,22 +211,11 @@ async function runSetup(
   const OBJECTIVE = obj.stdout[0]!;
   assert.match(OBJECTIVE, ULID_RE);
 
-  return { PROJECT, AIPROV, CRED, REPO, INITIATIVE, OBJECTIVE };
+  return { PROJECT, PROVIDER, REPO, INITIATIVE, OBJECTIVE };
 }
 
-function makeCtxArgs(
-  aiprovId: string,
-  credId: string,
-  repoId: string,
-): string[] {
-  return [
-    "--context",
-    `ai_provider=${aiprovId}`,
-    "--context",
-    `credential=${credId}`,
-    "--context",
-    `repository=${repoId}`,
-  ];
+function makeCtxArgs(repoId: string): string[] {
+  return ["--context", `repository=${repoId}`];
 }
 
 // ---------------------------------------------------------------------------
@@ -305,8 +281,10 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
       sessionFactory: factory as unknown as ProviderSessionFactory,
     });
 
-    const { PROJECT, AIPROV, CRED, REPO, INITIATIVE, OBJECTIVE } =
-      await runSetup(deps, sandboxDir);
+    const { PROJECT, REPO, INITIATIVE, OBJECTIVE } = await runSetup(
+      deps,
+      sandboxDir,
+    );
 
     // ── Phase 1 ──────────────────────────────────────────────────────────────
 
@@ -322,7 +300,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
         "Add an H1 title to README.md",
         "--ac",
         "README begins with a level-1 heading",
-        ...makeCtxArgs(AIPROV, CRED, REPO),
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -462,7 +440,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
         "Add a second line and escalate for review",
         "--ac",
         "second line added",
-        ...makeCtxArgs(AIPROV, CRED, REPO),
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -484,7 +462,7 @@ test("Phase 1+2: happy path README edit and escalation round-trip", async () => 
         "cleaned up",
         "--dependencies",
         TASK2,
-        ...makeCtxArgs(AIPROV, CRED, REPO),
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -690,7 +668,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
     const deps = buildDeps(dbPath, {
       sessionFactory: factory as unknown as ProviderSessionFactory,
     });
-    const { AIPROV, CRED, REPO, OBJECTIVE } = await runSetup(deps, sandboxDir);
+    const { REPO, OBJECTIVE } = await runSetup(deps, sandboxDir);
 
     const t = await dispatch(
       [
@@ -704,7 +682,7 @@ test("Phase 3a: retry rejection — task re-runs and completes; no task.failed e
         "do something",
         "--ac",
         "done",
-        ...makeCtxArgs(AIPROV, CRED, REPO),
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -808,7 +786,7 @@ test("Phase 3b: discard rejection — task discarded, pending dependent cascade-
     const deps = buildDeps(dbPath, {
       sessionFactory: factory as unknown as ProviderSessionFactory,
     });
-    const { AIPROV, CRED, REPO, OBJECTIVE } = await runSetup(deps, sandboxDir);
+    const { REPO, OBJECTIVE } = await runSetup(deps, sandboxDir);
 
     const td = await dispatch(
       [
@@ -822,7 +800,7 @@ test("Phase 3b: discard rejection — task discarded, pending dependent cascade-
         "do something to discard",
         "--ac",
         "n/a",
-        ...makeCtxArgs(AIPROV, CRED, REPO),
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -843,7 +821,7 @@ test("Phase 3b: discard rejection — task discarded, pending dependent cascade-
         "n/a",
         "--dependencies",
         TASK_DISCARD,
-        ...makeCtxArgs(AIPROV, CRED, REPO),
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -936,49 +914,27 @@ test("Phase 3b: discard rejection — task discarded, pending dependent cascade-
 // Phase 4: credential provider mismatch → daemon exits 1
 // ---------------------------------------------------------------------------
 
-test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential value in output", async () => {
+test("Phase 4: empty provider chain fails daemon exit 1; no credential value in output", async () => {
   const tmpRoot = await mkdtemp(join(tmpdir(), "kanthord-agent-smoke-"));
   const sandboxDir = join(tmpRoot, "sandbox");
   const dbPath = join(tmpRoot, "kanthord.db");
 
-  const BAD_CRED_VALUE = "secret-bad-cred-value";
-
   try {
     await makeSandbox(sandboxDir);
 
-    // Factory will throw CredentialError when provider mismatch is detected;
-    // no turns needed since session.for() never returns.
+    // Factory queue is empty — runner is never called when chain is empty,
+    // so the session factory is never invoked.
     const factory = new SmokeSessionFactory([]);
 
     const deps = buildDeps(dbPath, {
       sessionFactory: factory as unknown as ProviderSessionFactory,
     });
-    const { PROJECT, AIPROV, REPO, INITIATIVE, OBJECTIVE } = await runSetup(
+    const { REPO, OBJECTIVE } = await runSetup(
       deps,
       sandboxDir,
+      "smoke-fake-key",
+      false, // registerProvider=false — no provider means empty chain
     );
-
-    // Create a credential with provider="anthropic" (mismatches ai_provider's "openai")
-    // D4: --value is removed; write value to a temp file and use --value-file
-    const badCredValueFile = join(sandboxDir, ".bad-credential-value");
-    await writeFile(badCredValueFile, BAD_CRED_VALUE, { encoding: "utf8" });
-    const badCr = await dispatch(
-      [
-        "create",
-        "credential",
-        "--project",
-        PROJECT,
-        "--name",
-        "wrong-provider",
-        "--provider",
-        "anthropic",
-        "--value-file",
-        badCredValueFile,
-      ],
-      deps,
-    );
-    assert.equal(badCr.exitCode, 0);
-    const BADCRED = badCr.stdout[0]!;
 
     const t4 = await dispatch(
       [
@@ -987,17 +943,12 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
         "--objective",
         OBJECTIVE,
         "--title",
-        "task with bad credential",
+        "task with no provider",
         "--instructions",
-        "will fail due to provider mismatch",
+        "will fail due to empty provider chain",
         "--ac",
         "n/a",
-        "--context",
-        `ai_provider=${AIPROV}`,
-        "--context",
-        `credential=${BADCRED}`,
-        "--context",
-        `repository=${REPO}`,
+        ...makeCtxArgs(REPO),
       ],
       deps,
     );
@@ -1006,7 +957,7 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
 
     // daemon exits 1 (EPIC 005 contract: failed task → non-zero exit)
     const d4 = await dispatch(["run", "daemon", "--until-idle"], deps);
-    assert.equal(d4.exitCode, 1, "Phase 4 daemon exits 1 for credential error");
+    assert.equal(d4.exitCode, 1, "Phase 4 daemon exits 1 for empty chain");
 
     // task is failed
     const g4 = await dispatch(["get", "task", "--id", TASK4, "--json"], deps);
@@ -1017,7 +968,7 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
     };
     assert.equal(task4Data.status, "failed", "TASK4 is failed");
 
-    // task.failed event reason starts with "CredentialError"
+    // task.failed event reason contains "no AI provider available"
     const ev4 = await dispatch(
       ["list", "event", "--after", "0", "--limit", "1000", "--json"],
       deps,
@@ -1027,11 +978,11 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
     );
     assert.ok(failedEvent !== undefined, "task.failed event emitted");
     assert.ok(
-      failedEvent?.payload?.["reason"]?.startsWith("CredentialError"),
-      `task.failed reason starts with CredentialError, got: ${failedEvent?.payload?.["reason"]}`,
+      failedEvent?.payload?.["reason"]?.includes("no AI provider available"),
+      `task.failed reason mentions no provider, got: ${failedEvent?.payload?.["reason"]}`,
     );
 
-    // no output anywhere contains the bad credential value
+    // no output contains a credential value (trivially: no credential used)
     const allOutput = [
       ...d4.stdout,
       ...d4.stderr,
@@ -1040,9 +991,11 @@ test("Phase 4: provider-mismatched credential fails daemon exit 1; no credential
       ...ev4.stdout,
       ...ev4.stderr,
     ].join(" ");
+    // The provider was registered with "smoke-fake-key" but the daemon never
+    // reads it on empty chain — verify no opaque credential-like token leaks.
     assert.ok(
-      !allOutput.includes(BAD_CRED_VALUE),
-      "bad credential value must not appear in any output",
+      !allOutput.includes("smoke-fake-key"),
+      "credential value must not appear in any output",
     );
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });

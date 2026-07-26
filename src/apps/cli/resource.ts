@@ -1,7 +1,6 @@
 import type { AddResource } from "../../app/resource/add-resource.ts";
 import type { GetResource } from "../../app/resource/get-resource.ts";
 import type { ListResources } from "../../app/resource/list-resources.ts";
-import type { UpdateAiProvider } from "../../app/resource/update-ai-provider.ts";
 import type { UpdateCredential } from "../../app/resource/update-credential.ts";
 import type { UpdateRepository } from "../../app/resource/update-repository.ts";
 import type { UpdateNotification } from "../../app/resource/update-notification.ts";
@@ -12,21 +11,10 @@ import {
   CredentialReadTimeoutError,
 } from "./credential-input.ts";
 
-// Mirrors the domain ReasoningEffort union (apps must not import domain
-// directly — the domain re-validates on its side).
-const REASONING_EFFORTS = [
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-] as const;
-type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
-
 // Mirrors the domain ResourceType union (apps must not import domain
 // directly — the domain re-validates on its side).
 export type ResourceType =
-  "repository" | "credential" | "notification" | "ai_provider" | "filesystem";
+  "repository" | "credential" | "notification" | "filesystem";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
@@ -205,47 +193,6 @@ export async function runCreateNotification(
   }
 }
 
-export async function runCreateAiProvider(
-  args: Record<string, unknown>,
-  addResource: AddResource,
-): Promise<HandlerResult> {
-  try {
-    const projectId = requireFlag(args, "project");
-    const name = requireFlag(args, "name");
-    const provider = requireFlag(args, "provider");
-    const model = requireFlag(args, "model");
-    let effort: ReasoningEffort | undefined;
-    if (typeof args["effort"] === "string" && args["effort"] !== "") {
-      if (!(REASONING_EFFORTS as readonly string[]).includes(args["effort"])) {
-        return {
-          exitCode: 1,
-          stdout: [],
-          stderr: [
-            `error: invalid effort "${args["effort"]}": must be one of ${REASONING_EFFORTS.join(", ")}`,
-          ],
-        };
-      }
-      effort = args["effort"] as ReasoningEffort;
-    }
-    const id = await addResource.execute({
-      type: "ai_provider",
-      projectId,
-      name,
-      provider,
-      model,
-      ...(effort !== undefined ? { effort } : {}),
-    });
-    return {
-      exitCode: 0,
-      stdout: [id],
-      stderr: [`ai_provider created: ${id}`],
-    };
-  } catch (err) {
-    const mapped = toResult(err);
-    return { ...mapped, stdout: [] };
-  }
-}
-
 export async function runCreateFilesystem(
   args: Record<string, unknown>,
   addResource: AddResource,
@@ -328,34 +275,6 @@ export function runListResources(
     stdout: rows.map((r) => `${r.id}  ${r.name}`),
     stderr: [],
   };
-}
-
-export async function runUpdateAiProvider(
-  args: Record<string, unknown>,
-  updateAiProvider: UpdateAiProvider,
-): Promise<HandlerResult> {
-  try {
-    const id = requireFlag(args, "id");
-    await updateAiProvider.execute({
-      id,
-      ...(typeof args["name"] === "string" ? { name: args["name"] } : {}),
-      ...(typeof args["model"] === "string" ? { model: args["model"] } : {}),
-      ...(args["clear-effort"] === true
-        ? { effort: null }
-        : typeof args["effort"] === "string" && args["effort"] !== ""
-          ? { effort: args["effort"] as ReasoningEffort }
-          : {}),
-      ...(args["clear-base-url"] === true
-        ? { baseUrl: null }
-        : typeof args["base-url"] === "string"
-          ? { baseUrl: args["base-url"] }
-          : {}),
-    });
-    return { exitCode: 0, stdout: [], stderr: ["ai_provider updated"] };
-  } catch (err) {
-    const mapped = toResult(err);
-    return { ...mapped, stdout: [] };
-  }
 }
 
 export async function runUpdateCredential(

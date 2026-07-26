@@ -357,8 +357,6 @@ test("SqliteAiProviderRegistry: assign two providers at ranks 0 and 1, listAssig
     rmSync(dir, { recursive: true, force: true });
   });
 
-
-
   const projectId = "test-proj";
   db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
     projectId,
@@ -645,4 +643,100 @@ test("SqliteAiProviderRegistry: builtin record has null for custom fields", () =
   assert.equal(loaded.api, null);
   assert.equal(loaded.contextWindow, null);
   assert.equal(loaded.maxTokens, null);
+});
+
+// ── BLOCKER 4 — updateCredentialCAS discriminated result ──
+
+test("(BLOCKER 4) SqliteAiProviderRegistry: updateCredentialCAS applies successfully and bumps version", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const p = registry.register({
+    name: "cas-applied",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-old",
+  });
+
+  const result = registry.updateCredentialCAS(
+    p.id,
+    "sk-new",
+    p.credentialVersion,
+  );
+  assert.deepEqual(
+    result,
+    { applied: true, newVersion: p.credentialVersion + 1 },
+    "updateCredentialCAS with correct version must return {applied:true, newVersion}",
+  );
+  const stored = registry.get(p.id)!;
+  assert.equal(stored.value, "sk-new", "value must be updated");
+  assert.equal(
+    stored.credentialVersion,
+    p.credentialVersion + 1,
+    "credentialVersion must bump by 1",
+  );
+});
+
+test("(BLOCKER 4) SqliteAiProviderRegistry: updateCredentialCAS stale version returns {applied:false}", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const p = registry.register({
+    name: "cas-stale",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-old",
+  });
+
+  const result = registry.updateCredentialCAS(p.id, "sk-new", 999);
+  assert.deepEqual(
+    result,
+    { applied: false },
+    "stale version must return {applied:false}",
+  );
+
+  const stored = registry.get(p.id)!;
+  assert.equal(
+    stored.value,
+    "sk-old",
+    "value must not be updated on stale CAS",
+  );
+  assert.equal(
+    stored.credentialVersion,
+    p.credentialVersion,
+    "credentialVersion must not change on stale CAS",
+  );
+});
+
+test("(BLOCKER 4) SqliteAiProviderRegistry: updateCredentialCAS logged_out returns {applied:false}", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const p = registry.register({
+    name: "cas-loggedout",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-old",
+  });
+  registry.logout(p.id);
+
+  const result = registry.updateCredentialCAS(
+    p.id,
+    "sk-new",
+    p.credentialVersion,
+  );
+  assert.deepEqual(
+    result,
+    { applied: false },
+    "logged_out provider must return {applied:false}",
+  );
 });

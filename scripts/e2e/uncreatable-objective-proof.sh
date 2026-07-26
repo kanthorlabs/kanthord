@@ -44,6 +44,16 @@ G="$D/graph"
 node src/main.ts db migrate >/dev/null
 PROJECT=$(node src/main.ts create project --name proof-00719 | head -1)
 
+# 008.3 — the daemon resolves the provider chain for EVERY agent, `fake@1` included
+# (the `fake@1` carve-out in run-next-task.ts is being removed). An empty chain fails
+# the task with "no AI provider available for project", so register + assign one
+# provider. This proof is still no-model: `fake@1` resolves to FakeRunner, which never
+# opens a session, so the value below is never read.
+DUMMY_VALUE="$(mktemp -d)/token"; printf 'dummy' > "$DUMMY_VALUE"
+PROV_E2E=$(node src/main.ts register ai-provider --name e2e --provider openai-codex \
+        --model gpt-5.6-sol --value-file "$DUMMY_VALUE" | grep -oE '01[0-9A-HJKMNP-TV-Z]{24}')
+node src/main.ts assign ai-provider --project "$PROJECT" --provider "$PROV_E2E" >/dev/null
+
 "$HERE/make-orphan-objective-graph.sh" "$G"
 node src/main.ts import graph "$G" --create --project "$PROJECT" >/dev/null
 

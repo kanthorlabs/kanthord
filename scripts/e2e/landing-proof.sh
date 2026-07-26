@@ -26,34 +26,54 @@ MIRROR="$(mktemp -d)/mirror"
 REPO=$(node src/main.ts create repository --project "$PROJECT" --name home \
         --remote-url "file://$HOME_REMOTE" --branch main --auth ambient --path "$MIRROR")
 
-# generic@1 requires repository + ai_provider + credential context. Part A runs
-# NO real model, so a DUMMY provider+credential suffices (the fake factory ignores them).
-CREDVAL="$(mktemp)"; printf 'dummy-token' > "$CREDVAL"
-CRED=$(node src/main.ts create credential --project "$PROJECT" --name c1 --provider openai-codex --value-file "$CREDVAL")
-PROV=$(node src/main.ts create ai-provider --project "$PROJECT" --name p1 --provider openai-codex --model gpt-5.6-terra)
+# generic@1 now requires repository context only — the daemon auto-resolves the
+# provider chain from the project's registered providers (008.3). No context
+# binding is needed, but the chain must be non-empty or every task fails with
+# "no AI provider available for project". Story D binds this setup to
+# `register` + `assign`: registration alone would also work (the global default
+# is the chain tail), but `assign` is the documented project operator flow and
+# is what 008.3 actually resolves. KANTHORD_FAKE_AGENT replaces the session
+# factory, so this value is never read.
+DUMMY_VALUE="$(mktemp -d)/token"; printf 'dummy' > "$DUMMY_VALUE"
+PROV_E2E=$(node src/main.ts register ai-provider --name e2e --provider openai-codex \
+        --model gpt-5.6-sol --value-file "$DUMMY_VALUE" | grep -oE '01[0-9A-HJKMNP-TV-Z]{24}')
+node src/main.ts assign ai-provider --project "$PROJECT" --provider "$PROV_E2E" >/dev/null
 
 GRAPH="$(mktemp -d)/g"; scripts/e2e/make-landing-graph.sh "$GRAPH" >/dev/null
 node src/main.ts import graph "$GRAPH" --create --project "$PROJECT" \
-        --bind source="$REPO" --bind provider="$PROV" --bind cred="$CRED" >/dev/null
+        --bind source="$REPO" >/dev/null
 INIT=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).initiativeId)' "$GRAPH")
+OBJ=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).refToId.objectives["todo-api-obj"])' "$GRAPH")
 # Pick the ROOT task (create-task — "Create Task — POST /tasks"); the other four
-# endpoint tasks depend on it and stay pending in the no-model daemon pass.
+# endpoint tasks depend on it.
 TASK=$(node src/main.ts list task --initiative "$INIT" --json \
         | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).find(t=>/Create Task/.test(t.title||"")).id))')
 
 export KANTHORD_FAKE_AGENT="$GRAPH/.fake-agent.json"
 node src/main.ts run daemon --until-idle --poll-interval 200
 
-# Changed task must await confirmation with a candidate — NOT completed yet.
-test "$(node src/main.ts get task --id "$TASK" --json | node -e 'process.stdin.once("data",d=>console.log(JSON.parse(d).status))')" = "awaiting_confirmation"
-# Canonical mirror branch still at BASE_SHA (nothing landed before approval).
-test "$(git -C "$MIRROR" rev-parse main)" = "$BASE_SHA"
-
-node src/main.ts approve task --id "$TASK"
+# 007.12 changed the integration unit from the TASK to the OBJECTIVE: a task that
+# runs in an initiative clone carries a `workspace` binding, and RunNextTask
+# completes such a task directly (run-next-task.ts:365-372) instead of holding it
+# at awaiting_confirmation. The human gate moved to `approve objective`. This
+# script asserts that current lifecycle; the old task-level candidate gate is only
+# reachable for tasks with NO workspace binding.
 test "$(node src/main.ts get task --id "$TASK" --json | node -e 'process.stdin.once("data",d=>console.log(JSON.parse(d).status))')" = "completed"
-# Canonical branch ADVANCED and now contains the task output.
-NEW_SHA=$(git -C "$MIRROR" rev-parse main); test "$NEW_SHA" != "$BASE_SHA"
-git -C "$MIRROR" cat-file -e "main:$(cat "$GRAPH"/.expected-output-path)"
+test "$(node src/main.ts get objective --id "$OBJ" | sed -n 's/^status: //p')" = "awaiting_confirmation"
+# Nothing integrated before approval: the initiative branch is not yet advanced.
+INIT_BR="refs/heads/kanthord/init/$INIT"
+git --git-dir="$MIRROR" cat-file -e "$INIT_BR:$(cat "$GRAPH"/.expected-output-path)" 2>/dev/null \
+        && { echo "FAILED: output present on $INIT_BR before approve objective" >&2; exit 1; }
+# `main` is never touched by a land: delivery to a remote is the separate,
+# human-gated `publish repository` step (007.13 delivery contract).
+test "$(git --git-dir="$MIRROR" rev-parse main)" = "$BASE_SHA"
+
+node src/main.ts approve objective --id "$OBJ" >/dev/null
+test "$(node src/main.ts get objective --id "$OBJ" | sed -n 's/^status: //p')" = "integrated"
+# The initiative branch in the bare managed home ADVANCED and now has the output.
+git --git-dir="$MIRROR" cat-file -e "$INIT_BR:$(cat "$GRAPH"/.expected-output-path)"
+# `main` STILL untouched — a local land is not a remote delivery.
+test "$(git --git-dir="$MIRROR" rev-parse main)" = "$BASE_SHA"
 # A7: base_commit recorded (canonical SHA), not null.
 test "$(node src/main.ts get task --id "$TASK" --json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).result.baseCommit||""))')" != ""
 

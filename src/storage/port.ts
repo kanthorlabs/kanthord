@@ -364,6 +364,17 @@ export interface AiProviderRegistry {
    * Return every project id that assigns the given provider.
    */
   listProjectsAssigning(providerId: string): string[];
+
+  /**
+   * Conditional credential update (CAS) with discriminated result.
+   * Returns {applied:true, newVersion} when the version matches and the update succeeds,
+   * {applied:false} when the version is stale or the provider is logged_out.
+   */
+  updateCredentialCAS(
+    id: string,
+    value: string,
+    expectedVersion: number,
+  ): { applied: true; newVersion: number } | { applied: false };
 }
 
 /**

@@ -18,9 +18,9 @@
 # Usage: scripts/e2e/sequencing-proof.sh
 #
 # Why a script and not an inline block (AGENTS.md "Deterministic verification
-# script"): `generic@1` requires repository + ai_provider + credential context,
-# the no-model path needs KANTHORD_FAKE_AGENT exported, and the bare origin must
-# be seeded before `create repository` — setup an inline block cannot carry.
+# script"): the no-model path needs KANTHORD_FAKE_AGENT exported, and the bare
+# origin must be seeded before `create repository` — setup an inline block
+# cannot carry.
 #
 # Ordering note: steps 3 and 6 run the SAME command at DIFFERENT times on purpose.
 # The refusal checks are ordered idempotence → already-started → cycle, so before
@@ -50,14 +50,18 @@ REPO=$(node src/main.ts create repository --project "$PROJECT" --name r \
         --remote-url "file://$ORIGIN" --branch main --auth ambient \
         --path "$MIRROR" | head -1)
 
-# generic@1 requires repository + ai_provider + credential context. This proof
-# runs NO real model, so a DUMMY provider+credential suffices (the fake session
-# factory ignores them — they only satisfy the runner's binding check).
-CREDVAL="$(mktemp)"; printf 'dummy-token' > "$CREDVAL"
-CRED=$(node src/main.ts create credential --project "$PROJECT" --name c1 \
-        --provider openai-codex --value-file "$CREDVAL" | head -1)
-PROV=$(node src/main.ts create ai-provider --project "$PROJECT" --name p1 \
-        --provider openai-codex --model gpt-5.6-terra | head -1)
+# generic@1 now requires repository context only — the daemon auto-resolves the
+# provider chain from the project's registered providers (008.3). No context
+# binding is needed, but the chain must be non-empty or every task fails with
+# "no AI provider available for project". Story D binds this setup to
+# `register` + `assign`: registration alone would also work (the global default
+# is the chain tail), but `assign` is the documented project operator flow and
+# is what 008.3 actually resolves. KANTHORD_FAKE_AGENT replaces the session
+# factory, so this value is never read.
+DUMMY_VALUE="$(mktemp -d)/token"; printf 'dummy' > "$DUMMY_VALUE"
+PROV_E2E=$(node src/main.ts register ai-provider --name e2e --provider openai-codex \
+        --model gpt-5.6-sol --value-file "$DUMMY_VALUE" | grep -oE '01[0-9A-HJKMNP-TV-Z]{24}')
+node src/main.ts assign ai-provider --project "$PROJECT" --provider "$PROV_E2E" >/dev/null
 
 GRAPH="$(mktemp -d)/graph"
 scripts/e2e/make-sequencing-graph.sh "$GRAPH"
@@ -95,7 +99,7 @@ derive_variant() {
 
 import_pkg() { # $1 = package dir
   node src/main.ts import graph "$1" --create --project "$PROJECT" \
-    --bind source="$REPO" --bind provider="$PROV" --bind cred="$CRED" >/dev/null
+    --bind source="$REPO" >/dev/null
 }
 
 read_manifest() { # $1 = package dir, $2 = dotted path into the manifest
@@ -180,7 +184,7 @@ node src/main.ts get objective --id "$O2" | grep -q "^waiting on: "
 apply_variant() { # $1 = variant dir, extra args follow
   local dir="$1"; shift
   node src/main.ts import graph "$dir" --apply --initiative "$I2" \
-    --bind source="$REPO" --bind provider="$PROV" --bind cred="$CRED" "$@" 2>&1
+    --bind source="$REPO" "$@" 2>&1
 }
 
 # 8) reordering `after:` in the file is a NO-OP, not drift (canonicalisation).

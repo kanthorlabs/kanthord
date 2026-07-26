@@ -28,9 +28,8 @@
 # importing it and rewriting obj-2's `after:` line in the copy. See
 # `derive_variant` in scripts/e2e/sequencing-proof.sh.
 #
-# Bindings mirror make-discard-graph.sh: generic@1 requires repository +
-# ai_provider + credential context, so every initiative declares all three
-# aliases and the import needs `--bind source=… --bind provider=… --bind cred=…`.
+# Bindings: generic@1 requires repository context only, so every initiative
+# declares only the source alias and the import needs `--bind source=…` only.
 # Under the fake-agent seam the provider/credential values are ignored (they only
 # satisfy the runner's context-binding check) — a dummy pair suffices.
 #
@@ -58,8 +57,6 @@ ref: $2
 name: $3
 bindings:
   source: repository
-  provider: ai_provider
-  cred: credential
 ---
 EOF
 }
@@ -88,8 +85,6 @@ title: $5
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Deterministic no-model task: the scripted turn appends one marker line to

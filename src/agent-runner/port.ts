@@ -1,4 +1,5 @@
 import type { Task } from "../domain/task.ts";
+import type { ReasoningEffort } from "../domain/resource.ts";
 import type { VerificationEvidence } from "./verification.ts";
 
 export type { VerificationEvidence };
@@ -60,8 +61,26 @@ export interface TaskContextBinding {
   resourceId: string;
 }
 
+export interface ResolvedProvider {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  baseUrl?: string;
+  effort?: ReasoningEffort;
+  api?: "openai-completions" | "openai-responses";
+  contextWindow?: number;
+  maxTokens?: number;
+  value: string;
+  credentialVersion: number;
+}
+
 export interface AgentRunner {
-  run(task: Task, context: TaskContextBinding[]): Promise<TaskResult>;
+  run(
+    task: Task,
+    context: TaskContextBinding[],
+    provider?: ResolvedProvider,
+  ): Promise<TaskResult>;
 }
 
 export interface AgentRunnerResolver {

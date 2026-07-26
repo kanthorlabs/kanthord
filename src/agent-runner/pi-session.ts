@@ -19,15 +19,16 @@ import { createModels, createProvider } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type {
-  AIProvider,
-  Credential,
-  ReasoningEffort,
-} from "../domain/resource.ts";
+import type { ReasoningEffort } from "../domain/resource.ts";
 import {
   CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW,
   CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS,
 } from "../domain/resource.ts";
+import type { ResolvedProvider } from "./port.ts";
+
+import type { AiProviderRegistry } from "../storage/port.ts";
+import type { Logger } from "../logger/port.ts";
+import { NullLogger } from "../logger/null.ts";
 
 // ---------------------------------------------------------------------------
 // Public session type
@@ -53,9 +54,9 @@ export type SessionContext = { taskTitle?: string };
 
 export interface ProviderSessionFactory {
   for(
-    aiProvider: AIProvider,
-    credential: Credential,
+    provider: ResolvedProvider,
     context?: SessionContext,
+    expectedCredentialVersion?: number,
   ): Promise<ProviderSession>;
 }
 
@@ -87,6 +88,18 @@ export class UnknownModelError extends Error {
   }
 }
 
+export class UnsupportedApiError extends Error {
+  readonly api: string;
+
+  constructor(api: string) {
+    super(
+      `Unsupported API flavor '${api}' — expected 'openai-completions' or 'openai-responses'`,
+    );
+    this.name = "UnsupportedApiError";
+    this.api = api;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Reasoning-effort injection
 // ---------------------------------------------------------------------------
@@ -113,43 +126,34 @@ export function withReasoning(
 // ---------------------------------------------------------------------------
 
 export class PiProviderSessionFactory implements ProviderSessionFactory {
-  readonly #saveCredentialValue: (credentialId: string, value: string) => void;
+  readonly #registry: AiProviderRegistry;
+  readonly #logger: Logger;
 
-  constructor(options: {
-    saveCredentialValue: (credentialId: string, value: string) => void;
-  }) {
-    this.#saveCredentialValue = options.saveCredentialValue;
+  constructor(options: { registry: AiProviderRegistry; logger?: Logger }) {
+    this.#registry = options.registry;
+    this.#logger = options.logger ?? new NullLogger();
   }
 
   async for(
-    aiProvider: AIProvider,
-    credential: Credential,
+    provider: ResolvedProvider,
     _context?: SessionContext,
+    expectedCredentialVersion?: number,
   ): Promise<ProviderSession> {
     // _context (per-task selection) is a fake-seam concern; the real adapter
-    // builds one session per (aiProvider, credential) and ignores it.
+    // builds one session per provider and ignores it.
     // (d) empty value
-    if (!credential.value) {
+    if (!provider.value) {
       throw new CredentialError(
-        credential.name,
-        credential.provider,
-        `Credential '${credential.name}' has empty value`,
-      );
-    }
-
-    // (c) provider mismatch — message must name both providers, not the secret
-    if (credential.provider !== aiProvider.provider) {
-      throw new CredentialError(
-        credential.name,
-        credential.provider,
-        `Credential provider '${credential.provider}' does not match AIProvider provider '${aiProvider.provider}'`,
+        provider.name,
+        provider.provider,
+        `Credential '${provider.name}' has empty value`,
       );
     }
 
     // Discriminate credential kind by attempting JSON parse
     let parsedOAuth: PiOAuthCredential | undefined;
     try {
-      const raw = JSON.parse(credential.value) as { type?: unknown };
+      const raw = JSON.parse(provider.value) as { type?: unknown };
       if (raw && raw.type === "oauth") {
         parsedOAuth = raw as PiOAuthCredential;
       }
@@ -168,8 +172,10 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
       // reads within a session see the refreshed value (avoids re-refreshing
       // with a rotated-away refresh token).
       let current: PiOAuthCredential = parsedOAuth;
-      const credId = credential.id;
-      const saveFn = this.#saveCredentialValue;
+      const credId = provider.id;
+      const registry = this.#registry;
+      const logger = this.#logger;
+      let expectedVersion: number | undefined = expectedCredentialVersion;
 
       // Return "" (no override): a non-empty apiKey would make pi treat the
       // request as api-key auth and skip OAuth refresh (auth/resolve.ts:17).
@@ -187,7 +193,26 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
           const result = await fn(current);
           if (result !== undefined) {
             current = result as PiOAuthCredential;
-            saveFn(credId, JSON.stringify(result));
+            if (expectedVersion !== undefined) {
+              // The write-back must never throw into the agent loop (Story G):
+              // a failed CAS is a silent no-op for the in-flight attempt.
+              try {
+                const cas = registry.updateCredentialCAS(
+                  credId,
+                  JSON.stringify(result),
+                  expectedVersion,
+                );
+                if (cas.applied) {
+                  expectedVersion = cas.newVersion;
+                }
+              } catch (err) {
+                logger.error(
+                  `credential CAS write-back for ${credId} failed: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`,
+                );
+              }
+            }
           }
           // Per pi's CredentialStore contract: return the latest credential.
           // When fn makes no change (returns undefined — e.g. another request
@@ -195,33 +220,35 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
           return current;
         },
         delete: async (_providerId: string): Promise<void> => {
-          // no-op for now; logout path is a later story
+          // Unreachable: pi never calls delete on the store. kanthord's
+          // `logout ai-provider` goes through the registry (008.1), and 008.3's
+          // CAS write-back above is what keeps it from being undone.
         },
       };
     } else {
       // (a) API key path
-      const apiKey = credential.value;
+      const apiKey = provider.value;
       getApiKey = () => apiKey;
     }
 
     // ── Custom provider branch (api != null) ──
-    // When the aiProvider has api set, it is a custom OpenAI-compatible
+    // When the provider has api set, it is a custom OpenAI-compatible
     // provider that is not in pi's builtin catalog. Build a session-local
     // model catalog via createModels + createProvider instead.
-    if (aiProvider.api != null) {
-      const runtimeId = "custom:" + aiProvider.id;
+    if (provider.api != null) {
+      const runtimeId = "custom:" + provider.id;
       const contextWindow =
-        aiProvider.contextWindow ?? CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW;
+        provider.contextWindow ?? CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW;
       const maxTokens =
-        aiProvider.maxTokens ?? CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS;
+        provider.maxTokens ?? CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS;
 
       // Build a pi Model from the custom record data + documented defaults
       const model: Model<Api> = {
-        id: aiProvider.model,
-        name: aiProvider.model,
-        api: aiProvider.api as Api,
+        id: provider.model,
+        name: provider.model,
+        api: provider.api as Api,
         provider: runtimeId,
-        baseUrl: aiProvider.baseUrl ?? "",
+        baseUrl: provider.baseUrl ?? "",
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -235,15 +262,19 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
       );
 
       const streams =
-        aiProvider.api === "openai-completions"
+        provider.api === "openai-completions"
           ? openAICompletionsApi()
-          : openAIResponsesApi();
+          : provider.api === "openai-responses"
+            ? openAIResponsesApi()
+            : (() => {
+                throw new UnsupportedApiError(provider.api ?? "");
+              })();
 
       models.setProvider(
         createProvider({
           id: runtimeId,
-          name: aiProvider.name,
-          baseUrl: aiProvider.baseUrl,
+          name: provider.name,
+          baseUrl: provider.baseUrl,
           auth: {
             apiKey: {
               name: "Custom OpenAI-compatible API key",
@@ -259,13 +290,13 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
         }),
       );
 
-      const found = models.getModel(runtimeId, aiProvider.model);
+      const found = models.getModel(runtimeId, provider.model);
       if (!found) {
-        throw new UnknownModelError(runtimeId, aiProvider.model);
+        throw new UnknownModelError(runtimeId, provider.model);
       }
 
       const baseStream = models.streamSimple.bind(models) as StreamFunction;
-      const streamFn = withReasoning(baseStream, aiProvider.effort);
+      const streamFn = withReasoning(baseStream, provider.effort);
 
       return { model: found, streamFn, getApiKey, credentialStore };
     }
@@ -275,18 +306,18 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
     const models = builtinModels(
       credentialStore ? { credentials: credentialStore } : undefined,
     );
-    const found = models.getModel(aiProvider.provider, aiProvider.model);
+    const found = models.getModel(provider.provider, provider.model);
     if (!found) {
-      throw new UnknownModelError(aiProvider.provider, aiProvider.model);
+      throw new UnknownModelError(provider.provider, provider.model);
     }
 
     // (f) baseUrl override: spread a new model object with the custom URL
-    const model: Model<Api> = aiProvider.baseUrl
-      ? { ...found, baseUrl: aiProvider.baseUrl }
+    const model: Model<Api> = provider.baseUrl
+      ? { ...found, baseUrl: provider.baseUrl }
       : found;
 
     const baseStream = models.streamSimple.bind(models) as StreamFunction;
-    const streamFn = withReasoning(baseStream, aiProvider.effort);
+    const streamFn = withReasoning(baseStream, provider.effort);
 
     return { model, streamFn, getApiKey, credentialStore };
   }

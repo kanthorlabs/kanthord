@@ -16,6 +16,7 @@ import type {
 } from "../../storage/port.ts";
 import type {
   AgentRunnerResolver,
+  ResolvedProvider,
   TaskContextBinding,
   TaskResult,
 } from "../../agent-runner/port.ts";
@@ -101,6 +102,8 @@ export class RunNextTask {
   readonly #workspaces?: WorkspaceSquasher;
   readonly #initiativeWorkspaces?: InitiativeWorkspaces;
   readonly #sequencing?: { listObjectiveAfter: (id: string) => string[] };
+  readonly #providerChainFor?: (initiativeId: string) => ResolvedProvider[];
+  readonly #getProjectId?: (initiativeId: string) => string | undefined;
 
   constructor(
     queue: JobQueue,
@@ -115,6 +118,8 @@ export class RunNextTask {
       workspaces?: WorkspaceSquasher;
       initiativeWorkspaces?: InitiativeWorkspaces;
       sequencing?: { listObjectiveAfter: (id: string) => string[] };
+      providerChainFor?: (initiativeId: string) => ResolvedProvider[];
+      getProjectId?: (initiativeId: string) => string | undefined;
     },
   ) {
     this.#queue = queue;
@@ -131,6 +136,8 @@ export class RunNextTask {
     this.#workspaces = opts?.workspaces;
     this.#initiativeWorkspaces = opts?.initiativeWorkspaces;
     this.#sequencing = opts?.sequencing;
+    this.#providerChainFor = opts?.providerChainFor;
+    this.#getProjectId = opts?.getProjectId;
   }
 
   /**
@@ -224,9 +231,19 @@ export class RunNextTask {
 
     const { runningTask, contextBindings, initiativeId } = tx1;
 
+    // 008.3 Story A/B — resolve the provider chain for the task's initiative
+    // when the daemon wired a providerChainFor function. Only applies when
+    // the function is provided; existing callers that don't wire it keep the
+    // legacy behaviour (no provider passed to the runner).
+    const chain: ResolvedProvider[] | undefined =
+      this.#providerChainFor !== undefined
+        ? this.#providerChainFor(initiativeId ?? "")
+        : undefined;
+
     // Between tx1 and tx2: resolve runner and await the run, retrying a
     // transient failure (007.9 Story 02) — bounded by attempts + elapsed time.
     let failReason: string | null = null;
+    let failReasonCode: string | undefined;
     let completedResult:
       Extract<TaskResult, { outcome: "completed" }> | undefined;
     let escalatedResult:
@@ -235,41 +252,54 @@ export class RunNextTask {
       Extract<TaskResult, { outcome: "candidate" }> | undefined;
     let attempts = 0;
 
-    try {
-      const runner = this.#resolver.for(runningTask, contextBindings);
-      const startedAt = Date.now();
-      let result: TaskResult;
-      for (;;) {
-        attempts += 1;
-        result = await runner.run(runningTask, contextBindings);
+    if (chain !== undefined && chain.length === 0) {
+      const projectId =
+        initiativeId !== undefined
+          ? this.#getProjectId?.(initiativeId)
+          : undefined;
+      failReason = `no AI provider available for project ${projectId ?? initiativeId ?? "unknown"}`;
+      failReasonCode = "no_provider_available";
+    } else {
+      try {
+        const runner = this.#resolver.for(runningTask, contextBindings);
+        const startedAt = Date.now();
+        let result: TaskResult;
+        for (;;) {
+          attempts += 1;
+          result = await runner.run(
+            runningTask,
+            contextBindings,
+            chain !== undefined ? chain[0] : undefined,
+          );
 
-        if (result.outcome !== "failed" || result.transient !== true) break;
+          if (result.outcome !== "failed" || result.transient !== true) break;
 
-        const attemptsRemain = attempts < this.#maxAttempts;
-        const elapsedOk = Date.now() - startedAt < this.#maxElapsedMs;
-        if (!attemptsRemain || !elapsedOk) break;
+          const attemptsRemain = attempts < this.#maxAttempts;
+          const elapsedOk = Date.now() - startedAt < this.#maxElapsedMs;
+          if (!attemptsRemain || !elapsedOk) break;
 
-        this.#feed.append(
-          newEvent("provider.retry", {
-            taskId,
-            payload: { attempt: String(attempts), reason: result.reason },
-          }),
-        );
-        await this.#sleep(backoffDelayMs(attempts, result.retryAfterMs));
+          this.#feed.append(
+            newEvent("provider.retry", {
+              taskId,
+              payload: { attempt: String(attempts), reason: result.reason },
+            }),
+          );
+          await this.#sleep(backoffDelayMs(attempts, result.retryAfterMs));
+        }
+
+        if (result.outcome === "completed") {
+          completedResult = result;
+        } else if (result.outcome === "escalated") {
+          escalatedResult = result;
+        } else if (result.outcome === "failed") {
+          failReason = result.reason;
+        } else {
+          candidateResult = result;
+        }
+      } catch (err: unknown) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        failReason = `${e.name}: ${e.message}`;
       }
-
-      if (result.outcome === "completed") {
-        completedResult = result;
-      } else if (result.outcome === "escalated") {
-        escalatedResult = result;
-      } else if (result.outcome === "failed") {
-        failReason = result.reason;
-      } else {
-        candidateResult = result;
-      }
-    } catch (err: unknown) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      failReason = `${e.name}: ${e.message}`;
     }
 
     // tx2: persist the outcome.
@@ -410,10 +440,17 @@ export class RunNextTask {
         const failedTask = transitionTask(runningTask, "failed");
         this.#store.save(failedTask);
         this.#queue.finish(jobId, "failed");
+        const payload: Record<string, string> = {
+          reason,
+          attempts: String(attempts),
+        };
+        if (failReasonCode !== undefined) {
+          payload["reasonCode"] = failReasonCode;
+        }
         this.#feed.append(
           newEvent("task.failed", {
             taskId,
-            payload: { reason, attempts: String(attempts) },
+            payload,
           }),
         );
         this.#store.saveTaskResult(taskId, {

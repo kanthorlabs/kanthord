@@ -17,7 +17,6 @@ import {
   runCreateRepository,
   runCreateCredential,
   runCreateNotification,
-  runCreateAiProvider,
   runCreateFilesystem,
 } from "./resource.ts";
 import { runCreateTask } from "./task.ts";
@@ -37,7 +36,6 @@ import { CreateProject } from "../../app/project/create-project.ts";
 import { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import { CreateObjective } from "../../app/objective/create-objective.ts";
 import { AddResource } from "../../app/resource/add-resource.ts";
-import { FakeModelCatalog } from "../../model-catalog/fake.ts";
 import { CreateTask } from "../../app/task/create-task.ts";
 import { FindProject } from "../../app/project/find-project.ts";
 import { FindInitiative } from "../../app/initiative/find-initiative.ts";
@@ -177,11 +175,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           "remote-url": "https://github.com/acme/api.git",
           branch: "main",
         },
-        new AddResource(
-          fakeProjectRepoCreate,
-          resolverForProject,
-          new FakeModelCatalog(),
-        ),
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -197,11 +191,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "github",
           "value-file": "-",
         },
-        new AddResource(
-          fakeProjectRepoCreate,
-          resolverForProject,
-          new FakeModelCatalog(),
-        ),
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
         { stdin: stdinMock, timeoutMs: 5000 },
       );
     },
@@ -216,28 +206,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           provider: "slack",
           destination: "#ops",
         },
-        new AddResource(
-          fakeProjectRepoCreate,
-          resolverForProject,
-          new FakeModelCatalog(),
-        ),
-      ),
-  },
-  {
-    label: "create ai-provider",
-    fn: () =>
-      runCreateAiProvider(
-        {
-          project: PROJECT_SCOPE,
-          name: "claude",
-          provider: "anthropic",
-          model: "claude-3",
-        },
-        new AddResource(
-          fakeProjectRepoCreate,
-          resolverForProject,
-          new FakeModelCatalog([{ provider: "anthropic", model: "claude-3" }]),
-        ),
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {
@@ -245,11 +214,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
     fn: () =>
       runCreateFilesystem(
         { project: PROJECT_SCOPE, name: "src", path: "/code" },
-        new AddResource(
-          fakeProjectRepoCreate,
-          resolverForProject,
-          new FakeModelCatalog(),
-        ),
+        new AddResource(fakeProjectRepoCreate, resolverForProject),
       ),
   },
   {

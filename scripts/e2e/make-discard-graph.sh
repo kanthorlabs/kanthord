@@ -16,11 +16,8 @@
 # That is exactly the state the Proof needs: a `failed` root with a persisted
 # `reason`, plus one `pending` dependent for the cascade to discard.
 #
-# Bindings mirror make-todo-graph.sh: generic@1 requires repository +
-# ai_provider + credential context, so the initiative declares all three aliases
-# and the import needs `--bind source=… --bind provider=… --bind cred=…`. Under
-# the fake-agent seam the provider/credential values are ignored (they only
-# satisfy the runner's context-binding check) — a dummy pair suffices.
+# Bindings: generic@1 requires repository context only, so the initiative
+# declares only the source alias and the import needs `--bind source=…` only.
 set -Eeuo pipefail
 
 # A bare `test`/`grep -q` under `set -e` aborts with exit 1 and NO message, so the
@@ -38,8 +35,6 @@ ref: discard-init
 name: Unachievable work reaches a terminal state
 bindings:
   source: repository
-  provider: ai_provider
-  cred: credential
 ---
 EOF
 
@@ -64,8 +59,6 @@ title: Root task whose verification can never pass
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Deterministic no-model task. The scripted turn writes an unrelated file, so the
@@ -92,8 +85,6 @@ dependencies:
   - root-task
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Never executed by the Proof: only a `completed` dependency satisfies a

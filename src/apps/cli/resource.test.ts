@@ -8,7 +8,6 @@ import {
   runCreateRepository,
   runCreateCredential,
   runCreateNotification,
-  runCreateAiProvider,
   runCreateFilesystem,
   runGetResource,
 } from "./resource.ts";
@@ -19,7 +18,6 @@ import type {
 import type { Resource } from "../../domain/resource.ts";
 import type { Project } from "../../domain/project.ts";
 import { AddResource } from "../../app/resource/add-resource.ts";
-import { FakeModelCatalog } from "../../model-catalog/fake.ts";
 import { GetResource } from "../../app/resource/get-resource.ts";
 import type { ResourceView } from "../../app/resource/resource-view.ts";
 import { UnknownReferenceError } from "../../app/errors.ts";
@@ -64,15 +62,10 @@ class FakeReferenceResolver implements ReferenceResolver {
 
 const PROJECT_ID = "01HZZZZZZZZZZZZZZZZZZZZZPA";
 
-function makeAddResource(
-  validPairs: Array<{ provider: string; model: string }> = [
-    { provider: "anthropic", model: "claude-3" },
-  ],
-): AddResource {
+function makeAddResource(): AddResource {
   return new AddResource(
     new FakeProjectRepository(),
     new FakeReferenceResolver(),
-    new FakeModelCatalog(validPairs),
   );
 }
 
@@ -367,59 +360,6 @@ describe("runCreateNotification", () => {
   });
 });
 
-describe("runCreateAiProvider", () => {
-  test("runCreateAiProvider valid flags returns exitCode 0 with ULID in stdout", async () => {
-    const result = await runCreateAiProvider(
-      {
-        project: PROJECT_ID,
-        name: "claude",
-        provider: "anthropic",
-        model: "claude-3",
-      },
-      makeAddResource(),
-    );
-    assert.equal(result.exitCode, 0);
-    assert.ok(
-      result.stdout.length === 1,
-      "stdout has exactly one entry (the ULID)",
-    );
-  });
-
-  test("runCreateAiProvider missing --model returns exit 1 with missing flag error", async () => {
-    const result = await runCreateAiProvider(
-      { project: PROJECT_ID, name: "claude", provider: "anthropic" },
-      makeAddResource(),
-    );
-    assert.equal(result.exitCode, 1);
-    assert.ok(
-      result.stderr[0]!.startsWith("error:"),
-      `expected 'error:' prefix, got: ${result.stderr[0]}`,
-    );
-    assert.ok(
-      result.stderr[0]!.includes("--model"),
-      `expected --model in error, got: ${result.stderr[0]}`,
-    );
-  });
-
-  // 007.9 Story 03 item B: consistent `<kind> created: <id>` stderr line.
-  test("runCreateAiProvider stderr is the consistent 'ai_provider created: <id>' line", async () => {
-    const result = await runCreateAiProvider(
-      {
-        project: PROJECT_ID,
-        name: "claude",
-        provider: "anthropic",
-        model: "claude-3",
-      },
-      makeAddResource(),
-    );
-    assert.equal(
-      result.stderr[0],
-      `ai_provider created: ${result.stdout[0]}`,
-      `expected consistent created-line, got: ${result.stderr[0]}`,
-    );
-  });
-});
-
 describe("runCreateFilesystem", () => {
   test("runCreateFilesystem valid flags returns exitCode 0 with ULID in stdout", async () => {
     const result = await runCreateFilesystem(
@@ -492,15 +432,6 @@ const mockGetResource = (() => {
     path: "/tmp/repos/home",
     auth: { kind: "ambient" },
   });
-  // AIProvider fixture for --json test.
-  fakeRepo.addResource("proj-t2", {
-    id: "aip-t2",
-    projectId: "proj-t2",
-    type: "ai_provider",
-    name: "gpt",
-    provider: "openai-codex",
-    model: "gpt-5.6-terra",
-  });
   return new GetResource(fakeRepo);
 })();
 
@@ -523,21 +454,6 @@ describe("runGetResource", () => {
     assert.ok(
       out.includes("remoteUrl"),
       `plain-text output must include 'remoteUrl' key — got: ${out}`,
-    );
-  });
-
-  test("runGetResource ai_provider --json: valid JSON with type ai_provider and no value key", async () => {
-    const result = await runGetResource(
-      { id: "aip-t2", json: true },
-      mockGetResource,
-    );
-    assert.equal(result.exitCode, 0);
-    const parsed = JSON.parse(result.stdout.join("")) as ResourceView;
-    assert.equal(parsed.type, "ai_provider");
-    assert.equal(
-      "value" in parsed,
-      false,
-      "--json output must not contain a value key",
     );
   });
 

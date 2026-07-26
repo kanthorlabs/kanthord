@@ -119,6 +119,22 @@ export class InvalidEffortError extends Error {
 }
 
 /**
+ * Thrown when login is attempted for a provider that does not support OAuth
+ * (008.3 Story E). Message must hint at `register ai-provider --value-file`.
+ */
+export class NonOAuthProviderError extends Error {
+  readonly providerId: string;
+
+  constructor(providerId: string) {
+    super(
+      `provider "${providerId}" does not support OAuth login. Use \`register ai-provider --value-file\` for API-key providers.`,
+    );
+    this.name = "NonOAuthProviderError";
+    this.providerId = providerId;
+  }
+}
+
+/**
  * Thrown when an invalid baseUrl value is provided.
  */
 export class InvalidBaseUrlError extends Error {

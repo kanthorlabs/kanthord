@@ -31,18 +31,18 @@ import { Agent } from "@earendil-works/pi-agent-core";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 import type { Usage } from "@earendil-works/pi-ai";
-import type {
-  AIProvider,
-  Credential,
-  Filesystem,
-  Repository,
-} from "../domain/resource.ts";
+import type { Filesystem, Repository } from "../domain/resource.ts";
 import type { Task } from "../domain/task.ts";
 import type { EventType } from "../domain/event.ts";
 import type { Workspace } from "../workspace/port.ts";
 import type { WorkspaceManager } from "../workspace/port.ts";
 import type { Instruction, InstructionLoader } from "../instruction/port.ts";
-import type { AgentRunner, TaskContextBinding, TaskResult } from "./port.ts";
+import type {
+  AgentRunner,
+  ResolvedProvider,
+  TaskContextBinding,
+  TaskResult,
+} from "./port.ts";
 import type { PiAgentProfile } from "./pi-profile.ts";
 import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
 import type { OutcomeEvidence, VerificationEvidence } from "./verification.ts";
@@ -349,10 +349,20 @@ export class PiAgentRunner implements AgentRunner {
     this.#maxTurns = options.maxTurns ?? 50;
   }
 
-  async run(task: Task, context: TaskContextBinding[]): Promise<TaskResult> {
+  async run(
+    task: Task,
+    context: TaskContextBinding[],
+    provider?: ResolvedProvider,
+  ): Promise<TaskResult> {
     const turnCountRef = { current: 0 };
     const usageRef = { in: 0, out: 0 };
-    const result = await this.#doRun(task, context, turnCountRef, usageRef);
+    const result = await this.#doRun(
+      task,
+      context,
+      provider,
+      turnCountRef,
+      usageRef,
+    );
     this.#emit(task.id, "agent.finished", {
       outcome: result.outcome,
       turns: String(turnCountRef.current),
@@ -378,6 +388,7 @@ export class PiAgentRunner implements AgentRunner {
   async #doRun(
     task: Task,
     context: TaskContextBinding[],
+    provider: ResolvedProvider | undefined,
     turnCountRef: { current: number },
     usageRef: { in: number; out: number },
   ): Promise<TaskResult> {
@@ -390,35 +401,29 @@ export class PiAgentRunner implements AgentRunner {
       };
     }
 
-    // 2. Credential binding check (before calling session factory)
-    const credBinding = context.find((b) => b.type === "credential");
-    if (!credBinding) {
+    // 2. Resolve AI provider and credential — from the daemon-resolved
+    //    provider arg (008.3).
+    if (provider === undefined) {
       return {
         outcome: "failed",
-        reason: "CredentialError: task has no credential context",
+        reason: "no provider resolved for task",
       };
     }
-    const aiBinding = context.find((b) => b.type === "ai_provider");
-    if (!aiBinding) {
-      return {
-        outcome: "failed",
-        reason: "CredentialError: task has no ai_provider context",
-      };
-    }
-
-    const aiProvider = this.#getResource(aiBinding.resourceId) as AIProvider;
-    const credential = this.#getResource(credBinding.resourceId) as Credential;
 
     // Build redactor: replaces all occurrences of the credential value with ***
     const redact = (s: string): string =>
-      credential.value ? s.split(credential.value).join("***") : s;
+      provider.value ? s.split(provider.value).join("***") : s;
 
     // 3. Session factory — errors here mean task fails, no workspace prepared
     let session: ProviderSession;
     try {
-      session = await this.#sessions.for(aiProvider, credential, {
-        taskTitle: task.title,
-      });
+      session = await this.#sessions.for(
+        provider,
+        {
+          taskTitle: task.title,
+        },
+        provider.credentialVersion,
+      );
     } catch (err) {
       const e = err instanceof Error ? err : new Error(String(err));
       return { outcome: "failed", reason: redact(`${e.name}: ${e.message}`) };
@@ -466,7 +471,10 @@ export class PiAgentRunner implements AgentRunner {
         : await this.#workspaces.prepare(task.id, workspaceSource!);
 
       // Emit agent.started after workspace is ready
-      this.#emit(task.id, "agent.started", { workspace: workspace.dir });
+      this.#emit(task.id, "agent.started", {
+        workspace: workspace.dir,
+        providerId: provider?.id ?? "",
+      });
 
       // 6. Instruction loading
       const instructions: Instruction[] = this.#newInstructionLoader(

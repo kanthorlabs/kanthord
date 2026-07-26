@@ -273,51 +273,6 @@ describe("src/apps/cli/commands/create.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
-  test("creates an ai-provider from its provider, model, and effort and emits its result", async () => {
-    let received: unknown;
-    const cap = capture();
-    const deps = {
-      addResource: {
-        execute: async (input: unknown) => {
-          received = input;
-          return "ai-provider-1";
-        },
-      },
-    } as Parameters<typeof buildCreateCommand>[0];
-
-    await buildCreateCommand(
-      deps,
-      cap.io as Parameters<typeof buildCreateCommand>[1],
-    ).parseAsync(
-      [
-        "ai-provider",
-        "--project",
-        "project-1",
-        "--name",
-        "primary",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "gpt-5.6-terra",
-        "--effort",
-        "high",
-      ],
-      { from: "user" },
-    );
-
-    assert.deepEqual(received, {
-      type: "ai_provider",
-      projectId: "project-1",
-      name: "primary",
-      provider: "openai-codex",
-      model: "gpt-5.6-terra",
-      effort: "high",
-    });
-    assert.deepEqual(cap.out, ["ai-provider-1\n"]);
-    assert.deepEqual(cap.err, ["ai_provider created: ai-provider-1\n"]);
-    assert.equal(cap.code(), 0);
-  });
-
   test("creates a repository with its kebab-case resource options and emits its result", async () => {
     let received: unknown;
     const cap = capture();
@@ -539,6 +494,15 @@ describe("src/apps/cli/commands/create.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
+  test("BLOCKER S2: runCreateAiProvider is not exported from resource.ts", async () => {
+    const mod = await import("../resource.ts");
+    assert.equal(
+      typeof (mod as Record<string, unknown>).runCreateAiProvider,
+      "undefined",
+      "runCreateAiProvider must be removed from exports",
+    );
+  });
+
   test("documents create leaves with canonical usage and examples", async () => {
     const cap = capture();
     const deps = {} as Parameters<typeof buildCreateCommand>[0];
@@ -549,7 +513,6 @@ describe("src/apps/cli/commands/create.ts", () => {
       "objective",
       "notification",
       "filesystem",
-      "ai-provider",
     ]) {
       const command = buildCreateCommand(
         deps,
@@ -567,11 +530,8 @@ describe("src/apps/cli/commands/create.ts", () => {
     assert.match(help, /Usage: kanthord create objective/);
     assert.match(help, /Usage: kanthord create notification/);
     assert.match(help, /Usage: kanthord create filesystem/);
-    assert.match(help, /Usage: kanthord create ai-provider/);
     assert.match(help, /slack/);
     assert.match(help, /telegram/);
-    assert.match(help, /minimal/);
-    assert.match(help, /xhigh/);
     assert.match(help, /Example/);
   });
 });

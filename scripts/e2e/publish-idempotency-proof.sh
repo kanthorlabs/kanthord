@@ -40,13 +40,18 @@ REPO=$(node src/main.ts create repository --project "$PROJECT" --name r \
         --remote-url "file://$ORIGIN" --branch main --auth ambient \
         --path "$MIRROR" | head -1)
 
-# generic@1 requires repository + ai_provider + credential context; no real model
-# runs here, so a dummy provider+credential pair suffices.
-CREDVAL="$(mktemp)"; printf 'dummy-token' > "$CREDVAL"
-CRED=$(node src/main.ts create credential --project "$PROJECT" --name c1 \
-        --provider openai-codex --value-file "$CREDVAL" | head -1)
-PROV=$(node src/main.ts create ai-provider --project "$PROJECT" --name p1 \
-        --provider openai-codex --model gpt-5.6-terra | head -1)
+# generic@1 now requires repository context only — the daemon auto-resolves the
+# provider chain from the project's registered providers (008.3). No context
+# binding is needed, but the chain must be non-empty or every task fails with
+# "no AI provider available for project". Story D binds this setup to
+# `register` + `assign`: registration alone would also work (the global default
+# is the chain tail), but `assign` is the documented project operator flow and
+# is what 008.3 actually resolves. KANTHORD_FAKE_AGENT replaces the session
+# factory, so this value is never read.
+DUMMY_VALUE="$(mktemp -d)/token"; printf 'dummy' > "$DUMMY_VALUE"
+PROV_E2E=$(node src/main.ts register ai-provider --name e2e --provider openai-codex \
+        --model gpt-5.6-sol --value-file "$DUMMY_VALUE" | grep -oE '01[0-9A-HJKMNP-TV-Z]{24}')
+node src/main.ts assign ai-provider --project "$PROJECT" --provider "$PROV_E2E" >/dev/null
 
 # Smallest graph that can reach `landed`: one objective, one task. Authored here
 # rather than in a make-*.sh because it is used by this proof only.
@@ -58,8 +63,6 @@ ref: publish-init
 name: Publish idempotency proof
 bindings:
   source: repository
-  provider: ai_provider
-  cred: credential
 ---
 EOF
 cat > "$GRAPH/objective.md" <<'EOF'
@@ -79,8 +82,6 @@ title: Write the deterministic stub the verification looks for
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Deterministic no-model task: the scripted turn writes `src/todo.mjs`.
@@ -106,7 +107,7 @@ cat > "$GRAPH/.fake-agent.json" <<'EOF'
 EOF
 
 node src/main.ts import graph "$GRAPH" --create --project "$PROJECT" \
-        --bind source="$REPO" --bind provider="$PROV" --bind cred="$CRED" >/dev/null
+        --bind source="$REPO" >/dev/null
 INIT=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).initiativeId)' "$GRAPH")
 OBJ=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).refToId.objectives["publish-obj"])' "$GRAPH")
 

@@ -5,7 +5,6 @@ export const RESOURCE_TYPES = [
   "repository",
   "credential",
   "notification",
-  "ai_provider",
   "filesystem",
 ] as const;
 
@@ -55,29 +54,13 @@ export const CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW = 32768;
 /** Default max output tokens for custom OpenAI-compatible providers. */
 export const CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS = 4096;
 
-export interface AIProvider extends Entity {
-  type: "ai_provider";
-  name: string;
-  provider: string;
-  model: string;
-  baseUrl?: string;
-  effort?: ReasoningEffort;
-  /** API flavor for custom OpenAI-compatible providers; undefined for builtin. */
-  api?: "openai-completions" | "openai-responses";
-  /** Static context window (tokens) for a custom provider. */
-  contextWindow?: number;
-  /** Static max output tokens for a custom provider. */
-  maxTokens?: number;
-}
-
 export interface Filesystem extends Entity {
   type: "filesystem";
   name: string;
   path: string;
 }
 
-export type Resource =
-  Repository | Credential | Notification | AIProvider | Filesystem;
+export type Resource = Repository | Credential | Notification | Filesystem;
 
 export function isRepository(r: Resource): r is Repository {
   return r.type === "repository";
@@ -89,10 +72,6 @@ export function isCredential(r: Resource): r is Credential {
 
 export function isNotification(r: Resource): r is Notification {
   return r.type === "notification";
-}
-
-export function isAIProvider(r: Resource): r is AIProvider {
-  return r.type === "ai_provider";
 }
 
 export function isFilesystem(r: Resource): r is Filesystem {
@@ -246,53 +225,6 @@ export function buildResource(input: Record<string, unknown>): Resource {
     const provider = requireString(input, "provider") as "slack" | "telegram";
     const destination = requireString(input, "destination");
     return { id, type: "notification", name, provider, destination };
-  }
-
-  if (type === "ai_provider") {
-    const name = requireString(input, "name");
-    const provider = requireString(input, "provider");
-    const model = requireString(input, "model");
-    const baseUrlRaw = input["baseUrl"];
-    const baseUrl =
-      typeof baseUrlRaw === "string" && baseUrlRaw.length > 0
-        ? baseUrlRaw
-        : undefined;
-    const effortRaw = input["effort"];
-    let effort: ReasoningEffort | undefined;
-    if (typeof effortRaw === "string" && effortRaw.length > 0) {
-      if (!(REASONING_EFFORTS as readonly string[]).includes(effortRaw)) {
-        throw new ResourceValidationError("effort");
-      }
-      effort = effortRaw as ReasoningEffort;
-    }
-    const apiRaw = input["api"];
-    const api =
-      typeof apiRaw === "string" &&
-      (apiRaw === "openai-completions" || apiRaw === "openai-responses")
-        ? apiRaw
-        : undefined;
-    const contextWindowRaw = input["contextWindow"];
-    const contextWindow =
-      typeof contextWindowRaw === "number" && Number.isFinite(contextWindowRaw)
-        ? contextWindowRaw
-        : undefined;
-    const maxTokensRaw = input["maxTokens"];
-    const maxTokens =
-      typeof maxTokensRaw === "number" && Number.isFinite(maxTokensRaw)
-        ? maxTokensRaw
-        : undefined;
-    return {
-      id,
-      type: "ai_provider",
-      name,
-      provider,
-      model,
-      ...(baseUrl !== undefined ? { baseUrl } : {}),
-      ...(effort !== undefined ? { effort } : {}),
-      ...(api !== undefined ? { api } : {}),
-      ...(contextWindow !== undefined ? { contextWindow } : {}),
-      ...(maxTokens !== undefined ? { maxTokens } : {}),
-    };
   }
 
   if (type === "filesystem") {

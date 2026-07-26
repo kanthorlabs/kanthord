@@ -13,6 +13,10 @@ import type { Logger } from "./logger/port.ts";
 import type { Repository } from "./domain/resource.ts";
 import { LocalWorkspaceManager } from "./workspace/local.ts";
 import { runCli as dispatch } from "./apps/cli/commands/run-cli.ts";
+import { openDatabase } from "./storage/sqlite/open.ts";
+import { SqliteAiProviderRegistry } from "./storage/sqlite/ai-provider-registry.ts";
+import { migrate } from "./storage/sqlite/migrate.ts";
+import { MIGRATIONS } from "./storage/sqlite/migrations.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -59,126 +63,6 @@ test("T3: dispatch get resource returns credential view with canary value absent
   }
 });
 
-// ---------------------------------------------------------------------------
-// Story 04 T4 — CLI: remove --allow-unknown-model / --base-url; surface
-// UnknownModelError as exitCode 1 with "list model" in stderr.
-// ---------------------------------------------------------------------------
-
-// T4a: PRIMARY RED test.
-// UnknownModelError from PiModelCatalog (via buildDeps) must be handled by
-// toResult → exitCode 1 with "list model" in stderr.
-// FAILS today: UnknownModelError is not in toResult's guard, so it re-throws;
-// dispatch propagates the exception instead of returning { exitCode: 1, ... }.
-test("T4a: dispatch create ai-provider with unknown model returns exitCode 1 with 'list model' in stderr", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "kanthord-t4a-"));
-  const dbPath = join(dir, "kanthord.db");
-  try {
-    const deps = buildDeps(dbPath);
-    await dispatch(["db", "migrate"], deps);
-    const rp = await dispatch(["create", "project", "--name", "t4demo"], deps);
-    assert.equal(rp.exitCode, 0, "create project exits 0");
-    const PROJECT = rp.stdout[0]!;
-
-    const result = await dispatch(
-      [
-        "create",
-        "ai-provider",
-        "--project",
-        PROJECT,
-        "--name",
-        "bad",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "no-such-model-xyz",
-      ],
-      deps,
-    );
-
-    assert.equal(result.exitCode, 1, "unknown model must return exitCode 1");
-    assert.ok(
-      result.stderr.join("").toLowerCase().includes("list model"),
-      `expected 'list model' in stderr, got: ${result.stderr.join("")}`,
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// T4b: Characterization — --allow-unknown-model was never in the parse config;
-// strict mode already rejects it. This pinned the pre-existing behavior.
-test("T4b: dispatch create ai-provider with --allow-unknown-model returns exitCode 1 (unknown option)", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "kanthord-t4b-"));
-  const dbPath = join(dir, "kanthord.db");
-  try {
-    const deps = buildDeps(dbPath);
-    await dispatch(["db", "migrate"], deps);
-    const rp = await dispatch(["create", "project", "--name", "t4bdemo"], deps);
-    const PROJECT = rp.stdout[0]!;
-
-    const result = await dispatch(
-      [
-        "create",
-        "ai-provider",
-        "--project",
-        PROJECT,
-        "--name",
-        "x",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "gpt-5.6-terra",
-        "--allow-unknown-model",
-      ],
-      deps,
-    );
-
-    assert.equal(
-      result.exitCode,
-      1,
-      "--allow-unknown-model (unknown flag) must return exitCode 1 from strict parse",
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-// T4c: Characterization — valid pair succeeds end-to-end with real PiModelCatalog.
-test("T4c: dispatch create ai-provider with valid pair (openai-codex/gpt-5.6-terra) returns exitCode 0", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "kanthord-t4c-"));
-  const dbPath = join(dir, "kanthord.db");
-  try {
-    const deps = buildDeps(dbPath);
-    await dispatch(["db", "migrate"], deps);
-    const rp = await dispatch(["create", "project", "--name", "t4cdemo"], deps);
-    const PROJECT = rp.stdout[0]!;
-
-    const result = await dispatch(
-      [
-        "create",
-        "ai-provider",
-        "--project",
-        PROJECT,
-        "--name",
-        "gpt",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "gpt-5.6-terra",
-      ],
-      deps,
-    );
-
-    assert.equal(result.exitCode, 0, "valid model must succeed");
-    assert.ok(
-      result.stdout.length === 1,
-      "stdout has exactly one entry (the ULID)",
-    );
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
 test("buildDeps returns a RouterDeps bundle with all registered capabilities", () => {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-test-"));
   const dbPath = join(dir, "kanthord.db");
@@ -207,8 +91,11 @@ test("buildDeps returns a RouterDeps bundle with all registered capabilities", (
     assert.ok("removeDependency" in deps, "deps.removeDependency present");
     assert.ok("listTasks" in deps, "deps.listTasks present");
     assert.ok("getResource" in deps, "deps.getResource present");
-    // Story 05 T5 characterization: all five update use cases wired by SE in T4 GREEN
-    assert.ok("updateAiProvider" in deps, "deps.updateAiProvider present");
+    // 008.3 BLOCKER 1: updateAiProvider retired — project-scoped ai_provider type removed (Story C)
+    assert.ok(
+      !("updateAiProvider" in deps),
+      "deps.updateAiProvider must be retired",
+    );
     assert.ok("updateCredential" in deps, "deps.updateCredential present");
     assert.ok("updateRepository" in deps, "deps.updateRepository present");
     assert.ok("updateNotification" in deps, "deps.updateNotification present");
@@ -536,6 +423,34 @@ test("(007.12 daemon wiring) a real `run daemon` pass squashes an initiative-clo
     assert.equal(rp.exitCode, 0, "create project exits 0");
     const PROJECT = rp.stdout[0]!;
 
+    // Register + assign an AI provider so the daemon's provider-chain
+    // resolution (008.3) succeeds for this project — mirrors
+    // scripts/e2e/landing-proof.sh:37-40.
+    const providerValueFile = join(dir, ".provider-value");
+    writeFileSync(providerValueFile, "sk-test");
+    const rProv = await dispatch(
+      [
+        "register",
+        "ai-provider",
+        "--name",
+        "sq-provider",
+        "--provider",
+        "openai-codex",
+        "--model",
+        "gpt-5.6-sol",
+        "--value-file",
+        providerValueFile,
+      ],
+      deps,
+    );
+    assert.equal(rProv.exitCode, 0, "register ai-provider exits 0");
+    const PROVIDER = rProv.stdout[0]!;
+    const rAssign = await dispatch(
+      ["assign", "ai-provider", "--project", PROJECT, "--provider", PROVIDER],
+      deps,
+    );
+    assert.equal(rAssign.exitCode, 0, "assign ai-provider exits 0");
+
     const ri = await dispatch(
       ["create", "initiative", "--project", PROJECT, "--name", "sq-init"],
       deps,
@@ -749,6 +664,34 @@ test("(007.12 daemon wiring) a second objective's squash chains onto the first o
     const rp = await dispatch(["create", "project", "--name", "seq-obj"], deps);
     assert.equal(rp.exitCode, 0, "create project exits 0");
     const PROJECT = rp.stdout[0]!;
+
+    // Register + assign an AI provider so the daemon's provider-chain
+    // resolution (008.3) succeeds for this project — mirrors
+    // scripts/e2e/landing-proof.sh:37-40.
+    const providerValueFile2 = join(dir, ".provider-value");
+    writeFileSync(providerValueFile2, "sk-test");
+    const rProv2 = await dispatch(
+      [
+        "register",
+        "ai-provider",
+        "--name",
+        "seq-provider",
+        "--provider",
+        "openai-codex",
+        "--model",
+        "gpt-5.6-sol",
+        "--value-file",
+        providerValueFile2,
+      ],
+      deps,
+    );
+    assert.equal(rProv2.exitCode, 0, "register ai-provider exits 0");
+    const PROVIDER2 = rProv2.stdout[0]!;
+    const rAssign2 = await dispatch(
+      ["assign", "ai-provider", "--project", PROJECT, "--provider", PROVIDER2],
+      deps,
+    );
+    assert.equal(rAssign2.exitCode, 0, "assign ai-provider exits 0");
 
     const ri = await dispatch(
       ["create", "initiative", "--project", PROJECT, "--name", "seq-init"],
@@ -1183,6 +1126,83 @@ test("(007.17-approve-gate-regression) composition: approveTask respects objecti
       0,
       "T2 must NOT be enqueued when OBJ1 is building (objective-level gate)",
     );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── BLOCKER 7 — CAS credential version safety through real SQLite ────────────
+
+test("(BLOCKER 7) CAS credentialVersion is safe through real SQLite registry", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-b7-cas-"));
+  const dbPath = join(dir, "test.db");
+  try {
+    const db = openDatabase(dbPath);
+    migrate(db, MIGRATIONS);
+    const registry = new SqliteAiProviderRegistry(db);
+
+    // Register a provider — starts at credentialVersion: 1
+    const p1 = registry.register({
+      name: "b7-cas-test",
+      provider: "opencode",
+      model: "big-pickle",
+      value: "sk-b7-original",
+    });
+    assert.equal(
+      p1.credentialVersion,
+      1,
+      "credentialVersion must be 1 after fresh register",
+    );
+
+    // CAS with correct version succeeds, bumps version and updates value
+    const result1 = registry.updateCredentialCAS(
+      p1.id,
+      "sk-b7-updated",
+      p1.credentialVersion,
+    );
+    assert.deepEqual(
+      result1,
+      { applied: true, newVersion: 2 },
+      "CAS with correct version must apply",
+    );
+
+    const after1 = registry.get(p1.id)!;
+    assert.equal(after1.credentialVersion, 2, "credentialVersion bumped to 2");
+    assert.equal(after1.value, "sk-b7-updated", "value updated");
+
+    // CAS with stale version (version 1 — current is 2) is rejected
+    const result2 = registry.updateCredentialCAS(p1.id, "sk-b7-stale", 1);
+    assert.deepEqual(
+      result2,
+      { applied: false },
+      "CAS with stale version must be rejected",
+    );
+
+    const after2 = registry.get(p1.id)!;
+    assert.equal(
+      after2.credentialVersion,
+      2,
+      "credentialVersion unchanged after stale CAS",
+    );
+    assert.ok(
+      after2.value === null || !after2.value.includes("stale"),
+      "stale CAS value must not be persisted",
+    );
+
+    // CAS on a logged_out provider is rejected
+    registry.logout(p1.id);
+    const result3 = registry.updateCredentialCAS(
+      p1.id,
+      "sk-b7-after-logout",
+      2,
+    );
+    assert.deepEqual(
+      result3,
+      { applied: false },
+      "CAS on logged_out provider must be rejected",
+    );
+
+    db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

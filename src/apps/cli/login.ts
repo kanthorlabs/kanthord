@@ -34,10 +34,6 @@ export async function runLogin(
   if (typeof providerId !== "string" || providerId === "") {
     return err("missing required argument <provider>");
   }
-  const projectId = args["project"];
-  if (typeof projectId !== "string" || projectId === "") {
-    return err("missing required flag --project");
-  }
   const name = args["name"];
   if (typeof name !== "string" || name === "") {
     return err("missing required flag --name");
@@ -63,18 +59,50 @@ export async function runLogin(
     promptCode: (message) => io.prompt(message),
   };
 
+  const model =
+    typeof args["model"] === "string" && args["model"] !== ""
+      ? (args["model"] as string)
+      : undefined;
+
+  // Build selectModel callback for interactive model selection (used when --model absent).
+  const selectModel =
+    model === undefined
+      ? async (models: string[]) => {
+          const numbered = models.map((m, i) => `  ${i + 1}. ${m}`).join("\n");
+          io.print(`Available models:\n${numbered}`);
+          const pick = await io.prompt("Select a model:");
+          if (!models.includes(pick)) {
+            throw new Error(`invalid model selection "${pick}"`);
+          }
+          return pick;
+        }
+      : undefined;
+
+  const baseUrl =
+    typeof args["baseUrl"] === "string" && args["baseUrl"] !== ""
+      ? (args["baseUrl"] as string)
+      : undefined;
+
+  const effort =
+    typeof args["effort"] === "string" && args["effort"] !== ""
+      ? (args["effort"] as string)
+      : undefined;
+
   try {
-    const credId = await deps.loginProvider.execute({
+    const id = await deps.loginProvider.execute({
       providerId,
-      projectId,
       name,
       method,
       presenter,
+      ...(model !== undefined ? { model } : {}),
+      ...(selectModel !== undefined ? { selectModel } : {}),
+      ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...(effort !== undefined ? { effort } : {}),
     });
     return {
       exitCode: 0,
-      stdout: [credId],
-      stderr: [`credential created: ${credId}`],
+      stdout: [id],
+      stderr: [`ai-provider registered: ${id}`],
     };
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));

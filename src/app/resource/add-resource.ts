@@ -8,19 +8,13 @@ import {
   EmbeddedCredentialError,
   hasEmbeddedUserinfo,
 } from "../../domain/resource.ts";
-import type {
-  Resource,
-  ReasoningEffort,
-  RepositoryAuth,
-} from "../../domain/resource.ts";
+import type { Resource, RepositoryAuth } from "../../domain/resource.ts";
 import { newId } from "../../domain/entity.ts";
 import {
   DuplicateNameError,
   UnknownReferenceError,
   WrongTypeReferenceError,
 } from "../errors.ts";
-import type { ModelCatalog } from "../../model-catalog/port.ts";
-import { UnknownModelError } from "../../model-catalog/port.ts";
 
 export type AddResourceInput =
   | {
@@ -47,15 +41,6 @@ export type AddResourceInput =
       destination: string;
     }
   | {
-      type: "ai_provider";
-      projectId: string;
-      name: string;
-      provider: string;
-      model: string;
-      baseUrl?: string;
-      effort?: ReasoningEffort;
-    }
-  | {
       type: "filesystem";
       projectId: string;
       name: string;
@@ -79,16 +64,13 @@ function deriveDefaultRepoPath(remoteUrl: string): string {
 export class AddResource {
   readonly #projectRepository: ProjectRepository;
   readonly #referenceResolver: ReferenceResolver;
-  readonly #modelCatalog: ModelCatalog;
 
   constructor(
     projectRepository: ProjectRepository,
     referenceResolver: ReferenceResolver,
-    modelCatalog: ModelCatalog,
   ) {
     this.#projectRepository = projectRepository;
     this.#referenceResolver = referenceResolver;
-    this.#modelCatalog = modelCatalog;
   }
 
   async execute(input: AddResourceInput): Promise<string> {
@@ -149,19 +131,6 @@ export class AddResource {
         name: input.name,
         provider: input.provider,
         destination: input.destination,
-      };
-    } else if (input.type === "ai_provider") {
-      if (!this.#modelCatalog.isValid(input.provider, input.model)) {
-        throw new UnknownModelError(input.provider, input.model);
-      }
-      resource = {
-        id,
-        type: "ai_provider",
-        name: input.name,
-        provider: input.provider,
-        model: input.model,
-        ...(input.baseUrl !== undefined ? { baseUrl: input.baseUrl } : {}),
-        ...(input.effort !== undefined ? { effort: input.effort } : {}),
       };
     } else {
       resource = {

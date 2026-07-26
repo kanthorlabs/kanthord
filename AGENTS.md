@@ -165,6 +165,10 @@ force-pushes. Each repository target carries its own publication state —
 distinguishable from a completed remote delivery. The deferred `pr@1` agent
 (007.12) will call `publish`; until then, publication is a manual operator step.
 
+### AI-provider resolution
+
+- Provider selection is **daemon-resolved from the project chain** (`task → initiative → projectId`), not a task binding. The daemon calls `providerChainFor(initiativeId)` in `run-next-task` and hands the first provider (with its folded credential) to the runner. Importing a graph needs only `--bind source=<repo>`; no `--bind provider` or `--bind cred` is required.
+
 ### Testing
 
 - Domain and use cases test hermetically with fakes implementing ports — no

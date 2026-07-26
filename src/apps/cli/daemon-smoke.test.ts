@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
@@ -22,7 +22,10 @@ const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 // Graph: spike-auth (no deps) → implement-api → deploy
 // ---------------------------------------------------------------------------
 
-async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
+async function runEpic004Setup(
+  deps: ReturnType<typeof buildDeps>,
+  sandboxDir?: string,
+): Promise<{
   INITIATIVE: string;
   OBJECTIVE: string;
   TASK_API: string;
@@ -36,6 +39,35 @@ async function runEpic004Setup(deps: ReturnType<typeof buildDeps>): Promise<{
   assert.equal(r1.exitCode, 0);
   const PROJECT = r1.stdout[0]!;
   assert.match(PROJECT, ULID_RE);
+
+  // Register an AI provider so the fake@1 task passes the provider-chain check
+  const providerValueDir = sandboxDir ?? tmpdir();
+  const providerValueFile = join(providerValueDir, ".provider-value");
+  writeFileSync(providerValueFile, "sk-test");
+  const rProv = await dispatch(
+    [
+      "register",
+      "ai-provider",
+      "--name",
+      "test-provider",
+      "--provider",
+      "openai-codex",
+      "--model",
+      "gpt-5.6-sol",
+      "--value-file",
+      providerValueFile,
+    ],
+    deps,
+  );
+  assert.equal(rProv.exitCode, 0, "register ai-provider");
+  const PROVIDER = rProv.stdout[0]!;
+  assert.match(PROVIDER, ULID_RE);
+
+  const rAssign = await dispatch(
+    ["assign", "ai-provider", "--project", PROJECT, "--provider", PROVIDER],
+    deps,
+  );
+  assert.equal(rAssign.exitCode, 0, "assign ai-provider");
 
   await dispatch(
     [
@@ -157,7 +189,7 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
   try {
     const deps = buildDeps(dbPath);
     const { INITIATIVE, OBJECTIVE, TASK_API, TASK_DEPLOY, TASK_PREP } =
-      await runEpic004Setup(deps);
+      await runEpic004Setup(deps, dir);
 
     // ── Phase 1: daemon run until-idle ──────────────────────────────────────
     const d1 = await dispatch(["run", "daemon", "--until-idle"], deps);
@@ -311,7 +343,7 @@ test("daemon smoke — phase 3 (fresh DB): --fail deploy exits non-zero; task.fa
   const dbPath = join(dir, "kanthord.db");
   try {
     const deps = buildDeps(dbPath);
-    const { INITIATIVE, TASK_DEPLOY } = await runEpic004Setup(deps);
+    const { INITIATIVE, TASK_DEPLOY } = await runEpic004Setup(deps, dir);
 
     // daemon run with --fail $TASK_DEPLOY
     const d = await dispatch(

@@ -58,8 +58,6 @@ ref: transplant-init
 name: Deterministic stale-candidate transplant
 bindings:
   source: repository
-  provider: ai_provider
-  cred: credential
 ---
 EOF
 
@@ -85,8 +83,6 @@ title: ${ROOT_TITLE}
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Edit the TOP region of \`src/f.mjs\` (the \`export const A\` line). This is the
@@ -114,8 +110,6 @@ title: ${NONOVERLAP_TITLE}
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Edit ONLY the BOTTOM region of \`src/f.mjs\` (the \`export const Z\` line), leaving
@@ -143,8 +137,6 @@ title: ${OVERLAP_TITLE}
 agent: generic@1
 context:
   source: source
-  provider: provider
-  cred: cred
 ---
 # Instructions
 Edit the TOP region of \`src/f.mjs\` (the \`export const A\` line) — the same

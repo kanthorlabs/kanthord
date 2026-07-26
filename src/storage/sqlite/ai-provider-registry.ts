@@ -266,4 +266,20 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
       .all(providerId) as Array<{ projectId: string }>;
     return rows.map((r) => r.projectId);
   }
+
+  updateCredentialCAS(
+    id: string,
+    value: string,
+    expectedVersion: number,
+  ): { applied: true; newVersion: number } | { applied: false } {
+    const result = this.#db
+      .prepare(
+        "UPDATE ai_providers SET value = ?, credentialVersion = credentialVersion + 1 WHERE id = ? AND state = 'active' AND credentialVersion = ?",
+      )
+      .run(value, id, expectedVersion);
+    if (result.changes > 0) {
+      return { applied: true, newVersion: expectedVersion + 1 };
+    }
+    return { applied: false };
+  }
 }

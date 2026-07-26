@@ -725,4 +725,38 @@ ALTER TABLE ai_providers ADD COLUMN maxTokens INTEGER;
 `);
     },
   },
+  {
+    version: 25,
+    name: "008.3-s-retire-ai-provider-type",
+    // Rebuilds resources table without the 'ai_provider' CHECK option; deletes
+    // stale ai_provider rows from resources and stale ai_provider/credential
+    // rows from task_context (the credential context binding is retired because
+    // the daemon now resolves provider+credential from the chain, not per-task
+    // bindings).
+    //
+    // Disable FK enforcement during the DROP+RENAME of resources (it's an FK
+    // parent from task_context; the final state is consistent but the
+    // intermediate DROP+ALTER+RENAME trips FK enforcement).
+    disableForeignKeys: true,
+    up: (db) => {
+      db.exec(`
+DELETE FROM task_context WHERE type IN ('ai_provider', 'credential');
+CREATE TABLE resources_new (
+  id               TEXT PRIMARY KEY,
+  projectId        TEXT NOT NULL REFERENCES projects(id),
+  type             TEXT NOT NULL CHECK (type IN ('repository','credential','notification','filesystem')),
+  name             TEXT NOT NULL,
+  attributes       TEXT NOT NULL DEFAULT '{}',
+  remoteUrl        TEXT,
+  authKind         TEXT DEFAULT 'ambient',
+  authCredentialId TEXT
+);
+INSERT INTO resources_new (id, projectId, type, name, attributes, remoteUrl, authKind, authCredentialId)
+  SELECT id, projectId, type, name, attributes, remoteUrl, authKind, authCredentialId
+  FROM resources WHERE type != 'ai_provider';
+DROP TABLE resources;
+ALTER TABLE resources_new RENAME TO resources;
+`);
+    },
+  },
 ];

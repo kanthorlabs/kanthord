@@ -119,98 +119,6 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
       `D6: credential value 'sk-from-file' must not appear in resource JSON; got: ${credJson.slice(0, 200)}`,
     );
 
-    // ========== D3: ModelCatalog validation at create AND update ==========
-
-    // D3(a): unknown (provider, model) pair rejected at create
-    const rBadAip = await dispatch(
-      [
-        "create",
-        "ai-provider",
-        "--project",
-        PROJECT,
-        "--name",
-        "bad",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "no-such-model-xyz",
-        "--effort",
-        "medium",
-      ],
-      deps,
-    );
-    assert.equal(
-      rBadAip.exitCode,
-      1,
-      `D3: unknown model must exit 1; got exitCode: ${rBadAip.exitCode}`,
-    );
-    assert.ok(
-      rBadAip.stderr.some((l) => /list model/i.test(l)),
-      `D3: stderr must mention 'list model' for unknown model; got: ${JSON.stringify(rBadAip.stderr)}`,
-    );
-
-    // D3(b): known (provider, model) pair succeeds
-    const rAip = await dispatch(
-      [
-        "create",
-        "ai-provider",
-        "--project",
-        PROJECT,
-        "--name",
-        "gpt",
-        "--provider",
-        "openai-codex",
-        "--model",
-        "gpt-5.6-terra",
-        "--effort",
-        "medium",
-      ],
-      deps,
-    );
-    assert.equal(
-      rAip.exitCode,
-      0,
-      `D3: valid model exits 0; stderr: ${JSON.stringify(rAip.stderr)}`,
-    );
-    const AIP = rAip.stdout[0]!;
-    assert.match(AIP, ULID_RE, "D3: create ai-provider returns a ULID");
-
-    // ========== D1: typed update commands ==========
-
-    // D1(a): update ai-provider --model with valid pair succeeds
-    const rUpd = await dispatch(
-      ["update", "ai-provider", "--id", AIP, "--model", "gpt-5.6-sol"],
-      deps,
-    );
-    assert.equal(
-      rUpd.exitCode,
-      0,
-      `D1: update ai-provider --model valid exits 0; stderr: ${JSON.stringify(rUpd.stderr)}`,
-    );
-
-    // D1(b): update ai-provider --model with invalid pair rejected
-    const rBadUpd = await dispatch(
-      ["update", "ai-provider", "--id", AIP, "--model", "no-such-model-xyz"],
-      deps,
-    );
-    assert.equal(
-      rBadUpd.exitCode,
-      1,
-      "D1: update ai-provider invalid model exits 1",
-    );
-
-    // Confirm model was updated to gpt-5.6-sol (D1 state check)
-    const rGetAip = await dispatch(
-      ["get", "resource", "--id", AIP, "--json"],
-      deps,
-    );
-    assert.equal(rGetAip.exitCode, 0, "D1: get resource for AIP exits 0");
-    const aipJson = rGetAip.stdout.join("");
-    assert.ok(
-      aipJson.includes("gpt-5.6-sol"),
-      `D1: updated model 'gpt-5.6-sol' must appear in resource JSON; got: ${aipJson.slice(0, 200)}`,
-    );
-
     // ========== D2: repository transport identity ==========
 
     // D2(a): embedded userinfo in remoteUrl rejected
@@ -279,9 +187,9 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
     const REPO = rRepo.stdout[0]!;
     assert.match(REPO, ULID_RE, "D2: create repository returns a ULID");
 
-    // ========== C1: import graph --bind resolves aliases ==========
+    // ========== C1: import graph --bind resolves source alias ==========
 
-    // Write graph package files (initiative with 3-alias bindings)
+    // Write graph package files (initiative with source binding only, per 008.3 retire)
     const srcDir = join(tmp, "graph");
     mkdirSync(srcDir);
     mkdirSync(join(srcDir, "api"));
@@ -294,8 +202,6 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
         "name: todo",
         "bindings:",
         "  source: repository",
-        "  model: ai_provider",
-        "  model-auth: credential",
         "---",
       ].join("\n") + "\n",
     );
@@ -309,8 +215,6 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
         "name: api",
         "context:",
         "  source: source",
-        "  model: model",
-        "  model-auth: model-auth",
         "---",
       ].join("\n") + "\n",
     );
@@ -331,35 +235,22 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
       ].join("\n") + "\n",
     );
 
-    // C1(a): missing --bind for model-auth alias → exit 1 mentioning model-auth
-    // RED TODAY: --bind is not in router parse config → exitCode 1 with
-    // "unknown option '--bind'" instead of "model-auth" in stderr
-    const rMissingBind = await dispatch(
-      [
-        "import",
-        "graph",
-        srcDir,
-        "--create",
-        "--project",
-        PROJECT,
-        "--bind",
-        `source=${REPO}`,
-        "--bind",
-        `model=${AIP}`,
-      ],
+    // C1 (neg): --bind source=... MISSING → exit 1, stderr mentions source
+    const rNoBind = await dispatch(
+      ["import", "graph", srcDir, "--create", "--project", PROJECT],
       deps,
     );
     assert.equal(
-      rMissingBind.exitCode,
+      rNoBind.exitCode,
       1,
-      `C1: missing model-auth alias must exit 1; stderr: ${JSON.stringify(rMissingBind.stderr)}`,
+      `C1-neg: missing --bind source must exit 1; stderr: ${JSON.stringify(rNoBind.stderr)}`,
     );
     assert.ok(
-      rMissingBind.stderr.some((l) => /model-auth/i.test(l)),
-      `C1: stderr must mention 'model-auth' for unbound alias; got: ${JSON.stringify(rMissingBind.stderr)}`,
+      rNoBind.stderr.some((l: string) => /source/i.test(l)),
+      `C1-neg: stderr must mention the 'source' alias; got: ${rNoBind.stderr.join(" ")}`,
     );
 
-    // C1(b): all --bind provided → exit 0
+    // C1: --bind source provided → exit 0
     const rFullBind = await dispatch(
       [
         "import",
@@ -370,20 +261,16 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
         PROJECT,
         "--bind",
         `source=${REPO}`,
-        "--bind",
-        `model=${AIP}`,
-        "--bind",
-        `model-auth=${CRED}`,
       ],
       deps,
     );
     assert.equal(
       rFullBind.exitCode,
       0,
-      `C1: all aliases bound exits 0; stderr: ${JSON.stringify(rFullBind.stderr)}`,
+      `C1: source alias bound exits 0; stderr: ${JSON.stringify(rFullBind.stderr)}`,
     );
 
-    // C1(c): find the imported task and verify it has resolved context bindings
+    // C1: find the imported task and verify it has resolved context bindings
     const rFindInit = await dispatch(
       ["find", "initiative", "--project", PROJECT, "--name", "todo"],
       deps,
@@ -415,11 +302,8 @@ test("EPIC 007.1 Part A: resource safety + import context + local landing + diag
     >;
     const ctx = taskObj["context"] as Record<string, string> | undefined;
     assert.ok(
-      ctx &&
-        typeof ctx["repository"] === "string" &&
-        typeof ctx["ai_provider"] === "string" &&
-        typeof ctx["credential"] === "string",
-      `C1: task context must have repository, ai_provider, credential bindings; got: ${JSON.stringify(ctx)}`,
+      ctx && typeof ctx["repository"] === "string",
+      `C1: task context must have repository binding; got: ${JSON.stringify(ctx)}`,
     );
 
     // ========== C2/D5: local landing to the canonical branch ==========

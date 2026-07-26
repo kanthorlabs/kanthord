@@ -105,6 +105,14 @@ class FakeRegistry implements AiProviderRegistry {
 
   remove(_id: string): void {}
 
+  updateCredentialCAS(
+    _id: string,
+    _value: string,
+    _expectedVersion: number,
+  ): { applied: true; newVersion: number } | { applied: false } {
+    return { applied: false };
+  }
+
   clearDefault(): void {
     this.#defaultId = undefined;
   }
@@ -834,4 +842,57 @@ test("RegisterAiProvider: custom rejects negative maxTokens with InvalidNumericF
       }),
     (err: unknown) => (err as Error).name === "InvalidNumericFlagError",
   );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// BLOCKER 9 — builtin path must route through registerGlobalProvider
+// ═══════════════════════════════════════════════════════════════════
+
+test("(BLOCKER 9) RegisterAiProvider builtin path calls registerGlobalProvider instead of inline register", () => {
+  const registry = new FakeRegistry();
+  const uow = new FakeUnitOfWork();
+  const catalog = new FakeModelCatalog([
+    { provider: "openai-codex", model: "gpt-5.6-terra" },
+  ]);
+  let helperCalled = false;
+  let helperParams: Record<string, unknown> | undefined;
+
+  const registerProviderSpy = (
+    _reg: AiProviderRegistry,
+    params: {
+      name: string;
+      provider: string;
+      model: string;
+      value: string;
+      baseUrl?: string;
+      effort?: string;
+    },
+  ): string => {
+    helperCalled = true;
+    helperParams = params as unknown as Record<string, unknown>;
+    return registry.register(params).id;
+  };
+
+  // RegisterAiProvider does NOT currently accept registerProviderSpy — this will fail at runtime
+  const uc = new (RegisterAiProvider as any)(
+    registry,
+    uow,
+    catalog,
+    undefined,
+    registerProviderSpy,
+  );
+
+  const id = uc.execute({
+    name: "alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-secret",
+  });
+
+  // The builtin path must go through registerGlobalProvider, not inline registry.register
+  assert.ok(
+    helperCalled,
+    "registerProvider helper (registerGlobalProvider) must be called for builtin path",
+  );
+  assert.ok(id, "returns a provider id");
 });

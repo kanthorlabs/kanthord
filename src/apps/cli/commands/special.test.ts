@@ -334,10 +334,10 @@ describe("src/apps/cli/commands/login.ts", () => {
         "provider",
         "--provider",
         "openai-codex",
-        "--project",
-        "project-1",
         "--name",
         "openai",
+        "--model",
+        "gpt-5.6-sol",
         "--method",
         "browser",
       ],
@@ -347,23 +347,23 @@ describe("src/apps/cli/commands/login.ts", () => {
     const { presenter, ...loginInput } = received as {
       presenter?: unknown;
       providerId?: unknown;
-      projectId?: unknown;
       name?: unknown;
       method?: unknown;
+      model?: unknown;
     };
     assert.deepEqual(loginInput, {
       providerId: "openai-codex",
-      projectId: "project-1",
       name: "openai",
+      model: "gpt-5.6-sol",
       method: "browser",
     });
     assert.equal(typeof presenter, "object");
     assert.deepEqual(cap.out, ["credential-1\n"]);
-    assert.deepEqual(cap.err, ["credential created: credential-1\n"]);
+    assert.deepEqual(cap.err, ["ai-provider registered: credential-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
-  test("requires provider, project, and name for provider login", async () => {
+  test("requires provider and name for provider login", async () => {
     const cap = capture();
     const command = buildLoginCommand(
       {} as Parameters<typeof buildLoginCommand>[0],
@@ -372,12 +372,9 @@ describe("src/apps/cli/commands/login.ts", () => {
     command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
 
     await assert.rejects(
-      command.parseAsync(
-        ["provider", "--project", "project-1", "--name", "openai"],
-        {
-          from: "user",
-        },
-      ),
+      command.parseAsync(["provider", "--name", "openai"], {
+        from: "user",
+      }),
       (error: { code?: string }) =>
         error.code === "commander.missingMandatoryOptionValue",
     );

@@ -17,18 +17,13 @@ import { PiAgentRunner } from "./pi.ts";
 import { FakeSessionFactory } from "./fake-session.ts";
 import type { FakeTurn } from "./fake-session.ts";
 import { CredentialError } from "./pi-session.ts";
-import type { ProviderSessionFactory } from "./pi-session.ts";
+import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
 import type { Workspace } from "../workspace/port.ts";
-import type {
-  Repository,
-  Credential,
-  AIProvider,
-  Resource,
-  Filesystem,
-} from "../domain/resource.ts";
+import type { Repository, Filesystem } from "../domain/resource.ts";
 import type { Task } from "../domain/task.ts";
-import type { TaskContextBinding } from "./port.ts";
+import type { ResolvedProvider, TaskContextBinding } from "./port.ts";
 import type { PiAgentRunnerOptions } from "./pi.ts";
+import type { SessionContext } from "./pi-session.ts";
 
 // ---------------------------------------------------------------------------
 // Local structural types (no import from non-existent ports yet)
@@ -90,20 +85,13 @@ after(async () => {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const AI_PROVIDER: AIProvider = {
+const PROVIDER: ResolvedProvider = {
   id: "ai-001",
-  type: "ai_provider",
   name: "openai",
   provider: "openai",
   model: "gpt-5.5",
-};
-
-const CREDENTIAL: Credential = {
-  id: "cred-001",
-  type: "credential",
-  name: "openai-key",
-  provider: "openai",
   value: "sk-test",
+  credentialVersion: 1,
 };
 
 const REPO: Repository = {
@@ -131,21 +119,19 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 }
 
 function makeContext(
-  opts: { ai?: boolean; cred?: boolean; repo?: boolean; fs?: boolean } = {},
+  opts: { repo?: boolean; fs?: boolean } = {},
 ): TaskContextBinding[] {
-  const { ai = true, cred = true, repo = true, fs = false } = opts;
+  const { repo = true, fs = false } = opts;
   const ctx: TaskContextBinding[] = [];
-  if (ai) ctx.push({ type: "ai_provider", resourceId: AI_PROVIDER.id });
-  if (cred) ctx.push({ type: "credential", resourceId: CREDENTIAL.id });
   if (repo) ctx.push({ type: "repository", resourceId: REPO.id });
   if (fs) ctx.push({ type: "filesystem", resourceId: "fs-001" });
   return ctx;
 }
 
 function makeGetResource(
-  extra: Resource[] = [],
-): (id: string) => Resource | undefined {
-  const resources: Resource[] = [AI_PROVIDER, CREDENTIAL, REPO, ...extra];
+  extra: Repository[] = [],
+): (id: string) => Repository | undefined {
+  const resources: Repository[] = [REPO, ...extra];
   return (id: string) => resources.find((r) => r.id === id);
 }
 
@@ -192,7 +178,7 @@ function makeSessionFactory(
   captureCtx?: (ctx: unknown) => void,
 ): ProviderSessionFactory {
   return {
-    async for(_ai: AIProvider, _cred: Credential) {
+    async for(_provider: ResolvedProvider) {
       const fake = new FakeSessionFactory(turns);
       const streamFn = captureCtx
         ? (model: unknown, context: unknown, opts?: unknown) => {
@@ -215,7 +201,7 @@ function makeRunner(
     workspaces?: FakeWorkspaceManager;
     profiles?: Map<string, SyntheticProfile>;
     newInstructionLoader?: (dir: string) => InstructionLoader;
-    getResource?: (id: string) => Resource | undefined;
+    getResource?: (id: string) => unknown;
     getPriorRejection?: (
       taskId: string,
     ) =>
@@ -250,6 +236,7 @@ test("PiAgentRunner happy path: completed result, prepare called with repository
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "completed", "task completed");
@@ -267,7 +254,7 @@ test("PiAgentRunner happy path: completed result, prepare called with repository
 // (b) Missing credential binding
 // ---------------------------------------------------------------------------
 
-test("PiAgentRunner missing credential binding: failed with CredentialError prefix, session factory not called", async () => {
+test("PiAgentRunner missing provider: failed with 'no provider', session factory not called", async () => {
   let sessionFactoryCalled = false;
   const sessions: ProviderSessionFactory = {
     async for() {
@@ -277,19 +264,17 @@ test("PiAgentRunner missing credential binding: failed with CredentialError pref
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext({ cred: false }));
+  const result = await runner.run(makeTask(), makeContext());
 
   assert.equal(result.outcome, "failed");
   assert.ok(
-    (result as unknown as { reason: string }).reason.startsWith(
-      "CredentialError",
-    ),
-    `reason should start with CredentialError, got: ${(result as unknown as { reason: string }).reason}`,
+    (result as unknown as { reason: string }).reason.startsWith("no provider"),
+    `reason should start with "no provider", got: ${(result as unknown as { reason: string }).reason}`,
   );
   assert.equal(
     sessionFactoryCalled,
     false,
-    "session factory not called before credential check",
+    "session factory not called before provider check",
   );
 });
 
@@ -310,7 +295,7 @@ test("PiAgentRunner factory CredentialError: failed, prepare not called", async 
   };
   const runner = makeRunner({ sessions, workspaces: wm });
 
-  const result = await runner.run(makeTask(), makeContext());
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
 
   assert.equal(result.outcome, "failed");
   assert.ok(
@@ -334,7 +319,11 @@ test("PiAgentRunner factory CredentialError: failed, prepare not called", async 
 test("PiAgentRunner no repo or fs binding: failed WorkspaceUnresolvableError", async () => {
   const runner = makeRunner();
 
-  const result = await runner.run(makeTask(), makeContext({ repo: false }));
+  const result = await runner.run(
+    makeTask(),
+    makeContext({ repo: false }),
+    PROVIDER,
+  );
 
   assert.equal(result.outcome, "failed");
   assert.ok(
@@ -349,7 +338,7 @@ test("PiAgentRunner both repo and fs bindings: failed InvalidContextError", asyn
   const runner = makeRunner();
 
   const ctx = [...makeContext(), { type: "filesystem", resourceId: "fs-001" }];
-  const result = await runner.run(makeTask(), ctx);
+  const result = await runner.run(makeTask(), ctx, PROVIDER);
 
   assert.equal(result.outcome, "failed");
   assert.ok(
@@ -370,6 +359,7 @@ test("PiAgentRunner unknown profile key: failed UnknownAgentError", async () => 
   const result = await runner.run(
     makeTask({ agent: "ghost@9" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "failed");
@@ -399,7 +389,7 @@ test("PiAgentRunner stream rejection: failed, runner resolves not throws", async
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext());
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
 
   assert.equal(
     result.outcome,
@@ -466,8 +456,8 @@ test("PiAgentRunner two profiles produce different system prompts through same r
 
   const runner = makeRunner({ sessions, profiles });
 
-  await runner.run(makeTask({ agent: "alpha@1" }), makeContext());
-  await runner.run(makeTask({ agent: "beta@1" }), makeContext());
+  await runner.run(makeTask({ agent: "alpha@1" }), makeContext(), PROVIDER);
+  await runner.run(makeTask({ agent: "beta@1" }), makeContext(), PROVIDER);
 
   assert.equal(capturedPrompts.length, 2, "two runs captured");
   assert.ok(
@@ -505,7 +495,7 @@ test("PiAgentRunner escalate tool: scripted call results in escalated outcome re
     ]),
   });
 
-  const result = await runner.run(makeTask(), makeContext());
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
 
   assert.equal(
     result.outcome,
@@ -558,7 +548,7 @@ test("PiAgentRunner getPriorRejection returns decision: prompt contains feedback
     },
   });
 
-  await runner.run(makeTask(), makeContext());
+  await runner.run(makeTask(), makeContext(), PROVIDER);
 
   // The user message prompt should contain the rejection feedback block
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
@@ -607,7 +597,7 @@ test("PiAgentRunner getPriorRejection returns undefined: prompt contains no feed
 
   const runner = makeRunner({ sessions, getPriorRejection: () => undefined });
 
-  await runner.run(makeTask(), makeContext());
+  await runner.run(makeTask(), makeContext(), PROVIDER);
 
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
   const promptText = userMsgs
@@ -687,8 +677,8 @@ test("PiAgentRunner profile placement: placing profile puts instructions in proj
     newInstructionLoader: (_dir: string) => ({ load: () => instructions }),
   });
 
-  await runner.run(makeTask({ agent: "placing@1" }), makeContext());
-  await runner.run(makeTask({ agent: "ignoring@1" }), makeContext());
+  await runner.run(makeTask({ agent: "placing@1" }), makeContext(), PROVIDER);
+  await runner.run(makeTask({ agent: "ignoring@1" }), makeContext(), PROVIDER);
 
   assert.equal(capturedPrompts.length, 2, "two runs captured");
   assert.ok(
@@ -757,7 +747,7 @@ function makeEmitRunner08(
   emitted: EmitRecord08[],
   clock?: () => number,
   profile?: SyntheticProfile,
-  getResource?: (id: string) => Resource | undefined,
+  getResource?: (id: string) => unknown,
 ) {
   const recordingEmit = (
     taskId: string,
@@ -795,6 +785,7 @@ test("(a) happy run: emits agent.started, agent.progress, agent.finished in orde
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "completed", "outcome should be completed");
@@ -850,7 +841,7 @@ test("(b) no capture-throttle: 4 tool calls (3 + 1 across turns) produce 4 agent
   // No clock injection needed — throttle is removed from pi.ts; emit fires on every tool call.
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.equal(
@@ -883,7 +874,7 @@ test("(A3) un-throttled: 3 tool_execution_start events within 1000 ms each produ
   ];
   const runner = makeEmitRunner08(turns, emitted, fakeClock);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.equal(
@@ -924,6 +915,7 @@ test("(c) failed run: agent.finished emitted with outcome failed", async () => {
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "failed", "outcome should be failed");
@@ -957,6 +949,7 @@ test("(c) escalated run: agent.finished emitted with outcome escalated", async (
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "escalated", "outcome should be escalated");
@@ -976,7 +969,7 @@ test("(c) escalated run: agent.finished emitted with outcome escalated", async (
 // (d-progress) Credential value in tool args: progress payload must not contain it
 
 test("(d) tool args with credential value: progress summary must not contain it (redacted to ***)", async () => {
-  const credValue = CREDENTIAL.value; // "sk-test"
+  const credValue = PROVIDER.value; // "sk-test"
   const emitted: EmitRecord08[] = [];
   const turns: FakeTurn[] = [
     { toolCalls: [{ name: "search_files", arguments: { path: credValue } }] },
@@ -984,7 +977,7 @@ test("(d) tool args with credential value: progress summary must not contain it 
   ];
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.ok(
@@ -1003,7 +996,7 @@ test("(d) tool args with credential value: progress summary must not contain it 
 // (d-reason) Provider error embedding credential value: result.reason must not contain it
 
 test("(d) provider error with credential value in message: result.reason must be redacted", async () => {
-  const credValue = CREDENTIAL.value; // "sk-test"
+  const credValue = PROVIDER.value; // "sk-test"
   const emitted: EmitRecord08[] = [];
   const sessions: ProviderSessionFactory = {
     async for() {
@@ -1028,6 +1021,7 @@ test("(d) provider error with credential value in message: result.reason must be
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "failed");
@@ -1053,7 +1047,7 @@ test("(e) progress summary never exceeds 200 characters", async () => {
   ];
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.ok(
@@ -1093,7 +1087,7 @@ test("(e) progress summary never exceeds 200 characters", async () => {
 // catches this and sets errorMessage). The runner must redact the value.
 
 test("(B2 regression) post-waitForIdle agent.state.errorMessage containing credential value is redacted in result.reason", async () => {
-  const credValue = CREDENTIAL.value; // "sk-test"
+  const credValue = PROVIDER.value; // "sk-test"
 
   // Factory for() resolves successfully; the returned streamFn throws with the
   // credential value in its message. pi-agent-core catches the throw internally
@@ -1111,7 +1105,7 @@ test("(B2 regression) post-waitForIdle agent.state.errorMessage containing crede
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext());
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
 
   assert.equal(
     result.outcome,
@@ -1158,6 +1152,7 @@ test("(a) turn budget: maxTurns=3, always tool-calling session → failed Budget
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(
@@ -1200,7 +1195,7 @@ test("(T3) task.verification: exit-0 command emits start then end event with exi
   const runner = makeEmitRunner08(turns, emitted);
   const task = makeTask({ agent: "synthetic@1", verification: ["true"] });
 
-  await runner.run(task, makeContext());
+  await runner.run(task, makeContext(), PROVIDER);
 
   const verifEvents = emitted.filter((e) => e.type === "task.verification");
   assert.equal(
@@ -1255,7 +1250,7 @@ test("(T3) task.verification: exit-1 command emits end event with exitClass 'fai
   const task = makeTask({ agent: "synthetic@1", verification: ["false"] });
 
   // outcome will be "failed" because the verification command exits 1
-  const result = await runner.run(task, makeContext());
+  const result = await runner.run(task, makeContext(), PROVIDER);
 
   assert.equal(
     result.outcome,
@@ -1304,7 +1299,7 @@ test("(T4) A6: agent.finished payload carries turns, tokensIn, tokensOut", async
   ];
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const finishedEvents = emitted.filter((e) => e.type === "agent.finished");
   assert.equal(
@@ -1524,6 +1519,7 @@ test("(F2 T1) multi-turn usage: agent.finished tokensIn/tokensOut sum every assi
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "completed", "task completed");
@@ -1570,6 +1566,7 @@ test("(F2 T1) failed run (verification failure) still emits non-zero tokensIn/to
   const result = await runner.run(
     makeTask({ agent: "synthetic@1", verification: ["false"] }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "failed", "verification failure → failed");
@@ -1599,6 +1596,7 @@ test("(F2 T1) escalated run still emits non-zero tokensIn/tokensOut from the tur
   const result = await runner.run(
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "escalated", "escalate tool → escalated");
@@ -1696,6 +1694,7 @@ test("(F3 T2) pi runner: changed workspace resolves to candidate (not completed/
     const result = await runner.run(
       makeTask({ agent: "generic@1" }),
       makeContext(),
+      PROVIDER,
     );
 
     assert.equal(
@@ -1753,6 +1752,7 @@ test("(F3 T2) pi runner: no-change workspace resolves to completed (not failed)"
     const result = await runner.run(
       makeTask({ agent: "generic@1" }),
       makeContext(),
+      PROVIDER,
     );
 
     assert.equal(
@@ -1817,7 +1817,7 @@ test("(S3-j-getPriorFeedback-value) PiAgentRunner getPriorFeedback returns { not
     },
   } as unknown as PiAgentRunnerOptions);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
   const promptText = userMsgs
@@ -1884,7 +1884,7 @@ test("(S3-j-getPriorFeedback-undefined) PiAgentRunner getPriorFeedback returns u
     getPriorFeedback: () => undefined,
   } as unknown as PiAgentRunnerOptions);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext());
+  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
 
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
   const promptText = userMsgs
@@ -1903,6 +1903,72 @@ test("(S3-j-getPriorFeedback-undefined) PiAgentRunner getPriorFeedback returns u
   assert.ok(
     !promptText.includes("keep both"),
     `prompt must not contain feedback text when getPriorFeedback returns undefined; got snippet: ${promptText.slice(0, 300)}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story A (008.3) — Runner takes a resolved provider from the daemon,
+// bypassing ai_provider/credential context binding lookups
+// ---------------------------------------------------------------------------
+
+test("(008.3 Story A) PiAgentRunner with resolved provider: runs without ai_provider/credential context bindings", async () => {
+  const wm = new FakeWorkspaceManager();
+  let capturedProvider: ResolvedProvider | undefined;
+  const fakeFactory = new FakeSessionFactory([{ text: "done" }]);
+  const sessions: ProviderSessionFactory = {
+    async for(provider: ResolvedProvider) {
+      capturedProvider = provider;
+      return {
+        model: {} as unknown as any,
+        streamFn:
+          fakeFactory.streamFn as unknown as ProviderSession["streamFn"],
+        getApiKey: () => "fake-key",
+      } as unknown as any;
+    },
+  };
+  const runner = makeRunner({ sessions, workspaces: wm });
+
+  const provider: ResolvedProvider = {
+    id: "prov-001",
+    name: "test-provider",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    value: "sk-test",
+    credentialVersion: 1,
+  };
+
+  // No ai_provider or credential in context — this would normally fail
+  // with CredentialError. With a resolved provider arg it must succeed.
+  const result = await runner.run(makeTask(), makeContext(), provider);
+
+  assert.equal(
+    result.outcome,
+    "completed",
+    "task must complete when resolved provider is passed (no context ai/cred needed)",
+  );
+  assert.ok(
+    capturedProvider !== undefined,
+    "sessions.for must be called with the resolved provider",
+  );
+  assert.equal(
+    capturedProvider!.id,
+    provider.id,
+    "resolvedProvider.id must equal the passed provider's id",
+  );
+  assert.equal(
+    capturedProvider!.provider,
+    provider.provider,
+    "resolvedProvider.provider must equal the passed provider's provider",
+  );
+  assert.equal(
+    capturedProvider!.model,
+    provider.model,
+    "resolvedProvider.model must equal the passed provider's model",
+  );
+  assert.equal(
+    capturedProvider!.value,
+    provider.value,
+    "resolvedProvider.value must equal the passed provider's value",
   );
 });
 
@@ -1937,7 +2003,11 @@ test("(Story B / 007.12) pi runner: a 'workspace' context binding routes the run
     { type: "workspace", resourceId: initCloneDir },
   ];
 
-  const result = await runner.run(makeTask({ agent: "synthetic@1" }), ctx);
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    ctx,
+    PROVIDER,
+  );
 
   assert.equal(
     result.outcome,
@@ -1953,5 +2023,49 @@ test("(Story B / 007.12) pi runner: a 'workspace' context binding routes the run
     (result as { workspace?: string }).workspace,
     initCloneDir,
     "the runner must operate directly in the Story A initiative clone dir, not FakeWorkspaceManager's realGitDir",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// BLOCKER 4 — credentialVersion threaded through to sessions.for()
+// ---------------------------------------------------------------------------
+
+test("(BLOCKER 4) PiAgentRunner with provider arg: passes credentialVersion to sessions.for() as 4th arg", async () => {
+  const PI_PROVIDER: ResolvedProvider = {
+    id: "prov-001",
+    name: "test",
+    provider: "openai-codex",
+    model: "gpt-5",
+    value: "sk-test",
+    credentialVersion: 5,
+  };
+  let capturedVersion: number | undefined;
+  const sessions: ProviderSessionFactory = {
+    async for(
+      _provider: ResolvedProvider,
+      _ctx?: SessionContext,
+      expectedVersion?: number,
+    ) {
+      capturedVersion = expectedVersion;
+      const fake = new FakeSessionFactory([{ text: "done" }]);
+      return {
+        model: {} as any,
+        streamFn: fake.streamFn as any,
+        getApiKey: () => "key",
+      } as any;
+    },
+  };
+  const runner = makeRunner({ sessions });
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PI_PROVIDER,
+  );
+  // Current code (pi.ts:461) passes only 3 args — this should be undefined.
+  // Fix: pass provider.credentialVersion as 4th arg.
+  assert.equal(
+    capturedVersion,
+    5,
+    "sessions.for() must receive provider.credentialVersion as 4th arg",
   );
 });

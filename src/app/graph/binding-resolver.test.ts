@@ -63,7 +63,7 @@ describe("src/app/graph/binding-resolver.ts", () => {
   // validateExecutorBindings
   // -------------------------------------------------------------------------
 
-  test("(d) validateExecutorBindings: generic@1 with full context passes without error", () => {
+  test("(d) validateExecutorBindings: generic@1 with repository binding passes without error", () => {
     assert.doesNotThrow(() =>
       validateExecutorBindings([
         {
@@ -71,15 +71,13 @@ describe("src/app/graph/binding-resolver.ts", () => {
           agent: "generic@1",
           context: {
             repository: "REPO-ID",
-            ai_provider: "AIP-ID",
-            credential: "CRED-ID",
           },
         },
       ]),
     );
   });
 
-  test("(e) validateExecutorBindings: generic@1 missing ai_provider throws ExecutorBindingSetError", () => {
+  test("(e) validateExecutorBindings: generic@1 missing repository throws ExecutorBindingSetError", () => {
     assert.throws(
       () =>
         validateExecutorBindings([
@@ -87,8 +85,8 @@ describe("src/app/graph/binding-resolver.ts", () => {
             ref: "task-1",
             agent: "generic@1",
             context: {
-              repository: "REPO-ID",
-              // ai_provider absent
+              // repository absent
+              ai_provider: "AIP-ID",
               credential: "CRED-ID",
             },
           },
@@ -100,7 +98,7 @@ describe("src/app/graph/binding-resolver.ts", () => {
         );
         assert.equal(err.errors.length, 1);
         assert.equal(err.errors[0]!.taskRef, "task-1");
-        assert.deepEqual(err.errors[0]!.missing, ["ai_provider"]);
+        assert.deepEqual(err.errors[0]!.missing, ["repository"]);
         return true;
       },
     );
@@ -113,12 +111,12 @@ describe("src/app/graph/binding-resolver.ts", () => {
           {
             ref: "task-A",
             agent: "generic@1",
-            context: { repository: "REPO-ID" }, // missing ai_provider + credential
+            context: { ai_provider: "AIP-ID" }, // missing repository
           },
           {
             ref: "task-B",
             agent: "tdd@1",
-            context: { repository: "REPO-ID", ai_provider: "AIP-ID" }, // missing credential
+            context: { credential: "CRED-ID" }, // missing repository
           },
         ]),
       (err: unknown) => {

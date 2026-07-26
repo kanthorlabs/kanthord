@@ -1,17 +1,11 @@
 /**
- * `login <provider>` CLI handler (thin) — after S4 the OAuth orchestration
- * lives in the LoginProvider use case; this handler only parses/validates
- * inputs, builds the terminal presenter, calls the use case, and formats.
+ * `login <provider>` CLI handler (thin) — after 008.3 Story E the login
+ * creates a global ai-provider (not a project-scoped credential).
  */
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { runLogin, type LoginDeps } from "./login.ts";
-import type {
-  LoginProvider,
-  LoginProviderInput,
-} from "../../app/auth/login-provider.ts";
-
-const PROJECT_ID = "01HZZZZZZZZZZZZZZZZZZZZZPA";
+import type { LoginProvider } from "../../app/auth/login-provider.ts";
 
 function fakeIO() {
   const printed: string[] = [];
@@ -26,13 +20,13 @@ function fakeIO() {
 
 /** A fake LoginProvider use case that records the input and returns a fixed id. */
 function fakeLoginProvider(
-  impl?: (input: LoginProviderInput) => Promise<string>,
-): { calls: LoginProviderInput[]; provider: LoginProvider } {
-  const calls: LoginProviderInput[] = [];
+  impl?: (input: Record<string, unknown>) => Promise<string>,
+): { calls: Record<string, unknown>[]; provider: LoginProvider } {
+  const calls: Record<string, unknown>[] = [];
   const provider = {
-    async execute(input: LoginProviderInput) {
+    async execute(input: Record<string, unknown>) {
       calls.push(input);
-      return impl ? impl(input) : "01HCREDENTIALID0000000000";
+      return impl ? impl(input) : "01HPROVIDER000000000000000";
     },
   } as unknown as LoginProvider;
   return { calls, provider };
@@ -42,66 +36,64 @@ function deps(loginProvider: LoginProvider, io: LoginDeps["io"]): LoginDeps {
   return { loginProvider, io };
 }
 
-describe("runLogin (thin handler)", () => {
-  test("happy path: calls the use case with parsed inputs, returns the credential id", async () => {
+describe("runLogin (Story E — global registry)", () => {
+  test("(Story E) happy path: no --project, success confirms as ai-provider registered", async () => {
     const { calls, provider } = fakeLoginProvider();
     const { io } = fakeIO();
 
     const result = await runLogin(
       "openai-codex",
-      { project: PROJECT_ID, name: "openai", method: "browser" },
+      { name: "my-acct", method: "browser" },
       deps(provider, io),
     );
 
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(result.stdout, ["01HCREDENTIALID0000000000"]);
+    assert.deepEqual(result.stdout, ["01HPROVIDER000000000000000"]);
     assert.deepEqual(
       result.stderr,
-      ["credential created: 01HCREDENTIALID0000000000"],
-      "(Story D2) login provider must confirm the created credential on stderr, matching the create * id-on-stdout / friendly-line-on-stderr contract",
+      ["ai-provider registered: 01HPROVIDER000000000000000"],
+      "(Story E) login must confirm the registered ai-provider, not a credential",
     );
     assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.providerId, "openai-codex");
-    assert.equal(calls[0]?.projectId, PROJECT_ID);
-    assert.equal(calls[0]?.name, "openai");
-    assert.equal(calls[0]?.method, "browser");
+    const input = calls[0]!;
+    assert.equal(input.providerId, "openai-codex");
+    assert.equal(input.name, "my-acct");
+    assert.equal(input.method, "browser");
   });
 
-  test("method defaults to browser when --method omitted", async () => {
+  test("(Story E) method defaults to browser when --method omitted", async () => {
     const { calls, provider } = fakeLoginProvider();
     const { io } = fakeIO();
-    await runLogin(
-      "anthropic",
-      { project: PROJECT_ID, name: "c" },
-      deps(provider, io),
-    );
-    assert.equal(calls[0]?.method, "browser");
+
+    await runLogin("anthropic", { name: "c" }, deps(provider, io));
+
+    const input = calls[0]!;
+    assert.equal(input.method, "browser");
   });
 
-  test("presenter.showAuthUrl prints the auth URL live so the human can open it (B1)", async () => {
+  test("(Story E) presenter.showAuthUrl prints the auth URL live", async () => {
     const { printed, io } = fakeIO();
     const { provider } = fakeLoginProvider(async (input) => {
-      // Simulate the adapter surfacing the auth URL through the presenter.
-      input.presenter.showAuthUrl("https://auth.example/authorize?x=1");
+      (input as any).presenter?.showAuthUrl?.(
+        "https://auth.example/authorize?x=1",
+      );
       return "cid";
     });
 
     const result = await runLogin(
       "openai-codex",
-      { project: PROJECT_ID, name: "openai" },
+      { name: "my-acct" },
       deps(provider, io),
     );
 
     assert.equal(result.exitCode, 0);
     assert.ok(
-      printed.some((line) =>
-        line.includes("https://auth.example/authorize?x=1"),
-      ),
-      "the auth URL is printed live",
+      printed.some((l) => l.includes("https://auth.example/authorize?x=1")),
+      "auth URL must be printed live",
     );
   });
 
-  test("use-case error is mapped to exit 1 + one clean line, no crash (B2)", async () => {
+  test("(Story E) use-case error maps to exit 1 + one clean line, no crash", async () => {
     const { io } = fakeIO();
     const { provider } = fakeLoginProvider(async () => {
       throw new Error("Login cancelled");
@@ -109,7 +101,7 @@ describe("runLogin (thin handler)", () => {
 
     const result = await runLogin(
       "openai-codex",
-      { project: PROJECT_ID, name: "openai" },
+      { name: "my-acct" },
       deps(provider, io),
     );
 
@@ -118,27 +110,47 @@ describe("runLogin (thin handler)", () => {
     assert.deepEqual(result.stderr, ["error: Login cancelled"]);
   });
 
-  test("missing --project: fails before the use case runs (B5)", async () => {
-    const { calls, provider } = fakeLoginProvider();
+  test("(Story E) NonOAuthProviderError maps to exit 1 with register hint", async () => {
     const { io } = fakeIO();
+    const { provider } = fakeLoginProvider(async () => {
+      const err = new Error(
+        "use `register ai-provider --value-file` for API-key providers",
+      );
+      err.name = "NonOAuthProviderError";
+      throw err;
+    });
+
     const result = await runLogin(
-      "anthropic",
-      { name: "c" },
+      "opencode",
+      { name: "acct" },
       deps(provider, io),
     );
+
     assert.equal(result.exitCode, 1);
-    assert.equal(calls.length, 0, "use case must not run without --project");
+    assert.ok(
+      result.stderr[0]?.includes("register ai-provider"),
+      "error must hint at register ai-provider",
+    );
+  });
+
+  test("(Story E) missing --name: fails before the use case runs", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+
+    const result = await runLogin("anthropic", {}, deps(provider, io));
+
+    assert.equal(result.exitCode, 1);
+    assert.equal(calls.length, 0, "use case must not run without --name");
     assert.equal(result.stderr.length, 1);
+    assert.ok(result.stderr[0]?.includes("name"), "error must mention --name");
   });
 
   test("missing provider argument: exit 1, use case not called", async () => {
     const { calls, provider } = fakeLoginProvider();
     const { io } = fakeIO();
-    const result = await runLogin(
-      "",
-      { project: PROJECT_ID, name: "c" },
-      deps(provider, io),
-    );
+
+    const result = await runLogin("", { name: "c" }, deps(provider, io));
+
     assert.equal(result.exitCode, 1);
     assert.equal(calls.length, 0);
   });
@@ -146,13 +158,128 @@ describe("runLogin (thin handler)", () => {
   test("invalid --method: exit 1, use case not called", async () => {
     const { calls, provider } = fakeLoginProvider();
     const { io } = fakeIO();
+
     const result = await runLogin(
       "openai-codex",
-      { project: PROJECT_ID, name: "c", method: "carrier-pigeon" },
+      { name: "c", method: "carrier-pigeon" },
       deps(provider, io),
     );
+
     assert.equal(result.exitCode, 1);
     assert.equal(calls.length, 0);
     assert.match(result.stderr[0] ?? "", /method/);
+  });
+
+  test("(Story E) --model given: passed through to use case input", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+
+    await runLogin(
+      "openai-codex",
+      { name: "acct", method: "browser", model: "gpt-5.6-sol" },
+      deps(provider, io),
+    );
+
+    assert.equal(calls.length, 1);
+    const input = calls[0]!;
+    assert.equal(input.model, "gpt-5.6-sol");
+  });
+
+  // ── BLOCKER 6 — CLI must supply selectModel, baseUrl, effort ──
+
+  test("(BLOCKER 6) runLogin supplies selectModel callback when --model absent", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+
+    await runLogin(
+      "openai-codex",
+      { name: "acct", method: "browser" },
+      deps(provider, io),
+    );
+
+    assert.equal(calls.length, 1, "loginProvider.execute must be called");
+    const input = calls[0]!;
+    assert.ok(
+      typeof input.selectModel === "function",
+      "selectModel callback must be supplied when --model is absent; current login.ts drops it",
+    );
+  });
+
+  test("(BLOCKER 6) runLogin forwards baseUrl and effort to use case", async () => {
+    const { calls, provider } = fakeLoginProvider();
+    const { io } = fakeIO();
+
+    await runLogin(
+      "anthropic",
+      {
+        name: "acct",
+        method: "browser",
+        baseUrl: "https://custom.api/v1",
+        effort: "high",
+      },
+      deps(provider, io),
+    );
+
+    assert.equal(calls.length, 1);
+    const input = calls[0]!;
+    assert.equal(
+      input.baseUrl,
+      "https://custom.api/v1",
+      "baseUrl must be forwarded",
+    );
+    assert.equal(input.effort, "high", "effort must be forwarded");
+  });
+
+  // ── BLOCKER S4 — numbered model list + validated pick ──
+
+  test("(BLOCKER S4) runLogin's selectModel prints a NUMBERED model list before prompting", async () => {
+    const { printed, io } = fakeIO();
+    const { provider } = fakeLoginProvider(async (input) => {
+      const picked = await (
+        input.selectModel as (models: string[]) => Promise<string>
+      )(["gpt-alpha", "gpt-beta"]);
+      return picked;
+    });
+
+    await runLogin(
+      "openai-codex",
+      { name: "acct", method: "browser" },
+      deps(provider, io),
+    );
+
+    const combined = printed.join("\n");
+    assert.match(
+      combined,
+      /1\.\s*gpt-alpha/,
+      "must print a numbered entry for the first model",
+    );
+    assert.match(
+      combined,
+      /2\.\s*gpt-beta/,
+      "must print a numbered entry for the second model",
+    );
+  });
+
+  test("(BLOCKER S4) runLogin's selectModel rejects a pick that is not in the given model list", async () => {
+    const { io } = fakeIO();
+    io.prompt = async () => "not-a-real-model";
+    const { provider } = fakeLoginProvider(async (input) => {
+      return (input.selectModel as (models: string[]) => Promise<string>)([
+        "gpt-alpha",
+        "gpt-beta",
+      ]);
+    });
+
+    const result = await runLogin(
+      "openai-codex",
+      { name: "acct", method: "browser" },
+      deps(provider, io),
+    );
+
+    assert.equal(
+      result.exitCode,
+      1,
+      "an out-of-list pick must fail, not silently pass through",
+    );
   });
 });

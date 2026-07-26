@@ -14,11 +14,11 @@ export interface ExecutorBindingSpec {
 // Unknown executor → no binding validation (pass through).
 export const EXECUTOR_BINDING_SPECS: Record<string, ExecutorBindingSpec> = {
   "generic@1": {
-    required: ["repository", "ai_provider", "credential"],
+    required: ["repository"],
     forbidden: [],
   },
   "tdd@1": {
-    required: ["repository", "ai_provider", "credential"],
+    required: ["repository"],
     forbidden: [],
   },
 };

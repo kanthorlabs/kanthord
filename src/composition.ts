@@ -43,7 +43,6 @@ import { FindResource } from "./app/resource/find-resource.ts";
 import { GetResource } from "./app/resource/get-resource.ts";
 import { ListResources } from "./app/resource/list-resources.ts";
 import { ImportResources } from "./app/resource/import-resources.ts";
-import { UpdateAiProvider } from "./app/resource/update-ai-provider.ts";
 import { UpdateCredential } from "./app/resource/update-credential.ts";
 import { UpdateRepository } from "./app/resource/update-repository.ts";
 import { UpdateNotification } from "./app/resource/update-notification.ts";
@@ -55,7 +54,7 @@ import { ListTasks } from "./app/task/list-tasks.ts";
 import { RetryTask } from "./app/task/retry-task.ts";
 import { SqliteJobQueue } from "./queue/sqlite.ts";
 import { SqliteUnitOfWork } from "./storage/sqlite/sqlite-unit-of-work.ts";
-import type { AgentRunner } from "./agent-runner/port.ts";
+import type { AgentRunner, ResolvedProvider } from "./agent-runner/port.ts";
 import { FakeRunner } from "./agent-runner/fake.ts";
 import { PiAgentRunner } from "./agent-runner/pi.ts";
 import {
@@ -63,6 +62,7 @@ import {
   type ProviderSessionFactory,
 } from "./agent-runner/pi-session.ts";
 import { PiProviderProbe } from "./agent-runner/pi-provider-probe.ts";
+import { toResolvedProvider } from "./agent-runner/resolved-provider.ts";
 import { genericProfile } from "./agent-runner/pi-profile.ts";
 import { RegistryRunnerResolver } from "./agent-runner/resolver.ts";
 import { LocalWorkspaceManager } from "./workspace/local.ts";
@@ -107,6 +107,7 @@ import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { SqlitePublicationRepository } from "./storage/sqlite/publication.ts";
 import { SqliteAiProviderRegistry } from "./storage/sqlite/ai-provider-registry.ts";
 import { RegisterAiProvider } from "./app/ai-provider/register-ai-provider.ts";
+import { registerGlobalProvider } from "./app/ai-provider/register-global-provider.ts";
 import { GetAiProvider } from "./app/ai-provider/get-ai-provider.ts";
 import { ListAiProviders } from "./app/ai-provider/list-ai-providers.ts";
 import { SetDefaultAiProvider } from "./app/ai-provider/set-default-ai-provider.ts";
@@ -119,6 +120,7 @@ import { TestAiProvider } from "./app/ai-provider/test-ai-provider.ts";
 import { GitRepositoryPublisher } from "./publication/git.ts";
 import { PublishRepository } from "./app/repository/publish-repository.ts";
 import { isRepository } from "./domain/resource.ts";
+import { resolveProviderChain } from "./domain/resolve-provider-chain.ts";
 import { ApproveObjective } from "./app/objective/approve-objective.ts";
 import { RetryObjective } from "./app/objective/retry-objective.ts";
 import { RejectObjective } from "./app/objective/reject-objective.ts";
@@ -215,11 +217,7 @@ export function buildDeps(
         contextWindow: m.contextWindow,
       }));
   const modelCatalog: ModelCatalog = new PiModelCatalog(listModels);
-  const addResource = new AddResource(
-    projectRepository,
-    referenceResolver,
-    modelCatalog,
-  );
+  const addResource = new AddResource(projectRepository, referenceResolver);
   const findResource = new FindResource(projectRepository);
   const publicationRepository = new SqlitePublicationRepository(db);
   const aiProviderRegistry = new SqliteAiProviderRegistry(db);
@@ -227,6 +225,8 @@ export function buildDeps(
     aiProviderRegistry,
     unitOfWork,
     modelCatalog,
+    undefined, // warn
+    registerGlobalProvider, // BLOCKER 9: route through shared helper
   );
   const getAiProvider = new GetAiProvider(aiProviderRegistry);
   const listAiProviders = new ListAiProviders(aiProviderRegistry);
@@ -248,21 +248,11 @@ export function buildDeps(
     referenceResolver,
   );
 
-  // Save updated credential value (for OAuth refresh) directly into the resources table.
-  const saveCredentialValue = (credentialId: string, value: string): void => {
-    const existing = projectRepository.getResource(credentialId);
-    if (!existing) return;
-    const { id: _id, type: _type, name: _name, ...attrs } = existing;
-    const newAttrs = JSON.stringify({ ...attrs, value });
-    db.prepare("UPDATE resources SET attributes = ? WHERE id = ?").run(
-      newAttrs,
-      credentialId,
-    );
-  };
+  const logger = new StdoutLogger();
 
   const sessions: ProviderSessionFactory =
     opts?.sessionFactory ??
-    new PiProviderSessionFactory({ saveCredentialValue });
+    new PiProviderSessionFactory({ registry: aiProviderRegistry, logger });
 
   const probe = new PiProviderProbe(aiProviderRegistry, sessions);
   const testAiProvider = new TestAiProvider(probe);
@@ -277,10 +267,6 @@ export function buildDeps(
       return false;
     }
   };
-  const updateAiProvider = new UpdateAiProvider(
-    projectRepository,
-    modelCatalog,
-  );
   const updateCredential = new UpdateCredential(projectRepository);
   const updateRepository = new UpdateRepository(
     projectRepository,
@@ -492,6 +478,23 @@ export function buildDeps(
         sequencingRepository.listObjectiveAfter(objectiveId),
     };
 
+    // 008.3 Story A/B — resolve the provider chain from initiative→project.
+    const providerChainFor = (initiativeId: string): ResolvedProvider[] => {
+      const initiative = initiativeRepository.get(initiativeId);
+      if (initiative === undefined) return [];
+      const projectId = initiative.projectId;
+      const assigned = aiProviderRegistry.listAssigned(projectId);
+      const defaultProvider = aiProviderRegistry.getDefault();
+      const chain = resolveProviderChain(assigned, defaultProvider);
+      return chain.map(toResolvedProvider);
+    };
+
+    // BLOCKER 5b: resolve projectId from initiativeId for error messages.
+    const getProjectId = (initiativeId: string): string | undefined => {
+      const initiative = initiativeRepository.get(initiativeId);
+      return initiative?.projectId;
+    };
+
     const runNext = new RunNextTask(
       jobQueue,
       taskStoreWithObjectives,
@@ -506,6 +509,8 @@ export function buildDeps(
           listObjectiveAfter: (id: string) =>
             sequencingRepository.listObjectiveAfter(id),
         },
+        providerChainFor,
+        getProjectId,
       },
     );
     return new RunDaemon({
@@ -793,12 +798,12 @@ export function buildDeps(
     unitOfWork,
   );
 
-  const logger = new StdoutLogger();
-
   const loginProvider = new LoginProvider({
     oauth: new PiOAuthLoginProvider(),
-    projects: projectRepository,
-    resolver: referenceResolver,
+    registry: aiProviderRegistry,
+    unitOfWork,
+    modelCatalog,
+    listModels: (providerId: string) => listModels(providerId).map((m) => m.id),
   });
   const login = {
     loginProvider,
@@ -839,7 +844,6 @@ export function buildDeps(
     findResource,
     getResource,
     listResources,
-    updateAiProvider,
     updateCredential,
     updateRepository,
     updateNotification,

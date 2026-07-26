@@ -209,50 +209,6 @@ describe("src/apps/cli/index.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
-  test("lists update in help and routes update ai-provider through the injected use case and CLI I/O", async () => {
-    const helpCapture = capture();
-    const helpProgram = buildProgram(
-      {} as Parameters<typeof buildProgram>[0],
-      helpCapture.io,
-    ).exitOverride();
-    helpProgram.configureOutput({
-      writeOut: helpCapture.io.out,
-      writeErr: helpCapture.io.err,
-    });
-
-    await assert.rejects(helpProgram.parseAsync(["--help"], { from: "user" }));
-    assert.match(helpCapture.out.join(""), /update/);
-
-    let received: unknown;
-    const cap = capture();
-    const deps = {
-      updateAiProvider: {
-        execute: async (input: unknown) => {
-          received = input;
-        },
-      },
-    } as unknown as Parameters<typeof buildProgram>[0];
-    const program = buildProgram(deps, cap.io).exitOverride();
-    program.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
-
-    await program.parseAsync(
-      [
-        "update",
-        "ai-provider",
-        "--id",
-        "provider-1",
-        "--model",
-        "gpt-5.6-terra",
-      ],
-      { from: "user" },
-    );
-
-    assert.deepEqual(received, { id: "provider-1", model: "gpt-5.6-terra" });
-    assert.deepEqual(cap.out, []);
-    assert.deepEqual(cap.err, ["ai_provider updated\n"]);
-    assert.equal(cap.code(), 0);
-  });
-
   test("lists special verbs in help and routes run daemon and export initiative", async () => {
     const helpCapture = capture();
     const helpProgram = buildProgram(

@@ -19,9 +19,9 @@ import type { FakeTurn } from "./fake-session.ts";
 import { LocalWorkspaceManager } from "../workspace/local.ts";
 import { genericProfile, type PiAgentProfile } from "./pi-profile.ts";
 import type { VerificationEvidence } from "./verification.ts";
-import type { AIProvider, Credential, Repository } from "../domain/resource.ts";
+import type { Repository } from "../domain/resource.ts";
 import type { Task } from "../domain/task.ts";
-import type { TaskContextBinding } from "./port.ts";
+import type { ResolvedProvider, TaskContextBinding } from "./port.ts";
 import type { ProviderSessionFactory } from "./pi-session.ts";
 
 // ---------------------------------------------------------------------------
@@ -51,20 +51,13 @@ async function createSeedRepo(dir: string, branch = "main"): Promise<void> {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const AI_PROVIDER: AIProvider = {
-  id: "ai-001",
-  type: "ai_provider",
-  name: "openai",
-  provider: "openai",
-  model: "gpt-5.5",
-};
-
-const CREDENTIAL: Credential = {
-  id: "cred-001",
-  type: "credential",
-  name: "openai-key",
-  provider: "openai",
+const PROVIDER: ResolvedProvider = {
+  id: "prov-verification",
+  name: "test-provider",
+  provider: "openai-codex",
+  model: "gpt-5.6-sol",
   value: "sk-test",
+  credentialVersion: 1,
 };
 
 function makeRepo(path: string): Repository {
@@ -81,19 +74,13 @@ function makeRepo(path: string): Repository {
 
 function makeGetResource(repo: Repository): (id: string) => unknown {
   return (id: string) => {
-    if (id === AI_PROVIDER.id) return AI_PROVIDER;
-    if (id === CREDENTIAL.id) return CREDENTIAL;
     if (id === repo.id) return repo;
     return undefined;
   };
 }
 
 function makeContext(repo: Repository): TaskContextBinding[] {
-  return [
-    { type: "ai_provider", resourceId: AI_PROVIDER.id },
-    { type: "credential", resourceId: CREDENTIAL.id },
-    { type: "repository", resourceId: repo.id },
-  ];
+  return [{ type: "repository", resourceId: repo.id }];
 }
 
 function makeTask(overrides: Partial<Task> = {}): Task {
@@ -112,7 +99,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
 
 function makeSessionFactory(turns: FakeTurn[]): ProviderSessionFactory {
   return {
-    async for(_ai: AIProvider, _cred: Credential) {
+    async for(_provider: ResolvedProvider) {
       const fake = new FakeSessionFactory(turns);
       return {
         model: {} as unknown as any,
@@ -201,6 +188,7 @@ test("(a) agent writes file via write tool → candidate (changed work), candida
   const result = await runner.run(
     makeTask({ id: "task-a" }),
     makeContext(repo),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "candidate");
@@ -264,6 +252,7 @@ test("(b) text-only session, no changes → completed (verified no-change is a l
   const result = await runner.run(
     makeTask({ id: "task-b" }),
     makeContext(repo),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "completed");
@@ -300,6 +289,7 @@ test("(c) agent commits via bash → candidate, exactly one new commit on task b
   const result = await runner.run(
     makeTask({ id: "task-c" }),
     makeContext(repo),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "candidate");
@@ -379,6 +369,7 @@ test("(d) write then escalate → escalated, proposalCommit on proposal branch, 
   const result = await runner.run(
     makeTask({ id: "task-d" }),
     makeContext(repo),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "escalated");
@@ -459,6 +450,7 @@ test("(e) escalate with no change → escalated, proposalCommit absent", async (
   const result = await runner.run(
     makeTask({ id: "task-e" }),
     makeContext(repo),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "escalated");
@@ -498,6 +490,7 @@ test("(f) agent removes .git → failed ResultCaptureError", async () => {
   const result = await runner.run(
     makeTask({ id: "task-f" }),
     makeContext(repo),
+    PROVIDER,
   );
 
   assert.equal(result.outcome, "failed");
@@ -537,7 +530,7 @@ test("(g) D6: verification commands all exit 0 → candidate (changed work), evi
     verification: ['sh -c "exit 0"', "echo ok"],
   });
 
-  const result = await runner.run(task, makeContext(repo));
+  const result = await runner.run(task, makeContext(repo), PROVIDER);
 
   assert.equal(result.outcome, "candidate");
   const r = result as {
@@ -580,7 +573,7 @@ test("(h) verification exits 7 → failed VerificationFailedError, branch still 
 
   const task = makeTask({ id: "task-h", verification: ["exit 7"] });
 
-  const result = await runner.run(task, makeContext(repo));
+  const result = await runner.run(task, makeContext(repo), PROVIDER);
 
   assert.equal(result.outcome, "failed");
   const r = result as { outcome: "failed"; reason: string };
@@ -640,7 +633,7 @@ test("(i) escalate with verification set → escalated, verification commands ne
 
   const task = makeTask({ id: "task-i", verification: [probeCmd] });
 
-  const result = await runner.run(task, makeContext(repo));
+  const result = await runner.run(task, makeContext(repo), PROVIDER);
 
   assert.equal(result.outcome, "escalated");
 
@@ -682,7 +675,7 @@ test("(j) no verification field → candidate (changed work), evidence undefined
   // makeTask does NOT include verification field
   const task = makeTask({ id: "task-j" });
 
-  const result = await runner.run(task, makeContext(repo));
+  const result = await runner.run(task, makeContext(repo), PROVIDER);
 
   assert.equal(result.outcome, "candidate");
   const r = result as {

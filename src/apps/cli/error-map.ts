@@ -43,6 +43,7 @@ import {
   InvalidEffortError,
   InvalidBaseUrlError,
   ConflictingDefaultChoiceError,
+  NonOAuthProviderError,
   EmptyValueError,
   AssignedProviderError,
   InvalidRankError,
@@ -104,6 +105,7 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof InvalidEffortError ||
     err instanceof InvalidBaseUrlError ||
     err instanceof ConflictingDefaultChoiceError ||
+    err instanceof NonOAuthProviderError ||
     err instanceof DuplicateAssignmentError ||
     err instanceof EmptyValueError ||
     err instanceof AssignedProviderError ||

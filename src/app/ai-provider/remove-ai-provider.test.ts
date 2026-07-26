@@ -72,6 +72,13 @@ class FakeRegistry implements AiProviderRegistry {
   remove(id: string): void {
     this.#store.delete(id);
   }
+  updateCredentialCAS(
+    _id: string,
+    _value: string,
+    _expectedVersion: number,
+  ): { applied: true; newVersion: number } | { applied: false } {
+    return { applied: false };
+  }
   // 008.2 Story A — project→provider assignment (required by port)
   assign(_projectId: string, _providerId: string, _rank: number): void {}
   unassign(_projectId: string, _providerId: string): void {}

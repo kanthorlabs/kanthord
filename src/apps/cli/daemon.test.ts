@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildDeps } from "../../composition.ts";
 import { runCli as dispatch } from "./commands/run-cli.ts";
@@ -23,6 +23,34 @@ async function setupReadyTask(dbPath: string) {
   assert.equal(r1.exitCode, 0, "create project");
   const PROJECT = r1.stdout[0]!;
   assert.match(PROJECT, ULID_RE);
+
+  // Register an AI provider so the fake@1 task passes the provider-chain check
+  const providerValueFile = join(dirname(dbPath), ".provider-value");
+  writeFileSync(providerValueFile, "sk-test");
+  const rProv = await dispatch(
+    [
+      "register",
+      "ai-provider",
+      "--name",
+      "test-provider",
+      "--provider",
+      "openai-codex",
+      "--model",
+      "gpt-5.6-sol",
+      "--value-file",
+      providerValueFile,
+    ],
+    deps,
+  );
+  assert.equal(rProv.exitCode, 0, "register ai-provider");
+  const PROVIDER = rProv.stdout[0]!;
+  assert.match(PROVIDER, ULID_RE);
+
+  const rAssign = await dispatch(
+    ["assign", "ai-provider", "--project", PROJECT, "--provider", PROVIDER],
+    deps,
+  );
+  assert.equal(rAssign.exitCode, 0, "assign ai-provider");
 
   const r2 = await dispatch(
     ["create", "initiative", "--project", PROJECT, "--name", "test-init"],

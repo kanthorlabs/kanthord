@@ -14,7 +14,6 @@ import type {
   Repository,
   Credential,
   Notification,
-  AIProvider,
   Filesystem,
 } from "../../domain/resource.ts";
 
@@ -135,31 +134,6 @@ test("SqliteProjectRepository addResource + listResources round-trips notificati
     name: "my-notif",
     provider: "slack",
     destination: "#alerts",
-  };
-  repo.addResource(project.id, resource);
-
-  const resources = repo.listResources(project.id);
-  assert.equal(resources.length, 1);
-  assert.deepEqual(resources[0], resource);
-});
-
-test("SqliteProjectRepository addResource + listResources round-trips ai_provider variant", () => {
-  const { db, dir } = makeTempDb();
-  after(() => {
-    db.close();
-    rmSync(dir, { recursive: true });
-  });
-
-  const repo = new SqliteProjectRepository(db);
-  const project: Project = { id: newId(), name: "P4" };
-  repo.save(project);
-
-  const resource: AIProvider = {
-    id: newId(),
-    type: "ai_provider",
-    name: "claude",
-    provider: "anthropic",
-    model: "claude-3-5-sonnet",
   };
   repo.addResource(project.id, resource);
 

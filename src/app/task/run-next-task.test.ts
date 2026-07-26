@@ -24,6 +24,7 @@ import type {
 } from "../../agent-runner/port.ts";
 import { RunnerNotResolvableError } from "../../agent-runner/port.ts";
 import { FakeRunner } from "../../agent-runner/fake.ts";
+import type { GlobalAiProvider } from "../../storage/port.ts";
 
 // ---------------------------------------------------------------------------
 // Narrow structural interface the test wires to RunNextTask (duck-typed)
@@ -1315,6 +1316,161 @@ test("(11) regression: existing parent-completes-child-enqueued test passes unch
   assert.ok(
     readyEvents.some((e) => e.taskId === T_CHILD_ID),
     "task.ready event emitted for the newly-unblocked child",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story A — Daemon resolves the chain; runner takes a resolved provider
+// Story B — Empty chain fails loudly
+// ---------------------------------------------------------------------------
+
+const PROVIDER: GlobalAiProvider = {
+  id: "prov-001",
+  name: "test-provider",
+  provider: "openai-codex",
+  model: "gpt-5.6-sol",
+  baseUrl: null,
+  effort: null,
+  value: "sk-test",
+  state: "active",
+  credentialVersion: 1,
+  api: null,
+  contextWindow: null,
+  maxTokens: null,
+};
+
+test("(Story A) RunNextTask passes resolved provider from providerChainFor to runner as 3rd arg", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  let capturedProvider: unknown = undefined;
+  const capturingRunner: AgentRunner = {
+    async run(...args: unknown[]): Promise<TaskResult> {
+      capturedProvider = args[2];
+      return { outcome: "completed", summary: "fake" };
+    },
+  } as unknown as AgentRunner;
+  const resolver: AgentRunnerResolver = { for: () => capturingRunner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.deepEqual(
+    capturedProvider,
+    PROVIDER,
+    "runner must receive the resolved provider as 3rd arg",
+  );
+});
+
+test("(Story A) RunNextTask executes task without ai_provider/credential context when providerChainFor returns a provider", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const contexts = new Map([[TASK_SIMPLE.id, { repository: "res-1" }]]);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID, contexts);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "completed", taskId: TASK_SIMPLE.id });
+  assert.equal(runner.calls.length, 1, "runner must be called exactly once");
+});
+
+test("(Story B) RunNextTask fails task with typed error when providerChainFor returns empty chain", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+  const PROJECT_ID = "proj-for-story-b";
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [],
+    getProjectId: (_id: string) => PROJECT_ID,
+  } as any);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "failed", taskId: TASK_SIMPLE.id });
+
+  // task.failed event with the exact provider-resolution error (BLOCKER 5a: full-string equality with projectId)
+  const failedEvt = feed.events.find((e) => e.type === "task.failed");
+  assert.ok(failedEvt, "task.failed event must be emitted");
+  assert.equal(
+    failedEvt!.payload?.reason,
+    `no AI provider available for project ${PROJECT_ID}`,
+    "reason must be the exact full string with the resolved project id, not the initiative id",
+  );
+  assert.equal(
+    failedEvt!.payload?.reasonCode,
+    "no_provider_available",
+    "reasonCode must be 'no_provider_available'",
+  );
+
+  // Runner must NOT be called when the chain is empty
+  assert.equal(
+    runner.calls.length,
+    0,
+    "runner must not be called when chain is empty",
+  );
+});
+
+test("(Story B2) RunNextTask fails fake@1 task when providerChainFor returns empty chain (carve-out removed)", async () => {
+  const FAKE1_TASK_ID = "01JZZZZZZZZZZZZZZZZZZZTSK9";
+  const TASK_FAKE1: Task = {
+    ...TASK_SIMPLE,
+    id: FAKE1_TASK_ID,
+    agent: "fake@1",
+  };
+  const PROJECT_ID = "proj-for-story-b2";
+
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: FAKE1_TASK_ID };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_FAKE1 }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const runner = new FakeRunner({});
+  const resolver: AgentRunnerResolver = { for: () => runner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [],
+    getProjectId: (_id: string) => PROJECT_ID,
+  } as any);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, { outcome: "failed", taskId: FAKE1_TASK_ID });
+
+  // task.failed event with the exact provider-resolution error
+  const failedEvt = feed.events.find((e) => e.type === "task.failed");
+  assert.ok(failedEvt, "task.failed event must be emitted");
+  assert.equal(
+    failedEvt!.payload?.reason,
+    `no AI provider available for project ${PROJECT_ID}`,
+    "reason must be the exact full string with the resolved project id",
+  );
+  assert.equal(
+    failedEvt!.payload?.reasonCode,
+    "no_provider_available",
+    "reasonCode must be 'no_provider_available'",
+  );
+
+  // Runner must NOT be called when the chain is empty — even for fake@1 tasks
+  assert.equal(
+    runner.calls.length,
+    0,
+    "runner must not be called when chain is empty",
   );
 });
 

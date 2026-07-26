@@ -8,6 +8,7 @@ import {
   UnknownReferenceError,
   LoggedOutProviderError,
 } from "../domain/errors.ts";
+import { toResolvedProvider } from "./resolved-provider.ts";
 
 export class PiProviderProbe implements ProviderProbe {
   readonly #registry: AiProviderRegistry;
@@ -27,30 +28,14 @@ export class PiProviderProbe implements ProviderProbe {
       throw new LoggedOutProviderError(providerId, "test");
     }
 
-    // Build AIProvider-shape from the GlobalAiProvider record
-    const aiProvider = {
-      id: p.id,
-      type: "ai_provider" as const,
-      name: p.name,
-      provider: p.provider,
-      model: p.model,
-      ...(p.baseUrl !== null ? { baseUrl: p.baseUrl } : {}),
-      ...(p.effort !== null ? { effort: p.effort as any } : {}),
-      ...(p.api !== null ? { api: p.api } : {}),
-      ...(p.contextWindow !== null ? { contextWindow: p.contextWindow } : {}),
-      ...(p.maxTokens !== null ? { maxTokens: p.maxTokens } : {}),
-    };
+    // Build ResolvedProvider from the GlobalAiProvider record
+    const resolvedProvider = toResolvedProvider(p);
 
-    // Build Credential-shape from the GlobalAiProvider record
-    const credential = {
-      id: p.id,
-      type: "credential" as const,
-      name: p.name,
-      provider: p.provider,
-      value: p.value ?? "",
-    };
-
-    const session = await this.#sessions.for(aiProvider, credential);
+    const session = await this.#sessions.for(
+      resolvedProvider,
+      undefined,
+      p.credentialVersion,
+    );
 
     // Drain the stream: collect text_delta deltas only
     const chunks: string[] = [];

@@ -17,6 +17,7 @@ import type {
   ProviderSessionFactory,
   SessionContext,
 } from "./pi-session.ts";
+import type { ResolvedProvider } from "./port.ts";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -88,11 +89,10 @@ export function fakeSessionFactoryFromTurns(
   };
   return {
     async for(
-      _aiProvider,
-      _credential,
-      context?: SessionContext,
+      _provider: ResolvedProvider,
+      _ctx?: SessionContext,
     ): Promise<ProviderSession> {
-      const fake = new FakeSessionFactory(selectTurns(context));
+      const fake = new FakeSessionFactory(selectTurns(_ctx));
       return {
         model: {} as ProviderSession["model"],
         streamFn: fake.streamFn as unknown as ProviderSession["streamFn"],
