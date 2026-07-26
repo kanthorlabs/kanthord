@@ -228,6 +228,40 @@ export class IncompatibleProviderCredentialError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// EPIC 007.19 Story 1 — preflight refusal of uncreatable objective refs.
+// An objective ref is unresolvable when a task's objectiveRef resolves to an
+// id that does not correspond to an existing objective in the DB and cannot
+// be created through --apply.
+// ---------------------------------------------------------------------------
+
+export class UncreatableObjectiveError extends Error {
+  readonly initiativeId: string;
+  readonly unresolvable: ReadonlyArray<{
+    objectiveRef: string;
+    taskRefs: string[];
+  }>;
+
+  constructor(
+    initiativeId: string,
+    unresolvable: ReadonlyArray<{
+      objectiveRef: string;
+      taskRefs: string[];
+    }>,
+  ) {
+    const refsList = unresolvable
+      .map((u) => `${u.objectiveRef} (blocked tasks: ${u.taskRefs.join(", ")})`)
+      .join("; ");
+    super(
+      `Cannot apply: uncreatable objective(s) — ${refsList}. ` +
+        `To create them, run: kanthord create objective --initiative ${initiativeId}`,
+    );
+    this.name = "UncreatableObjectiveError";
+    this.initiativeId = initiativeId;
+    this.unresolvable = unresolvable;
+  }
+}
+
 // One or more tasks have an executor whose required binding set is not fully
 // satisfied by the resolved context. Collects ALL violations in one report.
 export class ExecutorBindingSetError extends Error {

@@ -33,6 +33,7 @@ import {
   CrossInitiativeError,
   UnknownNodeError,
   StaleManifestError,
+  UncreatableObjectiveError,
 } from "./import-errors.ts";
 import { GRAPH_FORMAT_VERSION } from "./format.ts";
 
@@ -669,6 +670,26 @@ export class ApplyGraph {
     let freshNodeShas: Record<string, string> | undefined;
     let createdNodes:
       Array<{ ref: string; id: string; sourcePath?: string }> | undefined;
+
+    // --- Preflight: refuse uncreatable objective refs (EPIC 007.19 Story 1) ---
+    // An objective ref is uncreatable when resolveObjectiveId returns a value
+    // that does not correspond to an existing DB objective (checked by
+    // getSha256) and the objective was not in the package with a persisted id.
+    const unresolvableByRef = new Map<string, string[]>();
+    for (const task of pkg.tasks) {
+      const resolved = resolveObjectiveId(task.objectiveRef);
+      if (this.#deps.initiatives.getSha256(resolved) === undefined) {
+        const refs = unresolvableByRef.get(task.objectiveRef) ?? [];
+        refs.push(task.ref);
+        unresolvableByRef.set(task.objectiveRef, refs);
+      }
+    }
+    if (unresolvableByRef.size > 0) {
+      const unresolvable = [...unresolvableByRef.entries()].map(
+        ([objectiveRef, taskRefs]) => ({ objectiveRef, taskRefs }),
+      );
+      throw new UncreatableObjectiveError(input.initiativeId, unresolvable);
+    }
 
     if (
       conflicts.length === 0 &&

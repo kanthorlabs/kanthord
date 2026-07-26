@@ -28,6 +28,7 @@ import { newId } from "../../domain/entity.ts";
 import { GRAPH_FORMAT_VERSION } from "../../app/graph/format.ts";
 import {
   StaleManifestError,
+  UncreatableObjectiveError,
   UnknownNodeError,
 } from "../../app/graph/import-errors.ts";
 
@@ -1371,6 +1372,80 @@ test("EPIC 007.18 Story 3 — an UnknownNodeError from ApplyGraph returns exitCo
   assert.equal(result.exitCode, 1);
   assert.deepEqual(result.stdout, []);
   assert.deepEqual(result.stderr, [`error: ${err.message}`]);
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.19 Story 2 — CLI maps UncreatableObjectiveError to one stderr line
+// ---------------------------------------------------------------------------
+
+test("EPIC 007.19 Story 2 — UncreatableObjectiveError maps to exitCode 1, one stderr line, empty stdout", async () => {
+  const dir = await makeExportedDir();
+  const err = new UncreatableObjectiveError(DR_INIT_ID, [
+    { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+  ]);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.deepEqual(result.stderr, [`error: ${err.message}`]);
+});
+
+test("EPIC 007.19 Story 2 — the stderr message names the objective ref and the remedy command", async () => {
+  const dir = await makeExportedDir();
+  const err = new UncreatableObjectiveError(DR_INIT_ID, [
+    { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+  ]);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.ok(
+    result.stderr[0]!.includes("orphan-obj"),
+    `stderr must name the objective ref "orphan-obj"; got: ${result.stderr[0]}`,
+  );
+  assert.ok(
+    result.stderr[0]!.includes("kanthord create objective --initiative"),
+    `stderr must include the remedy command; got: ${result.stderr[0]}`,
+  );
+});
+
+test("EPIC 007.19 Story 2 — UncreatableObjectiveError is handled, not an unhandled rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new UncreatableObjectiveError(DR_INIT_ID, [
+    { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+  ]);
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  // Must resolve (not reject) — the error is mapped by toResult, not re-thrown
+  const result = await runImportGraph(
+    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { createGraph: new FakeCreateGraph(), applyGraph, newId },
+  );
+
+  assert.equal(result.exitCode, 1);
+});
+
+test("EPIC 007.19 Story 2 — regression: an unregistered error still re-throws as an unhandled rejection", async () => {
+  const dir = await makeExportedDir();
+  const err = new Error("boom");
+  const applyGraph = new FakeApplyGraphThatThrows(err);
+
+  await assert.rejects(
+    () =>
+      runImportGraph(
+        { dir, create: false, apply: true, initiative: DR_INIT_ID },
+        { createGraph: new FakeCreateGraph(), applyGraph, newId },
+      ),
+    { message: "boom" },
+  );
 });
 
 // ---------------------------------------------------------------------------

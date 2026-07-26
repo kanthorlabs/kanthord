@@ -26,6 +26,7 @@ import {
   CreateModeIdError,
   DriftConflictError,
   StaleManifestError,
+  UncreatableObjectiveError,
 } from "../../app/graph/import-errors.ts";
 import {
   ImmutableFieldError,
@@ -66,6 +67,7 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof CreateModeIdError ||
     err instanceof DriftConflictError ||
     err instanceof StaleManifestError ||
+    err instanceof UncreatableObjectiveError ||
     err instanceof EmbeddedCredentialError ||
     err instanceof UnknownModelError ||
     err instanceof SequencingLockedError ||

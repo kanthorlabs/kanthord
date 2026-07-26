@@ -33,7 +33,11 @@ import {
 } from "../../domain/task.ts";
 import { StoreGraph } from "./store-graph.ts";
 import { CycleError, UnknownDependencyError } from "../../domain/graph.ts";
-import { StaleManifestError } from "./import-errors.ts";
+import {
+  StaleManifestError,
+  UncreatableObjectiveError,
+  UnknownNodeError,
+} from "./import-errors.ts";
 import { GRAPH_FORMAT_VERSION } from "./format.ts";
 // Real SQLite adapters — used in Story 07 T3d integration test only.
 import { openDatabase } from "../../storage/sqlite/open.ts";
@@ -1850,27 +1854,18 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
   });
 
   /**
-   * EPIC 007.18 regression (human-B1-followup, related still-open case) — a
-   * task's `objective:` field names a package-local objective ref that does
-   * NOT exist anywhere in this package's `objectives` list (a typo, or an
-   * objective the author forgot to author) and is not a live DB row either.
-   * `resolveObjectiveId` falls through unchanged to the bare ref slug (per
-   * `apply-graph.ts`'s `objRefToId.get(ref) ?? ref`), and the write phase
-   * creates the task but never creates the missing objective — so today this
-   * reaches `SqliteTaskRepository.save` with a bare, unresolved slug as
-   * `objectiveId`, crashing with a raw `FOREIGN KEY constraint failed`. The
-   * repository-boundary guard must turn this into the SAME typed,
-   * diagnosable error as the direct repository test, propagated out of
-   * `ApplyGraph.execute`, rather than an opaque SQLite crash.
+   * EPIC 007.18 regression — a task naming a nonexistent package-local
+   * objective ref fails with a typed error. EPIC 007.18 originally added a
+   * repository-boundary guard that threw `InvalidObjectiveIdError`. EPIC
+   * 007.19 Story 1 moved detection earlier (preflight, before the write gate)
+   * and uses `UncreatableObjectiveError` instead — the old guard is now
+   * unreachable through this path, which is intentional (see EPIC 007.19
+   * decision record: "makes it unreachable").
    *
    * The ref stays a plain slug ("ghost-obj"), deliberately NOT ULID-shaped:
-   * `apply-graph.ts` (:457-466) already has a separate, pre-existing
-   * existence check that only runs for ULID-SHAPED `objectiveRef` values (it
-   * throws `UnknownNodeError`, a different error, before reaching the write
-   * phase at all). A non-ULID slug is the case that check does not cover,
-   * so it is this test's only path to the repository-boundary guard this
-   * blocker is about. Either way the assertion is about EXISTENCE — the ref
-   * names no objective, in the package or the DB — never about string shape.
+   * `apply-graph.ts` (:457-466) already has a separate ULID existence check
+   * that throws `UnknownNodeError`. A non-ULID slug passes that check and
+   * reaches the EPIC 007.19 preflight.
    */
   test("EPIC 007.18 regression — a task naming a nonexistent package-local objective ref fails with a typed error, not a raw FK crash", async () => {
     const dir = mkdtempSync(
@@ -1949,10 +1944,14 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     await assert.rejects(
       () => uc.execute({ pkg, initiativeId }),
       (err: unknown) => {
-        if (!(err instanceof InvalidObjectiveIdError)) {
-          assert.fail(`expected InvalidObjectiveIdError, got ${String(err)}`);
-        }
-        assert.equal(err.objectiveId, "ghost-obj");
+        assert.ok(
+          err instanceof UncreatableObjectiveError,
+          `expected UncreatableObjectiveError (EPIC 007.19 preflight), got ${String(err)}`,
+        );
+        assert.equal(err.initiativeId, initiativeId);
+        assert.deepEqual(err.unresolvable, [
+          { objectiveRef: "ghost-obj", taskRefs: ["new-task"] },
+        ]);
         return true;
       },
       "a task naming a nonexistent package-local objective must fail with a typed error, not a raw FOREIGN KEY crash",
@@ -3767,5 +3766,373 @@ describe("Story 5c — apply-path after edge handling", () => {
 
     assert.equal(result.applied, true);
     assert.deepEqual(sequencing.listInitiativeAfter(INIT_ID), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 007.19 Story 1 — preflight refusal of uncreatable objectives
+// ---------------------------------------------------------------------------
+
+describe("EPIC 007.19 Story 1 — preflight refusal of uncreatable objectives", () => {
+  /**
+   * Package with an id-less objective and a task referencing it must be
+   * rejected with UncreatableObjectiveError before any write.
+   */
+  test("(S1-1) refusal fires for an id-less objective referenced by a task", async () => {
+    const pkg = makeBasePackage();
+    pkg.objectives.push({
+      ref: "orphan-obj",
+      name: "Orphan objective",
+      initiativeRef: INIT_ID,
+      sourcePath: "orphan/objective.md",
+    });
+    pkg.tasks.push({
+      ref: "orphan-task",
+      objectiveRef: "orphan-obj",
+      title: "Orphan task",
+      instructions: "do it",
+      ac: ["works"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: [],
+      sourcePath: "orphan/task.md",
+    });
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UncreatableObjectiveError,
+          `expected UncreatableObjectiveError, got ${String(err)}`,
+        );
+        assert.equal(err.initiativeId, INIT_ID);
+        assert.deepEqual(err.unresolvable, [
+          { objectiveRef: "orphan-obj", taskRefs: ["orphan-task"] },
+        ]);
+        return true;
+      },
+    );
+  });
+
+  /**
+   * Same package with --dry-run must also be rejected — the throw is before
+   * the write gate, so --dry-run and --apply take the same path.
+   */
+  test("(S1-2) --dry-run throws UncreatableObjectiveError too", async () => {
+    const pkg = makeBasePackage();
+    pkg.objectives.push({
+      ref: "orphan-obj",
+      name: "Orphan objective",
+      initiativeRef: INIT_ID,
+      sourcePath: "orphan/objective.md",
+    });
+    pkg.tasks.push({
+      ref: "orphan-task",
+      objectiveRef: "orphan-obj",
+      title: "Orphan task",
+      instructions: "do it",
+      ac: ["works"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: [],
+      sourcePath: "orphan/task.md",
+    });
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID, dryRun: true }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UncreatableObjectiveError,
+          `expected UncreatableObjectiveError for --dry-run, got ${String(err)}`,
+        );
+        return true;
+      },
+    );
+  });
+
+  /**
+   * After the rejection, no CAS write or import-map reserve was attempted.
+   */
+  test("(S1-3) nothing is written after the refusal — CAS spy count stays 0", async () => {
+    const { initiatives } = makeBaseDb();
+    const tasks = new FakeTaskRepositoryWithCas();
+    tasks.seed(
+      {
+        id: TASK1_ID,
+        objectiveId: OBJ1_ID,
+        title: "Implement API",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [],
+      },
+      TASK1_BASE_SHA,
+    );
+    tasks.seed(
+      {
+        id: TASK2_ID,
+        objectiveId: OBJ1_ID,
+        title: "Deploy",
+        instructions: "deploy it",
+        ac: ["health check green"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [TASK1_ID],
+      },
+      TASK2_BASE_SHA,
+    );
+    const importMap = new FakeGraphImportMapWithSpy();
+    const pkg = makeBasePackage();
+    pkg.objectives.push({
+      ref: "orphan-obj",
+      name: "Orphan objective",
+      initiativeRef: INIT_ID,
+      sourcePath: "orphan/objective.md",
+    });
+    pkg.tasks.push({
+      ref: "orphan-task",
+      objectiveRef: "orphan-obj",
+      title: "Orphan task",
+      instructions: "do it",
+      ac: ["works"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: [],
+      sourcePath: "orphan/task.md",
+    });
+    const deps = {
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap,
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    };
+    const uc = new ApplyGraph(deps);
+    await assert.rejects(() => uc.execute({ pkg, initiativeId: INIT_ID }));
+    assert.equal(
+      tasks.compareAndApplyCount,
+      0,
+      "the refusal must throw before any CAS write is attempted",
+    );
+    assert.equal(
+      importMap.reserveCount,
+      0,
+      "the refusal must throw before any import-map reserve is attempted",
+    );
+  });
+
+  /**
+   * Multiple id-less objectives are aggregated into one error with ordered
+   * groups — first-encounter order for refs, encounter order for task refs.
+   */
+  test("(S1-4) aggregation and order — two objectives, three tasks", async () => {
+    const pkg = makeBasePackage();
+    pkg.objectives.push(
+      {
+        ref: "orphan-a",
+        name: "Orphan A",
+        initiativeRef: INIT_ID,
+        sourcePath: "orphan/a.md",
+      },
+      {
+        ref: "orphan-b",
+        name: "Orphan B",
+        initiativeRef: INIT_ID,
+        sourcePath: "orphan/b.md",
+      },
+    );
+    pkg.tasks.push(
+      {
+        ref: "t1",
+        objectiveRef: "orphan-a",
+        title: "Task 1",
+        instructions: "do",
+        ac: ["ok"],
+        agent: "generic@1",
+        verification: undefined,
+        dependencies: [],
+        sourcePath: "orphan/t1.md",
+      },
+      {
+        ref: "t2",
+        objectiveRef: "orphan-b",
+        title: "Task 2",
+        instructions: "do",
+        ac: ["ok"],
+        agent: "generic@1",
+        verification: undefined,
+        dependencies: [],
+        sourcePath: "orphan/t2.md",
+      },
+      {
+        ref: "t3",
+        objectiveRef: "orphan-a",
+        title: "Task 3",
+        instructions: "do",
+        ac: ["ok"],
+        agent: "generic@1",
+        verification: undefined,
+        dependencies: [],
+        sourcePath: "orphan/t3.md",
+      },
+    );
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UncreatableObjectiveError,
+          `expected UncreatableObjectiveError, got ${String(err)}`,
+        );
+        assert.deepEqual(err.unresolvable, [
+          { objectiveRef: "orphan-a", taskRefs: ["t1", "t3"] },
+          { objectiveRef: "orphan-b", taskRefs: ["t2"] },
+        ]);
+        return true;
+      },
+    );
+  });
+
+  /**
+   * The error message must name the orphan objective ref and the remedy
+   * command — this is what the Proof script's grep assertions depend on.
+   */
+  test("(S1-5) message names the ref and the remedy command", async () => {
+    const pkg = makeBasePackage();
+    pkg.objectives.push({
+      ref: "orphan-obj",
+      name: "Orphan objective",
+      initiativeRef: INIT_ID,
+      sourcePath: "orphan/objective.md",
+    });
+    pkg.tasks.push({
+      ref: "orphan-task",
+      objectiveRef: "orphan-obj",
+      title: "Orphan task",
+      instructions: "do it",
+      ac: ["works"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: [],
+      sourcePath: "orphan/task.md",
+    });
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UncreatableObjectiveError,
+          `expected UncreatableObjectiveError, got ${String(err)}`,
+        );
+        assert.ok(
+          err.message.includes("orphan-obj"),
+          `message must name the objective ref "orphan-obj"; got: ${err.message}`,
+        );
+        assert.ok(
+          err.message.includes("kanthord create objective --initiative"),
+          `message must include the remedy command; got: ${err.message}`,
+        );
+        return true;
+      },
+    );
+  });
+
+  /**
+   * A fully resolvable package (unmodified makeBasePackage) does not throw
+   * UncreatableObjectiveError — the gate must not be a blanket refusal.
+   */
+  test("(S1-6) regression — fully resolvable package does not throw", async () => {
+    const uc = new ApplyGraph(makeDeps());
+    const result = await uc.execute({
+      pkg: makeBasePackage(),
+      initiativeId: INIT_ID,
+    });
+    assert.equal(result.applied, true);
+  });
+
+  /**
+   * A task whose objectiveRef is a ULID present in the DB but not in the
+   * package's objectives list resolves through getSha256 without error.
+   */
+  test("(S1-7) regression — live DB objective not in the package still resolves", async () => {
+    const { initiatives, tasks } = makeBaseDb();
+    // Seed a second objective (OBJ2_ID) that is NOT in the base package.
+    initiatives.seed(
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      INIT_BASE_SHA,
+      [
+        {
+          obj: { id: OBJ2_ID, initiativeId: INIT_ID, name: "frontend" },
+          sha: OBJ2_BASE_SHA,
+        },
+      ],
+    );
+    const pkg = makeBasePackage();
+    // Add a task whose objectiveRef is OBJ2_ID — a ULID that IS in the DB
+    // but is NOT in pkg.objectives.
+    pkg.tasks.push({
+      ref: "obj2-task",
+      objectiveRef: OBJ2_ID,
+      title: "Task under OBJ2",
+      instructions: "do it",
+      ac: ["works"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: [],
+      sourcePath: "obj2/task.md",
+    });
+    const deps = {
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    };
+    const uc = new ApplyGraph(deps);
+    // Must not throw UncreatableObjectiveError — resolves normally.
+    const result = await uc.execute({ pkg, initiativeId: INIT_ID });
+    assert.ok(
+      result.applied,
+      "a package with a DB-only objective ULID must apply",
+    );
+  });
+
+  /**
+   * A task whose objectiveRef is a ULID absent from both the package and
+   * the DB must be rejected by the earlier ULID check (UnknownNodeError),
+   * not by the new UncreatableObjectiveError check.
+   */
+  test("(S1-8) ordering vs UnknownNodeError — absent ULID throws UnknownNodeError, not UncreatableObjectiveError", async () => {
+    const pkg = makeBasePackage();
+    // UNKNOWN_ID is a ULID absent from both the package objectives and the DB.
+    pkg.tasks.push({
+      ref: "ghost-task",
+      objectiveRef: UNKNOWN_ID,
+      title: "Ghost task",
+      instructions: "do it",
+      ac: ["works"],
+      agent: "generic@1",
+      verification: undefined,
+      dependencies: [],
+      sourcePath: "ghost/task.md",
+    });
+    const uc = new ApplyGraph(makeDeps());
+    await assert.rejects(
+      () => uc.execute({ pkg, initiativeId: INIT_ID }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UnknownNodeError,
+          `expected UnknownNodeError for absent ULID, got ${String(err)}`,
+        );
+        assert.ok(
+          !(err instanceof UncreatableObjectiveError),
+          "must not be UncreatableObjectiveError — ULID check runs first",
+        );
+        return true;
+      },
+    );
   });
 });
