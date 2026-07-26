@@ -347,3 +347,250 @@ test("SqliteAiProviderRegistry: remove of the current default deletes the ai_pro
     "pointer row must be gone after removing the default",
   );
 });
+
+// ── 008.2 Story A — project assignment store ─────────────────────────────────
+
+test("SqliteAiProviderRegistry: assign two providers at ranks 0 and 1, listAssigned returns rank order, maxRank returns 1", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projectId = "test-proj";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId,
+    "Test",
+  );
+
+  const p1 = registry.register({
+    name: "assign-alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-1",
+  });
+  const p2 = registry.register({
+    name: "assign-beta",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    value: "sk-2",
+  });
+
+  registry.assign(projectId, p1.id, 0);
+  registry.assign(projectId, p2.id, 1);
+
+  const assigned = registry.listAssigned(projectId);
+  assert.equal(assigned.length, 2);
+  assert.equal(assigned[0]!.id, p1.id);
+  assert.equal(assigned[1]!.id, p2.id);
+  assert.equal(registry.maxRank(projectId), 1);
+});
+
+test("SqliteAiProviderRegistry: duplicate assign (same projectId, providerId) throws", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projectId = "test-proj-dup";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId,
+    "Test",
+  );
+  const p1 = registry.register({
+    name: "dup-alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-1",
+  });
+
+  registry.assign(projectId, p1.id, 0);
+  assert.throws(() => registry.assign(projectId, p1.id, 1));
+});
+
+test("SqliteAiProviderRegistry: two assigns with the same rank throws UNIQUE constraint", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projectId = "test-proj-rank";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId,
+    "Test",
+  );
+  const p1 = registry.register({
+    name: "runk-alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-1",
+  });
+  const p2 = registry.register({
+    name: "runk-beta",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    value: "sk-2",
+  });
+
+  registry.assign(projectId, p1.id, 0);
+  assert.throws(() => registry.assign(projectId, p2.id, 0));
+});
+
+test("SqliteAiProviderRegistry: shiftRanksFrom then insert at 0 keeps order total; compactRanks turns gaps into contiguous", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projectId = "test-proj-shift";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId,
+    "Test",
+  );
+  const p1 = registry.register({
+    name: "shift-alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-1",
+  });
+  const p2 = registry.register({
+    name: "shift-beta",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    value: "sk-2",
+  });
+  const p3 = registry.register({
+    name: "shift-gamma",
+    provider: "openai-codex",
+    model: "gpt-5.6-luna",
+    value: "sk-3",
+  });
+
+  registry.assign(projectId, p1.id, 1);
+  registry.assign(projectId, p2.id, 2);
+
+  registry.shiftRanksFrom(projectId, 0);
+  registry.assign(projectId, p3.id, 0);
+
+  let assigned = registry.listAssigned(projectId);
+  assert.equal(assigned.length, 3);
+  assert.equal(assigned[0]!.id, p3.id);
+  assert.equal(assigned[1]!.id, p1.id);
+  assert.equal(assigned[2]!.id, p2.id);
+
+  // compactRanks: insert at ranks 0,2,5 and compress to 0,1,2
+  const projectId2 = "test-proj-compact";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId2,
+    "Compact",
+  );
+  const p4 = registry.register({
+    name: "compact-a",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-4",
+  });
+  const p5 = registry.register({
+    name: "compact-b",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    value: "sk-5",
+  });
+  const p6 = registry.register({
+    name: "compact-c",
+    provider: "openai-codex",
+    model: "gpt-5.6-luna",
+    value: "sk-6",
+  });
+
+  registry.assign(projectId2, p4.id, 0);
+  registry.assign(projectId2, p5.id, 2);
+  registry.assign(projectId2, p6.id, 5);
+
+  registry.compactRanks(projectId2);
+
+  const compacted = registry.listAssigned(projectId2);
+  assert.equal(compacted.length, 3);
+  assert.equal(compacted[0]!.id, p4.id);
+  assert.equal(compacted[1]!.id, p5.id);
+  assert.equal(compacted[2]!.id, p6.id);
+  assert.equal(registry.maxRank(projectId2), 2);
+});
+
+test("SqliteAiProviderRegistry: unassign removes one; getAssignment undefined after", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projectId = "test-proj-unassign";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId,
+    "Test",
+  );
+  const p1 = registry.register({
+    name: "unassign-alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-1",
+  });
+
+  registry.assign(projectId, p1.id, 0);
+
+  const before = registry.getAssignment(projectId, p1.id);
+  assert.notEqual(before, undefined);
+  assert.equal(before!.rank, 0);
+
+  registry.unassign(projectId, p1.id);
+
+  const assignmentAfter = registry.getAssignment(projectId, p1.id);
+  assert.equal(assignmentAfter, undefined);
+});
+
+test("SqliteAiProviderRegistry: listProjectsAssigning returns every project that assigns a provider", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projA = "proj-list-a";
+  const projB = "proj-list-b";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projA,
+    "Project A",
+  );
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projB,
+    "Project B",
+  );
+
+  const p1 = registry.register({
+    name: "list-alpha",
+    provider: "openai-codex",
+    model: "gpt-5.6-terra",
+    value: "sk-1",
+  });
+  const p2 = registry.register({
+    name: "list-beta",
+    provider: "openai-codex",
+    model: "gpt-5.6-sol",
+    value: "sk-2",
+  });
+
+  registry.assign(projA, p1.id, 0);
+  registry.assign(projA, p2.id, 1);
+  registry.assign(projB, p1.id, 0);
+
+  const assigningP1 = registry.listProjectsAssigning(p1.id);
+  assert.equal(assigningP1.length, 2);
+  assert.ok(assigningP1.includes(projA));
+  assert.ok(assigningP1.includes(projB));
+
+  const assigningP2 = registry.listProjectsAssigning(p2.id);
+  assert.deepEqual(assigningP2, [projA]);
+});

@@ -7,6 +7,10 @@ import type { SetDefaultAiProvider } from "../../app/ai-provider/set-default-ai-
 import type { ListAiProviders } from "../../app/ai-provider/list-ai-providers.ts";
 import type { LogoutAiProvider } from "../../app/ai-provider/logout-ai-provider.ts";
 import type { RemoveAiProvider } from "../../app/ai-provider/remove-ai-provider.ts";
+import type { AssignAiProvider } from "../../app/ai-provider/assign-ai-provider.ts";
+import type { UnassignAiProvider } from "../../app/ai-provider/unassign-ai-provider.ts";
+import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-chain.ts";
+import { InvalidRankError } from "../../app/ai-provider/errors.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 import { readCredentialValue } from "./credential-input.ts";
 
@@ -164,20 +168,26 @@ export function runLogoutAiProvider(
 export function runRemoveAiProvider(
   args: Record<string, unknown>,
   removeAiProvider: RemoveAiProvider,
-  providerInfo?: { name: string; provider: string },
+  providerInfo?: { name: string; provider: string; isDefault?: boolean },
 ): HandlerResult {
   try {
     const id = requireFlag(args, "id");
     const replacement =
       typeof args["replacement"] === "string" ? args["replacement"] : undefined;
     const confirmNoDefault = args["confirmNoDefault"] === true;
-    removeAiProvider.execute(id, { replacement, confirmNoDefault });
+    const cascade = args["cascade"] === true;
+    removeAiProvider.execute(id, {
+      ...(replacement !== undefined ? { replacement } : {}),
+      ...(confirmNoDefault ? { confirmNoDefault: true } : {}),
+      ...(cascade ? { cascade: true } : {}),
+    });
 
     const audit = providerInfo
       ? `remove: ${id} (${providerInfo.provider}/${providerInfo.name})`
       : `remove: ${id}`;
     const stderr: string[] = [audit];
-    if (replacement) {
+    // S4: only print "default reassigned" when the removed provider was actually the default.
+    if (replacement && providerInfo?.isDefault) {
       stderr.push(`default reassigned to ${replacement}`);
     }
     if (confirmNoDefault) {
@@ -185,6 +195,77 @@ export function runRemoveAiProvider(
     }
 
     return { exitCode: 0, stdout: [id], stderr };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export function runAssignAiProvider(
+  args: Record<string, unknown>,
+  assignAiProvider: AssignAiProvider,
+): HandlerResult {
+  try {
+    const projectId = requireFlag(args, "project");
+    const providerId = requireFlag(args, "provider");
+    let rank =
+      typeof args["rank"] === "number" ? (args["rank"] as number) : undefined;
+
+    // B4: validate --rank is a non-negative integer.
+    if (rank !== undefined) {
+      if (!Number.isInteger(rank) || rank < 0) {
+        throw new InvalidRankError(rank);
+      }
+    }
+
+    const input: { projectId: string; providerId: string; rank?: number } = {
+      projectId,
+      providerId,
+    };
+    if (rank !== undefined) {
+      input.rank = rank;
+    }
+
+    assignAiProvider.execute(input);
+    return { exitCode: 0, stdout: [], stderr: [] };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export function runUnassignAiProvider(
+  args: Record<string, unknown>,
+  unassignAiProvider: UnassignAiProvider,
+): HandlerResult {
+  try {
+    const projectId = requireFlag(args, "project");
+    const providerId = requireFlag(args, "provider");
+
+    unassignAiProvider.execute({ projectId, providerId });
+    return { exitCode: 0, stdout: [], stderr: [] };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export function runResolveProjectChain(
+  args: Record<string, unknown>,
+  resolveProjectChain: ResolveProjectChain,
+): HandlerResult {
+  try {
+    const projectId = requireFlag(args, "project");
+    const views = resolveProjectChain.execute(projectId);
+    const isJson = args["json"] === true;
+    if (isJson) {
+      return { exitCode: 0, stdout: [JSON.stringify(views)], stderr: [] };
+    }
+    return {
+      exitCode: 0,
+      stdout: views.map((v) => `${v.id}  ${v.name}`),
+      stderr: [],
+    };
   } catch (err) {
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };

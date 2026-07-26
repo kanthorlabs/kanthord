@@ -111,6 +111,9 @@ import { ListAiProviders } from "./app/ai-provider/list-ai-providers.ts";
 import { SetDefaultAiProvider } from "./app/ai-provider/set-default-ai-provider.ts";
 import { LogoutAiProvider } from "./app/ai-provider/logout-ai-provider.ts";
 import { RemoveAiProvider } from "./app/ai-provider/remove-ai-provider.ts";
+import { AssignAiProvider } from "./app/ai-provider/assign-ai-provider.ts";
+import { UnassignAiProvider } from "./app/ai-provider/unassign-ai-provider.ts";
+import { ResolveProjectChain } from "./app/ai-provider/resolve-project-chain.ts";
 import { GitRepositoryPublisher } from "./publication/git.ts";
 import { PublishRepository } from "./app/repository/publish-repository.ts";
 import { isRepository } from "./domain/resource.ts";
@@ -228,6 +231,20 @@ export function buildDeps(
   const setDefaultAiProvider = new SetDefaultAiProvider(aiProviderRegistry);
   const logoutAiProvider = new LogoutAiProvider(aiProviderRegistry, unitOfWork);
   const removeAiProvider = new RemoveAiProvider(aiProviderRegistry, unitOfWork);
+  const assignAiProvider = new AssignAiProvider(
+    aiProviderRegistry,
+    referenceResolver,
+    unitOfWork,
+  );
+  const unassignAiProvider = new UnassignAiProvider(
+    aiProviderRegistry,
+    referenceResolver,
+    unitOfWork,
+  );
+  const resolveProjectChain = new ResolveProjectChain(
+    aiProviderRegistry,
+    referenceResolver,
+  );
   const getResource = new GetResource(projectRepository, publicationRepository);
   const listResources = new ListResources(projectRepository);
   const homePathExists = async (path: string): Promise<boolean> => {
@@ -857,6 +874,9 @@ export function buildDeps(
     setDefaultAiProvider,
     logoutAiProvider,
     removeAiProvider,
+    assignAiProvider,
+    unassignAiProvider,
+    resolveProjectChain,
     resolveHomeDir,
     workspaces,
     newId,

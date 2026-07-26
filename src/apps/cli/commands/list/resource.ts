@@ -3,7 +3,10 @@ import { Command } from "commander";
 import type { CliDeps } from "../../deps.ts";
 import type { ResourceType } from "../../resource.ts";
 import { runListResources } from "../../resource.ts";
-import { runListAiProviders } from "../../ai-provider.ts";
+import {
+  runListAiProviders,
+  runResolveProjectChain,
+} from "../../ai-provider.ts";
 import { emitResult } from "../action.ts";
 import type { CliIo } from "../action.ts";
 
@@ -54,13 +57,12 @@ export function buildListAiProviderCommand(deps: CliDeps, io: CliIo): Command {
     .action((opts: { project?: string; json?: boolean }) => {
       if (opts.project) {
         emitResult(
-          runListResources(
+          runResolveProjectChain(
             {
               project: opts.project,
               ...(opts.json ? { json: true } : {}),
             },
-            "ai_provider",
-            deps.listResources,
+            deps.resolveProjectChain,
           ),
           io,
         );

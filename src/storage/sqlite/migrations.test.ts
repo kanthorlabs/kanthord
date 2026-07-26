@@ -67,9 +67,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 22 and creates all tables including ai_providers and edge tables", () => {
+test("migrates to version 23 and creates all tables including project_ai_providers", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 22);
+    assert.equal(userVersion(db), 23);
     assert.deepEqual(userTables(db), [
       "ai_provider_default",
       "ai_providers",
@@ -83,6 +83,7 @@ test("migrates to version 22 and creates all tables including ai_providers and e
       "objective_dependencies",
       "objectives",
       "observability_refs",
+      "project_ai_providers",
       "projects",
       "publications",
       "repo_locks",
@@ -238,6 +239,11 @@ test("schema columns match locked DDL for all tables", () => {
     assert.deepEqual(columnNames(db, "ai_provider_default"), [
       "id",
       "providerId",
+    ]);
+    assert.deepEqual(columnNames(db, "project_ai_providers"), [
+      "projectId",
+      "providerId",
+      "rank",
     ]);
   });
 });
@@ -437,7 +443,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 22);
+    assert.equal(second.version, 23);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -850,8 +856,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      22,
-      "schema version must be 22 after all migrations",
+      23,
+      "schema version must be 23 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -983,7 +989,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 22);
+    assert.equal(userVersion(db), 23);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1087,7 +1093,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 22);
+    assert.equal(userVersion(db), 23);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1166,7 +1172,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 22);
+    assert.equal(userVersion(db), 23);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1203,7 +1209,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 22);
+    assert.equal(report.version, 23);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1498,7 +1504,82 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 22);
+    assert.equal(userVersion(db), 23);
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── (w) migration 23 — 008.2 project_ai_providers UNIQUE constraints ─────────
+
+test("migration 23 project_ai_providers UNIQUE(projectId,providerId) rejects duplicate assignment", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m23-uniq-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 23);
+
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-uniq', 'P');
+      INSERT INTO ai_providers(id, name, provider, model, value, state)
+        VALUES ('prov-a', 'A', 'o', 'm', 'v', 'active');
+      INSERT INTO ai_providers(id, name, provider, model, value, state)
+        VALUES ('prov-b', 'B', 'o', 'm', 'v', 'active');
+    `);
+
+    // First insert must succeed
+    db.prepare(
+      "INSERT INTO project_ai_providers(projectId, providerId, rank) VALUES (?, ?, ?)",
+    ).run("proj-uniq", "prov-a", 0);
+
+    // Duplicate (projectId, providerId) must be rejected
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO project_ai_providers(projectId, providerId, rank) VALUES (?, ?, ?)",
+      ).run("proj-uniq", "prov-a", 1);
+    }, "UNIQUE(projectId,providerId) must reject duplicate assignment");
+
+    // Same provider under a different project must succeed
+    db.exec("INSERT INTO projects(id, name) VALUES ('proj-uniq2', 'Q')");
+    assert.doesNotThrow(() => {
+      db.prepare(
+        "INSERT INTO project_ai_providers(projectId, providerId, rank) VALUES (?, ?, ?)",
+      ).run("proj-uniq2", "prov-a", 0);
+    }, "same provider under different project must be accepted");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two members at same rank", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m23-rank-uniq-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    migrate(db, MIGRATIONS);
+    assert.equal(userVersion(db), 23);
+
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-rank', 'P');
+      INSERT INTO ai_providers(id, name, provider, model, value, state)
+        VALUES ('prov-r1', 'R1', 'o', 'm', 'v', 'active');
+      INSERT INTO ai_providers(id, name, provider, model, value, state)
+        VALUES ('prov-r2', 'R2', 'o', 'm', 'v', 'active');
+    `);
+
+    db.prepare(
+      "INSERT INTO project_ai_providers(projectId, providerId, rank) VALUES (?, ?, ?)",
+    ).run("proj-rank", "prov-r1", 0);
+
+    // Same rank under same project must be rejected
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO project_ai_providers(projectId, providerId, rank) VALUES (?, ?, ?)",
+      ).run("proj-rank", "prov-r2", 0);
+    }, "UNIQUE(projectId,rank) must reject two assigns at same rank");
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });

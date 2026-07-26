@@ -16,6 +16,8 @@ import {
   SelfReplacementError,
   UnnecessaryReplacementError,
   ConflictingDefaultChoiceError,
+  DefaultNeedsReplacementError,
+  AssignedProviderError,
 } from "./errors.ts";
 import { UnknownReferenceError } from "../errors.ts";
 
@@ -66,6 +68,26 @@ class FakeRegistry implements AiProviderRegistry {
   logout(_id: string): void {}
   remove(id: string): void {
     this.#store.delete(id);
+  }
+  // 008.2 Story A — project→provider assignment (required by port)
+  assign(_projectId: string, _providerId: string, _rank: number): void {}
+  unassign(_projectId: string, _providerId: string): void {}
+  listAssigned(_projectId: string): GlobalAiProvider[] {
+    return [];
+  }
+  maxRank(_projectId: string): number | undefined {
+    return undefined;
+  }
+  shiftRanksFrom(_projectId: string, _rank: number): void {}
+  compactRanks(_projectId: string): void {}
+  getAssignment(
+    _projectId: string,
+    _providerId: string,
+  ): { rank: number } | undefined {
+    return undefined;
+  }
+  listProjectsAssigning(_providerId: string): string[] {
+    return [];
   }
 
   // Test helper: directly add a pre-built provider
@@ -317,7 +339,129 @@ test("RemoveAiProvider: default + both replacement and confirmNoDefault throws C
 
   assert.notEqual(registry.get("p1"), undefined);
   assert.equal(registry.getDefault()?.id, "p1");
-  assert.notEqual(registry.get("p2"), undefined);
+});
+
+// ── 008.2 Story E — assignment-aware removal ──────────────────────────
+
+class FakeRegistryWithAssignments extends FakeRegistry {
+  readonly #assignments = new Map<string, Map<string, number>>();
+
+  assign(projectId: string, providerId: string, rank: number): void {
+    let project = this.#assignments.get(projectId);
+    if (!project) {
+      project = new Map();
+      this.#assignments.set(projectId, project);
+    }
+    project.set(providerId, rank);
+  }
+  unassign(projectId: string, providerId: string): void {
+    this.#assignments.get(projectId)?.delete(providerId);
+  }
+  listAssigned(
+    projectId: string,
+  ): import("../../storage/port.ts").GlobalAiProvider[] {
+    const project = this.#assignments.get(projectId);
+    if (!project) return [];
+    return Array.from(project.entries())
+      .sort(([, a], [, b]) => a - b)
+      .map(([id]) => this.get(id)!)
+      .filter(
+        (p): p is import("../../storage/port.ts").GlobalAiProvider =>
+          p !== undefined,
+      );
+  }
+  compactRanks(_projectId: string): void {}
+  getAssignment(
+    projectId: string,
+    providerId: string,
+  ): { rank: number } | undefined {
+    const project = this.#assignments.get(projectId);
+    if (!project) return undefined;
+    const rank = project.get(providerId);
+    return rank !== undefined ? { rank } : undefined;
+  }
+  maxRank(projectId: string): number | undefined {
+    const project = this.#assignments.get(projectId);
+    if (!project || project.size === 0) return undefined;
+    return Math.max(...project.values());
+  }
+  listProjectsAssigning(providerId: string): string[] {
+    const result: string[] = [];
+    for (const [projectId, project] of this.#assignments) {
+      if (project.has(providerId)) result.push(projectId);
+    }
+    return result;
+  }
+}
+
+test("RemoveAiProvider: remove of assigned provider with no flag throws AssignedProviderError", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.setDefault("p2");
+  registry.assign("proj-1", "p1", 0);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  assert.throws(
+    () => uc.execute("p1"),
+    (err: unknown) =>
+      err instanceof AssignedProviderError &&
+      err.id === "p1" &&
+      err.assignedCount === 1,
+  );
+});
+
+test("RemoveAiProvider: cascade drops assignment rows and removes the provider", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.setDefault("p2");
+  registry.assign("proj-1", "p1", 0);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  uc.execute("p1", { cascade: true });
+
+  assert.equal(registry.get("p1"), undefined, "p1 removed");
+  assert.deepEqual(
+    registry.listProjectsAssigning("p1"),
+    [],
+    "no projects assign p1 after cascade",
+  );
+  assert.equal(registry.getDefault()?.id, "p2", "default unchanged");
+});
+
+test("RemoveAiProvider: cascade on provider that is also the default throws DefaultNeedsReplacementError", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.setDefault("p1");
+  registry.assign("proj-1", "p1", 0);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  assert.throws(
+    () => uc.execute("p1", { cascade: true }),
+    (err: unknown) => err instanceof DefaultNeedsReplacementError,
+  );
+});
+
+test("RemoveAiProvider: replacement rewrites assignments, dedups, and removes the provider", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.add(makeProvider("p3"));
+  registry.setDefault("p2");
+  // proj-1: p1 at rank 0, p3 at rank 1
+  registry.assign("proj-1", "p1", 0);
+  registry.assign("proj-1", "p3", 1);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  uc.execute("p1", { replacement: "p3" });
+
+  assert.equal(registry.get("p1"), undefined, "p1 removed");
+  // proj-1 chain should be [p3] after dedup + removal
+  const chain = registry.listAssigned("proj-1");
+  assert.equal(chain.length, 1);
+  assert.equal(chain[0]!.id, "p3");
 });
 
 test("RemoveAiProvider: non-default + confirmNoDefault throws UnnecessaryReplacementError naming the flag", () => {
@@ -338,18 +482,19 @@ test("RemoveAiProvider: non-default + confirmNoDefault throws UnnecessaryReplace
   assert.equal(registry.getDefault()?.id, "p1");
 });
 
-test("RemoveAiProvider: removing the last provider with --replacement is rejected as unnecessary (newly closed hole)", () => {
+test("RemoveAiProvider: non-default provider with --replacement and no assignments throws UnnecessaryReplacementError", () => {
   const registry = new FakeRegistry();
-  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p1")); // default
+  registry.add(makeProvider("p2")); // target — non-default, no assignments
   registry.setDefault("p1");
 
   const uc = new RemoveAiProvider(registry, passThroughUow);
   assert.throws(
-    () => uc.execute("p1", { replacement: "bogus" }),
+    () => uc.execute("p2", { replacement: "p1" }),
     UnnecessaryReplacementError,
   );
 
-  assert.notEqual(registry.get("p1"), undefined);
+  assert.notEqual(registry.get("p2"), undefined);
   assert.equal(registry.getDefault()?.id, "p1");
 });
 
@@ -366,4 +511,109 @@ test("RemoveAiProvider: removing the last provider with --confirm-no-default is 
 
   assert.notEqual(registry.get("p1"), undefined);
   assert.equal(registry.getDefault()?.id, "p1");
+});
+
+// ── HUMAN_REVIEW: B1 — replacement to unknown id must not crash with raw SQLite error ──
+
+test("RemoveAiProvider: non-default assigned provider with --replacement to unknown id throws UnknownReferenceError", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.setDefault("p2");
+  registry.assign("proj-1", "p1", 0);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  assert.throws(
+    () => uc.execute("p1", { replacement: "unknown" }),
+    (err: unknown) =>
+      err instanceof UnknownReferenceError && err.kind === "ai_provider",
+  );
+
+  // State unchanged — nothing was committed
+  assert.ok(registry.get("p1") !== undefined, "p1 still exists");
+  assert.equal(
+    registry.listProjectsAssigning("p1").length,
+    1,
+    "assignment preserved",
+  );
+});
+
+// ── HUMAN_REVIEW: B2 — replacement must occupy the removed provider's rank, not maxRank+1 ──
+
+test("RemoveAiProvider: replacement occupies the removed provider's rank slot (not maxRank+1)", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1")); // A
+  registry.add(makeProvider("p2")); // B
+  registry.add(makeProvider("p3")); // C — replacement
+  registry.setDefault("p2");
+  registry.assign("proj-1", "p1", 0);
+  registry.assign("proj-1", "p2", 1);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  uc.execute("p1", { replacement: "p3" });
+
+  const chain = registry.listAssigned("proj-1");
+  assert.equal(
+    chain.length,
+    2,
+    "chain must have 2 items: p3 at rank 0, p2 at rank 1",
+  );
+  assert.equal(
+    chain[0]!.id,
+    "p3",
+    "replacement p3 must occupy rank 0 (the removed provider's slot)",
+  );
+  assert.equal(chain[1]!.id, "p2", "original p2 stays at rank 1");
+});
+
+// ── HUMAN_REVIEW: S1 — --cascade and --replacement together must be rejected ──
+
+test("RemoveAiProvider: cascade and replacement together throw ambiguous-flags error", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.add(makeProvider("p3"));
+  registry.setDefault("p2");
+  registry.assign("proj-1", "p1", 0);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  assert.throws(
+    () => uc.execute("p1", { cascade: true, replacement: "p3" }),
+    (err: unknown) =>
+      err instanceof Error &&
+      (/\bcascade\b/i.test(err.message) ||
+        /\bmutually exclusive\b/i.test(err.message)),
+  );
+
+  // State unchanged
+  assert.ok(registry.get("p1") !== undefined, "p1 still exists");
+  assert.equal(
+    registry.listProjectsAssigning("p1").length,
+    1,
+    "assignment preserved",
+  );
+});
+
+// ── HUMAN_REVIEW: S2 — self-replacement rejected even for non-default assigned provider ──
+
+test("RemoveAiProvider: self-replacement on non-default assigned provider throws SelfReplacementError", () => {
+  const registry = new FakeRegistryWithAssignments();
+  registry.add(makeProvider("p1"));
+  registry.add(makeProvider("p2"));
+  registry.setDefault("p2");
+  registry.assign("proj-1", "p1", 0);
+
+  const uc = new RemoveAiProvider(registry, passThroughUow);
+  assert.throws(
+    () => uc.execute("p1", { replacement: "p1" }),
+    (err: unknown) => err instanceof SelfReplacementError,
+  );
+
+  // State unchanged
+  assert.ok(registry.get("p1") !== undefined, "p1 still exists");
+  assert.equal(
+    registry.listProjectsAssigning("p1").length,
+    1,
+    "assignment preserved",
+  );
 });

@@ -77,6 +77,27 @@ class FakeRegistry implements AiProviderRegistry {
     this.#store.delete(id);
   }
 
+  // 008.2 Story A — project→provider assignment (required by port)
+  assign(_projectId: string, _providerId: string, _rank: number): void {}
+  unassign(_projectId: string, _providerId: string): void {}
+  listAssigned(_projectId: string): GlobalAiProvider[] {
+    return [];
+  }
+  maxRank(_projectId: string): number | undefined {
+    return undefined;
+  }
+  shiftRanksFrom(_projectId: string, _rank: number): void {}
+  compactRanks(_projectId: string): void {}
+  getAssignment(
+    _projectId: string,
+    _providerId: string,
+  ): { rank: number } | undefined {
+    return undefined;
+  }
+  listProjectsAssigning(_providerId: string): string[] {
+    return [];
+  }
+
   // Test helper: directly add a pre-built provider
   add(p: GlobalAiProvider): void {
     this.#store.set(p.id, { ...p });

@@ -700,4 +700,18 @@ CREATE TABLE ai_provider_default (
 );
 `),
   },
+  {
+    version: 23,
+    name: "008.2-s-project-ai-providers",
+    up: (db) =>
+      db.exec(`
+CREATE TABLE project_ai_providers (
+  projectId  TEXT NOT NULL REFERENCES projects(id),
+  providerId TEXT NOT NULL REFERENCES ai_providers(id),
+  rank       INTEGER NOT NULL,
+  PRIMARY KEY (projectId, providerId),
+  UNIQUE (projectId, rank)
+);
+`),
+  },
 ];
