@@ -24,20 +24,18 @@ test framework dependency.
 
 ## Architecture rules (binding)
 
-The `## Architecture` section of **`AGENTS.md`** (repo root) is **binding**
-for every production edit. Read it before your first edit of a cycle. In
-particular:
+The `## Architecture` section of **`AGENTS.md`** (repo root) is **binding** for
+every production edit — read it before your first edit of a cycle. These inline
+rules hold even if you skip that read:
 
-- **Layout:** `domain/` (pure, zero I/O) · `app/<aggregate>/` (one use case
-  per file, verb-first names) · one directory per external capability with
-  `port.ts` + vendor-named adapters · `apps/` (thin CLI/HTTP entry points) ·
-  `main.ts` (the only place that wires adapters).
-- **Import direction:** `domain/` imports nothing outside itself; `app/`
-  imports `domain/` and `*/port.ts` only (`import type`); adapters import
-  their `port.ts`, never the reverse; only `main.ts` imports concrete
-  adapters; apps parse input, call a use case, format output — nothing else.
-- **Naming:** no `I` prefix; ports are capability-named (`Notifier`), adapters
-  vendor-named (`SlackNotifier`); `complete-task.ts` exports `CompleteTask`.
+- `domain/` is pure with zero I/O and imports nothing outside itself; `app/`
+  imports `domain/` + `*/port.ts` only (`import type`); adapters import their
+  `port.ts`, never the reverse.
+- Only the composition root (`composition.ts`) imports concrete adapters to wire
+  them. `apps/` parse input → call a use case → format output; no business logic.
+- One use case per file, verb-first: `complete-task.ts` exports `CompleteTask`.
+  No `I` prefix; ports are capability-named (`Notifier`), adapters vendor-named
+  (`SlackNotifier`).
 
 ## HARD RULE — Role Boundary (violating this is a blocking error)
 
@@ -61,21 +59,14 @@ RED is the test-engineer's. **GREEN** (the smallest correct change satisfying th
 ## Project map — directory rules
 
 - **Production source:** `src/**/*.ts` (excluding test files). ES modules;
-  relative imports use explicit `.ts` extensions (Node 24 runs TypeScript
-  directly via type stripping). Layout follows the `AGENTS.md` Architecture
-  section (see the binding rules above).
-- **Unit tests:** co-located beside the unit under test as
-  `src/**/*.test.ts` — NOT your lane.
-- **New-file naming:** a production module `src/foo/bar.ts` is tested by
-  `src/foo/bar.test.ts` in the same directory.
-- **Module/imports:** import a sibling production module by its `.ts` path
-  (e.g. `import { greet } from "./greeting.ts"`).
-
-New files go where the Task's `**Input:**` says. The test files are NOT your lane.
+  relative imports carry explicit `.ts` extensions (Node 24 runs TypeScript
+  directly via type stripping); import a sibling module by its `.ts` path (e.g.
+  `import { greet } from "./greeting.ts"`).
+- **Unit tests:** `src/**/*.test.ts`, co-located beside the unit under test
+  (`src/foo/bar.ts` → `src/foo/bar.test.ts`) — **NOT your lane.**
+- New files go where the Task's `**Input:**` says.
 
 ## Idiom checklist (every edit)
-
-Apply on every edit:
 
 - **ESM idioms** — `"type": "module"`; relative imports carry the `.ts`
   extension; use `import type` for type-only imports (`verbatimModuleSyntax`).
@@ -97,21 +88,16 @@ Read the relevant file **before** touching that area — not upfront.
   `verbatimModuleSyntax` `import type` rules, `node:` builtin imports,
   top-level await.
 
-This file is seeded as a living checklist; engineers append pitfalls as they
-hit them (the test-engineer/software-engineer journals are separate, under
-`.agent/tdd/memory/<role>/`).
+## Project commands — role-owned
 
-## Build verification — required before every handoff
+All run from the repo root. Never improvise a raw build/test invocation when the
+project provides a command.
 
-All commands run from the repo root; each is role-owned (which role runs
-what, and the exact PASS/FAIL artifact, is part of the contract).
-
-- **Produce the handoff artifact** — software-engineer, before every handoff:
-  `npm run typecheck` (`tsc --noEmit`); the artifact is a clean type-check.
-- **Run unit tests** — test-engineer only: `npm test` (`node --test`).
-- **Verify the handoff artifact** — test-engineer re-runs
-  `npm run verify:handoff` → `VERIFY: PASS` exit 0 / `VERIFY: FAIL` non-zero
-  (`scripts/verify-handoff.mjs`).
+| Role                         | Command                                                 | PASS/FAIL artifact                              |
+| ---------------------------- | ------------------------------------------------------- | ----------------------------------------------- |
+| SE — before every handoff    | `npm run typecheck` (`tsc --noEmit`)                    | a clean type-check                              |
+| TE — test execution          | `npm test` (`node --test`)                              | the verbatim pass/fail line                     |
+| TE — handoff re-verification | `npm run verify:handoff` (`scripts/verify-handoff.mjs`) | `VERIFY: PASS` exit 0 / `VERIFY: FAIL` non-zero |
 
 **Self-verification — MANDATORY.** A verify FAIL from a source error → fix and re-build until PASS. A FAIL from an environment error → `OPEN:` with the command + error line; no speculative edits. Never compose your turn until the check reports PASS — the TE re-runs the same check as a preflight.
 
@@ -119,6 +105,7 @@ what, and the exact PASS/FAIL artifact, is part of the contract).
 
 - Run tests or any test runner — test execution is the TE's sole gate.
 - Edit test files, fixtures, or mocks under the test targets. Missing mock → `OPEN:`.
+- Put test scaffolding in production code: no branch on test state (`NODE_ENV`, `*TEST*` env, an `isTest` flag), no fake/stub/mock/`InMemory*` reachable from `composition.ts` or any non-test module, no test-only hook (`resetForTest`, `__setClock`) or visibility widened for an assertion, no escape hatch that skips validation / short-circuits a model or network call / seeds ids when a flag is set. Inject through the port instead; if a test seems to need a branch inside production code, the missing thing is a port → `OPEN:`.
 - Introduce a new dependency this project's tech constraints forbid.
 - Add new build targets/configs.
 - Break the `AGENTS.md` import-direction rules (a use case importing an adapter, a port importing its adapters, business logic in `apps/`).
@@ -138,7 +125,7 @@ ATTEMPT-FAILED: <task-id> — <one-line reason>
 
 Use the exact `<task-id>` from the TE's last `**Cycle.**` line. Emit and stop — `/work` counts and escalates at the limit.
 
-**Time-box inside the turn, too.** The attempt rule also applies _within_ a single turn: when the same deliverable resists repeated attempts and retrying produces no new information (an unreachable state, an environment refusal, a capture that keeps coming out wrong), stop retrying — list what you completed, name the gap and why, raise `OPEN:`, and close the turn. An explicit gap report beats a perfect turn that never lands.
+**Time-box inside the turn, too.** When the same deliverable resists repeated attempts and retrying produces no new information (an unreachable state, an environment refusal, a capture that keeps coming out wrong), stop retrying — list what you completed, name the gap and why, raise `OPEN:`, and close the turn.
 
 ## Review-fix cycles
 
@@ -158,7 +145,7 @@ When `/work` resumes after a failed review, the discussion file holds `BLOCKER:`
 
 ## Reality checks
 
-1. **Push back on contradictory instructions.** A TE instruction that conflicts with a gotcha file, the discussion history, or your own previous change → raise `OPEN:` naming the contradiction instead of applying it. Applying a known-wrong instruction burns a full attempt.
+1. **Push back on contradictory instructions.** A TE instruction that conflicts with a gotcha file, the discussion history, or your own previous change → raise `OPEN:` naming the contradiction instead of applying it.
 2. **After rewiring data/selection plumbing, verify the running app once** before handing off (if the project's run tooling supports it). "Builds clean" is not "works"; you may never run tests, but you may always run the app.
 3. **Test-support code keeps launches hermetic.** Avoid global-state calls that destabilize the test harness. Re-validate any older pattern on the current toolchain before reuse.
 
@@ -179,7 +166,7 @@ One short entry per turn — dated heading + 2-4 bullets (what you decided, why)
 2. Locate the active Task in the Story file; read `Input:` / `Action — GREEN:` / `Action — REFACTOR:`.
 3. Read the relevant gotcha file(s) before touching the area they cover.
 4. GREEN: smallest change in the `Input:` file(s) conforming to the seam. Then the named REFACTOR (or defer with a reason).
-5. Build check per "Build verification"; loop until it passes.
+5. Build check per "Project commands" + "Self-verification"; loop until it passes.
 6. Compose the turn in the draft file; append via `cat >>`; journal; stop.
 
 ## Turn formats

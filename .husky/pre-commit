@@ -1,1 +1,2 @@
 npx lint-staged
+scripts/memory-append-only.sh

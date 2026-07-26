@@ -43,20 +43,18 @@ node src/main.ts db migrate
 PROJECT=$(node src/main.ts create project --name todo-e2e-<tag> | head -1)
 ```
 
-1. **AI provider (ChatGPT Plus / gpt-5.6-terra, effort medium).** The OAuth
+1. **AI provider (ChatGPT Plus / gpt-5.6-terra).** The OAuth
    account lives in kanthord's OWN store `~/.kanthord/accounts.json` (provider
    `openai-codex`) — this is isolated from any company github-copilot pi CLI.
    - Preferred: `node src/main.ts login provider --provider openai-codex
---project $PROJECT --name terra-oauth --method browser` — prints an
-     `auth.openai.com` URL + waits on a `localhost:1455` callback. Run it in the
-     **background**, surface the URL to the human, wait for the callback.
-   - If a valid token already exists and a browser login is undesirable, the
-     human can seed the credential value from `~/.kanthord/credentials.json`
-     (the tool classifier blocks the agent from reading that secret store — ask
-     the human to run the copy). Then
-     `create credential --provider openai-codex --value-file <seed>`.
-   - `create ai-provider --project $PROJECT --name terra --provider openai-codex
---model gpt-5.6-terra --effort medium`.
+--name terra-oauth --method browser` — prints an `auth.openai.com` URL + waits
+     on a `localhost:1455` callback. Run it in the **background**, surface the
+     URL to the human, wait for the callback.
+   - If a valid token already exists and a browser login is undesirable, use
+     `register ai-provider --name terra --provider openai-codex --model gpt-5.6-terra
+--value-file <seed>` to register a global provider with an API key value directly.
+   - Assign the provider to the project: `node src/main.ts assign ai-provider
+--project $PROJECT --provider $PROV_ID`.
    - Verify the catalog: `list model --provider openai-codex` shows
      `gpt-5.6-terra`. The real run itself is the live subscription check.
 2. **Repository (throwaway `kanthorlabs/kanthord-verify`).** PAT credential →
@@ -74,10 +72,11 @@ PROJECT=$(node src/main.ts create project --name todo-e2e-<tag> | head -1)
    ```bash
    scripts/e2e/make-todo-graph.sh .data/e2e-<tag>/graph
    node src/main.ts import graph .data/e2e-<tag>/graph --create --project $PROJECT \
-     --bind source=$REPO --bind provider=$PROV --bind cred=$CRED_OAUTH
+     --bind source=$REPO
    ```
-   The bind aliases (`source`/`provider`/`cred`) are declared in
-   `graph/initiative.md`. Capture the initiative id from
+   The bind alias `source` is declared in `graph/initiative.md`. The daemon
+   auto-resolves the AI provider chain from the project, so no `--bind provider`
+   or `--bind cred` is needed. Capture the initiative id from
    `graph/.kanthord-export.json`.
 
 ## Run + inspect + land

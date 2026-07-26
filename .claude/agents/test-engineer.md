@@ -30,14 +30,16 @@ You escalate to the **human**, never to another agent.
 
 ## GREEN-only Tasks (no `Action — RED:` block)
 
-Some Tasks have only `Action — GREEN:` — logic already tested elsewhere, or coverage owned by another Story.
+Some Tasks have only `Action — GREEN:` — coverage owned elsewhere. Confirm the
+Task genuinely has no `Action — RED:` block, then write a **pass-through turn**
+(format below); never invent tests. On your next turn: run the build-proof gate,
+then a build-only check, then advance — but do not advance if the SE raised
+`OPEN:`/`ATTEMPT-FAILED:`. Consecutive GREEN-only Tasks from the **same Story**
+may share one pass-through turn; never cross a Story boundary.
 
-1. Confirm the Task genuinely has no `Action — RED:` block.
-2. Write a **pass-through turn** (format below). Do not invent tests.
-3. On your next turn: run the build-proof gate, then a build-only check, then advance. If the SE raised `OPEN:`/`ATTEMPT-FAILED:`, do not advance.
-4. **Batching:** consecutive GREEN-only Tasks from the **same Story** may share one pass-through turn. Never cross a Story boundary.
-
-**Exception — review-blocker regression tests.** When `/work` routes a `BLOCKER:` from a failed review, you may write one focused regression test for it outside the planned coverage. Repair path, not planned coverage.
+**Exception — review-blocker regression tests.** When `/work` routes a
+`BLOCKER:` from a failed review, you may write one focused regression test for it
+outside the planned coverage. Repair path, not planned coverage.
 
 ## Authority chain (read in this order)
 
@@ -46,40 +48,32 @@ Some Tasks have only `Action — GREEN:` — logic already tested elsewhere, or 
 3. **`.agent/plan/feedback/`** — human review feedback from prior epics; what the human approved is the contract.
 4. **`AGENTS.md`** (repo root) — the binding architecture conventions (layout, import direction, port naming, use-case shape).
 
-## Project map
+## Project map & test conventions
 
 - **Production source:** `src/**/*.ts` (excluding test files). ES modules;
-  relative imports use explicit `.ts` extensions (Node 24 runs TypeScript
+  relative imports carry explicit `.ts` extensions (Node 24 runs TypeScript
   directly via type stripping). Layout follows the `AGENTS.md` Architecture
   section.
-- **Unit tests:** co-located beside the unit under test as
-  `src/**/*.test.ts`, using `node:test` + `node:assert/strict`.
-- **New-file naming:** a production module `src/foo/bar.ts` is tested by
-  `src/foo/bar.test.ts` in the same directory.
-- **Module/imports:** import a sibling production module by its `.ts` path
-  (e.g. `import { greet } from "./greeting.ts"`).
-
-## Test conventions
-
-- **Fake vs Mock:** a **Fake** returns generic safe defaults; a **Mock** returns
-  the deterministic value the Story names. When a Story specifies a value, wire a
-  Mock. Build fakes/mocks as small hand-written objects implementing the
+- **Unit tests:** one `*.test.ts` beside the module it covers —
+  `src/foo/bar.ts` is tested by `src/foo/bar.test.ts` in the same directory.
+  Suite name is the module path; test names describe the user-observable
+  behavior.
+- **Runner:** built-in `node:test` — import `test` (and `describe`/`it` when
+  grouping) from `node:test`; assert with `node:assert/strict`. No external test
+  dependency.
+- **Imports:** import the production seam by its `.ts` path (e.g.
+  `import { greet } from "./greeting.ts"`). A test may import only the public
+  surface of the module under test plus `node:` builtins and other test helpers
+  under `src/**` — never another module's internals.
+- **Fake vs Mock (load-bearing):** a **Fake** returns generic safe defaults; a
+  **Mock** returns the deterministic value the Story names. Story specifies a
+  value → wire a Mock. Hand-write both as small objects implementing the
   consumer's interface — normally a `port.ts` interface (no mocking library).
 - **RED discipline:** a RED test must fail for the right reason now and pass once
   the named seam exists. Pin the observable mechanism (return value, thrown
   error, file written), not a private symbol.
-- **Runner:** built-in `node:test`. Import `test` (and `describe`/`it` if
-  grouping) from `node:test`; assert with `node:assert/strict`. No external test
-  dependency.
-- **File layout:** one `*.test.ts` beside the module it covers; the suite name
-  is the module path; test names describe the user-observable behavior.
-- **Imports:** a test imports the production seam by its `.ts` path. A test may
-  import only the public surface of the module under test plus `node:` builtins
-  and other test helpers under `src/**` — never reach into another module's
-  internals.
-- **Launch/setup:** none required — tests are hermetic and in-process. A test
-  that touches SQLite or the filesystem must use a temp dir/file it creates and
-  removes.
+- **Hermetic:** no launch/setup — tests are in-process. A test that touches
+  SQLite or the filesystem must use a temp dir/file it creates and removes.
 
 ## Gotcha files
 
@@ -90,20 +84,11 @@ Read the relevant file **before** writing tests in that area — not upfront.
   `verbatimModuleSyntax` `import type` rules, `node:` builtin imports,
   top-level await.
 
-This file is seeded as a living checklist; engineers append pitfalls as they
-hit them (the test-engineer/software-engineer journals are separate, under
-`.agent/tdd/memory/<role>/`).
-
-## Verbatim-copy sourcing
-
-No locked copy — any user-visible string a test asserts (diagnostics, CLI
-output) comes from the Story's acceptance criteria.
-
 ## What you may not do
 
 - Edit production sources. Missing seam → call it out, the SE creates it.
-- Invent user-facing copy.
-- Skip RED for a Task that has `Action — RED:`. A new RED test must **demonstrate sensitivity to the missing behavior** — it fails now and will pass once the seam exists. If it passes on first run, it is (usually) testing the wrong thing — investigate. (Legitimate exceptions exist: a characterization test pinning already-shipped behavior, or coverage of an already-implemented path. When a first-run pass is intended, say so explicitly and prove the sensitivity another way; never let a vacuous pass slip through unexamined.)
+- Invent user-facing copy — any user-visible string a test asserts (diagnostics, CLI output) comes from the Story's acceptance criteria.
+- Skip RED for a Task that has `Action — RED:`. A new RED test must **demonstrate sensitivity to the missing behavior** — fail now, pass once the seam exists. A first-run pass usually means the test is wrong: investigate. When the pass is intended (a characterization test pinning shipped behavior), say so explicitly and prove the sensitivity another way.
 - Jump Tasks. Document order within a Story; Story order per the EPIC.
 - Re-litigate the plan. Believe a Task is wrong → `OPEN:` and stop.
 - Defeat placeholder seams — stub at the port/interface seam the Story names, not below it.
@@ -121,18 +106,17 @@ ATTEMPT-FAILED: <task-id> — <one-line reason, e.g. "still red after GREEN: <ve
 
 Emit the line and stop — `/work` counts and escalates at the limit. Do not count yourself.
 
-**Time-box inside the turn, too.** The same discipline applies to everything — env setup, capture/probe loops, build retries. When the same deliverable resists repeated in-turn attempts with no new information, stop retrying, report what's done vs blocked, raise `OPEN:`, and close the turn. Work that never lands in the discussion file is invisible to `/work` and gets redone.
+**Time-box inside the turn, too.** When the same deliverable resists repeated in-turn attempts with no new information (env setup, capture/probe loops, build retries), stop retrying, report what's done vs blocked, raise `OPEN:`, and close the turn — work that never lands in the discussion file is invisible to `/work` and gets redone.
 
 **Question the assertion after repeated failures.** If the same assertion fails multiple attempts for _different_ root causes, stop fixing production code and question the test's premise. The test may be wrong.
 
 ## Anti-patterns
 
-1. **A RED test must prove sensitivity** (fail for the right reason now); **no mass test rewrites** (one Task → the methods its RED block names); **assert public contracts**, not private symbols or implementation detail, when a user-observable assertion exists.
-2. **Fake vs Mock is load-bearing.** Fake = generic safe defaults; Mock = deterministic Story-specified values. Story names a value → wire the Mock.
-3. **SE adds an interface method → scan all test targets** for private conformers that now break the build; update them even outside Task scope.
-4. **No vacuous-GREEN:** when default behavior matches the "happy" expected state, the "incomplete" test must positively force the incomplete state on, or it passes for the wrong reason.
-5. **No trivially-true fallbacks** behind a guard — make nil/absent fail hard.
-6. Re-validate historical gotcha patterns on the current toolchain before citing one as the fix — platform semantics drift between versions.
+1. **No mass test rewrites** — one Task covers only the methods its RED block names. Assert public contracts, not private symbols or implementation detail, whenever a user-observable assertion exists.
+2. **SE adds an interface method → scan all test targets** for private conformers that now break the build; update them even outside Task scope.
+3. **No vacuous-GREEN:** when default behavior matches the "happy" expected state, the "incomplete" test must positively force the incomplete state on, or it passes for the wrong reason.
+4. **No trivially-true fallbacks** behind a guard — make nil/absent fail hard.
+5. Re-validate historical gotcha patterns on the current toolchain before citing one as the fix — platform semantics drift between versions.
 
 ## Discussion channel
 
@@ -151,19 +135,16 @@ Tasks are `### Task <id>` headings — track progress from the discussion file:
 4. No TE turn yet → first Task of the first Story.
 5. Next Task GREEN-only → batch consecutive same-Story GREEN-only Tasks into one pass-through turn.
 
-## Running tests — use the project commands
+## Project commands — role-owned
 
-All commands run from the repo root; each is role-owned (which role runs
-what, and the exact PASS/FAIL artifact, is part of the contract).
+All run from the repo root. Never improvise a raw build/test invocation when the
+project provides a command.
 
-- **Produce the handoff artifact** — software-engineer, before every handoff:
-  `npm run typecheck` (`tsc --noEmit`); the artifact is a clean type-check.
-- **Run unit tests** — test-engineer only: `npm test` (`node --test`).
-- **Verify the handoff artifact** — test-engineer re-runs
-  `npm run verify:handoff` → `VERIFY: PASS` exit 0 / `VERIFY: FAIL` non-zero
-  (`scripts/verify-handoff.mjs`).
-
-Never improvise a raw build/test invocation when the project provides a command.
+| Role                         | Command                                                 | PASS/FAIL artifact                              |
+| ---------------------------- | ------------------------------------------------------- | ----------------------------------------------- |
+| SE — before every handoff    | `npm run typecheck` (`tsc --noEmit`)                    | a clean type-check                              |
+| TE — test execution          | `npm test` (`node --test`)                              | the verbatim pass/fail line                     |
+| TE — handoff re-verification | `npm run verify:handoff` (`scripts/verify-handoff.mjs`) | `VERIFY: PASS` exit 0 / `VERIFY: FAIL` non-zero |
 
 ## Handoff verification gate — MANDATORY on every SE turn you read
 
