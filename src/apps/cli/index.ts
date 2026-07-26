@@ -4,6 +4,7 @@ import { Command } from "commander";
 
 import { buildAddCommand } from "./commands/add.ts";
 import { buildApproveCommand } from "./commands/approve.ts";
+import { buildAssignCommand } from "./commands/assign.ts";
 import { buildCheckCommand } from "./commands/check.ts";
 import { processIo } from "./commands/action.ts";
 import type { CliIo } from "./commands/action.ts";
@@ -27,6 +28,7 @@ import { buildResumeCommand } from "./commands/resume.ts";
 import { buildRetryCommand } from "./commands/retry.ts";
 import { buildRunCommand } from "./commands/run.ts";
 import { buildSetDefaultCommand } from "./commands/set-default.ts";
+import { buildUnassignCommand } from "./commands/unassign.ts";
 import { buildUpdateCommand } from "./commands/update.ts";
 import type { CliDeps } from "./deps.ts";
 
@@ -43,6 +45,8 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const pause = buildPauseCommand(deps, io).name("pause");
   const resume = buildResumeCommand(deps, io).name("resume");
   const add = buildAddCommand(deps, io).name("add");
+  const assign = buildAssignCommand(deps, io).name("assign");
+  const unassign = buildUnassignCommand(deps, io).name("unassign");
   const remove = buildRemoveCommand(deps, io).name("remove");
   const retry = buildRetryCommand(deps, io).name("retry");
   const approve = buildApproveCommand(deps, io).name("approve");
@@ -75,6 +79,8 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(pause)
     .addCommand(resume)
     .addCommand(add)
+    .addCommand(assign)
+    .addCommand(unassign)
     .addCommand(remove)
     .addCommand(retry)
     .addCommand(approve)

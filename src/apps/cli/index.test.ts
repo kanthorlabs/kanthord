@@ -42,6 +42,8 @@ describe("src/apps/cli/index.ts", () => {
     assert.match(help, /Usage: kanthord/);
     assert.match(help, /check/);
     assert.match(help, /db/);
+    assert.match(help, /assign/, "help must list assign command");
+    assert.match(help, /unassign/, "help must list unassign command");
   });
 
   test("routes db migrate through the injected use case and CLI I/O", async () => {

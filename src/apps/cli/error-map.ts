@@ -33,6 +33,7 @@ import {
   CacheConflictError,
 } from "../../app/resource/update-resource.ts";
 import {
+  DuplicateAssignmentError,
   LoggedOutProviderError,
   DefaultNeedsReplacementError,
   SelfReplacementError,
@@ -43,6 +44,9 @@ import {
   InvalidBaseUrlError,
   ConflictingDefaultChoiceError,
   EmptyValueError,
+  AssignedProviderError,
+  InvalidRankError,
+  AmbiguousFlagsError,
 } from "../../app/ai-provider/errors.ts";
 
 export class MissingFlagError extends Error {
@@ -95,7 +99,11 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof InvalidEffortError ||
     err instanceof InvalidBaseUrlError ||
     err instanceof ConflictingDefaultChoiceError ||
-    err instanceof EmptyValueError
+    err instanceof DuplicateAssignmentError ||
+    err instanceof EmptyValueError ||
+    err instanceof AssignedProviderError ||
+    err instanceof InvalidRankError ||
+    err instanceof AmbiguousFlagsError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

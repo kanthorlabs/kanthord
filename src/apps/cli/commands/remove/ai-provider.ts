@@ -24,6 +24,7 @@ export function buildRemoveAiProviderCommand(
       "--confirm-no-default",
       "Confirm removing the default with no replacement, leaving no default",
     )
+    .option("--cascade", "Remove assignments referencing this provider")
     .addHelpText(
       "after",
       "\nExample:\n  kanthord remove ai-provider --id <id>\n",
@@ -33,6 +34,7 @@ export function buildRemoveAiProviderCommand(
         id: string;
         replacement?: string;
         confirmNoDefault?: boolean;
+        cascade?: boolean;
       }) => {
         let record;
         try {
@@ -46,10 +48,15 @@ export function buildRemoveAiProviderCommand(
               id: opts.id,
               ...(opts.replacement ? { replacement: opts.replacement } : {}),
               ...(opts.confirmNoDefault ? { confirmNoDefault: true } : {}),
+              ...(opts.cascade ? { cascade: true } : {}),
             },
             deps.removeAiProvider,
             record
-              ? { name: record.name, provider: record.provider }
+              ? {
+                  name: record.name,
+                  provider: record.provider,
+                  isDefault: record.isDefault,
+                }
               : undefined,
           ),
           io,

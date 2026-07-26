@@ -160,4 +160,98 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
       .run(id);
     this.#db.prepare("DELETE FROM ai_providers WHERE id = ?").run(id);
   }
+
+  // ── 008.2 Story A — project→provider assignment ──────────────────────────
+
+  assign(projectId: string, providerId: string, rank: number): void {
+    this.#db
+      .prepare(
+        "INSERT INTO project_ai_providers (projectId, providerId, rank) VALUES (?, ?, ?)",
+      )
+      .run(projectId, providerId, rank);
+  }
+
+  unassign(projectId: string, providerId: string): void {
+    this.#db
+      .prepare(
+        "DELETE FROM project_ai_providers WHERE projectId = ? AND providerId = ?",
+      )
+      .run(projectId, providerId);
+  }
+
+  listAssigned(projectId: string): GlobalAiProvider[] {
+    const rows = this.#db
+      .prepare(
+        `SELECT p.id, p.name, p.provider, p.model, p.baseUrl, p.effort, p.value, p.state, p.credentialVersion
+         FROM ai_providers p
+         JOIN project_ai_providers a ON a.providerId = p.id
+         WHERE a.projectId = ?
+         ORDER BY a.rank ASC`,
+      )
+      .all(projectId) as GlobalAiProviderRow[];
+    return rows.map(rowToProvider);
+  }
+
+  maxRank(projectId: string): number | undefined {
+    const row = this.#db
+      .prepare(
+        "SELECT MAX(rank) AS maxRank FROM project_ai_providers WHERE projectId = ?",
+      )
+      .get(projectId) as { maxRank: number | null } | undefined;
+    if (row === undefined || row.maxRank === null) return undefined;
+    return row.maxRank;
+  }
+
+  shiftRanksFrom(projectId: string, rank: number): void {
+    // Two-phase shift to avoid UNIQUE (projectId, rank) constraint collisions:
+    // Phase 1 moves affected rows to unique negative values (no overlap with
+    // the original positive space), then Phase 2 flips them back positive.
+    this.#db
+      .prepare(
+        "UPDATE project_ai_providers SET rank = -(rank + 1) WHERE projectId = ? AND rank >= ?",
+      )
+      .run(projectId, rank);
+    this.#db
+      .prepare(
+        "UPDATE project_ai_providers SET rank = -rank WHERE projectId = ? AND rank < 0",
+      )
+      .run(projectId);
+  }
+
+  compactRanks(projectId: string): void {
+    const rows = this.#db
+      .prepare(
+        "SELECT providerId FROM project_ai_providers WHERE projectId = ? ORDER BY rank ASC",
+      )
+      .all(projectId) as Array<{ providerId: string }>;
+    const stmt = this.#db.prepare(
+      "UPDATE project_ai_providers SET rank = ? WHERE projectId = ? AND providerId = ?",
+    );
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      stmt.run(i, projectId, row.providerId);
+    }
+  }
+
+  getAssignment(
+    projectId: string,
+    providerId: string,
+  ): { rank: number } | undefined {
+    const row = this.#db
+      .prepare(
+        "SELECT rank FROM project_ai_providers WHERE projectId = ? AND providerId = ?",
+      )
+      .get(projectId, providerId) as { rank: number } | undefined;
+    if (row === undefined) return undefined;
+    return { rank: row.rank };
+  }
+
+  listProjectsAssigning(providerId: string): string[] {
+    const rows = this.#db
+      .prepare(
+        "SELECT projectId FROM project_ai_providers WHERE providerId = ?",
+      )
+      .all(providerId) as Array<{ projectId: string }>;
+    return rows.map((r) => r.projectId);
+  }
 }

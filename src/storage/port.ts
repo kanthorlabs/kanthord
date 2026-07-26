@@ -307,6 +307,52 @@ export interface AiProviderRegistry {
   clearDefault(): void;
   logout(id: string): void;
   remove(id: string): void;
+
+  // ── 008.2 Story A — project→provider assignment ──────────────────────────
+
+  /**
+   * Assign a provider to a project at a given rank. Throws on duplicate
+   * (projectId,providerId) or (projectId,rank).
+   */
+  assign(projectId: string, providerId: string, rank: number): void;
+
+  /**
+   * Remove an assignment row. No-op if the row does not exist.
+   */
+  unassign(projectId: string, providerId: string): void;
+
+  /**
+   * Return providers assigned to a project, ordered by rank ascending.
+   */
+  listAssigned(projectId: string): GlobalAiProvider[];
+
+  /**
+   * Return the highest rank assigned to a project, or undefined if none.
+   */
+  maxRank(projectId: string): number | undefined;
+
+  /**
+   * Shift all ranks >= `rank` up by 1 (open a slot).
+   */
+  shiftRanksFrom(projectId: string, rank: number): void;
+
+  /**
+   * Re-number all ranks for a project to 0..n-1 preserving order.
+   */
+  compactRanks(projectId: string): void;
+
+  /**
+   * Return the assignment row for (projectId, providerId), or undefined.
+   */
+  getAssignment(
+    projectId: string,
+    providerId: string,
+  ): { rank: number } | undefined;
+
+  /**
+   * Return every project id that assigns the given provider.
+   */
+  listProjectsAssigning(providerId: string): string[];
 }
 
 /**

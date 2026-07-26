@@ -24,11 +24,11 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const INDEX_SRC = join(__dirname, "index.ts");
 const COMMANDS_DIR = join(__dirname, "commands");
 
-/** Number of leaf files under commands/ subdirectories (007.17-s4 adds four: add/initiative-dependency.ts, add/objective-dependency.ts, remove/initiative-dependency.ts, remove/objective-dependency.ts; 008.1 Story D adds logout/ai-provider.ts, remove/ai-provider.ts). */
-const EXPECTED_LEAF_FILE_COUNT = 64;
+/** Number of leaf files under commands/ subdirectories (007.17-s4 adds four: add/initiative-dependency.ts, add/objective-dependency.ts, remove/initiative-dependency.ts, remove/objective-dependency.ts; 008.1 Story D adds logout/ai-provider.ts, remove/ai-provider.ts; 008.2 Story B adds assign/ai-provider.ts, unassign/ai-provider.ts). */
+const EXPECTED_LEAF_FILE_COUNT = 66;
 
 /** Number of audited leaves in the EPIC inventory. */
-const EXPECTED_LEAF_COUNT = 66;
+const EXPECTED_LEAF_COUNT = 68;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [

@@ -53,6 +53,9 @@ import type { ListAiProviders } from "../../app/ai-provider/list-ai-providers.ts
 import type { SetDefaultAiProvider } from "../../app/ai-provider/set-default-ai-provider.ts";
 import type { LogoutAiProvider } from "../../app/ai-provider/logout-ai-provider.ts";
 import type { RemoveAiProvider } from "../../app/ai-provider/remove-ai-provider.ts";
+import type { AssignAiProvider } from "../../app/ai-provider/assign-ai-provider.ts";
+import type { UnassignAiProvider } from "../../app/ai-provider/unassign-ai-provider.ts";
+import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-chain.ts";
 import type { CreateGraph } from "../../app/graph/create-graph.ts";
 import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
 import type { LoginDeps } from "./login.ts";
@@ -193,6 +196,9 @@ export interface CliDeps {
   setDefaultAiProvider: SetDefaultAiProvider;
   logoutAiProvider: LogoutAiProvider;
   removeAiProvider: RemoveAiProvider;
+  assignAiProvider: AssignAiProvider;
+  unassignAiProvider: UnassignAiProvider;
+  resolveProjectChain: ResolveProjectChain;
   resolveHomeDir: (repoId: string) => string;
   workspaces: CliWorkspaceManager;
   newId: () => string;

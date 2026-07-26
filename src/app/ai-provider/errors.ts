@@ -148,3 +148,71 @@ export class EmptyValueError extends Error {
     this.name = "EmptyValueError";
   }
 }
+
+/**
+ * Thrown when a provider is already assigned to a project (008.2 Story B).
+ */
+export class DuplicateAssignmentError extends Error {
+  readonly projectId: string;
+  readonly providerId: string;
+
+  constructor(projectId: string, providerId: string) {
+    super(
+      `duplicate assignment: provider ${providerId} is already assigned to project ${projectId}`,
+    );
+    this.name = "DuplicateAssignmentError";
+    this.projectId = projectId;
+    this.providerId = providerId;
+  }
+}
+
+/**
+ * Thrown when a provider is assigned to one or more projects and is removed
+ * without --cascade or --replacement (008.2 Story E).
+ */
+export class AssignedProviderError extends Error {
+  readonly id: string;
+  readonly assignedCount: number;
+
+  constructor(id: string, assignedCount: number) {
+    super(
+      `cannot remove provider ${id}: it is assigned to ${assignedCount} project(s). Use --cascade or --replacement`,
+    );
+    this.name = "AssignedProviderError";
+    this.id = id;
+    this.assignedCount = assignedCount;
+  }
+}
+
+/**
+ * Thrown when --rank is invalid (e.g. negative or NaN) (008.2 HUMAN_REVIEW B3).
+ */
+export class InvalidRankError extends Error {
+  readonly rank: number;
+
+  constructor(rank: number) {
+    super("invalid rank: --rank must be a non-negative integer");
+    this.name = "InvalidRankError";
+    this.rank = rank;
+  }
+}
+
+/**
+ * Thrown when both --cascade and --replacement are passed together
+ * to remove ai-provider (008.2 HUMAN_REVIEW S1).
+ */
+export class AmbiguousFlagsError extends Error {
+  readonly id: string;
+  readonly flag1: string;
+  readonly flag2: string;
+
+  constructor(id: string, flag1: string, flag2: string) {
+    super(
+      `cannot remove provider ${id}: --${flag1} and --${flag2} are mutually exclusive`,
+    );
+    this.name = "AmbiguousFlagsError";
+    this.id = id;
+    this.flag1 = flag1;
+    this.flag2 = flag2;
+  }
+}

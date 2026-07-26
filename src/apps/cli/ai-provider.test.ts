@@ -10,6 +10,8 @@ import {
   DefaultNeedsReplacementError,
   SelfReplacementError,
   ConflictingDefaultChoiceError,
+  AssignedProviderError,
+  DuplicateAssignmentError,
 } from "../../app/ai-provider/errors.ts";
 import { buildRegisterAiProviderCommand } from "./commands/register/ai-provider.ts";
 import { buildGetAiProviderCommand } from "./commands/get/ai-provider.ts";
@@ -17,6 +19,10 @@ import { buildSetDefaultAiProviderCommand } from "./commands/set-default/ai-prov
 import { buildListAiProviderCommand } from "./commands/list/resource.ts";
 import { buildLogoutAiProviderCommand } from "./commands/logout/ai-provider.ts";
 import { buildRemoveAiProviderCommand } from "./commands/remove/ai-provider.ts";
+import { buildAssignAiProviderCommand } from "./commands/assign/ai-provider.ts";
+import { buildUnassignAiProviderCommand } from "./commands/unassign/ai-provider.ts";
+import { CommanderError } from "commander";
+import { UnknownReferenceError } from "../../app/errors.ts";
 
 function capture() {
   const out: string[] = [];
@@ -211,16 +217,15 @@ test("list ai-provider --json: prints all providers as JSON with no value", asyn
   assert.equal(cap.code(), 0);
 });
 
-// ── S1: project-scoped list ai-provider (restored) ──
-test("list ai-provider --project <id>: calls listResources with projectId and type ai_provider", async () => {
+// ── S1: project-scoped list ai-provider (routed to resolveProjectChain) ──
+test("list ai-provider --project <id>: calls resolveProjectChain with projectId", async () => {
   const cap = capture();
-  let resourcesCalled = false;
+  let resolveCalled = false;
   const deps = {
-    listResources: {
-      execute: (filter: { projectId?: string; type?: string }) => {
-        resourcesCalled = true;
-        assert.equal(filter.projectId, "proj-1");
-        assert.equal(filter.type, "ai_provider");
+    resolveProjectChain: {
+      execute: (projectId: string) => {
+        resolveCalled = true;
+        assert.equal(projectId, "proj-1");
         return [];
       },
     },
@@ -242,9 +247,9 @@ test("list ai-provider --project <id>: calls listResources with projectId and ty
   await command.parseAsync(["--project", "proj-1", "--json"], { from: "user" });
 
   assert.equal(
-    resourcesCalled,
+    resolveCalled,
     true,
-    "listResources should be called for project-scoped list",
+    "resolveProjectChain should be called for project-scoped list",
   );
   assert.equal(cap.code(), 0);
 });
@@ -417,6 +422,168 @@ test("logout ai-provider --id of default with --replacement same id: exits 1 wit
   assert.doesNotMatch(stderrAll, /^Error:/m, "no Error: line prefix");
 });
 
+// ── 008.2 Story B — assign/unassign AI provider CLI ──────────────────────────
+
+test("assign ai-provider --project --provider --rank: assigns at specified rank and exits 0", async () => {
+  let received: unknown;
+  const cap = capture();
+  const deps = {
+    assignAiProvider: {
+      execute: (input: unknown) => {
+        received = input;
+      },
+    },
+  } as unknown as Parameters<typeof buildAssignAiProviderCommand>[0];
+
+  const command = buildAssignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildAssignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(
+    ["--project", "proj-1", "--provider", "aip-1", "--rank", "0"],
+    { from: "user" },
+  );
+
+  assert.deepEqual(received, {
+    projectId: "proj-1",
+    providerId: "aip-1",
+    rank: 0,
+  });
+  assert.equal(cap.code(), 0);
+});
+
+test("assign ai-provider --project --provider (no --rank): appends and exits 0", async () => {
+  let received: unknown;
+  const cap = capture();
+  const deps = {
+    assignAiProvider: {
+      execute: (input: unknown) => {
+        received = input;
+      },
+    },
+  } as unknown as Parameters<typeof buildAssignAiProviderCommand>[0];
+
+  const command = buildAssignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildAssignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--project", "proj-1", "--provider", "aip-1"], {
+    from: "user",
+  });
+
+  assert.deepEqual(received, {
+    projectId: "proj-1",
+    providerId: "aip-1",
+  });
+  assert.equal(cap.code(), 0);
+});
+
+test("assign ai-provider missing --project: exits 1 with error", async () => {
+  const cap = capture();
+  const deps = {
+    assignAiProvider: {
+      execute: () => {},
+    },
+  } as unknown as Parameters<typeof buildAssignAiProviderCommand>[0];
+
+  const command = buildAssignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildAssignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  try {
+    await command.parseAsync(["--provider", "aip-1", "--rank", "0"], {
+      from: "user",
+    });
+  } catch (err) {
+    const ce = err as CommanderError;
+    assert.equal(ce.exitCode, 1);
+    return;
+  }
+
+  assert.fail("expected CommanderError to be thrown");
+});
+
+test("assign ai-provider unknown project: exits 1 with error line (no stack)", async () => {
+  const cap = capture();
+  const deps = {
+    assignAiProvider: {
+      execute: () => {
+        throw new UnknownReferenceError("project", "bad-proj");
+      },
+    },
+  } as unknown as Parameters<typeof buildAssignAiProviderCommand>[0];
+
+  const command = buildAssignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildAssignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--project", "bad-proj", "--provider", "aip-1"], {
+    from: "user",
+  });
+
+  assert.equal(cap.code(), 1);
+  assert.match(cap.err[0]!, /error:/);
+  assert.doesNotMatch(cap.err.join(""), /at /, "no stack trace lines");
+});
+
+test("unassign ai-provider --project --provider: unassigns and exits 0", async () => {
+  let received: unknown;
+  const cap = capture();
+  const deps = {
+    unassignAiProvider: {
+      execute: (input: unknown) => {
+        received = input;
+      },
+    },
+  } as unknown as Parameters<typeof buildUnassignAiProviderCommand>[0];
+
+  const command = buildUnassignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildUnassignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--project", "proj-1", "--provider", "aip-1"], {
+    from: "user",
+  });
+
+  assert.deepEqual(received, { projectId: "proj-1", providerId: "aip-1" });
+  assert.equal(cap.code(), 0);
+});
+
+test("unassign ai-provider missing --project: exits 1 with error", async () => {
+  const cap = capture();
+  const deps = {
+    unassignAiProvider: {
+      execute: () => {},
+    },
+  } as unknown as Parameters<typeof buildUnassignAiProviderCommand>[0];
+
+  const command = buildUnassignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildUnassignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  try {
+    await command.parseAsync(["--provider", "aip-1"], { from: "user" });
+  } catch (err) {
+    const ce = err as CommanderError;
+    assert.equal(ce.exitCode, 1);
+    return;
+  }
+
+  assert.fail("expected CommanderError to be thrown");
+});
+
 // ── S10: allow "no default" via a second confirmation ──
 
 test("logout ai-provider --id --confirm-no-default: reaches the use case as confirmNoDefault: true", async () => {
@@ -526,6 +693,150 @@ test("logout ai-provider --id --confirm-no-default: the audit line reports the c
   );
 });
 
+// ── 008.2 Story D — list ai-provider --project resolved-chain branch ──────────
+
+test("list ai-provider --project <id> --json: calls resolveProjectChain.execute and prints chain-ordered views", async () => {
+  let resolveCalled = false;
+  const cap = capture();
+  const deps = {
+    resolveProjectChain: {
+      execute: (projectId: string) => {
+        resolveCalled = true;
+        assert.equal(projectId, "proj-1");
+        return [
+          {
+            id: "p3",
+            name: "gamma",
+            provider: "openai-codex",
+            model: "gpt-5.6-luna",
+            baseUrl: null,
+            effort: null,
+            state: "active",
+            isDefault: false,
+          },
+          {
+            id: "p1",
+            name: "alpha",
+            provider: "openai-codex",
+            model: "gpt-5.6-terra",
+            baseUrl: null,
+            effort: null,
+            state: "active",
+            isDefault: true,
+          },
+        ];
+      },
+    },
+    listAiProviders: {
+      execute: () => {
+        throw new Error(
+          "should not call global listAiProviders when --project is given",
+        );
+      },
+    },
+  } as unknown as Parameters<typeof buildListAiProviderCommand>[0];
+
+  const command = buildListAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildListAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--project", "proj-1", "--json"], {
+    from: "user",
+  });
+
+  assert.equal(
+    resolveCalled,
+    true,
+    "resolveProjectChain.execute should be called",
+  );
+  assert.equal(cap.code(), 0);
+  const out0 = cap.out[0]!;
+  const json = JSON.parse(out0);
+  assert.equal(json.length, 2);
+  assert.equal(json[0].id, "p3");
+  assert.equal(json[1].id, "p1");
+});
+
+test("list ai-provider --project <id> without --json: prints human-readable chain", async () => {
+  const cap = capture();
+  const deps = {
+    resolveProjectChain: {
+      execute: (_projectId: string) => [
+        {
+          id: "p3",
+          name: "gamma",
+          provider: "openai-codex",
+          model: "gpt-5.6-luna",
+          baseUrl: null,
+          effort: null,
+          state: "active",
+          isDefault: false,
+        },
+      ],
+    },
+    listAiProviders: {
+      execute: () => {
+        throw new Error(
+          "should not call global listAiProviders when --project is given",
+        );
+      },
+    },
+  } as unknown as Parameters<typeof buildListAiProviderCommand>[0];
+
+  const command = buildListAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildListAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--project", "proj-1"], { from: "user" });
+
+  assert.equal(cap.code(), 0);
+});
+
+test("list ai-provider --json (no --project): still calls global listAiProviders", async () => {
+  const cap = capture();
+  const deps = {
+    resolveProjectChain: {
+      execute: () => {
+        throw new Error(
+          "should not call resolveProjectChain without --project",
+        );
+      },
+    },
+    listAiProviders: {
+      execute: () => [
+        {
+          id: "aip-1",
+          name: "alpha",
+          provider: "openai-codex",
+          model: "gpt-5.6-terra",
+          baseUrl: null,
+          effort: null,
+          state: "active",
+          isDefault: true,
+        },
+      ],
+    },
+  } as unknown as Parameters<typeof buildListAiProviderCommand>[0];
+
+  const command = buildListAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildListAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--json"], { from: "user" });
+
+  assert.equal(cap.code(), 0);
+  const out0 = cap.out[0]!;
+  const json = JSON.parse(out0);
+  assert.equal(json.length, 1);
+  assert.equal(json[0].id, "aip-1");
+});
+
 test("remove ai-provider --id of default with --replacement same id: exits 1 with friendly error and no stack trace", async () => {
   const cap = capture();
   const deps = {
@@ -555,4 +866,210 @@ test("remove ai-provider --id of default with --replacement same id: exits 1 wit
   // No raw stack trace lines
   assert.doesNotMatch(stderrAll, /at /, "no raw stack trace lines");
   assert.doesNotMatch(stderrAll, /^Error:/m, "no Error: line prefix");
+});
+
+// ── 008.2 Story E — assignment-aware removal CLI ──────────────────────
+
+test("remove ai-provider --id of assigned provider without cascade or replacement: exits 1 with error containing cascade/replacement", async () => {
+  const cap = capture();
+  const deps = {
+    removeAiProvider: {
+      execute: (
+        _id: string,
+        _options?: {
+          replacement?: string;
+          confirmNoDefault?: boolean;
+          cascade?: boolean;
+        },
+      ) => {
+        throw new AssignedProviderError("aip-1", 1);
+      },
+    },
+  } as unknown as Parameters<typeof buildRemoveAiProviderCommand>[0];
+
+  const command = buildRemoveAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRemoveAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "aip-1"], { from: "user" });
+
+  assert.equal(cap.code(), 1);
+  const stderrAll = cap.err.join("");
+  assert.match(stderrAll, /error:/, "stderr must contain error: prefix");
+  assert.match(
+    stderrAll,
+    /cascade|replacement/i,
+    "error must mention --cascade or --replacement",
+  );
+});
+
+test("remove ai-provider --id --cascade: exits 0 and passes cascade flag", async () => {
+  let receivedOptions: unknown;
+  const cap = capture();
+  const deps = {
+    removeAiProvider: {
+      execute: (
+        id: string,
+        options?: {
+          replacement?: string;
+          confirmNoDefault?: boolean;
+          cascade?: boolean;
+        },
+      ) => {
+        receivedOptions = options;
+      },
+    },
+    getAiProvider: {
+      execute: (_id: string) => ({ name: "alpha", provider: "openai-codex" }),
+    },
+  } as unknown as Parameters<typeof buildRemoveAiProviderCommand>[0];
+
+  const command = buildRemoveAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRemoveAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "aip-1", "--cascade"], { from: "user" });
+
+  assert.deepEqual(receivedOptions, { cascade: true });
+  assert.equal(cap.code(), 0);
+});
+
+test("remove ai-provider --id --replacement <id>: exits 0 and passes replacement flag", async () => {
+  let receivedOptions: unknown;
+  const cap = capture();
+  const deps = {
+    removeAiProvider: {
+      execute: (
+        id: string,
+        options?: {
+          replacement?: string;
+          confirmNoDefault?: boolean;
+          cascade?: boolean;
+        },
+      ) => {
+        receivedOptions = options;
+      },
+    },
+    getAiProvider: {
+      execute: (_id: string) => ({ name: "alpha", provider: "openai-codex" }),
+    },
+  } as unknown as Parameters<typeof buildRemoveAiProviderCommand>[0];
+
+  const command = buildRemoveAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRemoveAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "aip-1", "--replacement", "aip-2"], {
+    from: "user",
+  });
+
+  assert.equal((receivedOptions as any)?.replacement, "aip-2");
+  assert.equal(cap.code(), 0);
+});
+
+// ── Review-blocker regression: DuplicateAssignmentError must be handled in error-map.ts (B1) ──
+
+test("assign ai-provider duplicate assignment: exits 1 with error line (no stack)", async () => {
+  const cap = capture();
+  const deps = {
+    assignAiProvider: {
+      execute: () => {
+        throw new DuplicateAssignmentError("proj-1", "aip-1");
+      },
+    },
+  } as unknown as Parameters<typeof buildAssignAiProviderCommand>[0];
+
+  const command = buildAssignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildAssignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--project", "proj-1", "--provider", "aip-1"], {
+    from: "user",
+  });
+
+  assert.equal(cap.code(), 1);
+  assert.match(cap.err[0]!, /error:/, "stderr must contain error: prefix");
+  assert.doesNotMatch(cap.err.join(""), /at /, "no raw stack trace lines");
+});
+
+// ── HUMAN_REVIEW: B4 — --rank abc must not crash with raw stack trace ──
+
+test("assign ai-provider --rank abc: exits 1 with clean error (no stack)", async () => {
+  const cap = capture();
+  const deps = {
+    assignAiProvider: {
+      execute: () => {},
+    },
+  } as unknown as Parameters<typeof buildAssignAiProviderCommand>[0];
+
+  const command = buildAssignAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildAssignAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(
+    ["--project", "proj-1", "--provider", "aip-1", "--rank", "abc"],
+    { from: "user" },
+  );
+
+  assert.equal(cap.code(), 1, "must exit with code 1 for invalid --rank");
+  const stderrAll = cap.err.join("");
+  assert.match(stderrAll, /error:/, "stderr must contain error: prefix");
+  assert.doesNotMatch(stderrAll, /at /, "no raw stack trace lines");
+  assert.doesNotMatch(
+    stderrAll,
+    /NaN|NOT NULL|FOREIGN KEY/i,
+    "no raw crash output",
+  );
+});
+
+// ── HUMAN_REVIEW: S4 — "default reassigned to <id>" not printed when removed provider was never default ──
+
+test("remove ai-provider --id of non-default assigned provider with --replacement: does NOT print default reassigned line", async () => {
+  const cap = capture();
+  const deps = {
+    removeAiProvider: {
+      execute: (
+        _id: string,
+        _options?: {
+          replacement?: string;
+          confirmNoDefault?: boolean;
+          cascade?: boolean;
+        },
+      ) => {
+        // mock succeeds — non-default assigned provider removed with replacement
+      },
+    },
+    getAiProvider: {
+      execute: (_id: string) => ({ name: "alpha", provider: "openai-codex" }),
+    },
+  } as unknown as Parameters<typeof buildRemoveAiProviderCommand>[0];
+
+  const command = buildRemoveAiProviderCommand(
+    deps as unknown as CliDeps,
+    cap.io as Parameters<typeof buildRemoveAiProviderCommand>[1],
+  ).exitOverride();
+  command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+  await command.parseAsync(["--id", "aip-1", "--replacement", "aip-2"], {
+    from: "user",
+  });
+
+  assert.equal(cap.code(), 0);
+  const stderrAll = cap.err.join("");
+  assert.match(stderrAll, /remove/, "stderr must contain operation word");
+  assert.doesNotMatch(
+    stderrAll,
+    /default reassigned/i,
+    "must NOT print default reassigned when removed provider was not the default",
+  );
 });
