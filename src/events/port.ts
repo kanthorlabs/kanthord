@@ -9,5 +9,5 @@ import type { Event } from "../domain/event.ts";
  */
 export interface EventFeed {
   append(event: Event): void;
-  readAfter(cursor: string, limit?: number): Event[];
+  readAfter(cursor: string, limit?: number, projectId?: string): Event[];
 }

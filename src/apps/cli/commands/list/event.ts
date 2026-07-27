@@ -11,6 +11,7 @@ export function buildListEventCommand(deps: CliDeps, io: CliIo): Command {
     .configureHelp({ commandUsage: () => "kanthord list event" })
     .requiredOption("--after <cursor>", "event cursor to start after")
     .option("--limit <count>", "maximum events to read per page")
+    .option("--project <id>", "only events belonging to this project")
     .option(
       "--json",
       'print the events page as a single JSON object: {"events":[…],"nextCursor":"…"}',
@@ -19,12 +20,13 @@ export function buildListEventCommand(deps: CliDeps, io: CliIo): Command {
     .option("--poll-interval <ms>", "milliseconds to wait between polls")
     .addHelpText(
       "after",
-      "\nExample:\n  kanthord list event --after 0 --json\n",
+      "\nExample:\n  kanthord list event --after 0 --project p1 --json\n",
     )
     .action(
       async (opts: {
         after: string;
         limit?: string;
+        project?: string;
         json?: boolean;
         follow?: boolean;
         pollInterval?: string;
@@ -38,6 +40,7 @@ export function buildListEventCommand(deps: CliDeps, io: CliIo): Command {
               {
                 after: opts.after,
                 ...(opts.limit ? { limit: opts.limit } : {}),
+                ...(opts.project ? { project: opts.project } : {}),
                 ...(opts.json ? { json: true } : {}),
                 ...(opts.follow ? { follow: true } : {}),
                 ...(opts.pollInterval

@@ -130,4 +130,90 @@ describe("src/app/resource/list-resources.ts", () => {
       "https://github.com/acme/api.git",
     );
   });
+
+  // -------------------------------------------------------------------------
+  // 011 Story 2 — list notification / list filesystem support (characterization)
+  // The use case + toResourceView already cover both types; these tests pin
+  // the exact forwarded type and the exact view key set so a future refactor
+  // can't silently drop a field or change the contract.
+  // -------------------------------------------------------------------------
+
+  test("(011 S2) execute({type: 'notification'}) forwards to listResourcesByProject and returns a view with exactly the notification keys", () => {
+    const call: {
+      received?: { projectId: string; type: string };
+      results: Resource[];
+    } = {
+      results: [
+        {
+          type: "notification",
+          id: "notif-1",
+          projectId: PROJECT_ID,
+          name: "ops",
+          provider: "slack",
+          destination: "#ops",
+        },
+      ],
+    };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({ projectId: PROJECT_ID, type: "notification" });
+
+    assert.deepEqual(call.received, {
+      projectId: PROJECT_ID,
+      type: "notification",
+    });
+    assert.equal(views.length, 1);
+    const v = views[0] as Record<string, unknown>;
+    assert.deepEqual(Object.keys(v).sort(), [
+      "destination",
+      "id",
+      "name",
+      "projectId",
+      "provider",
+      "type",
+    ]);
+    assert.equal(v["type"], "notification");
+    assert.equal(v["id"], "notif-1");
+    assert.equal(v["projectId"], PROJECT_ID);
+    assert.equal(v["name"], "ops");
+    assert.equal(v["provider"], "slack");
+    assert.equal(v["destination"], "#ops");
+  });
+
+  test("(011 S2) execute({type: 'filesystem'}) forwards to listResourcesByProject and returns a view with exactly the filesystem keys", () => {
+    const call: {
+      received?: { projectId: string; type: string };
+      results: Resource[];
+    } = {
+      results: [
+        {
+          type: "filesystem",
+          id: "fs-1",
+          projectId: PROJECT_ID,
+          name: "scratch",
+          path: "/w",
+        },
+      ],
+    };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({ projectId: PROJECT_ID, type: "filesystem" });
+
+    assert.deepEqual(call.received, {
+      projectId: PROJECT_ID,
+      type: "filesystem",
+    });
+    assert.equal(views.length, 1);
+    const v = views[0] as Record<string, unknown>;
+    assert.deepEqual(Object.keys(v).sort(), [
+      "id",
+      "name",
+      "path",
+      "projectId",
+      "type",
+    ]);
+    assert.equal(v["type"], "filesystem");
+    assert.equal(v["id"], "fs-1");
+    assert.equal(v["projectId"], PROJECT_ID);
+    assert.equal(v["name"], "scratch");
+    assert.equal(v["path"], "/w");
+  });
 });

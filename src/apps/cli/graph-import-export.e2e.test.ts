@@ -22,6 +22,7 @@ import {
   mkdirSync,
   writeFileSync,
   readFileSync,
+  cpSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -582,5 +583,190 @@ test("e2e: import/export graph — 7 legs through composition root + real SQLite
   assert.ok(
     taskFinalJson.ac.some((a) => a.includes("also rejects an expired token")),
     "DB unchanged by rejected stale apply (fresh ac still present)",
+  );
+});
+
+/**
+ * 011 Story 5 — the committed `examples/oauth-package` is a real, importable
+ * v3 graph package. The directory must exist at the repo root; the test copies
+ * it to a temp dir (import --create rewrites source files in place), imports
+ * it through the real CLI, and asserts:
+ *   - exit 0, no stderr
+ *   - the copy's .kanthord-export.json has formatVersion=3, a 26-char ULID
+ *     initiativeId, exactly 2 objectiveIds, and the 3 expected task refs
+ *   - ListObjectives for that initiative returns the 2 expected objective names
+ *   - ListTasks returns 3 rows, every row has a non-empty title, and the
+ *     session-refresh row's dependencies are exactly the google-oauth-api id
+ */
+test("e2e: examples/oauth-package imports as a real v3 graph package (011 S5)", async () => {
+  // -----------------------------------------------------------------------
+  // Setup: temp DB + temp copy dir
+  // -----------------------------------------------------------------------
+  const rootDir = mkdtempSync(join(tmpdir(), "kanthord-oauth-pkg-"));
+  const dbPath = join(rootDir, "kanthord.db");
+  const copyDir = join(rootDir, "oauth-package");
+  const repoMirror = join(rootDir, "mirror");
+  const deps = buildDeps(dbPath);
+
+  after(() => {
+    rmSync(rootDir, { recursive: true });
+  });
+
+  // -----------------------------------------------------------------------
+  // Bootstrap: migrate + project + repository (binding target)
+  // -----------------------------------------------------------------------
+  const rMigrate = await dispatch(["db", "migrate"], deps);
+  assert.equal(rMigrate.exitCode, 0, "db migrate exits 0");
+
+  const rProj = await dispatch(["create", "project", "--name", "demo"], deps);
+  assert.equal(rProj.exitCode, 0, "create project exits 0");
+  const PROJECT = rProj.stdout[0]!;
+  assert.match(PROJECT, ULID_RE, "project id is a ULID");
+
+  const rRepo = await dispatch(
+    [
+      "create",
+      "repository",
+      "--project",
+      PROJECT,
+      "--name",
+      "home",
+      "--remote-url",
+      "file://localhost/none",
+      "--branch",
+      "main",
+      "--auth",
+      "ambient",
+      "--path",
+      repoMirror,
+    ],
+    deps,
+  );
+  assert.equal(
+    rRepo.exitCode,
+    0,
+    `create repository exits 0 (stderr: ${rRepo.stderr.join(" ")})`,
+  );
+  const REPO = rRepo.stdout[0]!;
+  assert.match(REPO, ULID_RE, "repository id is a ULID");
+
+  // -----------------------------------------------------------------------
+  // Copy the committed example to a temp dir (import --create rewrites in
+  // place; we must not dirty the committed tree).
+  // -----------------------------------------------------------------------
+  cpSync("examples/oauth-package", copyDir, { recursive: true });
+
+  // -----------------------------------------------------------------------
+  // Real import through the CLI
+  // -----------------------------------------------------------------------
+  const rImport = await dispatch(
+    [
+      "import",
+      "graph",
+      copyDir,
+      "--create",
+      "--project",
+      PROJECT,
+      "--bind",
+      `source=${REPO}`,
+    ],
+    deps,
+  );
+  assert.equal(
+    rImport.exitCode,
+    0,
+    `import graph --create exits 0 (stderr: ${rImport.stderr.join(" ")}; stdout: ${rImport.stdout.join(" ")})`,
+  );
+  assert.deepEqual(
+    rImport.stderr,
+    [],
+    "import graph --create produces no stderr",
+  );
+
+  // -----------------------------------------------------------------------
+  // Manifest assertions (the copy's .kanthord-export.json was just rewritten
+  // by --create with the freshly minted ids)
+  // -----------------------------------------------------------------------
+  const manifest = JSON.parse(
+    readFileSync(join(copyDir, ".kanthord-export.json"), "utf8"),
+  ) as {
+    formatVersion: number;
+    initiativeId: string;
+    objectiveIds: string[];
+    refToId: { tasks: Record<string, string> };
+  };
+  assert.equal(manifest.formatVersion, 3, "manifest.formatVersion === 3");
+  assert.match(
+    manifest.initiativeId,
+    ULID_RE,
+    "manifest.initiativeId is a 26-char ULID",
+  );
+  assert.equal(
+    manifest.objectiveIds.length,
+    2,
+    "manifest.objectiveIds.length === 2",
+  );
+  assert.deepEqual(
+    Object.keys(manifest.refToId.tasks).sort(),
+    ["google-oauth-api", "oauth-ui", "session-refresh"],
+    "manifest.refToId.tasks has the 3 expected ref names sorted",
+  );
+
+  // -----------------------------------------------------------------------
+  // ListObjectives — 2 objectives named Backend and Web
+  // -----------------------------------------------------------------------
+  const rListObj = await dispatch(
+    ["list", "objective", "--initiative", manifest.initiativeId, "--json"],
+    deps,
+  );
+  assert.equal(
+    rListObj.exitCode,
+    0,
+    `list objective --initiative --json exits 0 (stderr: ${rListObj.stderr.join(" ")})`,
+  );
+  const objectives = parseJsonLine(rListObj.stdout) as Array<{
+    id: string;
+    name: string;
+  }>;
+  assert.deepEqual(
+    objectives.map((o) => o.name).sort(),
+    ["Backend", "Web"],
+    "ListObjectives returns exactly the 2 expected objective names sorted",
+  );
+
+  // -----------------------------------------------------------------------
+  // ListTasks — 3 tasks, every row has a non-empty title; the session-refresh
+  // row's dependencies array contains exactly the google-oauth-api ULID.
+  // -----------------------------------------------------------------------
+  const rListTask = await dispatch(
+    ["list", "task", "--initiative", manifest.initiativeId, "--json"],
+    deps,
+  );
+  assert.equal(
+    rListTask.exitCode,
+    0,
+    `list task --initiative --json exits 0 (stderr: ${rListTask.stderr.join(" ")})`,
+  );
+  const tasks = parseJsonLine(rListTask.stdout) as Array<{
+    id: string;
+    title: string;
+    dependencies: string[];
+  }>;
+  assert.equal(tasks.length, 3, "ListTasks returns 3 tasks");
+  for (const t of tasks) {
+    assert.ok(
+      t.title && t.title.length > 0,
+      `task ${t.id} has a non-empty title`,
+    );
+  }
+
+  const sessionRefreshId = manifest.refToId.tasks["session-refresh"]!;
+  const googleOAuthApiId = manifest.refToId.tasks["google-oauth-api"]!;
+  const sessionRefresh = tasks.find((t) => t.id === sessionRefreshId);
+  assert.ok(sessionRefresh, "session-refresh row is present in ListTasks");
+  assert.deepEqual(
+    sessionRefresh!.dependencies,
+    [googleOAuthApiId],
+    "session-refresh row's dependencies === [google-oauth-api id]",
   );
 });

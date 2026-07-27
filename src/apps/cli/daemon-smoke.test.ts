@@ -302,7 +302,7 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     const d2 = await dispatch(["run", "daemon", "--until-idle"], deps);
     assert.equal(d2.exitCode, 0, "phase 2: daemon exits 0");
 
-    // Only the new task ran: event count grew by exactly 3 (ready + started + completed).
+    // Only the new task ran: event count grew by exactly 4 (created + ready + started + completed).
     const ev2 = await dispatch(
       ["list", "event", "--after", "0", "--limit", "1000"],
       deps,
@@ -311,13 +311,13 @@ test("daemon smoke — phase 1: daemon drains all tasks; phase 2: new task picke
     const evLines2 = ev2.stderr;
     assert.equal(
       evLines2.length,
-      eventCountBefore + 3,
-      `event count grew by exactly 3 (was ${eventCountBefore}, now ${evLines2.length})`,
+      eventCountBefore + 4,
+      `event count grew by exactly 4 (was ${eventCountBefore}, now ${evLines2.length})`,
     );
 
-    // The three new events are for the new task.
+    // The four new events are for the new task.
     const newTaskEvents = evLines2.filter((l) => l.includes(TASK_MORE));
-    assert.equal(newTaskEvents.length, 3, "new task has exactly 3 events");
+    assert.equal(newTaskEvents.length, 4, "new task has exactly 4 events");
 
     // New task is completed.
     const list2 = await dispatch(

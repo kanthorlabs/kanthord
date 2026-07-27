@@ -1,5 +1,6 @@
 import type { CreateProject } from "../../app/project/create-project.ts";
 import type { RenameProject } from "../../app/project/rename-project.ts";
+import type { ListProjects } from "../../app/project/list-projects.ts";
 import { toResult } from "./error-map.ts";
 
 export async function runCreateProject(
@@ -29,4 +30,19 @@ export async function runRenameProject(
     const mapped = toResult(err);
     return { ...mapped, stdout: [] };
   }
+}
+
+export function runListProjects(
+  args: Record<string, unknown>,
+  listProjects: ListProjects,
+): { exitCode: number; stdout: string[]; stderr: string[] } {
+  const rows = listProjects.execute();
+  if (args["json"]) {
+    return { exitCode: 0, stdout: [JSON.stringify(rows)], stderr: [] };
+  }
+  return {
+    exitCode: 0,
+    stdout: rows.map((r) => `${r.id}  ${r.name}`),
+    stderr: [],
+  };
 }

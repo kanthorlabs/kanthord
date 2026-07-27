@@ -24,6 +24,7 @@ import { CreateProject } from "./app/project/create-project.ts";
 import { RenameProject } from "./app/project/rename-project.ts";
 import { GetProject } from "./app/project/get-project.ts";
 import { FindProject } from "./app/project/find-project.ts";
+import { ListProjects } from "./app/project/list-projects.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
 import { AddInitiativeDependency } from "./app/initiative/add-initiative-dependency.ts";
 import { RemoveInitiativeDependency } from "./app/initiative/remove-initiative-dependency.ts";
@@ -183,6 +184,7 @@ export function buildDeps(
   const renameProject = new RenameProject(projectRepository);
   const getProject = new GetProject(projectRepository);
   const findProject = new FindProject(projectRepository);
+  const listProjects = new ListProjects(projectRepository);
   const createInitiative = new CreateInitiative(
     initiativeRepository,
     referenceResolver,
@@ -288,6 +290,7 @@ export function buildDeps(
     initiativeRepository,
     projectRepository,
     referenceResolver,
+    events,
     agentCatalog,
   );
   const addDependency = new AddDependency(
@@ -854,6 +857,7 @@ export function buildDeps(
     renameProject,
     getProject,
     findProject,
+    listProjects,
     createInitiative,
     renameInitiative,
     findInitiative,

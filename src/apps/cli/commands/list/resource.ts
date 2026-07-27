@@ -81,3 +81,14 @@ export function buildListAiProviderCommand(deps: CliDeps, io: CliIo): Command {
 export function buildListRepositoryCommand(deps: CliDeps, io: CliIo): Command {
   return buildListResourceCommand("repository", "repository", deps, io);
 }
+
+export function buildListNotificationCommand(
+  deps: CliDeps,
+  io: CliIo,
+): Command {
+  return buildListResourceCommand("notification", "notification", deps, io);
+}
+
+export function buildListFilesystemCommand(deps: CliDeps, io: CliIo): Command {
+  return buildListResourceCommand("filesystem", "filesystem", deps, io);
+}

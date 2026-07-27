@@ -11,12 +11,12 @@ type CliEvent = {
 
 /**
  * CLI handler for `events --after <cursor> [--limit n] [--json] [--follow]
- * [--poll-interval ms]`.
+ * [--poll-interval ms] [--project <id>]`.
  *
  * Human output: one `stderr` line per event — `"<id> <type> <taskId>"` plus
  * the payload as JSON when present.
  * JSON output: exactly one `stdout` document per page — a single
- * `{"events":[...],"nextCursor":"<id-or-empty>"}` envelope (never bare
+ * `{"events":[...],"nextCursor":"<id>"}` envelope (never bare
  * per-event lines). In `--follow` mode an empty poll page pushes no
  * envelope at all (idle polling must not spam an empty document); a
  * non-follow invocation always emits its one envelope, even when empty.
@@ -25,8 +25,12 @@ type CliEvent = {
  * It reads one extra row (`pageSize + 1`); if that probe row comes back, more
  * events exist, so it drops the probe and sets the envelope's `nextCursor` to
  * the last shown event's id (JSON) or appends a `more available — pass
- * --after <lastId>` line (human). A page that reaches the tail leaves
- * `nextCursor` as `""` (JSON) and emits no hint (human).
+ * --after <lastId>` line (human).
+ *
+ * `nextCursor` is the last **scanned** row id: the last shown event's id for
+ * a non-empty page, or the input cursor (unchanged) for an empty page. A
+ * stable cursor on an empty page is what lets a project-scoped feed step
+ * past foreign events without stalling.
  *
  * --follow paging (unchanged): a full page (length === --limit) re-reads
  * immediately; a short/empty page sleeps then re-reads; the loop exits when the
@@ -34,13 +38,20 @@ type CliEvent = {
  */
 export async function runEvents(
   args: Record<string, unknown>,
-  listEvents: { execute(p: { after: string; limit?: number }): CliEvent[] },
+  listEvents: {
+    execute(p: {
+      after: string;
+      limit?: number;
+      projectId?: string;
+    }): CliEvent[];
+  },
   sleep: (ms: number) => Promise<void>,
   signal: AbortSignal,
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   const after = (args["after"] as string) ?? "0";
   const follow = (args["follow"] as boolean | undefined) ?? false;
   const json = (args["json"] as boolean | undefined) ?? false;
+  const project = args["project"] as string | undefined;
 
   const rawLimit = args["limit"];
   const limit: number | undefined =
@@ -76,7 +87,11 @@ export async function runEvents(
 
     let batch: CliEvent[];
     try {
-      batch = listEvents.execute({ after: cursor, limit: fetchLimit });
+      batch = listEvents.execute({
+        after: cursor,
+        limit: fetchLimit,
+        ...(project !== undefined ? { projectId: project } : {}),
+      });
     } catch (err) {
       if (err instanceof RangeError) {
         return {
@@ -132,7 +147,7 @@ export async function runEvents(
       stdout.push(
         JSON.stringify({
           events: pageEvents,
-          nextCursor: hasMore ? cursor : "",
+          nextCursor: cursor,
         }),
       );
     }

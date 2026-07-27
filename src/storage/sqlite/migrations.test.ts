@@ -161,6 +161,7 @@ test("schema columns match locked DDL for all tables", () => {
       "objectiveId",
       "initiativeId",
       "repositoryId",
+      "projectId",
     ]);
     assert.deepEqual(columnNames(db, "task_context"), [
       "task_id",
@@ -1001,6 +1002,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
       "objectiveId",
       "initiativeId",
       "repositoryId",
+      "projectId",
     ]);
 
     const taskRow = db
@@ -1835,7 +1837,15 @@ test("migration 26: pre-existing event rows survive the table rebuild (008.4 Sto
   }
 });
 
-test("migration 26: rebuild preserves all 7 events columns (id, type, taskId, payload, objectiveId, initiativeId, repositoryId) (008.4 Story D)", () => {
+// ── events schema guard (008.4 Story D + 011 S3) ────────────────────────────
+// These two tests assert the events table's END STATE after ALL migrations,
+// so they are independent of how the column and index got there. Any future
+// rebuild of `events` (the events_newN pattern — SQLite cannot ALTER a CHECK,
+// so growing the type list means rebuilding) that forgets `projectId` or
+// `events_project_cursor` fails here, before it can silently empty every
+// project-scoped feed. EPIC 013 story 5 is the next such rebuild.
+
+test("migration 26: rebuild preserves all 8 events columns, including the projectId that scoped feeds read (008.4 Story D + 011 S3)", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "events"), [
       "id",
@@ -1845,6 +1855,23 @@ test("migration 26: rebuild preserves all 7 events columns (id, type, taskId, pa
       "objectiveId",
       "initiativeId",
       "repositoryId",
+      "projectId",
     ]);
+  });
+});
+
+test("migration 26: creates the events_project_cursor index (011 S3)", () => {
+  withMigratedDb((db) => {
+    const rows = db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name='events_project_cursor'",
+      )
+      .all() as { name: string }[];
+    assert.equal(
+      rows.length,
+      1,
+      "events_project_cursor index must exist after all migrations",
+    );
+    assert.equal(rows[0]?.name, "events_project_cursor");
   });
 });
