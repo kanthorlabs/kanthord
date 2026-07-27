@@ -138,8 +138,19 @@ test "$(jv 'v.nodes.every(n=>n.blockedForever===false)' < "$G")" = "true"
 echo "B ok: one call returns a complete, drawable graph with nothing actionable"
 
 # ── Phase C — a failed root: retry on itself, dependents blocked but clearable ─
-export KANTHORD_FAKE_AGENT="$GRAPH_A/.fake-agent.json"
-node src/main.ts run daemon --until-idle --poll-interval 200 --fail "$ROOT_A" >/dev/null
+# `run daemon --fail <id>` is honoured ONLY by FakeRunner, which serves `fake@1`
+# (src/composition.ts:426, runner map :441-443). This fixture's tasks are
+# `generic@1` (make-todo-graph.sh:54) and route to PiAgentRunner, so `--fail` is
+# silently IGNORED and the root would COMPLETE — the assertions below would then
+# compare against the wrong state. Drive the failure through the real path
+# instead: a no-op agent writes no file, so the root's own verification
+# (`test -f src/todo.mjs`, make-todo-graph.sh:69-71) exits 1 and the task fails.
+printf '[{"text":"did nothing"}]' > "$PD/noop-agent.json"
+KANTHORD_FAKE_AGENT="$PD/noop-agent.json" \
+  node src/main.ts run daemon --until-idle --poll-interval 200 >/dev/null 2>&1 || true
+# Assert the fixture reached the state under test BEFORE asserting the graph, so a
+# broken fixture can never be mistaken for a `get graph` defect.
+test "$(node -e 'const{DatabaseSync}=require("node:sqlite");const d=new DatabaseSync(process.env.KANTHORD_DB,{readOnly:true});process.stdout.write(String(d.prepare("SELECT status FROM tasks WHERE id=?").get(process.argv[1]).status))' "$ROOT_A")" = "failed"
 graph "$INIT_A"
 test "$(nd "$ROOT_A" < "$G" | nf 'n.status')"             = "failed"
 test "$(nd "$ROOT_A" < "$G" | nf 'n.action.kind')"        = "retry"

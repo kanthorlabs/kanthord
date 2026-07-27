@@ -164,7 +164,8 @@ export interface GetProjectOverviewOutput {
    `latestActionableEventIds(initiativeId)` using the key matching the action:
    `retry` → `task.failed:<taskId>`; `approve` on a task →
    `task.escalated:<taskId>`; `approve` on an objective →
-   `objective.awaiting_confirmation:<objectiveId>`; `resolve-conflict` →
+   `objective.awaiting_confirmation:<objectiveId>`; `retry` on an **objective**
+   (the conflict verdict — **AMENDED**, formerly `resolve-conflict`) →
    `objective.conflict:<objectiveId>`; `remove-dependency` and
    `resume-initiative` → `null` (no event marks them). Absent key → `null`.
    **Never** derive it from the entity ULID — a task id can be days older than its

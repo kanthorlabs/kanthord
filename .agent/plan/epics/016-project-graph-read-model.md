@@ -95,10 +95,15 @@ type Action = {
     | "retry"
     | "approve"
     | "reject"
-    | "resolve-conflict"
     | "publish"
     | "resume-initiative"
     | "remove-dependency";
+  // AMENDED 2026-07-27 for EPIC 017 (human-approved): `resolve-conflict` removed.
+  // It named a problem category, not an operation — no CLI command is spelled
+  // "resolve conflict", and its `requiresInput: ["resolution"]` named a flag no
+  // objective verdict accepts. An objective conflict now yields concrete
+  // `retry` + `reject` verdicts. See
+  // `.agent/plan/stories/016-project-graph-read-model/02-actionability-domain-module.md`.
   target: {
     type: "task" | "objective" | "repository" | "initiative";
     id: string;
@@ -116,7 +121,12 @@ task inside an objective awaiting approval carries
 This is how the binding per-node-action decision and finding 2 are both honoured:
 the field is on the node, the target names what is really acted on. `requiresInput`
 plus optional `command` mirror EPIC 014's `next` shape, so `publish` and
-`resolve-conflict` are never a bare verb with no operand.
+`remove-dependency` are never a bare verb with no operand.
+
+**AMENDED 2026-07-27 for EPIC 017:** the rule table below lives in one function,
+`decisionActions(context): Action[]`; `nodeAction` / `groupAction` /
+`initiativeAction` are one-line projections returning its first element or `null`.
+The single-`action` field on every node, group and initiative is unchanged.
 
 The action table, each entry reachable through a real command:
 
@@ -124,8 +134,8 @@ The action table, each entry reachable through a real command:
 | ----------------------------------------------------------- | ------------------- | ------------------------------------------------ | -------------------------------------------------- |
 | task `failed`                                               | `retry`             | task                                             | `retry task --id <t>`                              |
 | task `awaiting_confirmation`                                | `approve`           | task                                             | `approve task --id <t>`                            |
-| objective `awaiting_confirmation`                           | `approve`           | objective                                        | `approve objective --id <o>`                       |
-| objective `conflict`                                        | `resolve-conflict`  | objective                                        | absent — `requiresInput: ["resolution"]`           |
+| objective `awaiting_confirmation`                           | `approve`           | objective                                        | `approve objective --id <o> --expected-commit <c>` |
+| objective `conflict`                                        | `retry`             | objective                                        | `retry objective --id <o> --expected-commit <c>`   |
 | task `pending` and `blockedForever`                         | `remove-dependency` | task, `targetDependencyId` = the dead dependency | `remove dependency --task <t> --dependency <d>`    |
 | initiative `paused`                                         | `resume-initiative` | initiative                                       | `resume initiative --id <i>`                       |
 | initiative `landed`, publication `unpublished`/`diverged`   | `publish`           | repository                                       | `publish repository --repository <r> --branch <b>` |
@@ -234,14 +244,18 @@ Hermetic coverage required beyond the Proof:
   Tested: empty graph → `nodeIds: []`, `length: 0`; a fully completed graph →
   `[]`; two equal-length chains → the lowest-id chain.
 - **One action authority.** `src/domain/actionability.ts` exports
-  `nodeAction`, `groupAction`, `initiativeAction` — pure, zero I/O, with the
-  closed `kind` vocabulary above. Every row of the action table is unit-tested,
-  plus these must-not-regress cases: a `running` node is `null`; a `discarded`
-  node is `null`; a completed task under an `awaiting_confirmation` objective
-  targets the **objective**, not itself; a `pending` + `blockedForever` node is
-  `remove-dependency` carrying `targetDependencyId`, and is **never** `reject`
-  (`reject task` refuses `pending` — finding 3); a `resolve-conflict` action
-  carries no `command` because the resolution is a human decision.
+  `decisionActions` plus the three projections `nodeAction`, `groupAction`,
+  `initiativeAction` — pure, zero I/O, with the closed `kind` vocabulary above.
+  Every row of the action table is unit-tested, plus these must-not-regress
+  cases: a `running` node is `null`; a `discarded` node is `null`; a completed
+  task under an `awaiting_confirmation` objective targets the **objective**, not
+  itself; a `pending` + `blockedForever` node is `remove-dependency` carrying
+  `targetDependencyId`, and is **never** `reject` (`reject task` refuses
+  `pending` — finding 3); an objective-conflict action carries no `command` when
+  `expectedCommit` is unknown, and lists `"expectedCommit"` in `requiresInput`.
+  **AMENDED 2026-07-27:** a table-driven test asserts each projection equals
+  `decisionActions(...)[0] ?? null` for every row, so a second rule table cannot
+  be introduced.
 - **Paused is never hidden.** A paused initiative makes every node report
   `executionState: "paused"` while `dependencyState` keeps its true value, and the
   initiative action is `resume-initiative`. Tested paused and unpaused.
@@ -305,10 +319,20 @@ It must print `016 ok: …`. Phases:
   is `remaining-node-count` with `length` 2 and the root first, `counts.actionable`
   is exactly `0`, the root is `dependencyState: "ready"` and every dependent
   `"blocked"`, and the root's `downstream` equals the real dependent count.
-- **C** — after `run daemon --until-idle --fail <root>`: the root is exactly
+- **C** — after a daemon pass in which the root **fails**: the root is exactly
   `failed` with `action.kind: "retry"` targeting itself; each dependent is exactly
   `pending`, `dependencyState: "blocked"`, `waiting` contains the root with
   `neverSatisfies: false`, and `blockedForever: false`.
+  **AMENDED 2026-07-27:** the failure is induced by a **no-op
+  `KANTHORD_FAKE_AGENT`**, not by `run daemon --fail`. `--fail` is honoured only by
+  `FakeRunner`, which serves `fake@1` (`src/composition.ts:426,441-443`); this
+  fixture's tasks are `generic@1` (`scripts/e2e/make-todo-graph.sh:54`) and route
+  to `PiAgentRunner`, so `--fail` is silently ignored and the root would complete.
+  The no-op agent writes no file, so the root's own verification
+  (`test -f src/todo.mjs`) exits 1 and the task fails through the real path. The
+  phase asserts the root reached `failed` **from SQLite directly, before** any
+  `get graph` assertion, so a broken fixture cannot masquerade as a read-model
+  defect.
 - **D** — after `reject task --id <root> --resolution discard`: the root is
   exactly `discarded`, and the four dependents are exactly `discarded` too,
   because `RejectTask` cascades over the pending dependent closure
