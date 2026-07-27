@@ -103,7 +103,15 @@ completion, proving abandon did not poison the queue.
    operator's reason.
 
 5. **`task.abandoned` event type + migration.** Add to `EVENT_TYPES` and the
-   `events.type` CHECK; payload carries `reason`.
+   `events.type` CHECK; payload carries `reason`. **Cross-epic hazard (011):**
+   SQLite cannot `ALTER` a CHECK, so this is a table rebuild (the `events_newN`
+   pattern, last used by migration 26). The rebuild copies columns by explicit
+   name, and EPIC 011 added `events.projectId` plus the `events_project_cursor`
+   index to that table. The new table MUST declare `projectId` and the
+   migration MUST re-create the index; dropping either silently empties every
+   `list event --project` feed. Two tests in `src/storage/sqlite/migrations.test.ts`
+   assert the post-migration events column set and the index, so a miss fails
+   `npm run verify` — but write it correctly rather than relying on the catch.
 
 6. **`abandon task` CLI + read view.** The command with `--id` and `--reason`,
    plus `abandoning` on `get task --json`. Typed errors map to non-zero exits

@@ -38,8 +38,16 @@ Hermetic coverage required beyond the Proof:
 - Paging: `nextCursor` advances past non-matching events, so a project feed
   never stalls behind a foreign event; the terminal page is empty with a stable
   cursor; no event id is ever returned twice across pages.
-- The migration backfills `events.projectId` for existing rows by hierarchy
-  join, and rows that cannot be resolved are left NULL rather than guessed.
+- ~~The migration backfills `events.projectId` for existing rows by hierarchy
+  join, and rows that cannot be resolved are left NULL rather than guessed.~~
+  **Amended (Ulrich, 2026-07-27): no backfill.** `projectId` and the
+  `events_project_cursor` index are folded into migration 26's existing
+  `events_new10` rebuild instead of arriving via a new migration, because
+  there is no database to preserve (AGENTS.md: local development only), so a
+  backfill would be machinery with nothing to migrate. The replacement
+  coverage is append-time, in `src/events/sqlite.test.ts`: one test per owner
+  kind proves `append` writes the chain's `projectId`, and an unresolvable
+  owner is stored as NULL rather than guessed.
 
 Proof: `scripts/e2e/client-discovery-proof.sh` — deterministic, no model, no
 network, no daemon. Run from the repo root:
@@ -81,13 +89,19 @@ project` → `unknown command 'project'`; `list notification` → `unknown comma
    `ResourceType` (`src/app/resource/list-resources.ts`), so this is
    registration + tests, including the no-secret-leak assertion.
 
-3. **Denormalise `projectId` onto `events`.** A migration adds a nullable
-   `events.projectId`, backfills existing rows by hierarchy join
-   (`task → objective → initiative → project`, and `repositoryId → project`),
-   and leaves unresolvable rows NULL. Every append path sets it from the
-   owner the event already carries. This is the load-bearing decision: joins at
-   read time break for deleted entities and make cursor paging expensive, and
-   an event's project never changes after it is appended.
+3. **Denormalise `projectId` onto `events`.** A nullable `events.projectId`
+   plus an `events_project_cursor` index, folded into migration 26's existing
+   `events_new10` rebuild (see the amended gate item above — no new migration,
+   no backfill). `SqliteEventFeed.append` resolves it by hierarchy join
+   (`task → objective → initiative → project`, and `repositoryId → project`)
+   and stores NULL when the owner cannot be resolved. This is the load-bearing
+   decision: joins at read time break for deleted entities and make cursor
+   paging expensive, and an event's project never changes after it is appended.
+   **Cross-epic hazard (013):** `events` is rebuilt whenever the `events.type`
+   CHECK grows, and 013's story 5 grows it for `task.abandoned`. That rebuild
+   must declare `projectId` and re-create `events_project_cursor`. The guard is
+   the pair of end-state tests in `src/storage/sqlite/migrations.test.ts`, which
+   assert the events column set and the index after ALL migrations.
 
 4. **`list event --project <id>` with correct cursor paging.** `ListEvents`
    gains an optional project filter applied in SQL over the new column. The
@@ -121,6 +135,21 @@ project` → `unknown command 'project'`; `list notification` → `unknown comma
   written once at append has one answer forever.
 - **The event cursor stays global.** A project-relative cursor would not be
   comparable with the global feed the daemon and `--follow` already use.
+- **Ownership is resolved in the storage adapter, not by the producers**
+  (review + debate, 2026-07-27). The story wording — "every append path sets it
+  from the owner the event already carries" — reads as if each use case should
+  supply `projectId`. It does not, and deliberately so: measured, there are 36
+  `newEvent(...)` call sites in 15 files, and only `create-task.ts` holds a
+  `projectId` already. Ownership here is _derived_, not _authored_ — a producer
+  knows a task, not a project — so requiring the field would force 13 use cases
+  to inject a repository and re-run the same hierarchy join. One join in one
+  place beats thirteen. `SqliteEventFeed.#resolveProjectId` owns it.
+  **Accepted debt:** the `EventFeed` port is now contract-asymmetric —
+  `readAfter(…, projectId)` can scope but `append(event)` takes an `Event` with
+  no `projectId`, so only the SQLite adapter can honour a scoped read. Harmless
+  today (the only other implementations are test fakes returning `[]`). `OPEN:`
+  if a second real `EventFeed` adapter ever lands, `projectId` moves onto the
+  `Event` type and this becomes a required field.
 - **`nextCursor` is the last scanned row.** Returning the last _matching_ row
   would make a scoped page stall whenever the next matches sit behind foreign
   events.

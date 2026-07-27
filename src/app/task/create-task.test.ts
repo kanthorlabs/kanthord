@@ -14,6 +14,8 @@ import type { Resource } from "../../domain/resource.ts";
 import type { Project } from "../../domain/project.ts";
 import { UnknownAgentError } from "../../agent-runner/port.ts";
 import type { AgentCatalog } from "../../agent-runner/port.ts";
+import type { Event } from "../../domain/event.ts";
+import type { EventFeed } from "../../events/port.ts";
 
 // --- Fakes ---
 
@@ -217,6 +219,16 @@ class FakeProjectRepository implements ProjectRepository {
   }
 }
 
+class RecordingEventFeed implements EventFeed {
+  readonly appended: Event[] = [];
+  append(event: Event): void {
+    this.appended.push(event);
+  }
+  readAfter(_cursor: string, _limit?: number): Event[] {
+    return [];
+  }
+}
+
 // --- Test fixture IDs (valid ULIDs) ---
 const OBJ_ID = "01JZZZZZZZZZZZZZZZZZZZOBJ0";
 const INIT_ID = "01JZZZZZZZZZZZZZZZZZZZINI0";
@@ -255,11 +267,13 @@ describe("CreateTask", () => {
   test("CreateTask create with no deps/context returns pending task ULID", async () => {
     const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
       buildDeps();
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     const id = await uc.execute({
@@ -281,11 +295,13 @@ describe("CreateTask", () => {
   test("CreateTask unknown objective throws UnknownReferenceError", async () => {
     const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
     const resolver = new FakeReferenceResolver({}); // OBJ_ID unknown
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     await assert.rejects(
@@ -301,11 +317,13 @@ describe("CreateTask", () => {
   test("CreateTask task id as objective throws WrongTypeReferenceError", async () => {
     const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
     const resolver = new FakeReferenceResolver({ [TASK_ID]: "task" });
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     await assert.rejects(
@@ -322,11 +340,13 @@ describe("CreateTask", () => {
   test("CreateTask unknown dependency id throws UnknownReferenceError kind task", async () => {
     const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
       buildDeps();
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     await assert.rejects(
@@ -360,11 +380,13 @@ describe("CreateTask", () => {
       path: "",
       auth: { kind: "ambient" },
     });
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     await assert.rejects(
@@ -397,11 +419,13 @@ describe("CreateTask", () => {
       provider: "github",
       value: "secret",
     });
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     await assert.rejects(
@@ -421,11 +445,13 @@ describe("CreateTask", () => {
   test("CreateTask with agent instructions ac persists all three fields", async () => {
     const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
       buildDeps();
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     const id = await uc.execute({
@@ -445,11 +471,13 @@ describe("CreateTask", () => {
   test("CreateTask with unknown agent ref throws UnknownAgentError", async () => {
     const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
       buildDeps();
+    const feed = new RecordingEventFeed();
     const uc = new CreateTask(
       taskRepo,
       initiativeRepo,
       projectRepo,
       resolver,
+      feed,
       agentCatalog,
     );
     await assert.rejects(
@@ -467,5 +495,248 @@ describe("CreateTask", () => {
         return true;
       },
     );
+  });
+
+  // ── 011 Story 6 — create task emits task.created ──────────────────────
+
+  test("CreateTask appends exactly one 'task.created' event with taskId and no payload, on success (011 S6)", async () => {
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    const id = await uc.execute({
+      objectiveId: OBJ_ID,
+      title: "implement api",
+    });
+    assert.equal(feed.appended.length, 1, "exactly one event appended");
+    const ev = feed.appended[0];
+    assert.ok(ev !== undefined, "appended[0] is defined");
+    assert.equal(ev.type, "task.created");
+    assert.equal(ev.taskId, id, "event carries the returned task id");
+    assert.equal(ev.payload, undefined, "no payload");
+    assert.equal(ev.objectiveId, undefined, "no objectiveId on the event");
+    assert.equal(ev.initiativeId, undefined, "no initiativeId on the event");
+    assert.equal(ev.repositoryId, undefined, "no repositoryId on the event");
+  });
+
+  test("CreateTask appends two distinct 'task.created' events when two tasks are created (011 S6)", async () => {
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    const id1 = await uc.execute({
+      objectiveId: OBJ_ID,
+      title: "first task",
+    });
+    const id2 = await uc.execute({
+      objectiveId: OBJ_ID,
+      title: "second task",
+    });
+    assert.equal(feed.appended.length, 2, "two events appended");
+    const ev0 = feed.appended[0];
+    const ev1 = feed.appended[1];
+    assert.ok(ev0 !== undefined, "appended[0] is defined");
+    assert.ok(ev1 !== undefined, "appended[1] is defined");
+    assert.equal(ev0.type, "task.created");
+    assert.equal(ev0.taskId, id1);
+    assert.equal(ev1.type, "task.created");
+    assert.equal(ev1.taskId, id2);
+    assert.notEqual(ev0.id, ev1.id, "the two events have distinct ids");
+  });
+
+  test("CreateTask unknown objective path appends zero events (011 S6)", async () => {
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
+    const resolver = new FakeReferenceResolver({}); // OBJ_ID unknown
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () => uc.execute({ objectiveId: "no-such", title: "x" }),
+      (err: unknown) => {
+        assert.ok(err instanceof UnknownReferenceError);
+        assert.equal(err.kind, "objective");
+        return true;
+      },
+    );
+    assert.equal(feed.appended.length, 0);
+  });
+
+  test("CreateTask wrong-type reference (task as objective) path appends zero events (011 S6)", async () => {
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
+    const resolver = new FakeReferenceResolver({ [TASK_ID]: "task" });
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () => uc.execute({ objectiveId: TASK_ID, title: "x" }),
+      (err: unknown) => {
+        assert.ok(err instanceof WrongTypeReferenceError);
+        assert.equal(err.expected, "objective");
+        return true;
+      },
+    );
+    assert.equal(feed.appended.length, 0);
+  });
+
+  test("CreateTask unknown dependency path appends zero events (011 S6)", async () => {
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () =>
+        uc.execute({
+          objectiveId: OBJ_ID,
+          title: "x",
+          dependencies: ["no-such-task"],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof UnknownReferenceError);
+        assert.equal(err.kind, "task");
+        return true;
+      },
+    );
+    assert.equal(feed.appended.length, 0);
+  });
+
+  test("CreateTask wrong-type context resource path appends zero events (011 S6)", async () => {
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
+    const resolver = new FakeReferenceResolver({
+      [OBJ_ID]: "objective",
+      [RES_REPO_ID]: "resource",
+    });
+    projectRepo.addResource(PROJ_ID, {
+      id: RES_REPO_ID,
+      type: "repository",
+      name: "backend",
+      remoteUrl: "https://github.com/acme/backend.git",
+      branch: "main",
+      path: "",
+      auth: { kind: "ambient" },
+    });
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () =>
+        uc.execute({
+          objectiveId: OBJ_ID,
+          title: "x",
+          context: { credential: RES_REPO_ID },
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof WrongTypeReferenceError);
+        assert.equal(err.expected, "credential");
+        return true;
+      },
+    );
+    assert.equal(feed.appended.length, 0);
+  });
+
+  test("CreateTask context resource from another project path appends zero events (011 S6)", async () => {
+    const { initiativeRepo, taskRepo, projectRepo, agentCatalog } = buildDeps();
+    const OTHER_PROJ = "01JZZZZZZZZZZZZZZZZZZZOP0C";
+    const resolver = new FakeReferenceResolver({
+      [OBJ_ID]: "objective",
+      [RES_OTHER_PROJ]: "resource",
+    });
+    projectRepo.addResource(OTHER_PROJ, {
+      id: RES_OTHER_PROJ,
+      type: "credential",
+      name: "other-cred",
+      provider: "github",
+      value: "secret",
+    });
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () =>
+        uc.execute({
+          objectiveId: OBJ_ID,
+          title: "x",
+          context: { credential: RES_OTHER_PROJ },
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof UnknownReferenceError);
+        return true;
+      },
+    );
+    assert.equal(feed.appended.length, 0);
+  });
+
+  test("CreateTask unknown agent path appends zero events (011 S6)", async () => {
+    const { resolver, initiativeRepo, taskRepo, projectRepo, agentCatalog } =
+      buildDeps();
+    const feed = new RecordingEventFeed();
+    const uc = new CreateTask(
+      taskRepo,
+      initiativeRepo,
+      projectRepo,
+      resolver,
+      feed,
+      agentCatalog,
+    );
+    await assert.rejects(
+      () =>
+        uc.execute({
+          objectiveId: OBJ_ID,
+          title: "x",
+          agent: "nope@1",
+          instructions: "do X",
+          ac: ["done"],
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof UnknownAgentError);
+        assert.equal(err.agent, "nope@1");
+        return true;
+      },
+    );
+    assert.equal(feed.appended.length, 0);
   });
 });

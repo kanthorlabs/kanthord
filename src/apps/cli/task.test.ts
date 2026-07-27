@@ -270,6 +270,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -297,6 +298,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -323,6 +325,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -349,6 +352,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -375,6 +379,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         badResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -407,6 +412,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -429,6 +435,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -454,6 +461,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -483,6 +491,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -502,6 +511,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -522,6 +532,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -548,6 +559,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );
@@ -573,6 +585,7 @@ describe("runCreateTask", () => {
         f.initiativeRepository,
         f.projectRepository,
         f.referenceResolver,
+        new NoopEventFeed(),
         f.agentCatalog,
       ),
     );

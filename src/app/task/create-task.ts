@@ -7,6 +7,8 @@ import type {
 import type { AgentCatalog } from "../../agent-runner/port.ts";
 import { UnknownAgentError } from "../../agent-runner/port.ts";
 import { newTask } from "../../domain/task.ts";
+import { newEvent } from "../../domain/event.ts";
+import type { EventFeed } from "../../events/port.ts";
 import { UnknownReferenceError, WrongTypeReferenceError } from "../errors.ts";
 
 export class CreateTask {
@@ -14,6 +16,7 @@ export class CreateTask {
   readonly #initiativeRepo: InitiativeRepository;
   readonly #projectRepo: ProjectRepository;
   readonly #resolver: ReferenceResolver;
+  readonly #events: EventFeed;
   readonly #agentCatalog: AgentCatalog | undefined;
 
   constructor(
@@ -21,12 +24,14 @@ export class CreateTask {
     initiativeRepo: InitiativeRepository,
     projectRepo: ProjectRepository,
     resolver: ReferenceResolver,
+    events: EventFeed,
     agentCatalog?: AgentCatalog,
   ) {
     this.#taskRepo = taskRepo;
     this.#initiativeRepo = initiativeRepo;
     this.#projectRepo = projectRepo;
     this.#resolver = resolver;
+    this.#events = events;
     this.#agentCatalog = agentCatalog;
   }
 
@@ -113,6 +118,7 @@ export class CreateTask {
     if (input.context !== undefined && Object.keys(input.context).length > 0) {
       this.#taskRepo.saveTaskContext(task.id, input.context);
     }
+    this.#events.append(newEvent("task.created", { taskId: task.id }));
     return task.id;
   }
 }

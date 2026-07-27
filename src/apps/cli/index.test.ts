@@ -204,7 +204,8 @@ describe("src/apps/cli/index.ts", () => {
     assert.deepEqual(providers, [undefined]);
     // Non-follow with no --limit → default page 10 + a probe row → limit 11.
     assert.deepEqual(eventInputs, [{ after: "0", limit: 11 }]);
-    assert.deepEqual(cap.out, ["[]\n", '{"events":[],"nextCursor":""}\n']);
+    // Story 4: empty page's nextCursor is the input --after, unchanged.
+    assert.deepEqual(cap.out, ["[]\n", '{"events":[],"nextCursor":"0"}\n']);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);
   });

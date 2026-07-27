@@ -7,12 +7,24 @@ import { buildListEventCommand } from "./commands/list/event.ts";
 /** Fake `ListEvents` backed by a mutable in-process array. */
 class FakeListEvents {
   readonly events: Event[];
+  /** Records every `execute` input — used by Story 4 to assert forwarding. */
+  readonly recorded: Array<{
+    after: string;
+    limit?: number;
+    projectId?: string;
+  }> = [];
 
   constructor(events: Event[]) {
     this.events = events;
   }
 
-  execute({ after, limit }: { after: string; limit?: number }): Event[] {
+  execute(input: {
+    after: string;
+    limit?: number;
+    projectId?: string;
+  }): Event[] {
+    this.recorded.push(input);
+    const { after, limit } = input;
     if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
       throw new RangeError(`limit must be a positive integer, got ${limit}`);
     }
@@ -64,8 +76,8 @@ test("events --after 0 prints all events as human lines and --json produces ndjs
   assert.deepEqual(envelope.events, [E1, E2, E3]);
   assert.equal(
     envelope.nextCursor,
-    "",
-    "no next page -> nextCursor is empty string",
+    "C3",
+    "non-empty page -> nextCursor is the last shown event id (not '')",
   );
 });
 
@@ -148,7 +160,7 @@ test("S2: non-follow --limit 2 (human) over 5 events emits 2 lines then more-ava
   );
 });
 
-test("StoryC: non-follow --limit 10 --json covers all 5 events emits one envelope with nextCursor ''", async () => {
+test("StoryC: non-follow --limit 10 --json covers all 5 events emits one envelope with nextCursor 'E' (the last shown id, not '')", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.ready", taskId: "T2" },
@@ -175,12 +187,12 @@ test("StoryC: non-follow --limit 10 --json covers all 5 events emits one envelop
   assert.equal(envelope.events.length, 5, "all 5 events present");
   assert.equal(
     envelope.nextCursor,
-    "",
-    "no next page -> nextCursor is empty string",
+    "E",
+    "non-empty terminal page -> nextCursor is the last shown event id, not ''",
   );
 });
 
-test("StoryC: non-follow --after last event id (--json) emits one envelope with empty events and nextCursor ''", async () => {
+test("StoryC: non-follow --after last event id (--json) emits one envelope with empty events and a stable cursor (the input --after, not '')", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.ready", taskId: "T2" },
@@ -207,8 +219,8 @@ test("StoryC: non-follow --after last event id (--json) emits one envelope with 
   assert.deepEqual(envelope.events, [], "no events on an empty page");
   assert.equal(
     envelope.nextCursor,
-    "",
-    "empty page has no last-event id to derive a cursor from",
+    "E",
+    "empty page -> nextCursor is the input --after unchanged (stable cursor)",
   );
   assert.equal(result.stderr.length, 0, "no hint emitted");
 });
@@ -250,7 +262,7 @@ test("StoryC: non-follow default page size is 10 — 12 events emit one envelope
   );
 });
 
-test("StoryC: non-follow default page — 3 events (< 10) emit one envelope with nextCursor ''", async () => {
+test("StoryC: non-follow default page — 3 events (< 10) emit one envelope with nextCursor 'C' (the last shown id, not '')", async () => {
   const events: Event[] = [
     { id: "A", type: "task.ready", taskId: "T1" },
     { id: "B", type: "task.started", taskId: "T1" },
@@ -275,8 +287,8 @@ test("StoryC: non-follow default page — 3 events (< 10) emit one envelope with
   assert.deepEqual(envelope.events, events);
   assert.equal(
     envelope.nextCursor,
-    "",
-    "no next page -> nextCursor is empty string",
+    "C",
+    "non-empty page -> nextCursor is the last shown event id, not ''",
   );
 });
 
@@ -347,7 +359,7 @@ test("(human-review blocker) --follow --json: an empty poll page pushes NO stdou
   );
 });
 
-test('(human-review blocker regression) non-follow --json: an empty page still emits exactly one {events:[],nextCursor:""} envelope', async () => {
+test('(human-review blocker regression) non-follow --json: an empty page still emits exactly one {events:[],nextCursor:"0"} envelope (stable cursor)', async () => {
   const feed = new FakeListEvents([]);
 
   const result = await runEvents(
@@ -364,7 +376,7 @@ test('(human-review blocker regression) non-follow --json: an empty page still e
     "non-follow empty page must still emit exactly one JSON envelope",
   );
   const envelope = JSON.parse(result.stdout[0]!);
-  assert.deepEqual(envelope, { events: [], nextCursor: "" });
+  assert.deepEqual(envelope, { events: [], nextCursor: "0" });
 });
 
 // (A3) Display throttle: human mode throttles agent.progress per taskId; json emits all
@@ -550,4 +562,116 @@ test("list event --json help text describes the {events,nextCursor} envelope, no
 
   assert.match(help, /nextCursor/);
   assert.doesNotMatch(help, /newline-delimited/);
+});
+
+// ── 011 Story 4 — --project flag forwards projectId; terminal page emits last shown id ──
+
+test("events --project p1 --after 0 --limit 2 --json forwards {after, limit=3, projectId: 'p1'} to ListEvents (011 S4)", async () => {
+  const events: Event[] = [
+    { id: "A", type: "task.ready", taskId: "T1" },
+    { id: "B", type: "task.ready", taskId: "T2" },
+    { id: "C", type: "task.started", taskId: "T1" },
+  ];
+  const feed = new FakeListEvents(events);
+
+  const result = await runEvents(
+    { after: "0", limit: 2, project: "p1", json: true },
+    feed,
+    noopSleep,
+    neverAbort,
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(feed.recorded.length, 1, "one read");
+  assert.deepEqual(feed.recorded[0], {
+    after: "0",
+    limit: 3,
+    projectId: "p1",
+  });
+});
+
+test("events without --project: the recorded input has NO projectId key (011 S4 characterization)", async () => {
+  const events: Event[] = [
+    { id: "A", type: "task.ready", taskId: "T1" },
+    { id: "B", type: "task.started", taskId: "T1" },
+  ];
+  const feed = new FakeListEvents(events);
+
+  await runEvents({ after: "0", json: true }, feed, noopSleep, neverAbort);
+
+  assert.equal(feed.recorded.length, 1);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(feed.recorded[0], "projectId"),
+    false,
+    "no --project means the recorded input must not carry a projectId key",
+  );
+});
+
+test("events --project p1 --follow --limit 1 --poll-interval 1 forwards projectId on every poll (011 S4)", async () => {
+  const events: Event[] = [
+    { id: "A1", type: "task.ready", taskId: "T1" },
+    { id: "B2", type: "task.started", taskId: "T1" },
+  ];
+  const E3: Event = { id: "C3", type: "task.completed", taskId: "T1" };
+  const feed = new FakeListEvents(events);
+
+  const ac = new AbortController();
+  let sleepCalls = 0;
+  const mockSleep = async (_ms: number) => {
+    sleepCalls++;
+    if (sleepCalls === 1) {
+      events.push(E3);
+    }
+    if (sleepCalls === 2) {
+      ac.abort();
+    }
+  };
+
+  await runEvents(
+    {
+      after: "0",
+      follow: true,
+      limit: 1,
+      "poll-interval": "50",
+      project: "p1",
+    },
+    feed,
+    mockSleep,
+    ac.signal,
+  );
+
+  // Every read carried projectId: "p1" — 3 polls: A1, B2, C3
+  assert.ok(feed.recorded.length >= 2, "at least 2 polls happened");
+  for (const input of feed.recorded) {
+    assert.equal(
+      input.projectId,
+      "p1",
+      `every poll's recorded input must carry projectId: "p1"; got ${JSON.stringify(input)}`,
+    );
+  }
+});
+
+test("events non-empty terminal page (--limit 2, 2 events): nextCursor equals the 2nd event's id, not '' (011 S4 regression)", async () => {
+  const events: Event[] = [
+    { id: "A", type: "task.ready", taskId: "T1" },
+    { id: "B", type: "task.started", taskId: "T1" },
+  ];
+  const feed = new FakeListEvents(events);
+
+  const result = await runEvents(
+    { after: "0", limit: 2, json: true },
+    feed,
+    noopSleep,
+    neverAbort,
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.stdout.length, 1, "exactly one JSON envelope");
+  const envelope = JSON.parse(result.stdout[0]!);
+  assert.equal(envelope.events.length, 2);
+  assert.equal(
+    envelope.nextCursor,
+    "B",
+    "non-empty terminal page must emit the last shown id, not ''",
+  );
 });
