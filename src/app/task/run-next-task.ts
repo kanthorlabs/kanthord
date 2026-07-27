@@ -63,6 +63,12 @@ type RunResult =
   | {
       outcome: "skipped" | "completed" | "failed" | "escalated" | "candidate";
       taskId: string;
+      /**
+       * 008.4 Story D — how many times this dispatch failed over to the next
+       * provider in the chain. Absent when the task never failed over, so
+       * RunDaemon's summary can sum it without a per-outcome special case.
+       */
+      failovers?: number;
     };
 
 type Tx1Outcome =
@@ -244,6 +250,15 @@ export class RunNextTask {
     // transient failure (007.9 Story 02) — bounded by attempts + elapsed time.
     let failReason: string | null = null;
     let failReasonCode: string | undefined;
+    // 008.4 Story 04 — exhaustion contract. Populated from each attempted
+    // provider's typed `reasonCode` on a `providerError === true` iteration;
+    // emitted on the terminal `task.failed` payload only when the chain
+    // walks past the last provider without a success (the structured
+    // aggregate consumers match on, not free prose).
+    const providerReasons: string[] = [];
+    // 008.4 Story D — run-scoped failover accounting, surfaced on the result
+    // so RunDaemon can report failover counts in its summary.
+    let failovers = 0;
     let completedResult:
       Extract<TaskResult, { outcome: "completed" }> | undefined;
     let escalatedResult:
@@ -264,27 +279,84 @@ export class RunNextTask {
         const runner = this.#resolver.for(runningTask, contextBindings);
         const startedAt = Date.now();
         let result: TaskResult;
+        // 008.4 Story B — failover index. Walks the resolved chain on a
+        // typed provider-level error; bounded by `chain.length`, separate
+        // from the transient-retry budget (which is bounded by
+        // `#maxAttempts`).
+        let providerIdx = 0;
         for (;;) {
           attempts += 1;
           result = await runner.run(
             runningTask,
             contextBindings,
-            chain !== undefined ? chain[0] : undefined,
+            chain !== undefined ? chain[providerIdx] : undefined,
           );
 
-          if (result.outcome !== "failed" || result.transient !== true) break;
+          const providerFailure =
+            result.outcome === "failed" && result.providerError === true
+              ? result
+              : undefined;
+          if (providerFailure?.reasonCode !== undefined) {
+            providerReasons.push(providerFailure.reasonCode);
+          }
 
-          const attemptsRemain = attempts < this.#maxAttempts;
-          const elapsedOk = Date.now() - startedAt < this.#maxElapsedMs;
-          if (!attemptsRemain || !elapsedOk) break;
+          // Provider failover branch (008.4 Story B) — advance to the next
+          // provider on a typed provider-level failure. Checked BEFORE the
+          // transient branch: a 429/503 is both provider-level and transient,
+          // and the epic's contract is to move to the next provider rather
+          // than retry the one that just rate-limited us. Emits the
+          // `provider.failover` event before the next run.
+          if (
+            providerFailure !== undefined &&
+            chain !== undefined &&
+            providerIdx + 1 < chain.length
+          ) {
+            const fromProvider = chain[providerIdx];
+            const toProvider = chain[providerIdx + 1];
+            if (fromProvider !== undefined && toProvider !== undefined) {
+              this.#feed.append(
+                newEvent("provider.failover", {
+                  taskId,
+                  payload: {
+                    from: fromProvider.id,
+                    to: toProvider.id,
+                    reasonCode: providerFailure.reasonCode ?? "provider_error",
+                  },
+                }),
+              );
+            }
+            failovers += 1;
+            providerIdx += 1;
+            continue;
+          }
 
-          this.#feed.append(
-            newEvent("provider.retry", {
-              taskId,
-              payload: { attempt: String(attempts), reason: result.reason },
-            }),
-          );
-          await this.#sleep(backoffDelayMs(attempts, result.retryAfterMs));
+          // Transient retry branch (007.9 S2) — same provider, bounded by
+          // attempts + elapsed time. Still reached by a provider error on the
+          // LAST provider of the chain (nothing left to fail over to), so a
+          // trailing rate-limit keeps its backoff retries.
+          if (result.outcome === "failed" && result.transient === true) {
+            const attemptsRemain = attempts < this.#maxAttempts;
+            const elapsedOk = Date.now() - startedAt < this.#maxElapsedMs;
+            if (attemptsRemain && elapsedOk) {
+              this.#feed.append(
+                newEvent("provider.retry", {
+                  taskId,
+                  payload: { attempt: String(attempts), reason: result.reason },
+                }),
+              );
+              await this.#sleep(backoffDelayMs(attempts, result.retryAfterMs));
+              continue;
+            }
+          }
+
+          // Exhaustion: a provider error with no next provider in a resolved
+          // chain. Set the typed aggregate reason so consumers match on the
+          // code, not free prose. Only meaningful when a chain was resolved —
+          // a caller without `providerChainFor` never had a chain to exhaust.
+          if (providerFailure !== undefined && chain !== undefined) {
+            failReasonCode = "provider_chain_exhausted";
+          }
+          break;
         }
 
         if (result.outcome === "completed") {
@@ -447,6 +519,17 @@ export class RunNextTask {
         if (failReasonCode !== undefined) {
           payload["reasonCode"] = failReasonCode;
         }
+        // 008.4 Story 04 — typed exhaustion aggregate: each attempted
+        // provider's `reasonCode` joined in walk order. Set only on chain
+        // exhaustion (where `failReasonCode === "provider_chain_exhausted"`),
+        // so a non-provider task failure never carries a `providerReasons`
+        // field.
+        if (
+          failReasonCode === "provider_chain_exhausted" &&
+          providerReasons.length > 0
+        ) {
+          payload["providerReasons"] = providerReasons.join(",");
+        }
         this.#feed.append(
           newEvent("task.failed", {
             taskId,
@@ -517,6 +600,8 @@ export class RunNextTask {
       }
     }
 
-    return { outcome: resultOutcome, taskId };
+    return failovers > 0
+      ? { outcome: resultOutcome, taskId, failovers }
+      : { outcome: resultOutcome, taskId };
   }
 }

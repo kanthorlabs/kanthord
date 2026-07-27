@@ -70,3 +70,12 @@ test("(B1) ProviderProbe is a port interface declared in port.ts", () => {
   const _probe: ProviderProbe = undefined as unknown as ProviderProbe;
   assert.equal(_probe, undefined);
 });
+
+// NOTE: 008.4 Story 01's TaskResult signal (failed variant gains
+// `providerError?: boolean; reasonCode?: string`) is pinned at the runtime
+// level by `src/agent-runner/pi.test.ts` — the runner must populate those
+// fields on its returned failed result, and any absence surfaces as a failing
+// runtime assertion. The type-level guard is enforced by `pi.ts` itself
+// (returning a literal with the new fields without a TaskResult widening
+// triggers an excess-property typecheck error), so no separate port-level
+// test is needed.

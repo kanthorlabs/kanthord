@@ -30,7 +30,12 @@ import { NullLogger } from "../../logger/null.ts";
 
 type RunNextResult =
   | { outcome: "idle" }
-  | { outcome: "skipped" | "completed" | "failed"; taskId: string };
+  | {
+      outcome: "skipped" | "completed" | "failed";
+      taskId: string;
+      /** 008.4 Story D — provider failovers this dispatch performed. */
+      failovers?: number;
+    };
 
 // ---------------------------------------------------------------------------
 // Scripted fakes
@@ -639,4 +644,55 @@ test("RunDaemon execute: a task retried twice within one run yields a single ini
     ["init-A"],
     `landedInitiativeIds must list init-A exactly once, not once per dispatch; got: ${JSON.stringify(landed)}`,
   );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story D — the run summary reports provider failovers: RunDaemon sums
+// each dispatch's `failovers` across the run.
+// ---------------------------------------------------------------------------
+
+test("(008.4 Story D) RunDaemon sums per-dispatch failovers into failoverCount", async () => {
+  const log: string[] = [];
+  const recover = makeRecoverUC(log);
+  const enqueueUC = makeEnqueueUC(log, [["t1"], ["t2"], ["t3"], []]);
+  const runNextUC = makeRunNextUC(log, [
+    { outcome: "completed", taskId: "t1", failovers: 1 },
+    { outcome: "failed", taskId: "t2", failovers: 2 },
+    { outcome: "completed", taskId: "t3" },
+    { outcome: "idle" },
+  ]);
+
+  const daemon = new RunDaemon({
+    recover,
+    enqueueReady: enqueueUC,
+    runNext: runNextUC,
+    sleep: makeSleep([]),
+    logger: new NullLogger(),
+  });
+
+  const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  assert.equal(
+    result.failoverCount,
+    3,
+    "failoverCount must sum every dispatch's failovers (1 + 2 + 0)",
+  );
+});
+
+test("(008.4 Story D) RunDaemon reports failoverCount 0 when no dispatch failed over", async () => {
+  const log: string[] = [];
+  const daemon = new RunDaemon({
+    recover: makeRecoverUC(log),
+    enqueueReady: makeEnqueueUC(log, [["t1"], []]),
+    runNext: makeRunNextUC(log, [
+      { outcome: "completed", taskId: "t1" },
+      { outcome: "idle" },
+    ]),
+    sleep: makeSleep([]),
+    logger: new NullLogger(),
+  });
+
+  const result = await daemon.execute({ untilIdle: true, pollIntervalMs: 100 });
+
+  assert.equal(result.failoverCount, 0, "no failovers ⇒ failoverCount 0");
 });

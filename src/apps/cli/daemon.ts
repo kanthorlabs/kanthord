@@ -97,6 +97,12 @@ export async function runDaemon(
     if (landedInitiativeIds.length > 0) {
       stderr.push(`${landedInitiativeIds.length} initiative(s) landed`);
     }
+    // 008.4 Story D — report provider failovers in the run summary.
+    const failoverCount =
+      (result as { failoverCount?: number }).failoverCount ?? 0;
+    if (failoverCount > 0) {
+      stderr.push(`${failoverCount} provider failover(s)`);
+    }
     return { exitCode: result.exitCode, stdout: [], stderr };
   } finally {
     process.removeListener("SIGINT", sigintHandler);

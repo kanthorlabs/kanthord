@@ -13,6 +13,8 @@ type RunNextResult =
   | {
       outcome: "skipped" | "completed" | "failed" | "escalated" | "candidate";
       taskId: string;
+      /** 008.4 Story D — provider failovers this dispatch performed. */
+      failovers?: number;
     };
 
 interface Recover {
@@ -84,9 +86,12 @@ export class RunDaemon {
     objectivesAwaitingConfirmation: number;
     landedInitiativeIds: string[];
     failedTasks: Array<{ id: string; reason: string }>;
+    /** 008.4 Story D — total provider failovers across this run. */
+    failoverCount: number;
   }> {
     let hasFailed = false;
     let escalatedCount = 0;
+    let failoverCount = 0;
     const touchedInitiatives = new Set<string>();
     const failedTasks: Array<{ id: string; reason: string }> = [];
 
@@ -99,6 +104,7 @@ export class RunDaemon {
         objectivesAwaitingConfirmation: 0,
         landedInitiativeIds: [],
         failedTasks: [],
+        failoverCount: 0,
       };
     }
     this.#deps.recover.execute();
@@ -129,6 +135,10 @@ export class RunDaemon {
       }
       if (runResult.outcome === "escalated") {
         escalatedCount += 1;
+      }
+      // 008.4 Story D — accumulate provider failovers for the run summary.
+      if (runResult.outcome !== "idle") {
+        failoverCount += runResult.failovers ?? 0;
       }
 
       // Log each non-idle outcome for observability (A1).
@@ -194,6 +204,7 @@ export class RunDaemon {
       objectivesAwaitingConfirmation,
       landedInitiativeIds,
       failedTasks,
+      failoverCount,
     };
   }
 }

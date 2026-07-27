@@ -12,10 +12,11 @@ import {
   fauxToolCall,
 } from "@earendil-works/pi-ai";
 import type { StreamFn } from "@earendil-works/pi-agent-core";
-import type {
-  ProviderSession,
-  ProviderSessionFactory,
-  SessionContext,
+import {
+  CredentialError,
+  type ProviderSession,
+  type ProviderSessionFactory,
+  type SessionContext,
 } from "./pi-session.ts";
 import type { ResolvedProvider } from "./port.ts";
 
@@ -36,6 +37,16 @@ export type FakeTurn = {
  * The `"*"` key is the default served to any task with no exact-title entry.
  */
 export type FakeTurnMap = Record<string, FakeTurn[]>;
+
+/**
+ * EPIC 008.4 — Fake-seam options. `failProviders` lists the provider `name`
+ * (or `provider` field) values whose `.for()` call must reject with a typed
+ * provider error, so the runner classifies the failure as a `providerError`
+ * and the failover loop advances to the next provider in the chain.
+ */
+export type FakeSessionFactoryOpts = {
+  failProviders?: string[];
+};
 
 export class FakeSessionFactory {
   private readonly _streamFn: StreamFn;
@@ -77,10 +88,18 @@ export class FakeSessionFactory {
  * the original behaviour) or a `FakeTurnMap` keyed by task title. In the keyed
  * form, `.for()` selects the entry matching `context.taskTitle`, falling back to
  * the `"*"` default (or an empty script if neither is present).
+ *
+ * EPIC 008.4 — `opts.failProviders` (read from the hermetic
+ * `KANTHORD_FAKE_FAIL_PROVIDERS` env var in `main.ts`) makes `.for()` reject
+ * with a typed `CredentialError` when the resolved provider's `name` or
+ * `provider` field is listed. The runner classifies the rejection as
+ * `providerError: true, reasonCode: 'auth'` and the failover loop advances.
  */
 export function fakeSessionFactoryFromTurns(
   turns: FakeTurn[] | FakeTurnMap,
+  opts?: FakeSessionFactoryOpts,
 ): ProviderSessionFactory {
+  const failList = opts?.failProviders ?? [];
   const selectTurns = (context?: SessionContext): FakeTurn[] => {
     if (Array.isArray(turns)) return turns;
     const byTitle =
@@ -92,6 +111,21 @@ export function fakeSessionFactoryFromTurns(
       _provider: ResolvedProvider,
       _ctx?: SessionContext,
     ): Promise<ProviderSession> {
+      if (failList.length > 0) {
+        if (
+          failList.includes(_provider.name) ||
+          failList.includes(_provider.provider)
+        ) {
+          // Typed provider error: the runner's `classifySessionError` arm for
+          // `CredentialError` produces reasonCode='auth'. The error message is
+          // redacted at the seam (pi.ts) before reaching the result.
+          throw new CredentialError(
+            _provider.name,
+            _provider.provider,
+            `fake-session: provider '${_provider.name}' is in failProviders`,
+          );
+        }
+      }
       const fake = new FakeSessionFactory(selectTurns(_ctx));
       return {
         model: {} as ProviderSession["model"],

@@ -4,7 +4,7 @@ import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the twenty-six literals in order", () => {
+test("EVENT_TYPES lists exactly the twenty-seven literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -23,6 +23,7 @@ test("EVENT_TYPES lists exactly the twenty-six literals in order", () => {
     "agent.finished",
     "task.verification", // A4 — new
     "provider.retry", // 007.9 S2 — new
+    "provider.failover", // 008.4 Story B — chain advance on provider error
     "objective.building", // 007.12 Story D — new
     "objective.awaiting_confirmation", // 007.12 Story D — new
     "objective.integrated", // 007.12 Story D — new

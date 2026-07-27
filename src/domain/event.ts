@@ -18,6 +18,7 @@ export const EVENT_TYPES = [
   "agent.finished",
   "task.verification",
   "provider.retry",
+  "provider.failover", // 008.4 Story B — chain advance on provider error
   "objective.building",
   "objective.awaiting_confirmation",
   "objective.integrated",

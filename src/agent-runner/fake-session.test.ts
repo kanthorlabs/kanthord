@@ -142,3 +142,95 @@ test("fakeSessionFactoryFromTurns plain array serves the same turns regardless o
   assert.equal(await runMark(b.streamFn), "same");
   assert.equal(await runMark(none.streamFn), "same");
 });
+
+// ---------------------------------------------------------------------------
+// 008.4 Story 01 — KANTHORD_FAKE_FAIL_PROVIDERS seam
+//
+// `fakeSessionFactoryFromTurns` accepts an optional `failProviders: string[]`
+// that lists provider `name` (or `provider`) values. When the resolved
+// provider matches an entry in the list, `.for()` REJECTS with a typed
+// provider-level error so the runner classifies the failure as
+// `providerError: true` and the failover loop advances to the next provider
+// in the chain. The seam is the hermetic replacement for the Proof's
+// `KANTHORD_FAKE_FAIL_PROVIDERS` env wiring.
+// ---------------------------------------------------------------------------
+
+const PROVIDER_BAD: ResolvedProvider = {
+  id: "ai-bad",
+  name: "bad",
+  provider: "openai-codex",
+  model: "gpt-5.6-terra",
+  value: "sk-bad",
+  credentialVersion: 1,
+};
+const PROVIDER_GOOD: ResolvedProvider = {
+  id: "ai-good",
+  name: "good",
+  provider: "openai-codex",
+  model: "gpt-5.6-sol",
+  value: "sk-good",
+  credentialVersion: 1,
+};
+
+test("(008.4 Story 01) fakeSessionFactoryFromTurns with failProviders: .for() rejects for a listed provider name (typed provider error)", async () => {
+  const factory = fakeSessionFactoryFromTurns([{ text: "done" }], {
+    failProviders: ["bad"],
+  });
+
+  await assert.rejects(
+    () => factory.for(PROVIDER_BAD, { taskTitle: "x" }),
+    (err: unknown) => {
+      // The thrown error must be an Error instance with a non-empty .name —
+      // the runner classifies on `err.name`, so a plain string would not be
+      // picked up by the CredentialError / UnknownModelError arms and would
+      // fall through to the generic 'provider_unavailable' bucket (still a
+      // provider error, but the typed path is what the Proof depends on).
+      return err instanceof Error && err.name.length > 0;
+    },
+    "factory.for() must reject with a typed provider error for a provider listed in failProviders",
+  );
+});
+
+test("(008.4 Story 01) fakeSessionFactoryFromTurns with failProviders: .for() resolves normally for a provider NOT listed", async () => {
+  const factory = fakeSessionFactoryFromTurns([{ text: "done" }], {
+    failProviders: ["bad"],
+  });
+
+  const session = await factory.for(PROVIDER_GOOD, { taskTitle: "x" });
+  assert.ok(
+    session !== undefined && typeof session.streamFn === "function",
+    "factory.for() must resolve to a normal session for a provider NOT in failProviders",
+  );
+});
+
+test("(008.4 Story 01) fakeSessionFactoryFromTurns with failProviders: matches by `provider` field as well as `name`", async () => {
+  // The Proof registers providers whose `name` differs from `provider`
+  // (e.g. name="bad", provider="openai-codex"). The seam must accept either
+  // identity so a hermetic Proof can list the FAIL providers by their
+  // registration name and have the fake raise.
+  const factory = fakeSessionFactoryFromTurns([{ text: "done" }], {
+    failProviders: ["openai-codex"],
+  });
+
+  // Different `name`, same `provider` → still must fail.
+  await assert.rejects(
+    () => factory.for(PROVIDER_BAD, { taskTitle: "x" }),
+    (err: unknown) => err instanceof Error,
+    "factory.for() must reject when the provider's `provider` field is listed (not just `name`)",
+  );
+});
+
+test("(008.4 Story 01) fakeSessionFactoryFromTurns with no failProviders: .for() never rejects on provider identity (backward compat)", async () => {
+  // The original signature is `(turns)` only — no opts. The factory must
+  // keep working for every provider without an opts argument so callers that
+  // never wire KANTHORD_FAKE_FAIL_PROVIDERS (or wire an empty list) keep
+  // succeeding.
+  const factory = fakeSessionFactoryFromTurns([{ text: "done" }]);
+
+  const a = await factory.for(PROVIDER_BAD, { taskTitle: "x" });
+  const b = await factory.for(PROVIDER_GOOD, { taskTitle: "x" });
+  assert.ok(
+    typeof a.streamFn === "function" && typeof b.streamFn === "function",
+    "factory without failProviders must resolve for every provider (backward compat)",
+  );
+});

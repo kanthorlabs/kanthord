@@ -17,6 +17,7 @@ import { PiAgentRunner } from "./pi.ts";
 import { FakeSessionFactory } from "./fake-session.ts";
 import type { FakeTurn } from "./fake-session.ts";
 import { CredentialError } from "./pi-session.ts";
+import { UnknownModelError } from "./pi-session.ts";
 import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
 import type { Workspace } from "../workspace/port.ts";
 import type { Repository, Filesystem } from "../domain/resource.ts";
@@ -308,6 +309,136 @@ test("PiAgentRunner factory CredentialError: failed, prepare not called", async 
     wm.calls.length,
     0,
     "prepare not called when session factory throws",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story 01 — Runner classifies session-creation errors as provider
+// errors, mapping the typed origin to a reasonCode the failover loop can act
+// on. The failed-result gains `providerError:true` + `reasonCode` fields.
+// ---------------------------------------------------------------------------
+
+test("(008.4 Story 01) runner: sessions.for throws CredentialError → result {providerError:true, reasonCode:'auth'}", async () => {
+  const sessions: ProviderSessionFactory = {
+    async for() {
+      throw new CredentialError(
+        "openai-key",
+        "anthropic",
+        "provider mismatch: anthropic vs openai",
+      );
+    },
+  };
+  const runner = makeRunner({ sessions });
+
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+
+  assert.equal(result.outcome, "failed");
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    true,
+    "CredentialError from sessions.for must set providerError=true on the failed result",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    "auth",
+    "CredentialError must map to reasonCode='auth'",
+  );
+});
+
+test("(008.4 Story 01) runner: sessions.for throws UnknownModelError → result {providerError:true, reasonCode:'invalid_model'}", async () => {
+  const sessions: ProviderSessionFactory = {
+    async for() {
+      throw new UnknownModelError("openai", "gpt-not-a-real-model");
+    },
+  };
+  const runner = makeRunner({ sessions });
+
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+
+  assert.equal(result.outcome, "failed");
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    true,
+    "UnknownModelError from sessions.for must set providerError=true on the failed result",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    "invalid_model",
+    "UnknownModelError must map to reasonCode='invalid_model'",
+  );
+});
+
+test("(008.4 Story 01) runner: sessions.for throws a non-typed error → result {providerError:true, reasonCode:'provider_unavailable'}", async () => {
+  const sessions: ProviderSessionFactory = {
+    async for() {
+      // A plain Error from the session adapter is still a provider-origin
+      // error (it surfaced from sessions.for). It must NOT be classified as a
+      // task-level failure: providerError must be set, and the reasonCode
+      // must be the generic 'provider_unavailable' bucket.
+      throw new Error("session adapter: model not reachable");
+    },
+  };
+  const runner = makeRunner({ sessions });
+
+  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+
+  assert.equal(result.outcome, "failed");
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    true,
+    "any error from sessions.for must set providerError=true on the failed result",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    "provider_unavailable",
+    "an untyped session-adapter error must map to reasonCode='provider_unavailable'",
+  );
+});
+
+test("(008.4 Story 01) runner: a verify-command failure leaves providerError unset (task-level, not provider)", async () => {
+  // A non-zero verification command exit makes the task FAIL. The error path
+  // for verification is INSIDE the runner (after the agent loop succeeds) and
+  // is NOT a session-adapter error, so providerError must remain UNSET.
+  const turns: FakeTurn[] = [{ text: "done" }];
+  const sessions = makeSessionFactory(turns);
+  const runner = makeRunner({ sessions });
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1", verification: ["false"] }),
+    makeContext(),
+    PROVIDER,
+  );
+
+  assert.equal(
+    result.outcome,
+    "failed",
+    "verify command exit 1 must fail the task",
+  );
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    undefined,
+    "verify failure is a task-level outcome, NOT a provider error: providerError must be unset",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    undefined,
+    "verify failure must not carry a provider reasonCode",
   );
 });
 
@@ -2067,5 +2198,252 @@ test("(BLOCKER 4) PiAgentRunner with provider arg: passes credentialVersion to s
     capturedVersion,
     5,
     "sessions.for() must receive provider.credentialVersion as 4th arg",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story A/B — mid-stream provider errors are classified by the provider's
+// HTTP response status (pi-ai's `onResponse` hook), never by the error text.
+// A 429/503 mid-stream is a provider error; any other stream failure stays a
+// task-level failure.
+// ---------------------------------------------------------------------------
+
+/**
+ * A session whose stream reports `status` through pi-ai's `onResponse` hook and
+ * then fails, optionally writing `dirtyFile` into `dirtyDir` first (the
+ * "workspace was already modified" case Story B's clean-attempt boundary must
+ * undo).
+ */
+function makeFailingStreamSessions(opts: {
+  status?: number;
+  dirtyDir?: string;
+  dirtyFile?: string;
+}): ProviderSessionFactory {
+  return {
+    async for() {
+      return {
+        model: {} as unknown as any,
+        streamFn: (async (
+          model: unknown,
+          _context: unknown,
+          streamOpts?: {
+            onResponse?: (
+              response: { status: number; headers: Record<string, string> },
+              model: unknown,
+            ) => void | Promise<void>;
+          },
+        ) => {
+          if (opts.status !== undefined) {
+            await streamOpts?.onResponse?.(
+              { status: opts.status, headers: {} },
+              model,
+            );
+          }
+          if (opts.dirtyDir !== undefined && opts.dirtyFile !== undefined) {
+            await writeFile(join(opts.dirtyDir, opts.dirtyFile), "partial\n");
+          }
+          throw new Error("upstream connection closed");
+        }) as unknown as any,
+        getApiKey: () => "fake-key",
+      } as unknown as any;
+    },
+  };
+}
+
+test("(008.4 Story A) runner: a mid-stream failure after a 429 response → {providerError:true, reasonCode:'rate_limit'}", async () => {
+  const runner = makeRunner({
+    sessions: makeFailingStreamSessions({ status: 429 }),
+  });
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+  );
+
+  assert.equal(result.outcome, "failed");
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    true,
+    "a stream failure whose last provider response was 429 must set providerError=true",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    "rate_limit",
+    "a 429 must map to reasonCode='rate_limit'",
+  );
+});
+
+test("(008.4 Story A) runner: a mid-stream failure after a 503 response → {providerError:true, reasonCode:'provider_unavailable'}", async () => {
+  const runner = makeRunner({
+    sessions: makeFailingStreamSessions({ status: 503 }),
+  });
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+  );
+
+  assert.equal(result.outcome, "failed");
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    true,
+    "a stream failure whose last provider response was 503 must set providerError=true",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    "provider_unavailable",
+    "a 503 must map to reasonCode='provider_unavailable'",
+  );
+});
+
+test("(008.4 Story A) runner: a mid-stream failure with a 200 response is NOT a provider error (no failover on non-provider stream noise)", async () => {
+  const runner = makeRunner({
+    sessions: makeFailingStreamSessions({ status: 200 }),
+  });
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+  );
+
+  assert.equal(result.outcome, "failed");
+  const tagged = result as unknown as {
+    providerError?: boolean;
+    reasonCode?: string;
+  };
+  assert.equal(
+    tagged.providerError,
+    undefined,
+    "a stream failure with no 429/503 status must leave providerError unset (task-level)",
+  );
+  assert.equal(
+    tagged.reasonCode,
+    undefined,
+    "a non-provider stream failure must not carry a provider reasonCode",
+  );
+});
+
+test("(008.4 Story B) runner clean-attempt boundary: an initiative-clone run starts from a pristine tree, discarding a failed attempt's workspace debris", async () => {
+  // A `workspace` binding routes the run into an initiative clone, bypassing
+  // workspaces.prepare()'s wipe-on-retry. Attempt 1 dirties the clone and then
+  // fails mid-stream with a 429 (a provider error → the failover loop starts a
+  // clean attempt). Attempt 2 must not see attempt 1's file.
+  const cloneDir = join(tmpPiRoot, "failover-clone");
+  await mkdir(cloneDir, { recursive: true });
+  await execFileAsync("git", ["init", "-b", "kanthord/init/init-004"], {
+    cwd: cloneDir,
+  });
+  await execFileAsync("git", ["config", "user.email", "test@localhost"], {
+    cwd: cloneDir,
+  });
+  await execFileAsync("git", ["config", "user.name", "Test"], {
+    cwd: cloneDir,
+  });
+  await writeFile(join(cloneDir, "README.md"), "# clone");
+  await execFileAsync("git", ["add", "."], { cwd: cloneDir });
+  await execFileAsync("git", ["commit", "-m", "initial"], { cwd: cloneDir });
+
+  const ctx: TaskContextBinding[] = [
+    ...makeContext(),
+    { type: "workspace", resourceId: cloneDir },
+  ];
+
+  // Attempt 1 — dirties the clone, then fails with a provider error.
+  const failing = makeRunner({
+    sessions: makeFailingStreamSessions({
+      status: 429,
+      dirtyDir: cloneDir,
+      dirtyFile: "half-written.mjs",
+    }),
+  });
+  const first = await failing.run(
+    makeTask({ agent: "synthetic@1" }),
+    ctx,
+    PROVIDER,
+  );
+  assert.equal(
+    (first as unknown as { providerError?: boolean }).providerError,
+    true,
+    "attempt 1 must fail as a provider error",
+  );
+  await assert.doesNotReject(
+    () =>
+      execFileAsync("git", ["cat-file", "-e", "HEAD:half-written.mjs"], {
+        cwd: cloneDir,
+      }).then(
+        () => {
+          throw new Error("debris must not be committed");
+        },
+        () => undefined,
+      ),
+    "attempt 1's debris stays uncommitted",
+  );
+
+  // Attempt 2 — the next provider's clean attempt must see a pristine tree.
+  let dirtyDuringSecondRun: string[] = [];
+  const clean = makeRunner({
+    profiles: new Map([
+      [
+        "synthetic@1",
+        {
+          ...makeSyntheticProfile("synthetic@1"),
+          systemPrompt: () => {
+            return "prompt";
+          },
+        },
+      ],
+    ]),
+    sessions: {
+      async for() {
+        const { stdout } = await execFileAsync(
+          "git",
+          ["status", "--porcelain"],
+          { cwd: cloneDir },
+        );
+        dirtyDuringSecondRun = stdout.trim().split("\n").filter(Boolean);
+        const fake = new FakeSessionFactory([{ text: "done" }]);
+        return {
+          model: {} as unknown as any,
+          streamFn: fake.streamFn as unknown as any,
+          getApiKey: () => "fake-key",
+        } as unknown as any;
+      },
+    },
+  });
+  const second = await clean.run(
+    makeTask({ agent: "synthetic@1" }),
+    ctx,
+    PROVIDER,
+  );
+  assert.equal(
+    second.outcome,
+    "completed",
+    `attempt 2 must run to completion, got ${JSON.stringify(second)}`,
+  );
+  const { stdout: afterStatus } = await execFileAsync(
+    "git",
+    ["status", "--porcelain"],
+    { cwd: cloneDir },
+  );
+  assert.equal(
+    afterStatus.includes("half-written.mjs"),
+    false,
+    `attempt 1's debris must be gone from the clone; git status:\n${afterStatus}`,
+  );
+  assert.equal(
+    dirtyDuringSecondRun.some((l) => l.includes("half-written.mjs")),
+    true,
+    "sanity: the debris was still present when attempt 2 started (so the reset — not the test — removed it)",
   );
 });

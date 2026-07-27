@@ -45,6 +45,7 @@ import type {
 } from "./port.ts";
 import type { PiAgentProfile } from "./pi-profile.ts";
 import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
+import { CredentialError, UnknownModelError } from "./pi-session.ts";
 import type { OutcomeEvidence, VerificationEvidence } from "./verification.ts";
 import { renderTaskPrompt } from "./task-prompt.ts";
 
@@ -72,6 +73,35 @@ class InvalidContextError extends Error {
     super(message);
     this.name = "InvalidContextError";
   }
+}
+
+/**
+ * EPIC 008.4 — Map a session-factory error to a typed `reasonCode` the
+ * failover loop can act on. Pure: depends only on the error's identity, not
+ * its message.
+ */
+function classifySessionError(
+  err: Error,
+): "auth" | "invalid_model" | "provider_unavailable" {
+  if (err instanceof CredentialError) return "auth";
+  if (err instanceof UnknownModelError) return "invalid_model";
+  return "provider_unavailable";
+}
+
+/**
+ * EPIC 008.4 — Map a provider's HTTP response status to a typed `reasonCode`.
+ * The status comes from pi-ai's `StreamOptions.onResponse` hook (every api
+ * module calls it with the real `{status, headers}`), so a mid-stream provider
+ * failure is classified by response code, never by matching the error text —
+ * git/workspace/db/verify failures can produce the same words but never a
+ * provider HTTP status.
+ */
+function classifyStreamStatus(
+  status: number | undefined,
+): "rate_limit" | "provider_unavailable" | undefined {
+  if (status === 429) return "rate_limit";
+  if (status === 503) return "provider_unavailable";
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +410,17 @@ export class PiAgentRunner implements AgentRunner {
    * branch/baseCommit are read from the clone itself.
    */
   async #resolveClonedWorkspace(dir: string): Promise<Workspace> {
+    // EPIC 008.4 Story B — clean-attempt boundary. `workspaces.prepare()`
+    // wipes its workspace dir on every call (wipe-on-retry, see
+    // workspace/local.ts); the initiative-clone path is the runner's
+    // equivalent entry point, so it must give the same guarantee: a failed
+    // previous attempt (e.g. a mid-stream 429 after the agent had already
+    // edited files) must not leak its debris into the next provider's run.
+    // Committed work from earlier tasks lives in HEAD and is preserved;
+    // `clean -fd` (no `-x`) removes untracked-but-not-ignored files only, so
+    // gitignored build state (node_modules, …) survives.
+    await gitRun(dir, ["reset", "--hard", "HEAD"]);
+    await gitRun(dir, ["clean", "-fd"]);
     const branch = await gitRun(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
     const baseCommit = await gitRun(dir, ["rev-parse", "HEAD"]);
     return { dir, branch, baseCommit };
@@ -425,8 +466,21 @@ export class PiAgentRunner implements AgentRunner {
         provider.credentialVersion,
       );
     } catch (err) {
+      // EPIC 008.4: classify the error by typed origin. Any error that surfaces
+      // from `sessions.for` is a provider-level failure (the session adapter
+      // could not produce a session) — the failover loop will walk the chain.
+      // The reasonCode is the typed signal the loop matches on:
+      //   CredentialError     → "auth"
+      //   UnknownModelError   → "invalid_model"
+      //   anything else from a session adapter → "provider_unavailable"
       const e = err instanceof Error ? err : new Error(String(err));
-      return { outcome: "failed", reason: redact(`${e.name}: ${e.message}`) };
+      const reasonCode = classifySessionError(e);
+      return {
+        outcome: "failed",
+        reason: redact(`${e.name}: ${e.message}`),
+        providerError: true,
+        reasonCode,
+      };
     }
 
     // 4. Workspace source resolution
@@ -523,8 +577,23 @@ export class PiAgentRunner implements AgentRunner {
         }
       }
 
+      // EPIC 008.4 Story A — mid-stream provider-error provenance. Wrap the
+      // session's streamFn so pi-ai's `onResponse` hook records the provider's
+      // last HTTP status; a stream failure is then classified by that status
+      // (429/503), not by the error text. The caller's own `onResponse` (if
+      // any) still runs.
+      const httpProbe: { lastStatus?: number } = {};
+      const streamFn: typeof session.streamFn = (model, context, options) =>
+        session.streamFn(model, context, {
+          ...(options ?? {}),
+          onResponse: async (response, responseModel) => {
+            httpProbe.lastStatus = response.status;
+            await options?.onResponse?.(response, responseModel);
+          },
+        });
+
       const agent = new Agent({
-        streamFn: session.streamFn,
+        streamFn,
         getApiKey: () => session.getApiKey(),
       });
       agent.state.systemPrompt = systemPrompt;
@@ -580,6 +649,20 @@ export class PiAgentRunner implements AgentRunner {
 
       // Check for agent-level error before evidence computation
       if (agent.state.errorMessage && escalationReason === undefined) {
+        // EPIC 008.4 Story A/B — a stream failure whose last provider response
+        // was 429/503 is a provider-level error: the failover loop advances to
+        // the next provider on a clean attempt (the workspace edits this run
+        // may already have made are discarded by the clean-attempt boundary in
+        // `prepare` / `#resolveClonedWorkspace`).
+        const streamReasonCode = classifyStreamStatus(httpProbe.lastStatus);
+        if (streamReasonCode !== undefined) {
+          return {
+            outcome: "failed",
+            reason: redact(agent.state.errorMessage),
+            providerError: true,
+            reasonCode: streamReasonCode,
+          };
+        }
         return { outcome: "failed", reason: redact(agent.state.errorMessage) };
       }
 

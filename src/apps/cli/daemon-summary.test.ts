@@ -221,3 +221,49 @@ test("(Story 07) runDaemon: a run whose only task failed reports the failure fir
     `stderr must NOT print an 'initiative(s) landed' line — this run landed nothing; got: ${JSON.stringify(result.stderr)}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// 008.4 Story D — the daemon summary reports provider failover counts.
+// ---------------------------------------------------------------------------
+
+/** Fake RunDaemon whose execute() reports the given failoverCount. */
+function makeFailoverDaemon(failoverCount: number): RunDaemonClass {
+  return {
+    execute(_opts: {
+      untilIdle: boolean;
+      pollIntervalMs?: number;
+    }): Promise<{ exitCode: 0 | 1 }> {
+      return Promise.resolve({
+        exitCode: 0 as const,
+        escalatedCount: 0,
+        objectivesAwaitingConfirmation: 0,
+        landedInitiativeIds: [],
+        failedTasks: [],
+        failoverCount,
+      } as unknown as { exitCode: 0 | 1 });
+    },
+    stop(): void {},
+  } as unknown as RunDaemonClass;
+}
+
+test("(008.4 Story D) runDaemon prints '2 provider failover(s)' when the run failed over twice", async () => {
+  const result = await runDaemon({ "until-idle": true }, () =>
+    makeFailoverDaemon(2),
+  );
+
+  assert.ok(
+    result.stderr.some((l) => l === "2 provider failover(s)"),
+    `stderr must include '2 provider failover(s)'; got: ${JSON.stringify(result.stderr)}`,
+  );
+});
+
+test("(008.4 Story D) runDaemon prints no failover line when the run had none", async () => {
+  const result = await runDaemon({ "until-idle": true }, () =>
+    makeFailoverDaemon(0),
+  );
+
+  assert.ok(
+    !result.stderr.some((l) => l.includes("failover")),
+    `stderr must not mention failovers when there were none; got: ${JSON.stringify(result.stderr)}`,
+  );
+});

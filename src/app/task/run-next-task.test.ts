@@ -19,6 +19,7 @@ import type { Objective } from "../../domain/initiative.ts";
 import type {
   AgentRunner,
   AgentRunnerResolver,
+  ResolvedProvider,
   TaskContextBinding,
   TaskResult,
 } from "../../agent-runner/port.ts";
@@ -1541,5 +1542,541 @@ test("(12) candidate-completes-directly branch also gates: filesystem-bound chan
     readyForO2.length,
     0,
     "no task.ready event for O2's task from candidate-completes-directly",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story 02 — Failover loop with a clean-attempt boundary
+// ---------------------------------------------------------------------------
+
+const BAD_PROVIDER: ResolvedProvider = {
+  id: "prov-bad",
+  name: "bad",
+  provider: "openai-codex",
+  model: "gpt-5.6-terra",
+  value: "sk-bad",
+  credentialVersion: 1,
+};
+
+const GOOD_PROVIDER: ResolvedProvider = {
+  id: "prov-good",
+  name: "good",
+  provider: "openai-codex",
+  model: "gpt-5.6-sol",
+  value: "sk-good",
+  credentialVersion: 1,
+};
+
+const BAD2_PROVIDER: ResolvedProvider = {
+  id: "prov-bad2",
+  name: "bad2",
+  provider: "openai-codex",
+  model: "gpt-5.6-luna",
+  value: "sk-bad2",
+  credentialVersion: 1,
+};
+
+test("(008.4 Story 02) RunNextTask on a provider error: chain=[BAD,GOOD], task ends completed; runner.run called with BAD then GOOD; exactly one provider.failover event with payload {from, to, reasonCode}", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  // Runner: returns providerError for BAD, success for GOOD. Records the
+  // provider passed on each call for the sequence assertion.
+  const calls: Array<{
+    taskId: string;
+    providerId: string | undefined;
+  }> = [];
+  const failoverRunner: AgentRunner = {
+    async run(
+      task: Task,
+      _context: TaskContextBinding[],
+      provider?: ResolvedProvider,
+    ): Promise<TaskResult> {
+      calls.push({ taskId: task.id, providerId: provider?.id });
+      if (provider !== undefined && provider.id === BAD_PROVIDER.id) {
+        return {
+          outcome: "failed",
+          reason: "auth failed",
+          providerError: true,
+          reasonCode: "auth",
+        };
+      }
+      return { outcome: "completed", summary: "ok" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => failoverRunner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [BAD_PROVIDER, GOOD_PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  // Task ends completed (failover succeeded on the second provider), and the
+  // result reports the one failover for the daemon summary (Story D).
+  assert.deepEqual(result, {
+    outcome: "completed",
+    taskId: TASK_SIMPLE.id,
+    failovers: 1,
+  });
+
+  // Runner called exactly twice: BAD first, then GOOD.
+  assert.equal(
+    calls.length,
+    2,
+    `runner.run must be called exactly twice (BAD then GOOD); got ${calls.length} calls`,
+  );
+  assert.equal(
+    calls[0]!.providerId,
+    BAD_PROVIDER.id,
+    "first run must use BAD provider",
+  );
+  assert.equal(
+    calls[1]!.providerId,
+    GOOD_PROVIDER.id,
+    "second run must use GOOD provider",
+  );
+
+  // Exactly one provider.failover event with the right payload.
+  const failoverEvts = feed.events.filter(
+    (e) => e.type === "provider.failover",
+  );
+  assert.equal(
+    failoverEvts.length,
+    1,
+    `exactly one provider.failover event must be emitted; got ${failoverEvts.length}`,
+  );
+  const ev = failoverEvts[0]!;
+  assert.equal(ev.taskId, TASK_SIMPLE.id, "failover event scoped to the task");
+  assert.equal(
+    ev.payload?.from,
+    BAD_PROVIDER.id,
+    "failover payload.from must be the BAD provider's id",
+  );
+  assert.equal(
+    ev.payload?.to,
+    GOOD_PROVIDER.id,
+    "failover payload.to must be the GOOD provider's id",
+  );
+  assert.equal(
+    ev.payload?.reasonCode,
+    "auth",
+    "failover payload.reasonCode must match the typed reason code from the failed result",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story 03 — Task failures never fail over (no providerError ⇒ no
+// chain advance, no provider.failover event). A task-level outcome
+// (verify fail, bad work, budget, escalation) returns immediately on the
+// current provider; the failover branch is gated on `providerError === true`.
+// ---------------------------------------------------------------------------
+
+test("(008.4 Story 03) RunNextTask on a task-level failure (providerError unset): chain=[GOOD,BAD], task ends failed; runner.run called exactly once (no advance to BAD); no provider.failover event", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  // Runner: returns a TASK-LEVEL failure (verify fail) for any provider —
+  // note the absence of `providerError`. The runner must be called exactly
+  // once; the loop's failover branch is gated on `providerError === true`,
+  // so the absence of that flag means no chain advance and no event.
+  const calls: Array<{
+    taskId: string;
+    providerId: string | undefined;
+  }> = [];
+  const taskFailRunner: AgentRunner = {
+    async run(
+      task: Task,
+      _context: TaskContextBinding[],
+      provider?: ResolvedProvider,
+    ): Promise<TaskResult> {
+      calls.push({ taskId: task.id, providerId: provider?.id });
+      return {
+        outcome: "failed",
+        reason: "verify failed: test -f src/todo.mjs returned non-zero",
+        // NOTE: providerError is intentionally OMITTED — this is a
+        // task-level outcome, not a provider error.
+      };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => taskFailRunner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [GOOD_PROVIDER, BAD_PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  // Task ends failed (verify fail is a task-level failure).
+  assert.equal(
+    result.outcome,
+    "failed",
+    `task must end failed (verify-fail is task-level); got ${JSON.stringify(result)}`,
+  );
+
+  // Runner called exactly ONCE — the failover branch is gated on
+  // `providerError === true`, so a task-level failure does NOT advance the
+  // chain to BAD.
+  assert.equal(
+    calls.length,
+    1,
+    `runner.run must be called exactly once (no chain advance on task-level failure); got ${calls.length} calls`,
+  );
+  assert.equal(
+    calls[0]!.providerId,
+    GOOD_PROVIDER.id,
+    "the single run must use the FIRST provider in the chain (GOOD); a task-level failure must NOT walk to BAD",
+  );
+
+  // No `provider.failover` event must be emitted — the failure is not a
+  // provider error, so the failover branch never fires.
+  const failoverEvts = feed.events.filter(
+    (e) => e.type === "provider.failover",
+  );
+  assert.equal(
+    failoverEvts.length,
+    0,
+    `no provider.failover event may be emitted for a task-level failure; got ${failoverEvts.length}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story 04 — Provider failover chain exhaustion: a `task.failed` event
+// carries the typed `reasonCode: "provider_chain_exhausted"` and a
+// `providerReasons` list of each attempted provider's typed reason code (no
+// secret, structured codes only).
+// ---------------------------------------------------------------------------
+
+test("(008.4 Story 04) RunNextTask on exhausted chain: chain=[BAD, BAD2] both providerError; task ends failed; provider.failover (BAD→BAD2) emitted; task.failed payload has reasonCode='provider_chain_exhausted' and providerReasons listing both codes; no secret in any payload", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  // Runner: returns a typed provider-level failure for BOTH providers, with
+  // distinct reason codes ("auth" for BAD, "invalid_model" for BAD2) so the
+  // aggregate `providerReasons` proves the loop walked the whole chain.
+  const calls: Array<{
+    taskId: string;
+    providerId: string | undefined;
+  }> = [];
+  const exhaustingRunner: AgentRunner = {
+    async run(
+      task: Task,
+      _context: TaskContextBinding[],
+      provider?: ResolvedProvider,
+    ): Promise<TaskResult> {
+      calls.push({ taskId: task.id, providerId: provider?.id });
+      if (provider !== undefined && provider.id === BAD_PROVIDER.id) {
+        return {
+          outcome: "failed",
+          reason: "auth failed for sk-bad",
+          providerError: true,
+          reasonCode: "auth",
+        };
+      }
+      if (provider !== undefined && provider.id === BAD2_PROVIDER.id) {
+        return {
+          outcome: "failed",
+          reason: "model gpt-5.6-luna not in catalog",
+          providerError: true,
+          reasonCode: "invalid_model",
+        };
+      }
+      return { outcome: "completed", summary: "ok" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => exhaustingRunner };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    providerChainFor: (_id: string) => [BAD_PROVIDER, BAD2_PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  // Task ends failed (chain exhausted; no provider succeeded).
+  assert.equal(
+    result.outcome,
+    "failed",
+    `exhausted chain must end failed; got ${JSON.stringify(result)}`,
+  );
+  assert.equal(
+    (result as { taskId: string }).taskId,
+    TASK_SIMPLE.id,
+    "exhausted task id must equal the claimed task",
+  );
+
+  // Runner called exactly twice (BAD then BAD2 — the chain was walked).
+  assert.equal(
+    calls.length,
+    2,
+    `runner.run must walk the whole chain (BAD then BAD2); got ${calls.length} calls`,
+  );
+  assert.equal(
+    calls[0]!.providerId,
+    BAD_PROVIDER.id,
+    "first run must use BAD provider",
+  );
+  assert.equal(
+    calls[1]!.providerId,
+    BAD2_PROVIDER.id,
+    "second run must use BAD2 provider (chain advanced past BAD's providerError)",
+  );
+
+  // Exactly one provider.failover event with the right payload (BAD → BAD2).
+  const failoverEvts = feed.events.filter(
+    (e) => e.type === "provider.failover",
+  );
+  assert.equal(
+    failoverEvts.length,
+    1,
+    `exactly one provider.failover event must be emitted on exhaustion; got ${failoverEvts.length}`,
+  );
+  const fEv = failoverEvts[0]!;
+  assert.equal(fEv.taskId, TASK_SIMPLE.id, "failover event scoped to the task");
+  assert.equal(
+    fEv.payload?.from,
+    BAD_PROVIDER.id,
+    "failover payload.from must be the BAD provider's id",
+  );
+  assert.equal(
+    fEv.payload?.to,
+    BAD2_PROVIDER.id,
+    "failover payload.to must be the BAD2 provider's id",
+  );
+  assert.equal(
+    fEv.payload?.reasonCode,
+    "auth",
+    "failover payload.reasonCode must carry the typed reason code from the failed provider (BAD's auth)",
+  );
+
+  // The terminal task.failed event must carry the typed aggregate reason.
+  const failedEvt = feed.events.find((e) => e.type === "task.failed");
+  assert.ok(failedEvt, "task.failed event must be emitted on chain exhaustion");
+  assert.equal(
+    failedEvt!.payload?.reasonCode,
+    "provider_chain_exhausted",
+    `task.failed payload.reasonCode must equal 'provider_chain_exhausted'; got ${JSON.stringify(failedEvt!.payload)}`,
+  );
+
+  // providerReasons must list each attempted provider's typed reason code.
+  const reasons = failedEvt!.payload?.providerReasons;
+  assert.ok(
+    reasons !== undefined && reasons.length > 0,
+    `task.failed payload.providerReasons must be present; got ${JSON.stringify(failedEvt!.payload)}`,
+  );
+  // The two codes the runner returned ("auth" then "invalid_model") must both
+  // appear in `providerReasons` in walk order.
+  assert.equal(
+    reasons,
+    "auth,invalid_model",
+    `task.failed payload.providerReasons must list each attempted provider's typed code in walk order; got ${JSON.stringify(reasons)}`,
+  );
+
+  // No credential value may leak into any payload. The two BAD providers
+  // carry distinct `value` strings ("sk-bad" and "sk-bad2"); the Secret
+  // marker from the EPIC's `set -euo pipefail` Proof block is "SECRET".
+  const serialized = JSON.stringify(feed.events);
+  assert.equal(
+    /SECRET/.test(serialized),
+    false,
+    "task.failed/provider.failover payloads must not carry a 'SECRET' marker",
+  );
+  assert.equal(
+    serialized.includes("sk-bad"),
+    false,
+    "task.failed/provider.failover payloads must not carry BAD's credential value (sk-bad)",
+  );
+  assert.equal(
+    serialized.includes("sk-bad2"),
+    false,
+    "task.failed/provider.failover payloads must not carry BAD2's credential value (sk-bad2)",
+  );
+
+  // The task must be persisted as failed and the job finished as failed.
+  const lastSaved = store.saved[store.saved.length - 1]!;
+  assert.equal(
+    lastSaved.status,
+    "failed",
+    "exhausted task must be saved with status=failed",
+  );
+  assert.deepEqual(
+    queue.finished[0],
+    { jobId: JOB_ID, outcome: "failed" },
+    "exhausted job must be finished with outcome=failed",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 008.4 Story B — failover takes precedence over the same-provider transient
+// retry (007.9 S2). A 429/503 is BOTH provider-level and transient; the epic's
+// contract is to move to the next provider rather than retry the one that just
+// rate-limited us. On the LAST provider of the chain there is nothing to fail
+// over to, so the transient retry still applies.
+// ---------------------------------------------------------------------------
+
+test("(008.4 Story 02) a result that is both providerError and transient fails over instead of retrying: 1 provider.failover, 0 provider.retry, runner called BAD then GOOD, failovers=1 on the result", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  const calls: Array<string | undefined> = [];
+  const rateLimitedRunner: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+      provider?: ResolvedProvider,
+    ): Promise<TaskResult> {
+      calls.push(provider?.id);
+      if (provider !== undefined && provider.id === BAD_PROVIDER.id) {
+        return {
+          outcome: "failed",
+          reason: "429 rate limited",
+          providerError: true,
+          reasonCode: "rate_limit",
+          transient: true,
+          retryAfterMs: 5000,
+        };
+      }
+      return { outcome: "completed", summary: "ok" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => rateLimitedRunner };
+  const sleepLog: number[] = [];
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    maxAttempts: 5,
+    sleep: makeSleepRT(sleepLog),
+    providerChainFor: (_id: string) => [BAD_PROVIDER, GOOD_PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  assert.equal(
+    result.outcome,
+    "completed",
+    `expected completion on the second provider, got ${JSON.stringify(result)}`,
+  );
+  assert.deepEqual(
+    calls,
+    [BAD_PROVIDER.id, GOOD_PROVIDER.id],
+    "the rate-limited provider must not be retried; the chain must advance",
+  );
+  assert.equal(
+    feed.events.filter((e) => e.type === "provider.failover").length,
+    1,
+    "exactly one provider.failover event",
+  );
+  assert.equal(
+    feed.events.filter((e) => e.type === "provider.retry").length,
+    0,
+    "a provider error with a next provider must NOT emit a same-provider retry",
+  );
+  assert.deepEqual(
+    sleepLog,
+    [],
+    "failover must not wait out the retry backoff",
+  );
+  assert.equal(
+    (result as { failovers?: number }).failovers,
+    1,
+    "the result must report the failover count for the daemon summary",
+  );
+});
+
+test("(008.4 Story 02) a providerError+transient result on the LAST provider still retries on that provider, then fails with reasonCode=provider_chain_exhausted", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  let calls = 0;
+  const alwaysRateLimited: AgentRunner = {
+    async run(): Promise<TaskResult> {
+      calls += 1;
+      return {
+        outcome: "failed",
+        reason: "429 rate limited",
+        providerError: true,
+        reasonCode: "rate_limit",
+        transient: true,
+      };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => alwaysRateLimited };
+  const sleepLog: number[] = [];
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver, undefined, {
+    maxAttempts: 2,
+    sleep: makeSleepRT(sleepLog),
+    providerChainFor: (_id: string) => [BAD_PROVIDER],
+  } as any);
+  const result = await uc.execute();
+
+  assert.equal(result.outcome, "failed");
+  assert.equal(calls, 2, "the single provider must exhaust its retry budget");
+  assert.equal(
+    feed.events.filter((e) => e.type === "provider.retry").length,
+    1,
+    "one provider.retry for the one retried attempt",
+  );
+  assert.equal(
+    feed.events.filter((e) => e.type === "provider.failover").length,
+    0,
+    "no failover event when the chain has no next provider",
+  );
+  const failedEvt = feed.events.find((e) => e.type === "task.failed");
+  assert.equal(
+    failedEvt?.payload?.reasonCode,
+    "provider_chain_exhausted",
+    "the terminal failure is still the typed exhaustion aggregate",
+  );
+  assert.equal(
+    (result as { failovers?: number }).failovers,
+    undefined,
+    "no failover happened, so the result carries no failover count",
+  );
+});
+
+test("(008.4 Story 04) a provider error with NO resolved chain (legacy caller without providerChainFor) does not claim a chain was exhausted", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  const providerErrorRunner: AgentRunner = {
+    async run(): Promise<TaskResult> {
+      return {
+        outcome: "failed",
+        reason: "CredentialError: bad key",
+        providerError: true,
+        reasonCode: "auth",
+      };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => providerErrorRunner };
+
+  // No providerChainFor → chain is undefined: there was never a chain to walk.
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.equal(result.outcome, "failed");
+  const failedEvt = feed.events.find((e) => e.type === "task.failed");
+  assert.equal(
+    failedEvt?.payload?.reasonCode,
+    undefined,
+    "without a resolved chain the failure must not be labelled provider_chain_exhausted",
+  );
+  assert.equal(
+    failedEvt?.payload?.providerReasons,
+    undefined,
+    "no chain ⇒ no aggregated providerReasons",
   );
 });

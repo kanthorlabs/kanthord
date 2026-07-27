@@ -67,9 +67,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 25 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
+test("migrates to version 26 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
     assert.deepEqual(userTables(db), [
       "ai_provider_default",
       "ai_providers",
@@ -446,7 +446,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 25);
+    assert.equal(second.version, 26);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -797,7 +797,7 @@ test("migration 7 creates workspace_cached_policies with repo_id PRIMARY KEY", (
 
 // ── (p) migration 8 — S2: task.conflict schema + bidirectional drift guard ────
 
-test("S2: all 16 EVENT_TYPES members are accepted by the migrated events table", () => {
+test("S2: all 27 EVENT_TYPES members are accepted by the migrated events table", () => {
   withMigratedDb((db) => {
     const { taskId } = insertChain(db);
     for (const eventType of EVENT_TYPES) {
@@ -859,8 +859,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // (a) Schema must now be at the latest version.
     assert.equal(
       userVersion(db),
-      25,
-      "schema version must be 25 after all migrations",
+      26,
+      "schema version must be 26 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -992,7 +992,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1096,7 +1096,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1175,7 +1175,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1212,7 +1212,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 25);
+    assert.equal(report.version, 26);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1507,7 +1507,7 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
@@ -1522,7 +1522,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,providerId) rejects dup
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-uniq', 'P');
@@ -1563,7 +1563,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two membe
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-rank', 'P');
@@ -1682,9 +1682,9 @@ test("migration 25 (008.3-s-retire-ai-provider-type): resources CHECK rejects ai
       "INSERT INTO task_context(task_id, type, resource_id) VALUES ('task-m25', 'credential', 'r-cred')",
     );
 
-    // Apply all migrations including 25
+    // Apply all migrations including 25 (and any later migrations)
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 25);
+    assert.equal(userVersion(db), 26);
 
     // migration-7 columns still present
     assert.deepEqual(columnNames(db, "resources"), [
@@ -1749,4 +1749,102 @@ test("migration 25 (008.3-s-retire-ai-provider-type): resources CHECK rejects ai
     db.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── (v) migration 26 — 008.4-s-provider-failover-event (Story D) ────────────
+
+test("migration 26: events.type CHECK admits 'provider.failover' (008.4 Story D)", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.doesNotThrow(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-pf-1",
+        "provider.failover",
+        taskId,
+      );
+    }, "'provider.failover' must be a valid event type after migration 26");
+    // The row must be readable back through the rebuilt table.
+    const row = db
+      .prepare("SELECT type FROM events WHERE id = ?")
+      .get("ev-pf-1") as { type: string } | undefined;
+    assert.ok(row !== undefined, "inserted provider.failover row must survive");
+    assert.equal(row.type, "provider.failover");
+  });
+});
+
+test("migration 26: events.type CHECK still rejects an unknown type (008.4 Story D)", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.throws(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-bad-m26",
+        "task.bogus",
+        taskId,
+      );
+    }, "an unknown event type must still be rejected by the events.type CHECK after migration 26");
+  });
+});
+
+test("migration 26: pre-existing event rows survive the table rebuild (008.4 Story D)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m26-rebuild-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 25 only (pre-migration-26 state) and seed event
+    // rows that the rebuild must preserve verbatim.
+    migrate(db, MIGRATIONS.slice(0, 25));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m26', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m26', 'proj-m26', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m26', 'init-m26', 'O');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-m26', 'obj-m26', 'T', 'pending');
+    `);
+    db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+      "ev-m26-1",
+      "task.created",
+      "task-m26",
+    );
+    db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+      "ev-m26-2",
+      "task.verification",
+      "task-m26",
+    );
+
+    migrate(db, MIGRATIONS);
+    assert.equal(
+      userVersion(db),
+      26,
+      "schema version must be 26 after all migrations",
+    );
+    const countRow = db
+      .prepare("SELECT COUNT(*) AS cnt FROM events WHERE taskId = ?")
+      .get("task-m26") as { cnt: number };
+    assert.equal(
+      countRow.cnt,
+      2,
+      "both seeded event rows must survive the migration 26 table rebuild",
+    );
+    const row = db
+      .prepare("SELECT type FROM events WHERE id = ?")
+      .get("ev-m26-1") as { type: string } | undefined;
+    assert.ok(row !== undefined, "seeded event row ev-m26-1 must survive");
+    assert.equal(row.type, "task.created");
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 26: rebuild preserves all 7 events columns (id, type, taskId, payload, objectiveId, initiativeId, repositoryId) (008.4 Story D)", () => {
+  withMigratedDb((db) => {
+    assert.deepEqual(columnNames(db, "events"), [
+      "id",
+      "type",
+      "taskId",
+      "payload",
+      "objectiveId",
+      "initiativeId",
+      "repositoryId",
+    ]);
+  });
 });

@@ -759,4 +759,39 @@ ALTER TABLE resources_new RENAME TO resources;
 `);
     },
   },
+  {
+    version: 26,
+    name: "008.4-s-provider-failover-event",
+    // EPIC 008.4 Story D — admit 'provider.failover' in the events.type
+    // CHECK list (SQLite can't ALTER a CHECK constraint; rebuild the table).
+    // Mirrors the events_new* pattern (e.g. migration 19's events_new9): all
+    // 7 columns preserved verbatim, only the CHECK list grows by one literal.
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new10 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.blocked','task.conflict','agent.started','agent.progress',
+                 'agent.finished','task.verification','provider.retry',
+                 'provider.failover',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published',
+                 'objective.discarded','initiative.discarded'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id),
+  repositoryId TEXT
+);
+INSERT INTO events_new10 (id, type, taskId, payload, objectiveId, initiativeId, repositoryId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new10 RENAME TO events;
+`),
+  },
 ];

@@ -39,7 +39,21 @@ if (fakeAgentPath !== undefined) {
   const { fakeSessionFactoryFromTurns } =
     await import("./agent-runner/fake-session.ts");
   const turns = JSON.parse(readFileSync(fakeAgentPath, "utf8"));
-  sessionFactory = fakeSessionFactoryFromTurns(turns);
+  // EPIC 008.4 — hermetic env var listing provider names whose fake session
+  // must reject with a typed provider error. Drives the failover loop
+  // end-to-end without a real provider (see scripts/e2e Proof A/B/D).
+  const failProvidersEnv = process.env.KANTHORD_FAKE_FAIL_PROVIDERS;
+  const failProviders =
+    failProvidersEnv === undefined
+      ? undefined
+      : failProvidersEnv
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+  sessionFactory =
+    failProviders === undefined
+      ? fakeSessionFactoryFromTurns(turns)
+      : fakeSessionFactoryFromTurns(turns, { failProviders });
 }
 
 const deps = buildDeps(dbPath, { maxTurns, sessionFactory });

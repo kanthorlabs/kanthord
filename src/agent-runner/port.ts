@@ -36,6 +36,16 @@ export type TaskResult =
       reason: string;
       transient?: boolean;
       retryAfterMs?: number;
+      /**
+       * EPIC 008.4 — True when the failure originated in the AI session adapter
+       * (typed session-creation errors / classified stream errors 429/503). The
+       * failover loop in `run-next-task` walks the provider chain only when
+       * this flag is set; task-level outcomes (verify fail, budget, bad work)
+       * leave it unset.
+       */
+      providerError?: boolean;
+      /** Typed provenance code — see `pi.ts` for the error → code map. */
+      reasonCode?: string;
     }
   | {
       outcome: "escalated";
