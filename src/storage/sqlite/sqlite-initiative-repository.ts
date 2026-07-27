@@ -38,12 +38,13 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
     const status = initiative.status ?? "building";
     this.#db
       .prepare(
-        "INSERT INTO initiatives (id, projectId, name, sha256, status) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256, status = excluded.status",
+        "INSERT INTO initiatives (id, projectId, name, paused, sha256, status) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256, status = excluded.status",
       )
       .run(
         initiative.id,
         initiative.projectId,
         initiative.name,
+        initiative.paused ? 1 : 0,
         sha256,
         status,
       );
@@ -52,13 +53,14 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
   get(id: string): Initiative | undefined {
     const row = this.#db
       .prepare(
-        "SELECT id, projectId, name, status, workspace FROM initiatives WHERE id = ?",
+        "SELECT id, projectId, name, paused, status, workspace FROM initiatives WHERE id = ?",
       )
       .get(id) as
       | {
           id: string;
           projectId: string;
           name: string;
+          paused: number;
           status: InitiativeStatus;
           workspace: string | null;
         }
@@ -68,6 +70,7 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
       id: row.id,
       projectId: row.projectId,
       name: row.name,
+      paused: row.paused === 1,
       status: row.status,
     };
     if (row.workspace !== null) initiative.workspace = row.workspace;
@@ -162,12 +165,13 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
   listInitiatives(projectId: string): Initiative[] {
     const rows = this.#db
       .prepare(
-        "SELECT id, projectId, name, status, workspace FROM initiatives WHERE projectId = ? ORDER BY id ASC",
+        "SELECT id, projectId, name, paused, status, workspace FROM initiatives WHERE projectId = ? ORDER BY id ASC",
       )
       .all(projectId) as Array<{
       id: string;
       projectId: string;
       name: string;
+      paused: number;
       status: InitiativeStatus;
       workspace: string | null;
     }>;
@@ -176,6 +180,7 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
         id: r.id,
         projectId: r.projectId,
         name: r.name,
+        paused: r.paused === 1,
         status: r.status,
       };
       if (r.workspace !== null) initiative.workspace = r.workspace;

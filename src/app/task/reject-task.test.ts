@@ -54,7 +54,13 @@ class MemStore implements RejectTaskStore {
       { id: OBJ_ID, initiativeId, name: "O", status: "building" },
     ],
     initiatives: Initiative[] = [
-      { id: initiativeId, projectId: "proj-1", name: "I", status: "building" },
+      {
+        id: initiativeId,
+        projectId: "proj-1",
+        name: "I",
+        paused: false,
+        status: "building",
+      },
     ],
   ) {
     this.#tasks = new Map(tasks.map((t) => [t.id, t]));
@@ -562,7 +568,15 @@ test("(Story 05 c-g) RejectTask discard cascades pending dependents, skips a com
       { id: OBJ_ID, initiativeId: INI_ID, name: "O1", status: "building" },
       { id: OBJ2_ID, initiativeId: INI_ID, name: "O2", status: "integrated" },
     ],
-    [{ id: INI_ID, projectId: "proj-1", name: "I", status: "building" }],
+    [
+      {
+        id: INI_ID,
+        projectId: "proj-1",
+        name: "I",
+        paused: false,
+        status: "building",
+      },
+    ],
   );
   const feed = new MemFeed();
   const uc = new RejectTask(store, new MemQueue(), feed, new MemUow());

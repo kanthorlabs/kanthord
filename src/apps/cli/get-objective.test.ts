@@ -302,3 +302,87 @@ describe("runGetObjective Story 6 — after/waiting rendering", () => {
     assert.deepEqual(parsed.waiting, [{ id: S6_X, neverSatisfies: false }]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Story 3 — commitOid / parentOid on the CLI read view (012)
+// ---------------------------------------------------------------------------
+
+const S3_COMMIT = "a".repeat(40);
+const S3_PARENT = "b".repeat(40);
+
+describe("runGetObjective Story 3 — commitOid/parentOid on the read view", () => {
+  test("(S3-3) --json: commitOid and parentOid are emitted verbatim in the JSON line when set", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "backend-slice",
+      status: "awaiting_confirmation",
+      commitOid: S3_COMMIT,
+      parentOid: S3_PARENT,
+    };
+    const getObjective = makeGetObjective(objective, "repo-1");
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID, json: true },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.stdout.length, 1, "--json prints exactly one line");
+    const parsed = JSON.parse(r.stdout[0]!);
+    assert.equal(parsed.commitOid, S3_COMMIT, "commitOid present in JSON");
+    assert.equal(parsed.parentOid, S3_PARENT, "parentOid present in JSON");
+  });
+
+  test("(S3-4) --json: commitOid and parentOid keys are ABSENT when the objective has no candidate (a building objective)", async () => {
+    const objective: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "backend-slice",
+      status: "building",
+    };
+    const getObjective = makeGetObjective(objective, undefined);
+    const r: HandlerResult = await runGetObjective(
+      { id: OBJ_ID, json: true },
+      getObjective,
+    );
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout[0]!) as Record<string, unknown>;
+    assert.equal(
+      "commitOid" in parsed,
+      false,
+      "commitOid key must be absent when not set (never null, never '')",
+    );
+    assert.equal(
+      "parentOid" in parsed,
+      false,
+      "parentOid key must be absent when not set (never null, never '')",
+    );
+  });
+
+  test("(S3-5) regression: non-(--json) human output is byte-identical regardless of commitOid/parentOid", async () => {
+    const base: Objective = {
+      id: OBJ_ID,
+      initiativeId: "init-1",
+      name: "backend-slice",
+      status: "awaiting_confirmation",
+    };
+    const withCandidate: Objective = {
+      ...base,
+      commitOid: S3_COMMIT,
+      parentOid: S3_PARENT,
+    };
+    const withoutCandidate: Objective = { ...base };
+    const rWith = await runGetObjective(
+      { id: OBJ_ID },
+      makeGetObjective(withCandidate, "repo-1"),
+    );
+    const rWithout = await runGetObjective(
+      { id: OBJ_ID },
+      makeGetObjective(withoutCandidate, "repo-1"),
+    );
+    assert.deepEqual(
+      rWith.stdout,
+      rWithout.stdout,
+      `human output must be byte-identical between candidate-set and candidate-absent; got:\n  with:    ${JSON.stringify(rWith.stdout)}\n  without: ${JSON.stringify(rWithout.stdout)}`,
+    );
+  });
+});

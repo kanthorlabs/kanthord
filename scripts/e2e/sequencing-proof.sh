@@ -109,6 +109,13 @@ read_manifest() { # $1 = package dir, $2 = dotted path into the manifest
 
 status_of() { node src/main.ts get "$1" --id "$2" | sed -n 's/^status: //p'; }
 
+# Story 5 (012) — required `--expected-commit` on every objective verdict. Read
+# the oid from the real read surface immediately before each approve; an
+# earlier land can re-squash a later objective, so a value captured once is
+# not reusable.
+jv() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s);process.stdout.write(String(eval(process.argv[1])))})' "$1"; }
+obj_oid() { node src/main.ts get objective --id "$1" --json | jv 'v.commitOid'; }
+
 ready_count() { # $1 = task id — number of task.ready events for that task
   # ZERO matches is a legitimate answer here (claim 4 asserts exactly that), but
   # `grep` exits 1 on no match and `pipefail` propagates it — which reads as a
@@ -151,7 +158,8 @@ test "$(ready_count "$BTASK")" -eq 0
 test "$(ready_count "$ATASK")" -eq 1
 
 # 5) land A, then B becomes runnable.
-node src/main.ts approve objective --id "$AOBJ" >/dev/null
+AOBJ_OID=$(obj_oid "$AOBJ"); test -n "$AOBJ_OID"
+node src/main.ts approve objective --id "$AOBJ" --expected-commit "$AOBJ_OID" >/dev/null
 test "$(status_of objective "$AOBJ")" = "integrated"
 test "$(status_of initiative "$A")" = "landed"
 node src/main.ts run daemon --until-idle --poll-interval 200 || true
@@ -226,13 +234,15 @@ node src/main.ts run daemon --until-idle --poll-interval 200 || true
 test "$(status_of task "$T2")" = "pending"
 test "$(ready_count "$T2")" -eq 0
 
-node src/main.ts approve objective --id "$O1" >/dev/null
+O1_OID=$(obj_oid "$O1"); test -n "$O1_OID"
+node src/main.ts approve objective --id "$O1" --expected-commit "$O1_OID" >/dev/null
 node src/main.ts run daemon --until-idle --poll-interval 200 || true
 # still blocked: obj-1b is not integrated yet, and `after` is a SET — every
 # member must be satisfied.
 test "$(status_of task "$T2")" = "pending"
 
-node src/main.ts approve objective --id "$O1B" >/dev/null
+O1B_OID=$(obj_oid "$O1B"); test -n "$O1B_OID"
+node src/main.ts approve objective --id "$O1B" --expected-commit "$O1B_OID" >/dev/null
 node src/main.ts run daemon --until-idle --poll-interval 200 || true
 test "$(status_of task "$T2")" = "completed"
 

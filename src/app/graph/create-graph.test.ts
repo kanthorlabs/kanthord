@@ -325,6 +325,7 @@ test("CreateGraph creates initiative + 2 objectives + 2 tasks; refToId has corre
     pkg: makeAuthoredPkg(),
     projectId: PROJECT_ID,
     packageId: PACKAGE_ID,
+    paused: false,
   };
 
   const result = await uc.execute(input);
@@ -376,7 +377,13 @@ test("CreateGraph throws CreateModeIdError when initiative has a persisted id", 
   };
 
   await assert.rejects(
-    () => uc.execute({ pkg, projectId: PROJECT_ID, packageId: PACKAGE_ID }),
+    () =>
+      uc.execute({
+        pkg,
+        projectId: PROJECT_ID,
+        packageId: PACKAGE_ID,
+        paused: false,
+      }),
     (err: unknown) => {
       assert.ok(
         err instanceof CreateModeIdError,
@@ -399,7 +406,13 @@ test("CreateGraph throws CreateModeIdError when a task has a persisted id", asyn
   ];
 
   await assert.rejects(
-    () => uc.execute({ pkg, projectId: PROJECT_ID, packageId: PACKAGE_ID }),
+    () =>
+      uc.execute({
+        pkg,
+        projectId: PROJECT_ID,
+        packageId: PACKAGE_ID,
+        paused: false,
+      }),
     (err: unknown) => {
       assert.ok(
         err instanceof CreateModeIdError,
@@ -422,6 +435,7 @@ test("CreateGraph throws when projectId does not exist", async () => {
         pkg: makeAuthoredPkg(),
         projectId: "NONEXISTENTPROJECTID00000001",
         packageId: PACKAGE_ID,
+        paused: false,
       }),
     (err: unknown) => {
       assert.ok(err instanceof Error, "must throw an Error");
@@ -439,6 +453,7 @@ test("CreateGraph calls importMap.reserve once per objective + task with correct
     pkg: makeAuthoredPkg(),
     projectId: PROJECT_ID,
     packageId: PACKAGE_ID,
+    paused: false,
   });
 
   const calls = importMap.reserveCalls;
@@ -505,7 +520,13 @@ test("CreateGraph throws CycleError for cyclic deps and saveAll is never called"
   ];
 
   await assert.rejects(
-    () => uc.execute({ pkg, projectId: PROJECT_ID, packageId: PACKAGE_ID }),
+    () =>
+      uc.execute({
+        pkg,
+        projectId: PROJECT_ID,
+        packageId: PACKAGE_ID,
+        paused: false,
+      }),
     CycleError,
   );
   assert.equal(
@@ -572,6 +593,7 @@ test("T4(g): CreateGraph.execute with bindings calls saveTaskContext for each ta
     pkg: makeAuthoredPkgWithBindings(),
     projectId: PROJECT_ID,
     packageId: PACKAGE_ID,
+    paused: false,
     bindings: {
       source: T4_REPO_ID,
       model: T4_AIP_ID,
@@ -612,6 +634,7 @@ test("T4(h): CreateGraph.execute with no bindings skips saveTaskContext entirely
     pkg: makeAuthoredPkg(), // no initiative.bindings (format-1)
     projectId: PROJECT_ID,
     packageId: PACKAGE_ID,
+    paused: false,
     // bindings: undefined (omitted)
   });
 
@@ -711,6 +734,7 @@ describe("Story 5b — after: on --create path", () => {
       pkg,
       projectId: PROJECT_ID,
       packageId: PACKAGE_ID,
+      paused: false,
     });
     const obj1Id = result.refToId.objectives["obj-1"];
     const obj2Id = result.refToId.objectives["obj-2"];
@@ -747,6 +771,7 @@ describe("Story 5b — after: on --create path", () => {
       pkg,
       projectId: PROJECT_ID,
       packageId: PACKAGE_ID,
+      paused: false,
     });
     const initiativeId = result.initiativeId;
     const obj1Id = result.refToId.objectives["obj-1"]!;
@@ -792,6 +817,7 @@ describe("Story 5b — after: on --create path", () => {
       pkg,
       projectId: PROJECT_ID,
       packageId: PACKAGE_ID,
+      paused: false,
     });
     const obj1Id = result.refToId.objectives["obj-1"];
     const obj1bId = result.refToId.objectives["obj-1b"];
@@ -850,6 +876,7 @@ describe("Story 5b — after: on --create path", () => {
       pkg,
       projectId: PROJECT_ID,
       packageId: PACKAGE_ID,
+      paused: false,
     });
 
     assert.equal(
@@ -905,6 +932,7 @@ describe("Story 5b — after: on --create path", () => {
           pkg,
           projectId: PROJECT_ID,
           packageId: PACKAGE_ID,
+          paused: false,
         }),
       CrossInitiativeError,
     );
@@ -924,6 +952,7 @@ describe("Story 5b — after: on --create path", () => {
           pkg,
           projectId: PROJECT_ID,
           packageId: PACKAGE_ID,
+          paused: false,
         }),
       UnknownNodeError,
     );
@@ -945,6 +974,7 @@ describe("Story 5b — after: on --create path", () => {
           pkg,
           projectId: PROJECT_ID,
           packageId: PACKAGE_ID,
+          paused: false,
         }),
       UnknownNodeError,
     );
@@ -971,6 +1001,7 @@ describe("Story 5b — after: on --create path", () => {
           pkg,
           projectId: PROJECT_ID,
           packageId: PACKAGE_ID,
+          paused: false,
         }),
       CycleError,
     );
@@ -991,6 +1022,7 @@ describe("Story 5b — after: on --create path", () => {
       pkg,
       projectId: PROJECT_ID,
       packageId: PACKAGE_ID,
+      paused: false,
     });
 
     // setInitiativeAfter called with []
@@ -1026,4 +1058,44 @@ describe("Story 5b — after: on --create path", () => {
       );
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 (012) — `paused` rides in the CreateGraph initiative literal. The
+// use case must not call CreateInitiative (no use-case-calls-use-case); it
+// builds the Initiative literal itself inside its own uow.transaction.
+// ---------------------------------------------------------------------------
+
+test("CreateGraph execute({ paused: true }) writes paused === true on the saved initiative", async () => {
+  const deps = makeDeps();
+  const uc = new CreateGraph(deps);
+  await uc.execute({
+    pkg: makeAuthoredPkg(),
+    projectId: PROJECT_ID,
+    packageId: PACKAGE_ID,
+    paused: true,
+  });
+  assert.equal(deps.initiatives.saved.length, 1, "one initiative was saved");
+  assert.equal(
+    deps.initiatives.saved[0]!.paused,
+    true,
+    "CreateGraph must write paused === true into the initiative literal",
+  );
+});
+
+test("CreateGraph execute({ paused: false }) writes paused === false on the saved initiative", async () => {
+  const deps = makeDeps();
+  const uc = new CreateGraph(deps);
+  await uc.execute({
+    pkg: makeAuthoredPkg(),
+    projectId: PROJECT_ID,
+    packageId: PACKAGE_ID,
+    paused: false,
+  });
+  assert.equal(deps.initiatives.saved.length, 1, "one initiative was saved");
+  assert.equal(
+    deps.initiatives.saved[0]!.paused,
+    false,
+    "CreateGraph must write paused === false into the initiative literal",
+  );
 });

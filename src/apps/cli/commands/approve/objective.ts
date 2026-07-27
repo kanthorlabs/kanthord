@@ -13,13 +13,20 @@ export function buildApproveObjectiveCommand(
     .description("Approve an objective (broker its commit into home).")
     .configureHelp({ commandUsage: () => "kanthord approve objective" })
     .requiredOption("--id <id>", "ID of the objective to approve")
+    .requiredOption(
+      "--expected-commit <oid>",
+      "the candidate commit OID read from `get objective --json`",
+    )
     .addHelpText(
       "after",
-      "\nExample:\n  kanthord approve objective --id objective-1\n",
+      "\nExample:\n  kanthord approve objective --id objective-1 --expected-commit <oid-from-get-objective>\n",
     )
-    .action(async (opts: { id: string }) => {
+    .action(async (opts: { id: string; expectedCommit: string }) => {
       emitResult(
-        await runApproveObjective({ id: opts.id }, deps.approveObjective),
+        await runApproveObjective(
+          { id: opts.id, expectedCommit: opts.expectedCommit },
+          deps.approveObjective,
+        ),
         io,
       );
     });

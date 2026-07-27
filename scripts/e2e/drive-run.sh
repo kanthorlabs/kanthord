@@ -57,7 +57,10 @@ const tasks=JSON.parse(process.env.TASKS||"[]").map((t)=>({
   dependencies:t.dependencies||[], waiting:t.waiting||[],
 })).sort((a,b)=>a.id.localeCompare(b.id));
 const initiative=db.prepare("SELECT status FROM initiatives WHERE id = ?").get(init);
-const objectives=db.prepare("SELECT id,name,status FROM objectives WHERE initiativeId = ? ORDER BY id").all(init);
+// Story 5 (012) — commitOid travels with the snapshot so the approve loop can
+// echo it back through `--expected-commit`; never hard-code and never bypass
+// the guard.
+const objectives=db.prepare("SELECT id,name,status,commitOid FROM objectives WHERE initiativeId = ? ORDER BY id").all(init);
 const events=db.prepare("SELECT COUNT(*) n FROM events").get().n;
 process.stdout.write(JSON.stringify({
   initiative: initiative ? initiative.status : "unknown",
@@ -157,16 +160,21 @@ while [ "$ROUND" -lt "$E2E_MAX_ROUNDS" ]; do
 
   # --- the one safe unattended transition --------------------------------
   APPROVED=0
-  while IFS= read -r obj; do
+  while IFS=$'\t' read -r obj oid; do
     [ -n "$obj" ] || continue
+    if [ -z "$oid" ]; then
+      e2e_finding P3 objective-missing-commitoid major \
+        "objective $obj is awaiting_confirmation with no commitOid" round="$ROUND" objectiveId="$obj"
+      continue
+    fi
     log "approve objective $obj (automated orchestration of a human-gated command)"
-    if e2e_kanthord approve objective --id "$obj" >>"$LOG" 2>&1; then
+    if e2e_kanthord approve objective --id "$obj" --expected-commit "$oid" >>"$LOG" 2>&1; then
       APPROVED=$((APPROVED + 1))
     else
       e2e_finding P3 approve-objective-failed major \
         "approve objective refused for $obj" round="$ROUND" objectiveId="$obj"
     fi
-  done < <(jq -r '.objectives[] | select(.status=="awaiting_confirmation") | .id' "$SNAP")
+  done < <(jq -r '.objectives[] | select(.status=="awaiting_confirmation") | [.id, (.commitOid // "")] | @tsv' "$SNAP")
 
   # A conflicted objective needs its base re-read, then another daemon pass.
   RETRIED_OBJ=0

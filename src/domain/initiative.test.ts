@@ -8,13 +8,19 @@ import {
   IllegalObjectiveTransitionError,
   IllegalInitiativeTransitionError,
   canRetryObjective,
+  assertCandidateFresh,
+  StaleCandidateError,
 } from "./initiative.ts";
 import type { ObjectiveStatus } from "./initiative.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 test("newInitiative returns an object with a ULID id, the given projectId and name", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   assert.match(ini.id, ULID_RE);
   assert.equal(ini.projectId, "proj-01");
   assert.equal(ini.name, "init alpha");
@@ -28,8 +34,8 @@ test("newObjective returns an object with a ULID id, the given initiativeId and 
 });
 
 test("newInitiative generates distinct ids for each call", () => {
-  const a = newInitiative("p", "a");
-  const b = newInitiative("p", "b");
+  const a = newInitiative({ projectId: "p", name: "a", paused: false });
+  const b = newInitiative({ projectId: "p", name: "b", paused: false });
   assert.notEqual(a.id, b.id);
 });
 
@@ -40,7 +46,11 @@ test("newObjective generates distinct ids for each call", () => {
 });
 
 test("newInitiative defaults status to building", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   assert.equal(ini.status, "building");
 });
 
@@ -79,13 +89,21 @@ test("transitionObjective rejects integrated -> anything (immutable once integra
 });
 
 test("transitionInitiative allows building -> landed", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   const landed = transitionInitiative(ini, "landed");
   assert.equal(landed.status, "landed");
 });
 
 test("transitionInitiative rejects building -> awaiting_pr (removed status)", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   assert.throws(() =>
     // @ts-expect-error — "awaiting_pr" is no longer a valid InitiativeStatus
     transitionInitiative(ini, "awaiting_pr"),
@@ -93,7 +111,11 @@ test("transitionInitiative rejects building -> awaiting_pr (removed status)", ()
 });
 
 test("transitionInitiative rejects building -> delivered (removed status)", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   assert.throws(() =>
     // @ts-expect-error — "delivered" is no longer a valid InitiativeStatus
     transitionInitiative(ini, "delivered"),
@@ -122,13 +144,21 @@ test("transitionObjective rejects discarded -> anything (terminal, no outbound e
 });
 
 test("transitionInitiative allows building -> discarded", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   const discarded = transitionInitiative(ini, "discarded");
   assert.equal(discarded.status, "discarded");
 });
 
 test("transitionInitiative rejects discarded -> anything (terminal, no outbound edge)", () => {
-  const ini = newInitiative("proj-01", "init alpha");
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
   const discarded = transitionInitiative(ini, "discarded");
   assert.throws(
     () => transitionInitiative(discarded, "landed"),
@@ -161,4 +191,94 @@ test("canRetryObjective is true for exactly awaiting_confirmation and conflict, 
       `canRetryObjective(${status}) must be ${want}`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 (012) — `paused` is part of the Initiative on construction and
+// survives a status transition. The transition function never reads or writes
+// `paused`; it only spreads.
+// ---------------------------------------------------------------------------
+
+test("newInitiative({ paused: true }) sets paused === true and status === 'building'", () => {
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: true,
+  });
+  assert.equal(ini.paused, true, "paused flag must equal the input value");
+  assert.equal(ini.status, "building", "default status is unchanged");
+});
+
+test("newInitiative({ paused: false }) sets paused === false", () => {
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: false,
+  });
+  assert.equal(ini.paused, false, "paused flag must equal the input value");
+});
+
+test("transitionInitiative carries paused through unchanged (building -> landed keeps paused === true)", () => {
+  const ini = newInitiative({
+    projectId: "proj-01",
+    name: "init alpha",
+    paused: true,
+  });
+  const landed = transitionInitiative(ini, "landed");
+  assert.equal(landed.status, "landed");
+  assert.equal(
+    landed.paused,
+    true,
+    "transitionInitiative must not read or write paused",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 4 (012) — verdict guard: `assertCandidateFresh` is the single
+// comparison implementation for objective verdicts. Three behaviors: pass
+// through, stale oid, and missing oid. Message must match /stale|expected|moved/i.
+// ---------------------------------------------------------------------------
+
+test("assertCandidateFresh('o','abc','abc') returns without throwing", () => {
+  assert.doesNotThrow(() => assertCandidateFresh("o", "abc", "abc"));
+});
+
+test("assertCandidateFresh('o','abc','def') throws StaleCandidateError with expected='abc', actual='def', message matching /stale|expected|moved/i", () => {
+  assert.throws(
+    () => assertCandidateFresh("o", "abc", "def"),
+    (err) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      const e = err as StaleCandidateError;
+      assert.equal(e.objectiveId, "o");
+      assert.equal(e.expected, "abc");
+      assert.equal(e.actual, "def");
+      assert.match(e.message, /stale|expected|moved/i);
+      assert.equal(err.name, "StaleCandidateError");
+      return true;
+    },
+  );
+});
+
+test("assertCandidateFresh('o','abc',undefined) throws StaleCandidateError with actual === ''", () => {
+  assert.throws(
+    () => assertCandidateFresh("o", "abc", undefined),
+    (err) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      const e = err as StaleCandidateError;
+      assert.equal(e.expected, "abc");
+      assert.equal(
+        e.actual,
+        "",
+        "actual must be empty string when stored commitOid is undefined",
+      );
+      assert.match(e.message, /stale|expected|moved/i);
+      return true;
+    },
+  );
 });

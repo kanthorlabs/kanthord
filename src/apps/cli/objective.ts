@@ -102,12 +102,25 @@ export async function runApproveObjective(
   if (typeof id !== "string" || id === "") {
     return { ...toResult(new MissingFlagError("--id")), stdout: [] };
   }
+  // Story 4 (012) — required `--expected-commit` so the client echoes the
+  // candidate it reviewed; checked here in addition to the commander
+  // requiredOption so the runtime path is equally strict.
+  const expectedCommit = args["expectedCommit"];
+  if (typeof expectedCommit !== "string" || expectedCommit === "") {
+    return {
+      ...toResult(new MissingFlagError("--expected-commit")),
+      stdout: [],
+    };
+  }
   try {
     // The use case records a conflict internally rather than throwing, so
     // announcing "integrated" unconditionally reported a success that did not
     // happen — it cost a full diagnosis to notice (e2e 20260727-141944). Exit
     // code stays 0: a conflict is a real, expected outcome of approving.
-    const { outcome } = await approveObjective.execute({ objectiveId: id });
+    const { outcome } = await approveObjective.execute({
+      objectiveId: id,
+      expectedCommit,
+    });
     return {
       exitCode: 0,
       stdout: [id],
@@ -130,13 +143,23 @@ export async function runRetryObjective(
   if (typeof id !== "string" || id === "") {
     return { ...toResult(new MissingFlagError("--id")), stdout: [] };
   }
+  // Story 4 (012) — required `--expected-commit`.
+  const expectedCommit = args["expectedCommit"];
+  if (typeof expectedCommit !== "string" || expectedCommit === "") {
+    return {
+      ...toResult(new MissingFlagError("--expected-commit")),
+      stdout: [],
+    };
+  }
   const note =
     typeof args["note"] === "string" && args["note"] !== ""
       ? args["note"]
       : undefined;
   try {
     await retryObjective.execute(
-      note !== undefined ? { objectiveId: id, note } : { objectiveId: id },
+      note !== undefined
+        ? { objectiveId: id, note, expectedCommit }
+        : { objectiveId: id, expectedCommit },
     );
     return { exitCode: 0, stdout: [id], stderr: [] };
   } catch (err) {
@@ -171,13 +194,27 @@ export async function runRejectObjective(
     };
   }
   const resolution = rawResolution as "retry" | "discard";
+  // Story 4 (012) — required `--expected-commit`, checked AFTER the
+  // `--resolution` checks so the existing missing/invalid resolution messages
+  // and their tests are unaffected.
+  const expectedCommit = args["expectedCommit"];
+  if (typeof expectedCommit !== "string" || expectedCommit === "") {
+    return {
+      ...toResult(new MissingFlagError("--expected-commit")),
+      stdout: [],
+    };
+  }
   const reason =
     typeof args["reason"] === "string" ? args["reason"] : undefined;
   try {
     if (resolution === "retry") {
-      await retryObjective.execute({ objectiveId: id });
+      await retryObjective.execute({ objectiveId: id, expectedCommit });
     } else {
-      await rejectObjective.execute({ objectiveId: id, reason });
+      await rejectObjective.execute({
+        objectiveId: id,
+        reason,
+        expectedCommit,
+      });
     }
     return { exitCode: 0, stdout: [id], stderr: [] };
   } catch (err) {

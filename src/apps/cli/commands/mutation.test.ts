@@ -300,7 +300,7 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
-  test("approves an objective from its required ID and emits its result (Story C broker CLI)", async () => {
+  test("approves an objective from its required ID and expected-commit and emits its result (Story C broker CLI + Story 4, 012)", async () => {
     let received: unknown;
     const cap = capture();
     const deps = {
@@ -315,15 +315,32 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     await buildApproveCommand(
       deps,
       cap.io as Parameters<typeof buildApproveCommand>[1],
-    ).parseAsync(["objective", "--id", "obj-1"], { from: "user" });
+    ).parseAsync(["objective", "--id", "obj-1", "--expected-commit", "abc"], {
+      from: "user",
+    });
 
-    assert.deepEqual(received, { objectiveId: "obj-1" });
+    assert.deepEqual(received, { objectiveId: "obj-1", expectedCommit: "abc" });
     assert.deepEqual(cap.out, ["obj-1\n"]);
     assert.deepEqual(cap.err, ["objective integrated: obj-1\n"]);
     assert.equal(cap.code(), 0);
   });
 
-  test("retries an objective from its required ID and emits its result (Story E CLI)", async () => {
+  test("approves an objective without --expected-commit: non-zero exit (commander requiredOption), no use-case call (Story 4, 012)", async () => {
+    const cap = capture();
+    const command = buildApproveCommand(
+      {} as Parameters<typeof buildApproveCommand>[0],
+      cap.io as Parameters<typeof buildApproveCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["objective", "--id", "obj-1"], { from: "user" }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+  });
+
+  test("retries an objective from its required ID and expected-commit and emits its result (Story E CLI + Story 4, 012)", async () => {
     let received: unknown;
     const cap = capture();
     const deps = {
@@ -337,11 +354,93 @@ describe("src/apps/cli/commands/mutation.ts", () => {
     await buildRetryCommand(
       deps,
       cap.io as Parameters<typeof buildRetryCommand>[1],
-    ).parseAsync(["objective", "--id", "obj-1"], { from: "user" });
+    ).parseAsync(["objective", "--id", "obj-1", "--expected-commit", "abc"], {
+      from: "user",
+    });
 
-    assert.deepEqual(received, { objectiveId: "obj-1" });
+    assert.deepEqual(received, {
+      objectiveId: "obj-1",
+      expectedCommit: "abc",
+    });
     assert.deepEqual(cap.out, ["obj-1\n"]);
     assert.equal(cap.code(), 0);
+  });
+
+  test("retries an objective without --expected-commit: non-zero exit (commander requiredOption), no use-case call (Story 4, 012)", async () => {
+    const cap = capture();
+    const command = buildRetryCommand(
+      {} as Parameters<typeof buildRetryCommand>[0],
+      cap.io as Parameters<typeof buildRetryCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["objective", "--id", "obj-1"], { from: "user" }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+  });
+
+  test("rejects an objective with --expected-commit, --resolution, and optional --reason (Story 4, 012)", async () => {
+    let discardReceived: unknown;
+    const cap = capture();
+    const deps = {
+      rejectObjective: {
+        execute: async (input: unknown) => {
+          discardReceived = input;
+        },
+      },
+      retryObjective: {
+        execute: async () => {
+          // must not be called for --resolution discard
+          throw new Error("retry must not run for --resolution discard");
+        },
+      },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    await buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).parseAsync(
+      [
+        "objective",
+        "--id",
+        "obj-1",
+        "--expected-commit",
+        "abc",
+        "--resolution",
+        "discard",
+        "--reason",
+        "why",
+      ],
+      { from: "user" },
+    );
+
+    assert.deepEqual(discardReceived, {
+      objectiveId: "obj-1",
+      expectedCommit: "abc",
+      reason: "why",
+    });
+    assert.deepEqual(cap.out, ["obj-1\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("rejects an objective without --expected-commit: non-zero exit (commander requiredOption), no use-case call (Story 4, 012)", async () => {
+    const cap = capture();
+    const command = buildRejectCommand(
+      {} as Parameters<typeof buildRejectCommand>[0],
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(
+        ["objective", "--id", "obj-1", "--resolution", "discard"],
+        { from: "user" },
+      ),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
   });
 
   test("rejects a task with its resolution and optional reason", async () => {

@@ -162,6 +162,7 @@ describe("src/apps/cli/commands/read.ts", () => {
             id: "init-1",
             name: "init-wf",
             status: "building",
+            paused: false,
             workspace: "/tmp/init-1-clone",
           };
         },
@@ -183,6 +184,7 @@ describe("src/apps/cli/commands/read.ts", () => {
       id: "init-1",
       name: "init-wf",
       status: "building",
+      paused: false,
       workspace: "/tmp/init-1-clone",
     });
   });
@@ -220,6 +222,50 @@ describe("src/apps/cli/commands/read.ts", () => {
       name: "backend",
       status: "integrated",
       integrations: [{ repository: "repo-1", state: "integrated" }],
+    });
+  });
+
+  test("gets an objective with commitOid and parentOid on --json (Story 3, 012)", async () => {
+    const S3_COMMIT = "a".repeat(40);
+    const S3_PARENT = "b".repeat(40);
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      getObjective: {
+        execute: async (input: unknown) => {
+          received = input;
+          return {
+            id: "obj-1",
+            name: "backend",
+            status: "awaiting_confirmation",
+            commitOid: S3_COMMIT,
+            parentOid: S3_PARENT,
+            integrations: [
+              { repository: "repo-1", state: "awaiting_confirmation" },
+            ],
+          };
+        },
+      },
+    } as unknown as Parameters<typeof buildGetCommand>[0];
+
+    await buildGetCommand(
+      deps,
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).parseAsync(["objective", "--id", "obj-1", "--json"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { id: "obj-1" });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.out.length, 1);
+    assert.deepEqual(JSON.parse(cap.out[0]!), {
+      id: "obj-1",
+      name: "backend",
+      status: "awaiting_confirmation",
+      commitOid: S3_COMMIT,
+      parentOid: S3_PARENT,
+      integrations: [{ repository: "repo-1", state: "awaiting_confirmation" }],
     });
   });
 

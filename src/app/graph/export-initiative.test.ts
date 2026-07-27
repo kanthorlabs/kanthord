@@ -78,6 +78,7 @@ const INITIATIVE: Initiative = {
   id: INIT_ID,
   projectId: PROJ_ID,
   name: "oauth",
+  paused: false,
 };
 
 const OBJ1: Objective = {

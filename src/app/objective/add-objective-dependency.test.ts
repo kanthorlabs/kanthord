@@ -194,6 +194,7 @@ function buildObjectives(repo: FakeInitiativeRepository): void {
     id: INIT_ID,
     projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
     name: "init",
+    paused: false,
   });
   repo.saveObjective({ id: OBJ_A, initiativeId: INIT_ID, name: "obj-a" });
   repo.saveObjective({ id: OBJ_B, initiativeId: INIT_ID, name: "obj-b" });

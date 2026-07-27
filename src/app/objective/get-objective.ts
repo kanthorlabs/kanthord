@@ -17,6 +17,10 @@ export interface GetObjectiveOutput {
   id: string;
   name: string;
   status: string;
+  /** The squashed candidate commit a client must echo back on a verdict. */
+  commitOid?: string;
+  /** The parent the candidate was built on (the broker's CAS anchor). */
+  parentOid?: string;
   integrations: Array<{ repository: string; state: string }>;
   after: string[];
   waiting: UnsatisfiedEdge[];
@@ -60,6 +64,12 @@ export class GetObjective {
       id: objective.id,
       name: objective.name,
       status,
+      ...(objective.commitOid !== undefined
+        ? { commitOid: objective.commitOid }
+        : {}),
+      ...(objective.parentOid !== undefined
+        ? { parentOid: objective.parentOid }
+        : {}),
       integrations:
         repositoryId !== undefined
           ? [{ repository: repositoryId, state: status }]

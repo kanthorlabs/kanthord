@@ -4,6 +4,7 @@ import {
   RetryObjective,
   ObjectiveNotRetryableError,
 } from "./retry-objective.ts";
+import { StaleCandidateError } from "../../domain/initiative.ts";
 import type { Objective, Initiative } from "../../domain/initiative.ts";
 import type { Task } from "../../domain/task.ts";
 import { newEvent } from "../../domain/event.ts";
@@ -142,7 +143,8 @@ test("execute throws UnknownReferenceError('objective', id) when the objective d
   const useCase = new RetryObjective(store);
 
   await assert.rejects(
-    () => useCase.execute({ objectiveId: "missing-obj" }),
+    () =>
+      useCase.execute({ objectiveId: "missing-obj", expectedCommit: "MATCH" }),
     (err: unknown) => {
       assert.ok(err instanceof UnknownReferenceError);
       assert.equal(err.kind, "objective");
@@ -172,7 +174,7 @@ test("execute refuses retry on a non-tip integrated objective, guiding to a corr
   const useCase = new RetryObjective(store);
 
   await assert.rejects(
-    () => useCase.execute({ objectiveId: OBJ_A.id }),
+    () => useCase.execute({ objectiveId: OBJ_A.id, expectedCommit: "MATCH" }),
     (err: unknown) => {
       assert.ok(err instanceof ObjectiveNotRetryableError);
       assert.match(
@@ -203,7 +205,7 @@ test("execute throws ObjectiveNotAwaitingConfirmationError for a non-retryable s
   const useCase = new RetryObjective(store);
 
   await assert.rejects(
-    () => useCase.execute({ objectiveId: OBJ.id }),
+    () => useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" }),
     (err: unknown) => {
       assert.ok(
         err instanceof ObjectiveNotAwaitingConfirmationError,
@@ -233,7 +235,7 @@ test("execute on a conflict objective without the resolution dependency set (bro
   const store = new FakeObjectiveStore([OBJ]);
   const useCase = new RetryObjective(store);
 
-  await useCase.execute({ objectiveId: OBJ.id });
+  await useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" });
 
   assert.equal(
     store.savedObjectives.length,
@@ -254,6 +256,7 @@ test("execute resolves a conflict objective when the gate passes: re-squashes on
     id: "init-1",
     projectId: "proj-1",
     name: "init",
+    paused: false,
     status: "building",
     workspace: "/clones/init-1",
   };
@@ -279,7 +282,7 @@ test("execute resolves a conflict objective when the gate passes: re-squashes on
     noopUow,
   );
 
-  await useCase.execute({ objectiveId: OBJ.id });
+  await useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" });
 
   assert.equal(
     broker.currentTipCalls.length,
@@ -314,6 +317,7 @@ test("execute resolves a conflict objective when the gate fails: stays conflict,
     id: "init-1",
     projectId: "proj-1",
     name: "init",
+    paused: false,
     status: "building",
     workspace: "/clones/init-1",
   };
@@ -339,7 +343,7 @@ test("execute resolves a conflict objective when the gate fails: stays conflict,
     noopUow,
   );
 
-  await useCase.execute({ objectiveId: OBJ.id });
+  await useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" });
 
   assert.equal(store.savedObjectives.length, 1);
   const saved = store.savedObjectives[0]!;
@@ -380,6 +384,7 @@ test("execute resolves a conflict objective with a note: writes the note onto ev
     id: "init-1",
     projectId: "proj-1",
     name: "init",
+    paused: false,
     status: "building",
     workspace: "/clones/init-1",
   };
@@ -414,7 +419,11 @@ test("execute resolves a conflict objective with a note: writes the note onto ev
     noopUow,
   );
 
-  await useCase.execute({ objectiveId: OBJ.id, note: "guidance" });
+  await useCase.execute({
+    objectiveId: OBJ.id,
+    expectedCommit: "STALE_OID",
+    note: "guidance",
+  });
 
   const savedFailed = store.savedTasks.find((t) => t.id === "task-failed");
   assert.ok(savedFailed, "the failed task must have the note written onto it");
@@ -445,6 +454,7 @@ test("execute resolves a conflict objective without a note: no task is rewritten
     id: "init-1",
     projectId: "proj-1",
     name: "init",
+    paused: false,
     status: "building",
     workspace: "/clones/init-1",
   };
@@ -479,11 +489,190 @@ test("execute resolves a conflict objective without a note: no task is rewritten
     noopUow,
   );
 
-  await useCase.execute({ objectiveId: OBJ.id });
+  await useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" });
 
   assert.equal(
     store.savedTasks.length,
     0,
     "with no --note, no task should be saved/rewritten",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 4 (012) — Required `--expected-commit` on RetryObjective.
+//
+// (a) a stale guard on a `conflict` objective is refused BEFORE the
+//     broker.currentTip / workspaces.squashObjective / gate.verify calls —
+//     SQLite cannot roll back a moved ref, so the refusal must precede any
+//     git work. Pinned by a broker whose `currentTip` throws if reached.
+// (b) a stale guard on an `awaiting_confirmation` objective (the path that
+//     currently falls into the silent no-op at retry-objective.ts:129-130)
+//     must also be refused — the client never reviewed the current
+//     candidate, so the guard fires before the no-op.
+// (c) the in-transaction re-check inside the success branch of
+//     #resolveConflict: store.getObjective returns "AAA" on the early guard
+//     and "BBB" inside the uow.transaction; the verdict is refused.
+// ---------------------------------------------------------------------------
+
+test("execute stale retry (a): conflict objective, broker never reached; rejects with StaleCandidateError; nothing saved", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    paused: false,
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "REVIEWED_OID",
+    parentOid: "OLD_TIP",
+  };
+  const store = new FakeObjectiveStore([OBJ], initiative);
+  // A broker whose currentTip throws if called — proves the early guard
+  // fires before any git work.
+  const broker = {
+    async currentTip(): Promise<string> {
+      throw new Error("broker reached: currentTip");
+    },
+  };
+  const squasher = {
+    async squashObjective(): Promise<{ oid: string }> {
+      throw new Error("broker reached: squashObjective");
+    },
+  };
+  const gate = {
+    async verify(): Promise<{ passed: boolean; reason?: string }> {
+      throw new Error("broker reached: gate.verify");
+    },
+  };
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        objectiveId: OBJ.id,
+        expectedCommit: "0".repeat(40),
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}: ${(err as Error).message}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(store.savedObjectives.length, 0);
+  assert.equal(store.savedTasks.length, 0);
+  assert.equal(
+    feed.events.length,
+    0,
+    "no event must be appended on stale retry",
+  );
+});
+
+test("execute stale retry (b): awaiting_confirmation objective (silent no-op path) refuses a stale guard; nothing saved", async () => {
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "awaiting_confirmation",
+    commitOid: "REVIEWED_OID",
+  };
+  const store = new FakeObjectiveStore([OBJ]);
+  const useCase = new RetryObjective(store);
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        objectiveId: OBJ.id,
+        expectedCommit: "0".repeat(40),
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(store.savedObjectives.length, 0);
+  assert.equal(store.savedTasks.length, 0);
+});
+
+test("execute matching retry on conflict with interleaved store: store returns 'AAA' on the early guard then 'BBB' inside the uow — refused with StaleCandidateError; nothing saved", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    paused: false,
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "AAA",
+    parentOid: "OLD_TIP",
+  };
+  const store = new FakeObjectiveStore([OBJ], initiative);
+  // First getObjective (early guard, outside the transaction) returns "AAA"
+  // (matches expectedCommit, guard passes). Subsequent getObjective calls
+  // (inside the uow.transaction re-check) return "BBB" (mismatch, refused).
+  let callIndex = 0;
+  const originalGetObjective = store.getObjective.bind(store);
+  store.getObjective = (id: string) => {
+    callIndex += 1;
+    if (callIndex === 1) {
+      return { ...OBJ, commitOid: "AAA" };
+    }
+    return { ...OBJ, commitOid: "BBB" };
+  };
+  void originalGetObjective;
+
+  const broker = new FakeBroker("NEW_TIP");
+  const squasher = new FakeSquasher("RESQUASHED_OID");
+  const gate = new FakeGate({ passed: true });
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await assert.rejects(
+    () => useCase.execute({ objectiveId: OBJ.id, expectedCommit: "AAA" }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(store.savedObjectives.length, 0);
+  assert.equal(
+    feed.events.some((e) => e.type === "objective.awaiting_confirmation"),
+    false,
+    "no objective.awaiting_confirmation must be appended",
   );
 });

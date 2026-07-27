@@ -42,6 +42,7 @@ describe("runGetInitiative", () => {
       id: INIT_ID,
       projectId: "proj-1",
       name: "oauth-rollout",
+      paused: false,
       status: "building",
       workspace: "/tmp/kanthord-init-clone",
     };
@@ -88,6 +89,7 @@ describe("runGetInitiative", () => {
       id: INIT_ID,
       projectId: "proj-1",
       name: "not-yet-provisioned",
+      paused: false,
       status: "building",
     };
     const getInitiative = makeGetInitiative(initiative);
@@ -109,6 +111,7 @@ describe("runGetInitiative", () => {
       id: INIT_ID,
       projectId: "proj-1",
       name: "oauth-rollout",
+      paused: false,
       status: "building",
       workspace: "/tmp/kanthord-init-clone",
     };
@@ -126,11 +129,87 @@ describe("runGetInitiative", () => {
       id: INIT_ID,
       name: "oauth-rollout",
       status: "building",
+      paused: false,
       branch: `kanthord/init/${INIT_ID}`,
       workspace: "/tmp/kanthord-init-clone",
       after: [],
       waiting: [],
     });
+  });
+
+  test("(S2-3) --json: paused initiative reports paused: true with status 'building' (two axes independent)", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "proj-1",
+      name: "deferred",
+      paused: true,
+      status: "building",
+    };
+    const getInitiative = makeGetInitiative(initiative);
+
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID, json: true },
+      getInitiative,
+    );
+
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.stdout.length, 1);
+    const parsed = JSON.parse(r.stdout[0]!);
+    assert.equal(parsed.paused, true, "JSON must include paused: true");
+    assert.equal(
+      parsed.status,
+      "building",
+      "status stays orthogonal to paused",
+    );
+  });
+
+  test("(S2-4) --json: unpaused initiative reports paused: false with status 'building'", async () => {
+    const initiative: Initiative = {
+      id: INIT_ID,
+      projectId: "proj-1",
+      name: "active",
+      paused: false,
+      status: "building",
+    };
+    const getInitiative = makeGetInitiative(initiative);
+
+    const r: HandlerResult = await runGetInitiative(
+      { id: INIT_ID, json: true },
+      getInitiative,
+    );
+
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout[0]!);
+    assert.equal(parsed.paused, false, "JSON must include paused: false");
+    assert.equal(parsed.status, "building");
+  });
+
+  test("(S2-5) human output: line list is byte-identical regardless of paused (JSON only — paused does not add a human line)", async () => {
+    const base: Omit<Initiative, "paused"> = {
+      id: INIT_ID,
+      projectId: "proj-1",
+      name: "test",
+      status: "building",
+    };
+    const active: Initiative = { ...base, paused: false };
+    const paused: Initiative = { ...base, paused: true };
+
+    const rActive = await runGetInitiative(
+      { id: INIT_ID },
+      makeGetInitiative(active),
+    );
+    const rPaused = await runGetInitiative(
+      { id: INIT_ID },
+      makeGetInitiative(paused),
+    );
+
+    assert.deepEqual(
+      rActive.stdout,
+      rPaused.stdout,
+      "human stdout must be identical — paused does not render a line",
+    );
+    assert.equal(rActive.exitCode, 0);
+    assert.equal(rPaused.exitCode, 0);
   });
 
   test("returns exitCode 1 with an error line for an unknown id", async () => {
@@ -160,6 +239,7 @@ describe("runGetInitiative Story 6 — after/waiting rendering", () => {
       id: INIT_ID,
       projectId: "p1",
       name: "test",
+      paused: false,
       status: "building",
     };
     const getInitiative = makeGetInitiative(initiative);
@@ -183,12 +263,14 @@ describe("runGetInitiative Story 6 — after/waiting rendering", () => {
       id: INIT_ID,
       projectId: "p1",
       name: "test",
+      paused: false,
       status: "building",
     };
     const other: Initiative = {
       id: S6_X,
       projectId: "p1",
       name: "other",
+      paused: false,
       status: "building",
     };
     const source = new MemInitiativeSource([initiative, other]);
@@ -212,12 +294,14 @@ describe("runGetInitiative Story 6 — after/waiting rendering", () => {
       id: INIT_ID,
       projectId: "p1",
       name: "test",
+      paused: false,
       status: "building",
     };
     const other: Initiative = {
       id: S6_X,
       projectId: "p1",
       name: "other",
+      paused: false,
       status: "discarded",
     };
     const source = new MemInitiativeSource([initiative, other]);
@@ -239,18 +323,21 @@ describe("runGetInitiative Story 6 — after/waiting rendering", () => {
       id: INIT_ID,
       projectId: "p1",
       name: "test",
+      paused: false,
       status: "building",
     };
     const a: Initiative = {
       id: S6_Y,
       projectId: "p1",
       name: "A",
+      paused: false,
       status: "landed",
     };
     const b: Initiative = {
       id: S6_X,
       projectId: "p1",
       name: "B",
+      paused: false,
       status: "landed",
     };
     const source = new MemInitiativeSource([initiative, a, b]);
@@ -274,12 +361,14 @@ describe("runGetInitiative Story 6 — after/waiting rendering", () => {
       id: INIT_ID,
       projectId: "p1",
       name: "test",
+      paused: false,
       status: "building",
     };
     const other: Initiative = {
       id: S6_X,
       projectId: "p1",
       name: "other",
+      paused: false,
       status: "building",
     };
     const source = new MemInitiativeSource([initiative, other]);

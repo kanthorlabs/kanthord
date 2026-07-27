@@ -222,7 +222,12 @@ function buildFakes(): {
     [RES_ID]: "resource",
   });
   const initiativeRepository = new FakeInitiativeRepository();
-  initiativeRepository.save({ id: INIT_ID, projectId: PROJ_ID, name: "oauth" });
+  initiativeRepository.save({
+    id: INIT_ID,
+    projectId: PROJ_ID,
+    name: "oauth",
+    paused: false,
+  });
   initiativeRepository.saveObjective({
     id: OBJ_ID,
     initiativeId: INIT_ID,

@@ -184,7 +184,7 @@ describe("runRenameObjective handler", () => {
 });
 
 class FakeApproveObjective {
-  readonly calls: string[] = [];
+  readonly calls: Array<{ objectiveId: string; expectedCommit: string }> = [];
   #error: unknown;
 
   constructor(error?: unknown) {
@@ -193,8 +193,12 @@ class FakeApproveObjective {
 
   async execute(input: {
     objectiveId: string;
+    expectedCommit: string;
   }): Promise<{ outcome: "integrated" | "conflict" }> {
-    this.calls.push(input.objectiveId);
+    this.calls.push({
+      objectiveId: input.objectiveId,
+      expectedCommit: input.expectedCommit,
+    });
     if (this.#error !== undefined) {
       throw this.#error;
     }
@@ -203,13 +207,15 @@ class FakeApproveObjective {
 }
 
 describe("runApproveObjective handler", () => {
-  test("runApproveObjective --id <id>: returns exitCode 0, stdout [id], stderr ['objective integrated: <id>'] on success", async () => {
+  test("runApproveObjective --id <id> --expected-commit <oid>: returns exitCode 0, stdout [id], stderr ['objective integrated: <id>'] on success", async () => {
     const fake = new FakeApproveObjective();
     const result = await runApproveObjective(
-      { id: "obj-1" },
+      { id: "obj-1", expectedCommit: "COMMIT_OID" },
       fake as unknown as ApproveObjective,
     );
-    assert.deepEqual(fake.calls, ["obj-1"]);
+    assert.deepEqual(fake.calls, [
+      { objectiveId: "obj-1", expectedCommit: "COMMIT_OID" },
+    ]);
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["obj-1"]);
     assert.deepEqual(result.stderr, ["objective integrated: obj-1"]);
@@ -221,14 +227,20 @@ describe("runApproveObjective handler", () => {
   // approving, not a CLI failure.
   test("runApproveObjective on a conflict outcome: says conflict, never 'integrated'", async () => {
     const fake = {
-      calls: [] as string[],
-      async execute(input: { objectiveId: string }) {
-        this.calls.push(input.objectiveId);
+      calls: [] as Array<{ objectiveId: string; expectedCommit: string }>,
+      async execute(input: {
+        objectiveId: string;
+        expectedCommit: string;
+      }): Promise<{ outcome: "integrated" | "conflict" }> {
+        this.calls.push({
+          objectiveId: input.objectiveId,
+          expectedCommit: input.expectedCommit,
+        });
         return { outcome: "conflict" as const };
       },
     };
     const result = await runApproveObjective(
-      { id: "obj-1" },
+      { id: "obj-1", expectedCommit: "COMMIT_OID" },
       fake as unknown as ApproveObjective,
     );
     assert.equal(result.exitCode, 0);
@@ -245,7 +257,7 @@ describe("runApproveObjective handler", () => {
   test("runApproveObjective missing --id: returns exitCode 1, no use-case call", async () => {
     const fake = new FakeApproveObjective();
     const result = await runApproveObjective(
-      {},
+      { expectedCommit: "COMMIT_OID" },
       fake as unknown as ApproveObjective,
     );
     assert.equal(result.exitCode, 1);
@@ -253,12 +265,44 @@ describe("runApproveObjective handler", () => {
     assert.deepEqual(fake.calls, []);
   });
 
+  test("runApproveObjective missing --expected-commit: returns exitCode 1 with 'error: missing required flag --expected-commit', no use-case call (Story 4, 012)", async () => {
+    const fake = new FakeApproveObjective();
+    const result = await runApproveObjective(
+      { id: "obj-1" },
+      fake as unknown as ApproveObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(
+      fake.calls,
+      [],
+      "use case must not be called without --expected-commit",
+    );
+    assert.match(result.stderr[0]!, /missing required flag --expected-commit/);
+  });
+
+  test("runApproveObjective empty --expected-commit: returns exitCode 1 with 'error: missing required flag --expected-commit', no use-case call (Story 4, 012)", async () => {
+    const fake = new FakeApproveObjective();
+    const result = await runApproveObjective(
+      { id: "obj-1", expectedCommit: "" },
+      fake as unknown as ApproveObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(
+      fake.calls,
+      [],
+      "use case must not be called with empty --expected-commit",
+    );
+    assert.match(result.stderr[0]!, /missing required flag --expected-commit/);
+  });
+
   test("runApproveObjective returns exitCode 1 with error line when the use case rejects (e.g. unknown objective)", async () => {
     const fake = new FakeApproveObjective(
       new UnknownReferenceError("objective", "no-such"),
     );
     const result = await runApproveObjective(
-      { id: "no-such" },
+      { id: "no-such", expectedCommit: "COMMIT_OID" },
       fake as unknown as ApproveObjective,
     );
     assert.equal(result.exitCode, 1);
@@ -271,14 +315,22 @@ describe("runApproveObjective handler", () => {
 });
 
 class FakeRetryObjective {
-  readonly calls: Array<{ objectiveId: string; note?: string }> = [];
+  readonly calls: Array<{
+    objectiveId: string;
+    note?: string;
+    expectedCommit: string;
+  }> = [];
   #error: unknown;
 
   constructor(error?: unknown) {
     this.#error = error;
   }
 
-  async execute(input: { objectiveId: string; note?: string }): Promise<void> {
+  async execute(input: {
+    objectiveId: string;
+    note?: string;
+    expectedCommit: string;
+  }): Promise<void> {
     this.calls.push(input);
     if (this.#error !== undefined) {
       throw this.#error;
@@ -287,13 +339,15 @@ class FakeRetryObjective {
 }
 
 describe("runRetryObjective handler", () => {
-  test("runRetryObjective --id <id>: returns exitCode 0, stdout [id] on success", async () => {
+  test("runRetryObjective --id <id> --expected-commit <oid>: returns exitCode 0, stdout [id] on success", async () => {
     const fake = new FakeRetryObjective();
     const result = await runRetryObjective(
-      { id: "obj-1" },
+      { id: "obj-1", expectedCommit: "COMMIT_OID" },
       fake as unknown as RetryObjective,
     );
-    assert.deepEqual(fake.calls, [{ objectiveId: "obj-1" }]);
+    assert.deepEqual(fake.calls, [
+      { objectiveId: "obj-1", expectedCommit: "COMMIT_OID" },
+    ]);
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["obj-1"]);
   });
@@ -301,7 +355,7 @@ describe("runRetryObjective handler", () => {
   test("runRetryObjective missing --id: returns exitCode 1, no use-case call", async () => {
     const fake = new FakeRetryObjective();
     const result = await runRetryObjective(
-      {},
+      { expectedCommit: "COMMIT_OID" },
       fake as unknown as RetryObjective,
     );
     assert.equal(result.exitCode, 1);
@@ -309,12 +363,28 @@ describe("runRetryObjective handler", () => {
     assert.deepEqual(fake.calls, []);
   });
 
+  test("runRetryObjective missing --expected-commit: returns exitCode 1 with 'error: missing required flag --expected-commit', no use-case call (Story 4, 012)", async () => {
+    const fake = new FakeRetryObjective();
+    const result = await runRetryObjective(
+      { id: "obj-1" },
+      fake as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(
+      fake.calls,
+      [],
+      "use case must not be called without --expected-commit",
+    );
+    assert.match(result.stderr[0]!, /missing required flag --expected-commit/);
+  });
+
   test("runRetryObjective returns exitCode 1 with error line naming non-tip immutability when the use case rejects", async () => {
     const fake = new FakeRetryObjective(
       new ObjectiveNotRetryableError("obj-1"),
     );
     const result = await runRetryObjective(
-      { id: "obj-1" },
+      { id: "obj-1", expectedCommit: "COMMIT_OID" },
       fake as unknown as RetryObjective,
     );
     assert.equal(result.exitCode, 1);
@@ -325,20 +395,31 @@ describe("runRetryObjective handler", () => {
     );
   });
 
-  test("runRetryObjective --id <id> --note <text>: passes {objectiveId, note} through (Story 06 a)", async () => {
+  test("runRetryObjective --id <id> --expected-commit <oid> --note <text>: passes {objectiveId, expectedCommit, note} through (Story 06 a + Story 4, 012)", async () => {
     const fake = new FakeRetryObjective();
     const result = await runRetryObjective(
-      { id: "obj-1", note: "guidance" },
+      { id: "obj-1", expectedCommit: "COMMIT_OID", note: "guidance" },
       fake as unknown as RetryObjective,
     );
-    assert.deepEqual(fake.calls, [{ objectiveId: "obj-1", note: "guidance" }]);
+    assert.deepEqual(fake.calls, [
+      {
+        objectiveId: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        note: "guidance",
+      },
+    ]);
     assert.equal(result.exitCode, 0);
   });
 
-  test("runRetryObjective --id <id> without --note: passes no note key (Story 06 a)", async () => {
+  test("runRetryObjective --id <id> --expected-commit <oid> without --note: passes no note key (Story 06 a + Story 4, 012)", async () => {
     const fake = new FakeRetryObjective();
-    await runRetryObjective({ id: "obj-1" }, fake as unknown as RetryObjective);
-    assert.deepEqual(fake.calls, [{ objectiveId: "obj-1" }]);
+    await runRetryObjective(
+      { id: "obj-1", expectedCommit: "COMMIT_OID" },
+      fake as unknown as RetryObjective,
+    );
+    assert.deepEqual(fake.calls, [
+      { objectiveId: "obj-1", expectedCommit: "COMMIT_OID" },
+    ]);
   });
 });
 
@@ -355,7 +436,11 @@ describe("runRetryObjective handler", () => {
 // ---------------------------------------------------------------------------
 
 class FakeRejectObjective {
-  readonly calls: Array<{ objectiveId: string; reason?: string }> = [];
+  readonly calls: Array<{
+    objectiveId: string;
+    reason?: string;
+    expectedCommit: string;
+  }> = [];
   #error: unknown;
 
   constructor(error?: unknown) {
@@ -365,6 +450,7 @@ class FakeRejectObjective {
   async execute(input: {
     objectiveId: string;
     reason?: string;
+    expectedCommit: string;
   }): Promise<void> {
     this.calls.push(input);
     if (this.#error !== undefined) {
@@ -374,18 +460,27 @@ class FakeRejectObjective {
 }
 
 describe("runRejectObjective handler", () => {
-  test("runRejectObjective --id <id> --resolution discard: calls RejectObjective (discard use case), never RetryObjective", async () => {
+  test("runRejectObjective --id <id> --expected-commit <oid> --resolution discard: calls RejectObjective (discard use case), never RetryObjective", async () => {
     const fakeDiscard = new FakeRejectObjective();
     const fakeRetry = new FakeRetryObjective();
     const result = await runRejectObjective(
-      { id: "obj-1", resolution: "discard", reason: "unachievable" },
+      {
+        id: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        resolution: "discard",
+        reason: "unachievable",
+      },
       fakeDiscard as unknown as RejectObjective,
       fakeRetry as unknown as RetryObjective,
     );
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["obj-1"]);
     assert.deepEqual(fakeDiscard.calls, [
-      { objectiveId: "obj-1", reason: "unachievable" },
+      {
+        objectiveId: "obj-1",
+        reason: "unachievable",
+        expectedCommit: "COMMIT_OID",
+      },
     ]);
     assert.deepEqual(
       fakeRetry.calls,
@@ -394,17 +489,23 @@ describe("runRejectObjective handler", () => {
     );
   });
 
-  test("runRejectObjective --id <id> --resolution retry: calls RetryObjective (retry use case), never RejectObjective", async () => {
+  test("runRejectObjective --id <id> --expected-commit <oid> --resolution retry: calls RetryObjective (retry use case), never RejectObjective", async () => {
     const fakeDiscard = new FakeRejectObjective();
     const fakeRetry = new FakeRetryObjective();
     const result = await runRejectObjective(
-      { id: "obj-1", resolution: "retry" },
+      {
+        id: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        resolution: "retry",
+      },
       fakeDiscard as unknown as RejectObjective,
       fakeRetry as unknown as RetryObjective,
     );
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["obj-1"]);
-    assert.deepEqual(fakeRetry.calls, [{ objectiveId: "obj-1" }]);
+    assert.deepEqual(fakeRetry.calls, [
+      { objectiveId: "obj-1", expectedCommit: "COMMIT_OID" },
+    ]);
     assert.deepEqual(
       fakeDiscard.calls,
       [],
@@ -416,7 +517,7 @@ describe("runRejectObjective handler", () => {
     const fakeDiscard = new FakeRejectObjective();
     const fakeRetry = new FakeRetryObjective();
     const result = await runRejectObjective(
-      { resolution: "discard" },
+      { resolution: "discard", expectedCommit: "COMMIT_OID" },
       fakeDiscard as unknown as RejectObjective,
       fakeRetry as unknown as RetryObjective,
     );
@@ -430,7 +531,7 @@ describe("runRejectObjective handler", () => {
     const fakeDiscard = new FakeRejectObjective();
     const fakeRetry = new FakeRetryObjective();
     const result = await runRejectObjective(
-      { id: "obj-1" },
+      { id: "obj-1", expectedCommit: "COMMIT_OID" },
       fakeDiscard as unknown as RejectObjective,
       fakeRetry as unknown as RetryObjective,
     );
@@ -444,7 +545,11 @@ describe("runRejectObjective handler", () => {
     const fakeDiscard = new FakeRejectObjective();
     const fakeRetry = new FakeRetryObjective();
     const result = await runRejectObjective(
-      { id: "obj-1", resolution: "badval" },
+      {
+        id: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        resolution: "badval",
+      },
       fakeDiscard as unknown as RejectObjective,
       fakeRetry as unknown as RetryObjective,
     );
@@ -452,5 +557,35 @@ describe("runRejectObjective handler", () => {
     assert.equal(result.stdout.length, 0);
     assert.deepEqual(fakeDiscard.calls, []);
     assert.deepEqual(fakeRetry.calls, []);
+  });
+
+  test("runRejectObjective --resolution discard without --expected-commit: returns exitCode 1 with 'error: missing required flag --expected-commit', no use-case call (Story 4, 012)", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1", resolution: "discard", reason: "x" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fakeDiscard.calls, []);
+    assert.deepEqual(fakeRetry.calls, []);
+    assert.match(result.stderr[0]!, /missing required flag --expected-commit/);
+  });
+
+  test("runRejectObjective --resolution retry without --expected-commit: returns exitCode 1 with 'error: missing required flag --expected-commit', no use-case call (Story 4, 012)", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1", resolution: "retry" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stdout.length, 0);
+    assert.deepEqual(fakeDiscard.calls, []);
+    assert.deepEqual(fakeRetry.calls, []);
+    assert.match(result.stderr[0]!, /missing required flag --expected-commit/);
   });
 });

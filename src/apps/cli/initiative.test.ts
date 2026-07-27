@@ -153,6 +153,73 @@ describe("runCreateInitiative handler", () => {
       `expected 'error:' prefix, got: ${result.stderr[0]}`,
     );
   });
+
+  test("(S2-1) runCreateInitiative forwards paused: true to the use case (exit 0, [id] stdout, 'created' stderr)", async () => {
+    class CapturingRepo extends FakeInitiativeRepository {
+      lastInput: unknown = undefined;
+      save(initiative: Initiative): void {
+        this.lastInput = initiative;
+        super.save(initiative);
+      }
+    }
+    const repo = new CapturingRepo();
+    const resolver = new MockReferenceResolver("project");
+    const useCase = new CreateInitiative(repo, resolver);
+    const result = await runCreateInitiative(
+      { project: "proj-1", name: "deferred", paused: true },
+      useCase,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 1);
+    assert.match(result.stdout[0]!, /^[0-9A-Z]{26}$/);
+    assert.deepEqual(result.stderr, ["initiative created: deferred"]);
+    const saved = repo.lastInput as { paused?: boolean };
+    assert.equal(saved.paused, true, "use case must receive paused: true");
+  });
+
+  test("(S2-2) runCreateInitiative forwards paused: false to the use case when paused is explicitly false", async () => {
+    class CapturingRepo extends FakeInitiativeRepository {
+      lastInput: unknown = undefined;
+      save(initiative: Initiative): void {
+        this.lastInput = initiative;
+        super.save(initiative);
+      }
+    }
+    const repo = new CapturingRepo();
+    const resolver = new MockReferenceResolver("project");
+    const useCase = new CreateInitiative(repo, resolver);
+    const result = await runCreateInitiative(
+      { project: "proj-1", name: "active", paused: false },
+      useCase,
+    );
+    assert.equal(result.exitCode, 0);
+    const saved = repo.lastInput as { paused?: boolean };
+    assert.equal(saved.paused, false, "use case must receive paused: false");
+  });
+
+  test("(S2-3) runCreateInitiative without a paused key forwards paused: false (default)", async () => {
+    class CapturingRepo extends FakeInitiativeRepository {
+      lastInput: unknown = undefined;
+      save(initiative: Initiative): void {
+        this.lastInput = initiative;
+        super.save(initiative);
+      }
+    }
+    const repo = new CapturingRepo();
+    const resolver = new MockReferenceResolver("project");
+    const useCase = new CreateInitiative(repo, resolver);
+    const result = await runCreateInitiative(
+      { project: "proj-1", name: "no-flag" },
+      useCase,
+    );
+    assert.equal(result.exitCode, 0);
+    const saved = repo.lastInput as { paused?: boolean };
+    assert.equal(
+      saved.paused,
+      false,
+      "use case must receive paused: false when key absent",
+    );
+  });
 });
 
 describe("runRenameInitiative handler", () => {

@@ -236,6 +236,7 @@ describe("CreateObjective with after", () => {
       id: INIT_ID_AFTER,
       projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
       name: "init",
+      paused: false,
     });
     const resolver = new MockReferenceResolver(
       new Map([[INIT_ID_AFTER, "initiative"]]),
@@ -259,6 +260,7 @@ describe("CreateObjective with after", () => {
       id: INIT_ID_AFTER,
       projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
       name: "init",
+      paused: false,
     });
     repo.saveObjective({
       id: EXISTING_OBJ_A,
@@ -313,6 +315,7 @@ describe("CreateObjective with after", () => {
       id: INIT_ID_AFTER,
       projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
       name: "init",
+      paused: false,
     });
     repo.saveObjective({
       id: EXISTING_OBJ_A,
@@ -357,6 +360,7 @@ describe("CreateObjective with after", () => {
       id: INIT_ID_AFTER,
       projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
       name: "init",
+      paused: false,
     });
     const resolver = new MockReferenceResolver(
       new Map([[INIT_ID_AFTER, "initiative"]]),

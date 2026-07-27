@@ -2,6 +2,7 @@ import type { Objective, Initiative } from "../../domain/initiative.ts";
 import {
   transitionObjective,
   canRetryObjective,
+  assertCandidateFresh,
 } from "../../domain/initiative.ts";
 import type { Task } from "../../domain/task.ts";
 import { newEvent } from "../../domain/event.ts";
@@ -79,8 +80,12 @@ export class RetryObjective {
     this.#uow = uow;
   }
 
-  async execute(input: { objectiveId: string; note?: string }): Promise<void> {
-    const { objectiveId, note } = input;
+  async execute(input: {
+    objectiveId: string;
+    note?: string;
+    expectedCommit: string;
+  }): Promise<void> {
+    const { objectiveId, note, expectedCommit } = input;
 
     const objective = this.#store.getObjective(objectiveId);
     if (objective === undefined) {
@@ -96,6 +101,9 @@ export class RetryObjective {
       if (isNonTip) {
         throw new ObjectiveNotRetryableError(objectiveId);
       }
+      // Story 4 (012) — even the tip-integrated silent no-op is refused on a
+      // stale guard. The client never reviewed the current candidate.
+      assertCandidateFresh(objectiveId, expectedCommit, objective.commitOid);
       return;
     }
 
@@ -105,6 +113,11 @@ export class RetryObjective {
         objective.status,
       );
     }
+
+    // Story 4 (012) — early guard after the retry-eligibility check, before
+    // any broker / workspaces / gate call. SQLite cannot roll back a moved
+    // ref, so the refusal must precede git work.
+    assertCandidateFresh(objectiveId, expectedCommit, objective.commitOid);
 
     if (
       objective.status === "conflict" &&
@@ -122,6 +135,7 @@ export class RetryObjective {
         this.#feed,
         this.#uow,
         note,
+        expectedCommit,
       );
       return;
     }
@@ -137,7 +151,8 @@ export class RetryObjective {
     gate: ObjectiveGate,
     feed: EventAppender,
     uow: UnitOfWork,
-    note?: string,
+    note: string | undefined,
+    expectedCommit: string,
   ): Promise<void> {
     const { initiativeId, id: objectiveId } = objective;
     const homeDir = this.#store.resolveHomeDir(initiativeId);
@@ -155,6 +170,12 @@ export class RetryObjective {
 
     if (passed) {
       uow.transaction(() => {
+        // Story 4 (012) — in-transaction re-check. Compare against the
+        // STORED commitOid (still the pre-squash candidate at this point);
+        // the new oid is only written inside this callback.
+        const fresh = this.#store.getObjective(objectiveId);
+        assertCandidateFresh(objectiveId, expectedCommit, fresh?.commitOid);
+
         const updated: Objective = {
           ...transitionObjective(objective, "awaiting_confirmation"),
           commitOid: oid,

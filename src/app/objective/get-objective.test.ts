@@ -232,3 +232,68 @@ test("(S6-5) after: [B, A] from repo → after and waiting preserve repo order",
   assert.deepEqual(output.after, [S6_Y, S6_X]);
   assert.deepEqual(output.waiting, [{ id: S6_Y, neverSatisfies: false }]);
 });
+
+// ---------------------------------------------------------------------------
+// Story 3 — commitOid / parentOid on the read view (012)
+// ---------------------------------------------------------------------------
+
+const S3_COMMIT = "a".repeat(40);
+const S3_PARENT = "b".repeat(40);
+
+test("(S3-1) execute returns commitOid and parentOid when both are set on the objective", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "backend",
+    status: "awaiting_confirmation",
+    commitOid: S3_COMMIT,
+    parentOid: S3_PARENT,
+  };
+  const { objectives, repos } = makeStore(objective, REPO_ID);
+  const useCase = new GetObjective(objectives, repos);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.equal(output.commitOid, S3_COMMIT, "commitOid carried into output");
+  assert.equal(output.parentOid, S3_PARENT, "parentOid carried into output");
+  assert.deepEqual(output, {
+    id: OBJ_ID,
+    name: "backend",
+    status: "awaiting_confirmation",
+    commitOid: S3_COMMIT,
+    parentOid: S3_PARENT,
+    integrations: [{ repository: REPO_ID, state: "awaiting_confirmation" }],
+    after: [],
+    waiting: [],
+  });
+});
+
+test("(S3-2) execute omits commitOid and parentOid keys when neither is set (a building objective)", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "backend",
+    status: "building",
+  };
+  const { objectives, repos } = makeStore(objective, REPO_ID);
+  const useCase = new GetObjective(objectives, repos);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.equal(
+    "commitOid" in output,
+    false,
+    "commitOid key must be absent when domain value is undefined",
+  );
+  assert.equal(
+    "parentOid" in output,
+    false,
+    "parentOid key must be absent when domain value is undefined",
+  );
+  assert.equal(
+    output.commitOid,
+    undefined,
+    "commitOid is undefined, never null or empty string",
+  );
+  assert.equal(
+    output.parentOid,
+    undefined,
+    "parentOid is undefined, never null or empty string",
+  );
+});

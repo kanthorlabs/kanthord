@@ -200,7 +200,12 @@ function buildFakes() {
   const events = new FakeEventFeed();
   const transactor = { run: <T>(work: () => T): T => work() };
 
-  initiativeRepository.save({ id: INIT_ID, projectId: PROJ_ID, name: "oauth" });
+  initiativeRepository.save({
+    id: INIT_ID,
+    projectId: PROJ_ID,
+    name: "oauth",
+    paused: false,
+  });
   initiativeRepository.saveObjective({
     id: OBJ_ID,
     initiativeId: INIT_ID,

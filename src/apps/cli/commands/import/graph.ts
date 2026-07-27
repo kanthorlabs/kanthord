@@ -23,6 +23,10 @@ export function buildImportGraphCommand(deps: CliDeps, io: CliIo): Command {
       (value, values: string[]) => (values.push(value), values),
       [],
     )
+    .option(
+      "--paused",
+      "with --create: create the initiative paused; nothing runs until `resume initiative`",
+    )
     .addHelpText(
       "after",
       "\nExample:\n  kanthord import graph ./graph --create --project project-1 --bind repository=resource-1\n",
@@ -39,6 +43,7 @@ export function buildImportGraphCommand(deps: CliDeps, io: CliIo): Command {
           project?: string;
           initiative?: string;
           bind: string[];
+          paused?: boolean;
         },
       ) => {
         const bind: Record<string, string> | undefined = opts.bind.length
@@ -64,6 +69,7 @@ export function buildImportGraphCommand(deps: CliDeps, io: CliIo): Command {
               project: opts.project,
               initiative: opts.initiative,
               bind,
+              paused: opts.paused ?? false,
             },
             {
               createGraph: deps.createGraph,

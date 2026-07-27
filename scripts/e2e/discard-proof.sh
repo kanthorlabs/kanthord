@@ -94,12 +94,18 @@ test "$(printf '%s' "$EVENTS" | grep -c '"type":"objective.integrated"' || true)
 
 # 4) `reject objective` exists beside approve/retry.
 node src/main.ts reject objective --help | grep -q -- '--resolution'
+node src/main.ts reject objective --help | grep -q -- '--expected-commit'
 
 # 5) approve on a terminal objective is a CONFLICT, not a fake success: a
 #    single-line mapped error at a non-zero exit, and never "objective integrated".
-APPROVE_OUT=$(node src/main.ts approve objective --id "$OBJ" 2>&1 || true)
+#    $OBJ is `discarded` here, so it has no live candidate — pass the
+#    placeholder so the terminal-objective claim is tested rather than the
+#    missing-flag error.
+APPROVE_OUT=$(node src/main.ts approve objective --id "$OBJ" \
+        --expected-commit 0000000000000000000000000000000000000000 2>&1 || true)
 printf '%s' "$APPROVE_OUT" | grep -qv 'objective integrated'
 printf '%s' "$APPROVE_OUT" | grep -q '^error: '
+printf '%s' "$APPROVE_OUT" | grep -q 'is not awaiting confirmation'
 printf '%s' "$APPROVE_OUT" | grep -qv 'at ChildProcess'
 
 # 6) an unknown ref is a typed one-line error, not a stack trace. The message is

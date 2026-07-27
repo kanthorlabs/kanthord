@@ -25,7 +25,7 @@ class FakePauseRepo implements PauseRepo {
 
   seed(id: string, paused = false): void {
     this.#map.set(id, {
-      initiative: { id, projectId: "proj-1", name: "test" },
+      initiative: { id, projectId: "proj-1", name: "test", paused: false },
       paused,
     });
   }
