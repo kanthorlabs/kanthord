@@ -1996,4 +1996,42 @@ describe("LocalWorkspaceManager — 007.12 Story B: squashObjective", () => {
     const message = await git(ws.dir, "log", "-1", "--format=%s");
     assert.equal(message, "objective: obj-1");
   });
+
+  // e2e 20260727-132041 B1 — an objective whose tasks left no net diff (its work
+  // was already satisfied by an earlier objective) used to reach `git commit`
+  // with an empty index; git exits 1 with "nothing to commit" and the raw error
+  // crashed the whole daemon mid-integration.
+  test("an objective with no net diff since parentOid returns parentOid instead of throwing", async () => {
+    const homePath = join(tmpRoot, "home-b-empty");
+    const wsRoot = join(tmpRoot, "ws-b-empty");
+    await mkdir(wsRoot, { recursive: true });
+
+    const repo = makeRepo(homePath, "main", `file://${seedDir}`);
+    const mgr = new LocalWorkspaceManager({ root: wsRoot });
+
+    await mgr.prepare("seed-task-empty", repo);
+    const ws = await mgr.prepareInitiative("init-b-empty", repo);
+    const parentOid = ws.baseCommit;
+
+    // No task contributed anything — the tree already equals parentOid.
+    const result = await mgr.squashObjective(
+      ws.dir,
+      parentOid,
+      "objective: obj-empty",
+    );
+
+    assert.equal(
+      result.oid,
+      parentOid,
+      "an empty objective reports the parent as its tip",
+    );
+
+    const afterCount = await git(
+      ws.dir,
+      "rev-list",
+      "--count",
+      `${parentOid}..HEAD`,
+    );
+    assert.equal(afterCount, "0", "no empty commit may be created");
+  });
 });

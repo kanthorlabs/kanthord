@@ -191,11 +191,14 @@ class FakeApproveObjective {
     this.#error = error;
   }
 
-  async execute(input: { objectiveId: string }): Promise<void> {
+  async execute(input: {
+    objectiveId: string;
+  }): Promise<{ outcome: "integrated" | "conflict" }> {
     this.calls.push(input.objectiveId);
     if (this.#error !== undefined) {
       throw this.#error;
     }
+    return { outcome: "integrated" };
   }
 }
 
@@ -210,6 +213,33 @@ describe("runApproveObjective handler", () => {
     assert.equal(result.exitCode, 0);
     assert.deepEqual(result.stdout, ["obj-1"]);
     assert.deepEqual(result.stderr, ["objective integrated: obj-1"]);
+  });
+
+  // e2e 20260727-141944 — the use case records a conflict instead of throwing,
+  // so the CLI used to print "objective integrated" for an objective that was
+  // NOT integrated. The exit code stays 0: a conflict is a real outcome of
+  // approving, not a CLI failure.
+  test("runApproveObjective on a conflict outcome: says conflict, never 'integrated'", async () => {
+    const fake = {
+      calls: [] as string[],
+      async execute(input: { objectiveId: string }) {
+        this.calls.push(input.objectiveId);
+        return { outcome: "conflict" as const };
+      },
+    };
+    const result = await runApproveObjective(
+      { id: "obj-1" },
+      fake as unknown as ApproveObjective,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.stdout, ["obj-1"]);
+    assert.equal(result.stderr.length, 1);
+    assert.match(result.stderr[0]!, /conflict/);
+    assert.doesNotMatch(
+      result.stderr[0]!,
+      /objective integrated/,
+      "must not announce an integration that did not happen",
+    );
   });
 
   test("runApproveObjective missing --id: returns exitCode 1, no use-case call", async () => {

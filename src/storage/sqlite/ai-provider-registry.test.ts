@@ -645,6 +645,75 @@ test("SqliteAiProviderRegistry: builtin record has null for custom fields", () =
   assert.equal(loaded.maxTokens, null);
 });
 
+// ── e2e 20260727-124515 B2 — every read method returns the full record ──
+//
+// listAssigned shipped a 9-column SELECT against a 12-field contract, so `api`
+// read back undefined and the daemon's custom-provider branch never fired. The
+// per-method round-trips above only covered `get`, which is why the gap
+// survived. This asserts the whole record through EVERY public read path, so a
+// new query that omits a column cannot pass.
+
+test("SqliteAiProviderRegistry: get/list/getDefault/listAssigned each return all 12 fields of a custom record", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const projectId = "full-fields-proj";
+  db.prepare("INSERT INTO projects(id, name) VALUES (?, ?)").run(
+    projectId,
+    "Full Fields",
+  );
+
+  const record = registry.register({
+    name: "custom-full",
+    provider: "e2e-custom",
+    model: "deepseek-v4-flash",
+    baseUrl: "https://custom.api.com/v1",
+    effort: "high",
+    api: "openai-completions",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    value: "sk-custom-key",
+  });
+  registry.assign(projectId, record.id, 0);
+  registry.setDefault(record.id);
+
+  const expected = {
+    id: record.id,
+    name: "custom-full",
+    provider: "e2e-custom",
+    model: "deepseek-v4-flash",
+    baseUrl: "https://custom.api.com/v1",
+    effort: "high",
+    value: "sk-custom-key",
+    state: "active",
+    credentialVersion: record.credentialVersion,
+    api: "openai-completions",
+    contextWindow: 131072,
+    maxTokens: 8192,
+  };
+
+  const byReadMethod = {
+    get: registry.get(record.id),
+    list: registry.list().find((p) => p.id === record.id),
+    getDefault: registry.getDefault(),
+    listAssigned: registry
+      .listAssigned(projectId)
+      .find((p) => p.id === record.id),
+  };
+
+  for (const [method, loaded] of Object.entries(byReadMethod)) {
+    assert.ok(loaded !== undefined, `${method} returned the record`);
+    assert.deepEqual(
+      { ...loaded },
+      expected,
+      `${method} returns every field — a dropped column shows up here`,
+    );
+  }
+});
+
 // ── BLOCKER 4 — updateCredentialCAS discriminated result ──
 
 test("(BLOCKER 4) SqliteAiProviderRegistry: updateCredentialCAS applies successfully and bumps version", () => {

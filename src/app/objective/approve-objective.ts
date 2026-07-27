@@ -38,7 +38,13 @@ export class ApproveObjective {
     this.#uow = uow;
   }
 
-  async execute(input: { objectiveId: string }): Promise<void> {
+  /**
+   * Returns what actually happened, so callers (the CLI) can report a conflict
+   * instead of announcing an integration that did not occur.
+   */
+  async execute(input: {
+    objectiveId: string;
+  }): Promise<{ outcome: "integrated" | "conflict" }> {
     const { objectiveId } = input;
 
     const objective = this.#store.getObjective(objectiveId);
@@ -59,6 +65,17 @@ export class ApproveObjective {
     const commitOid = objective.commitOid ?? "";
     const parentOid = objective.parentOid ?? "";
 
+    // e2e 20260727-141944 — an objective whose tasks left no net diff carries
+    // commitOid === parentOid (squashObjective reports the parent as its tip
+    // rather than creating an empty commit). There is nothing to fetch and
+    // nothing to fast-forward: the branch already points at that oid, so this
+    // integrates as a no-op. Falling through would count 0 commits, record a
+    // conflict, and livelock — retry re-squashes to the same empty result.
+    if (commitOid !== "" && commitOid === parentOid) {
+      this.#integrate(objective, objectiveId, initiative);
+      return { outcome: "integrated" };
+    }
+
     await this.#broker.fetch(homeDir, clonePath, commitOid);
     const commitCount = await this.#broker.countCommitsSince(
       homeDir,
@@ -68,7 +85,7 @@ export class ApproveObjective {
 
     if (commitCount !== 1) {
       this.#recordConflict(objective, objectiveId);
-      return;
+      return { outcome: "conflict" };
     }
 
     try {
@@ -81,11 +98,21 @@ export class ApproveObjective {
     } catch (err) {
       if (err instanceof LandingCASMismatchError) {
         this.#recordConflict(objective, objectiveId);
-        return;
+        return { outcome: "conflict" };
       }
       throw err;
     }
 
+    this.#integrate(objective, objectiveId, initiative);
+    return { outcome: "integrated" };
+  }
+
+  /** Mark the objective integrated, landing the initiative once all are. */
+  #integrate(
+    objective: Objective,
+    objectiveId: string,
+    initiative: Initiative | undefined,
+  ): void {
     this.#uow.transaction(() => {
       const updated = transitionObjective(objective, "integrated");
       this.#store.saveObjective(updated);

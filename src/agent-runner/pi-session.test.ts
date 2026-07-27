@@ -16,6 +16,7 @@ import type {
 import {
   CredentialError,
   UnknownModelError,
+  IncompleteCustomProviderError,
   PiProviderSessionFactory,
   withReasoning,
 } from "./pi-session.ts";
@@ -492,6 +493,38 @@ test("PiProviderSessionFactory unknown model throws UnknownModelError with provi
         err.message.includes("gpt-nonexistent-9999") ||
           String(err.model) === "gpt-nonexistent-9999",
         "error references model id",
+      );
+      return true;
+    },
+  );
+});
+
+// ---------- (e2) custom record that lost its api flavor ---------------------
+//
+// e2e 20260727-124515 S1: listAssigned dropped `api`, so a custom provider fell
+// into the builtin branch and failed with `UnknownModelError: Unknown model
+// 'deepseek-v4-flash'` — pointing at the model instead of the missing field.
+
+test("PiProviderSessionFactory unknown provider id + baseUrl + no api throws IncompleteCustomProviderError naming the field", async () => {
+  const factory = makeFactory();
+  const aiProvider = makeAIProvider({
+    provider: "e2e-custom-not-in-catalog",
+    model: "deepseek-v4-flash",
+    baseUrl: "https://custom.api.com/v1",
+    // api deliberately absent — this is the shape the SQL bug produced
+  });
+  await assert.rejects(
+    () => factory.for(aiProvider),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof IncompleteCustomProviderError,
+        "is IncompleteCustomProviderError, not UnknownModelError",
+      );
+      assert.equal(err.field, "api", "error names the missing field");
+      assert.equal(
+        err.provider,
+        "e2e-custom-not-in-catalog",
+        "error names the provider",
       );
       return true;
     },

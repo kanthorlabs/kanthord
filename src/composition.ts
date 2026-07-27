@@ -71,6 +71,7 @@ import { EnqueueReadyTasks } from "./app/task/enqueue-ready-tasks.ts";
 import { RecoverInterruptedTasks } from "./app/task/recover-interrupted-tasks.ts";
 import { RunNextTask } from "./app/task/run-next-task.ts";
 import { RunDaemon } from "./app/task/run-daemon.ts";
+import { SettleObjectives } from "./app/objective/settle-objectives.ts";
 import { ListEvents } from "./app/task/list-events.ts";
 import { GetTask } from "./app/task/get-task.ts";
 import { ApproveTask } from "./app/task/approve-task.ts";
@@ -513,10 +514,33 @@ export function buildDeps(
         getProjectId,
       },
     );
+    // B2 — startup sweep for objectives a crashed run left mid-integration.
+    const settleObjectives = new SettleObjectives(
+      {
+        listAllInitiatives: () => initiativeRepository.listAllInitiatives(),
+        get: (id: string) => initiativeRepository.get(id),
+        listObjectives: (initiativeId: string) =>
+          initiativeRepository.listObjectives(initiativeId),
+      },
+      {
+        listTasksByObjective: (objectiveId: string) =>
+          taskRepository.listTasksByObjective(objectiveId),
+      },
+      {
+        getObjective: (id: string) => initiativeRepository.getObjective(id),
+        saveObjective: (objective: Objective) =>
+          initiativeRepository.saveObjective(objective),
+        getObjectiveParentOid,
+      },
+      workspaces,
+      events,
+    );
+
     return new RunDaemon({
       recover,
       enqueueReady,
       runNext,
+      settleObjectives,
       sleep: (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
       logger: effectiveLogger,
       initiatives: initiativeRepository,

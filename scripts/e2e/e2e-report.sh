@@ -24,6 +24,26 @@ e2e_state_init
 [ -f "$E2E_FINDINGS" ] || : >"$E2E_FINDINGS"
 
 state() { jq -r --arg k "$1" '.[$k] // "—"' "$E2E_STATE"; }
+
+# Only contract-proof.sh (P4) resolves `outcome`, so a chain that stops earlier
+# leaves it at the init value `pending` — which is not one of the three verdicts
+# and reads like "still running". Derive it from the phases that did run, and
+# write it back so state.json and the report never disagree.
+resolve_outcome() {
+  case "$(state outcome)" in
+  passed | blocked | failed) return 0 ;;
+  esac
+  local verdict="" p
+  for p in p0 p1 p2 p3 p4; do
+    case "$(state "$p")" in
+    failed) verdict="failed"; break ;;
+    blocked) [ -n "$verdict" ] || verdict="blocked" ;;
+    esac
+  done
+  [ -n "$verdict" ] || return 0
+  e2e_state_set outcome "$verdict"
+}
+resolve_outcome
 count_kind() { jq -r --arg k "$1" 'select(.kind==$k) | .kind' "$E2E_FINDINGS" 2>/dev/null | wc -l | tr -d ' '; }
 
 {

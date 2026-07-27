@@ -53,6 +53,16 @@ interface RunDaemonStore {
   getTaskResult(taskId: string): { reason: string | null } | undefined;
 }
 
+/**
+ * e2e 20260727-132041 B2 — re-drive objective integration at startup. A crash
+ * between "last task completed" and "objective awaiting_confirmation" leaves an
+ * objective with no schedulable task, so only a restart can repair it. Optional
+ * so pre-existing fakes keep compiling.
+ */
+interface SettleObjectivesStep {
+  execute(): Promise<string[]>;
+}
+
 interface RunDaemonDeps {
   recover: Recover;
   enqueueReady: EnqueueReady;
@@ -61,6 +71,7 @@ interface RunDaemonDeps {
   logger: Logger;
   initiatives?: InitiativeCounts;
   store?: RunDaemonStore;
+  settleObjectives?: SettleObjectivesStep;
 }
 
 export class RunDaemon {
@@ -108,6 +119,18 @@ export class RunDaemon {
       };
     }
     this.#deps.recover.execute();
+
+    // Step 1b: settle any objective a previous run left mid-integration —
+    // all tasks completed, objective still `building`. No task remains to
+    // schedule, so without this the initiative can never land (B2).
+    if (this.#deps.settleObjectives !== undefined) {
+      const settled = await this.#deps.settleObjectives.execute();
+      for (const objectiveId of settled) {
+        this.#logger.info(
+          `objective ${objectiveId}: settled on startup (integration was interrupted)`,
+        );
+      }
+    }
 
     // Main loop.
     while (true) {

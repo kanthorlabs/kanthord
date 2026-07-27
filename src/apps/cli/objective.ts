@@ -103,11 +103,19 @@ export async function runApproveObjective(
     return { ...toResult(new MissingFlagError("--id")), stdout: [] };
   }
   try {
-    await approveObjective.execute({ objectiveId: id });
+    // The use case records a conflict internally rather than throwing, so
+    // announcing "integrated" unconditionally reported a success that did not
+    // happen — it cost a full diagnosis to notice (e2e 20260727-141944). Exit
+    // code stays 0: a conflict is a real, expected outcome of approving.
+    const { outcome } = await approveObjective.execute({ objectiveId: id });
     return {
       exitCode: 0,
       stdout: [id],
-      stderr: [`objective integrated: ${id}`],
+      stderr: [
+        outcome === "integrated"
+          ? `objective integrated: ${id}`
+          : `objective conflict: ${id} — nothing was landed; resolve it and retry`,
+      ],
     };
   } catch (err) {
     return { ...toResult(err), stdout: [] };

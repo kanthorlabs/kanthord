@@ -860,6 +860,22 @@ export class LocalWorkspaceManager implements WorkspaceManager {
     message: string,
   ): Promise<{ oid: string }> {
     await execFile("git", ["reset", "--soft", parentOid], { cwd: dir });
+
+    // An objective whose tasks left no net diff is a legitimate outcome — the
+    // work it asked for was already satisfied by an earlier objective. `git
+    // commit` exits 1 on an empty index ("nothing to commit"), so committing
+    // blindly here crashed the daemon mid-integration and left the objective
+    // stuck in `building` forever (e2e 20260727-132041 B1). Report the parent
+    // as the objective's tip instead: nothing new landed, and that is correct.
+    const { stdout: staged } = await execFile(
+      "git",
+      ["diff", "--cached", "--name-only"],
+      { cwd: dir },
+    );
+    if (staged.trim() === "") {
+      return { oid: parentOid };
+    }
+
     await execFile("git", [...GIT_CONFIG, "commit", "-m", message], {
       cwd: dir,
     });

@@ -369,3 +369,75 @@ test("execute moves the objective to conflict when the CAS ref-advance rejects a
   assert.ok(conflictEvent, "must append an objective.conflict event");
   assert.equal(conflictEvent?.objectiveId, "obj-1");
 });
+
+// e2e 20260727-141944 — an objective whose tasks left no net diff carries
+// commitOid === parentOid (squashObjective reports the parent rather than
+// creating an empty commit). Counting commits since the parent yields 0, so the
+// commitCount !== 1 branch recorded a conflict; `retry objective` re-squashed to
+// the same empty result and the run livelocked until the round budget ran out.
+test("execute integrates an empty objective (commitOid === parentOid) as a no-op instead of recording a conflict", async () => {
+  const objective = baseObjective({
+    commitOid: "SAME_OID",
+    parentOid: "SAME_OID",
+  });
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FakeBroker();
+  broker.countSinceResult = 0;
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await useCase.execute({ objectiveId: "obj-1" });
+
+  assert.equal(store.savedObjectives.length, 1);
+  assert.equal(
+    store.savedObjectives[0]?.status,
+    "integrated",
+    "an empty objective integrates; it must never land in conflict",
+  );
+  assert.ok(
+    feed.events.some((e) => e.type === "objective.integrated"),
+    "must append objective.integrated",
+  );
+  assert.equal(
+    feed.events.some((e) => e.type === "objective.conflict"),
+    false,
+    "must NOT append objective.conflict",
+  );
+
+  // Nothing to move: the branch already points at that oid.
+  assert.deepEqual(broker.fetchCalls, [], "no fetch for an empty objective");
+  assert.deepEqual(
+    broker.casCalls,
+    [],
+    "no ref advance for an empty objective",
+  );
+});
+
+test("execute lands the initiative when the last objective is an empty no-op", async () => {
+  const done = baseObjective({ id: "obj-0", status: "integrated" });
+  const empty = baseObjective({
+    id: "obj-1",
+    commitOid: "SAME_OID",
+    parentOid: "SAME_OID",
+  });
+  const store = new FakeStore({
+    objective: empty,
+    initiative: baseInitiative(),
+    siblings: [done, empty],
+  });
+  const broker = new FakeBroker();
+  broker.countSinceResult = 0;
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await useCase.execute({ objectiveId: "obj-1" });
+
+  assert.equal(store.savedInitiatives.at(-1)?.status, "landed");
+  assert.ok(
+    feed.events.some((e) => e.type === "initiative.landed"),
+    "the initiative must land even though the last objective added nothing",
+  );
+});

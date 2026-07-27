@@ -110,6 +110,18 @@ while [ "$ROUND" -lt "$E2E_MAX_ROUNDS" ]; do
       "daemon hit the ${E2E_ROUND_TIMEOUT}s round timeout and was stopped" round="$ROUND" log="$ROUND_LOG"
   fi
 
+  # A crashed daemon prints a stack trace and NO summary line, so every parser
+  # below sees nothing and the run only surfaces as `stalled` rounds later —
+  # pointing at the symptom and hiding the cause (e2e 20260727-132041 S1). Any
+  # other non-zero exit with no summary is its own finding, carrying the tail of
+  # what the process actually said.
+  if [ "$RC" != "0" ] && [ "$RC" != "124" ] && [ "$RC" != "137" ] &&
+    ! grep -qE '^(task failed: |[0-9]+ (task|objective|initiative))' "$ROUND_LOG"; then
+    e2e_finding P3 daemon-crashed critical \
+      "daemon exited $RC with no summary line — $(grep -E '^(Error|[A-Za-z]*Error):' "$ROUND_LOG" | head -1 | cut -c1-200)" \
+      round="$ROUND" log="$ROUND_LOG"
+  fi
+
   # --- daemon's own summary lines -----------------------------------------
   while IFS= read -r line; do
     TASK_ID="$(sed -E 's/^task failed: ([^ ]+) .*/\1/' <<<"$line")"

@@ -88,6 +88,28 @@ export class UnknownModelError extends Error {
   }
 }
 
+/**
+ * A record with its own `baseUrl` whose provider id is unknown to pi's builtin
+ * catalog and whose `api` flavor is absent. It cannot be a builtin with an
+ * overridden URL, so it is a custom OpenAI-compatible provider missing `api`.
+ * The custom branch below keys off `api`, so without it the session falls
+ * through to the builtin catalog and dies with `UnknownModelError`, blaming the
+ * model name for a missing field. Fail at the field instead.
+ */
+export class IncompleteCustomProviderError extends Error {
+  readonly provider: string;
+  readonly field: string;
+
+  constructor(provider: string, field: string) {
+    super(
+      `Provider '${provider}' has baseUrl set but '${field}' is missing — a custom OpenAI-compatible provider must carry '${field}'`,
+    );
+    this.name = "IncompleteCustomProviderError";
+    this.provider = provider;
+    this.field = field;
+  }
+}
+
 export class UnsupportedApiError extends Error {
   readonly api: string;
 
@@ -308,6 +330,17 @@ export class PiProviderSessionFactory implements ProviderSessionFactory {
     );
     const found = models.getModel(provider.provider, provider.model);
     if (!found) {
+      // A record with its own baseUrl whose provider id is not in the builtin
+      // catalog is not a builtin with an overridden URL — it is a custom
+      // OpenAI-compatible provider that reached here with `api` missing. Blame
+      // the absent field, not the model name.
+      if (
+        provider.baseUrl != null &&
+        provider.baseUrl !== "" &&
+        models.getProvider(provider.provider) === undefined
+      ) {
+        throw new IncompleteCustomProviderError(provider.provider, "api");
+      }
       throw new UnknownModelError(provider.provider, provider.model);
     }
 

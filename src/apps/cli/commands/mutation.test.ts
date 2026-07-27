@@ -307,6 +307,7 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       approveObjective: {
         execute: async (input: unknown) => {
           received = input;
+          return { outcome: "integrated" };
         },
       },
     } as unknown as Parameters<typeof buildApproveCommand>[0];

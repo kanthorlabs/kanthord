@@ -6,7 +6,7 @@ import { unsatisfiedObjectiveEdges } from "../../domain/sequencing.ts";
 import { newId } from "../../domain/entity.ts";
 import { newChangeCandidate } from "../../domain/landing.ts";
 import type { Objective } from "../../domain/initiative.ts";
-import { transitionObjective } from "../../domain/initiative.ts";
+import { settleObjective } from "../objective/settle-objectives.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type {
@@ -574,28 +574,21 @@ export class RunNextTask {
         ).filter((t) => t.objectiveId === objectiveId);
         const allCompleted = siblings.every((t) => t.status === "completed");
 
-        if (allCompleted) {
-          const parentOid = this.#store.getObjectiveParentOid(objectiveId);
-          const { oid } = await this.#workspaces.squashObjective(
+        if (allCompleted && objectiveId !== undefined) {
+          // Shared with the daemon's startup sweep (SettleObjectives) so the
+          // happy path and the crash-recovery path cannot drift apart.
+          await settleObjective(
+            objectiveId,
             workspaceBinding.resourceId,
-            parentOid,
-            `objective ${objectiveId}`,
+            {
+              getObjective: (id) => this.#store.getObjective!(id),
+              saveObjective: (o) => this.#store.saveObjective!(o),
+              getObjectiveParentOid: (id) =>
+                this.#store.getObjectiveParentOid!(id),
+            },
+            this.#workspaces,
+            this.#feed,
           );
-          const objective = this.#store.getObjective(objectiveId);
-          if (objective !== undefined) {
-            const transitioned = transitionObjective(
-              objective,
-              "awaiting_confirmation",
-            );
-            this.#store.saveObjective({
-              ...transitioned,
-              commitOid: oid,
-              parentOid,
-            });
-            this.#feed.append(
-              newEvent("objective.awaiting_confirmation", { objectiveId }),
-            );
-          }
         }
       }
     }

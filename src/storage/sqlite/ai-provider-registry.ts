@@ -194,7 +194,7 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
   listAssigned(projectId: string): GlobalAiProvider[] {
     const rows = this.#db
       .prepare(
-        `SELECT p.id, p.name, p.provider, p.model, p.baseUrl, p.effort, p.value, p.state, p.credentialVersion
+        `SELECT p.id, p.name, p.provider, p.model, p.baseUrl, p.effort, p.value, p.state, p.credentialVersion, p.api, p.contextWindow, p.maxTokens
          FROM ai_providers p
          JOIN project_ai_providers a ON a.providerId = p.id
          WHERE a.projectId = ?
