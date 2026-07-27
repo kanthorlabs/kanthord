@@ -49,9 +49,9 @@ function pad(s: string, width: number): string {
 export function buildCommandsCommand(_io: CliIo): Command {
   return new Command("commands")
     .description("Print a table of all commands with their options.")
+    .addHelpText("after", "\nExample:\n  kanthord commands\n")
     .action(function () {
       // `this` is the Command instance; walk up to the root
-      // eslint-disable-next-line @typescript-eslint/no-this-alias
       let root: Command = this;
       while (root.parent) root = root.parent;
 
