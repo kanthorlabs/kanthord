@@ -172,11 +172,16 @@ evidence: {
 }
 ```
 
-For an objective, `args` is
-`["-C", homeDir, "diff", `${parentOid}..${commitOid}`]`, from
-`resolveHomeDir(initiativeId)` (`src/app/objective/approve-objective.ts:63`) and
-`Objective.parentOid` / `commitOid` (`src/domain/initiative.ts:32-35`). For a
-task candidate it is `base_commit`..`commit_sha` from `task_results`.
+For an objective, `args` is:
+
+```ts
+["-C", homeDir, "diff", `${parentOid}..${commitOid}`];
+```
+
+…sourced from `resolveHomeDir(initiativeId)`
+(`src/app/objective/approve-objective.ts:63`) and `Objective.parentOid` /
+`commitOid` (`src/domain/initiative.ts:32-35`). For a task candidate the two OIDs
+are `base_commit` and `commit_sha` from `task_results`.
 
 Binding sub-decisions:
 

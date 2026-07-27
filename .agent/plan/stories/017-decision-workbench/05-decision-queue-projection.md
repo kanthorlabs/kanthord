@@ -187,11 +187,15 @@ follow-up epic that adds the event.
 
 - `basis` is always the literal `"verification-and-summary"`.
 - `diffAvailable` is always the literal `false`.
-- `inspect` is
-  `{ executable: "git", args: ["-C", homeDir, "diff", `${baseOid}..${headOid}`] }`
-  when the element's `QueueEvidenceInput` has a non-null `homeDir`, `baseOid` and
-  `headOid`, **and** both OIDs match `/^[0-9a-f]{7,64}$/`. Otherwise `null`.
-  Never build a single shell string.
+- `inspect` is:
+
+  ```ts
+  { executable: "git", args: ["-C", homeDir, "diff", `${baseOid}..${headOid}`] }
+  ```
+
+  …but only when the element's `QueueEvidenceInput` has a non-null `homeDir`,
+  `baseOid` and `headOid`, **and** both OIDs match `/^[0-9a-f]{7,64}$/`. Otherwise
+  `null`. Never build a single shell string.
 
 **`rankDecisions` — the ordering rule.** Total and deterministic:
 

@@ -57,19 +57,36 @@ export class ObjectiveNotInConflictError extends Error {
 2. `(objective.status ?? "building") !== "conflict"` throws
    `ObjectiveNotInConflictError` naming the **actual** status. Never return an
    empty overview.
-3. `currentTip` from `broker.currentTip(homeDir, ref)` where
-   `homeDir = resolveHomeDir(objective.initiativeId)` and
-   `ref = \`refs/heads/kanthord/init/${objective.initiativeId}\``— the exact ref
-built at`src/app/objective/retry-objective.ts:144`. `currentTip` is optional
-on the port (`src/objective-broker/port.ts`), so when it is absent or throws,
-set `currentTip: null`and`tipMovedSinceAnchor: false`. A read must not fail
+3. Read `currentTip` from the broker:
+
+   ```ts
+   const homeDir = resolveHomeDir(objective.initiativeId);
+   const ref = `refs/heads/kanthord/init/${objective.initiativeId}`;
+   const currentTip = await broker.currentTip(homeDir, ref);
+   ```
+
+   That is the exact ref built at
+   `src/app/objective/retry-objective.ts:144`. `currentTip` is **optional** on the
+   port (`src/objective-broker/port.ts`), so when it is absent or rejects, set
+   `currentTip: null` and `tipMovedSinceAnchor: false`. A read must not fail
    because the mirror is unreadable.
-4. `tipMovedSinceAnchor` is `currentTip !== null && parentOid !== null &&
-currentTip !== parentOid`. It is **never** used to derive `conflictCause`.
-5. `evidence.inspect` is
-   `{ executable: "git", args: ["-C", homeDir, "diff", `${parentOid}..${commitOid}`] }`
-   when `homeDir` is non-empty and both OIDs match `/^[0-9a-f]{7,64}$/`; otherwise
-   `null`. Never a single shell string.
+
+4. `tipMovedSinceAnchor` is true only when all three hold:
+
+   ```ts
+   currentTip !== null && parentOid !== null && currentTip !== parentOid;
+   ```
+
+   It is **never** used to derive `conflictCause`.
+
+5. Build `evidence.inspect` as:
+
+   ```ts
+   { executable: "git", args: ["-C", homeDir, "diff", `${parentOid}..${commitOid}`] }
+   ```
+
+   …but only when `homeDir` is non-empty and both OIDs match
+   `/^[0-9a-f]{7,64}$/`; otherwise `null`. Never a single shell string.
 
 **There is no `files` key.** An objective conflict is a stale-anchor / CAS failure
 at ref-update time (`src/app/objective/approve-objective.ts:86-89,98-103`), not a
