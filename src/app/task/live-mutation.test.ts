@@ -134,6 +134,7 @@ function setup(): Fixture {
     initiativeRepo,
     projectRepo,
     resolver,
+    feed,
   );
 
   return {

@@ -17,6 +17,7 @@ import type { RenameObjective } from "../../app/objective/rename-objective.ts";
 import type { CreateProject } from "../../app/project/create-project.ts";
 import type { FindProject } from "../../app/project/find-project.ts";
 import type { GetProject } from "../../app/project/get-project.ts";
+import type { ListProjects } from "../../app/project/list-projects.ts";
 import type { RenameProject } from "../../app/project/rename-project.ts";
 import type { AddResource } from "../../app/resource/add-resource.ts";
 import type { FindResource } from "../../app/resource/find-resource.ts";
@@ -137,6 +138,7 @@ export interface CliDeps {
   renameProject: RenameProject;
   getProject: GetProject;
   findProject: FindProject;
+  listProjects: ListProjects;
   createInitiative: CreateInitiative;
   renameInitiative: RenameInitiative;
   findInitiative: FindInitiative;

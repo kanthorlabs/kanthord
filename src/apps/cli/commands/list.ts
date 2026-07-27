@@ -6,11 +6,14 @@ import { buildListInitiativeCommand } from "./list/initiative.ts";
 import { buildListEventCommand } from "./list/event.ts";
 import { buildListModelCommand } from "./list/model.ts";
 import { buildListObjectiveCommand } from "./list/objective.ts";
+import { buildListProjectCommand } from "./list/project.ts";
 import { buildListTaskCommand } from "./list/task.ts";
 import {
   buildListCredentialCommand,
   buildListAiProviderCommand,
   buildListRepositoryCommand,
+  buildListNotificationCommand,
+  buildListFilesystemCommand,
 } from "./list/resource.ts";
 
 export function buildListCommand(deps: CliDeps, io: CliIo): Command {
@@ -22,6 +25,7 @@ export function buildListCommand(deps: CliDeps, io: CliIo): Command {
   command.hook("preSubcommand", (_parent, child) => {
     child.copyInheritedSettings(command);
   });
+  command.addCommand(buildListProjectCommand(deps, io));
   command.addCommand(buildListTaskCommand(deps, io));
   command.addCommand(buildListInitiativeCommand(deps, io));
   command.addCommand(buildListObjectiveCommand(deps, io));
@@ -30,6 +34,8 @@ export function buildListCommand(deps: CliDeps, io: CliIo): Command {
   command.addCommand(buildListCredentialCommand(deps, io));
   command.addCommand(buildListAiProviderCommand(deps, io));
   command.addCommand(buildListRepositoryCommand(deps, io));
+  command.addCommand(buildListNotificationCommand(deps, io));
+  command.addCommand(buildListFilesystemCommand(deps, io));
 
   return command;
 }

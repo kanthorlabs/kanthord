@@ -1,0 +1,13 @@
+{
+  "packageId": "",
+  "formatVersion": 3,
+  "digestAlgorithm": "sha256",
+  "initiativeId": "",
+  "nodes": {},
+  "files": [],
+  "objectiveIds": [],
+  "refToId": {
+    "objectives": {},
+    "tasks": {}
+  }
+}

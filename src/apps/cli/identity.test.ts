@@ -41,6 +41,8 @@ import { FindProject } from "../../app/project/find-project.ts";
 import { FindInitiative } from "../../app/initiative/find-initiative.ts";
 import { FindObjective } from "../../app/objective/find-objective.ts";
 import { FindResource } from "../../app/resource/find-resource.ts";
+import type { EventFeed } from "../../events/port.ts";
+import type { Event } from "../../domain/event.ts";
 
 /** Strict Crockford base-32 ULID: 26 chars, no I / L / O / U. */
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
@@ -133,6 +135,11 @@ const resolverForInitiative = {
 const resolverForObjective = {
   resolveKind: (_id: string) => "objective" as const,
 } as unknown as ReferenceResolver;
+
+const noopEventFeed = {
+  append: (_event: Event): void => {},
+  readAfter: (_cursor: string, _limit?: number): Event[] => [],
+} as unknown as EventFeed;
 
 // ---------------------------------------------------------------------------
 // Table of (label, handler invocation) pairs
@@ -232,6 +239,7 @@ const cases: Array<{ label: string; fn: () => Promise<HandlerResult> }> = [
           fakeInitiativeRepoForTask,
           fakeProjectRepoForTask,
           resolverForObjective,
+          noopEventFeed,
         ),
       ),
   },

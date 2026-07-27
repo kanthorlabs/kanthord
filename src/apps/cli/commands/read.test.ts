@@ -481,9 +481,45 @@ describe("src/apps/cli/commands/read.ts", () => {
     assert.deepEqual(received, [{ after: "0", limit: 1 }]);
     assert.equal(listenersWhileListing, listenersBefore + 1);
     assert.equal(process.listenerCount("SIGINT"), listenersBefore);
+    // Story 4: non-empty page → nextCursor is the last shown event id, not ''.
     assert.deepEqual(cap.out, [
-      '{"events":[{"id":"event-1","type":"task.ready","taskId":"task-1"}],"nextCursor":""}\n',
+      '{"events":[{"id":"event-1","type":"task.ready","taskId":"task-1"}],"nextCursor":"event-1"}\n',
     ]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(011 S4) list event --project p1 --after 0 --json forwards projectId: 'p1' to the use case", async () => {
+    const cap = capture();
+    const received: Array<{
+      after: string;
+      limit?: number;
+      projectId?: string;
+    }> = [];
+    const deps = {
+      listEvents: {
+        execute: (input: {
+          after: string;
+          limit?: number;
+          projectId?: string;
+        }) => {
+          received.push(input);
+          return [];
+        },
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    await buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).parseAsync(["event", "--project", "p1", "--after", "0", "--json"], {
+      from: "user",
+    });
+
+    // Non-follow with no --limit → default page 10 + a probe row → limit 11.
+    assert.deepEqual(received, [{ after: "0", limit: 11, projectId: "p1" }]);
+    // Empty page → nextCursor is the input --after, unchanged.
+    assert.deepEqual(cap.out, ['{"events":[],"nextCursor":"0"}\n']);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);
   });
@@ -617,6 +653,193 @@ describe("src/apps/cli/commands/read.ts", () => {
     assert.deepEqual(cap.out, [
       '[{"type":"repository","id":"repo-1","name":"home","remoteUrl":"https://github.com/acme/api.git"}]\n',
     ]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 011 Story 1 — list project
+  // -------------------------------------------------------------------------
+
+  test("(011 S1) list project --json: emits one JSON line of all projects in repo order", async () => {
+    const cap = capture();
+    const deps = {
+      listProjects: {
+        execute: () => [
+          { id: "p1", name: "alpha" },
+          { id: "p2", name: "beta" },
+        ],
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(["project", "--json"], { from: "user" });
+
+    assert.deepEqual(cap.out, [
+      '[{"id":"p1","name":"alpha"},{"id":"p2","name":"beta"}]\n',
+    ]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(011 S1) list project: emits id + two spaces + name, one line per project", async () => {
+    const cap = capture();
+    const deps = {
+      listProjects: {
+        execute: () => [
+          { id: "p1", name: "alpha" },
+          { id: "p2", name: "beta" },
+        ],
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(["project"], { from: "user" });
+
+    assert.deepEqual(cap.out, ["p1  alpha\n", "p2  beta\n"]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 011 Story 2 — list notification / list filesystem / non-vacuous canary
+  // -------------------------------------------------------------------------
+
+  test("(011 S2) list notification --project <id> --json: forwards {projectId, type: 'notification'}; emits one notification view line", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      listResources: {
+        execute: (input: unknown) => {
+          received = input;
+          return [
+            {
+              type: "notification",
+              id: "notif-1",
+              name: "ops",
+              provider: "slack",
+              destination: "#ops",
+            },
+          ];
+        },
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      ["notification", "--project", "project-1", "--json"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, {
+      projectId: "project-1",
+      type: "notification",
+    });
+    assert.deepEqual(cap.out, [
+      '[{"type":"notification","id":"notif-1","name":"ops","provider":"slack","destination":"#ops"}]\n',
+    ]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(011 S2) list filesystem --project <id> --json: forwards {projectId, type: 'filesystem'}; emits one filesystem view line", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      listResources: {
+        execute: (input: unknown) => {
+          received = input;
+          return [
+            {
+              type: "filesystem",
+              id: "fs-1",
+              name: "scratch",
+              path: "/w",
+            },
+          ];
+        },
+      },
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      ["filesystem", "--project", "project-1", "--json"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, { projectId: "project-1", type: "filesystem" });
+    assert.deepEqual(cap.out, [
+      '[{"type":"filesystem","id":"fs-1","name":"scratch","path":"/w"}]\n',
+    ]);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(011 S2) list credential --project <id> --json: NON-VACUOUS no-secret-leak canary (real ListResources, fake repo returns value)", async () => {
+    // Characterization test (passes today, pins the no-secret-leak invariant).
+    // The existing 007.9 S3-A test uses a fake that returns a credential row
+    // without a `value` field, so the canary can never appear. This test
+    // constructs a real `ListResources` over a fake `ProjectRepository` whose
+    // `listResourcesByProject` actually returns a credential carrying the
+    // canary value, so the canary would appear in the output if any path
+    // (use case, view, or handler) leaked the `value` field.
+    const CANARY = "CANARY_SECRET_VALUE";
+    const { ListResources } =
+      await import("../../../app/resource/list-resources.ts");
+    const cap = capture();
+    const fakeRepo = {
+      listResourcesByProject: (_projectId: string, _type: string) => [
+        {
+          type: "credential",
+          id: "cred-1",
+          projectId: "project-1",
+          name: "gh",
+          provider: "github",
+          value: CANARY,
+        },
+      ],
+    };
+    const listResources = new ListResources(
+      fakeRepo as unknown as ConstructorParameters<typeof ListResources>[0],
+    );
+    const deps = {
+      listResources,
+    } as unknown as Parameters<typeof buildListCommand>[0];
+
+    const command = buildListCommand(
+      deps,
+      cap.io as Parameters<typeof buildListCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      ["credential", "--project", "project-1", "--json"],
+      { from: "user" },
+    );
+
+    const out = cap.out.join("");
+    assert.equal(
+      out.includes(CANARY),
+      false,
+      "credential secret value must never appear in list output (even --json)",
+    );
+    const parsed = JSON.parse(out);
+    assert.equal(parsed[0].value, undefined);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);
   });

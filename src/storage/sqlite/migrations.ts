@@ -766,6 +766,23 @@ ALTER TABLE resources_new RENAME TO resources;
     // CHECK list (SQLite can't ALTER a CHECK constraint; rebuild the table).
     // Mirrors the events_new* pattern (e.g. migration 19's events_new9): all
     // 7 columns preserved verbatim, only the CHECK list grows by one literal.
+    //
+    // EPIC 011 Story 3 also lands here: `projectId` denormalises the owning
+    // project onto every event row so scoped reads survive entity deletion
+    // and cursor paging stays cheap. It is folded into this rebuild rather
+    // than added by a later migration because there is no database to
+    // preserve (AGENTS.md: local development only), so a nullable ALTER plus
+    // a hierarchy-join backfill would be machinery with nothing to migrate.
+    // Nullable, and no REFERENCES projects(id): `repositoryId` beside it
+    // already carries no FK, and an unresolvable owner must leave NULL rather
+    // than fail the insert. `SqliteEventFeed.append` resolves and writes it.
+    // `events` is not an FK parent, so no disableForeignKeys (precedent
+    // comment at migrations.ts:488-492).
+    //
+    // ANY future rebuild of this table MUST carry `projectId` and re-create
+    // `events_project_cursor`; dropping either silently empties every
+    // project-scoped feed. Two tests in migrations.test.ts assert the
+    // post-migration column set and the index, and will fail if it is missed.
     up: (db) =>
       db.exec(`
 CREATE TABLE events_new10 (
@@ -786,12 +803,14 @@ CREATE TABLE events_new10 (
   payload      TEXT,
   objectiveId  TEXT REFERENCES objectives(id),
   initiativeId TEXT REFERENCES initiatives(id),
-  repositoryId TEXT
+  repositoryId TEXT,
+  projectId    TEXT
 );
 INSERT INTO events_new10 (id, type, taskId, payload, objectiveId, initiativeId, repositoryId)
   SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId FROM events;
 DROP TABLE events;
 ALTER TABLE events_new10 RENAME TO events;
+CREATE INDEX events_project_cursor ON events(projectId, id);
 `),
   },
 ];
