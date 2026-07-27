@@ -151,3 +151,6 @@ vite.config.ts.timestamp-*
 
 # Local direnv (loads OpenCode model config from .data/)
 .envrc
+
+# /e2e evidence reports (raw run data lives under .data/e2e-*/)
+.agent/e2e/
