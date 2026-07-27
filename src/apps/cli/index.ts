@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { Command } from "commander";
 
 import { buildAddCommand } from "./commands/add.ts";
+import { buildCommandsCommand } from "./commands/commands.ts";
 import { buildApproveCommand } from "./commands/approve.ts";
 import { buildAssignCommand } from "./commands/assign.ts";
 import { buildCheckCommand } from "./commands/check.ts";
@@ -66,6 +67,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const land = buildLandCommand(deps, io).name("land");
   const publish = buildPublishCommand(deps, io).name("publish");
   const test = buildTestCommand(deps, io).name("test");
+  const commands = buildCommandsCommand(io);
 
   return new Command()
     .name("kanthord")
@@ -100,5 +102,6 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(run)
     .addCommand(land)
     .addCommand(publish)
-    .addCommand(test);
+    .addCommand(test)
+    .addCommand(commands);
 }
