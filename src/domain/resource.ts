@@ -81,7 +81,9 @@ export function isFilesystem(r: Resource): r is Filesystem {
 export class EmbeddedCredentialError extends Error {
   readonly field: "remoteUrl";
   constructor(url: string) {
-    super(`remoteUrl must not contain embedded credentials: ${url}`);
+    super(
+      `remoteUrl must not contain embedded credentials: ${redactUserinfo(url)}`,
+    );
     this.name = "EmbeddedCredentialError";
     this.field = "remoteUrl";
   }
@@ -156,6 +158,25 @@ export function isInsecureEndpoint(url: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Replaces a URL's userinfo segment with `***`, keeping scheme, host and path so
+ * the message still identifies which URL was rejected. Used by
+ * `EmbeddedCredentialError`: the rejected URL carries a live token by definition,
+ * so echoing it verbatim would leak the secret into logs and terminal output.
+ * Returns `url` unchanged when there is no userinfo to redact.
+ */
+export function redactUserinfo(url: string): string {
+  const schemeEnd = url.indexOf("://");
+  if (schemeEnd === -1) return url;
+  const authorityStart = schemeEnd + 3;
+  const slashPos = url.indexOf("/", authorityStart);
+  const authorityEnd = slashPos === -1 ? url.length : slashPos;
+  const authority = url.slice(authorityStart, authorityEnd);
+  const at = authority.lastIndexOf("@");
+  if (at === -1) return url;
+  return url.slice(0, authorityStart) + "***" + url.slice(authorityStart + at);
 }
 
 /** Pure string check — no `new URL()`. Returns true when the URL authority contains `@`. */

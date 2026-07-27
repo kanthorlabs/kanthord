@@ -11,6 +11,7 @@ import {
   UnknownResourceTypeError,
   EmbeddedCredentialError,
   hasEmbeddedUserinfo,
+  redactUserinfo,
   isInsecureEndpoint,
   CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW,
   CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS,
@@ -242,6 +243,50 @@ test("EmbeddedCredentialError is thrown when remoteUrl has embedded userinfo", (
       }),
     (err: unknown) =>
       err instanceof EmbeddedCredentialError && err.field === "remoteUrl",
+  );
+});
+
+test("EmbeddedCredentialError redacts the userinfo it rejects, keeping host and path", () => {
+  assert.throws(
+    () =>
+      buildResource({
+        type: "repository",
+        name: "test",
+        remoteUrl: "https://x-access-token:sk-live-secret@github.com/o/r.git",
+        branch: "main",
+        path: "/repo",
+        auth: { kind: "ambient" },
+      }),
+    (err: unknown) => {
+      const message = (err as Error).message;
+      assert.ok(
+        !message.includes("sk-live-secret"),
+        `message must not echo the token: ${message}`,
+      );
+      assert.ok(
+        !message.includes("x-access-token"),
+        `message must not echo the username either: ${message}`,
+      );
+      assert.match(message, /https:\/\/\*\*\*@github\.com\/o\/r\.git/);
+      return true;
+    },
+  );
+});
+
+test("redactUserinfo leaves a URL without userinfo unchanged", () => {
+  assert.equal(
+    redactUserinfo("https://github.com/o/r.git"),
+    "https://github.com/o/r.git",
+  );
+  // SSH-style URLs have no authority segment to redact.
+  assert.equal(
+    redactUserinfo("git@github.com:o/r.git"),
+    "git@github.com:o/r.git",
+  );
+  // A token containing '@' must not truncate the redaction early.
+  assert.equal(
+    redactUserinfo("https://user:p@ss@github.com/o/r.git"),
+    "https://***@github.com/o/r.git",
   );
 });
 
