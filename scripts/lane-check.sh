@@ -8,8 +8,11 @@ role="${1:?usage: lane-check.sh <role> <path>}"
 path="${2:?usage: lane-check.sh <role> <path>}"
 
 # Always forbidden to every role (note: in bash case patterns, * matches "/").
+# The pipeline guards under scripts/ stay locked even though the rest of
+# scripts/ is writable by the software-engineer.
 case "$path" in
-  .agent/plan/*|.claude/*|.opencode/*|scripts/*|\
+  .agent/plan/*|.claude/*|.opencode/*|\
+  scripts/lane-check.sh|scripts/verify-handoff.mjs|scripts/memory-append-only.sh|\
   package.json|package-lock.json|tsconfig*.json|*.config.*|\
   AGENTS.md|Containerfile|compose.yaml|Makefile)
     exit 1 ;;
@@ -35,6 +38,7 @@ case "$role" in
     case "$path" in
       src/*.test.ts|src/*.spec.ts) exit 1 ;;
       src/*.ts) exit 0 ;;
+      scripts/*) exit 0 ;;
     esac
     ;;
 esac

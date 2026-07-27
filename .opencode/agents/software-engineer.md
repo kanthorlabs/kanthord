@@ -64,6 +64,13 @@ RED is the test-engineer's. **GREEN** (the smallest correct change satisfying th
   `import { greet } from "./greeting.ts"`).
 - **Unit tests:** `src/**/*.test.ts`, co-located beside the unit under test
   (`src/foo/bar.ts` → `src/foo/bar.test.ts`) — **NOT your lane.**
+- **Helper scripts:** `scripts/**` is **yours to write** when the work needs a
+  script (an EPIC `Proof:` script, an e2e/setup helper, a one-off check).
+  Commit it here instead of pasting an ad-hoc inline shell blob. Keep it
+  executable, `set -euo pipefail`, and runnable from the repo root. Three
+  pipeline guards stay locked to every role: `scripts/lane-check.sh`,
+  `scripts/verify-handoff.mjs`, `scripts/memory-append-only.sh`. Wiring a
+  script into `package.json` is not your lane → `OPEN:`.
 - New files go where the Task's `**Input:**` says.
 
 ## Idiom checklist (every edit)

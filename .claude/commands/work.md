@@ -34,7 +34,7 @@ The canonical TDD cycle:
 2. **The `Gates:` command runs green** (typically `npm run verify`).
 3. **The `Proof:` command has actually been run**, and its real output — including the string the EPIC says it must print — is pasted into the turn.
 
-A marker missing any of the three is premature: the orchestrator must **reject it** and dispatch the next engineer turn instead of advancing to Step 6. `Proof:` scripts live under `scripts/`, which is lane-forbidden to **modify** and always allowed to **run** (see AGENTS.md). "Lane-forbidden" is never a valid reason to skip the Proof.
+A marker missing any of the three is premature: the orchestrator must **reject it** and dispatch the next engineer turn instead of advancing to Step 6. `Proof:` scripts live under `scripts/`, which every role may always **run** (see AGENTS.md); only the software-engineer may **modify** it, and never the three pipeline guards. "Lane-forbidden" is never a valid reason to skip the Proof.
 
 After the TDD loop completes (`IMPLEMENTATION_READY_FOR_REVIEW:` detected), the orchestrator runs the **reviewer-engineer gate** and auto-routes its `action:YES` findings back through the TDD loop (once per cycle), leaving only `action:NO` findings for the human. It then **pauses for the human operator's review**. The human reviews the implementation and records the verdict in the discussion file as `HUMAN_REVIEW: PASS` or `HUMAN_REVIEW: FAIL` (with `BLOCKER:` lines). On `PASS`, the EPIC is done. On `FAIL`, the orchestrator routes the `BLOCKER:` lines back through the TDD loop until the next `IMPLEMENTATION_READY_FOR_REVIEW:`.
 
@@ -208,7 +208,7 @@ Do NOT edit the EPIC or Story files — those are locked by planning. Do NOT tou
 
 If you are test-engineer and you have just confirmed that every Task is green AND the Verification Gate runs green end-to-end, append an IMPLEMENTATION_READY_FOR_REVIEW turn (still ending with END: TEST-ENGINEER). /work greps "^IMPLEMENTATION_READY_FOR_REVIEW:" to stop the TDD loop and hand the cycle to the human for review.
 
-"The Verification Gate runs green end-to-end" means BOTH of its parts: the `Gates:` command AND the `Proof:` command, each actually executed this turn, with the Proof's real output (including the exact success string the EPIC names) pasted into your turn. A Proof script under `scripts/` is lane-forbidden to EDIT and always allowed to RUN — never skip it on lane grounds. If the Proof fails, you are not ready: report the failure as your turn instead. If any Story Task is still unimplemented or its story file still unexpanded, you are not ready either — open the next Task.
+"The Verification Gate runs green end-to-end" means BOTH of its parts: the `Gates:` command AND the `Proof:` command, each actually executed this turn, with the Proof's real output (including the exact success string the EPIC names) pasted into your turn. A Proof script under `scripts/` is always allowed to RUN by every role — never skip it on lane grounds. If the Proof fails, you are not ready: report the failure as your turn instead. If any Story Task is still unimplemented or its story file still unexpanded, you are not ready either — open the next Task.
 ```
 
 Also append:
@@ -242,13 +242,17 @@ script**: `scripts/lane-check.sh <role> <path>` (exit 0 = in-lane).
   draft files under `.agent/tdd/` and its journal under
   `.agent/tdd/memory/test-engineer/`.
 - **software-engineer** lane: `src/**/*.ts` that is NOT a `*.test.ts` /
-  `*.spec.ts`; plus its draft files and journal as above.
+  `*.spec.ts`; plus `scripts/**` (helper/proof scripts its work needs — the
+  three pipeline guards below stay locked); plus its draft files and journal as
+  above.
 - **Always forbidden to BOTH** (the lane script denies these for every role):
   the locked plan tree `.agent/plan/**`; the pipeline files `.claude/**` and
-  `.opencode/**`; toolchain/config `package.json`, `package-lock.json`,
-  `tsconfig*.json`, `*.config.*`, `scripts/**`; the architecture contract
-  `AGENTS.md`; container/build files `Containerfile`, `compose.yaml`,
-  `Makefile`. The reviewer-engineer edits nothing at all.
+  `.opencode/**`; the pipeline guards `scripts/lane-check.sh`,
+  `scripts/verify-handoff.mjs`, `scripts/memory-append-only.sh`;
+  toolchain/config `package.json`, `package-lock.json`, `tsconfig*.json`,
+  `*.config.*`; the architecture contract `AGENTS.md`; container/build files
+  `Containerfile`, `compose.yaml`, `Makefile`. The reviewer-engineer edits
+  nothing at all.
 
 Both roles may also write `.agent/tdd/` and their own `.agent/tdd/memory/<role>/` journal dir (under `<root>`).
 

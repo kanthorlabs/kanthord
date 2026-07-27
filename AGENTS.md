@@ -48,8 +48,10 @@ Binding rules:
   CLI → use case → port → adapter → SQLite end to end first; every later
   epic extends a running program and must keep it runnable.
 - An epic that mostly edits lane-forbidden files (toolchain, configs,
-  `scripts/`, `package.json`) is a **maintainer epic**: executed directly by
-  the human + assistant in normal sessions, not dispatched through `/work`.
+  `package.json`, the pipeline guards under `scripts/`) is a **maintainer
+  epic**: executed directly by the human + assistant in normal sessions, not
+  dispatched through `/work`. The rest of `scripts/` is in the
+  software-engineer's lane, so a helper script an epic needs is normal `/work`.
 - **Deterministic verification script.** In "Verification Gate" section,
   must write bash script to setup validation instead of using inline bash.
   The agent who author the epic must write it to put it into
