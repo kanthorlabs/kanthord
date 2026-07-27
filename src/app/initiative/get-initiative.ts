@@ -13,6 +13,7 @@ export interface GetInitiativeOutput {
   id: string;
   name: string;
   status: string;
+  paused: boolean;
   /** The publishable initiative branch; convention mirrors composition.ts. */
   branch: string;
   workspace?: string;
@@ -50,6 +51,7 @@ export class GetInitiative {
       id: initiative.id,
       name: initiative.name,
       status: initiative.status ?? "building",
+      paused: initiative.paused,
       branch: `kanthord/init/${initiative.id}`,
       ...(initiative.workspace !== undefined
         ? { workspace: initiative.workspace }

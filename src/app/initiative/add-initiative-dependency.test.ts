@@ -199,22 +199,26 @@ function buildInitiatives(repo: FakeInitiativeRepository): void {
     id: INIT_A,
     projectId: PROJ_ID,
     name: "init-a",
+    paused: false,
   });
   repo.save({
     id: INIT_B,
     projectId: PROJ_ID,
     name: "init-b",
+    paused: false,
   });
   repo.save({
     id: INIT_C,
     projectId: PROJ_ID,
     name: "init-c",
+    paused: false,
   });
   // Different project
   repo.save({
     id: INIT_DIFF,
     projectId: "01JZZZZZZZZZZZZZZZZZZZPRX0",
     name: "init-diff",
+    paused: false,
   });
 }
 

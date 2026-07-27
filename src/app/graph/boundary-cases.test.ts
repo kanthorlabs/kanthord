@@ -321,6 +321,7 @@ describe("Story 09 T2 — empty objective (no tasks)", () => {
       pkg,
       projectId: PROJ_ID,
       packageId: PKG_ID,
+      paused: false,
     });
     assert.ok(result.initiativeId.length > 0, "initiativeId must be assigned");
     assert.equal(
@@ -373,6 +374,7 @@ describe("Story 09 T2 — empty initiative (no objectives, no tasks)", () => {
       pkg,
       projectId: PROJ_ID,
       packageId: PKG_ID,
+      paused: false,
     });
     assert.ok(result.initiativeId.length > 0, "initiativeId must be assigned");
     assert.equal(
@@ -398,7 +400,7 @@ describe("Story 09 T2 — task with DB-persisted objective absent from package",
 
     // Seed initiative
     initRepo.seedInitiative(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_SHA,
     );
     // DB_OBJ_ONLY_ID exists as an objective sha (present in DB, not in package)
@@ -502,7 +504,7 @@ describe("Story 09 T2 — unknown objectiveRef (neither package nor DB)", () => 
     const storeGraph = new StoreGraph(taskRepo);
 
     initRepo.seedInitiative(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_SHA,
     );
     // NOTE: UNKNOWN_OBJ_ULID is NOT seeded in initRepo — it's in neither package nor DB.
@@ -575,7 +577,7 @@ describe("Story 09 T2 — dep ULID from a different initiative", () => {
     const storeGraph = new StoreGraph(taskRepo);
 
     initRepo.seedInitiative(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_SHA,
     );
     // FOREIGN_TASK_ID belongs to ANOTHER_INIT_ID, not INIT_ID

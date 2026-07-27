@@ -7,6 +7,9 @@ export type { TaskStatus } from "../domain/task.ts";
 // EmbeddedCredentialError lives in domain; re-exported here so apps/ can
 // catch it without importing domain directly.
 export { EmbeddedCredentialError } from "../domain/resource.ts";
+// StaleCandidateError (EPIC 012 Story 4) — re-exported here so apps/ (the CLI
+// error map) can catch it without importing the objective domain directly.
+export { StaleCandidateError } from "../domain/initiative.ts";
 export {
   SequencingLockedError,
   SequencingScopeError,

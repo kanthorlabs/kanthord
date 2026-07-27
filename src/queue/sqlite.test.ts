@@ -38,7 +38,7 @@ function seedTask(db: ReturnType<typeof openDatabase>): string {
   const taskId = newId();
 
   projectRepo.save({ id: projectId, name: "Proj" });
-  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init", paused: false });
   initRepo.saveObjective({ id: objectiveId, initiativeId, name: "Obj" });
   taskRepo.save({
     id: taskId,
@@ -335,7 +335,7 @@ function seedTaskWithInitiative(db: ReturnType<typeof openDatabase>): {
   const taskId = newId();
 
   projectRepo.save({ id: projectId, name: "Proj" });
-  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init", paused: false });
   initRepo.saveObjective({ id: objectiveId, initiativeId, name: "Obj" });
   taskRepo.save({
     id: taskId,
@@ -489,7 +489,7 @@ function seedInitiative(db: ReturnType<typeof openDatabase>): string {
   const initiativeId = newId();
 
   projectRepo.save({ id: projectId, name: "Proj" });
-  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init", paused: false });
 
   return initiativeId;
 }

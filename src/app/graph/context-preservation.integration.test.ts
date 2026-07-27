@@ -62,7 +62,12 @@ test("context-preservation: apply(spec+dep edit) leaves task_context byte-identi
   const objectiveId = newId();
 
   projectRepo.save({ id: projectId, name: "TestProject" });
-  initRepo.save({ id: initiativeId, projectId, name: "TestInit" });
+  initRepo.save({
+    id: initiativeId,
+    projectId,
+    name: "TestInit",
+    paused: false,
+  });
   initRepo.saveObjective({ id: objectiveId, initiativeId, name: "TestObj" });
 
   const task = newTask({

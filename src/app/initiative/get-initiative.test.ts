@@ -42,6 +42,7 @@ test("execute returns { id, name, status, workspace } for a provisioned initiati
     id: INIT_ID,
     projectId: "proj-1",
     name: "init-wf",
+    paused: false,
     status: "building",
     workspace: "/tmp/kanthord-init-clone",
   };
@@ -51,6 +52,7 @@ test("execute returns { id, name, status, workspace } for a provisioned initiati
     id: INIT_ID,
     name: "init-wf",
     status: "building",
+    paused: false,
     branch: `kanthord/init/${INIT_ID}`,
     workspace: "/tmp/kanthord-init-clone",
     after: [],
@@ -63,6 +65,7 @@ test("execute omits workspace when the initiative has not been provisioned yet",
     id: INIT_ID,
     projectId: "proj-1",
     name: "init-wf",
+    paused: false,
     status: "building",
   };
   const useCase = new GetInitiative(makeStore(initiative));
@@ -72,6 +75,7 @@ test("execute omits workspace when the initiative has not been provisioned yet",
     id: INIT_ID,
     name: "init-wf",
     status: "building",
+    paused: false,
     branch: `kanthord/init/${INIT_ID}`,
     after: [],
     waiting: [],
@@ -96,6 +100,7 @@ test("(S6-1) no edges → after and waiting are empty arrays", async () => {
     id: INIT_ID,
     projectId: "p1",
     name: "test",
+    paused: false,
     status: "building",
   };
   const store = makeStoreMap([initiative]);
@@ -113,12 +118,14 @@ test("(S6-2) after: [X] with X landed → after is [X], waiting is []", async ()
     id: INIT_ID,
     projectId: "p1",
     name: "test",
+    paused: false,
     status: "building",
   };
   const other: Initiative = {
     id: S6_X,
     projectId: "p1",
     name: "other",
+    paused: false,
     status: "landed",
   };
   const store = makeStoreMap([initiative, other]);
@@ -136,12 +143,14 @@ test("(S6-3) after: [X] with X building → waiting includes X with neverSatisfi
     id: INIT_ID,
     projectId: "p1",
     name: "test",
+    paused: false,
     status: "building",
   };
   const other: Initiative = {
     id: S6_X,
     projectId: "p1",
     name: "other",
+    paused: false,
     status: "building",
   };
   const store = makeStoreMap([initiative, other]);
@@ -159,12 +168,14 @@ test("(S6-4) after: [X] with X discarded → waiting includes X with neverSatisf
     id: INIT_ID,
     projectId: "p1",
     name: "test",
+    paused: false,
     status: "building",
   };
   const other: Initiative = {
     id: S6_X,
     projectId: "p1",
     name: "other",
+    paused: false,
     status: "discarded",
   };
   const store = makeStoreMap([initiative, other]);
@@ -182,18 +193,21 @@ test("(S6-5) after: [B, A] from repo → after and waiting preserve repo order",
     id: INIT_ID,
     projectId: "p1",
     name: "test",
+    paused: false,
     status: "building",
   };
   const a: Initiative = {
     id: S6_Y,
     projectId: "p1",
     name: "A",
+    paused: false,
     status: "building",
   };
   const b: Initiative = {
     id: S6_X,
     projectId: "p1",
     name: "B",
+    paused: false,
     status: "landed",
   };
   const store = makeStoreMap([initiative, a, b]);

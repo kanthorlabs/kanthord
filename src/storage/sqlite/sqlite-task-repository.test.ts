@@ -35,7 +35,7 @@ function seedHierarchy(db: ReturnType<typeof openDatabase>) {
   const objectiveId = newId();
 
   projectRepo.save({ id: projectId, name: "Proj" });
-  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init", paused: false });
   initRepo.saveObjective({ id: objectiveId, initiativeId, name: "Obj" });
 
   return { projectId, initiativeId, objectiveId };
@@ -208,7 +208,7 @@ test("SqliteTaskRepository save with a non-ULID objectiveId succeeds when that o
   const syntheticObjectiveId = "a-" + newId();
 
   projectRepo.save({ id: projectId, name: "Proj" });
-  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init", paused: false });
   initRepo.saveObjective({
     id: syntheticObjectiveId,
     initiativeId,
@@ -319,7 +319,7 @@ test("SqliteTaskRepository listByInitiative returns tasks across two objectives 
   const obj2Id = "b-" + newId();
 
   projectRepo.save({ id: projectId, name: "P" });
-  initRepo.save({ id: initiativeId, projectId, name: "I" });
+  initRepo.save({ id: initiativeId, projectId, name: "I", paused: false });
   initRepo.saveObjective({ id: obj1Id, initiativeId, name: "Obj1" });
   initRepo.saveObjective({ id: obj2Id, initiativeId, name: "Obj2" });
 
@@ -378,13 +378,13 @@ test("SqliteTaskRepository listByInitiative excludes tasks from another initiati
   // Initiative A
   const initAId = newId();
   const objAId = newId();
-  initRepo.save({ id: initAId, projectId, name: "Init A" });
+  initRepo.save({ id: initAId, projectId, name: "Init A", paused: false });
   initRepo.saveObjective({ id: objAId, initiativeId: initAId, name: "ObjA" });
 
   // Initiative B
   const initBId = newId();
   const objBId = newId();
-  initRepo.save({ id: initBId, projectId, name: "Init B" });
+  initRepo.save({ id: initBId, projectId, name: "Init B", paused: false });
   initRepo.saveObjective({ id: objBId, initiativeId: initBId, name: "ObjB" });
 
   const taskA: Task = {

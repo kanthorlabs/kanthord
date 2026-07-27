@@ -233,7 +233,12 @@ function buildDeps() {
     [PROJ_ID]: "project",
   });
   const initiativeRepo = new FakeInitiativeRepository();
-  initiativeRepo.save({ id: INIT_ID, projectId: PROJ_ID, name: "oauth" });
+  initiativeRepo.save({
+    id: INIT_ID,
+    projectId: PROJ_ID,
+    name: "oauth",
+    paused: false,
+  });
   initiativeRepo.saveObjective({
     id: OBJ_ID,
     initiativeId: INIT_ID,

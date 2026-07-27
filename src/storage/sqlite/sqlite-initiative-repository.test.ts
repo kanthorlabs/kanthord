@@ -45,6 +45,7 @@ test("SqliteInitiativeRepository save then get round-trips the initiative", () =
     projectId,
     name: "My Initiative",
     status: "building",
+    paused: false,
   };
   repo.save(initiative);
   const loaded = repo.get(initiative.id);
@@ -79,6 +80,7 @@ test("SqliteInitiativeRepository duplicate save (same id + same data) is a no-op
     projectId,
     name: "Dupe",
     status: "building",
+    paused: false,
   };
   repo.save(initiative);
   // upsert semantics: re-saving identical data must not throw
@@ -99,7 +101,7 @@ test("SqliteInitiativeRepository saveObjective + listObjectives round-trips in i
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I1" });
+  repo.save({ id: initiativeId, projectId, name: "I1", paused: false });
 
   // Insert second objective before first alphabetically by id to prove ordering
   const objB: Objective = {
@@ -149,6 +151,7 @@ test("SqliteInitiativeRepository save with unknown projectId throws (FK)", () =>
     id: newId(),
     projectId: "nonexistent-project",
     name: "Orphan",
+    paused: false,
   };
   assert.throws(() => repo.save(initiative));
 });
@@ -182,7 +185,7 @@ test("SqliteInitiativeRepository getObjective returns the objective for a known 
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-get-obj" });
+  repo.save({ id: initiativeId, projectId, name: "I-get-obj", paused: false });
 
   const objective: Objective = {
     id: newId(),
@@ -220,7 +223,12 @@ test("SqliteInitiativeRepository saveObjective persists commitOid and parentOid;
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-commit-oid" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-commit-oid",
+    paused: false,
+  });
 
   const objective: Objective = {
     id: newId(),
@@ -250,7 +258,12 @@ test("SqliteInitiativeRepository resolveInitiativeByName returns [id] for matchi
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "target-initiative" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "target-initiative",
+    paused: false,
+  });
 
   const ids = repo.resolveInitiativeByName(projectId, "target-initiative");
   assert.deepEqual(ids, [initiativeId]);
@@ -288,8 +301,18 @@ test("SqliteInitiativeRepository resolveInitiativeByName scopes by projectId —
   const repo = new SqliteInitiativeRepository(db);
   const init1 = newId();
   const init2 = newId();
-  repo.save({ id: init1, projectId: proj1, name: "shared-name" });
-  repo.save({ id: init2, projectId: proj2, name: "shared-name" });
+  repo.save({
+    id: init1,
+    projectId: proj1,
+    name: "shared-name",
+    paused: false,
+  });
+  repo.save({
+    id: init2,
+    projectId: proj2,
+    name: "shared-name",
+    paused: false,
+  });
 
   assert.deepEqual(repo.resolveInitiativeByName(proj1, "shared-name"), [init1]);
   assert.deepEqual(repo.resolveInitiativeByName(proj2, "shared-name"), [init2]);
@@ -308,7 +331,12 @@ test("SqliteInitiativeRepository resolveObjectiveByName returns [id] for matchin
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-resolve-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-resolve-obj",
+    paused: false,
+  });
 
   const objectiveId = newId();
   repo.saveObjective({
@@ -335,8 +363,8 @@ test("SqliteInitiativeRepository listInitiatives returns all initiatives for a p
   const repo = new SqliteInitiativeRepository(db);
   const init1Id = newId();
   const init2Id = newId();
-  repo.save({ id: init1Id, projectId, name: "Initiative One" });
-  repo.save({ id: init2Id, projectId, name: "Initiative Two" });
+  repo.save({ id: init1Id, projectId, name: "Initiative One", paused: false });
+  repo.save({ id: init2Id, projectId, name: "Initiative Two", paused: false });
 
   const initiatives = repo.listInitiatives(projectId);
   assert.equal(initiatives.length, 2);
@@ -368,7 +396,12 @@ test("SqliteInitiativeRepository resolveObjectiveByName returns [] for unknown n
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-resolve-obj-none" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-resolve-obj-none",
+    paused: false,
+  });
 
   const ids = repo.resolveObjectiveByName(initiativeId, "no-such-objective");
   assert.deepEqual(ids, []);
@@ -391,9 +424,15 @@ test("SqliteInitiativeRepository save with same id and new name updates the name
     id: newId(),
     projectId,
     name: "Original Initiative",
+    paused: false,
   };
   repo.save(initiative);
-  repo.save({ id: initiative.id, projectId, name: "Renamed Initiative" });
+  repo.save({
+    id: initiative.id,
+    projectId,
+    name: "Renamed Initiative",
+    paused: false,
+  });
   const loaded = repo.get(initiative.id);
   assert.equal(loaded?.name, "Renamed Initiative");
 });
@@ -411,7 +450,7 @@ test("SqliteInitiativeRepository setPaused sets paused to true and listAllInitia
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "Pausable" });
+  repo.save({ id: initiativeId, projectId, name: "Pausable", paused: false });
 
   // before: not paused
   const before = repo.listAllInitiatives();
@@ -445,7 +484,7 @@ test("SqliteInitiativeRepository setPaused(id, false) clears the paused flag", (
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "Resumable" });
+  repo.save({ id: initiativeId, projectId, name: "Resumable", paused: false });
 
   repo.setPaused(initiativeId, true);
   repo.setPaused(initiativeId, false);
@@ -474,8 +513,8 @@ test("SqliteInitiativeRepository listAllInitiatives returns initiatives across m
   const repo = new SqliteInitiativeRepository(db);
   const init1 = newId();
   const init2 = newId();
-  repo.save({ id: init1, projectId: proj1, name: "IA" });
-  repo.save({ id: init2, projectId: proj2, name: "IB" });
+  repo.save({ id: init1, projectId: proj1, name: "IA", paused: false });
+  repo.save({ id: init2, projectId: proj2, name: "IB", paused: false });
 
   const all = repo.listAllInitiatives();
   const ids = all.map((i) => i.id);
@@ -508,7 +547,12 @@ test("SqliteInitiativeRepository saveObjective with same id and new name updates
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-rename-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-rename-obj",
+    paused: false,
+  });
 
   const objective: Objective = {
     id: newId(),
@@ -569,6 +613,7 @@ test("save(initiative) stamps sha256Hex(canonicalInitiative({name, projectId}))"
     id: newId(),
     projectId,
     name: "Sha Initiative",
+    paused: false,
   };
   repo.save(initiative);
 
@@ -591,7 +636,7 @@ test("saveObjective stamps sha256Hex(canonicalObjective({name, initiativeId}))",
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-sha-obj" });
+  repo.save({ id: initiativeId, projectId, name: "I-sha-obj", paused: false });
 
   const objective: Objective = {
     id: newId(),
@@ -622,6 +667,7 @@ test("re-saving initiative with a changed name bumps the sha256 token", () => {
     id: newId(),
     projectId,
     name: "Before Rename",
+    paused: false,
   };
   repo.save(initiative);
   const shaBeforeRename = readInitiativeSha(db, initiative.id);
@@ -654,7 +700,12 @@ test("conditionalRenameInitiative applies name change and returns applied with f
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "Original Name" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Original Name",
+    paused: false,
+  });
   const originalSha = readInitiativeSha(db, initiativeId);
 
   const result: CasResult = repo.conditionalRenameInitiative(
@@ -694,7 +745,12 @@ test("conditionalRenameInitiative returns conflict and leaves name unchanged on 
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "Original Name" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Original Name",
+    paused: false,
+  });
   const realSha = readInitiativeSha(db, initiativeId);
 
   const result: CasResult = repo.conditionalRenameInitiative(
@@ -730,7 +786,12 @@ test("conditionalRenameObjective applies name change and returns applied with fr
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-cas-rename-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-cas-rename-obj",
+    paused: false,
+  });
   const objectiveId = newId();
   repo.saveObjective({ id: objectiveId, initiativeId, name: "Original Obj" });
   const originalSha = readObjectiveSha(db, objectiveId);
@@ -772,7 +833,12 @@ test("conditionalRenameObjective returns conflict and leaves name unchanged on s
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-cas-conflict-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-cas-conflict-obj",
+    paused: false,
+  });
   const objectiveId = newId();
   repo.saveObjective({ id: objectiveId, initiativeId, name: "Original Obj" });
   const realSha = readObjectiveSha(db, objectiveId);
@@ -810,7 +876,12 @@ test("conditionalDeleteObjective deletes empty objective on sha match", () => {
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-cas-del-empty-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-cas-del-empty-obj",
+    paused: false,
+  });
   const objectiveId = newId();
   repo.saveObjective({
     id: objectiveId,
@@ -843,7 +914,12 @@ test("conditionalDeleteObjective returns non-applied result for non-empty object
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-cas-del-nonempty-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-cas-del-nonempty-obj",
+    paused: false,
+  });
   const objectiveId = newId();
   repo.saveObjective({
     id: objectiveId,
@@ -890,7 +966,12 @@ test("save without an explicit status defaults the persisted initiative status t
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
   // no `status` field supplied
-  repo.save({ id: initiativeId, projectId, name: "No Status Given" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "No Status Given",
+    paused: false,
+  });
 
   assert.equal(repo.get(initiativeId)?.status, "building");
 });
@@ -913,6 +994,7 @@ test("save persists and round-trips a non-default initiative status (landed)", (
     projectId,
     name: "Landed Initiative",
     status: "landed",
+    paused: false,
   });
 
   assert.equal(repo.get(initiativeId)?.status, "landed");
@@ -931,7 +1013,12 @@ test("saveObjective without an explicit status defaults the persisted objective 
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-status-default-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-status-default-obj",
+    paused: false,
+  });
 
   const objectiveId = newId();
   // no `status` field supplied
@@ -953,7 +1040,12 @@ test("saveObjective persists and round-trips a non-default objective status (int
 
   const repo = new SqliteInitiativeRepository(db);
   const initiativeId = newId();
-  repo.save({ id: initiativeId, projectId, name: "I-status-persist-obj" });
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-status-persist-obj",
+    paused: false,
+  });
 
   const objectiveId = newId();
   repo.saveObjective({
@@ -984,12 +1076,14 @@ test("re-saving an initiative with a new status updates the persisted status (up
     projectId,
     name: "Status Update Initiative",
     status: "building",
+    paused: false,
   });
   repo.save({
     id: initiativeId,
     projectId,
     name: "Status Update Initiative",
     status: "landed",
+    paused: false,
   });
 
   assert.equal(repo.get(initiativeId)?.status, "landed");
@@ -1013,6 +1107,7 @@ test("listObjectives + listInitiatives include the persisted status field", () =
     projectId,
     name: "Listed Initiative",
     status: "landed",
+    paused: false,
   });
   const objectiveId = newId();
   repo.saveObjective({
@@ -1053,6 +1148,7 @@ test("SqliteInitiativeRepository get returns no workspace key before setWorkspac
     projectId,
     name: "Unprovisioned Initiative",
     status: "building",
+    paused: false,
   };
   repo.save(initiative);
 
@@ -1082,6 +1178,7 @@ test("SqliteInitiativeRepository setWorkspace persists the clone dir; get() retu
     projectId,
     name: "Workspace Initiative",
     status: "building",
+    paused: false,
   });
 
   repo.setWorkspace(initiativeId, "/tmp/kanthord/init/abc");
@@ -1111,6 +1208,7 @@ test("SqliteInitiativeRepository re-calling setWorkspace overwrites the persiste
     projectId,
     name: "Reprovisioned Initiative",
     status: "building",
+    paused: false,
   });
 
   repo.setWorkspace(initiativeId, "/tmp/kanthord/init/first");
@@ -1137,6 +1235,7 @@ test("SqliteInitiativeRepository listInitiatives includes the persisted workspac
     projectId,
     name: "Listed Workspace Initiative",
     status: "building",
+    paused: false,
   });
   repo.setWorkspace(initiativeId, "/tmp/kanthord/init/listed");
 
@@ -1144,5 +1243,145 @@ test("SqliteInitiativeRepository listInitiatives includes the persisted workspac
   assert.equal(
     initiatives.find((i) => i.id === initiativeId)?.workspace,
     "/tmp/kanthord/init/listed",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 (012) — `paused` is part of the creation INSERT and round-trips
+// through get() / listInitiatives(). The conflict-update exclusion is the
+// "setPaused is the only writer after creation" gate.
+// ---------------------------------------------------------------------------
+
+type PausedRow = { paused: number };
+
+function readPausedColumn(
+  db: ReturnType<typeof openDatabase>,
+  id: string,
+): number {
+  const row = db
+    .prepare("SELECT paused FROM initiatives WHERE id = ?")
+    .get(id) as PausedRow | undefined;
+  if (row === undefined) throw new Error(`initiative ${id} not found`);
+  return row.paused;
+}
+
+test("SqliteInitiativeRepository save({ paused: true }) stores paused = 1 in one write, no setPaused needed", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-create-paused" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiative: Initiative = {
+    id: newId(),
+    projectId,
+    name: "Born Paused",
+    status: "building",
+    paused: true,
+  };
+  repo.save(initiative);
+
+  assert.equal(
+    readPausedColumn(db, initiative.id),
+    1,
+    "paused === true must persist as 1 in the first write",
+  );
+});
+
+test("SqliteInitiativeRepository save({ paused: false }) stores paused = 0; get() and listInitiatives() return paused as a boolean", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-create-active" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const activeId = newId();
+  repo.save({
+    id: activeId,
+    projectId,
+    name: "Active",
+    status: "building",
+    paused: false,
+  });
+  const pausedId = newId();
+  repo.save({
+    id: pausedId,
+    projectId,
+    name: "Paused",
+    status: "building",
+    paused: true,
+  });
+
+  assert.equal(
+    readPausedColumn(db, activeId),
+    0,
+    "paused === false must persist as 0 in the first write",
+  );
+  assert.equal(
+    readPausedColumn(db, pausedId),
+    1,
+    "paused === true must persist as 1 in the first write",
+  );
+
+  // get() round-trips the boolean
+  assert.equal(repo.get(activeId)?.paused, false);
+  assert.equal(repo.get(pausedId)?.paused, true);
+
+  // listInitiatives() round-trips the boolean
+  const listed = repo.listInitiatives(projectId);
+  assert.equal(listed.find((i) => i.id === activeId)?.paused, false);
+  assert.equal(listed.find((i) => i.id === pausedId)?.paused, true);
+});
+
+test("SqliteInitiativeRepository conflict-update exclusion: re-saving a paused:false snapshot does NOT clear a true value set by setPaused", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-conflict-exclusion" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  // Creation with paused:false (stale in-memory snapshot)
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Conflict Exclusion",
+    status: "building",
+    paused: false,
+  });
+  // External mutator flips it to paused
+  repo.setPaused(initiativeId, true);
+  assert.equal(
+    readPausedColumn(db, initiativeId),
+    1,
+    "setPaused(true) must persist 1",
+  );
+  // Stale re-save with paused:false MUST NOT overwrite the setPaused value
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "Conflict Exclusion",
+    status: "building",
+    paused: false,
+  });
+  assert.equal(
+    readPausedColumn(db, initiativeId),
+    1,
+    "ON CONFLICT DO UPDATE must not write paused — only setPaused owns the column",
   );
 });

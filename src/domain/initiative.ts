@@ -18,6 +18,10 @@ export type ObjectiveStatus = (typeof OBJECTIVE_STATUSES)[number];
 export interface Initiative extends Entity {
   projectId: string;
   name: string;
+  /** Explicit-activation gate; orthogonal to `status`. The column is NOT NULL
+   * DEFAULT 0, so every persisted row has a value. Set in the creation INSERT
+   * — `setPaused` is the only mutator after creation. */
+  paused: boolean;
   /** Defaults to `"building"`; optional so pre-migration rows/fixtures without a persisted status still type-check. */
   status?: InitiativeStatus;
   /** The daemon-provisioned isolated clone directory for this initiative's branch; absent until provisioned. */
@@ -37,8 +41,18 @@ export interface Objective extends Entity {
   conflictReason?: string;
 }
 
-export function newInitiative(projectId: string, name: string): Initiative {
-  return { id: newId(), projectId, name, status: "building" };
+export function newInitiative(input: {
+  projectId: string;
+  name: string;
+  paused: boolean;
+}): Initiative {
+  return {
+    id: newId(),
+    projectId: input.projectId,
+    name: input.name,
+    paused: input.paused,
+    status: "building",
+  };
 }
 
 export function newObjective(initiativeId: string, name: string): Objective {
@@ -72,6 +86,32 @@ export class IllegalObjectiveTransitionError extends Error {
   }
 }
 
+/**
+ * Refused an objective verdict because the candidate the client reviewed is no
+ * longer this objective's candidate. The guard is the single comparison
+ * implementation for `ApproveObjective` / `RejectObjective` / `RetryObjective`
+ * (AGENTS.md forbids use-case-calls-use-case, so the check lives in domain/).
+ *
+ * The message must match `/stale|expected|moved/i` so the Proof's
+ * `grep -qiE 'stale|expected|moved'` at `activation-verdict-proof.sh:97`
+ * catches it.
+ */
+export class StaleCandidateError extends Error {
+  readonly objectiveId: string;
+  readonly expected: string;
+  readonly actual: string;
+
+  constructor(objectiveId: string, expected: string, actual: string) {
+    super(
+      `objective ${objectiveId} candidate moved: expected ${expected}, found ${actual}`,
+    );
+    this.name = "StaleCandidateError";
+    this.objectiveId = objectiveId;
+    this.expected = expected;
+    this.actual = actual;
+  }
+}
+
 export class IllegalInitiativeTransitionError extends Error {
   readonly from: InitiativeStatus;
   readonly to: InitiativeStatus;
@@ -86,6 +126,22 @@ export class IllegalInitiativeTransitionError extends Error {
 
 export function canRetryObjective(status: ObjectiveStatus): boolean {
   return status === "awaiting_confirmation" || status === "conflict";
+}
+
+/**
+ * Refuse a verdict whose reviewed candidate is no longer this objective's
+ * candidate. `actual === undefined` (no candidate at all) is always stale.
+ * Shared across `ApproveObjective` / `RejectObjective` / `RetryObjective` so
+ * the comparison lives in exactly one place.
+ */
+export function assertCandidateFresh(
+  objectiveId: string,
+  expectedCommit: string,
+  actual: string | undefined,
+): void {
+  if (actual === undefined || actual !== expectedCommit) {
+    throw new StaleCandidateError(objectiveId, expectedCommit, actual ?? "");
+  }
 }
 
 export function transitionObjective(

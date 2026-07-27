@@ -127,7 +127,7 @@ test("--create --project: parses 1-init/2-obj/2-task package and calls createGra
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: PROJ_ID },
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
     { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
   );
 
@@ -155,7 +155,7 @@ test("--create rewrites source files in place with their assigned ULID in frontm
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: PROJ_ID },
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
     { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
   );
 
@@ -213,7 +213,7 @@ test("--create writes .kanthord-export.json with packageId + nodes snapshot", as
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: PROJ_ID },
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
     { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
   );
 
@@ -253,7 +253,7 @@ test("--create writes .kanthord-export.json with ordered manifest.objectiveIds (
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: PROJ_ID },
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
     { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
   );
 
@@ -277,7 +277,7 @@ test("S3: --create packageId minted by injected newId is a ULID (uppercase Crock
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: PROJ_ID },
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
     { createGraph: fake, newId },
   );
 
@@ -303,7 +303,7 @@ test("--create without --project exits 1 with error message", async () => {
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: undefined },
+    { dir, create: true, apply: false, project: undefined, paused: false },
     { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
   );
 
@@ -320,7 +320,7 @@ test("--create and --apply together exits 1 (mutually exclusive)", async () => {
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: true, project: PROJ_ID },
+    { dir, create: true, apply: true, project: PROJ_ID, paused: false },
     { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
   );
 
@@ -337,6 +337,98 @@ test("--create and --apply together exits 1 (mutually exclusive)", async () => {
   assert.ok(
     result.stderr.length > 0,
     "should emit at least one error line to stderr",
+  );
+});
+
+test("(S2-1) runImportGraph --create with paused: true forwards paused: true to createGraph.execute", async () => {
+  const dir = await makeAuthoredDir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: true,
+      apply: false,
+      project: PROJ_ID,
+      paused: true,
+    } as unknown as Parameters<typeof runImportGraph>[0],
+    { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(fake.calls.length, 1);
+  assert.equal(
+    fake.calls[0]!.paused,
+    true,
+    "createGraph.execute must receive paused: true",
+  );
+});
+
+test("(S2-2) runImportGraph --create without paused defaults to paused: false", async () => {
+  const dir = await makeAuthoredDir();
+  const fake = new FakeCreateGraph();
+
+  const result = await runImportGraph(
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
+    { createGraph: fake, newId: () => "01JTESTULID00000000000000A" },
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(fake.calls.length, 1);
+  assert.equal(
+    fake.calls[0]!.paused,
+    false,
+    "createGraph.execute must receive paused: false when paused is absent",
+  );
+});
+
+test("(S2-3) runImportGraph --apply with paused: true exits 1, stderr 'error: --paused requires --create'", async () => {
+  const dir = await makeAuthoredDir();
+  const fake = new FakeCreateGraph();
+  let applyCalled = false;
+  const applyGraph = {
+    execute: async (): Promise<ApplyGraphResult> => {
+      applyCalled = true;
+      return {
+        applied: false,
+        classifications: [],
+        summary: {
+          created: 0,
+          updated: 0,
+          unchanged: 0,
+          missing: 0,
+        },
+        conflicts: [],
+      };
+    },
+  };
+
+  const result = await runImportGraph(
+    {
+      dir,
+      create: false,
+      apply: true,
+      initiative: "i-1",
+      paused: true,
+    } as unknown as Parameters<typeof runImportGraph>[0],
+    {
+      createGraph: fake,
+      applyGraph,
+      newId: () => "01JTESTULID00000000000000A",
+    },
+  );
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stderr, ["error: --paused requires --create"]);
+  assert.equal(
+    fake.calls.length,
+    0,
+    "createGraph.execute must NOT be called when --paused is given without --create",
+  );
+  assert.equal(
+    applyCalled,
+    false,
+    "applyGraph.execute must NOT be called when --paused is given without --create",
   );
 });
 
@@ -488,7 +580,14 @@ test("--dry-run: prints all classification types from applyGraph result; writes 
   const fakeCreate = new FakeCreateGraph(); // unused in --apply path
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, dryRun: true, initiative: DR_INIT_ID },
+    {
+      dir,
+      create: false,
+      apply: true,
+      dryRun: true,
+      initiative: DR_INIT_ID,
+      paused: false,
+    },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -559,7 +658,7 @@ test("--apply with a non-empty conflict set (drifted) exits non-zero, first stde
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -606,7 +705,7 @@ test("--apply with conflicts: the summary counters include the drifted count (St
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -654,7 +753,14 @@ test("--apply --dry-run with the same conflicts still exits 0 and uses 'would cr
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, dryRun: true, initiative: DR_INIT_ID },
+    {
+      dir,
+      create: false,
+      apply: true,
+      dryRun: true,
+      initiative: DR_INIT_ID,
+      paused: false,
+    },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -696,7 +802,7 @@ test("--apply with a non-empty conflict set (locked only) exits non-zero, refusa
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -741,7 +847,7 @@ test("--apply with both drifted and locked conflicts: refusal stays byte-identic
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -776,7 +882,7 @@ test("EPIC 007.18 Story 4 — a status CAS conflict prints the per-node lifecycl
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -812,7 +918,7 @@ test("EPIC 007.18 Story 4 — a sha CAS conflict prints the per-node content-cha
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -908,6 +1014,7 @@ test("--delete-missing without --confirm-delete: applyGraph called with deleteMi
       create: false,
       apply: true,
       initiative: DR_INIT_ID,
+      paused: false,
       deleteMissing: true,
     } as any,
     { createGraph: fakeCreate, applyGraph: fakeApply } as any,
@@ -972,6 +1079,7 @@ test("--delete-missing without --confirm-delete: does not pass confirmDelete:tru
       create: false,
       apply: true,
       initiative: DR_INIT_ID,
+      paused: false,
       deleteMissing: true,
     } as any,
     { createGraph: fakeCreate, applyGraph: fakeApply } as any,
@@ -1048,6 +1156,7 @@ test("--delete-missing --confirm-delete: exits 0, stdout contains '1 deleted'", 
       create: false,
       apply: true,
       initiative: DR_INIT_ID,
+      paused: false,
       deleteMissing: true,
       confirmDelete: true,
     },
@@ -1114,7 +1223,14 @@ test("BLOCKER missing-node-label: missing classification with name field emits n
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID, dryRun: true },
+    {
+      dir,
+      create: false,
+      apply: true,
+      initiative: DR_INIT_ID,
+      dryRun: true,
+      paused: false,
+    },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -1158,7 +1274,14 @@ test("--dry-run missing: pending removed file vs non-pending not-exported shown 
   const fakeCreate = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, dryRun: true, initiative: DR_INIT_ID },
+    {
+      dir,
+      create: false,
+      apply: true,
+      dryRun: true,
+      initiative: DR_INIT_ID,
+      paused: false,
+    },
     {
       createGraph: fakeCreate,
       applyGraph: fakeApply,
@@ -1267,6 +1390,7 @@ test("(f) --create with initiative that has bindings writes manifest with format
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: T2_REPO_ID, model: T2_AIP_ID },
     },
     {
@@ -1303,7 +1427,7 @@ test("EPIC 007.18 Story 3 — --create with an initiative WITHOUT bindings still
   const fake = new FakeCreateGraph();
 
   const result = await runImportGraph(
-    { dir, create: true, apply: false, project: PROJ_ID },
+    { dir, create: true, apply: false, project: PROJ_ID, paused: false },
     {
       createGraph: fake,
       newId,
@@ -1350,7 +1474,7 @@ test("EPIC 007.18 Story 3 — a stale manifest returns exitCode 1 with the singl
   const applyGraph = new FakeApplyGraphThatThrows(err);
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     { createGraph: new FakeCreateGraph(), applyGraph, newId },
   );
 
@@ -1365,7 +1489,7 @@ test("EPIC 007.18 Story 3 — an UnknownNodeError from ApplyGraph returns exitCo
   const applyGraph = new FakeApplyGraphThatThrows(err);
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     { createGraph: new FakeCreateGraph(), applyGraph, newId },
   );
 
@@ -1386,7 +1510,7 @@ test("EPIC 007.19 Story 2 — UncreatableObjectiveError maps to exitCode 1, one 
   const applyGraph = new FakeApplyGraphThatThrows(err);
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     { createGraph: new FakeCreateGraph(), applyGraph, newId },
   );
 
@@ -1403,7 +1527,7 @@ test("EPIC 007.19 Story 2 — the stderr message names the objective ref and the
   const applyGraph = new FakeApplyGraphThatThrows(err);
 
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     { createGraph: new FakeCreateGraph(), applyGraph, newId },
   );
 
@@ -1426,7 +1550,7 @@ test("EPIC 007.19 Story 2 — UncreatableObjectiveError is handled, not an unhan
 
   // Must resolve (not reject) — the error is mapped by toResult, not re-thrown
   const result = await runImportGraph(
-    { dir, create: false, apply: true, initiative: DR_INIT_ID },
+    { dir, create: false, apply: true, initiative: DR_INIT_ID, paused: false },
     { createGraph: new FakeCreateGraph(), applyGraph, newId },
   );
 
@@ -1441,7 +1565,13 @@ test("EPIC 007.19 Story 2 — regression: an unregistered error still re-throws 
   await assert.rejects(
     () =>
       runImportGraph(
-        { dir, create: false, apply: true, initiative: DR_INIT_ID },
+        {
+          dir,
+          create: false,
+          apply: true,
+          initiative: DR_INIT_ID,
+          paused: false,
+        },
         { createGraph: new FakeCreateGraph(), applyGraph, newId },
       ),
     { message: "boom" },
@@ -1529,6 +1659,7 @@ test("T4(a): --bind missing model-auth alias → exitCode 1 and stderr mentions 
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: REPO_ID, model: AIP_ID },
     },
     {
@@ -1564,6 +1695,7 @@ test("T4(b): all 3 --bind provided → exitCode 0 and createGraph receives bindi
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: REPO_ID, model: AIP_ID, "model-auth": CRED_ID },
     },
     {
@@ -1604,6 +1736,7 @@ test("T4(c): --bind source=<name> → findResourcesByName resolves to id", async
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: "my-home-repo", model: AIP_ID, "model-auth": CRED_ID },
     },
     {
@@ -1649,6 +1782,7 @@ test("T4(d): --bind source=<name> with 0 matches → exitCode 1 mentioning alias
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: "no-such-repo", model: AIP_ID, "model-auth": CRED_ID },
     },
     {
@@ -1684,6 +1818,7 @@ test("T4(e): --bind source=<name> with 2+ matches → exitCode 1 (ambiguous)", a
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: "dup-name", model: AIP_ID, "model-auth": CRED_ID },
     },
     {
@@ -1722,6 +1857,7 @@ test("T4(f): --bind source=<id> with wrong resource type → exitCode 1 (type mi
       create: true,
       apply: false,
       project: PROJ_ID,
+      paused: false,
       bind: { source: CRED_ID, model: AIP_ID, "model-auth": CRED_ID },
     },
     {
@@ -1860,7 +1996,7 @@ describe("Story 5b — after: id handoff on --create", () => {
     const fake = new FakeCreateGraphWithAfter();
 
     const result = await runImportGraph(
-      { dir, create: true, apply: false, project: PROJ_ID },
+      { dir, create: true, apply: false, project: PROJ_ID, paused: false },
       { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
     );
 
@@ -1915,7 +2051,7 @@ describe("Story 5b — after: id handoff on --create", () => {
     const fake = new FakeCreateGraphWithAfter();
 
     const result = await runImportGraph(
-      { dir, create: true, apply: false, project: PROJ_ID },
+      { dir, create: true, apply: false, project: PROJ_ID, paused: false },
       { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
     );
 
@@ -1934,7 +2070,7 @@ describe("Story 5b — after: id handoff on --create", () => {
     const fake = new FakeCreateGraphWithAfter();
 
     const result = await runImportGraph(
-      { dir, create: true, apply: false, project: PROJ_ID },
+      { dir, create: true, apply: false, project: PROJ_ID, paused: false },
       { createGraph: fake as any, newId: () => "01JTESTULID00000000000000A" },
     );
 

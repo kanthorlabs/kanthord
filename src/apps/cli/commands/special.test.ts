@@ -195,6 +195,183 @@ describe("src/apps/cli/commands/import.ts", () => {
     }
   });
 
+  test("(S2-1) import graph --create --project --paused forwards paused: true to createGraph.execute", async () => {
+    const dir = await makeGraphDirectory();
+
+    try {
+      const graphCalls: unknown[] = [];
+      const cap = capture();
+      const deps = {
+        createGraph: {
+          execute: async (input: unknown) => {
+            graphCalls.push(input);
+            return {
+              initiativeId: "initiative-1",
+              refToId: {
+                objectives: { api: "objective-1" },
+                tasks: { route: "task-1" },
+              },
+              nodes: {
+                "initiative-1": "a".repeat(64),
+                "objective-1": "b".repeat(64),
+                "task-1": "c".repeat(64),
+              },
+            };
+          },
+        },
+        newId: () => "package-1",
+        findResource: {
+          execute: async (input: unknown) => {
+            const name = (input as { name: string }).name;
+            return name === "repository-name" ? "repository-1" : "model-1";
+          },
+        },
+        getResource: {
+          execute: async (id: string) => ({
+            type: id === "repository-1" ? "repository" : "ai_provider",
+          }),
+        },
+      } as unknown as Parameters<typeof buildImportCommand>[0];
+
+      await buildImportCommand(
+        deps,
+        cap.io as Parameters<typeof buildImportCommand>[1],
+      ).parseAsync(
+        [
+          "graph",
+          dir,
+          "--create",
+          "--project",
+          "project-1",
+          "--bind",
+          "repository=repository-name",
+          "--bind",
+          "model=model-name",
+          "--paused",
+        ],
+        { from: "user" },
+      );
+
+      assert.equal(graphCalls.length, 1);
+      assert.equal(
+        (graphCalls[0] as { paused?: boolean }).paused,
+        true,
+        "createGraph.execute must receive paused: true when --paused is set",
+      );
+      assert.equal(cap.code(), 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("(S2-2) import graph --create without --paused forwards paused: false to createGraph.execute", async () => {
+    const dir = await makeGraphDirectory();
+
+    try {
+      const graphCalls: unknown[] = [];
+      const cap = capture();
+      const deps = {
+        createGraph: {
+          execute: async (input: unknown) => {
+            graphCalls.push(input);
+            return {
+              initiativeId: "initiative-1",
+              refToId: {
+                objectives: { api: "objective-1" },
+                tasks: { route: "task-1" },
+              },
+              nodes: {
+                "initiative-1": "a".repeat(64),
+                "objective-1": "b".repeat(64),
+                "task-1": "c".repeat(64),
+              },
+            };
+          },
+        },
+        newId: () => "package-1",
+        findResource: {
+          execute: async (input: unknown) => {
+            const name = (input as { name: string }).name;
+            return name === "repository-name" ? "repository-1" : "model-1";
+          },
+        },
+        getResource: {
+          execute: async (id: string) => ({
+            type: id === "repository-1" ? "repository" : "ai_provider",
+          }),
+        },
+      } as unknown as Parameters<typeof buildImportCommand>[0];
+
+      await buildImportCommand(
+        deps,
+        cap.io as Parameters<typeof buildImportCommand>[1],
+      ).parseAsync(
+        [
+          "graph",
+          dir,
+          "--create",
+          "--project",
+          "project-1",
+          "--bind",
+          "repository=repository-name",
+          "--bind",
+          "model=model-name",
+        ],
+        { from: "user" },
+      );
+
+      assert.equal(graphCalls.length, 1);
+      assert.equal(
+        (graphCalls[0] as { paused?: boolean }).paused,
+        false,
+        "createGraph.execute must receive paused: false when --paused is absent",
+      );
+      assert.equal(cap.code(), 0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("(S2-3) import graph --paused without --create exits 1 with 'error: --paused requires --create'", async () => {
+    const dir = await makeGraphDirectory();
+
+    try {
+      const graphCalls: unknown[] = [];
+      const cap = capture();
+      const deps = {
+        createGraph: {
+          execute: async (input: unknown) => {
+            graphCalls.push(input);
+            return {
+              initiativeId: "initiative-1",
+              refToId: { objectives: {}, tasks: {} },
+              nodes: { "initiative-1": "a".repeat(64) },
+            };
+          },
+        },
+        newId: () => "package-1",
+      } as unknown as Parameters<typeof buildImportCommand>[0];
+
+      await buildImportCommand(
+        deps,
+        cap.io as Parameters<typeof buildImportCommand>[1],
+      ).parseAsync(
+        ["graph", dir, "--apply", "--initiative", "i-1", "--paused"],
+        { from: "user" },
+      );
+
+      assert.equal(
+        graphCalls.length,
+        0,
+        "createGraph.execute must NOT be called",
+      );
+      assert.equal(cap.code(), 1);
+      assert.deepEqual(cap.err, ["error: --paused requires --create\n"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   test("defaults the optional graph directory argument to the current directory", () => {
     const cap = capture();
     const command = buildImportCommand(

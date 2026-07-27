@@ -2,6 +2,7 @@ import type { Objective, Initiative } from "../../domain/initiative.ts";
 import {
   transitionObjective,
   transitionInitiative,
+  assertCandidateFresh,
 } from "../../domain/initiative.ts";
 import { newEvent } from "../../domain/event.ts";
 import type { EventFeed } from "../../events/port.ts";
@@ -44,8 +45,9 @@ export class ApproveObjective {
    */
   async execute(input: {
     objectiveId: string;
+    expectedCommit: string;
   }): Promise<{ outcome: "integrated" | "conflict" }> {
-    const { objectiveId } = input;
+    const { objectiveId, expectedCommit } = input;
 
     const objective = this.#store.getObjective(objectiveId);
     if (objective === undefined) {
@@ -58,6 +60,10 @@ export class ApproveObjective {
         objective.status,
       );
     }
+
+    // Story 4 (012) — early guard BEFORE any broker call. SQLite cannot roll
+    // back a moved ref, so the refusal must precede git work.
+    assertCandidateFresh(objectiveId, expectedCommit, objective.commitOid);
 
     const initiative = this.#store.getInitiative(objective.initiativeId);
     const homeDir = this.#store.resolveHomeDir(objective.initiativeId);
@@ -72,7 +78,7 @@ export class ApproveObjective {
     // integrates as a no-op. Falling through would count 0 commits, record a
     // conflict, and livelock — retry re-squashes to the same empty result.
     if (commitOid !== "" && commitOid === parentOid) {
-      this.#integrate(objective, objectiveId, initiative);
+      this.#integrate(objective, objectiveId, initiative, expectedCommit);
       return { outcome: "integrated" };
     }
 
@@ -103,7 +109,7 @@ export class ApproveObjective {
       throw err;
     }
 
-    this.#integrate(objective, objectiveId, initiative);
+    this.#integrate(objective, objectiveId, initiative, expectedCommit);
     return { outcome: "integrated" };
   }
 
@@ -112,8 +118,18 @@ export class ApproveObjective {
     objective: Objective,
     objectiveId: string,
     initiative: Initiative | undefined,
+    expectedCommit: string,
   ): void {
     this.#uow.transaction(() => {
+      // Story 4 (012) — in-transaction re-check. The early guard above saw
+      // the candidate at call time; this re-check inside the write transaction
+      // catches the case where a concurrent writer moved the candidate between
+      // the early guard and the write. Throwing rolls the transaction back
+      // (src/storage/sqlite/sqlite-unit-of-work.ts:26), so no transition and
+      // no event are persisted.
+      const fresh = this.#store.getObjective(objectiveId);
+      assertCandidateFresh(objectiveId, expectedCommit, fresh?.commitOid);
+
       const updated = transitionObjective(objective, "integrated");
       this.#store.saveObjective(updated);
       this.#feed.append(newEvent("objective.integrated", { objectiveId }));

@@ -34,7 +34,11 @@ test("StoreGraph → CheckStoredGraph: both roots ready, deploy blocked on api U
     const project = newProject("my-project");
     projectRepo.save(project);
 
-    const initiative = newInitiative(project.id, "my-initiative");
+    const initiative = newInitiative({
+      projectId: project.id,
+      name: "my-initiative",
+      paused: false,
+    });
     initiativeRepo.save(initiative);
 
     const objective = newObjective(initiative.id, "my-objective");
@@ -121,7 +125,11 @@ test("StoreGraph → CheckStoredGraph: two tasks stored, loaded task has deps in
 
     const project = newProject("dep-order-project");
     projectRepo.save(project);
-    const initiative = newInitiative(project.id, "dep-order-initiative");
+    const initiative = newInitiative({
+      projectId: project.id,
+      name: "dep-order-initiative",
+      paused: false,
+    });
     initiativeRepo.save(initiative);
     const objective = newObjective(initiative.id, "dep-order-objective");
     initiativeRepo.saveObjective(objective);

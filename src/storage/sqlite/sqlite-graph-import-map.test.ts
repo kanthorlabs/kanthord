@@ -31,7 +31,7 @@ function seedHierarchy(db: ReturnType<typeof openDatabase>) {
   const objectiveId = newId();
 
   projectRepo.save({ id: projectId, name: "Proj" });
-  initRepo.save({ id: initiativeId, projectId, name: "Init" });
+  initRepo.save({ id: initiativeId, projectId, name: "Init", paused: false });
   initRepo.saveObjective({ id: objectiveId, initiativeId, name: "Obj" });
 
   return { projectId, initiativeId, objectiveId };

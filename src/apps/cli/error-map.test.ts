@@ -10,6 +10,7 @@ import {
   SequencingLockedError,
   SequencingScopeError,
 } from "../../app/errors.ts";
+import { StaleCandidateError } from "../../domain/initiative.ts";
 import {
   CrossInitiativeError,
   UnknownNodeError,
@@ -193,4 +194,26 @@ test("DriftConflictError maps to exit 1 with sourcePath cited", () => {
     `expected stderr line to cite sourcePath; got: ${result.stderr[0]!}`,
   );
   assert.ok(result.stderr[0]!.startsWith("error:"));
+});
+
+// ---------------------------------------------------------------------------
+// Story 4 (012) — StaleCandidateError is the verdict-guard refusal. The CLI
+// must render it as a single `error: …` line and exit 1 (not re-throw, not
+// print a stack trace).
+// ---------------------------------------------------------------------------
+
+test("StaleCandidateError maps to exit 1 with single error line matching /stale|expected|moved/i (Story 4, 012)", () => {
+  const err = new StaleCandidateError("obj-1", "0".repeat(40), "abc");
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.stderr.length, 1, "exactly one error line");
+  assert.ok(
+    result.stderr[0]!.startsWith("error:"),
+    `expected 'error:' prefix; got: ${result.stderr[0]!}`,
+  );
+  assert.match(
+    result.stderr[0]!,
+    /stale|expected|moved/i,
+    `expected verdict-guard message to mention the move; got: ${result.stderr[0]!}`,
+  );
 });

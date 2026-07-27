@@ -215,6 +215,7 @@ function buildDeps(kinds: Record<string, Exclude<KindResult, undefined>>) {
     id: INIT_ID,
     projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
     name: "oauth",
+    paused: false,
   });
   initiativeRepo.saveObjective({
     id: OBJ_ID,

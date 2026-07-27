@@ -110,11 +110,15 @@ node src/main.ts import graph "$GRAPH" --create --project "$PROJECT" \
         --bind source="$REPO" >/dev/null
 INIT=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).initiativeId)' "$GRAPH")
 OBJ=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).refToId.objectives["publish-obj"])' "$GRAPH")
+# Story 5 (012) — required `--expected-commit` on every objective verdict.
+jv() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s);process.stdout.write(String(eval(process.argv[1])))})' "$1"; }
+obj_oid() { node src/main.ts get objective --id "$1" --json | jv 'v.commitOid'; }
 
 export KANTHORD_FAKE_AGENT="$GRAPH/.fake-agent.json"
 node src/main.ts run daemon --until-idle --poll-interval 200
 
-node src/main.ts approve objective --id "$OBJ" >/dev/null
+OBJ_OID=$(obj_oid "$OBJ"); test -n "$OBJ_OID"
+node src/main.ts approve objective --id "$OBJ" --expected-commit "$OBJ_OID" >/dev/null
 test "$(node src/main.ts get initiative --id "$INIT" | sed -n 's/^status: //p')" = "landed"
 
 BR="kanthord/init/$INIT"

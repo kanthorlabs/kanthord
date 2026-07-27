@@ -185,12 +185,13 @@ const INIT_DIFF = "01JZZZZZZZZZZZZZZZZZZZIND0";
 const TASK_RUN = "01JZZZZZZZZZZZZZZZZZZZTRU0";
 
 function buildInitiatives(repo: FakeInitiativeRepository): void {
-  repo.save({ id: INIT_A, projectId: PROJ_ID, name: "init-a" });
-  repo.save({ id: INIT_B, projectId: PROJ_ID, name: "init-b" });
+  repo.save({ id: INIT_A, projectId: PROJ_ID, name: "init-a", paused: false });
+  repo.save({ id: INIT_B, projectId: PROJ_ID, name: "init-b", paused: false });
   repo.save({
     id: INIT_DIFF,
     projectId: "01JZZZZZZZZZZZZZZZZZZZPRX0",
     name: "init-diff",
+    paused: false,
   });
 }
 

@@ -77,6 +77,7 @@ export type ImportGraphArgs = {
   dir: string;
   create: boolean;
   apply: boolean;
+  paused: boolean;
   dryRun?: boolean;
   deleteMissing?: boolean;
   confirmDelete?: boolean;
@@ -116,10 +117,20 @@ export async function runImportGraph(
     };
   }
 
+  // Guard: --paused requires --create
+  if (args.paused && !args.create) {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: --paused requires --create"],
+    };
+  }
+
   if (args.create) {
     return runCreate(
       args.dir,
       args.project!,
+      args.paused,
       deps.createGraph,
       deps.newId,
       args.bind,
@@ -363,6 +374,7 @@ function isUlidShaped(value: string): boolean {
 async function runCreate(
   dir: string,
   projectId: string,
+  paused: boolean,
   createGraph: CreateGraphUC,
   mintId: () => string,
   bind: Record<string, string> | undefined,
@@ -451,6 +463,7 @@ async function runCreate(
     pkg,
     projectId,
     packageId,
+    paused,
     bindings: resolvedBindings,
   });
 

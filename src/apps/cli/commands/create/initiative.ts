@@ -20,15 +20,29 @@ export function buildCreateInitiativeCommand(
       (value: string, values: string[]) => (values.push(value), values),
       [] as string[],
     )
+    .option(
+      "--paused",
+      "create the initiative paused; nothing runs until `resume initiative`",
+    )
     .addHelpText(
       "after",
       "\nExample:\n  kanthord create initiative --project project-1 --name cli\n",
     )
     .action(
-      async (opts: { project: string; name: string; after: string[] }) => {
+      async (opts: {
+        project: string;
+        name: string;
+        after: string[];
+        paused?: boolean;
+      }) => {
         emitResult(
           await runCreateInitiative(
-            { project: opts.project, name: opts.name, after: opts.after },
+            {
+              project: opts.project,
+              name: opts.name,
+              after: opts.after,
+              paused: opts.paused ?? false,
+            },
             deps.createInitiative,
           ),
           io,

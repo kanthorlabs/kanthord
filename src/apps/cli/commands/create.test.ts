@@ -74,6 +74,7 @@ describe("src/apps/cli/commands/create.ts", () => {
       projectId: "project-1",
       name: "cli",
       after: [],
+      paused: false,
     });
     assert.deepEqual(cap.out, ["initiative-1\n"]);
     assert.deepEqual(cap.err, ["initiative created: cli\n"]);
@@ -113,6 +114,7 @@ describe("src/apps/cli/commands/create.ts", () => {
       projectId: "project-1",
       name: "follow-up",
       after: ["i1", "i2"],
+      paused: false,
     });
     assert.deepEqual(cap.out, ["initiative-1\n"]);
     assert.deepEqual(cap.err, ["initiative created: follow-up\n"]);
@@ -142,9 +144,66 @@ describe("src/apps/cli/commands/create.ts", () => {
       projectId: "project-1",
       name: "solo",
       after: [],
+      paused: false,
     });
     assert.deepEqual(cap.out, ["initiative-1\n"]);
     assert.deepEqual(cap.err, ["initiative created: solo\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(S2-1) create initiative --paused passes paused: true to the use case", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      createInitiative: {
+        execute: async (input: unknown) => {
+          received = input;
+          return "initiative-1";
+        },
+      },
+    } as Parameters<typeof buildCreateInitiativeCommand>[0];
+
+    await buildCreateInitiativeCommand(
+      deps,
+      cap.io as Parameters<typeof buildCreateInitiativeCommand>[1],
+    ).parseAsync(["--project", "project-1", "--name", "deferred", "--paused"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, {
+      projectId: "project-1",
+      name: "deferred",
+      after: [],
+      paused: true,
+    });
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(S2-2) create initiative without --paused passes paused: false to the use case", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      createInitiative: {
+        execute: async (input: unknown) => {
+          received = input;
+          return "initiative-1";
+        },
+      },
+    } as Parameters<typeof buildCreateInitiativeCommand>[0];
+
+    await buildCreateInitiativeCommand(
+      deps,
+      cap.io as Parameters<typeof buildCreateInitiativeCommand>[1],
+    ).parseAsync(["--project", "project-1", "--name", "active"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, {
+      projectId: "project-1",
+      name: "active",
+      after: [],
+      paused: false,
+    });
     assert.equal(cap.code(), 0);
   });
 

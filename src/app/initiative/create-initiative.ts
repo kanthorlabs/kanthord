@@ -36,6 +36,7 @@ export class CreateInitiative {
     projectId: string;
     name: string;
     after?: string[];
+    paused: boolean;
   }): Promise<string> {
     const kind = this.#resolver.resolveKind(input.projectId);
     if (kind === undefined) {
@@ -51,7 +52,11 @@ export class CreateInitiative {
     if (existing.length > 0) {
       throw new DuplicateNameError("initiative", input.projectId, input.name);
     }
-    const initiative = newInitiative(input.projectId, input.name);
+    const initiative = newInitiative({
+      projectId: input.projectId,
+      name: input.name,
+      paused: input.paused,
+    });
 
     const afterIds = input.after ?? [];
     if (

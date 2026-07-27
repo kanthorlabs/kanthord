@@ -511,7 +511,7 @@ function makeBaseDb(): {
 } {
   const initiatives = new FakeInitiativeRepository();
   initiatives.seed(
-    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
     INIT_BASE_SHA,
     [
       {
@@ -1520,7 +1520,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
   test("id-less task without map hit: importMap.reserve called once after create", async () => {
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -1631,7 +1631,12 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const initiativeId = newId();
     const objectiveId = newId();
     projRepo.save({ id: projectId, name: "test-project" });
-    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.save({
+      id: initiativeId,
+      projectId,
+      name: "oauth",
+      paused: false,
+    });
     initRepo.saveObjective({ id: objectiveId, initiativeId, name: "backend" });
 
     const initSha = initRepo.getSha256(initiativeId)!;
@@ -1751,7 +1756,12 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const initiativeId = newId();
     const objectiveId = newId();
     projRepo.save({ id: projectId, name: "test-project" });
-    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.save({
+      id: initiativeId,
+      projectId,
+      name: "oauth",
+      paused: false,
+    });
     initRepo.saveObjective({ id: objectiveId, initiativeId, name: "backend" });
 
     const initSha = initRepo.getSha256(initiativeId)!;
@@ -1888,7 +1898,12 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const projectId = newId();
     const initiativeId = newId();
     projRepo.save({ id: projectId, name: "test-project" });
-    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.save({
+      id: initiativeId,
+      projectId,
+      name: "oauth",
+      paused: false,
+    });
 
     const initSha = initRepo.getSha256(initiativeId)!;
 
@@ -2069,7 +2084,12 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     const initiativeId = newId();
     const objectiveId = newId();
     projRepo.save({ id: projectId, name: "test-project" });
-    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.save({
+      id: initiativeId,
+      projectId,
+      name: "oauth",
+      paused: false,
+    });
     initRepo.saveObjective({ id: objectiveId, initiativeId, name: "backend" });
 
     const initSha = initRepo.getSha256(initiativeId)!;
@@ -2181,7 +2201,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     // Seed initiative with both OBJ1 and OBJ2
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -2298,7 +2318,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
     // Seed initiative with both OBJ1 (live parent) and OBJ2 (reparent target).
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -2419,7 +2439,7 @@ describe("Story 07 T3 — apply execution (CAS mutate + id-less create + idempot
 test("EPIC 007.18 — a completed task whose file nobody touched classifies unchanged, not drifted", async () => {
   const initiatives = new FakeInitiativeRepository();
   initiatives.seed(
-    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
     INIT_BASE_SHA,
     [
       {
@@ -2669,7 +2689,7 @@ test("EPIC 007.18 — compareAndApply receives the preflight-observed status (pe
 test("EPIC 007.18 — conditionalDeleteTask receives the missing task's real preflight status", async () => {
   const initiatives = new FakeInitiativeRepository();
   initiatives.seed(
-    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
     INIT_BASE_SHA,
     [
       {
@@ -2816,7 +2836,7 @@ describe("Story 08 T3 — confirmed delete execution", () => {
   test("confirmDelete: conditionalDeleteTask called for eligible pending missing task", async () => {
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -2891,7 +2911,7 @@ describe("Story 08 T3 — confirmed delete execution", () => {
   test("EPIC 007.18 Story 4 — conditionalDeleteTask status conflict classifies locked with casReason", async () => {
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -2965,7 +2985,7 @@ describe("Story 08 T3 — confirmed delete execution", () => {
   test("EPIC 007.18 Story 4 — conditionalDeleteTask sha conflict classifies drifted with casReason", async () => {
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -3052,7 +3072,7 @@ describe("Story 08 T3 — confirmed delete execution", () => {
   test("drifted missing task: deleteTask NOT called, spec apply commits (TB3) [characterisation]", async () => {
     const initiatives = new FakeInitiativeRepository();
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {
@@ -3171,7 +3191,12 @@ describe("Story 08 T3 — confirmed delete execution", () => {
     const task3Id = newId(); // NOT in package → missing → eligible for delete
 
     projRepo.save({ id: projectId, name: "test-project" });
-    initRepo.save({ id: initiativeId, projectId, name: "oauth" });
+    initRepo.save({
+      id: initiativeId,
+      projectId,
+      name: "oauth",
+      paused: false,
+    });
     initRepo.saveObjective({ id: obj1Id, initiativeId, name: "backend" });
     initRepo.saveObjective({ id: obj2Id, initiativeId, name: "frontend" });
 
@@ -3585,7 +3610,7 @@ function makeTwoObjDb(): {
 } {
   const { initiatives, tasks } = makeBaseDb();
   initiatives.seed(
-    { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+    { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
     INIT_BASE_SHA,
     [
       {
@@ -4060,7 +4085,7 @@ describe("EPIC 007.19 Story 1 — preflight refusal of uncreatable objectives", 
     const { initiatives, tasks } = makeBaseDb();
     // Seed a second objective (OBJ2_ID) that is NOT in the base package.
     initiatives.seed(
-      { id: INIT_ID, projectId: PROJ_ID, name: "oauth" },
+      { id: INIT_ID, projectId: PROJ_ID, name: "oauth", paused: false },
       INIT_BASE_SHA,
       [
         {

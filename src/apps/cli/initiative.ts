@@ -13,8 +13,16 @@ export async function runCreateInitiative(
   const projectId = args["project"] as string;
   const name = args["name"] as string;
   const after = (args["after"] as string[]) ?? [];
+  // The `--paused` flag is optional at the CLI; the CLI defaults it here so
+  // the use-case input type stays non-optional.
+  const paused = (args["paused"] as boolean | undefined) ?? false;
   try {
-    const id = await createInitiative.execute({ projectId, name, after });
+    const id = await createInitiative.execute({
+      projectId,
+      name,
+      after,
+      paused,
+    });
     return {
       exitCode: 0,
       stdout: [id],

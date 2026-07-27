@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { ApproveObjective } from "./approve-objective.ts";
+import { StaleCandidateError } from "../../domain/initiative.ts";
 import type { Objective, Initiative } from "../../domain/initiative.ts";
 import type { Event } from "../../domain/event.ts";
 import type { EventFeed } from "../../events/port.ts";
@@ -144,6 +145,7 @@ function baseInitiative(overrides: Partial<Initiative> = {}): Initiative {
     id: INIT_ID,
     projectId: "proj-1",
     name: "I",
+    paused: false,
     status: "building",
     workspace: CLONE_DIR,
     ...overrides,
@@ -161,7 +163,8 @@ test("execute throws UnknownReferenceError('objective', id) when the objective d
   );
 
   await assert.rejects(
-    () => useCase.execute({ objectiveId: "missing" }),
+    () =>
+      useCase.execute({ objectiveId: "missing", expectedCommit: "COMMIT_OID" }),
     (err: unknown) =>
       err instanceof UnknownReferenceError &&
       err.kind === "objective" &&
@@ -183,7 +186,9 @@ test("execute throws when the objective is not awaiting_confirmation", async () 
     new FakeUow(),
   );
 
-  await assert.rejects(() => useCase.execute({ objectiveId: "obj-1" }));
+  await assert.rejects(() =>
+    useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" }),
+  );
   assert.equal(
     broker.fetchCalls.length,
     0,
@@ -202,7 +207,8 @@ test("execute throws ObjectiveNotAwaitingConfirmationError (not a silent no-op) 
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
   await assert.rejects(
-    () => useCase.execute({ objectiveId: "obj-1" }),
+    () =>
+      useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" }),
     (err: unknown) =>
       err instanceof ObjectiveNotAwaitingConfirmationError &&
       err.status === "integrated",
@@ -235,7 +241,7 @@ test("execute happy path: fetches the objective commit, validates exactly one co
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-1" });
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
 
   assert.deepEqual(broker.fetchCalls, [
     { homeDir: HOME_DIR, clonePath: CLONE_DIR, oid: "COMMIT_OID" },
@@ -273,7 +279,7 @@ test("execute moves the objective to conflict (no CAS attempt) when more than on
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-1" });
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
 
   assert.equal(
     broker.casCalls.length,
@@ -302,7 +308,7 @@ test("execute transitions the initiative to landed and appends initiative.landed
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-b" });
+  await useCase.execute({ objectiveId: "obj-b", expectedCommit: "COMMIT_OID" });
 
   assert.equal(
     store.savedInitiatives.length,
@@ -332,7 +338,7 @@ test("execute does NOT transition the initiative when another sibling objective 
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-b" });
+  await useCase.execute({ objectiveId: "obj-b", expectedCommit: "COMMIT_OID" });
 
   assert.equal(
     store.savedInitiatives.length,
@@ -358,7 +364,7 @@ test("execute moves the objective to conflict when the CAS ref-advance rejects a
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-1" });
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
 
   assert.equal(store.savedObjectives.length, 1);
   assert.equal(store.savedObjectives[0]?.status, "conflict");
@@ -389,7 +395,7 @@ test("execute integrates an empty objective (commitOid === parentOid) as a no-op
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-1" });
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "SAME_OID" });
 
   assert.equal(store.savedObjectives.length, 1);
   assert.equal(
@@ -433,11 +439,210 @@ test("execute lands the initiative when the last objective is an empty no-op", a
   const feed = new FakeFeed();
   const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
 
-  await useCase.execute({ objectiveId: "obj-1" });
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "SAME_OID" });
 
   assert.equal(store.savedInitiatives.at(-1)?.status, "landed");
   assert.ok(
     feed.events.some((e) => e.type === "initiative.landed"),
     "the initiative must land even though the last objective added nothing",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 4 (012) — Required `--expected-commit` on objective verdicts.
+//
+// (a) the early guard runs BEFORE any broker call (SQLite cannot roll back a
+//     moved ref, so the refusal must be cheaper than git work).
+// (b) the in-transaction re-check fires when the persisted commitOid changes
+//     between the early guard and the write transaction.
+// (c) a matching `expectedCommit` integrates even when the store still
+//     diverges on later reads (interleaving reads return the same oid).
+// (d) the empty-objective shortcut (`commitOid === parentOid`) is reached
+//     only AFTER the early guard; a stale `expectedCommit` is still refused.
+// ---------------------------------------------------------------------------
+
+class FailIfCalledBroker {
+  async fetch(
+    _homeDir: string,
+    _clonePath: string,
+    _oid: string,
+  ): Promise<void> {
+    throw new Error("broker reached: fetch");
+  }
+  async countCommitsSince(
+    _homeDir: string,
+    _parentOid: string,
+    _oid: string,
+  ): Promise<number> {
+    throw new Error("broker reached: countCommitsSince");
+  }
+  async casUpdateRef(
+    _homeDir: string,
+    _ref: string,
+    _oid: string,
+    _expectedOld: string,
+  ): Promise<void> {
+    throw new Error("broker reached: casUpdateRef");
+  }
+}
+
+test("execute stale approve (a): FailIfCalledBroker is never reached; rejects with StaleCandidateError; no save; no event", async () => {
+  const objective = baseObjective(); // commitOid: "COMMIT_OID"
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FailIfCalledBroker();
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        objectiveId: "obj-1",
+        expectedCommit: "0".repeat(40),
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}: ${(err as Error).message}`,
+      );
+      assert.equal(err.name, "StaleCandidateError");
+      return true;
+    },
+  );
+
+  assert.equal(
+    store.savedObjectives.length,
+    0,
+    "stale approve must not save the objective",
+  );
+  assert.equal(
+    feed.events.length,
+    0,
+    "stale approve must not append objective.integrated or objective.conflict",
+  );
+});
+
+test("execute stale approve on the empty-objective shortcut (d): commitOid === parentOid; stale expectedCommit is still refused before the shortcut integrates", async () => {
+  const objective = baseObjective({
+    commitOid: "SAME_OID",
+    parentOid: "SAME_OID",
+  });
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FailIfCalledBroker();
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await assert.rejects(
+    () =>
+      useCase.execute({
+        objectiveId: "obj-1",
+        expectedCommit: "0".repeat(40),
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(
+    store.savedObjectives.length,
+    0,
+    "stale approve must not save even when the empty shortcut would otherwise integrate",
+  );
+  assert.equal(
+    feed.events.length,
+    0,
+    "stale approve must not append any event",
+  );
+});
+
+test("execute stale approve (b): in-transaction interleaving — early guard sees 'AAA', the uow re-check sees 'BBB'; rejects with StaleCandidateError; no save; no event", async () => {
+  const objective = baseObjective({ commitOid: "AAA" });
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  // Override getObjective: first call returns the reviewed oid ("AAA"), every
+  // later call returns the persisted oid after a concurrent writer moved it
+  // ("BBB"). The early guard (outside the transaction) is the first call, so
+  // it passes; the uow re-check (inside the transaction) is the second call,
+  // so it must throw.
+  let callIndex = 0;
+  const originalGet = store.getObjective.bind(store);
+  store.getObjective = (id: string) => {
+    callIndex += 1;
+    if (callIndex === 1) {
+      return baseObjective({ commitOid: "AAA" });
+    }
+    return baseObjective({ commitOid: "BBB" });
+  };
+  // Touch `originalGet` to satisfy "no unused" lint without changing the
+  // override contract (keeps the original signature available if a future
+  // assertion needs it).
+  void originalGet;
+
+  const broker = new FakeBroker();
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await assert.rejects(
+    () => useCase.execute({ objectiveId: "obj-1", expectedCommit: "AAA" }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(
+    store.savedObjectives.length,
+    0,
+    "interleaved stale approve must not save",
+  );
+  assert.equal(
+    feed.events.some((e) => e.type === "objective.integrated"),
+    false,
+    "interleaved stale approve must not append objective.integrated",
+  );
+  assert.equal(
+    feed.events.some((e) => e.type === "initiative.landed"),
+    false,
+    "interleaved stale approve must not append initiative.landed",
+  );
+});
+
+test("execute matching approve (c): interleaving reads return 'AAA' on every call; integrates and appends objective.integrated", async () => {
+  const objective = baseObjective({ commitOid: "AAA" });
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  store.getObjective = (id: string) => baseObjective({ commitOid: "AAA" });
+
+  const broker = new FakeBroker();
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  const result = await useCase.execute({
+    objectiveId: "obj-1",
+    expectedCommit: "AAA",
+  });
+
+  assert.deepEqual(result, { outcome: "integrated" });
+  assert.equal(store.savedObjectives.length, 1);
+  assert.equal(store.savedObjectives[0]?.status, "integrated");
+  assert.ok(
+    feed.events.some((e) => e.type === "objective.integrated"),
+    "must append objective.integrated",
   );
 });

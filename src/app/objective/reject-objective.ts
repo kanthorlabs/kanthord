@@ -2,6 +2,7 @@ import type { Objective, Initiative } from "../../domain/initiative.ts";
 import {
   transitionObjective,
   transitionInitiative,
+  assertCandidateFresh,
 } from "../../domain/initiative.ts";
 import { transitionTask } from "../../domain/task.ts";
 import type { Task } from "../../domain/task.ts";
@@ -43,8 +44,9 @@ export class RejectObjective {
   async execute(input: {
     objectiveId: string;
     reason?: string;
+    expectedCommit: string;
   }): Promise<void> {
-    const { objectiveId, reason } = input;
+    const { objectiveId, reason, expectedCommit } = input;
 
     const objective = this.#store.getObjective(objectiveId);
     if (objective === undefined) {
@@ -56,7 +58,17 @@ export class RejectObjective {
       throw new ObjectiveNotAwaitingConfirmationError(objectiveId, status);
     }
 
+    // Story 4 (012) — early guard after the status guard. A stale verdict on
+    // a discardable objective is refused before the cascade loop touches any
+    // task.
+    assertCandidateFresh(objectiveId, expectedCommit, objective.commitOid);
+
     this.#uow.transaction(() => {
+      // Story 4 (012) — in-transaction re-check. Throwing rolls the cascade
+      // back so no task.discarded or objective.discarded is persisted.
+      const fresh = this.#store.getObjective(objectiveId);
+      assertCandidateFresh(objectiveId, expectedCommit, fresh?.commitOid);
+
       const tasks = this.#store.listTasksByObjective(objectiveId);
       for (const task of tasks) {
         if (task.status === "pending" || task.status === "failed") {

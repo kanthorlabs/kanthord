@@ -42,6 +42,7 @@ export interface CreateGraphInput {
   pkg: GraphPackage; // must have NO persisted ids anywhere
   projectId: string; // must exist; import never creates it
   packageId: string; // ULID minted by the CLI at --create
+  paused: boolean; // explicit-activation gate; rides in the creation INSERT
   bindings?: Record<string, string>; // C1: CLI --bind alias→id map (alias → concrete resource id)
 }
 
@@ -150,6 +151,7 @@ export class CreateGraph {
         id: initiativeId,
         projectId: input.projectId,
         name: input.pkg.initiative.name,
+        paused: input.paused,
       };
       this.#deps.initiatives.save(initiative);
 

@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 
 import { RejectObjective } from "./reject-objective.ts";
 import { ObjectiveNotAwaitingConfirmationError } from "../errors.ts";
+import { StaleCandidateError } from "../../domain/initiative.ts";
 import type { Objective, Initiative } from "../../domain/initiative.ts";
 import type { Task } from "../../domain/task.ts";
 import type { Event } from "../../domain/event.ts";
@@ -137,11 +138,13 @@ describe("RejectObjective — discard from building/awaiting_confirmation/confli
         initiativeId: INI_ID,
         name: "O",
         status,
+        commitOid: "REVIEWED_OID",
       };
       const initiative: Initiative = {
         id: INI_ID,
         projectId: "proj-1",
         name: "I",
+        paused: false,
         status: "building",
       };
       const store = new MemStore([objective], [initiative], tasks());
@@ -151,6 +154,7 @@ describe("RejectObjective — discard from building/awaiting_confirmation/confli
       await uc.execute({
         objectiveId: OBJ_ID,
         reason: "unachievable",
+        expectedCommit: "REVIEWED_OID",
       });
 
       assert.equal(
@@ -194,11 +198,13 @@ test("RejectObjective: discard emits task.discarded with {reason: cascade, origi
     initiativeId: INI_ID,
     name: "O",
     status: "building",
+    commitOid: "REVIEWED_OID",
   };
   const initiative: Initiative = {
     id: INI_ID,
     projectId: "proj-1",
     name: "I",
+    paused: false,
     status: "building",
   };
   const store = new MemStore([objective], [initiative], tasks());
@@ -208,6 +214,7 @@ test("RejectObjective: discard emits task.discarded with {reason: cascade, origi
   await uc.execute({
     objectiveId: OBJ_ID,
     reason: "unachievable",
+    expectedCommit: "REVIEWED_OID",
   });
 
   for (const taskId of [TASK_PENDING, TASK_FAILED]) {
@@ -237,18 +244,20 @@ test("RejectObjective: discard from building rolls up a single-objective initiat
     initiativeId: INI_ID,
     name: "O",
     status: "building",
+    commitOid: "REVIEWED_OID",
   };
   const initiative: Initiative = {
     id: INI_ID,
     projectId: "proj-1",
     name: "I",
+    paused: false,
     status: "building",
   };
   const store = new MemStore([objective], [initiative], tasks());
   const feed = new MemFeed();
   const uc = new RejectObjective(store, feed, new MemUow());
 
-  await uc.execute({ objectiveId: OBJ_ID });
+  await uc.execute({ objectiveId: OBJ_ID, expectedCommit: "REVIEWED_OID" });
 
   assert.equal(
     store.getInitiative(INI_ID)?.status,
@@ -270,11 +279,13 @@ test("RejectObjective: discard from integrated throws ObjectiveNotAwaitingConfir
     initiativeId: INI_ID,
     name: "O",
     status: "integrated",
+    commitOid: "REVIEWED_OID",
   };
   const initiative: Initiative = {
     id: INI_ID,
     projectId: "proj-1",
     name: "I",
+    paused: false,
     status: "building",
   };
   const store = new MemStore([objective], [initiative]);
@@ -282,7 +293,7 @@ test("RejectObjective: discard from integrated throws ObjectiveNotAwaitingConfir
   const uc = new RejectObjective(store, feed, new MemUow());
 
   await assert.rejects(
-    () => uc.execute({ objectiveId: OBJ_ID }),
+    () => uc.execute({ objectiveId: OBJ_ID, expectedCommit: "REVIEWED_OID" }),
     (err: unknown) => {
       assert.ok(
         err instanceof ObjectiveNotAwaitingConfirmationError,
@@ -292,4 +303,121 @@ test("RejectObjective: discard from integrated throws ObjectiveNotAwaitingConfir
     },
     "discard from integrated must throw ObjectiveNotAwaitingConfirmationError — integrated work is not discardable",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Story 4 (012) — RejectObjective requires the same `expectedCommit` guard
+// as ApproveObjective. A stale guard is refused with StaleCandidateError
+// and no state changes (no objective.discarded, no task.discarded).
+// ---------------------------------------------------------------------------
+
+test("RejectObjective: stale expectedCommit rejects with StaleCandidateError; no objective.discarded; no task.discarded; no save", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INI_ID,
+    name: "O",
+    status: "awaiting_confirmation",
+    commitOid: "REVIEWED_OID",
+  };
+  const initiative: Initiative = {
+    id: INI_ID,
+    projectId: "proj-1",
+    name: "I",
+    paused: false,
+    status: "building",
+  };
+  const store = new MemStore([objective], [initiative], tasks());
+  const feed = new MemFeed();
+  const uc = new RejectObjective(store, feed, new MemUow());
+
+  await assert.rejects(
+    () =>
+      uc.execute({
+        objectiveId: OBJ_ID,
+        reason: "unachievable",
+        expectedCommit: "0".repeat(40),
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}: ${(err as Error).message}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(store.savedObjectives.length, 0, "no objective must be saved");
+  assert.equal(
+    store.savedTasks.length,
+    0,
+    "no tasks must be discarded on stale reject",
+  );
+  assert.equal(
+    feed.events.some(
+      (e) => e.type === "objective.discarded" && e.objectiveId === OBJ_ID,
+    ),
+    false,
+    "must not append objective.discarded",
+  );
+  assert.equal(
+    feed.events.some(
+      (e) => e.type === "task.discarded" && e.taskId === TASK_PENDING,
+    ),
+    false,
+    "must not append task.discarded for the pending task",
+  );
+});
+
+test("RejectObjective: in-transaction interleaving — early guard sees 'AAA', uow re-check sees 'BBB'; rejected with StaleCandidateError; nothing saved", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INI_ID,
+    name: "O",
+    status: "awaiting_confirmation",
+    commitOid: "AAA",
+  };
+  const initiative: Initiative = {
+    id: INI_ID,
+    projectId: "proj-1",
+    name: "I",
+    paused: false,
+    status: "building",
+  };
+  const store = new MemStore([objective], [initiative], tasks());
+  // First getObjective (early guard, outside the transaction) returns "AAA"
+  // (matches expectedCommit, so guard passes). Every later getObjective
+  // (inside the transaction re-check) returns "BBB" (mismatch, refused).
+  let callIndex = 0;
+  const originalGet = store.getObjective.bind(store);
+  store.getObjective = (id: string) => {
+    callIndex += 1;
+    if (callIndex === 1) {
+      return { ...objective, commitOid: "AAA" };
+    }
+    return { ...objective, commitOid: "BBB" };
+  };
+  void originalGet;
+
+  const feed = new MemFeed();
+  const uc = new RejectObjective(store, feed, new MemUow());
+
+  await assert.rejects(
+    () =>
+      uc.execute({
+        objectiveId: OBJ_ID,
+        reason: "unachievable",
+        expectedCommit: "AAA",
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof StaleCandidateError,
+        `must be StaleCandidateError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+  );
+
+  assert.equal(store.savedObjectives.length, 0);
+  assert.equal(store.savedTasks.length, 0);
+  assert.equal(feed.events.length, 0, "no event must be appended");
 });

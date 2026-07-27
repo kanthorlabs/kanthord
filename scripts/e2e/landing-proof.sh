@@ -44,6 +44,11 @@ node src/main.ts import graph "$GRAPH" --create --project "$PROJECT" \
         --bind source="$REPO" >/dev/null
 INIT=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).initiativeId)' "$GRAPH")
 OBJ=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1]+"/.kanthord-export.json","utf8")).refToId.objectives["todo-api-obj"])' "$GRAPH")
+# Story 5 (012) — required `--expected-commit` on every objective verdict. The
+# client reads the candidate id from the real read surface (`get objective
+# --json`) and echoes it back; never hard-code and never bypass the guard.
+jv() { node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s);process.stdout.write(String(eval(process.argv[1])))})' "$1"; }
+obj_oid() { node src/main.ts get objective --id "$1" --json | jv 'v.commitOid'; }
 # Pick the ROOT task (create-task — "Create Task — POST /tasks"); the other four
 # endpoint tasks depend on it.
 TASK=$(node src/main.ts list task --initiative "$INIT" --json \
@@ -68,7 +73,8 @@ git --git-dir="$MIRROR" cat-file -e "$INIT_BR:$(cat "$GRAPH"/.expected-output-pa
 # human-gated `publish repository` step (007.13 delivery contract).
 test "$(git --git-dir="$MIRROR" rev-parse main)" = "$BASE_SHA"
 
-node src/main.ts approve objective --id "$OBJ" >/dev/null
+OBJ_OID=$(obj_oid "$OBJ"); test -n "$OBJ_OID"
+node src/main.ts approve objective --id "$OBJ" --expected-commit "$OBJ_OID" >/dev/null
 test "$(node src/main.ts get objective --id "$OBJ" | sed -n 's/^status: //p')" = "integrated"
 # The initiative branch in the bare managed home ADVANCED and now has the output.
 git --git-dir="$MIRROR" cat-file -e "$INIT_BR:$(cat "$GRAPH"/.expected-output-path)"

@@ -20,6 +20,8 @@ import { CycleError } from "../../domain/graph.ts";
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
   readonly #objectives: Map<string, Objective> = new Map();
+  /** Counts every setPaused() call — Story 1's "no second write" gate. */
+  setPausedCalls: number = 0;
 
   save(initiative: Initiative): void {
     this.#initiatives.set(initiative.id, { ...initiative });
@@ -63,7 +65,9 @@ class FakeInitiativeRepository implements InitiativeRepository {
     return [];
   }
 
-  setPaused(_id: string, _paused: boolean): void {}
+  setPaused(_id: string, _paused: boolean): void {
+    this.setPausedCalls += 1;
+  }
 
   listAllInitiatives(): Array<{ id: string; paused: boolean }> {
     return [];
@@ -109,7 +113,11 @@ describe("CreateInitiative", () => {
       new Map([["proj-1", "project"]]),
     );
     const uc = new CreateInitiative(repo, resolver);
-    const id = await uc.execute({ projectId: "proj-1", name: "oauth" });
+    const id = await uc.execute({
+      projectId: "proj-1",
+      name: "oauth",
+      paused: false,
+    });
     assert.ok(
       typeof id === "string" && id.length > 0,
       "returns a non-empty id",
@@ -125,7 +133,12 @@ describe("CreateInitiative", () => {
     const resolver = new MockReferenceResolver(new Map());
     const uc = new CreateInitiative(repo, resolver);
     await assert.rejects(
-      () => uc.execute({ projectId: "no-such", name: "oauth" }),
+      () =>
+        uc.execute({
+          projectId: "no-such",
+          name: "oauth",
+          paused: false,
+        }),
       (err: unknown) => {
         assert.ok(err instanceof UnknownReferenceError);
         assert.equal(err.kind, "project");
@@ -142,7 +155,12 @@ describe("CreateInitiative", () => {
     );
     const uc = new CreateInitiative(repo, resolver);
     await assert.rejects(
-      () => uc.execute({ projectId: "init-1", name: "oauth" }),
+      () =>
+        uc.execute({
+          projectId: "init-1",
+          name: "oauth",
+          paused: false,
+        }),
       (err: unknown) => {
         assert.ok(err instanceof WrongTypeReferenceError);
         assert.equal(err.expected, "project");
@@ -158,9 +176,9 @@ describe("CreateInitiative", () => {
       new Map([["proj-1", "project"]]),
     );
     const uc = new CreateInitiative(repo, resolver);
-    await uc.execute({ projectId: "proj-1", name: "clash" });
+    await uc.execute({ projectId: "proj-1", name: "clash", paused: false });
     await assert.rejects(
-      () => uc.execute({ projectId: "proj-1", name: "clash" }),
+      () => uc.execute({ projectId: "proj-1", name: "clash", paused: false }),
       (err: unknown) => {
         assert.ok(err instanceof DuplicateNameError);
         return true;
@@ -238,7 +256,11 @@ describe("CreateInitiative with after", () => {
     const sequencing = new FakeSequencingRepo();
     const tx = new FakeTx();
     const uc = new CreateInitiative(repo, resolver, sequencing, tx);
-    const id = await uc.execute({ projectId: "proj-1", name: "alone" });
+    const id = await uc.execute({
+      projectId: "proj-1",
+      name: "alone",
+      paused: false,
+    });
 
     assert.ok(id.length > 0, "returns an id");
     assert.equal(sequencing.addedCalls.length, 0, "no after edges written");
@@ -251,11 +273,13 @@ describe("CreateInitiative with after", () => {
       id: EXISTING_A,
       projectId: PROJ_ID_AFTER,
       name: "existing-a",
+      paused: false,
     });
     repo.save({
       id: EXISTING_B,
       projectId: PROJ_ID_AFTER,
       name: "existing-b",
+      paused: false,
     });
     const resolver = new MockReferenceResolver(
       new Map([
@@ -276,6 +300,7 @@ describe("CreateInitiative with after", () => {
       projectId: PROJ_ID_AFTER,
       name: "new-init",
       after: [EXISTING_B, EXISTING_A, EXISTING_B],
+      paused: false,
     });
 
     assert.equal(
@@ -301,11 +326,13 @@ describe("CreateInitiative with after", () => {
       id: EXISTING_CROSS,
       projectId: "01JZZZZZZZZZZZZZZZZZZZPRX0",
       name: "other-project",
+      paused: false,
     });
     repo.save({
       id: EXISTING_A,
       projectId: PROJ_ID_AFTER,
       name: "existing-a",
+      paused: false,
     });
     const resolver = new MockReferenceResolver(
       new Map([
@@ -324,6 +351,7 @@ describe("CreateInitiative with after", () => {
           projectId: PROJ_ID_AFTER,
           name: "new-init",
           after: [EXISTING_CROSS],
+          paused: false,
         }),
       (err: unknown) => {
         assert.ok(err instanceof SequencingScopeError);
@@ -357,6 +385,7 @@ describe("CreateInitiative with after", () => {
           projectId: PROJ_ID_AFTER,
           name: "new-init",
           after: ["no-such-id"],
+          paused: false,
         }),
       (err: unknown) => {
         assert.ok(err instanceof Error);
@@ -377,6 +406,7 @@ describe("RenameInitiative", () => {
     const id = await createUc.execute({
       projectId: "proj-1",
       name: "old-name",
+      paused: false,
     });
     const renameUc = new RenameInitiative(repo);
     await renameUc.execute({ id, name: "new-name" });
@@ -397,4 +427,95 @@ describe("RenameInitiative", () => {
       },
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 (012) — `paused` is part of the creation INSERT (no second write).
+// The fake repo's `setPausedCalls` counter is the "no second write" gate: any
+// implementation that follows creation with a setPaused() call fails the
+// contract.
+// ---------------------------------------------------------------------------
+
+test("CreateInitiative execute({ paused: true }) persists paused in the first save, never via setPaused", async () => {
+  const repo = new FakeInitiativeRepository();
+  const resolver = new MockReferenceResolver(new Map([["proj-1", "project"]]));
+  const uc = new CreateInitiative(repo, resolver);
+  const id = await uc.execute({
+    projectId: "proj-1",
+    name: "inert",
+    paused: true,
+  });
+  const saved = repo.get(id);
+  assert.ok(saved !== undefined, "initiative was persisted");
+  assert.equal(
+    saved.paused,
+    true,
+    "saved initiative must carry paused === true from the first write",
+  );
+  assert.equal(
+    repo.setPausedCalls,
+    0,
+    "no follow-up setPaused() — paused is part of the creation INSERT",
+  );
+});
+
+test("CreateInitiative execute({ paused: false }) persists paused === false", async () => {
+  const repo = new FakeInitiativeRepository();
+  const resolver = new MockReferenceResolver(new Map([["proj-1", "project"]]));
+  const uc = new CreateInitiative(repo, resolver);
+  const id = await uc.execute({
+    projectId: "proj-1",
+    name: "active",
+    paused: false,
+  });
+  const saved = repo.get(id);
+  assert.ok(saved !== undefined);
+  assert.equal(
+    saved.paused,
+    false,
+    "saved initiative must carry paused === false",
+  );
+  assert.equal(
+    repo.setPausedCalls,
+    0,
+    "no setPaused() call even when paused is false",
+  );
+});
+
+test("CreateInitiative execute({ after, paused: true }) sequencing branch writes paused in the first save, never via setPaused", async () => {
+  const repo = new FakeInitiativeRepository();
+  repo.save({
+    id: EXISTING_A,
+    projectId: PROJ_ID_AFTER,
+    name: "existing-a",
+    paused: false,
+  });
+  const resolver = new MockReferenceResolver(
+    new Map([
+      [PROJ_ID_AFTER, "project"],
+      [EXISTING_A, "initiative"],
+    ]),
+  );
+  const sequencing = new FakeSequencingRepo();
+  sequencing.dag = [{ id: EXISTING_A, dependencies: [] }];
+  const tx = new FakeTx();
+  const uc = new CreateInitiative(repo, resolver, sequencing, tx);
+  const id = await uc.execute({
+    projectId: PROJ_ID_AFTER,
+    name: "new-inert",
+    after: [EXISTING_A],
+    paused: true,
+  });
+  const saved = repo.get(id);
+  assert.ok(saved !== undefined);
+  assert.equal(
+    saved.paused,
+    true,
+    "saved initiative must carry paused === true across the after path",
+  );
+  assert.equal(
+    repo.setPausedCalls,
+    0,
+    "no follow-up setPaused() in the sequencing branch either",
+  );
 });
