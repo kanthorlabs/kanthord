@@ -13,6 +13,8 @@ import { UnknownReferenceError } from "../errors.ts";
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow } from "../../storage/port.ts";
 import type { ChangeCandidate } from "../../domain/landing.ts";
+import type { ObjectiveStatus } from "../../domain/initiative.ts";
+import type { Action } from "../../domain/actionability.ts";
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -53,13 +55,44 @@ const FAKE_RESULT: TaskResultRow = {
 
 interface FakeTaskSource {
   get(id: string): Task | undefined;
+  listByInitiative(initiativeId: string): Task[];
+  getInitiativeId(taskId: string): string | undefined;
 }
 
 interface FakeResultSource {
   getTaskResult(taskId: string): TaskResultRow | undefined;
 }
 
+// (016 B2) `TaskSource.listByInitiative`/`getInitiativeId` are a REQUIRED
+// part of the production seam, not optional — see the compile-guard test
+// below. This is the pre-Story-7 fake every non-Story-7 test constructs
+// `GetTask` with; it has no initiative scope of its own, so it reports
+// `getInitiativeId` as always `undefined` and `listByInitiative` as always
+// `[]` — the exact degraded default those tests already exercise, so this
+// satisfies the required interface with zero behavior change.
 class MemTaskSource implements FakeTaskSource {
+  readonly #tasks: Map<string, Task>;
+  constructor(tasks: Task[]) {
+    this.#tasks = new Map(tasks.map((t) => [t.id, t]));
+  }
+  get(id: string): Task | undefined {
+    return this.#tasks.get(id);
+  }
+  listByInitiative(_initiativeId: string): Task[] {
+    return [];
+  }
+  getInitiativeId(_taskId: string): string | undefined {
+    return undefined;
+  }
+}
+
+/**
+ * (016 B2) A deliberately non-conforming task source — implements only
+ * `get`, exactly like the pre-016 `MemTaskSource` used to. Exists solely to
+ * pin, at the type level, that `TaskSource.listByInitiative` /
+ * `getInitiativeId` are required constructor-seam methods, not optional.
+ */
+class MemTaskSourceGetOnly {
   readonly #tasks: Map<string, Task>;
   constructor(tasks: Task[]) {
     this.#tasks = new Map(tasks.map((t) => [t.id, t]));
@@ -82,6 +115,28 @@ class MemResultSource implements FakeResultSource {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+test("(016 B2) GetTask: TaskSource.listByInitiative/getInitiativeId are required, not optional (compile guard)", () => {
+  // AGENTS.md: "never weaken a spec-required field to optional". Story 7 §A
+  // pins `listByInitiative`/`getInitiativeId` as required members of
+  // `TaskSource`. `MemTaskSourceGetOnly` implements only `get` — exactly the
+  // shape `MemTaskSource` used to have before this fixture existed. Today,
+  // with the two methods marked optional (`?`) in production, a get-only
+  // source still satisfies `TaskSource` structurally, so the line below does
+  // NOT produce a compile error and this `@ts-expect-error` is unused
+  // (TS2578) — which fails `npm run typecheck` for the right reason. It
+  // starts suppressing a real "Property 'listByInitiative' is missing"
+  // error — and typecheck turns green — only once the software-engineer
+  // makes both methods required on `TaskSource`.
+  const results = new MemResultSource(new Map());
+  // @ts-expect-error — listByInitiative/getInitiativeId must be required on TaskSource; a get-only source must be a type error
+  const _guard = new GetTask(
+    new MemTaskSourceGetOnly([FAKE_TASK]),
+    results,
+    nullContextSource,
+  );
+  void _guard;
+});
 
 test("GetTask returns task data and task_results row for a known task with a result", async () => {
   const tasks = new MemTaskSource([FAKE_TASK]);
@@ -429,4 +484,465 @@ test("(013 S6) GetTask output.abandoning is true when the source reports a revok
     "running",
     "status must stay 'running' — abandoning is a marker, not a status",
   );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 016 Story 7 — `get task` reuses the graph functions (no second copy).
+//
+// The four new fields (`waiting`, `blockedForever`, `downstream`, `action`)
+// must be sourced from the same domain functions Story 3's `GetInitiativeGraph`
+// uses (`unsatisfiedTaskEdges`, `permanentlyBlockedTasks`, `dependentClosure`,
+// `nodeAction`). The assembly is pinned in the Story 7 §Change.A spec:
+//   1. `getInitiativeId(id)` → read initiative scope; `undefined` means no
+//      scope, no throw, all four fields default to the empty / zero / null shape.
+//   2. Otherwise compute against the sibling task list for that initiative.
+//   3. `action` = `nodeAction({ taskId, status, objectiveId, objectiveStatus,
+//      blockedForever, deadDependencyId })` where `deadDependencyId` is the
+//      first `waiting` entry with `neverSatisfies === true`, else null.
+//   4. Optional `objectives` source omitted → `objectiveStatus === undefined`,
+//      which keeps `nodeAction` from firing rule 4 / 5; the documented degraded
+//      shape for a completed task under an awaiting objective is `action: null`.
+// ---------------------------------------------------------------------------
+
+interface TaskSourceWithSiblings {
+  get(id: string): Task | undefined;
+  listByInitiative(initiativeId: string): Task[];
+  getInitiativeId(taskId: string): string | undefined;
+}
+
+class MemTaskSourceWithSiblings implements TaskSourceWithSiblings {
+  readonly #byId: Map<string, Task>;
+  readonly #byInitiative: Map<string, Task[]>;
+  readonly #initiativeIdByTaskId: Map<string, string>;
+  constructor(
+    byId: Task[],
+    byInitiative: Map<string, Task[]> = new Map(),
+    initiativeIdByTaskId: Map<string, string> = new Map(),
+  ) {
+    this.#byId = new Map(byId.map((t) => [t.id, t]));
+    this.#byInitiative = byInitiative;
+    this.#initiativeIdByTaskId = initiativeIdByTaskId;
+  }
+  get(id: string): Task | undefined {
+    return this.#byId.get(id);
+  }
+  listByInitiative(initiativeId: string): Task[] {
+    return this.#byInitiative.get(initiativeId) ?? [];
+  }
+  getInitiativeId(taskId: string): string | undefined {
+    return this.#initiativeIdByTaskId.get(taskId);
+  }
+}
+
+interface ObjectiveStatusSource {
+  getObjective(id: string): { status?: ObjectiveStatus } | undefined;
+}
+
+class MemObjectiveStatusSource implements ObjectiveStatusSource {
+  readonly #byId: Map<string, { status?: ObjectiveStatus }>;
+  constructor(byId: Map<string, { status?: ObjectiveStatus }>) {
+    this.#byId = byId;
+  }
+  getObjective(id: string): { status?: ObjectiveStatus } | undefined {
+    return this.#byId.get(id);
+  }
+}
+
+const S7_INIT_ID = "01JZZZZZZZZZZZZZZZZZZZINITS7";
+const S7_OBJ_AWAIT = "01JZZZZZZZZZZZZZZZZZZZOBJS7A";
+const S7_OBJ_BUILD = "01JZZZZZZZZZZZZZZZZZZZOBJS7B";
+const S7_DEP_COMPLETED = "01JZZZZZZZZZZZZZZZZZZZS7DC1";
+const S7_DEP_PENDING = "01JZZZZZZZZZZZZZZZZZZZS7DP1";
+const S7_DEP_DISCARDED = "01JZZZZZZZZZZZZZZZZZZZS7DD1";
+
+const S7_DEP_COMPLETED_TASK: Task = {
+  id: S7_DEP_COMPLETED,
+  objectiveId: S7_OBJ_BUILD,
+  title: "completed dep",
+  status: "completed",
+  dependencies: [],
+};
+const S7_DEP_PENDING_TASK: Task = {
+  id: S7_DEP_PENDING,
+  objectiveId: S7_OBJ_BUILD,
+  title: "pending dep",
+  status: "pending",
+  dependencies: [],
+};
+const S7_DEP_DISCARDED_TASK: Task = {
+  id: S7_DEP_DISCARDED,
+  objectiveId: S7_OBJ_BUILD,
+  title: "discarded dep",
+  status: "discarded",
+  dependencies: [],
+};
+
+function makeS7Sources(
+  siblingList: Task[],
+  initiativeId: string = S7_INIT_ID,
+  objectiveById: Map<string, { status?: ObjectiveStatus }> = new Map(),
+): {
+  tasks: TaskSourceWithSiblings;
+  results: MemResultSource;
+  objectives: ObjectiveStatusSource;
+} {
+  // Build the byInitiative map from the sibling list (all siblings share one
+  // initiative in the test fixtures). Track initiative ids from siblings so
+  // `getInitiativeId(<sibling.id>)` resolves to that initiative.
+  const byInitiative = new Map<string, Task[]>([[initiativeId, siblingList]]);
+  const initiativeIdByTaskId = new Map<string, string>();
+  for (const t of siblingList) initiativeIdByTaskId.set(t.id, initiativeId);
+  const tasks = new MemTaskSourceWithSiblings(
+    siblingList,
+    byInitiative,
+    initiativeIdByTaskId,
+  );
+  return {
+    tasks,
+    results: new MemResultSource(new Map()),
+    objectives: new MemObjectiveStatusSource(objectiveById),
+  };
+}
+
+test("(016 S7) GetTask: pending task with completed dep reports waiting:[] blockedForever:false action:null", async () => {
+  const pending: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "pending with completed dep",
+    status: "pending",
+    dependencies: [S7_DEP_COMPLETED],
+  };
+  const siblings = [S7_DEP_COMPLETED_TASK, pending];
+  const { tasks, results, objectives } = makeS7Sources(siblings);
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.deepEqual(
+    output.waiting,
+    [],
+    "waiting must be empty when every dep is completed",
+  );
+  assert.equal(
+    output.blockedForever,
+    false,
+    "blockedForever must be false when every dep is completed",
+  );
+  assert.equal(
+    output.action,
+    null,
+    "action must be null for a runnable pending task",
+  );
+});
+
+test("(016 S7) GetTask: pending task with pending dep reports one waiting entry neverSatisfies:false blockedForever:false", async () => {
+  const pending: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "pending with pending dep",
+    status: "pending",
+    dependencies: [S7_DEP_PENDING],
+  };
+  const siblings = [S7_DEP_PENDING_TASK, pending];
+  const { tasks, results, objectives } = makeS7Sources(siblings);
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(output.waiting.length, 1, "exactly one waiting entry");
+  assert.equal(
+    output.waiting[0]!.id,
+    S7_DEP_PENDING,
+    "waiting entry names the dep",
+  );
+  assert.equal(
+    output.waiting[0]!.neverSatisfies,
+    false,
+    "neverSatisfies must be false (a pending dep can become completed)",
+  );
+  assert.equal(
+    output.blockedForever,
+    false,
+    "blockedForever must be false — pending is not terminal",
+  );
+});
+
+test("(016 S7) GetTask: pending task with discarded dep reports neverSatisfies:true blockedForever:true action.kind='remove-dependency' with targetDependencyId", async () => {
+  const pending: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "pending with discarded dep",
+    status: "pending",
+    dependencies: [S7_DEP_DISCARDED],
+  };
+  const siblings = [S7_DEP_DISCARDED_TASK, pending];
+  const { tasks, results, objectives } = makeS7Sources(siblings);
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(output.waiting.length, 1, "one waiting entry");
+  assert.equal(
+    output.waiting[0]!.neverSatisfies,
+    true,
+    "neverSatisfies must be true for a discarded dep (terminal)",
+  );
+  assert.equal(
+    output.blockedForever,
+    true,
+    "blockedForever must be true — discarded is terminal",
+  );
+  assert.ok(
+    output.action !== null,
+    "action must be non-null when blockedForever",
+  );
+  assert.equal(output.action!.kind, "remove-dependency");
+  assert.equal(output.action!.targetDependencyId, S7_DEP_DISCARDED);
+});
+
+test("(016 S7) GetTask: failed task reports action.kind='retry' targeting the task", async () => {
+  const failed: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "failed task",
+    status: "failed",
+    dependencies: [],
+  };
+  const siblings = [failed];
+  const { tasks, results, objectives } = makeS7Sources(siblings);
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.ok(
+    output.action !== null,
+    "action must be non-null for a failed task",
+  );
+  assert.equal(output.action!.kind, "retry");
+  assert.equal(output.action!.target.type, "task");
+  assert.equal(output.action!.target.id, TASK_ID);
+});
+
+test("(016 S7) GetTask: completed task under awaiting_confirmation objective reports action.kind='approve' targeting the OBJECTIVE (not the task)", async () => {
+  const completed: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_AWAIT,
+    title: "completed task under awaiting objective",
+    status: "completed",
+    dependencies: [],
+  };
+  const siblings = [completed];
+  const objectiveById = new Map<string, { status?: ObjectiveStatus }>([
+    [S7_OBJ_AWAIT, { status: "awaiting_confirmation" }],
+  ]);
+  const { tasks, results, objectives } = makeS7Sources(
+    siblings,
+    S7_INIT_ID,
+    objectiveById,
+  );
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.ok(
+    output.action !== null,
+    "action must be non-null for completed+awaiting",
+  );
+  assert.equal(output.action!.kind, "approve");
+  assert.equal(
+    output.action!.target.type,
+    "objective",
+    "target must be the objective, not the task (node rule 4)",
+  );
+  assert.equal(output.action!.target.id, S7_OBJ_AWAIT);
+});
+
+test("(016 S7) GetTask: downstream equals dependentClosure(siblings, id).length — a root with three direct dependents reports 3", async () => {
+  const root: Task = {
+    id: "01JZZZZZZZZZZZZZZZZZZZS7R01",
+    objectiveId: S7_OBJ_BUILD,
+    title: "root",
+    status: "completed",
+    dependencies: [],
+  };
+  const d1: Task = {
+    id: "01JZZZZZZZZZZZZZZZZZZZS7D01",
+    objectiveId: S7_OBJ_BUILD,
+    title: "dep1",
+    status: "pending",
+    dependencies: [root.id],
+  };
+  const d2: Task = {
+    id: "01JZZZZZZZZZZZZZZZZZZZS7D02",
+    objectiveId: S7_OBJ_BUILD,
+    title: "dep2",
+    status: "pending",
+    dependencies: [root.id],
+  };
+  const d3: Task = {
+    id: "01JZZZZZZZZZZZZZZZZZZZS7D03",
+    objectiveId: S7_OBJ_BUILD,
+    title: "dep3",
+    status: "pending",
+    dependencies: [root.id],
+  };
+  const siblings = [root, d1, d2, d3];
+  const { tasks, results, objectives } = makeS7Sources(siblings);
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: root.id });
+
+  assert.equal(
+    output.downstream,
+    3,
+    "downstream must equal the dependent-closure size of the root",
+  );
+});
+
+test("(016 S7) GetTask: getInitiativeId returning undefined → waiting:[] blockedForever:false downstream:0, no throw", async () => {
+  // The task itself exists in the source, but the source's `getInitiativeId`
+  // returns undefined for it. Story 7 §Change.A rule 1: degraded shape, no throw.
+  const orphan: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "orphan task",
+    status: "pending",
+    dependencies: [S7_DEP_DISCARDED],
+  };
+  // byInitiative is empty AND getInitiativeId returns undefined.
+  const tasks = new MemTaskSourceWithSiblings([orphan], new Map(), new Map());
+  const uc = new GetTask(
+    tasks,
+    new MemResultSource(new Map()),
+    nullContextSource,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.deepEqual(output.waiting, [], "waiting must default to []");
+  assert.equal(
+    output.blockedForever,
+    false,
+    "blockedForever must default to false",
+  );
+  assert.equal(output.downstream, 0, "downstream must default to 0");
+  assert.equal(
+    output.action,
+    null,
+    "action must be null in the degraded shape",
+  );
+});
+
+test("(016 S7) GetTask: optional `objectives` source omitted → completed task under awaiting objective yields action:null (degraded shape)", async () => {
+  // No objectives source wired (the 5th arg is undefined). nodeAction rules
+  // 4 and 5 require `objectiveStatus`; without it, the action is null even
+  // when the underlying Task would carry an awaiting_confirmation objective.
+  const completed: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_AWAIT,
+    title: "completed task",
+    status: "completed",
+    dependencies: [],
+  };
+  const { tasks, results } = makeS7Sources([completed]);
+  // 4-arg ctor: no `objectives` source wired.
+  const uc = new GetTask(tasks, results, nullContextSource);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.action,
+    null,
+    "action must be null when objectives source is absent (documented degraded shape)",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 016 Story 7 — pre-existing assertions stay green, including
+// `dependencyStatus`. This is the regression guard the Story's Verify block
+// names. The pre-existing `dependencyStatus` test above (Story 07 T2) covers
+// the happy path; this test pins `waiting`/`blockedForever`/`downstream`/`action`
+// are ADDITIVE — they do not change the projection of `dependencyStatus`.
+// ---------------------------------------------------------------------------
+
+test("(016 S7) GetTask: new fields are additive — dependencyStatus and existing fields are unchanged for a discarded-dep dependent", async () => {
+  const pending: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "blocked dependent",
+    status: "pending",
+    dependencies: [S7_DEP_DISCARDED],
+  };
+  const siblings = [S7_DEP_DISCARDED_TASK, pending];
+  const { tasks, results, objectives } = makeS7Sources(siblings);
+  const uc = new GetTask(
+    tasks,
+    results,
+    nullContextSource,
+    undefined,
+    undefined,
+    objectives,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  // dependencyStatus stays as before.
+  assert.ok(
+    output.dependencyStatus !== undefined,
+    "dependencyStatus must remain present",
+  );
+  assert.equal(output.dependencyStatus!.length, 1);
+  assert.equal(output.dependencyStatus![0]!.id, S7_DEP_DISCARDED);
+  assert.equal(output.dependencyStatus![0]!.status, "discarded");
+  // The four new fields are present and computed.
+  assert.equal(output.blockedForever, true);
+  assert.equal(output.waiting[0]!.id, S7_DEP_DISCARDED);
+  assert.equal(output.downstream, 0, "no other task depends on this one");
+  assert.equal(output.action!.kind, "remove-dependency");
+  // Action carries the typed target.
+  const action: Action = output.action!;
+  assert.equal(action.target.type, "task");
+  assert.equal(action.target.id, TASK_ID);
 });

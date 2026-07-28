@@ -239,6 +239,14 @@ export interface PublicationRepository {
   ): void;
 }
 
+/** Per-project last-acknowledged event cursor (016 story 5). */
+export interface ProjectAckRepository {
+  getAck(projectId: string): string | undefined;
+  setAck(projectId: string, cursor: string): void;
+  /** Highest event id belonging to this project, or undefined when it has none. */
+  latestProjectEventId(projectId: string): string | undefined;
+}
+
 /**
  * Durable ref→id idempotency store backed by the `graph_import_map` table
  * (migration 6). Used by `import graph --create` (reserve) and

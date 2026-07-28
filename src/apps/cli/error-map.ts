@@ -60,6 +60,10 @@ import {
   NoRunningJobError,
   AmbiguousRunningJobError,
 } from "../../app/task/abandon-task.ts";
+import {
+  CursorNotUlidError,
+  CursorAheadOfFeedError,
+} from "../../app/project/ack-project.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -142,7 +146,9 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof InvalidNumericFlagError ||
     err instanceof TaskNotAbandonableError ||
     err instanceof NoRunningJobError ||
-    err instanceof AmbiguousRunningJobError
+    err instanceof AmbiguousRunningJobError ||
+    err instanceof CursorNotUlidError ||
+    err instanceof CursorAheadOfFeedError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

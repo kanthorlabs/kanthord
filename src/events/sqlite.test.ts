@@ -749,3 +749,341 @@ test("readAfter with projectId scope: deletion of owner does not affect feed (01
     cleanup();
   }
 });
+
+// ── 016 Story 3 — SqliteEventFeed.latestEventIdByTask (adapter-only reader) ──
+// Returns the latest event id per task id, for a given list. Missing tasks
+// (no events) are absent from the returned Map. The empty-input case is a
+// short-circuit that must NOT touch the database.
+
+test("latestEventIdByTask([]) returns an empty Map and issues no SQL", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    // Add an event so the table is not empty; the short-circuit must still
+    // return an empty Map and never read the table.
+    const ev = newEvent("task.created", { taskId });
+    feed.append(ev);
+
+    const out = feed.latestEventIdByTask([]);
+    assert.ok(out instanceof Map, "return type is Map");
+    assert.equal(out.size, 0, "empty input yields an empty Map");
+  } finally {
+    cleanup();
+  }
+});
+
+test("latestEventIdByTask returns the maximum id per task and omits a task with no events", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+
+    // Three events for `taskId`, in this insertion order. Their ids are
+    // monotonically increasing, so the third one is the max.
+    const e1 = newEvent("task.created", { taskId });
+    const e2 = newEvent("task.ready", { taskId });
+    const e3 = newEvent("task.started", { taskId });
+    feed.append(e1);
+    feed.append(e2);
+    feed.append(e3);
+
+    // A second task that gets NO events. Seed it so the FK is satisfied.
+    const emptyTask = newId();
+    const objId = (
+      db.prepare("SELECT id FROM objectives LIMIT 1").get() as { id: string }
+    ).id;
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, status) VALUES(?, ?, 'empty', 'pending')",
+    ).run(emptyTask, objId);
+
+    const out = feed.latestEventIdByTask([taskId, emptyTask]);
+    assert.equal(out.size, 1, "the empty task must be absent from the Map");
+    assert.equal(out.get(taskId), e3.id, "max id per task wins");
+  } finally {
+    cleanup();
+  }
+});
+
+test("latestEventIdByTask returns one entry per task when many tasks each have events", () => {
+  const { db, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+
+    // Use a fresh task to keep the test independent of `setupDb`'s `taskId`.
+    const tA = newId();
+    const tB = newId();
+    const objId = (
+      db.prepare("SELECT id FROM objectives LIMIT 1").get() as { id: string }
+    ).id;
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, status) VALUES(?, ?, 'A', 'pending')",
+    ).run(tA, objId);
+    db.prepare(
+      "INSERT INTO tasks(id, objectiveId, title, status) VALUES(?, ?, 'B', 'pending')",
+    ).run(tB, objId);
+
+    const a1 = newEvent("task.created", { taskId: tA });
+    const a2 = newEvent("task.ready", { taskId: tA });
+    const b1 = newEvent("task.created", { taskId: tB });
+    feed.append(a1);
+    feed.append(b1);
+    feed.append(a2);
+
+    const out = feed.latestEventIdByTask([tA, tB]);
+    assert.equal(out.size, 2);
+    assert.equal(out.get(tA), a2.id, "tA's max event id is a2");
+    assert.equal(out.get(tB), b1.id, "tB's max event id is b1");
+  } finally {
+    cleanup();
+  }
+});
+
+// ── 016 Story 6 — countProjectEventsAfter, readProjectEventsAfter,
+//    latestActionableEventIds (all adapter-only readers, NOT on EventFeed
+//    port). They back the `get overview` digest / decisions[] aggregation.
+
+test("countProjectEventsAfter(projectId, null) counts ALL events for that project and excludes another project's events; byType keys ascending", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+
+    // Seed a second project + initiative + objective + task so we can
+    // confirm the project filter actually fires.
+    const projectB = newId();
+    const initB = newId();
+    const objB = newId();
+    const taskB = newId();
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES('${projectB}', 'pB');
+      INSERT INTO initiatives(id, projectId, name) VALUES('${initB}', '${projectB}', 'iB');
+      INSERT INTO objectives(id, initiativeId, name) VALUES('${objB}', '${initB}', 'oB');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES('${taskB}', '${objB}', 'tB', 'pending');
+    `);
+
+    // Mix of types — byType should have keys ascending.
+    feed.append(newEvent("task.created", { taskId })); // projectA (setupDb)
+    feed.append(newEvent("task.created", { taskId })); // projectA
+    feed.append(newEvent("task.started", { taskId })); // projectA
+    feed.append(newEvent("task.created", { taskId: taskB })); // projectB
+    feed.append(newEvent("task.failed", { taskId })); // projectA
+
+    // The setupDb `taskId` resolves to projectA. The `taskB` resolves
+    // to projectB. Filter by projectA.
+    const projectA = (
+      db
+        .prepare("SELECT projectId FROM initiatives WHERE id = ?")
+        .get(
+          (
+            db
+              .prepare("SELECT initiativeId FROM objectives WHERE id = ?")
+              .get(objB) as { initiativeId: string }
+          ).initiativeId,
+        ) as { projectId: string }
+    ).projectId;
+    // The simpler way: just look it up.
+    const projectAId = (
+      db
+        .prepare(
+          "SELECT i.projectId AS projectId FROM tasks t JOIN objectives o ON t.objectiveId = o.id JOIN initiatives i ON o.initiativeId = i.id WHERE t.id = ?",
+        )
+        .get(taskId) as { projectId: string }
+    ).projectId;
+
+    const out = feed.countProjectEventsAfter(projectAId, null);
+    // Four events belong to projectA: 2 task.created, 1 task.started, 1 task.failed.
+    assert.equal(out.totalCount, 4);
+    // byType keys ascending: task.created, task.failed, task.started.
+    assert.deepEqual(Object.keys(out.byType), [
+      "task.created",
+      "task.failed",
+      "task.started",
+    ]);
+    assert.equal(out.byType["task.created"], 2);
+    assert.equal(out.byType["task.started"], 1);
+    assert.equal(out.byType["task.failed"], 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test("countProjectEventsAfter with a mid-feed cursor returns events strictly after it (exclusive)", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const e1 = newEvent("task.created", { taskId });
+    const e2 = newEvent("task.ready", { taskId });
+    const e3 = newEvent("task.started", { taskId });
+    feed.append(e1);
+    feed.append(e2);
+    feed.append(e3);
+
+    // After e2, only e3 remains.
+    const out = feed.countProjectEventsAfter(
+      (
+        db
+          .prepare(
+            "SELECT i.projectId AS projectId FROM tasks t JOIN objectives o ON t.objectiveId = o.id JOIN initiatives i ON o.initiativeId = i.id WHERE t.id = ?",
+          )
+          .get(taskId) as { projectId: string }
+      ).projectId,
+      e2.id,
+    );
+    assert.equal(out.totalCount, 1);
+    assert.equal(out.byType["task.started"], 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test("readProjectEventsAfter returns ascending ids, respects limit, and excludes another project's events", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+
+    // Seed a second project so we can prove the filter excludes it.
+    const projectB = newId();
+    const initB = newId();
+    const objB = newId();
+    const taskB = newId();
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES('${projectB}', 'pB');
+      INSERT INTO initiatives(id, projectId, name) VALUES('${initB}', '${projectB}', 'iB');
+      INSERT INTO objectives(id, initiativeId, name) VALUES('${objB}', '${initB}', 'oB');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES('${taskB}', '${objB}', 'tB', 'pending');
+    `);
+
+    // 4 events for projectA, 2 for projectB — interleaved in id order.
+    const a1 = newEvent("task.created", { taskId });
+    const b1 = newEvent("task.created", { taskId: taskB });
+    const a2 = newEvent("task.started", { taskId });
+    const b2 = newEvent("task.ready", { taskId: taskB });
+    const a3 = newEvent("task.completed", { taskId });
+    const a4 = newEvent("task.failed", { taskId });
+    feed.append(a1);
+    feed.append(b1);
+    feed.append(a2);
+    feed.append(b2);
+    feed.append(a3);
+    feed.append(a4);
+
+    const projectAId = (
+      db
+        .prepare(
+          "SELECT i.projectId AS projectId FROM tasks t JOIN objectives o ON t.objectiveId = o.id JOIN initiatives i ON o.initiativeId = i.id WHERE t.id = ?",
+        )
+        .get(taskId) as { projectId: string }
+    ).projectId;
+
+    const out = feed.readProjectEventsAfter(projectAId, null, 3);
+    // Only projectA events in ascending id order, capped at 3.
+    assert.equal(out.length, 3);
+    assert.deepEqual(
+      out.map((e) => e.id),
+      [a1.id, a2.id, a3.id],
+    );
+    // No projectB events leaked in.
+    for (const e of out) {
+      assert.notEqual(e.taskId, taskB);
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+test("readProjectEventsAfter with a non-positive or non-integer limit throws RangeError", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const projectAId = (
+      db
+        .prepare(
+          "SELECT i.projectId AS projectId FROM tasks t JOIN objectives o ON t.objectiveId = o.id JOIN initiatives i ON o.initiativeId = i.id WHERE t.id = ?",
+        )
+        .get(taskId) as { projectId: string }
+    ).projectId;
+    for (const bad of [0, -1, 1.5, NaN, Infinity]) {
+      assert.throws(
+        () => feed.readProjectEventsAfter(projectAId, null, bad as number),
+        RangeError,
+        `limit ${bad} must throw RangeError`,
+      );
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+test("latestActionableEventIds returns the max id per (type, entity) pair, scoped to one initiative, and omits types outside the four-type list", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+
+    // Get the seeded initiative id from setupDb.
+    const initiativeId = (
+      db.prepare("SELECT id FROM initiatives LIMIT 1").get() as { id: string }
+    ).id;
+    // Get a second initiative so we can prove scoping.
+    const projectB = newId();
+    const initB = newId();
+    const objB = newId();
+    const taskB = newId();
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES('${projectB}', 'pB');
+      INSERT INTO initiatives(id, projectId, name) VALUES('${initB}', '${projectB}', 'iB');
+      INSERT INTO objectives(id, initiativeId, name) VALUES('${objB}', '${initB}', 'oB');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES('${taskB}', '${objB}', 'tB', 'pending');
+    `);
+
+    // In `initiativeId` (setupDb's):
+    //   task.failed for taskId (twice → second wins)
+    //   task.escalated for taskId
+    //   objective.awaiting_confirmation for obj1
+    //   objective.conflict for obj1
+    //   task.created for taskId (NOT one of the four — must be excluded)
+    const objId = (
+      db.prepare("SELECT id FROM objectives LIMIT 1").get() as { id: string }
+    ).id;
+    const f1 = newEvent("task.failed", { taskId, initiativeId });
+    const f2 = newEvent("task.failed", { taskId, initiativeId });
+    const esc = newEvent("task.escalated", { taskId, initiativeId });
+    const ac = newEvent("objective.awaiting_confirmation", {
+      objectiveId: objId,
+      initiativeId,
+    });
+    const conf = newEvent("objective.conflict", {
+      objectiveId: objId,
+      initiativeId,
+    });
+    const created = newEvent("task.created", { taskId, initiativeId });
+    // In `initB` (a different initiative):
+    const f_other = newEvent("task.failed", {
+      taskId: taskB,
+      initiativeId: initB,
+    });
+    feed.append(f1);
+    feed.append(esc);
+    feed.append(ac);
+    feed.append(f2);
+    feed.append(conf);
+    feed.append(created);
+    feed.append(f_other);
+
+    const out = feed.latestActionableEventIds(initiativeId);
+    // Only the four-type entries scoped to `initiativeId` are present.
+    assert.equal(
+      out.get(`task.failed:${taskId}`),
+      f2.id,
+      "max id per (type, task) pair",
+    );
+    assert.equal(out.get(`task.escalated:${taskId}`), esc.id);
+    assert.equal(out.get(`objective.awaiting_confirmation:${objId}`), ac.id);
+    assert.equal(out.get(`objective.conflict:${objId}`), conf.id);
+    // task.created is NOT actionable — must be excluded.
+    assert.equal(out.get(`task.created:${taskId}`), undefined);
+    // The other initiative's task.failed is NOT in this initiative's map.
+    assert.equal(out.get(`task.failed:${taskB}`), undefined);
+    // Total entries: 4 (one per actionable pair).
+    assert.equal(out.size, 4);
+  } finally {
+    cleanup();
+  }
+});

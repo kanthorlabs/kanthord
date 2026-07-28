@@ -1,4 +1,5 @@
 import type { InitiativeStatus, ObjectiveStatus } from "./initiative.ts";
+import type { TaskStatus } from "./task.ts";
 
 export interface UnsatisfiedEdge {
   id: string;
@@ -101,4 +102,97 @@ export class SequencingScopeError extends Error {
     this.dependencyId = dependencyId;
     this.scope = scope;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Story 1 (016) — task edge permanence
+// ---------------------------------------------------------------------------
+
+export interface TaskEdgeNode {
+  id: string;
+  status: TaskStatus;
+  dependencies: readonly string[];
+}
+
+/**
+ * Returns `true` when a task's edge is satisfied. Only `"completed"` satisfies.
+ * `undefined` (unknown dependency id) returns `false`.
+ */
+export function taskEdgeSatisfied(status: TaskStatus | undefined): boolean {
+  return status === "completed";
+}
+
+/**
+ * Ids of nodes that can never become runnable through task status transitions
+ * alone, given the current dependency graph. The qualifier matters: removing
+ * dependencies while a task is `pending` is always legal, so no edge is
+ * permanent against graph edits.
+ *
+ * `failed` is **not** permanent (`failed->pending` is a legal transition).
+ * Only `discarded` (terminal — no entry in `LEGAL_TRANSITIONS` for
+ * `discarded->*`) and transitive closure over a `discarded` source make a
+ * `pending` node permanent.
+ */
+export function permanentlyBlockedTasks(
+  nodes: readonly TaskEdgeNode[],
+): Set<string> {
+  const statusOf = new Map<string, TaskStatus>();
+  for (const n of nodes) statusOf.set(n.id, n.status);
+
+  const blocked = new Set<string>();
+  // Fixpoint: each pass scans all nodes; a pass that adds nothing ends the loop.
+  // The result is independent of input order because the membership test
+  // (statusOf(d) === "discarded" || blocked.has(d)) does not depend on scan
+  // order, only on the current set.
+  while (true) {
+    let added = false;
+    for (const n of nodes) {
+      if (n.status !== "pending") continue;
+      if (blocked.has(n.id)) continue;
+      const permanentlyBlocking = n.dependencies.some(
+        (d) => statusOf.get(d) === "discarded" || blocked.has(d),
+      );
+      if (permanentlyBlocking) {
+        blocked.add(n.id);
+        added = true;
+      }
+    }
+    if (!added) break;
+  }
+  return blocked;
+}
+
+/**
+ * Per-node unsatisfied task edges, keyed by node id. Insertion order equals
+ * input order; each array preserves the node's own `dependencies` order.
+ *
+ * Non-`pending` nodes map to `[]` (they are not waiting on anything — only
+ * `pending` is the actionable state for the read model).
+ */
+export function unsatisfiedTaskEdges(
+  nodes: readonly TaskEdgeNode[],
+): Map<string, UnsatisfiedEdge[]> {
+  const statusOf = new Map<string, TaskStatus>();
+  for (const n of nodes) statusOf.set(n.id, n.status);
+
+  const blocked = permanentlyBlockedTasks(nodes);
+
+  const result = new Map<string, UnsatisfiedEdge[]>();
+  for (const n of nodes) {
+    if (n.status !== "pending") {
+      result.set(n.id, []);
+      continue;
+    }
+    const edges: UnsatisfiedEdge[] = [];
+    for (const d of n.dependencies) {
+      const depStatus = statusOf.get(d);
+      if (taskEdgeSatisfied(depStatus)) continue;
+      edges.push({
+        id: d,
+        neverSatisfies: depStatus === "discarded" || blocked.has(d),
+      });
+    }
+    result.set(n.id, edges);
+  }
+  return result;
 }

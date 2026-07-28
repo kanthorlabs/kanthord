@@ -108,6 +108,12 @@ stored`, **return without writing** — the ack is monotonic and a backwards or
    repeat ack is a silent no-op, never an error.
 5. Otherwise `acks.setAck(projectId, cursor)`.
 
+**AMENDED 2026-07-28:** `execute` **returns the cursor now in effect** —
+`{ cursor: string }`, the value a subsequent `getAck(projectId)` would read.
+Rule 4 returns `{ cursor: stored }`; rule 5 returns `{ cursor }`. Reason: a
+backwards ack is a no-op, so a caller that echoes its own input claims a cursor
+that was never stored. The CLI must be able to report what is true (see §E).
+
 Register both error classes in `src/apps/cli/error-map.ts`'s `toResult`
 `instanceof` chain (lines 69-119) so they map to `exitCode: 1` with
 `error: <message>` instead of crashing.
@@ -138,6 +144,11 @@ following the `runPauseInitiative` shape (`src/apps/cli/initiative.ts:44-56`):
 reads `args["id"]` and `args["cursor"]`; on success
 return `{ exitCode: 0, stdout: [], stderr: ["project acknowledged: <id> @ <cursor>"] }`;
 on error `{ ...toResult(err), stdout: [] }`.
+
+**AMENDED 2026-07-28:** `<cursor>` in that message is the cursor **returned by
+`execute`**, never the raw `args["cursor"]` input. On a backwards ack the two
+differ, and printing the input would name a cursor that was not stored while
+`get overview`'s `since` kept the higher value.
 
 Register in `src/apps/cli/index.ts`:
 

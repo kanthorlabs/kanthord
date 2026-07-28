@@ -105,27 +105,160 @@ export class SqliteEventFeed implements EventFeed {
             repositoryId: string | null;
           }>);
 
-    return rows.map((r) => {
-      const event: Event = {
-        id: r.id,
-        type: r.type as Event["type"],
-      };
-      if (r.taskId !== null) {
-        event.taskId = r.taskId;
-      }
-      if (r.objectiveId !== null) {
-        event.objectiveId = r.objectiveId;
-      }
-      if (r.initiativeId !== null) {
-        event.initiativeId = r.initiativeId;
-      }
-      if (r.repositoryId !== null) {
-        event.repositoryId = r.repositoryId;
-      }
-      if (r.payload !== null) {
-        event.payload = JSON.parse(r.payload) as Record<string, string>;
-      }
-      return event;
-    });
+    return rows.map((r) => this.#mapEventRow(r));
+  }
+
+  // EPIC 016 Story 3 — adapter-only reader. Returns the latest event id per
+  // task id, for the given task ids. Missing tasks (no events) are absent
+  // from the returned Map. Empty input short-circuits with a new Map() and
+  // does NOT touch the database. NOT added to the `EventFeed` port — this is
+  // a use-case-local read consumed through a structural interface in
+  // `src/app/initiative/get-initiative-graph.ts`.
+  latestEventIdByTask(taskIds: readonly string[]): Map<string, string> {
+    const out = new Map<string, string>();
+    if (taskIds.length === 0) {
+      return out;
+    }
+    const placeholders = taskIds.map(() => "?").join(",");
+    const rows = this.#db
+      .prepare(
+        `SELECT taskId, MAX(id) AS latest FROM events WHERE taskId IN (${placeholders}) GROUP BY taskId`,
+      )
+      .all(...taskIds) as Array<{ taskId: string; latest: string }>;
+    for (const r of rows) {
+      out.set(r.taskId, r.latest);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // EPIC 016 Story 6 — three more adapter-only readers backing
+  // `GetProjectOverview`. NOT on the `EventFeed` port; the use case declares
+  // a structural source that consumes these methods.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Aggregate over all events for `projectId` strictly after `after`
+   * (exclusive; `null` = from the start). `byType` keys are inserted in
+   * ascending type order — that is the SQL `ORDER BY type ASC` guarantee,
+   * not a JS object key iteration quirk. `totalCount` is the sum of the
+   * per-type counts.
+   */
+  countProjectEventsAfter(
+    projectId: string,
+    after: string | null,
+  ): { totalCount: number; byType: Record<string, number> } {
+    const rows = this.#db
+      .prepare(
+        "SELECT type, COUNT(*) AS c FROM events WHERE projectId = ? AND (? IS NULL OR id > ?) GROUP BY type ORDER BY type ASC",
+      )
+      .all(projectId, after, after) as Array<{ type: string; c: number }>;
+    const byType: Record<string, number> = {};
+    let totalCount = 0;
+    for (const r of rows) {
+      byType[r.type] = r.c;
+      totalCount += r.c;
+    }
+    return { totalCount, byType };
+  }
+
+  /**
+   * One capped page of the same rows, ascending by id. `limit` must be a
+   * positive integer — mirrors the `readAfter` contract.
+   */
+  readProjectEventsAfter(
+    projectId: string,
+    after: string | null,
+    limit: number,
+  ): Event[] {
+    if (!Number.isInteger(limit) || limit <= 0) {
+      throw new RangeError(`limit must be a positive integer, got ${limit}`);
+    }
+    const rows = this.#db
+      .prepare(
+        "SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId FROM events WHERE projectId = ? AND (? IS NULL OR id > ?) ORDER BY id ASC LIMIT ?",
+      )
+      .all(projectId, after, after, limit) as Array<{
+      id: string;
+      type: string;
+      taskId: string | null;
+      payload: string | null;
+      objectiveId: string | null;
+      initiativeId: string | null;
+      repositoryId: string | null;
+    }>;
+    return rows.map((r) => this.#mapEventRow(r));
+  }
+
+  /**
+   * Latest event id per `(type, entity)` pair for the four actionable types
+   * in the closed `Actionable` vocabulary, scoped to one initiative. Key
+   * format: `<type>:<taskId|objectiveId>`. Rows with both `taskId` and
+   * `objectiveId` NULL (should not occur for the four types, but defensive)
+   * are skipped. Absent `(type, entity)` pairs are absent from the Map.
+   */
+  latestActionableEventIds(initiativeId: string): Map<string, string> {
+    const rows = this.#db
+      .prepare(
+        `SELECT type, taskId, objectiveId, MAX(id) AS latest
+           FROM events
+          WHERE type IN ('task.failed','task.escalated','objective.awaiting_confirmation','objective.conflict')
+            AND initiativeId = ?
+          GROUP BY type, taskId, objectiveId`,
+      )
+      .all(initiativeId) as Array<{
+      type: string;
+      taskId: string | null;
+      objectiveId: string | null;
+      latest: string;
+    }>;
+    const out = new Map<string, string>();
+    for (const r of rows) {
+      const entity = r.taskId ?? r.objectiveId;
+      if (entity === null) continue;
+      out.set(`${r.type}:${entity}`, r.latest);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Row → `Event` mapping shared by `readAfter` and `readProjectEventsAfter`
+   * so the payload-decode and nullable-field-set logic lives in exactly one
+   * place. The `events.projectId` column is storage-internal and is NEVER
+   * surfaced on the `Event` interface.
+   */
+  #mapEventRow(r: {
+    id: string;
+    type: string;
+    taskId: string | null;
+    payload: string | null;
+    objectiveId: string | null;
+    initiativeId: string | null;
+    repositoryId: string | null;
+  }): Event {
+    const event: Event = {
+      id: r.id,
+      type: r.type as Event["type"],
+    };
+    if (r.taskId !== null) {
+      event.taskId = r.taskId;
+    }
+    if (r.objectiveId !== null) {
+      event.objectiveId = r.objectiveId;
+    }
+    if (r.initiativeId !== null) {
+      event.initiativeId = r.initiativeId;
+    }
+    if (r.repositoryId !== null) {
+      event.repositoryId = r.repositoryId;
+    }
+    if (r.payload !== null) {
+      event.payload = JSON.parse(r.payload) as Record<string, string>;
+    }
+    return event;
   }
 }

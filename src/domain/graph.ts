@@ -212,3 +212,103 @@ export function readiness(nodes: GraphNode[]): ReadinessEntry[] {
   }
   return result;
 }
+
+// ---------------------------------------------------------------------------
+// Story 1 (016) — longest remaining chain (critical path)
+// ---------------------------------------------------------------------------
+
+export interface RemainingChain {
+  metric: "remaining-node-count";
+  nodeIds: string[];
+  length: number;
+}
+
+/**
+ * Lexicographic compare of two string arrays, element by element. Returns
+ * `true` when `a` is strictly less than `b`. Shorter arrays sort first when
+ * one is a prefix of the other.
+ */
+function lexLess(a: readonly string[], b: readonly string[]): boolean {
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const av = a[i] as string;
+    const bv = b[i] as string;
+    if (av < bv) return true;
+    if (av > bv) return false;
+  }
+  return a.length < b.length;
+}
+
+/**
+ * Longest dependency chain among nodes that are neither `completed` nor
+ * `discarded`, counted in nodes. `nodeIds` is dependency-first (deepest
+ * dependency at index 0, terminal dependent at the end). Tie-break among
+ * equal-length chains: lexicographically smallest `nodeIds`.
+ *
+ * `validateDag` guarantees the graph is acyclic, so memoised DFS is sound.
+ */
+export function longestRemainingChain(
+  nodes: readonly GraphNode[],
+): RemainingChain {
+  const statusOf = new Map<string, TaskStatus>();
+  const depsOf = new Map<string, readonly string[]>();
+  const remaining = new Set<string>();
+  for (const n of nodes) {
+    statusOf.set(n.id, n.status);
+    depsOf.set(n.id, n.dependencies);
+    if (n.status !== "completed" && n.status !== "discarded") {
+      remaining.add(n.id);
+    }
+  }
+
+  if (remaining.size === 0) {
+    return { metric: "remaining-node-count", nodeIds: [], length: 0 };
+  }
+
+  // Longest remaining chain ENDING at `id`, dependency-first, including `id`
+  // at the end. Recursive memoised DFS: the recursion depth is bounded by
+  // the longest path in the DAG.
+  const memo = new Map<string, string[]>();
+
+  function longestEndingAt(id: string): string[] {
+    const cached = memo.get(id);
+    if (cached !== undefined) return cached;
+
+    // Seed with the trivial chain [id] so a node with no remaining deps still
+    // gets a baseline we can replace.
+    let best: string[] = [id];
+    for (const dep of depsOf.get(id) ?? []) {
+      if (!remaining.has(dep)) continue;
+      const depChain = longestEndingAt(dep);
+      // Dependency-first: deepest dep at index 0, terminal dependent at the end.
+      const candidate = [...depChain, id];
+      if (
+        candidate.length > best.length ||
+        (candidate.length === best.length && lexLess(candidate, best))
+      ) {
+        best = candidate;
+      }
+    }
+
+    memo.set(id, best);
+    return best;
+  }
+
+  let bestOverall: string[] = [];
+  for (const id of remaining) {
+    const candidate = longestEndingAt(id);
+    if (
+      candidate.length > bestOverall.length ||
+      (candidate.length === bestOverall.length &&
+        lexLess(candidate, bestOverall))
+    ) {
+      bestOverall = candidate;
+    }
+  }
+
+  return {
+    metric: "remaining-node-count",
+    nodeIds: bestOverall,
+    length: bestOverall.length,
+  };
+}

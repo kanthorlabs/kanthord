@@ -9,6 +9,8 @@ import { buildExportCommand } from "./export.ts";
 import { buildLoginCommand } from "./login.ts";
 import { buildRunCommand } from "./run.ts";
 import { buildLandCommand } from "./land.ts";
+import { buildAckCommand } from "./ack.ts";
+import { CursorNotUlidError } from "../../../app/project/ack-project.ts";
 
 function capture() {
   const out: string[] = [];
@@ -720,5 +722,124 @@ describe("src/apps/cli/commands/land.ts", () => {
     await assert.rejects(
       command.parseAsync(["repo", "land"], { from: "user" }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 016 Story 5 — `ack project` leaf. Forwards the pinned (projectId, cursor)
+// pair to the use case, requires both --id and --cursor, and renders
+// use-case errors via toResult (single-line "error: …").
+// ---------------------------------------------------------------------------
+
+describe("src/apps/cli/commands/ack.ts", () => {
+  test("ack project --id <id> --cursor <ulid>: forwards {projectId, cursor} to the use case and emits the acknowledgement line", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      ackProject: {
+        execute: async (input: unknown) => {
+          received = input;
+          return { cursor: "01H1234567890ABCDEFGHJKMNP" };
+        },
+      },
+    } as unknown as Parameters<typeof buildAckCommand>[0];
+
+    await buildAckCommand(
+      deps,
+      cap.io as Parameters<typeof buildAckCommand>[1],
+    ).parseAsync(
+      ["project", "--id", "proj-1", "--cursor", "01H1234567890ABCDEFGHJKMNP"],
+      { from: "user" },
+    );
+
+    assert.deepEqual(received, {
+      projectId: "proj-1",
+      cursor: "01H1234567890ABCDEFGHJKMNP",
+    });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.out, []);
+    assert.deepEqual(cap.err, [
+      "project acknowledged: proj-1 @ 01H1234567890ABCDEFGHJKMNP\n",
+    ]);
+  });
+
+  test("ack project: missing --cursor exits non-zero and the use case is never called", async () => {
+    let called = false;
+    const cap = capture();
+    const command = buildAckCommand(
+      {
+        ackProject: {
+          execute: async () => {
+            called = true;
+          },
+        },
+      } as unknown as Parameters<typeof buildAckCommand>[0],
+      cap.io as Parameters<typeof buildAckCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["project", "--id", "proj-1"], { from: "user" }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+    assert.equal(
+      called,
+      false,
+      "execute must not run when --cursor is missing",
+    );
+  });
+
+  test("ack project: missing --id exits non-zero and the use case is never called", async () => {
+    let called = false;
+    const cap = capture();
+    const command = buildAckCommand(
+      {
+        ackProject: {
+          execute: async () => {
+            called = true;
+          },
+        },
+      } as unknown as Parameters<typeof buildAckCommand>[0],
+      cap.io as Parameters<typeof buildAckCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(
+        ["project", "--cursor", "01H1234567890ABCDEFGHJKMNP"],
+        { from: "user" },
+      ),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+    assert.equal(called, false, "execute must not run when --id is missing");
+  });
+
+  test("ack project use-case error renders to a single 'error: …' line and non-zero exit", async () => {
+    const cap = capture();
+    const deps = {
+      ackProject: {
+        execute: async () => {
+          throw new CursorNotUlidError("not-a-ulid");
+        },
+      },
+    } as unknown as Parameters<typeof buildAckCommand>[0];
+
+    await buildAckCommand(
+      deps,
+      cap.io as Parameters<typeof buildAckCommand>[1],
+    ).parseAsync(["project", "--id", "proj-1", "--cursor", "not-a-ulid"], {
+      from: "user",
+    });
+
+    assert.equal(cap.code(), 1);
+    assert.equal(cap.err.length, 1, "exactly one error line");
+    assert.equal(
+      cap.err[0],
+      "error: cursor is not a ULID: not-a-ulid\n",
+      `stderr must be the locked error line; got: ${cap.err[0]}`,
+    );
+    assert.deepEqual(cap.out, []);
   });
 });

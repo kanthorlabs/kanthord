@@ -11,6 +11,8 @@ import { runGetTask } from "./task.ts";
 import { GetTask } from "../../app/task/get-task.ts";
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow } from "../../storage/port.ts";
+import type { Action } from "../../domain/actionability.ts";
+import type { UnsatisfiedEdge } from "../../domain/sequencing.ts";
 
 // ---------------------------------------------------------------------------
 // Shared result type so r.stdout is known to be string[] even before the
@@ -67,11 +69,17 @@ const RESULT_NO_EVIDENCE: TaskResultRow = {
 
 interface FakeTaskSource {
   get(id: string): Task | undefined;
+  listByInitiative(initiativeId: string): Task[];
+  getInitiativeId(taskId: string): string | undefined;
 }
 interface FakeResultSource {
   getTaskResult(taskId: string): TaskResultRow | undefined;
 }
 
+// (016 B2) `TaskSource.listByInitiative`/`getInitiativeId` are required, not
+// optional (see `src/app/task/get-task.test.ts`'s compile guard). This fake
+// has no initiative scope of its own, so it reports the same degraded
+// default (`undefined` / `[]`) every test in this file already exercises.
 class MemTaskSource implements FakeTaskSource {
   readonly #tasks: Map<string, Task>;
   constructor(tasks: Task[]) {
@@ -79,6 +87,12 @@ class MemTaskSource implements FakeTaskSource {
   }
   get(id: string): Task | undefined {
     return this.#tasks.get(id);
+  }
+  listByInitiative(_initiativeId: string): Task[] {
+    return [];
+  }
+  getInitiativeId(_taskId: string): string | undefined {
+    return undefined;
   }
 }
 
@@ -362,6 +376,10 @@ describe("runGetTask", () => {
       context: Record<string, string> | undefined;
       landingCandidate: LandingCandidateOutput;
       abandoning: boolean;
+      waiting: UnsatisfiedEdge[];
+      blockedForever: boolean;
+      downstream: number;
+      action: Action | null;
     }>,
   ): GetTask {
     return {
@@ -381,6 +399,12 @@ describe("runGetTask", () => {
         // Story 6 — EPIC 013 abandoned marker (default false: a non-abandoning
         // task is byte-identical to today's JSON / human output).
         abandoning: output.abandoning ?? false,
+        // Story 7 — EPIC 016 graph fields (defaults: empty/zero/null so a
+        // happy-path stub is byte-identical to the pre-Story-7 human output).
+        waiting: output.waiting ?? [],
+        blockedForever: output.blockedForever ?? false,
+        downstream: output.downstream ?? 0,
+        action: output.action === undefined ? null : output.action,
       }),
     } as unknown as GetTask;
   }
@@ -604,10 +628,88 @@ describe("runGetTask", () => {
       r2.stdout.some((l) => l === "abandoning: true"),
       `human output must include 'abandoning: true' when the source reports a revoked job; got: ${JSON.stringify(r2.stdout)}`,
     );
-    // And status stays `running` — the marker is on a `running` task.
+    // And status stays `running` — the marker is on a running task.
     assert.ok(
       r2.stdout.some((l) => l === "status: running"),
       `status must stay 'running' alongside the abandoning marker; got: ${JSON.stringify(r2.stdout)}`,
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // EPIC 016 Story 7 — `get task` text output gains the `blocked forever:` and
+  // `action:` lines from the graph read model. The new lines must appear
+  // ONLY under the conditions the Story 7 §Change spec pins; every other
+  // pre-Story-7 test must keep passing because the lines are absent by
+  // default (the stub defaults to `blockedForever: false`, `action: null`).
+  // -------------------------------------------------------------------------
+
+  test("(016 S7) runGetTask human output gains a 'blocked forever: yes (dependency <id> can never clear)' line only when blockedForever is true", async () => {
+    const deadId = "01JZZZZZZZZZZZZZZZZZZZS7DEAD";
+    const getTask = makeStubGetTask({
+      blockedForever: true,
+      action: {
+        kind: "remove-dependency",
+        target: { type: "task", id: TASK_ID },
+        targetDependencyId: deadId,
+        requiresInput: [],
+      },
+    });
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    const blockedLine = r.stdout.find((l) => l.startsWith("blocked forever:"));
+    assert.ok(
+      blockedLine !== undefined,
+      `human output must include a 'blocked forever:' line when blockedForever is true; got: ${JSON.stringify(r.stdout)}`,
+    );
+    assert.ok(
+      blockedLine!.includes(deadId),
+      `blocked forever: line must name the dead dependency id; got: ${blockedLine}`,
+    );
+    assert.ok(
+      blockedLine!.includes("can never clear"),
+      `blocked forever: line must carry the 'can never clear' clause; got: ${blockedLine}`,
+    );
+  });
+
+  test("(016 S7) runGetTask human output gains an 'action: <kind> <target.type>:<target.id>' line only when action !== null", async () => {
+    const getTask = makeStubGetTask({
+      action: {
+        kind: "retry",
+        target: { type: "task", id: TASK_ID },
+        requiresInput: [],
+      },
+    });
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    const actionLine = r.stdout.find((l) => l.startsWith("action:"));
+    assert.ok(
+      actionLine !== undefined,
+      `human output must include an 'action:' line when action is non-null; got: ${JSON.stringify(r.stdout)}`,
+    );
+    assert.ok(
+      actionLine!.includes("retry"),
+      `action line must include the action kind; got: ${actionLine}`,
+    );
+    assert.ok(
+      actionLine!.includes(`task:${TASK_ID}`),
+      `action line must include the scoped target as 'task:<id>'; got: ${actionLine}`,
+    );
+  });
+
+  test("(016 S7) runGetTask human output for a default (non-blocked, action-null) task includes NO 'blocked forever:' or 'action:' line", async () => {
+    const getTask = makeStubGetTask({}); // defaults: blockedForever false, action null
+    const r: HandlerResult = await runGetTask({ id: TASK_ID }, getTask);
+
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("blocked forever:")),
+      `human output must NOT include a 'blocked forever:' line when blockedForever is false; got: ${JSON.stringify(r.stdout)}`,
+    );
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("action:")),
+      `human output must NOT include an 'action:' line when action is null; got: ${JSON.stringify(r.stdout)}`,
     );
   });
 });

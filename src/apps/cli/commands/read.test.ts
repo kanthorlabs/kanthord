@@ -889,4 +889,164 @@ describe("src/apps/cli/commands/read.ts", () => {
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);
   });
+
+  // -------------------------------------------------------------------------
+  // 016 Story 4 — get graph --initiative <id>
+  // -------------------------------------------------------------------------
+
+  test("(016 S4) get graph --initiative <id> --json: forwards {id} to the use case; emits one JSON line", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      getInitiativeGraph: {
+        execute: async (input: unknown) => {
+          received = input;
+          return {
+            projectId: "project-1",
+            initiative: {
+              id: "init-1",
+              name: "init",
+              status: "building",
+              paused: false,
+              branch: "kanthord/init/init-1",
+              action: null,
+            },
+            groups: [],
+            nodes: [],
+            edges: [],
+            criticalPath: {
+              metric: "remaining-node-count",
+              nodeIds: [],
+              length: 0,
+            },
+            counts: {
+              pending: 0,
+              running: 0,
+              completed: 0,
+              failed: 0,
+              awaiting_confirmation: 0,
+              discarded: 0,
+              blocked: 0,
+              blockedForever: 0,
+              actionable: 0,
+            },
+          };
+        },
+      },
+    } as unknown as Parameters<typeof buildGetCommand>[0];
+
+    await buildGetCommand(
+      deps,
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).parseAsync(["graph", "--initiative", "init-1", "--json"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { id: "init-1" });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.out.length, 1, "exactly one stdout line");
+    const parsed = JSON.parse(cap.out[0]!);
+    assert.equal(parsed.projectId, "project-1");
+    assert.equal(parsed.initiative.id, "init-1");
+  });
+
+  test("(016 S4) get graph --initiative <id>: missing required --initiative rejects with commander.missingMandatoryOptionValue", async () => {
+    let called = false;
+    const cap = capture();
+    const command = buildGetCommand(
+      {
+        getInitiativeGraph: {
+          execute: async () => {
+            called = true;
+            throw new Error("must not be called");
+          },
+        },
+      } as unknown as Parameters<typeof buildGetCommand>[0],
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["graph", "--json"], { from: "user" }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+    assert.equal(
+      called,
+      false,
+      "execute must not be called when --initiative is missing",
+    );
+  });
+
+  // ── 016 Story 6 — `get overview` leaf. Forwards { projectId } to the use case.
+
+  test("(016 S6) get overview --project <id> --json: forwards { projectId } to the use case and emits one JSON line", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      getProjectOverview: {
+        execute: async (input: unknown) => {
+          received = input;
+          return {
+            projectId: "project-1",
+            initiatives: [],
+            lanes: [],
+            decisions: [],
+            digest: {
+              since: null,
+              latest: null,
+              totalCount: 0,
+              byType: {},
+              events: [],
+              hasMore: false,
+              pageCursor: null,
+            },
+          };
+        },
+      },
+    } as unknown as Parameters<typeof buildGetCommand>[0];
+
+    await buildGetCommand(
+      deps,
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).parseAsync(["overview", "--project", "project-1", "--json"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { projectId: "project-1" });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.out.length, 1, "exactly one stdout line");
+    const parsed = JSON.parse(cap.out[0]!);
+    assert.equal(parsed.projectId, "project-1");
+  });
+
+  test("(016 S6) get overview: missing required --project rejects with commander.missingMandatoryOptionValue and the use case is never called", async () => {
+    let called = false;
+    const cap = capture();
+    const command = buildGetCommand(
+      {
+        getProjectOverview: {
+          execute: async () => {
+            called = true;
+            throw new Error("must not be called");
+          },
+        },
+      } as unknown as Parameters<typeof buildGetCommand>[0],
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["overview", "--json"], { from: "user" }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+    assert.equal(
+      called,
+      false,
+      "execute must not be called when --project is missing",
+    );
+  });
 });

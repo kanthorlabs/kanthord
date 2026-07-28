@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
+import { decodeTime } from "ulid";
+import { EVENT_TYPES, newEvent, eventTimeMs, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
@@ -160,4 +161,29 @@ test("newEvent constructs a candidate.transplanted event carrying the old/new ca
   assert.equal(ev.type, "candidate.transplanted");
   assert.equal(ev.taskId, taskId);
   assert.deepEqual(ev.payload, payload);
+});
+
+// ── 016 Story 3 — eventTimeMs (016 §A: decodeTime of the event id) ──────
+// events has no timestamp column (see EPIC 016 facts). Event times are
+// derived from the ULID. eventTimeMs is the single source of truth.
+
+test("eventTimeMs: a known ULID returns its decodeTime (literal millisecond value)", () => {
+  // 01H1234567890ABCDEFGHJKMNP → decodeTime=1684771312839
+  const id = "01H1234567890ABCDEFGHJKMNP";
+  assert.equal(eventTimeMs(id), decodeTime(id));
+  // Pin a literal value so a future ULID-package update cannot silently
+  // shift the result.
+  assert.equal(eventTimeMs(id), 1684771312839);
+});
+
+test("eventTimeMs: another known ULID matches its decodeTime (second literal)", () => {
+  // 01H0000000000000000000ABCD → decodeTime=1683627180032
+  const id = "01H0000000000000000000ABCD";
+  assert.equal(eventTimeMs(id), decodeTime(id));
+  assert.equal(eventTimeMs(id), 1683627180032);
+});
+
+test("eventTimeMs: a fresh newEvent() id's time matches its own id's decodeTime", () => {
+  const ev = newEvent("task.started", { taskId: "t" });
+  assert.equal(eventTimeMs(ev.id), decodeTime(ev.id));
 });

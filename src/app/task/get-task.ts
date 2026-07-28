@@ -1,10 +1,37 @@
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow } from "../../storage/port.ts";
 import type { ChangeCandidate } from "../../domain/landing.ts";
+import type { ObjectiveStatus } from "../../domain/initiative.ts";
+import type { Action } from "../../domain/actionability.ts";
+import type { UnsatisfiedEdge } from "../../domain/sequencing.ts";
 import { UnknownReferenceError } from "../errors.ts";
+import {
+  unsatisfiedTaskEdges,
+  permanentlyBlockedTasks,
+} from "../../domain/sequencing.ts";
+import { dependentClosure } from "../../domain/graph.ts";
+import { nodeAction } from "../../domain/actionability.ts";
 
 interface TaskSource {
   get(id: string): Task | undefined;
+  /**
+   * EPIC 016 Story 7 — sibling scope for `waiting`/`blockedForever`/
+   * `downstream`. Required per Story 7 §A; when `getInitiativeId` returns
+   * `undefined` the four new fields still default to the empty/zero/null
+   * shape (no scope, no throw).
+   */
+  listByInitiative(initiativeId: string): Task[];
+  getInitiativeId(taskId: string): string | undefined;
+}
+
+/**
+ * EPIC 016 Story 7 — optional sixth constructor argument. Supplies the
+ * objective's status so `nodeAction` can fire rules 4/5 (approve/retry
+ * targeting the objective). Absent → `objectiveStatus` stays `undefined`,
+ * the documented degraded shape.
+ */
+interface ObjectiveStatusSource {
+  getObjective(id: string): { status?: ObjectiveStatus } | undefined;
 }
 
 interface ResultSource {
@@ -55,6 +82,15 @@ export interface GetTaskOutput {
    * `running` task, not a new lifecycle state. `TASK_STATUSES` is NOT widened.
    */
   abandoning: boolean;
+  /**
+   * EPIC 016 Story 7 — the same edge-permanence / fan-out / action fields
+   * `GetInitiativeGraph` computes for a node, sourced from the same Story
+   * 1/2 domain functions. No second copy of the rules.
+   */
+  waiting: UnsatisfiedEdge[];
+  blockedForever: boolean;
+  downstream: number;
+  action: Action | null;
 }
 
 export class GetTask {
@@ -63,6 +99,7 @@ export class GetTask {
   readonly #context: ContextSource;
   readonly #landing: LandingSource | undefined;
   readonly #jobs: RunningJobSource | undefined;
+  readonly #objectives: ObjectiveStatusSource | undefined;
 
   constructor(
     tasks: TaskSource,
@@ -70,12 +107,14 @@ export class GetTask {
     context: ContextSource,
     landing?: LandingSource,
     jobs?: RunningJobSource,
+    objectives?: ObjectiveStatusSource,
   ) {
     this.#tasks = tasks;
     this.#results = results;
     this.#context = context;
     this.#landing = landing;
     this.#jobs = jobs;
+    this.#objectives = objectives;
   }
 
   async execute({ id }: { id: string }): Promise<GetTaskOutput> {
@@ -104,6 +143,35 @@ export class GetTask {
           })
         : undefined;
 
+    // EPIC 016 Story 7 — reuse the same domain functions
+    // `GetInitiativeGraph` uses (Story 1 + 2), never a second copy.
+    // `getInitiativeId` returning `undefined` is the degraded shape: no
+    // scope, no throw, all four fields default to empty/zero/null.
+    const initiativeId = this.#tasks.getInitiativeId(id);
+    const siblings =
+      initiativeId !== undefined
+        ? this.#tasks.listByInitiative(initiativeId)
+        : [];
+    const waiting =
+      initiativeId !== undefined
+        ? (unsatisfiedTaskEdges(siblings).get(id) ?? [])
+        : [];
+    const blockedForever =
+      initiativeId !== undefined
+        ? permanentlyBlockedTasks(siblings).has(id)
+        : false;
+    const downstream =
+      initiativeId !== undefined ? dependentClosure(siblings, id).length : 0;
+    const deadDependencyId = waiting.find((e) => e.neverSatisfies)?.id ?? null;
+    const action: Action | null = nodeAction({
+      taskId: id,
+      status: task.status,
+      objectiveId: task.objectiveId,
+      objectiveStatus: this.#objectives?.getObjective(task.objectiveId)?.status,
+      blockedForever,
+      deadDependencyId,
+    });
+
     // EPIC 013 Story 6 — `abandoning` is true while a revoked run drains on
     // a `running` task. The marker is on a `running` task, not a new
     // lifecycle state, so the task's `status` stays `running`.
@@ -130,6 +198,10 @@ export class GetTask {
       ...(Object.keys(ctx).length > 0 ? { context: ctx } : {}),
       landingCandidate,
       abandoning,
+      waiting,
+      blockedForever,
+      downstream,
+      action,
     };
   }
 }

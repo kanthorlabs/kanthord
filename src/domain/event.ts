@@ -1,3 +1,4 @@
+import { decodeTime } from "ulid";
 import { newId } from "./entity.ts";
 
 export const EVENT_TYPES = [
@@ -73,4 +74,18 @@ export function newEvent(
     event.payload = input.payload;
   }
   return event;
+}
+
+// ---------------------------------------------------------------------------
+// Story 3 (EPIC 016) — `events` has no timestamp column; the time encoded
+// in the event's ULID is the only oracle.
+// ---------------------------------------------------------------------------
+
+/**
+ * Milliseconds encoded in an event's ULID. `events` has no timestamp column
+ * (see `src/storage/sqlite/migrations.ts:771-784`); the id is a real ULID
+ * minted by `newEvent`, so `decodeTime(id)` is the event's wall-clock time.
+ */
+export function eventTimeMs(eventId: string): number {
+  return decodeTime(eventId);
 }
