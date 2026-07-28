@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { runImportGraph } from "./import-graph.ts";
+import { runImportGraph, resolveGraphBindings } from "./import-graph.ts";
 import type {
   CreateGraphInput,
   CreateGraphResult,
@@ -2085,5 +2085,288 @@ describe("Story 5b — after: id handoff on --create", () => {
         `${f} must NOT contain after: line when original had none; got:\n${content}`,
       );
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 015 Story 4 — extracted `resolveGraphBindings` (lifted verbatim from
+// `runCreate` at src/apps/cli/import-graph.ts:388-456). The test-only seam
+// is the new exported function; the test asserts each outcome is reachable
+// and that the existing stderr messages stay byte-identical so callers
+// depending on them (the guided-setup wizard at run-setup.ts) keep working.
+// ---------------------------------------------------------------------------
+
+const RGB_PROJ_ID = "0000000000000000000000PRJ1";
+
+// All declarations below reuse the ID-shape conventions already in the
+// file: 26 uppercase Crockford ULIDs for ids, plain lower-case strings for
+// resource names.
+const RGB_REPO_ID = "01JTESTULID00000000000REPO";
+const RGB_AIP_ID = "01JTESTULID000000000000AIP";
+const RGB_CRED_ID = "01JTESTULID00000000000CRED";
+const RGB_HOME_NAME = "home";
+const RGB_OPENAI_NAME = "openai-default";
+
+describe("EPIC 015 Story 4 — resolveGraphBindings extraction", () => {
+  test("resolves a ULID-shaped bind value directly without consulting findResourcesByName", async () => {
+    let findCalled = false;
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: RGB_REPO_ID },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => {
+          findCalled = true;
+          return [];
+        },
+        getResource: async (id) =>
+          id === RGB_REPO_ID ? { type: "repository" } : undefined,
+      },
+    );
+
+    assert.equal(
+      result.ok,
+      true,
+      `expected ok; got: ${JSON.stringify(result)}`,
+    );
+    if (result.ok) {
+      assert.deepEqual(result.bindings, { source: RGB_REPO_ID });
+    }
+    assert.equal(
+      findCalled,
+      false,
+      "findResourcesByName must NOT be called for a ULID-shaped bind value",
+    );
+  });
+
+  test("resolves a name-shaped bind value through findResourcesByName and validates via getResource", async () => {
+    let findArgs: { projectId: string; name: string; type: string } | undefined;
+    let getArgs: string | undefined;
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: RGB_HOME_NAME },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async (projectId, name, type) => {
+          findArgs = { projectId, name, type };
+          return [{ id: RGB_REPO_ID }];
+        },
+        getResource: async (id) => {
+          getArgs = id;
+          return id === RGB_REPO_ID ? { type: "repository" } : undefined;
+        },
+      },
+    );
+
+    assert.equal(
+      result.ok,
+      true,
+      `expected ok; got: ${JSON.stringify(result)}`,
+    );
+    if (result.ok) {
+      assert.deepEqual(result.bindings, { source: RGB_REPO_ID });
+    }
+    assert.deepEqual(findArgs, {
+      projectId: RGB_PROJ_ID,
+      name: RGB_HOME_NAME,
+      type: "repository",
+    });
+    assert.equal(getArgs, RGB_REPO_ID);
+  });
+
+  test("missing --bind mapping yields the byte-identical missing-mapping stderr line", async () => {
+    const result = await resolveGraphBindings(
+      { source: "repository", "model-auth": "credential" },
+      { source: RGB_REPO_ID }, // model-auth absent
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => [],
+        getResource: async (id) =>
+          id === RGB_REPO_ID ? { type: "repository" } : undefined,
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.deepEqual(result.errors, [
+        `error: alias "model-auth" has no --bind mapping (missing --bind model-auth=<id>)`,
+      ]);
+    }
+  });
+
+  test("0 matches in findResourcesByName yields the byte-identical UnknownBindingNameError message", async () => {
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: "no-such-repo" },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => [],
+        getResource: async () => ({ type: "repository" }),
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.deepEqual(result.errors, [
+        `Unknown binding for alias "source": no resource named "no-such-repo" found in the project.`,
+      ]);
+    }
+  });
+
+  test(">1 matches in findResourcesByName yields the byte-identical AmbiguousBindingNameError message", async () => {
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: "dup-name" },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => [{ id: "ID-A" }, { id: "ID-B" }],
+        getResource: async () => ({ type: "repository" }),
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.deepEqual(result.errors, [
+        `Ambiguous binding for alias "source": name "dup-name" matches 2 resources. Use a resource id.`,
+      ]);
+    }
+  });
+
+  test("a ULID-shaped value whose getResource lookup returns undefined yields the 'resource not found' stderr line", async () => {
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: RGB_REPO_ID },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => [],
+        getResource: async () => undefined, // id shaped but no row
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.deepEqual(result.errors, [
+        `error: alias "source": resource "${RGB_REPO_ID}" not found`,
+      ]);
+    }
+  });
+
+  test("a ULID-shaped value whose resource has the wrong type yields the byte-identical IncompatibleBindingTypeError message", async () => {
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: RGB_AIP_ID }, // id resolves to ai_provider, not repository
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => [],
+        getResource: async (id) =>
+          id === RGB_AIP_ID ? { type: "ai_provider" } : undefined,
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.deepEqual(result.errors, [
+        `Binding for alias "source" expects type "repository" but got "ai_provider".`,
+      ]);
+    }
+  });
+
+  test("with multiple aliases, a resolved alias and a missing-mapping alias both process, and only the missing-mapping alias reports an error", async () => {
+    // Two aliases declared: source (valid) and model (missing mapping).
+    // The missing-mapping error must be the only error; the source alias is
+    // processed first and resolved, but the function still surfaces the
+    // missing-mapping error for `model`.
+    const result = await resolveGraphBindings(
+      { source: "repository", model: "ai_provider" },
+      { source: RGB_REPO_ID }, // model absent
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => [],
+        getResource: async (id) =>
+          id === RGB_REPO_ID ? { type: "repository" } : undefined,
+      },
+    );
+
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.errors.length, 1);
+      assert.equal(
+        result.errors[0],
+        `error: alias "model" has no --bind mapping (missing --bind model=<id>)`,
+      );
+    }
+  });
+
+  test("all aliases resolve and the bindings map carries every alias in declaration order (object insertion order)", async () => {
+    const result = await resolveGraphBindings(
+      {
+        source: "repository",
+        model: "ai_provider",
+        "model-auth": "credential",
+      },
+      {
+        source: RGB_HOME_NAME,
+        model: RGB_OPENAI_NAME,
+        "model-auth": RGB_CRED_ID,
+      },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async (_pid, name, type) => {
+          if (name === RGB_HOME_NAME && type === "repository")
+            return [{ id: RGB_REPO_ID }];
+          if (name === RGB_OPENAI_NAME && type === "ai_provider")
+            return [{ id: RGB_AIP_ID }];
+          return [];
+        },
+        getResource: async (id) => {
+          if (id === RGB_REPO_ID) return { type: "repository" };
+          if (id === RGB_AIP_ID) return { type: "ai_provider" };
+          if (id === RGB_CRED_ID) return { type: "credential" };
+          return undefined;
+        },
+      },
+    );
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      assert.deepEqual(result.bindings, {
+        source: RGB_REPO_ID,
+        model: RGB_AIP_ID,
+        "model-auth": RGB_CRED_ID,
+      });
+    }
+  });
+
+  test("a 27-char value is name-shaped, not ULID-shaped — the canonical ULID length (26) is unchanged", async () => {
+    // Regression for AUTO_REVIEW B2: Story 4 §A requires this extraction to
+    // be a byte-identical lift with no behaviour change. A value one
+    // character longer than a canonical 26-char ULID must still be resolved
+    // through `findResourcesByName` (the name branch), never treated as an
+    // id directly.
+    const notQuiteAUlid = "01JTESTULID00000000000REPOX"; // 27 chars
+    let findCalled = false;
+    const result = await resolveGraphBindings(
+      { source: "repository" },
+      { source: notQuiteAUlid },
+      RGB_PROJ_ID,
+      {
+        findResourcesByName: async () => {
+          findCalled = true;
+          return [];
+        },
+        getResource: async () => {
+          throw new Error(
+            "getResource must not be called for a non-canonical-length value",
+          );
+        },
+      },
+    );
+
+    assert.equal(
+      findCalled,
+      true,
+      "a 27+ char value must be treated as a name and resolved via findResourcesByName",
+    );
+    assert.equal(result.ok, false);
   });
 });

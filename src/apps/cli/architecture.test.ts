@@ -24,8 +24,8 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const INDEX_SRC = join(__dirname, "index.ts");
 const COMMANDS_DIR = join(__dirname, "commands");
 
-/** Number of leaf files under commands/ subdirectories (007.17-s4 adds four: add/initiative-dependency.ts, add/objective-dependency.ts, remove/initiative-dependency.ts, remove/objective-dependency.ts; 008.1 Story D adds logout/ai-provider.ts, remove/ai-provider.ts; 008.1 Story D2 adds test/ai-provider.ts; 008.2 Story B adds assign/ai-provider.ts, unassign/ai-provider.ts; 008.3 Story C removes create/ai-provider.ts and update/ai-provider.ts; 013 Story 6 adds abandon/task.ts; 014 Story 6 adds check/project.ts; 016 Story 4 adds get/graph.ts; 016 Story 5 adds ack/project.ts; 016 Story 6 adds get/overview.ts). */
-const EXPECTED_LEAF_FILE_COUNT = 71;
+/** Number of leaf files under commands/ subdirectories (007.17-s4 adds four: add/initiative-dependency.ts, add/objective-dependency.ts, remove/initiative-dependency.ts, remove/objective-dependency.ts; 008.1 Story D adds logout/ai-provider.ts, remove/ai-provider.ts; 008.1 Story D2 adds test/ai-provider.ts; 008.2 Story B adds assign/ai-provider.ts, unassign/ai-provider.ts; 008.3 Story C removes create/ai-provider.ts and update/ai-provider.ts; 013 Story 6 adds abandon/task.ts; 014 Story 6 adds check/project.ts; 015 Story 5 adds setup/project.ts; 016 Story 4 adds get/graph.ts; 016 Story 5 adds ack/project.ts; 016 Story 6 adds get/overview.ts). */
+const EXPECTED_LEAF_FILE_COUNT = 72;
 
 /** Number of audited leaves in the EPIC inventory (fd6f799 adds the top-level
  *  `commands` leaf; it lives directly in commands/, not in a subdirectory, so it
@@ -34,10 +34,11 @@ const EXPECTED_LEAF_FILE_COUNT = 71;
  *  011 Story 2 adds `list notification` + `list filesystem` (both live in
  *  the existing `commands/list/resource.ts`, so the FILE count stays the same);
  *  013 Story 6 adds `abandon task`; 014 Story 6 adds `check project`;
+ *  015 Story 5 adds `setup project`;
  *  016 Story 4 adds `get graph`;
  *  016 Story 5 adds `ack` as a new top-level group containing `ack project`;
  *  016 Story 6 adds `get overview`). */
-const EXPECTED_LEAF_COUNT = 76;
+const EXPECTED_LEAF_COUNT = 77;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [
@@ -202,6 +203,22 @@ describe("src/apps/cli/architecture.ts", () => {
     assert.ok(
       firstLine.startsWith("Usage: kanthord get conflict"),
       `'get help conflict' must print the conflict subcommand's own usage line; got: ${firstLine}`,
+    );
+  });
+
+  /**
+   * (EPIC 015 Story 5) `setup project --help` must print the leaf's own
+   * usage (`Usage: kanthord setup project [options]`), not the root or
+   * group help — same matrix contract as 007.10.
+   */
+  test("(EPIC 015) 'setup project --help' prints the leaf's own usage line", async () => {
+    const result = await runCli(["setup", "project", "--help"], noopDeps);
+    const output = result.stdout[0] ?? result.stderr[0] ?? "";
+    const firstLine = output.split("\n")[0] ?? "";
+    assert.equal(
+      firstLine,
+      "Usage: kanthord setup project [options]",
+      `'setup project --help' must print the leaf's own usage line; got: ${firstLine}`,
     );
   });
 });

@@ -366,9 +366,100 @@ async function runApply(
 // --create mode
 // ---------------------------------------------------------------------------
 
-/** Returns true when a string is ULID-shaped (26 Crockford base32 chars). */
+/**
+ * Returns true when a string is shaped like a ULID: exactly 26 Crockford
+ * base32 chars, matching every resource id minted by `newId()`.
+ */
 function isUlidShaped(value: string): boolean {
   return value.length === 26 && /^[0-9A-Za-z]{26}$/.test(value);
+}
+
+/**
+ * EPIC 015 Story 4 — extract the graph alias resolver from `runCreate` so the
+ * guided-setup wizard (`run-setup.ts`) can call it without depending on the
+ * filesystem-touching `runCreate` path. Behaviour is byte-identical to the
+ * block that previously lived inline at `import-graph.ts:388-456`: every
+ * message, every error class, the ULID-vs-name discrimination, and the
+ * accumulate-all-errors semantics are preserved. The `bind` map's iteration
+ * order follows `declared`'s object insertion order so a multi-alias package
+ * surfaces errors in declaration order.
+ */
+export async function resolveGraphBindings(
+  declared: Record<string, string>,
+  bind: Record<string, string>,
+  projectId: string,
+  deps: {
+    findResourcesByName?: ImportGraphDeps["findResourcesByName"];
+    getResource?: ImportGraphDeps["getResource"];
+  },
+): Promise<
+  | { ok: true; bindings: Record<string, string> }
+  | { ok: false; errors: string[] }
+> {
+  const declaredAliases = Object.keys(declared);
+  const errors: string[] = [];
+  const bindMap: Record<string, string> = {};
+
+  for (const alias of declaredAliases) {
+    const value = bind[alias];
+    if (value === undefined) {
+      errors.push(
+        `error: alias "${alias}" has no --bind mapping (missing --bind ${alias}=<id>)`,
+      );
+      continue;
+    }
+
+    const expectedType = declared[alias]!;
+    let resolvedId: string;
+
+    if (isUlidShaped(value)) {
+      // ULID-shaped → treat as a direct resource id
+      resolvedId = value;
+    } else {
+      // Name-style → resolve via findResourcesByName
+      const matches = await (deps.findResourcesByName ?? (async () => []))(
+        projectId,
+        value,
+        expectedType,
+      );
+      if (matches.length === 0) {
+        errors.push(new UnknownBindingNameError(alias, value).message);
+        continue;
+      }
+      if (matches.length > 1) {
+        errors.push(
+          new AmbiguousBindingNameError(alias, value, matches.length).message,
+        );
+        continue;
+      }
+      resolvedId = matches[0]!.id;
+    }
+
+    // Type validation via getResource
+    const resource = await (deps.getResource ?? (async () => undefined))(
+      resolvedId,
+    );
+    if (resource === undefined) {
+      errors.push(
+        `error: alias "${alias}": resource "${resolvedId}" not found`,
+      );
+      continue;
+    }
+    if (resource.type !== expectedType) {
+      errors.push(
+        new IncompatibleBindingTypeError(alias, expectedType, resource.type)
+          .message,
+      );
+      continue;
+    }
+
+    bindMap[alias] = resolvedId;
+  }
+
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+  return { ok: true, bindings: bindMap };
 }
 
 async function runCreate(
@@ -388,71 +479,16 @@ async function runCreate(
   // 2. C1 — resolve --bind aliases before the graph transaction
   let resolvedBindings: Record<string, string> | undefined;
   if (pkg.initiative.bindings !== undefined) {
-    const declaredAliases = Object.keys(pkg.initiative.bindings);
-    const errors: string[] = [];
-    const bindMap: Record<string, string> = {};
-
-    for (const alias of declaredAliases) {
-      const value = (bind ?? {})[alias];
-      if (value === undefined) {
-        errors.push(
-          `error: alias "${alias}" has no --bind mapping (missing --bind ${alias}=<id>)`,
-        );
-        continue;
-      }
-
-      const expectedType = pkg.initiative.bindings[alias]!;
-      let resolvedId: string;
-
-      if (isUlidShaped(value)) {
-        // ULID-shaped → treat as a direct resource id
-        resolvedId = value;
-      } else {
-        // Name-style → resolve via findResourcesByName
-        const matches = await (findResourcesByName ?? (async () => []))(
-          projectId,
-          value,
-          expectedType,
-        );
-        if (matches.length === 0) {
-          errors.push(new UnknownBindingNameError(alias, value).message);
-          continue;
-        }
-        if (matches.length > 1) {
-          errors.push(
-            new AmbiguousBindingNameError(alias, value, matches.length).message,
-          );
-          continue;
-        }
-        resolvedId = matches[0]!.id;
-      }
-
-      // Type validation via getResource
-      const resource = await (getResource ?? (async () => undefined))(
-        resolvedId,
-      );
-      if (resource === undefined) {
-        errors.push(
-          `error: alias "${alias}": resource "${resolvedId}" not found`,
-        );
-        continue;
-      }
-      if (resource.type !== expectedType) {
-        errors.push(
-          new IncompatibleBindingTypeError(alias, expectedType, resource.type)
-            .message,
-        );
-        continue;
-      }
-
-      bindMap[alias] = resolvedId;
+    const resolved = await resolveGraphBindings(
+      pkg.initiative.bindings,
+      bind ?? {},
+      projectId,
+      { findResourcesByName, getResource },
+    );
+    if (!resolved.ok) {
+      return { exitCode: 1, stdout: [], stderr: resolved.errors };
     }
-
-    if (errors.length > 0) {
-      return { exitCode: 1, stdout: [], stderr: errors };
-    }
-
-    resolvedBindings = bindMap;
+    resolvedBindings = resolved.bindings;
   }
 
   // 3. Mint a stable packageId for this create session

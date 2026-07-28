@@ -27,6 +27,7 @@ import { FindProject } from "./app/project/find-project.ts";
 import { ListProjects } from "./app/project/list-projects.ts";
 import { ProbeAiProvider } from "./app/project/probe-ai-provider.ts";
 import { CheckProject } from "./app/project/check-project.ts";
+import { ObserveSetupFacts } from "./app/project/observe-setup-facts.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
 import { AddInitiativeDependency } from "./app/initiative/add-initiative-dependency.ts";
 import { RemoveInitiativeDependency } from "./app/initiative/remove-initiative-dependency.ts";
@@ -243,6 +244,16 @@ export function buildDeps(
   const findResource = new FindResource(projectRepository);
   const publicationRepository = new SqlitePublicationRepository(db);
   const aiProviderRegistry = new SqliteAiProviderRegistry(db);
+  // EPIC 015 Story 1 — fact collector for the guided setup wizard. Sits
+  // next to the other project use cases; consumes three repos/registries
+  // and synthesises the `ObservedFacts` value the pure `SetupPlan` decides
+  // against. No other use case depends on it yet; it is wired here so the
+  // executor in Story 4 can read it from `deps.observeSetupFacts`.
+  const observeSetupFacts = new ObserveSetupFacts(
+    projectRepository,
+    initiativeRepository,
+    aiProviderRegistry,
+  );
   const registerAiProvider = new RegisterAiProvider(
     aiProviderRegistry,
     unitOfWork,
@@ -1040,6 +1051,35 @@ export function buildDeps(
     },
   };
 
+  // EPIC 015 Story 5 — the interactive-prompt seam the setup wizard
+  // injects. A single-method interface (`ask`) that resolves the user's
+  // answer line and returns `undefined` on EOF / Ctrl-C so the wizard
+  // can abort cleanly. Built over `node:readline` (the same block
+  // `login` uses) so the two interactive surfaces share one transport.
+  const setupPrompt = {
+    ask: async (message: string): Promise<string | undefined> => {
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+      try {
+        // `rl.question(...)` never settles once the interface closes
+        // without an answer (EOF / Ctrl-C) — it neither resolves nor
+        // rejects. Race it against a one-shot `close` listener that
+        // resolves `undefined`, so EOF reliably produces the documented
+        // abort signal instead of hanging forever.
+        return await new Promise<string | undefined>((resolve, reject) => {
+          rl.once("close", () => resolve(undefined));
+          rl.question(`${message} `).then(resolve, reject);
+        });
+      } catch {
+        return undefined;
+      } finally {
+        rl.close();
+      }
+    },
+  };
+
   return {
     migrateDb,
     getDbStatus,
@@ -1111,6 +1151,7 @@ export function buildDeps(
     testAiProvider,
     providerProbe: probeAiProvider,
     checkProject,
+    observeSetupFacts,
     heartbeat,
     repositoryProbe,
     resolveHomeDir,
@@ -1119,5 +1160,7 @@ export function buildDeps(
     getConflict,
     getPriorFeedback,
     resolveCredential,
+    setupPrompt,
+    stdinIsTty: process.stdin.isTTY === true,
   };
 }

@@ -30,6 +30,7 @@ import { buildRenameCommand } from "./commands/rename.ts";
 import { buildResumeCommand } from "./commands/resume.ts";
 import { buildRetryCommand } from "./commands/retry.ts";
 import { buildRunCommand } from "./commands/run.ts";
+import { buildSetupCommand } from "./commands/setup.ts";
 import { buildTestCommand } from "./commands/test.ts";
 import { buildSetDefaultCommand } from "./commands/set-default.ts";
 import { buildUnassignCommand } from "./commands/unassign.ts";
@@ -68,6 +69,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const register = buildRegisterCommand(deps, io).name("register");
   const setDefault = buildSetDefaultCommand(deps, io).name("set-default");
   const run = buildRunCommand(deps, io).name("run");
+  const setup = buildSetupCommand(deps, io).name("setup");
   const land = buildLandCommand(deps, io).name("land");
   const publish = buildPublishCommand(deps, io).name("publish");
   const test = buildTestCommand(deps, io).name("test");
@@ -106,6 +108,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(register)
     .addCommand(setDefault)
     .addCommand(run)
+    .addCommand(setup)
     .addCommand(land)
     .addCommand(publish)
     .addCommand(test)
