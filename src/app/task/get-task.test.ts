@@ -119,15 +119,22 @@ class MemResultSource implements FakeResultSource {
 test("(016 B2) GetTask: TaskSource.listByInitiative/getInitiativeId are required, not optional (compile guard)", () => {
   // AGENTS.md: "never weaken a spec-required field to optional". Story 7 §A
   // pins `listByInitiative`/`getInitiativeId` as required members of
-  // `TaskSource`. `MemTaskSourceGetOnly` implements only `get` — exactly the
-  // shape `MemTaskSource` used to have before this fixture existed. Today,
-  // with the two methods marked optional (`?`) in production, a get-only
-  // source still satisfies `TaskSource` structurally, so the line below does
-  // NOT produce a compile error and this `@ts-expect-error` is unused
-  // (TS2578) — which fails `npm run typecheck` for the right reason. It
-  // starts suppressing a real "Property 'listByInitiative' is missing"
-  // error — and typecheck turns green — only once the software-engineer
-  // makes both methods required on `TaskSource`.
+  // `TaskSource`. `MemTaskSourceGetOnly` implements only `get`, so it must
+  // NOT satisfy `TaskSource` — the `@ts-expect-error` below asserts exactly
+  // that, and typecheck passing proves the directive is suppressing a real
+  // "Property 'listByInitiative' is missing" error.
+  //
+  // Mark BOTH methods optional (`?`) again and the get-only source starts
+  // satisfying `TaskSource` structurally: the error disappears, the directive
+  // becomes unused, and `npm run typecheck` fails with TS2578. That is the
+  // regression signal this test exists for. Weakening only ONE method leaves
+  // the other required, so this guard stays used — but `execute` calls both
+  // unconditionally, so typecheck still fails, there with TS2722 at the call
+  // site. Both signals were verified by hand on 2026-07-28.
+  //
+  // Keep the directive on the argument line, not above `new GetTask(`:
+  // `@ts-expect-error` guards only the following line, and prettier keeps this
+  // call split across lines.
   const results = new MemResultSource(new Map());
   const _guard = new GetTask(
     // @ts-expect-error — listByInitiative/getInitiativeId must be required on TaskSource; a get-only source must be a type error
