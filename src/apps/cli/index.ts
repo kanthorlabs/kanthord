@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { Command } from "commander";
 
 import { buildAddCommand } from "./commands/add.ts";
+import { buildAckCommand } from "./commands/ack.ts";
 import { buildCommandsCommand } from "./commands/commands.ts";
 import { buildApproveCommand } from "./commands/approve.ts";
 import { buildAssignCommand } from "./commands/assign.ts";
@@ -49,6 +50,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const pause = buildPauseCommand(deps, io).name("pause");
   const resume = buildResumeCommand(deps, io).name("resume");
   const add = buildAddCommand(deps, io).name("add");
+  const ack = buildAckCommand(deps, io).name("ack");
   const assign = buildAssignCommand(deps, io).name("assign");
   const unassign = buildUnassignCommand(deps, io).name("unassign");
   const remove = buildRemoveCommand(deps, io).name("remove");
@@ -87,6 +89,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(pause)
     .addCommand(resume)
     .addCommand(add)
+    .addCommand(ack)
     .addCommand(assign)
     .addCommand(unassign)
     .addCommand(remove)

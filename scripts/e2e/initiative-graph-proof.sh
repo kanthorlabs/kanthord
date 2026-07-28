@@ -179,7 +179,7 @@ echo "D ok: discard cascades; a discarded node offers nothing"
 # permanently dead is `remove dependency` — legal precisely because edges are
 # editable while pending.
 W=$(node src/main.ts create task --objective "$OBJ_A" --title "Blocked forever" \
-  --instructions "waits on a discarded dependency" --agent fake@1)
+  --instructions "waits on a discarded dependency" --ac "task W is blocked forever" --agent fake@1)
 node src/main.ts add dependency --task "$W" --dependency "$ROOT_A" >/dev/null
 graph "$INIT_A"
 test "$(nd "$W" < "$G" | nf 'n.status')"          = "pending"

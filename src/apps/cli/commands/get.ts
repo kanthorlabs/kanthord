@@ -10,6 +10,8 @@ import { buildGetInitiativeCommand } from "./get/initiative.ts";
 import { buildGetObjectiveCommand } from "./get/objective.ts";
 import { buildGetRepositoryCommand } from "./get/repository.ts";
 import { buildGetAiProviderCommand } from "./get/ai-provider.ts";
+import { buildGetGraphCommand } from "./get/graph.ts";
+import { buildGetOverviewCommand } from "./get/overview.ts";
 
 export function buildGetCommand(deps: CliDeps, io: CliIo): Command {
   const command = new Command("get")
@@ -28,6 +30,8 @@ export function buildGetCommand(deps: CliDeps, io: CliIo): Command {
   command.addCommand(buildGetObjectiveCommand(deps, io));
   command.addCommand(buildGetRepositoryCommand(deps, io));
   command.addCommand(buildGetAiProviderCommand(deps, io));
+  command.addCommand(buildGetGraphCommand(deps, io));
+  command.addCommand(buildGetOverviewCommand(deps, io));
 
   return command;
 }

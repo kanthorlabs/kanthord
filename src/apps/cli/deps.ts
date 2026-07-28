@@ -4,6 +4,7 @@ import type { ExportInitiative } from "../../app/graph/export-initiative.ts";
 import type { CreateInitiative } from "../../app/initiative/create-initiative.ts";
 import type { FindInitiative } from "../../app/initiative/find-initiative.ts";
 import type { GetInitiative } from "../../app/initiative/get-initiative.ts";
+import type { GetInitiativeGraph } from "../../app/initiative/get-initiative-graph.ts";
 import type { ListInitiatives } from "../../app/initiative/list-initiatives.ts";
 import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
 import type { RenameInitiative } from "../../app/initiative/rename-initiative.ts";
@@ -19,6 +20,8 @@ import type { FindProject } from "../../app/project/find-project.ts";
 import type { GetProject } from "../../app/project/get-project.ts";
 import type { ListProjects } from "../../app/project/list-projects.ts";
 import type { RenameProject } from "../../app/project/rename-project.ts";
+import type { AckProject } from "../../app/project/ack-project.ts";
+import type { GetProjectOverview } from "../../app/project/get-project-overview.ts";
 import type { AddResource } from "../../app/resource/add-resource.ts";
 import type { FindResource } from "../../app/resource/find-resource.ts";
 import type { GetResource } from "../../app/resource/get-resource.ts";
@@ -167,10 +170,15 @@ export interface CliDeps {
   getProject: GetProject;
   findProject: FindProject;
   listProjects: ListProjects;
+  /** EPIC 016 Story 5 — `ack project --id <id> --cursor <ulid>`. The only writer of `project_acks`. */
+  ackProject: AckProject;
+  /** EPIC 016 Story 6 — `get overview --project <id>`. Read-only project summary. */
+  getProjectOverview: GetProjectOverview;
   createInitiative: CreateInitiative;
   renameInitiative: RenameInitiative;
   findInitiative: FindInitiative;
   getInitiative: GetInitiative;
+  getInitiativeGraph: GetInitiativeGraph;
   pauseInitiative: PauseInitiative;
   resumeInitiative: ResumeInitiative;
   createObjective: CreateObjective;

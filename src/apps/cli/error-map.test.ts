@@ -18,6 +18,10 @@ import {
   CreateModeIdError,
   DriftConflictError,
 } from "../../app/graph/import-errors.ts";
+import {
+  CursorNotUlidError,
+  CursorAheadOfFeedError,
+} from "../../app/project/ack-project.ts";
 
 test("UnknownReferenceError maps to exit 1 with locked message on stderr", () => {
   const err = new UnknownReferenceError("project", "abc123");
@@ -276,5 +280,38 @@ test("AmbiguousRunningJobError maps to exit 1 with the locked 'task … has N ru
     result.stderr[0],
     "error: task t1 has 2 running jobs; refusing to guess which to abandon",
     `stderr must be the locked error message; got: ${result.stderr[0]}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 016 Story 5 — AckProject error types render to exit 1 + single "error: …"
+// line. Both are pinned in Story 5 §D: the CLI refuses to crash on a
+// non-ULID or ahead-of-feed cursor so the operator can correct it.
+// ---------------------------------------------------------------------------
+
+test("CursorNotUlidError maps to exit 1 with the locked message on stderr (016 S5)", () => {
+  const err = new CursorNotUlidError("not-a-ulid");
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.stderr.length, 1, "exactly one error line");
+  assert.equal(
+    result.stderr[0],
+    "error: cursor is not a ULID: not-a-ulid",
+    `stderr must be the locked message; got: ${result.stderr[0]}`,
+  );
+});
+
+test("CursorAheadOfFeedError maps to exit 1 with the locked message on stderr (016 S5)", () => {
+  const err = new CursorAheadOfFeedError(
+    "01H99999999999999999999999",
+    "01H00000000000000000000001",
+  );
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.stderr.length, 1, "exactly one error line");
+  assert.equal(
+    result.stderr[0],
+    "error: cursor 01H99999999999999999999999 is ahead of the project feed (latest: 01H00000000000000000000001)",
+    `stderr must be the locked message; got: ${result.stderr[0]}`,
   );
 });

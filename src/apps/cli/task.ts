@@ -338,6 +338,23 @@ export async function runGetTask(
       lines.push("abandoning: true");
     }
 
+    // EPIC 016 Story 7 — the graph read model's edge-permanence + action
+    // fields. Only printed when they apply, so a default (non-blocked,
+    // action-null) task's output stays byte-identical to pre-Story-7.
+    if (
+      output.blockedForever &&
+      output.action?.targetDependencyId !== undefined
+    ) {
+      lines.push(
+        `blocked forever: yes (dependency ${output.action.targetDependencyId} can never clear)`,
+      );
+    }
+    if (output.action !== null) {
+      lines.push(
+        `action: ${output.action.kind} ${output.action.target.type}:${output.action.target.id}`,
+      );
+    }
+
     return { exitCode: 0, stdout: lines, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };

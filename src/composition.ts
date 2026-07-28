@@ -34,8 +34,10 @@ import { RemoveInitiativeDependency } from "./app/initiative/remove-initiative-d
 import { RenameInitiative } from "./app/initiative/rename-initiative.ts";
 import { FindInitiative } from "./app/initiative/find-initiative.ts";
 import { GetInitiative } from "./app/initiative/get-initiative.ts";
+import { GetInitiativeGraph } from "./app/initiative/get-initiative-graph.ts";
 import { PauseInitiative } from "./app/initiative/pause-initiative.ts";
 import { ResumeInitiative } from "./app/initiative/resume-initiative.ts";
+import { GetProjectOverview } from "./app/project/get-project-overview.ts";
 import { CreateObjective } from "./app/objective/create-objective.ts";
 import { AddObjectiveDependency } from "./app/objective/add-objective-dependency.ts";
 import { RemoveObjectiveDependency } from "./app/objective/remove-objective-dependency.ts";
@@ -111,6 +113,8 @@ import { GitRepositoryLanding } from "./landing/git.ts";
 import { GetConflict } from "./app/task/get-conflict.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { SqlitePublicationRepository } from "./storage/sqlite/publication.ts";
+import { SqliteProjectAckRepository } from "./storage/sqlite/project-ack.ts";
+import { AckProject } from "./app/project/ack-project.ts";
 import { SqliteAiProviderRegistry } from "./storage/sqlite/ai-provider-registry.ts";
 import { SqliteDaemonHeartbeatRepository } from "./storage/sqlite/daemon-heartbeat-repository.ts";
 import {
@@ -191,12 +195,16 @@ export function buildDeps(
   const jobQueue = new SqliteJobQueue(db);
   const unitOfWork = new SqliteUnitOfWork(db);
   const sequencingRepository = new SqliteSequencingRepository(db);
+  const projectAckRepository = new SqliteProjectAckRepository(db);
 
   const createProject = new CreateProject(projectRepository);
   const renameProject = new RenameProject(projectRepository);
   const getProject = new GetProject(projectRepository);
   const findProject = new FindProject(projectRepository);
   const listProjects = new ListProjects(projectRepository);
+  const ackProject = new AckProject(projectAckRepository, {
+    get: (id) => projectRepository.get(id),
+  });
   const createInitiative = new CreateInitiative(
     initiativeRepository,
     referenceResolver,
@@ -404,6 +412,7 @@ export function buildDeps(
     taskRepository,
     landingRepository,
     jobQueue,
+    { getObjective: (id) => initiativeRepository.getObjective(id) },
   );
   const rejectTask = new RejectTask(
     {
@@ -893,6 +902,67 @@ export function buildDeps(
     { get: (id) => initiativeRepository.get(id) },
     sequencingRepository,
   );
+  // Story 3 (EPIC 016) — `get graph --initiative <id>`. Read-only assembly
+  // of the initiative's full DAG. `repositoryBranch` reads the resource
+  // record off `projectRepository` and returns the repository branch, or
+  // `undefined` when the resource is absent or not a repository.
+  const repositoryBranchFor = (repositoryId: string): string | undefined => {
+    const resource = projectRepository.getResource(repositoryId);
+    if (resource === undefined || !isRepository(resource)) {
+      return undefined;
+    }
+    return resource.branch;
+  };
+  const getInitiativeGraph = new GetInitiativeGraph(
+    taskRepository,
+    {
+      getTaskResult: (id) => taskRepository.getTaskResult(id),
+    },
+    {
+      get: (id) => initiativeRepository.get(id),
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+      listAllInitiatives: () => initiativeRepository.listAllInitiatives(),
+    },
+    sequencingRepository,
+    {
+      getCandidateByTask: (taskId) =>
+        landingRepository.getCandidateByTask?.(taskId),
+    },
+    events,
+    publicationRepository,
+    repositoryBranchFor,
+  );
+  // Story 6 (EPIC 016) — `get overview --project <id>`. Read-only assembly
+  // of a project's initiative rows, ranked decisions, lanes, and digest.
+  // The five structural sources mirror Story 3's shape. `OverviewEventSource`
+  // carries four readers; three live on `SqliteEventFeed` (the Story 6
+  // adapter-only readers) and `latestProjectEventId` lives on the ack
+  // repository. The composition combines them into a single structural
+  // object, so `app/` never has to know that the readers come from two
+  // adapters.
+  const getProjectOverview = new GetProjectOverview(
+    projectRepository,
+    {
+      listInitiatives: (projectId) =>
+        initiativeRepository.listInitiatives(projectId),
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+      listAllInitiatives: () => initiativeRepository.listAllInitiatives(),
+    },
+    taskRepository,
+    projectAckRepository,
+    {
+      countProjectEventsAfter: (projectId, after) =>
+        events.countProjectEventsAfter(projectId, after),
+      readProjectEventsAfter: (projectId, after, limit) =>
+        events.readProjectEventsAfter(projectId, after, limit),
+      latestProjectEventId: (projectId) =>
+        projectAckRepository.latestProjectEventId(projectId),
+      latestActionableEventIds: (initiativeId) =>
+        events.latestActionableEventIds(initiativeId),
+    },
+  );
   const getObjective = new GetObjective(
     { getObjective: (id) => initiativeRepository.getObjective(id) },
     { resolveInitiativeRepository },
@@ -1018,10 +1088,13 @@ export function buildDeps(
     getProject,
     findProject,
     listProjects,
+    ackProject,
+    getProjectOverview,
     createInitiative,
     renameInitiative,
     findInitiative,
     getInitiative,
+    getInitiativeGraph,
     pauseInitiative,
     resumeInitiative,
     createObjective,

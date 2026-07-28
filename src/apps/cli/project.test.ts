@@ -1,10 +1,15 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { runCreateProject, runRenameProject } from "./project.ts";
+import {
+  runCreateProject,
+  runRenameProject,
+  runAckProject,
+} from "./project.ts";
 import type { ProjectRepository } from "../../storage/port.ts";
 import type { Project } from "../../domain/project.ts";
 import { CreateProject } from "../../app/project/create-project.ts";
 import { RenameProject } from "../../app/project/rename-project.ts";
+import { AckProject } from "../../app/project/ack-project.ts";
 
 // --- Minimal fake ProjectRepository that returns a fixed id on save ---
 class MockProjectRepository implements ProjectRepository {
@@ -121,6 +126,69 @@ describe("runRenameProject handler", () => {
     assert.ok(
       result.stderr[0]!.startsWith("error:"),
       `expected 'error:' prefix, got: ${result.stderr[0]}`,
+    );
+  });
+});
+
+// AMENDED 2026-07-28 (Story 5 §E): `runAckProject` must echo the cursor
+// RETURNED by `AckProject.execute`, never the raw `args["cursor"]` input —
+// a backwards ack is a silent no-op and the two values then differ.
+describe("runAckProject handler", () => {
+  interface FakeAcks {
+    getAck: (projectId: string) => string | undefined;
+    setAck: (projectId: string, cursor: string) => void;
+    latestProjectEventId: (projectId: string) => string | undefined;
+  }
+
+  function makeAcks(stored: string, latest: string): FakeAcks {
+    const store = new Map<string, string>([["proj-1", stored]]);
+    return {
+      getAck: (id) => store.get(id),
+      setAck: (id, cursor) => store.set(id, cursor),
+      latestProjectEventId: () => latest,
+    };
+  }
+
+  function makeProjects(): { get: (id: string) => Project | undefined } {
+    const project: Project = { id: "proj-1", name: "P" };
+    return { get: (id) => (id === "proj-1" ? project : undefined) };
+  }
+
+  test("an advancing ack echoes the new cursor now in effect", async () => {
+    const stored = "01H00000000000000000000001";
+    const advancing = "01H00000000000000000000002";
+    const latest = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
+    const ackProject = new AckProject(makeAcks(stored, latest), makeProjects());
+
+    const result = await runAckProject(
+      { id: "proj-1", cursor: advancing },
+      ackProject,
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(
+      result.stderr[0],
+      `project acknowledged: proj-1 @ ${advancing}`,
+      "must echo the new cursor returned by execute()",
+    );
+  });
+
+  test("a backwards ack echoes the STORED (higher) cursor, never the raw input", async () => {
+    const stored = "01H00000000000000000000002";
+    const backwards = "01H00000000000000000000001"; // < stored
+    const latest = "01HZZZZZZZZZZZZZZZZZZZZZZZ";
+    const ackProject = new AckProject(makeAcks(stored, latest), makeProjects());
+
+    const result = await runAckProject(
+      { id: "proj-1", cursor: backwards },
+      ackProject,
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(
+      result.stderr[0],
+      `project acknowledged: proj-1 @ ${stored}`,
+      "must echo the stored cursor, never the rejected backwards input",
     );
   });
 });

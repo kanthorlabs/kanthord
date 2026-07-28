@@ -6,6 +6,7 @@ import {
   readiness,
   serialOrder,
   dependentClosure,
+  longestRemainingChain,
   DuplicateTaskError,
   UnknownDependencyError,
   CycleError,
@@ -14,7 +15,13 @@ import {
 // helper: build a GraphNode-like object
 function node(
   id: string,
-  status: "pending" | "running" | "completed" | "failed",
+  status:
+    | "pending"
+    | "running"
+    | "completed"
+    | "failed"
+    | "awaiting_confirmation"
+    | "discarded",
   dependencies: string[] = [],
 ) {
   return { id, status, dependencies };
@@ -278,4 +285,97 @@ test("validateDag: throws CycleError with path ['a','b','a'] for two-node cycle 
       return true;
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// Story 1 (016) — longestRemainingChain
+// ---------------------------------------------------------------------------
+
+test("longestRemainingChain: empty input returns {metric, nodeIds: [], length: 0}", () => {
+  const result = longestRemainingChain([]);
+  assert.deepEqual(result, {
+    metric: "remaining-node-count",
+    nodeIds: [],
+    length: 0,
+  });
+});
+
+test("longestRemainingChain: every node completed returns {metric, nodeIds: [], length: 0}", () => {
+  const nodes = [
+    node("a", "completed", []),
+    node("b", "completed", ["a"]),
+    node("c", "completed", ["b"]),
+  ];
+  const result = longestRemainingChain(nodes);
+  assert.deepEqual(result, {
+    metric: "remaining-node-count",
+    nodeIds: [],
+    length: 0,
+  });
+});
+
+test("longestRemainingChain: chain a→b→c all pending returns [a,b,c] dependency-first, length=3", () => {
+  const nodes = [
+    node("a", "pending", []),
+    node("b", "pending", ["a"]),
+    node("c", "pending", ["b"]),
+  ];
+  const result = longestRemainingChain(nodes);
+  assert.equal(result.length, 3);
+  assert.deepEqual(result.nodeIds, ["a", "b", "c"]);
+});
+
+test("longestRemainingChain: a completed dependency is skipped without breaking the chain", () => {
+  const nodes = [
+    node("a", "completed", []),
+    node("b", "pending", ["a"]),
+    node("c", "pending", ["b"]),
+  ];
+  const result = longestRemainingChain(nodes);
+  assert.equal(result.length, 2);
+  assert.deepEqual(result.nodeIds, ["b", "c"]);
+});
+
+test("longestRemainingChain: discarded nodes are excluded from the path entirely", () => {
+  const nodes = [
+    node("a", "pending", []),
+    node("b", "discarded", ["a"]),
+    node("c", "pending", ["b"]),
+    node("d", "pending", ["c"]),
+  ];
+  const result = longestRemainingChain(nodes);
+  assert.equal(result.length, 2);
+  assert.deepEqual(result.nodeIds, ["c", "d"]);
+});
+
+test("longestRemainingChain: two equal-length chains — the lexicographically smallest nodeIds wins", () => {
+  // Two independent chains of length 2:
+  //   "a1" → "a2"
+  //   "b1" → "b2"
+  // The lexicographically smaller chain is the "a1"/"a2" chain.
+  const forward = [
+    node("b1", "pending", []),
+    node("b2", "pending", ["b1"]),
+    node("a1", "pending", []),
+    node("a2", "pending", ["a1"]),
+  ];
+  const reversed = [
+    node("a2", "pending", ["a1"]),
+    node("a1", "pending", []),
+    node("b2", "pending", ["b1"]),
+    node("b1", "pending", []),
+  ];
+  const expected = {
+    metric: "remaining-node-count",
+    nodeIds: ["a1", "a2"],
+    length: 2,
+  };
+  assert.deepEqual(longestRemainingChain(forward), expected);
+  assert.deepEqual(longestRemainingChain(reversed), expected);
+});
+
+test("longestRemainingChain: asserts metric is exactly the string 'remaining-node-count'", () => {
+  const nodes = [node("a", "pending", [])];
+  const result = longestRemainingChain(nodes);
+  assert.equal(result.metric, "remaining-node-count");
 });

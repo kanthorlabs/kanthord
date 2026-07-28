@@ -891,4 +891,25 @@ CREATE TABLE daemon_heartbeats (
 );
 `),
   },
+  {
+    version: 30,
+    name: "016-s5-project-acks",
+    // EPIC 016 Story 5 — per-project last-acknowledged event cursor. The
+    // cursor is a ULID; the `ack project --cursor <ulid>` CLI command is
+    // the only writer. The "not ahead of the feed" guard reads the project's
+    // latest event id from `events.projectId` (EPIC 011 Story 3's column).
+    // One row per project, so a re-ack of the same projectId overwrites the
+    // stored cursor; this is the PK invariant that backs the monotonic
+    // cursor (AckProject refuses a backwards ack at the use-case layer).
+    // Plain `CREATE TABLE`, not `IF NOT EXISTS` — mirrors migration 15
+    // (publications). Additive: it does not rebuild `events`, so it cannot
+    // drop another epic's column.
+    up: (db) =>
+      db.exec(`
+CREATE TABLE project_acks (
+  projectId TEXT PRIMARY KEY REFERENCES projects(id),
+  cursor    TEXT NOT NULL
+);
+`),
+  },
 ];

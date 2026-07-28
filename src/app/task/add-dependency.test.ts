@@ -12,7 +12,7 @@ import type { EventFeed } from "../../events/port.ts";
 import type { Task } from "../../domain/task.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import type { Event } from "../../domain/event.ts";
-import { CycleError } from "../../domain/graph.ts";
+import { CycleError, UnknownDependencyError } from "../../domain/graph.ts";
 import { DependenciesLockedError } from "../../domain/task.ts";
 import { WrongTypeReferenceError } from "../errors.ts";
 
@@ -115,6 +115,33 @@ class FakeTaskRepository implements TaskRepository {
     _expectedStatus: string,
   ) {
     return { status: "applied" as const, freshSha: "" };
+  }
+}
+
+/**
+ * (016 B5) EPIC 016's Verification Gate: "Cross-initiative task edges cannot
+ * exist" relies on `listByInitiative(initiativeId)` actually scoping to that
+ * initiative. `FakeTaskRepository.listByInitiative` above ignores its
+ * argument and returns every task regardless of initiative — a fixture built
+ * on it could never observe a cross-initiative rejection. This subclass adds
+ * real per-task initiative scoping so the regression test below exercises
+ * the actual invariant, not an accidentally-permissive fake.
+ */
+class ScopedFakeTaskRepository extends FakeTaskRepository {
+  readonly #initiativeByTaskId = new Map<string, string>();
+
+  assignInitiative(taskId: string, initiativeId: string): void {
+    this.#initiativeByTaskId.set(taskId, initiativeId);
+  }
+
+  override listByInitiative(initiativeId: string): Task[] {
+    return super
+      .listByInitiative(initiativeId)
+      .filter((t) => this.#initiativeByTaskId.get(t.id) === initiativeId);
+  }
+
+  override getInitiativeId(taskId: string): string | undefined {
+    return this.#initiativeByTaskId.get(taskId);
   }
 }
 
@@ -378,6 +405,97 @@ describe("AddDependency", () => {
         return true;
       },
     );
+  });
+
+  test("(016 B5) AddDependency: a dependencyId scoped to a foreign initiative is refused, nothing persisted, no event", async () => {
+    // Characterization test: EPIC 016's Verification Gate names this
+    // invariant as already-shipped ("Cross-initiative task edges cannot
+    // exist" — enforcement is incidental via `validateGraph`, not a
+    // dedicated check). This test is expected to pass today; it pins the
+    // behavior so the invariant this epic relies on cannot silently
+    // regress. Sensitivity is proven by `ScopedFakeTaskRepository` itself:
+    // the plain `FakeTaskRepository.listByInitiative` above ignores its
+    // argument and returns every task for every initiative, so swapping
+    // back to it would make `TASK_C` visible in the proposed graph and this
+    // test would fail (no throw) — that swap is exactly what a silent
+    // regression of the invariant would look like.
+    const TASK_C = "01JZZZZZZZZZZZZZZZZZZTSKC0";
+    const OTHER_INIT_ID = "01JZZZZZZZZZZZZZZZZZZINI1";
+    const OTHER_OBJ_ID = "01JZZZZZZZZZZZZZZZZZZOBJ1";
+
+    const resolver = new FakeReferenceResolver({
+      [TASK_A]: "task",
+      [TASK_C]: "task",
+    });
+    const taskRepo = new ScopedFakeTaskRepository();
+    const initiativeRepo = new FakeInitiativeRepository();
+    const events = new FakeEventFeed();
+    const transactor = new FakeTransactor();
+
+    initiativeRepo.save({
+      id: INIT_ID,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ0",
+      name: "oauth",
+      paused: false,
+    });
+    initiativeRepo.saveObjective({
+      id: OBJ_ID,
+      initiativeId: INIT_ID,
+      name: "backend",
+    });
+    initiativeRepo.save({
+      id: OTHER_INIT_ID,
+      projectId: "01JZZZZZZZZZZZZZZZZZZZPRJ1",
+      name: "billing",
+      paused: false,
+    });
+    initiativeRepo.saveObjective({
+      id: OTHER_OBJ_ID,
+      initiativeId: OTHER_INIT_ID,
+      name: "invoices",
+    });
+
+    taskRepo.save({
+      id: TASK_A,
+      objectiveId: OBJ_ID,
+      title: "A",
+      status: "pending",
+      dependencies: [],
+    });
+    taskRepo.assignInitiative(TASK_A, INIT_ID);
+    taskRepo.save({
+      id: TASK_C,
+      objectiveId: OTHER_OBJ_ID,
+      title: "C (other initiative)",
+      status: "pending",
+      dependencies: [],
+    });
+    taskRepo.assignInitiative(TASK_C, OTHER_INIT_ID);
+
+    const uc = new AddDependency(
+      taskRepo,
+      initiativeRepo,
+      resolver,
+      events,
+      transactor,
+    );
+
+    await assert.rejects(
+      () => uc.execute({ taskId: TASK_A, dependencyId: TASK_C }),
+      (err: unknown) => {
+        assert.ok(
+          err instanceof UnknownDependencyError,
+          `expected UnknownDependencyError, got ${String(err)}`,
+        );
+        return true;
+      },
+    );
+    assert.equal(
+      taskRepo.addedEdges.length,
+      0,
+      "no edge persisted across initiatives",
+    );
+    assert.equal(events.events.length, 0, "no event emitted");
   });
 });
 

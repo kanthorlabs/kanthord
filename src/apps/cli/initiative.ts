@@ -4,6 +4,7 @@ import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
 import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
 import type { ListInitiatives } from "../../app/initiative/list-initiatives.ts";
 import type { GetInitiative } from "../../app/initiative/get-initiative.ts";
+import type { GetInitiativeGraph } from "../../app/initiative/get-initiative-graph.ts";
 import { toResult } from "./error-map.ts";
 
 export async function runCreateInitiative(
@@ -105,6 +106,50 @@ export async function runGetInitiative(
     lines.push(`branch: ${output.branch}`);
     if (output.workspace !== undefined) {
       lines.push(`workspace: ${output.workspace}`);
+    }
+    return { exitCode: 0, stdout: lines, stderr: [] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+export async function runGetInitiativeGraph(
+  args: Record<string, unknown>,
+  getInitiativeGraph: GetInitiativeGraph,
+): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
+  const id = args["initiative"] as string;
+  try {
+    const output = await getInitiativeGraph.execute({ id });
+    if (args["json"]) {
+      return { exitCode: 0, stdout: [JSON.stringify(output)], stderr: [] };
+    }
+    const lines: string[] = [
+      `initiative: ${output.initiative.id} ${output.initiative.name} [${output.initiative.status}]`,
+      `paused: ${output.initiative.paused}`,
+    ];
+    if (output.criticalPath.length > 0) {
+      lines.push(`critical path: ${output.criticalPath.length} node(s)`);
+    }
+    for (const g of output.groups) {
+      const repos = g.repositories.length > 0 ? g.repositories.join(",") : "-";
+      const kind = g.action?.kind ?? "-";
+      lines.push(
+        `group ${g.id} ${g.name} [${g.status}] repos=${repos} ${kind}`,
+      );
+    }
+    for (const n of output.nodes) {
+      const kind = n.action?.kind ?? "-";
+      lines.push(
+        `node ${n.id} ${n.status} ${n.dependencyState}/${n.executionState} down=${n.downstream} ${kind}`,
+      );
+    }
+    for (const n of output.nodes) {
+      const dead = n.action?.targetDependencyId;
+      if (n.blockedForever && dead !== undefined) {
+        lines.push(
+          `blocked forever: ${n.id} (dependency ${dead} can never clear)`,
+        );
+      }
     }
     return { exitCode: 0, stdout: lines, stderr: [] };
   } catch (err) {
