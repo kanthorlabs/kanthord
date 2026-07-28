@@ -60,6 +60,8 @@ import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-
 import type { TestAiProvider } from "../../app/ai-provider/test-ai-provider.ts";
 import type { ProbeAiProvider } from "../../app/project/probe-ai-provider.ts";
 import type { CheckProject } from "../../app/project/check-project.ts";
+import type { ObserveSetupFacts } from "../../app/project/observe-setup-facts.ts";
+import type { SetupPrompt } from "./setup/prompt.ts";
 import type { CreateGraph } from "../../app/graph/create-graph.ts";
 import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
 import type { LoginDeps } from "./login.ts";
@@ -231,6 +233,13 @@ export interface CliDeps {
   providerProbe: ProbeAiProvider;
   checkProject: CheckProject;
   /**
+   * EPIC 015 Story 1 — fact collector for the guided setup wizard. Returns
+   * the `ObservedFacts` value the pure `SetupPlan` decides against.
+   * Consumed by the Step 4 executor (`run-setup.ts`); nothing in the CLI
+   * reads it yet.
+   */
+  observeSetupFacts: ObserveSetupFacts;
+  /**
    * EPIC 014 Story 6 — starts a daemon heartbeat (014 S3) so a live daemon
    * is visible to `check project`'s `daemon` check. The returned function
    * cancels the schedule; it is idempotent.
@@ -251,4 +260,17 @@ export interface CliDeps {
   ) =>
     | { note?: string; conflictContext?: string; priorSummary?: string }
     | undefined;
+  /**
+   * EPIC 015 Story 5 — the interactive-prompt seam the guided setup
+   * wizard injects. Wired in `composition.ts` over `node:readline` (the
+   * same block `login` already uses).
+   */
+  setupPrompt: SetupPrompt;
+  /**
+   * EPIC 015 Story 5 — whether the process's stdin is a TTY. The
+   * `kanthord setup project` leaf needs this to decide whether to
+   * prompt (TTY) or to fail with a clear "use --answers" message
+   * (no TTY). `process.stdin.isTTY === true` at the composition root.
+   */
+  stdinIsTty: boolean;
 }

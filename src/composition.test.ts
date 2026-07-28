@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -1204,6 +1205,66 @@ test("(BLOCKER 7) CAS credentialVersion is safe through real SQLite registry", a
 
     db.close();
   } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ─── AUTO_REVIEW F-B3 — the real setupPrompt adapter cannot abort on stdin
+// EOF ─────────────────────────────────────────────────────────────────────
+//
+// `buildDeps(...).setupPrompt.ask` (composition.ts) awaits
+// `rl.question(...)` from `node:readline/promises`. That promise never
+// settles once the interface closes without an answer (EOF / Ctrl-D): it
+// neither resolves nor rejects, so the `catch { return undefined; }` in
+// `composition.ts` never runs and the wizard hangs forever instead of
+// producing `error: aborted` / `exitCode: 1`
+// (`src/apps/cli/setup/prompt.ts:19-28`: "undefined is the abort signal:
+// EOF ... the wizard treats either as a user-initiated abort").
+//
+// This test reaches the REAL adapter (not a fake) by swapping
+// `process.stdin` for an already-ended `Readable` before calling `ask()`,
+// then races `ask()` against a short timeout. Today `ask()` never settles,
+// so the race resolves to the timeout sentinel and the assertion below
+// fails — proving the hang, not just asserting it by inspection. Once
+// fixed, `ask()` must resolve `undefined` well within the timeout.
+test("(AUTO_REVIEW F-B3) real setupPrompt.ask must resolve undefined on stdin EOF, not hang forever", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-fb3-"));
+  const dbPath = join(dir, "kanthord.db");
+  const originalStdin = process.stdin;
+  try {
+    const deps = buildDeps(dbPath);
+
+    // A stdin double that is already at EOF: no data, ended immediately.
+    const endedStdin = new Readable({ read() {} });
+    endedStdin.push(null);
+    Object.defineProperty(process, "stdin", {
+      value: endedStdin,
+      configurable: true,
+    });
+
+    const TIMEOUT = Symbol("timeout");
+    const result = await Promise.race([
+      deps.setupPrompt.ask("some prompt"),
+      new Promise((resolve) => setTimeout(() => resolve(TIMEOUT), 500)),
+    ]);
+
+    assert.notEqual(
+      result,
+      TIMEOUT,
+      "ask() must resolve on stdin EOF, not hang forever — AUTO_REVIEW F-B3: " +
+        "rl.question() never settles once the readline interface closes " +
+        "without an answer, so the existing catch{return undefined} never runs",
+    );
+    assert.equal(
+      result,
+      undefined,
+      "ask() must resolve undefined on stdin EOF (the documented abort signal)",
+    );
+  } finally {
+    Object.defineProperty(process, "stdin", {
+      value: originalStdin,
+      configurable: true,
+    });
     rmSync(dir, { recursive: true, force: true });
   }
 });

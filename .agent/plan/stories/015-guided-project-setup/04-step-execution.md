@@ -207,8 +207,16 @@ bare method reference — the leaf passes arrow wrappers.
           `error: provider: verification failed: <outcome.detail>` and
           `provider <providerId> is registered but unverified; fix the credential and rerun setup`,
           then `exitCode: 1`. `detail` is already redacted and single-line by
-          014's `makeRedactor` seam — **do not scrub, truncate or re-redact it
-          here**, and do not read the secret back to do so.
+          014's `makeRedactor` seam — **do not truncate or reformat it here**,
+          and do not read the secret back from storage to redact it.
+          **Do apply setup's own defence-in-depth scrub** over the secret values
+          this run already holds in memory (the `trackedSecrets` set), so a
+          rejection message that echoes a secret 014's redactor did not catch
+          still cannot reach stderr. The verify list's "no secret contents
+          anywhere" rule is binding and outranks a single pass-through
+          formatting preference. (Amended 2026-07-28 by the maintainer,
+          resolving the contradiction the reviewer raised as S4/S3 in
+          `.agent/tdd/history/2026-07-28-015-guided-project-setup.md`.)
         - Success → append ` — verified` to the provider line.
         - For route `oauth` no probe call is made: the successful login is the
           verification, and no `confirmCost` consent exists for that route.
@@ -338,7 +346,9 @@ sqlite, no git, no network:
   `/registered but unverified/`, a first stderr line containing `401 unauthorized`
   verbatim, and the provider line still present on stdout.
 - **detail is not re-redacted**: a `failed` detail containing `[redacted]`
-  reaches stderr byte-identical.
+  reaches stderr byte-identical. (Consistent with the amended scrub rule above:
+  setup's scrub replaces only the secret values this run holds in
+  `trackedSecrets`, and the literal `[redacted]` is never one of them.)
 - **verification does not re-run**: facts with an equivalent assigned active
   provider → `providerProbe.execute` call count `0`.
 - **reactivation re-verifies**: facts with an equivalent assigned provider whose
