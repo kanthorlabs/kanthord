@@ -64,6 +64,13 @@ export type TaskResult =
       candidateCommit: string;
       summary: string;
       evidence?: VerificationEvidence[];
+    }
+  | {
+      /**
+       * EPIC 013 — the run's lease was revoked and it drained at a turn
+       * boundary. Carries no payload: a drained run has no outcome to persist.
+       */
+      outcome: "abandoned";
     };
 
 export interface TaskContextBinding {
@@ -85,11 +92,17 @@ export interface ResolvedProvider {
   credentialVersion: number;
 }
 
+/** Observes whether the run's queue lease is still current. */
+export interface LeaseObserver {
+  isCurrent(): boolean;
+}
+
 export interface AgentRunner {
   run(
     task: Task,
     context: TaskContextBinding[],
-    provider?: ResolvedProvider,
+    provider: ResolvedProvider | undefined,
+    lease: LeaseObserver,
   ): Promise<TaskResult>;
 }
 

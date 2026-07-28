@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RunNextTask } from "./run-next-task.ts";
-import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { JobQueue, ClaimedJob, RunningJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type {
   UnitOfWork,
@@ -127,8 +127,14 @@ class RecordingJobQueue implements JobQueue {
   }> = [];
   readonly discarded: string[] = [];
   readonly enqueued: string[] = [];
-  readonly #preEnqueued: Set<string>;
+  /** EPIC 013 S1 — arguments passed to isLeaseCurrent, in call order. */
+  readonly isLeaseCurrentCalls: string[] = [];
+  /** EPIC 013 S1 — arguments passed to listRunningJobsForTask, in call order. */
+  readonly listRunningJobsForTaskCalls: string[] = [];
+  /** EPIC 013 S1 — controlled return for isLeaseCurrent (default true = "current"). */
+  leaseCurrentResult = true;
   #nextClaim: ClaimedJob | undefined;
+  readonly #preEnqueued: Set<string>;
 
   constructor(nextClaim: ClaimedJob | undefined, preEnqueued: string[] = []) {
     this.#nextClaim = nextClaim;
@@ -158,6 +164,26 @@ class RecordingJobQueue implements JobQueue {
 
   listRunningJobs(): ClaimedJob[] {
     return [];
+  }
+
+  isLeaseCurrent(leaseToken: string): boolean {
+    this.isLeaseCurrentCalls.push(leaseToken);
+    return this.leaseCurrentResult;
+  }
+
+  listRunningJobsForTask(taskId: string): RunningJob[] {
+    this.listRunningJobsForTaskCalls.push(taskId);
+    return [];
+  }
+
+  // EPIC 013 Story 3 — `revoke` seam. RunNextTask does not call revoke
+  // (the AbandonTask use case does); default `not_found` keeps a stray
+  // call debuggable.
+  revoke(
+    _leaseToken: string,
+    _reason: string,
+  ): "revoked" | "already_revoked" | "not_found" {
+    return "not_found";
   }
 }
 
@@ -2078,5 +2104,434 @@ test("(008.4 Story 04) a provider error with NO resolved chain (legacy caller wi
     failedEvt?.payload?.providerReasons,
     undefined,
     "no chain ⇒ no aggregated providerReasons",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 1 — lease identity threaded from claim into the runner
+// ---------------------------------------------------------------------------
+
+test("(013 S1) RunNextTask passes a lease whose isCurrent reaches the queue with the claimed job id", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  // A runner that captures the 4th argument (the lease) the use case is
+  // supposed to pass. Typed loosely so the test is forward-compatible with the
+  // new 4-arg AgentRunner.run signature (the SE widens the interface in
+  // Story 1; this runner records whatever the use case hands it).
+  const receivedLeases: unknown[] = [];
+  const capturingRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+      _provider: ResolvedProvider | undefined,
+      ...rest: unknown[]
+    ): Promise<TaskResult> {
+      receivedLeases.push(rest[0]);
+      return { outcome: "completed", summary: "fake" };
+    },
+  };
+  const resolver: AgentRunnerResolver = {
+    for: () => capturingRunner as unknown as AgentRunner,
+  };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  await uc.execute();
+
+  assert.equal(receivedLeases.length, 1, "runner called exactly once");
+  const lease = receivedLeases[0];
+  assert.ok(
+    lease !== undefined && lease !== null,
+    "RunNextTask must hand the runner a lease object (the 4th argument)",
+  );
+  const observer = lease as { isCurrent: () => boolean };
+  const current = observer.isCurrent();
+  assert.equal(
+    current,
+    true,
+    "the lease's isCurrent() returns whatever the queue says (true by default)",
+  );
+  // EPIC 013 S1 — the lease observer's `isCurrent()` must reach the queue
+  // with the claimed job's id, proving the token is threaded from
+  // claim → runner. After Story 2, the queue is consulted additional times
+  // (tx2 top-level read + per-branch guard), so the call array is no
+  // longer exactly `[JOB_ID]`. The load-bearing invariant is that the
+  // observer's call reaches the queue — checked with `includes`, not
+  // strict equality.
+  assert.ok(
+    queue.isLeaseCurrentCalls.includes(JOB_ID),
+    `the lease's isCurrent() must reach the queue with the claimed job's id, ` +
+      `proving the token is threaded from claim → runner; got ${JSON.stringify(queue.isLeaseCurrentCalls)}`,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 3 + Story 4 — the `abandoned` TaskResult arm. A scripted
+// runner that returns `{ outcome: "abandoned" }` is the runner reporting a
+// drained lease. The use case must:
+//   - resolve to `{ outcome: "abandoned", taskId }`;
+//   - NOT call `finish`, `saveTaskResult`;
+//   - requeue the task (`running → pending`, discard the old job row, re-enqueue);
+//   - append `task.ready` (only when the re-enqueue inserted) then
+//     `task.abandoned` (with the operator's reason) inside tx2.
+//
+// The Story 3 turn wrote this test against a "soft early return" contract
+// (no requeue, no `task.abandoned` event). Story 4 filled the tx2
+// `abandoned` branch with the requeue + `task.abandoned` append per the
+// Story 4 spec, so the assertions now mirror that contract. The base
+// `RecordingJobQueue` returns `[]` from `listRunningJobsForTask`, so the
+// reason defaults to `""` — the S4 test variant uses
+// `S4RecordingJobQueue` to drive a non-empty `revokeReason`.
+// ---------------------------------------------------------------------------
+
+test("(013 S3) RunNextTask execute: scripted runner returning {outcome:'abandoned'} → outcome 'abandoned', requeue, task.abandoned event", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new RecordingJobQueue(claimed);
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  const scripted: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+      _provider: ResolvedProvider | undefined,
+      _lease: { isCurrent: () => boolean },
+    ): Promise<TaskResult> {
+      return { outcome: "abandoned" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => scripted };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.deepEqual(
+    result,
+    { outcome: "abandoned", taskId: TASK_SIMPLE.id },
+    "a drained run must surface as 'abandoned' from execute()",
+  );
+
+  // finish was never called — the lease row's lifecycle ends via discard
+  // (the requeue path), not finish.
+  assert.equal(
+    queue.finished.length,
+    0,
+    "finish must NOT be called for an abandoned run (the row is discarded, not finished)",
+  );
+
+  // saveTaskResult was never called — an abandoned run has no result to persist.
+  assert.equal(
+    store.taskResults.length,
+    0,
+    "no task_results row must be saved for an abandoned run",
+  );
+
+  // The task was saved TWICE: once to `running` (tx1) and once to `pending`
+  // (tx2 abandoned branch — the requeue).
+  assert.equal(
+    store.saved.length,
+    2,
+    "tx1 + tx2 each save once (tx1 pending→running, tx2 running→pending)",
+  );
+  assert.equal(store.saved[0]!.status, "running", "tx1: pending → running");
+  assert.equal(
+    store.saved[1]!.status,
+    "pending",
+    "tx2 abandoned branch: running → pending (requeue)",
+  );
+
+  // The lease row was discarded and a fresh enqueue happened.
+  assert.deepEqual(
+    queue.discarded,
+    [JOB_ID],
+    "the old lease row was discarded by the requeue",
+  );
+  assert.deepEqual(
+    queue.enqueued,
+    [TASK_SIMPLE.id],
+    "the task was re-enqueued by the requeue",
+  );
+
+  // Event order inside the run: task.started (tx1) → task.ready (tx2 requeue)
+  // → task.abandoned (tx2 abandonment record). The task.abandoned payload
+  // carries the operator's reason (here: "" because listRunningJobsForTask
+  // returned no revoked row in this test).
+  const types = feed.events.map((e) => e.type);
+  assert.deepEqual(
+    types,
+    ["task.started", "task.ready", "task.abandoned"],
+    "events must be: task.started (tx1) → task.ready (tx2 requeue) → task.abandoned (tx2)",
+  );
+  const abandonedEvt = feed.events.find((e) => e.type === "task.abandoned");
+  assert.ok(abandonedEvt !== undefined, "task.abandoned event was appended");
+  assert.deepEqual(
+    abandonedEvt!.payload,
+    { reason: "" },
+    "task.abandoned payload collapses to { reason: '' } when listRunningJobsForTask has no revoked row",
+  );
+
+  // No terminal event of any other kind.
+  const terminalTypes = feed.events
+    .map((e) => e.type)
+    .filter(
+      (t) =>
+        t === "task.completed" || t === "task.failed" || t === "task.escalated",
+    );
+  assert.equal(
+    terminalTypes.length,
+    0,
+    "no task.completed / task.failed / task.escalated event for a drained run",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 4 — requeue on exit. The Story 3 early return at the top of
+// tx2 must be filled with the requeue + `task.abandoned` append so a drained
+// run hands the task back. The lease observer's `listRunningJobsForTask`
+// returns the just-revoked row carrying the operator's `revokeReason`; that
+// reason is the payload of `task.abandoned`. Event order inside tx2 is pinned:
+// `task.started` (tx1) → `task.ready` (only when the re-enqueue inserted) →
+// `task.abandoned`.
+// ---------------------------------------------------------------------------
+
+/**
+ * RecordingJobQueue extended for S4 — surfaces a revoked running job via
+ * `listRunningJobsForTask` so the abandoned branch can read its
+ * `revokeReason` before requeueing (the requeue discards the row, so the
+ * reason must be read first).
+ */
+class S4RecordingJobQueue extends RecordingJobQueue {
+  readonly #revoked: { id: string; taskId: string; reason: string }[];
+  constructor(
+    nextClaim: ClaimedJob | undefined,
+    preEnqueued: string[] = [],
+    revoked: { id: string; taskId: string; reason: string }[] = [],
+  ) {
+    super(nextClaim, preEnqueued);
+    this.#revoked = revoked;
+  }
+
+  override listRunningJobsForTask(taskId: string): RunningJob[] {
+    this.listRunningJobsForTaskCalls.push(taskId);
+    return this.#revoked
+      .filter((r) => r.taskId === taskId)
+      .map((r) => ({
+        id: r.id,
+        taskId: r.taskId,
+        revoked: true,
+        revokeReason: r.reason,
+      }));
+  }
+}
+
+test("(013 S4) RunNextTask execute: scripted 'abandoned' outcome + revoked running job → requeue to pending, task.abandoned event with reason", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new S4RecordingJobQueue(
+    claimed,
+    [],
+    [{ id: JOB_ID, taskId: TASK_SIMPLE.id, reason: "stuck on a slow tool" }],
+  );
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  const scripted: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+      _provider: ResolvedProvider | undefined,
+      _lease: { isCurrent: () => boolean },
+    ): Promise<TaskResult> {
+      return { outcome: "abandoned" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => scripted };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.deepEqual(
+    result,
+    { outcome: "abandoned", taskId: TASK_SIMPLE.id },
+    "a drained run must surface as 'abandoned' from execute()",
+  );
+
+  // The task was saved TWICE: once to `running` (tx1) and once to `pending`
+  // (tx2 abandoned branch — the requeue).
+  assert.equal(store.saved.length, 2, "tx1 + tx2 each save once");
+  assert.equal(store.saved[0]!.status, "running", "tx1: pending → running");
+  assert.equal(store.saved[1]!.status, "pending", "tx2: running → pending");
+
+  // The lease row was discarded and a fresh enqueue happened.
+  assert.deepEqual(
+    queue.discarded,
+    [JOB_ID],
+    "the old lease row was discarded by the requeue",
+  );
+  assert.deepEqual(
+    queue.enqueued,
+    [TASK_SIMPLE.id],
+    "the task was re-enqueued by the requeue",
+  );
+
+  // finish was never called — the lease row's lifecycle ends via discard.
+  assert.equal(
+    queue.finished.length,
+    0,
+    "finish must NOT be called for an abandoned run (the row is discarded, not finished)",
+  );
+
+  // saveTaskResult was never called.
+  assert.equal(
+    store.taskResults.length,
+    0,
+    "no task_results row must be saved for an abandoned run",
+  );
+
+  // Event order inside the run: task.started (tx1) → task.ready (tx2 requeue)
+  // → task.abandoned (tx2 abandonment record). The task.abandoned payload
+  // carries the operator's reason exactly as `listRunningJobsForTask` reported
+  // it.
+  const types = feed.events.map((e) => e.type);
+  assert.deepEqual(
+    types,
+    ["task.started", "task.ready", "task.abandoned"],
+    "events must be: task.started (tx1) → task.ready (tx2 requeue) → task.abandoned (tx2)",
+  );
+  const abandonedEvt = feed.events.find((e) => e.type === "task.abandoned");
+  assert.ok(abandonedEvt !== undefined, "task.abandoned event was appended");
+  assert.equal(
+    abandonedEvt!.taskId,
+    TASK_SIMPLE.id,
+    "task.abandoned carries the task id",
+  );
+  assert.deepEqual(
+    abandonedEvt!.payload,
+    { reason: "stuck on a slow tool" },
+    "task.abandoned payload carries the operator's reason from the revoked lease row",
+  );
+
+  // No terminal event of any other kind.
+  const terminalTypes = feed.events
+    .map((e) => e.type)
+    .filter(
+      (t) =>
+        t === "task.completed" || t === "task.failed" || t === "task.escalated",
+    );
+  assert.equal(
+    terminalTypes.length,
+    0,
+    "no task.completed / task.failed / task.escalated event for a drained run",
+  );
+});
+
+test("(013 S4) RunNextTask execute: scripted 'abandoned' outcome with revokeReason=null → task.abandoned payload is { reason: '' }", async () => {
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new S4RecordingJobQueue(
+    claimed,
+    [],
+    [{ id: JOB_ID, taskId: TASK_SIMPLE.id, reason: "" }],
+  );
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  const scripted: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+      _provider: ResolvedProvider | undefined,
+      _lease: { isCurrent: () => boolean },
+    ): Promise<TaskResult> {
+      return { outcome: "abandoned" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => scripted };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, {
+    outcome: "abandoned",
+    taskId: TASK_SIMPLE.id,
+  });
+
+  const abandonedEvt = feed.events.find((e) => e.type === "task.abandoned");
+  assert.ok(abandonedEvt !== undefined);
+  assert.deepEqual(
+    abandonedEvt!.payload,
+    { reason: "" },
+    "a null revokeReason collapses to { reason: '' } in the task.abandoned payload",
+  );
+});
+
+test("(013 S4) RunNextTask execute: runner reports 'completed' but isLeaseCurrent is false in tx2 → the 'run finished before it noticed' path; requeue + task.abandoned", async () => {
+  // The runner hands back a normal completed result, but the lease was
+  // revoked while the run was in flight (e.g. between tx1 and tx2, or
+  // between the run's last turn and the use case's tx2). RunNextTask's tx2
+  // top-level read sees `!isLeaseCurrent`, takes the abandoned branch, and
+  // hands the task back. The runner's completed result is silently
+  // discarded (a per-branch guard is unreachable because we never enter
+  // the per-branch arms).
+  const claimed: ClaimedJob = { id: JOB_ID, taskId: TASK_SIMPLE.id };
+  const queue = new S4RecordingJobQueue(
+    claimed,
+    [],
+    [{ id: JOB_ID, taskId: TASK_SIMPLE.id, reason: "abandoned mid-run" }],
+  );
+  queue.leaseCurrentResult = false;
+  const store = new SimpleTaskStore([{ ...TASK_SIMPLE }], INI_ID);
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+
+  const scripted: AgentRunner = {
+    async run(
+      _task: Task,
+      _context: TaskContextBinding[],
+      _provider: ResolvedProvider | undefined,
+      _lease: { isCurrent: () => boolean },
+    ): Promise<TaskResult> {
+      return { outcome: "completed", summary: "would have completed" };
+    },
+  };
+  const resolver: AgentRunnerResolver = { for: () => scripted };
+
+  const uc = new RunNextTask(queue, store, feed, uow, resolver);
+  const result = await uc.execute();
+
+  assert.deepEqual(result, {
+    outcome: "abandoned",
+    taskId: TASK_SIMPLE.id,
+  });
+
+  // Requeue: task → pending, job discarded, fresh enqueue, task.abandoned
+  // appended with the reason.
+  assert.equal(store.saved.length, 2, "tx1 + tx2 each save once");
+  assert.equal(store.saved[1]!.status, "pending");
+  assert.deepEqual(queue.discarded, [JOB_ID]);
+  assert.deepEqual(queue.enqueued, [TASK_SIMPLE.id]);
+
+  // The runner's completed result was ignored: no `task.completed` event,
+  // no task_results row, finish was never called.
+  assert.equal(queue.finished.length, 0, "no finish on a late-revoked run");
+  assert.equal(store.taskResults.length, 0, "no task_results row");
+  const completedEvts = feed.events.filter((e) => e.type === "task.completed");
+  assert.equal(
+    completedEvts.length,
+    0,
+    "no task.completed event when the lease was revoked before tx2",
+  );
+
+  // task.abandoned still carries the reason.
+  const abandonedEvt = feed.events.find((e) => e.type === "task.abandoned");
+  assert.ok(abandonedEvt !== undefined);
+  assert.deepEqual(
+    abandonedEvt!.payload,
+    { reason: "abandoned mid-run" },
+    "task.abandoned payload mirrors the reason stored on the revoked lease row",
   );
 });

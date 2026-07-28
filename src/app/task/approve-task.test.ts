@@ -24,7 +24,7 @@ import type { Objective } from "../../domain/initiative.ts";
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow, LandingRepository } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
-import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { JobQueue, ClaimedJob, RunningJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
 import type { WorkspaceManager, Workspace } from "../../workspace/port.ts";
@@ -248,6 +248,19 @@ class MemQueue implements JobQueue {
   }
   listRunningJobs(): ClaimedJob[] {
     return [];
+  }
+  isLeaseCurrent(_leaseToken: string): boolean {
+    return true;
+  }
+  listRunningJobsForTask(_taskId: string): RunningJob[] {
+    return [];
+  }
+  // EPIC 013 Story 3 — `revoke` seam. approve-task never reaches it.
+  revoke(
+    _leaseToken: string,
+    _reason: string,
+  ): "revoked" | "already_revoked" | "not_found" {
+    return "not_found";
   }
 }
 

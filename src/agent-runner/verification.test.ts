@@ -21,8 +21,16 @@ import { genericProfile, type PiAgentProfile } from "./pi-profile.ts";
 import type { VerificationEvidence } from "./verification.ts";
 import type { Repository } from "../domain/resource.ts";
 import type { Task } from "../domain/task.ts";
-import type { ResolvedProvider, TaskContextBinding } from "./port.ts";
+import type {
+  LeaseObserver,
+  ResolvedProvider,
+  TaskContextBinding,
+} from "./port.ts";
 import type { ProviderSessionFactory } from "./pi-session.ts";
+
+// EPIC 013 S1 — AgentRunner.run takes a LeaseObserver as 4th arg. Hermetic
+// tests use a static "live" observer (Story 3 will plug in revocation).
+const LIVE_LEASE: LeaseObserver = { isCurrent: () => true };
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -189,6 +197,7 @@ test("(a) agent writes file via write tool → candidate (changed work), candida
     makeTask({ id: "task-a" }),
     makeContext(repo),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "candidate");
@@ -253,6 +262,7 @@ test("(b) text-only session, no changes → completed (verified no-change is a l
     makeTask({ id: "task-b" }),
     makeContext(repo),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "completed");
@@ -290,6 +300,7 @@ test("(c) agent commits via bash → candidate, exactly one new commit on task b
     makeTask({ id: "task-c" }),
     makeContext(repo),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "candidate");
@@ -370,6 +381,7 @@ test("(d) write then escalate → escalated, proposalCommit on proposal branch, 
     makeTask({ id: "task-d" }),
     makeContext(repo),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "escalated");
@@ -451,6 +463,7 @@ test("(e) escalate with no change → escalated, proposalCommit absent", async (
     makeTask({ id: "task-e" }),
     makeContext(repo),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "escalated");
@@ -491,6 +504,7 @@ test("(f) agent removes .git → failed ResultCaptureError", async () => {
     makeTask({ id: "task-f" }),
     makeContext(repo),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -530,7 +544,12 @@ test("(g) D6: verification commands all exit 0 → candidate (changed work), evi
     verification: ['sh -c "exit 0"', "echo ok"],
   });
 
-  const result = await runner.run(task, makeContext(repo), PROVIDER);
+  const result = await runner.run(
+    task,
+    makeContext(repo),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "candidate");
   const r = result as {
@@ -573,7 +592,12 @@ test("(h) verification exits 7 → failed VerificationFailedError, branch still 
 
   const task = makeTask({ id: "task-h", verification: ["exit 7"] });
 
-  const result = await runner.run(task, makeContext(repo), PROVIDER);
+  const result = await runner.run(
+    task,
+    makeContext(repo),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "failed");
   const r = result as { outcome: "failed"; reason: string };
@@ -633,7 +657,12 @@ test("(i) escalate with verification set → escalated, verification commands ne
 
   const task = makeTask({ id: "task-i", verification: [probeCmd] });
 
-  const result = await runner.run(task, makeContext(repo), PROVIDER);
+  const result = await runner.run(
+    task,
+    makeContext(repo),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "escalated");
 
@@ -675,7 +704,12 @@ test("(j) no verification field → candidate (changed work), evidence undefined
   // makeTask does NOT include verification field
   const task = makeTask({ id: "task-j" });
 
-  const result = await runner.run(task, makeContext(repo), PROVIDER);
+  const result = await runner.run(
+    task,
+    makeContext(repo),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "candidate");
   const r = result as {

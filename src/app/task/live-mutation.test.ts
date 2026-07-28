@@ -38,10 +38,14 @@ import { AddDependency } from "./add-dependency.ts";
 import { DependenciesLockedError } from "../../domain/task.ts";
 import type {
   AgentRunner,
+  LeaseObserver,
+  ResolvedProvider,
   TaskContextBinding,
   TaskResult,
 } from "../../agent-runner/port.ts";
 import type { Task } from "../../domain/task.ts";
+
+const LIVE_LEASE: LeaseObserver = { isCurrent: () => true };
 
 // ---------------------------------------------------------------------------
 // InstrumentedRunner — wraps FakeRunner; fires a per-task callback (if set)
@@ -57,10 +61,15 @@ class InstrumentedRunner implements AgentRunner {
     this.#callbacks = callbacks;
   }
 
-  async run(task: Task, context: TaskContextBinding[]): Promise<TaskResult> {
+  async run(
+    task: Task,
+    context: TaskContextBinding[],
+    _provider: ResolvedProvider | undefined,
+    _lease: LeaseObserver,
+  ): Promise<TaskResult> {
     const cb = this.#callbacks.get(task.id);
     if (cb !== undefined) await cb();
-    return this.#inner.run(task, context);
+    return this.#inner.run(task, context, undefined, LIVE_LEASE);
   }
 }
 

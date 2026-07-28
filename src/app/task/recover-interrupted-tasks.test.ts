@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RecoverInterruptedTasks } from "./recover-interrupted-tasks.ts";
-import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { JobQueue, ClaimedJob, RunningJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
@@ -60,6 +60,25 @@ class RecordingJobQueue implements JobQueue {
 
   listRunningJobs(): ClaimedJob[] {
     return [...this.#runningJobs];
+  }
+
+  isLeaseCurrent(_leaseToken: string): boolean {
+    return true;
+  }
+
+  listRunningJobsForTask(_taskId: string): RunningJob[] {
+    return [];
+  }
+
+  // EPIC 013 Story 3 — `revoke` seam. The recover-interrupted-tasks use case
+  // never reaches this path; the default records nothing and reports
+  // `not_found` so a future test that touches it gets a clear, debuggable
+  // signal rather than a silent no-op.
+  revoke(
+    _leaseToken: string,
+    _reason: string,
+  ): "revoked" | "already_revoked" | "not_found" {
+    return "not_found";
   }
 }
 

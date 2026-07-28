@@ -18,6 +18,7 @@ import { SqliteInitiativeRepository } from "../storage/sqlite/sqlite-initiative-
 import { SqliteTaskRepository } from "../storage/sqlite/sqlite-task-repository.ts";
 import { newId } from "../domain/entity.ts";
 import { SqliteJobQueue } from "./sqlite.ts";
+import { StaleLeaseError } from "./port.ts";
 
 function makeTempDb() {
   const dir = mkdtempSync(join(tmpdir(), "kanthord-queue-test-"));
@@ -636,3 +637,573 @@ test(
       assert.ok(union.has(id), `${id} not claimed by any worker`);
   },
 );
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 1 — lease identity (isLeaseCurrent, listRunningJobsForTask)
+// ---------------------------------------------------------------------------
+
+test("isLeaseCurrent returns true for a freshly claimed job's id", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  assert.equal(
+    queue.isLeaseCurrent(claimed.id),
+    true,
+    "a freshly claimed job's id is a current lease",
+  );
+});
+
+test("isLeaseCurrent returns false for an unknown id", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const queue = new SqliteJobQueue(db);
+  assert.equal(
+    queue.isLeaseCurrent("does-not-exist"),
+    false,
+    "an unknown id is not a current lease",
+  );
+});
+
+test("isLeaseCurrent returns false for a queued job's id (only running is current)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+
+  // pull the queued row's id directly from the jobs table
+  const row = db
+    .prepare("SELECT id FROM jobs WHERE taskId=? AND status='queued'")
+    .get(taskId) as { id: string } | undefined;
+  assert.ok(row !== undefined);
+  assert.equal(
+    queue.isLeaseCurrent(row.id),
+    false,
+    "a queued job is not a current lease (the run has not started)",
+  );
+});
+
+test("isLeaseCurrent returns false after finish(jobId, 'completed')", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+  queue.finish(claimed.id, "completed");
+
+  assert.equal(
+    queue.isLeaseCurrent(claimed.id),
+    false,
+    "after finish the lease is no longer current",
+  );
+});
+
+test("isLeaseCurrent returns false after revoked=1 is set on a running job", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  // sanity: current before revoke
+  assert.equal(queue.isLeaseCurrent(claimed.id), true);
+
+  db.prepare("UPDATE jobs SET revoked=1 WHERE id=?").run(claimed.id);
+
+  assert.equal(
+    queue.isLeaseCurrent(claimed.id),
+    false,
+    "a revoked running job is not a current lease",
+  );
+});
+
+test("listRunningJobsForTask returns [] for a task with only a queued job", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+
+  const rows = queue.listRunningJobsForTask(taskId);
+  assert.deepEqual(rows, [], "a queued-only task has no running jobs");
+});
+
+test("listRunningJobsForTask returns one row with revoked:false, revokeReason:null after claim", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  const rows = queue.listRunningJobsForTask(taskId);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.id, claimed.id);
+  assert.equal(rows[0]!.taskId, taskId);
+  assert.equal(rows[0]!.revoked, false);
+  assert.equal(rows[0]!.revokeReason, null);
+});
+
+test("listRunningJobsForTask returns revoked:true and the stored reason after direct UPDATE", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  db.prepare("UPDATE jobs SET revoked=1, revokeReason=? WHERE id=?").run(
+    "why",
+    claimed.id,
+  );
+
+  const rows = queue.listRunningJobsForTask(taskId);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.id, claimed.id);
+  assert.equal(rows[0]!.revoked, true);
+  assert.equal(rows[0]!.revokeReason, "why");
+});
+
+test("listRunningJobsForTask ignores running jobs belonging to other tasks", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskIdA = seedTask(db);
+  const taskIdB = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskIdA);
+  queue.enqueue(taskIdB);
+  const claimA = queue.claim();
+  const claimB = queue.claim();
+  assert.ok(claimA !== undefined);
+  assert.ok(claimB !== undefined);
+
+  const rowsA = queue.listRunningJobsForTask(taskIdA);
+  assert.equal(rowsA.length, 1, "task A sees only its own running job");
+  assert.equal(rowsA[0]!.taskId, taskIdA);
+
+  const rowsB = queue.listRunningJobsForTask(taskIdB);
+  assert.equal(rowsB.length, 1, "task B sees only its own running job");
+  assert.equal(rowsB[0]!.taskId, taskIdB);
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 2 — lease-guarded finish(): the row id IS the lease, and a
+// write from a revoked / non-running / non-existent job must throw
+// StaleLeaseError without mutating any row.
+// ---------------------------------------------------------------------------
+
+test("finish throws StaleLeaseError for an unknown id (013 S2)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const queue = new SqliteJobQueue(db);
+  assert.throws(
+    () => queue.finish("does-not-exist", "completed"),
+    (err: unknown) => err instanceof StaleLeaseError,
+    "finish on an unknown id must throw StaleLeaseError",
+  );
+});
+
+test("finish throws StaleLeaseError for a queued job's id (013 S2)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+
+  // pull the queued row's id directly from the jobs table
+  const row = db
+    .prepare("SELECT id FROM jobs WHERE taskId=? AND status='queued'")
+    .get(taskId) as { id: string } | undefined;
+  assert.ok(row !== undefined);
+
+  assert.throws(
+    () => queue.finish(row.id, "completed"),
+    (err: unknown) => err instanceof StaleLeaseError,
+    "finish on a queued job's id must throw StaleLeaseError (a queued job is not yet a lease)",
+  );
+});
+
+test("finish throws StaleLeaseError for an already-finished job's id (013 S2)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+  queue.finish(claimed.id, "completed");
+
+  // second finish on the same (now completed) id
+  assert.throws(
+    () => queue.finish(claimed.id, "failed"),
+    (err: unknown) => err instanceof StaleLeaseError,
+    "finish on a completed job's id must throw StaleLeaseError",
+  );
+});
+
+test("finish throws StaleLeaseError for a running row with revoked=1 (013 S2)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  // revoke the lease (Story 3 wires this; here we drive the column directly)
+  db.prepare("UPDATE jobs SET revoked=1 WHERE id=?").run(claimed.id);
+
+  assert.throws(
+    () => queue.finish(claimed.id, "completed"),
+    (err: unknown) => err instanceof StaleLeaseError,
+    "finish on a revoked running job must throw StaleLeaseError",
+  );
+});
+
+test("finish throw leaves the jobs row unchanged: zero rows written (013 S2)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  // Revoke; the row is still 'running' on disk, but the lease is no longer
+  // current. A finish() call must be a no-op on disk.
+  db.prepare("UPDATE jobs SET revoked=1 WHERE id=?").run(claimed.id);
+
+  // Capture the on-disk state BEFORE the throw.
+  const before = db
+    .prepare("SELECT status, revoked FROM jobs WHERE id=?")
+    .get(claimed.id) as { status: string; revoked: number };
+  assert.equal(before.status, "running");
+  assert.equal(before.revoked, 1);
+
+  try {
+    queue.finish(claimed.id, "completed");
+  } catch {
+    // expected
+  }
+
+  // The on-disk state MUST be byte-identical to before — no status change,
+  // no row written. The epic's invariant: a revoked write is rolled back / a
+  // no-op so the on-disk row never moves.
+  const afterRow = db
+    .prepare("SELECT status, revoked FROM jobs WHERE id=?")
+    .get(claimed.id) as { status: string; revoked: number };
+  assert.deepEqual(
+    { status: afterRow.status, revoked: afterRow.revoked },
+    { status: before.status, revoked: before.revoked },
+    "finish() must not mutate the jobs row when the lease is stale",
+  );
+  assert.equal(afterRow.status, "running", "row stays 'running'");
+  assert.equal(afterRow.revoked, 1, "row stays revoked=1");
+});
+
+test("late write from lease A cannot touch lease B's row (013 S2)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  // Two tasks in the same initiative (a real, distinct id for each).
+  // After claim→discard of A, B is enqueued + claimed. The lease row id
+  // belongs to B now. A's id is stale.
+  const projectRepo = new SqliteProjectRepository(db);
+  const initRepo = new SqliteInitiativeRepository(db);
+  const taskRepo = new SqliteTaskRepository(db);
+
+  const projectId = newId();
+  const initiativeId = newId();
+  const objectiveId = newId();
+  const taskId1 = newId();
+  const taskId2 = newId();
+  projectRepo.save({ id: projectId, name: "P" });
+  initRepo.save({ id: initiativeId, projectId, name: "I", paused: false });
+  initRepo.saveObjective({ id: objectiveId, initiativeId, name: "O" });
+  taskRepo.save({
+    id: taskId1,
+    objectiveId,
+    title: "T1",
+    status: "pending",
+    dependencies: [],
+  });
+  taskRepo.save({
+    id: taskId2,
+    objectiveId,
+    title: "T2",
+    status: "pending",
+    dependencies: [],
+  });
+
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId1);
+  const claimA = queue.claim();
+  assert.ok(claimA !== undefined);
+  queue.discard(claimA.id);
+
+  queue.enqueue(taskId2);
+  const claimB = queue.claim();
+  assert.ok(claimB !== undefined);
+
+  // A late write from lease A must not touch lease B's row.
+  assert.throws(
+    () => queue.finish(claimA.id, "completed"),
+    (err: unknown) => err instanceof StaleLeaseError,
+    "finish(A, 'completed') is a stale-lease write — must throw StaleLeaseError",
+  );
+  // `discard` is id-keyed and deliberately unguarded: re-discarding A's gone
+  // row is a no-op and must not touch B's row.
+  queue.discard(claimA.id);
+
+  // B's row is untouched and still current.
+  const bRow = db
+    .prepare("SELECT status FROM jobs WHERE id=?")
+    .get(claimB.id) as { status: string } | undefined;
+  assert.ok(bRow !== undefined);
+  assert.equal(
+    bRow.status,
+    "running",
+    "B's job row must still be 'running' — the late write from A did not touch it",
+  );
+  assert.equal(
+    queue.isLeaseCurrent(claimB.id),
+    true,
+    "B's lease must still be current after A's stale writes",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 3 — revoke() is a queue operation. The lease row stays
+// `status='running'` (so the per-initiative NOT EXISTS guard keeps blocking
+// new claims against the same initiative), but `revoked=1` flips the lease
+// into a stale-lease state. The 5 tests cover: claimed→revoked, idempotency,
+// unknown/queued/finished-not-found, and the post-revoke read-only view.
+// ---------------------------------------------------------------------------
+
+test("revoke returns 'revoked' on a claimed job and sets revoked=1 + revokeReason (013 S3)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  const result = queue.revoke(claimed.id, "stuck on a slow tool");
+  assert.equal(result, "revoked", "a claimed job must revoke to 'revoked'");
+
+  const row = db
+    .prepare("SELECT status, revoked, revokeReason FROM jobs WHERE id=?")
+    .get(claimed.id) as
+    | { status: string; revoked: number; revokeReason: string | null }
+    | undefined;
+  assert.ok(row !== undefined);
+  assert.equal(row.status, "running", "row stays 'running' after revoke");
+  assert.equal(row.revoked, 1, "row has revoked=1");
+  assert.equal(row.revokeReason, "stuck on a slow tool", "reason persisted");
+});
+
+test("revoke returns 'already_revoked' on a second call and leaves the FIRST reason in place (013 S3)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  const first = queue.revoke(claimed.id, "first reason");
+  assert.equal(first, "revoked");
+
+  const second = queue.revoke(claimed.id, "second reason overwrites nothing");
+  assert.equal(
+    second,
+    "already_revoked",
+    "a second revoke on the same id must be idempotent — 'already_revoked'",
+  );
+
+  const row = db
+    .prepare("SELECT revokeReason FROM jobs WHERE id=?")
+    .get(claimed.id) as { revokeReason: string | null } | undefined;
+  assert.ok(row !== undefined);
+  assert.equal(
+    row.revokeReason,
+    "first reason",
+    "the FIRST reason is preserved; the second call does NOT overwrite",
+  );
+});
+
+test("revoke returns 'not_found' for an unknown id (013 S3)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const queue = new SqliteJobQueue(db);
+  assert.equal(
+    queue.revoke("does-not-exist", "any reason"),
+    "not_found",
+    "an unknown id revokes to 'not_found'",
+  );
+});
+
+test("revoke returns 'not_found' for a queued job's id (013 S3)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+
+  const row = db
+    .prepare("SELECT id FROM jobs WHERE taskId=? AND status='queued'")
+    .get(taskId) as { id: string } | undefined;
+  assert.ok(row !== undefined);
+
+  assert.equal(
+    queue.revoke(row.id, "any reason"),
+    "not_found",
+    "a queued job has no live lease — revoke is 'not_found'",
+  );
+});
+
+test("revoke returns 'not_found' for a finished job's id (013 S3)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+  queue.finish(claimed.id, "completed");
+
+  assert.equal(
+    queue.revoke(claimed.id, "too late"),
+    "not_found",
+    "a finished job has no live lease — revoke is 'not_found'",
+  );
+});
+
+test("after revoke, isLeaseCurrent is false while SELECT status is still 'running' (013 S3)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const taskId = seedTask(db);
+  const queue = new SqliteJobQueue(db);
+  queue.enqueue(taskId);
+  const claimed = queue.claim();
+  assert.ok(claimed !== undefined);
+
+  // sanity: current before revoke
+  assert.equal(queue.isLeaseCurrent(claimed.id), true);
+
+  const r = queue.revoke(claimed.id, "any reason");
+  assert.equal(r, "revoked");
+
+  assert.equal(
+    queue.isLeaseCurrent(claimed.id),
+    false,
+    "after revoke the lease is no longer current",
+  );
+
+  // The on-disk row keeps status='running' — that is what upholds the
+  // per-initiative NOT EXISTS guard in claim() while a revoked run drains.
+  const row = db
+    .prepare("SELECT status FROM jobs WHERE id=?")
+    .get(claimed.id) as { status: string } | undefined;
+  assert.ok(row !== undefined);
+  assert.equal(
+    row.status,
+    "running",
+    "row keeps status='running' after revoke so a new claim is still blocked",
+  );
+});

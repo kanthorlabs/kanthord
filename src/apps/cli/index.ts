@@ -22,6 +22,7 @@ import { buildLogoutCommand } from "./commands/logout.ts";
 import { buildPauseCommand } from "./commands/pause.ts";
 import { buildPublishCommand } from "./commands/publish.ts";
 import { buildRejectCommand } from "./commands/reject.ts";
+import { buildAbandonCommand } from "./commands/abandon.ts";
 import { buildRegisterCommand } from "./commands/register.ts";
 import { buildRemoveCommand } from "./commands/remove.ts";
 import { buildRenameCommand } from "./commands/rename.ts";
@@ -53,6 +54,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const retry = buildRetryCommand(deps, io).name("retry");
   const approve = buildApproveCommand(deps, io).name("approve");
   const reject = buildRejectCommand(deps, io).name("reject");
+  const abandon = buildAbandonCommand(deps, io).name("abandon");
   const get = buildGetCommand(deps, io).name("get");
   const find = buildFindCommand(deps, io).name("find");
   const list = buildListCommand(deps, io).name("list");
@@ -89,6 +91,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(retry)
     .addCommand(approve)
     .addCommand(reject)
+    .addCommand(abandon)
     .addCommand(get)
     .addCommand(find)
     .addCommand(list)

@@ -4,7 +4,7 @@ import { EVENT_TYPES, newEvent, type EventType } from "./event.ts";
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
-test("EVENT_TYPES lists exactly the twenty-seven literals in order", () => {
+test("EVENT_TYPES lists exactly the twenty-eight literals in order", () => {
   assert.deepEqual(EVENT_TYPES, [
     "task.created",
     "task.ready",
@@ -16,6 +16,7 @@ test("EVENT_TYPES lists exactly the twenty-seven literals in order", () => {
     "task.approved",
     "task.rejected",
     "task.discarded",
+    "task.abandoned", // 013 Story 5 — operator revoked a run's lease
     "task.blocked",
     "task.conflict", // C2/D5 — landing conflict
     "agent.started",

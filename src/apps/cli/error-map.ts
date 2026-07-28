@@ -55,6 +55,11 @@ import {
   MissingBaseUrlError,
   InvalidNumericFlagError,
 } from "../../app/ai-provider/errors.ts";
+import {
+  TaskNotAbandonableError,
+  NoRunningJobError,
+  AmbiguousRunningJobError,
+} from "../../app/task/abandon-task.ts";
 
 export class MissingFlagError extends Error {
   readonly flag: string;
@@ -117,7 +122,10 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof InsecureEndpointError ||
     err instanceof MissingCustomProviderIdError ||
     err instanceof MissingBaseUrlError ||
-    err instanceof InvalidNumericFlagError
+    err instanceof InvalidNumericFlagError ||
+    err instanceof TaskNotAbandonableError ||
+    err instanceof NoRunningJobError ||
+    err instanceof AmbiguousRunningJobError
   ) {
     return { exitCode: 1, stderr: [`error: ${err.message}`] };
   }

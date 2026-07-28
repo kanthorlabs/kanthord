@@ -813,4 +813,62 @@ ALTER TABLE events_new10 RENAME TO events;
 CREATE INDEX events_project_cursor ON events(projectId, id);
 `),
   },
+  {
+    version: 27,
+    name: "013-s1-job-lease-revocation",
+    // EPIC 013 Story 1 — revocation state on the existing jobs row. The row id
+    // is the lease token; these two columns make a revoked lease observable.
+    // ALTER ADD COLUMN (mirrors migration 6's `tasks.sha256`) — no rebuild, so
+    // the partial unique index `jobs_queued_taskId` is untouched.
+    up: (db) =>
+      db.exec(`
+ALTER TABLE jobs ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE jobs ADD COLUMN revokeReason TEXT;
+`),
+  },
+  {
+    version: 28,
+    name: "013-s5-task-abandoned-event",
+    // EPIC 013 Story 5 — admit 'task.abandoned' in the events.type CHECK list
+    // (SQLite can't ALTER a CHECK constraint; rebuild the table). Mirrors the
+    // events_newN pattern used by migration 26: all 8 columns preserved verbatim,
+    // only the CHECK list grows by one literal. The CHECK literal list MUST be
+    // exactly the 28 EVENT_TYPES members — no more, no fewer.
+    //
+    // EPIC 011 S3 added `projectId` denormalised onto every event row, and the
+    // `events_project_cursor` index on `(projectId, id)`. The CREATE TABLE
+    // column list and the INSERT…SELECT column list both carry `projectId`
+    // explicitly; the migration recreates the index after RENAME. `events` is
+    // not an FK parent (precedent comment at migrations.ts:488-492), so no
+    // disableForeignKeys is needed.
+    up: (db) =>
+      db.exec(`
+CREATE TABLE events_new11 (
+  id           TEXT PRIMARY KEY,
+  type         TEXT NOT NULL CHECK (type IN (
+                 'task.created','task.ready','task.started','task.completed',
+                 'task.failed','task.dependencies_changed',
+                 'task.escalated','task.approved','task.rejected','task.discarded',
+                 'task.abandoned','task.blocked','task.conflict',
+                 'agent.started','agent.progress','agent.finished',
+                 'task.verification','provider.retry','provider.failover',
+                 'objective.building','objective.awaiting_confirmation',
+                 'objective.integrated','objective.conflict',
+                 'initiative.landed','candidate.transplanted','repository.published',
+                 'objective.discarded','initiative.discarded'
+               )),
+  taskId       TEXT REFERENCES tasks(id),
+  payload      TEXT,
+  objectiveId  TEXT REFERENCES objectives(id),
+  initiativeId TEXT REFERENCES initiatives(id),
+  repositoryId TEXT,
+  projectId    TEXT
+);
+INSERT INTO events_new11 (id, type, taskId, payload, objectiveId, initiativeId, repositoryId, projectId)
+  SELECT id, type, taskId, payload, objectiveId, initiativeId, repositoryId, projectId FROM events;
+DROP TABLE events;
+ALTER TABLE events_new11 RENAME TO events;
+CREATE INDEX events_project_cursor ON events(projectId, id);
+`),
+  },
 ];

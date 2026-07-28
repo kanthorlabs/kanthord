@@ -36,6 +36,11 @@ Migration numbers are fixed by this order: **27** = `jobs.revoked` /
 
 `scripts/e2e/abandon-run-proof.sh` (do not modify).
 
+Amended in review (2026-07-28): the three scripted `sleep 2` tool calls became
+`sleep 12`. Each sleep is the whole window in which `abandoning` is observable,
+and phase B spends ~3s in CLI startup, so 2s made phase B fail on every run.
+No assertion was weakened.
+
 | Phase                                                                              | Delivered by                             |
 | ---------------------------------------------------------------------------------- | ---------------------------------------- |
 | A — a run reaches `running`                                                        | pre-existing; Story 1 must keep it green |

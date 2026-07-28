@@ -39,11 +39,13 @@ GRAPH="$PD/g"; scripts/e2e/make-landing-graph.sh "$GRAPH" >/dev/null
 # A MULTI-TURN script with short tool calls. Drain happens at a turn boundary, so
 # the run must have boundaries to reach — a single endless tool call is an
 # explicit non-goal of this epic, not the case under test.
+# Each sleep must outlast phase B's three CLI round-trips (~1s of node startup
+# each), or the run drains and is re-claimed before `abandoning` can be read.
 cat > "$GRAPH/.fake-agent.json" <<'EOF'
 [
-  { "toolCalls": [ { "name": "bash", "arguments": { "command": "sleep 2" } } ] },
-  { "toolCalls": [ { "name": "bash", "arguments": { "command": "sleep 2" } } ] },
-  { "toolCalls": [ { "name": "bash", "arguments": { "command": "sleep 2" } } ] },
+  { "toolCalls": [ { "name": "bash", "arguments": { "command": "sleep 12" } } ] },
+  { "toolCalls": [ { "name": "bash", "arguments": { "command": "sleep 12" } } ] },
+  { "toolCalls": [ { "name": "bash", "arguments": { "command": "sleep 12" } } ] },
   { "toolCalls": [ { "name": "bash", "arguments": { "command": "mkdir -p src && printf 'export const x = 1;\\n' > src/todo.mjs" } } ] },
   { "text": "done" }
 ]

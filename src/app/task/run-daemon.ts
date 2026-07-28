@@ -11,7 +11,13 @@ import type { Logger } from "../../logger/port.ts";
 type RunNextResult =
   | { outcome: "idle" }
   | {
-      outcome: "skipped" | "completed" | "failed" | "escalated" | "candidate";
+      outcome:
+        | "skipped"
+        | "completed"
+        | "failed"
+        | "escalated"
+        | "candidate"
+        | "abandoned";
       taskId: string;
       /** 008.4 Story D — provider failovers this dispatch performed. */
       failovers?: number;

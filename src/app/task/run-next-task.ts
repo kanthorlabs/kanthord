@@ -8,6 +8,8 @@ import { newChangeCandidate } from "../../domain/landing.ts";
 import type { Objective } from "../../domain/initiative.ts";
 import { settleObjective } from "../objective/settle-objectives.ts";
 import type { JobQueue } from "../../queue/port.ts";
+import { StaleLeaseError } from "../../queue/port.ts";
+import { requeueRunningTask } from "./requeue-running-task.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type {
   UnitOfWork,
@@ -61,7 +63,13 @@ interface InitiativeWorkspaces {
 type RunResult =
   | { outcome: "idle" }
   | {
-      outcome: "skipped" | "completed" | "failed" | "escalated" | "candidate";
+      outcome:
+        | "skipped"
+        | "completed"
+        | "failed"
+        | "escalated"
+        | "candidate"
+        | "abandoned";
       taskId: string;
       /**
        * 008.4 Story D — how many times this dispatch failed over to the next
@@ -182,6 +190,13 @@ export class RunNextTask {
     }
   }
 
+  /** Story 013-2 — fence: refuse a write from a lease that is no longer current. */
+  #assertLeaseCurrent(leaseToken: string): void {
+    if (!this.#queue.isLeaseCurrent(leaseToken)) {
+      throw new StaleLeaseError(leaseToken);
+    }
+  }
+
   async execute(): Promise<RunResult> {
     // Claim before tx1 — claim itself is synchronous and its result drives tx1.
     const claimed = this.#queue.claim();
@@ -265,6 +280,10 @@ export class RunNextTask {
       Extract<TaskResult, { outcome: "escalated" }> | undefined;
     let candidateResult:
       Extract<TaskResult, { outcome: "candidate" }> | undefined;
+    // EPIC 013 Story 3 — the runner reported a drained lease (its own
+    // `lease.isCurrent()` returned false mid-run). Routed explicitly so the
+    // bare `else` arm of the dispatch does not classify it as a candidate.
+    let abandoned = false;
     let attempts = 0;
 
     if (chain !== undefined && chain.length === 0) {
@@ -290,6 +309,7 @@ export class RunNextTask {
             runningTask,
             contextBindings,
             chain !== undefined ? chain[providerIdx] : undefined,
+            { isCurrent: () => this.#queue.isLeaseCurrent(jobId) },
           );
 
           const providerFailure =
@@ -365,6 +385,8 @@ export class RunNextTask {
           escalatedResult = result;
         } else if (result.outcome === "failed") {
           failReason = result.reason;
+        } else if (result.outcome === "abandoned") {
+          abandoned = true;
         } else {
           candidateResult = result;
         }
@@ -375,10 +397,36 @@ export class RunNextTask {
     }
 
     // tx2: persist the outcome.
-    let resultOutcome: "completed" | "failed" | "escalated" | "candidate" =
+    let resultOutcome:
+      "completed" | "failed" | "escalated" | "candidate" | "abandoned" =
       "failed";
     this.#uow.transaction(() => {
+      // Story 013-2/3/4 — a run whose lease was revoked writes nothing
+      // terminal here, but the task is requeued under a new lease and a
+      // `task.abandoned` event is appended with the operator's reason. The
+      // `abandoned` flag (set in the dispatch) takes precedence so a
+      // runner-reported drain short-circuits without an extra
+      // `isLeaseCurrent` read. Event order inside tx2 is pinned:
+      // `task.ready` (only when the re-enqueue inserted) then
+      // `task.abandoned` — exactly one `task.abandoned` per drained run.
+      if (abandoned || !this.#queue.isLeaseCurrent(jobId)) {
+        resultOutcome = "abandoned";
+        // Read the reason BEFORE requeueing — requeue discards the job row.
+        const revokedJob = this.#queue
+          .listRunningJobsForTask(taskId)
+          .find((j) => j.id === jobId);
+        const reason = revokedJob?.revokeReason ?? "";
+        requeueRunningTask(
+          { id: jobId, taskId },
+          { store: this.#store, queue: this.#queue, feed: this.#feed },
+        );
+        this.#feed.append(
+          newEvent("task.abandoned", { taskId, payload: { reason } }),
+        );
+        return;
+      }
       if (completedResult !== undefined) {
+        this.#assertLeaseCurrent(jobId);
         resultOutcome = "completed";
         const completedTask = transitionTask(runningTask, "completed");
         this.#store.save(completedTask);
@@ -402,6 +450,7 @@ export class RunNextTask {
         // Re-scan the initiative for newly-ready tasks.
         this.#enqueueNewlyReady(initiativeId);
       } else if (escalatedResult !== undefined) {
+        this.#assertLeaseCurrent(jobId);
         const escalatedTask = transitionTask(
           runningTask,
           "awaiting_confirmation",
@@ -446,6 +495,7 @@ export class RunNextTask {
           (b) => b.type === "workspace",
         );
         if (repoBinding === undefined || workspaceBinding !== undefined) {
+          this.#assertLeaseCurrent(jobId);
           const completedTask = transitionTask(runningTask, "completed");
           this.#store.save(completedTask);
           this.#queue.finish(jobId, "completed");
@@ -469,6 +519,7 @@ export class RunNextTask {
           this.#enqueueNewlyReady(initiativeId);
           resultOutcome = "completed";
         } else {
+          this.#assertLeaseCurrent(jobId);
           // Persist a fresh candidate id that identifies THIS execution attempt
           // (not the legacy `${taskId}-lc`), in the SAME transaction as the
           // task transition so a crash can never leave a candidate-less
@@ -508,6 +559,7 @@ export class RunNextTask {
           resultOutcome = "candidate";
         }
       } else {
+        this.#assertLeaseCurrent(jobId);
         const reason = failReason ?? "unknown failure";
         const failedTask = transitionTask(runningTask, "failed");
         this.#store.save(failedTask);

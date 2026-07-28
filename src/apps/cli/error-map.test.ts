@@ -217,3 +217,64 @@ test("StaleCandidateError maps to exit 1 with single error line matching /stale|
     `expected verdict-guard message to mention the move; got: ${result.stderr[0]!}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 6 — `abandon task` typed errors map to exit 1 + error line.
+// All three are produced by `AbandonTask.execute` and must be registered in
+// `src/apps/cli/error-map.ts` so the CLI does not re-throw them as raw stack
+// traces (unregistered errors are rethrown, error-map.ts:122).
+// ---------------------------------------------------------------------------
+
+import {
+  TaskNotAbandonableError,
+  NoRunningJobError,
+  AmbiguousRunningJobError,
+} from "../../app/task/abandon-task.ts";
+
+test("TaskNotAbandonableError maps to exit 1 with the locked 'task … is not abandonable (status: …)' message (013 S6)", () => {
+  const err = new TaskNotAbandonableError("t1", "completed");
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(
+    result.stderr.length,
+    1,
+    "exactly one error line, not a stack trace",
+  );
+  assert.equal(
+    result.stderr[0],
+    "error: task t1 is not abandonable (status: completed)",
+    `stderr must be the locked error message; got: ${result.stderr[0]}`,
+  );
+});
+
+test("NoRunningJobError maps to exit 1 with the locked 'task … has no running job to abandon' message (013 S6)", () => {
+  const err = new NoRunningJobError("t1");
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(
+    result.stderr.length,
+    1,
+    "exactly one error line, not a stack trace",
+  );
+  assert.equal(
+    result.stderr[0],
+    "error: task t1 has no running job to abandon",
+    `stderr must be the locked error message; got: ${result.stderr[0]}`,
+  );
+});
+
+test("AmbiguousRunningJobError maps to exit 1 with the locked 'task … has N running jobs; refusing to guess which to abandon' message (013 S6)", () => {
+  const err = new AmbiguousRunningJobError("t1", 2);
+  const result = toResult(err);
+  assert.equal(result.exitCode, 1);
+  assert.equal(
+    result.stderr.length,
+    1,
+    "exactly one error line, not a stack trace",
+  );
+  assert.equal(
+    result.stderr[0],
+    "error: task t1 has 2 running jobs; refusing to guess which to abandon",
+    `stderr must be the locked error message; got: ${result.stderr[0]}`,
+  );
+});

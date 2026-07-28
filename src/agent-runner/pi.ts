@@ -39,6 +39,7 @@ import type { WorkspaceManager } from "../workspace/port.ts";
 import type { Instruction, InstructionLoader } from "../instruction/port.ts";
 import type {
   AgentRunner,
+  LeaseObserver,
   ResolvedProvider,
   TaskContextBinding,
   TaskResult,
@@ -382,7 +383,8 @@ export class PiAgentRunner implements AgentRunner {
   async run(
     task: Task,
     context: TaskContextBinding[],
-    provider?: ResolvedProvider,
+    provider: ResolvedProvider | undefined,
+    lease: LeaseObserver,
   ): Promise<TaskResult> {
     const turnCountRef = { current: 0 };
     const usageRef = { in: 0, out: 0 };
@@ -390,6 +392,7 @@ export class PiAgentRunner implements AgentRunner {
       task,
       context,
       provider,
+      lease,
       turnCountRef,
       usageRef,
     );
@@ -430,6 +433,7 @@ export class PiAgentRunner implements AgentRunner {
     task: Task,
     context: TaskContextBinding[],
     provider: ResolvedProvider | undefined,
+    lease: LeaseObserver,
     turnCountRef: { current: number },
     usageRef: { in: number; out: number },
   ): Promise<TaskResult> {
@@ -517,6 +521,15 @@ export class PiAgentRunner implements AgentRunner {
         : (this.#getResource(fsBinding!.resourceId) as Filesystem);
     }
 
+    // EPIC 013 Story 3 — drain state, declared outside the try so the
+    // catch-all at the end of #doRun can report `abandoned` too. The lease
+    // observer passed by RunNextTask is the live wire: as long as it is
+    // current, the agent loop runs; the moment the operator revokes the run
+    // (the CLI's `abandon task --id ...`), the next tool-call boundary sees
+    // `isCurrent() === false` and we abort.
+    let leaseRevoked = false;
+    let agentRef: Agent | undefined;
+
     // 5–12. Workspace prep, instruction loading, agent run, evidence, finalize
     try {
       // 5. Workspace preparation
@@ -595,7 +608,20 @@ export class PiAgentRunner implements AgentRunner {
       const agent = new Agent({
         streamFn,
         getApiKey: () => session.getApiKey(),
+        // EPIC 013 Story 3 — drain at the next tool-call boundary. When the
+        // operator revokes the lease, the next `beforeToolCall` sees
+        // `isCurrent() === false`, blocks that one tool call AND calls
+        // `agent.abort()`. Per pi's contract, `{ block: true }` alone fails
+        // the tool call but does NOT stop the loop — the abort is the second
+        // half of the drain (same pairing the turn-budget path uses).
+        beforeToolCall: async () => {
+          if (lease.isCurrent()) return undefined;
+          leaseRevoked = true;
+          agentRef?.abort();
+          return { block: true, reason: "lease revoked: run abandoned" };
+        },
       });
+      agentRef = agent;
       agent.state.systemPrompt = systemPrompt;
       agent.state.model = session.model;
       agent.state.tools = tools;
@@ -638,6 +664,13 @@ export class PiAgentRunner implements AgentRunner {
 
       await agent.prompt(userPrompt);
       await agent.waitForIdle();
+
+      // EPIC 013 Story 3 — a drained run reports `abandoned`, never `failed`.
+      // Checked BEFORE the budget check so a revoked run does not surface as
+      // a budget failure.
+      if (leaseRevoked) {
+        return { outcome: "abandoned" };
+      }
 
       // Check budget exceeded before any other error check
       if (budgetExceeded) {
@@ -800,6 +833,12 @@ export class PiAgentRunner implements AgentRunner {
         evidence: verificationEvidence,
       };
     } catch (err) {
+      // EPIC 013 Story 3 — a drained run also short-circuits the catch-all
+      // (e.g. the aborted tool call surfaces as an exception). The catch
+      // reports `abandoned` instead of masking it as a failure.
+      if (leaseRevoked) {
+        return { outcome: "abandoned" };
+      }
       const e = err instanceof Error ? err : new Error(String(err));
       return { outcome: "failed", reason: `${e.name}: ${e.message}` };
     }

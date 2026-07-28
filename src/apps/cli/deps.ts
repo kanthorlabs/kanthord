@@ -41,6 +41,7 @@ import type { GetTask } from "../../app/task/get-task.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
 import type { RejectTask } from "../../app/task/reject-task.ts";
+import type { AbandonTask } from "../../app/task/abandon-task.ts";
 import type { RemoveDependency } from "../../app/task/remove-dependency.ts";
 import type { GetConflict } from "../../app/task/get-conflict.ts";
 import type { RetryTask } from "../../app/task/retry-task.ts";
@@ -173,6 +174,7 @@ export interface CliDeps {
   retryObjective: RetryObjective;
   rejectObjective: RejectObjective;
   rejectTask: RejectTask;
+  abandonTask: AbandonTask;
   buildDaemon: (
     failTaskIds: string[],
     failTransient?: Record<string, number>,

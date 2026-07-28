@@ -5,9 +5,16 @@ import {
   runRetryTask,
   runApproveTask,
   runRejectTask,
+  runAbandonTask,
 } from "./task.ts";
+import {
+  TaskNotAbandonableError,
+  NoRunningJobError,
+  AmbiguousRunningJobError,
+  AbandonTask,
+} from "../../app/task/abandon-task.ts";
 import { RetryTask, TaskNotRetryableError } from "../../app/task/retry-task.ts";
-import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { JobQueue, ClaimedJob, RunningJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
@@ -643,6 +650,20 @@ class NoopJobQueue implements JobQueue {
   listRunningJobs(): ClaimedJob[] {
     return [];
   }
+  isLeaseCurrent(_leaseToken: string): boolean {
+    return true;
+  }
+  listRunningJobsForTask(_taskId: string): RunningJob[] {
+    return [];
+  }
+  // EPIC 013 Story 3 — `revoke` seam. CLI tests never reach it; default to
+  // `not_found` so a stray call surfaces clearly.
+  revoke(
+    _leaseToken: string,
+    _reason: string,
+  ): "revoked" | "already_revoked" | "not_found" {
+    return "not_found";
+  }
 }
 
 class NoopEventFeed implements EventFeed {
@@ -1254,5 +1275,173 @@ describe("runRejectTask", () => {
         `expected skipped dependent ${skippedId} to be reported in the output; got: ${JSON.stringify(result.stdout)}`,
       );
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 6 — runAbandonTask handler
+//
+// The handler must:
+//   - resolve to exit 0 on both `abandoning` and `already_abandoning` outcomes
+//     (the second abandon in Proof phase B is a no-op and must not fail);
+//   - render `error: <message>` on stderr and exit 1 for every typed error
+//     (TaskNotAbandonableError / NoRunningJobError / AmbiguousRunningJobError)
+//     — proves the errors are registered in error-map.ts so the CLI does not
+//     re-throw them as raw stack traces;
+//   - treat empty `--id` / empty `--reason` as `MissingFlagError`
+//     (matches the runApproveTask / runRejectTask pattern).
+// ---------------------------------------------------------------------------
+
+describe("runAbandonTask", () => {
+  // Duck-typed AbandonTask — uses double-cast so the inline object is
+  // accepted by runAbandonTask regardless of the current return type.
+  // `AbandonTask.execute` is synchronous (Story 3 §7), so the mock is too.
+  function makeAbandonUc(
+    onExecute: (input: { taskId: string; reason: string }) => unknown,
+  ): Parameters<typeof runAbandonTask>[1] {
+    return { execute: onExecute } as unknown as Parameters<
+      typeof runAbandonTask
+    >[1];
+  }
+
+  test("(013 S6) already_abandoning outcome: exit 0, stdout [id], stderr mentions 'already abandoning'", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZABND1";
+    const uc = makeAbandonUc(() => ({
+      outcome: "already_abandoning",
+      taskId,
+    }));
+
+    const result = await runAbandonTask(
+      { id: taskId, reason: "second try" },
+      uc,
+    );
+
+    assert.equal(
+      result.exitCode,
+      0,
+      "already_abandoning must exit 0 (idempotent, second abandon is a no-op)",
+    );
+    assert.ok(
+      result.stdout.some((l: string) => l === taskId),
+      `stdout must include the task id; got: ${JSON.stringify(result.stdout)}`,
+    );
+    assert.ok(
+      result.stderr.some((l: string) => /already abandoning/i.test(l)),
+      `stderr must mention 'already abandoning'; got: ${JSON.stringify(result.stderr)}`,
+    );
+  });
+
+  test("(013 S6) abandoning outcome: exit 0, stdout [id], stderr mentions 'task abandoning'", async () => {
+    const taskId = "01JZZZZZZZZZZZZZZZZZZZABND2";
+    const uc = makeAbandonUc(() => ({
+      outcome: "abandoning",
+      taskId,
+    }));
+
+    const result = await runAbandonTask(
+      { id: taskId, reason: "stuck on a slow tool" },
+      uc,
+    );
+
+    assert.equal(result.exitCode, 0, "abandoning must exit 0");
+    assert.ok(
+      result.stdout.some((l: string) => l === taskId),
+      `stdout must include the task id; got: ${JSON.stringify(result.stdout)}`,
+    );
+    assert.ok(
+      result.stderr.some((l: string) => /abandoning/i.test(l)),
+      `stderr must mention 'abandoning'; got: ${JSON.stringify(result.stderr)}`,
+    );
+  });
+
+  test("(013 S6) TaskNotAbandonableError('t1','completed') → exit 1, stderr is exactly 'error: task t1 is not abandonable (status: completed)'", async () => {
+    const uc = makeAbandonUc(() => {
+      throw new TaskNotAbandonableError("t1", "completed");
+    });
+
+    const result = await runAbandonTask({ id: "t1", reason: "why" }, uc);
+
+    assert.equal(result.exitCode, 1, "TaskNotAbandonableError must exit 1");
+    assert.equal(
+      result.stderr.length,
+      1,
+      `TaskNotAbandonableError must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    assert.equal(
+      result.stderr[0],
+      "error: task t1 is not abandonable (status: completed)",
+      `stderr must be the locked error message; got: ${result.stderr[0]}`,
+    );
+    assert.equal(
+      result.stdout.length,
+      0,
+      "TaskNotAbandonableError must not write to stdout",
+    );
+  });
+
+  test("(013 S6) NoRunningJobError: exit 1 with the locked error message (proves it is registered in error-map.ts)", async () => {
+    const uc = makeAbandonUc(() => {
+      throw new NoRunningJobError("t1");
+    });
+
+    const result = await runAbandonTask({ id: "t1", reason: "why" }, uc);
+
+    assert.equal(result.exitCode, 1, "NoRunningJobError must exit 1");
+    assert.equal(
+      result.stderr.length,
+      1,
+      `NoRunningJobError must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    assert.equal(
+      result.stderr[0],
+      "error: task t1 has no running job to abandon",
+      `stderr must be the locked error message; got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("(013 S6) AmbiguousRunningJobError: exit 1 with the locked error message (proves it is registered in error-map.ts)", async () => {
+    const uc = makeAbandonUc(() => {
+      throw new AmbiguousRunningJobError("t1", 2);
+    });
+
+    const result = await runAbandonTask({ id: "t1", reason: "why" }, uc);
+
+    assert.equal(result.exitCode, 1, "AmbiguousRunningJobError must exit 1");
+    assert.equal(
+      result.stderr.length,
+      1,
+      `AmbiguousRunningJobError must emit exactly one stderr line; got: ${JSON.stringify(result.stderr)}`,
+    );
+    assert.equal(
+      result.stderr[0],
+      "error: task t1 has 2 running jobs; refusing to guess which to abandon",
+      `stderr must be the locked error message; got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("(013 S6) empty --id: error 'missing required flag --id', exit 1, no use-case call", async () => {
+    const uc = makeAbandonUc(() => {
+      throw new Error("execute must not be called for empty --id");
+    });
+    const result = await runAbandonTask({ id: "", reason: "why" }, uc);
+    assert.equal(result.exitCode, 1, "empty --id must exit 1");
+    assert.equal(
+      result.stderr[0],
+      "error: missing required flag --id",
+      `stderr must be the locked MissingFlagError message; got: ${result.stderr[0]}`,
+    );
+  });
+
+  test("(013 S6) empty --reason: error 'missing required flag --reason', exit 1, no use-case call", async () => {
+    const uc = makeAbandonUc(() => {
+      throw new Error("execute must not be called for empty --reason");
+    });
+    const result = await runAbandonTask({ id: "t1", reason: "" }, uc);
+    assert.equal(result.exitCode, 1, "empty --reason must exit 1");
+    assert.equal(
+      result.stderr[0],
+      "error: missing required flag --reason",
+      `stderr must be the locked MissingFlagError message; got: ${result.stderr[0]}`,
+    );
   });
 });

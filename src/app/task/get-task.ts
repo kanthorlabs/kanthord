@@ -19,6 +19,15 @@ interface LandingSource {
   getCandidateByTask(taskId: string): ChangeCandidate | undefined;
 }
 
+/**
+ * EPIC 013 Story 6 — narrow consumer of the job queue that exposes only the
+ * revocation state. A revoked running job makes the task's read view surface
+ * `abandoning: true` (a marker on a `running` task, not a new status).
+ */
+interface RunningJobSource {
+  listRunningJobsForTask(taskId: string): Array<{ revoked: boolean }>;
+}
+
 export interface LandingCandidateOutput {
   state: "pending" | "landed" | "conflict";
   baseSHA: string;
@@ -41,6 +50,11 @@ export interface GetTaskOutput {
   dependencyStatus?: Array<{ id: string; status: string }>;
   context?: Record<string, string>;
   landingCandidate: LandingCandidateOutput | null;
+  /**
+   * EPIC 013 Story 6 — `true` while a revoked run drains. A marker on a
+   * `running` task, not a new lifecycle state. `TASK_STATUSES` is NOT widened.
+   */
+  abandoning: boolean;
 }
 
 export class GetTask {
@@ -48,17 +62,20 @@ export class GetTask {
   readonly #results: ResultSource;
   readonly #context: ContextSource;
   readonly #landing: LandingSource | undefined;
+  readonly #jobs: RunningJobSource | undefined;
 
   constructor(
     tasks: TaskSource,
     results: ResultSource,
     context: ContextSource,
     landing?: LandingSource,
+    jobs?: RunningJobSource,
   ) {
     this.#tasks = tasks;
     this.#results = results;
     this.#context = context;
     this.#landing = landing;
+    this.#jobs = jobs;
   }
 
   async execute({ id }: { id: string }): Promise<GetTaskOutput> {
@@ -87,6 +104,12 @@ export class GetTask {
           })
         : undefined;
 
+    // EPIC 013 Story 6 — `abandoning` is true while a revoked run drains on
+    // a `running` task. The marker is on a `running` task, not a new
+    // lifecycle state, so the task's `status` stays `running`.
+    const abandoning =
+      this.#jobs?.listRunningJobsForTask(id).some((j) => j.revoked) ?? false;
+
     return {
       id: task.id,
       title: task.title,
@@ -106,6 +129,7 @@ export class GetTask {
       ...(dependencyStatus !== undefined ? { dependencyStatus } : {}),
       ...(Object.keys(ctx).length > 0 ? { context: ctx } : {}),
       landingCandidate,
+      abandoning,
     };
   }
 }

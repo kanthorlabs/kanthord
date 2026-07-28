@@ -11,6 +11,7 @@ export const EVENT_TYPES = [
   "task.approved",
   "task.rejected",
   "task.discarded",
+  "task.abandoned", // 013 Story 5 — operator revoked a run's lease
   "task.blocked",
   "task.conflict",
   "agent.started",

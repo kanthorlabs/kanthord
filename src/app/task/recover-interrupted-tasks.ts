@@ -1,9 +1,8 @@
 import type { Task } from "../../domain/task.ts";
-import { transitionTask } from "../../domain/task.ts";
-import { newEvent } from "../../domain/event.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
+import { requeueRunningTask } from "./requeue-running-task.ts";
 
 interface TaskStore {
   get(id: string): Task | undefined;
@@ -33,15 +32,12 @@ export class RecoverInterruptedTasks {
     this.#uow.transaction(() => {
       const runningJobs = this.#queue.listRunningJobs();
       for (const job of runningJobs) {
-        const task = this.#store.get(job.taskId);
-        if (task === undefined) continue;
-        const pending = transitionTask(task, "pending");
-        this.#store.save(pending);
-        this.#queue.discard(job.id);
-        const inserted = this.#queue.enqueue(job.taskId);
-        if (inserted) {
-          this.#feed.append(newEvent("task.ready", { taskId: job.taskId }));
-        }
+        if (this.#store.get(job.taskId) === undefined) continue;
+        requeueRunningTask(job, {
+          store: this.#store,
+          queue: this.#queue,
+          feed: this.#feed,
+        });
         recovered.push(job.taskId);
       }
     });

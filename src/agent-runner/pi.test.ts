@@ -22,9 +22,17 @@ import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
 import type { Workspace } from "../workspace/port.ts";
 import type { Repository, Filesystem } from "../domain/resource.ts";
 import type { Task } from "../domain/task.ts";
-import type { ResolvedProvider, TaskContextBinding } from "./port.ts";
+import type {
+  LeaseObserver,
+  ResolvedProvider,
+  TaskContextBinding,
+} from "./port.ts";
 import type { PiAgentRunnerOptions } from "./pi.ts";
 import type { SessionContext } from "./pi-session.ts";
+
+// EPIC 013 S1 — AgentRunner.run takes a LeaseObserver as 4th arg. Hermetic
+// tests use a static "live" observer (Story 3 will plug in revocation).
+const LIVE_LEASE: LeaseObserver = { isCurrent: () => true };
 
 // ---------------------------------------------------------------------------
 // Local structural types (no import from non-existent ports yet)
@@ -238,6 +246,7 @@ test("PiAgentRunner happy path: completed result, prepare called with repository
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "completed", "task completed");
@@ -265,7 +274,12 @@ test("PiAgentRunner missing provider: failed with 'no provider', session factory
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext());
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    undefined,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "failed");
   assert.ok(
@@ -296,7 +310,12 @@ test("PiAgentRunner factory CredentialError: failed, prepare not called", async 
   };
   const runner = makeRunner({ sessions, workspaces: wm });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "failed");
   assert.ok(
@@ -330,7 +349,12 @@ test("(008.4 Story 01) runner: sessions.for throws CredentialError → result {p
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "failed");
   const tagged = result as unknown as {
@@ -357,7 +381,12 @@ test("(008.4 Story 01) runner: sessions.for throws UnknownModelError → result 
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "failed");
   const tagged = result as unknown as {
@@ -388,7 +417,12 @@ test("(008.4 Story 01) runner: sessions.for throws a non-typed error → result 
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(result.outcome, "failed");
   const tagged = result as unknown as {
@@ -419,6 +453,7 @@ test("(008.4 Story 01) runner: a verify-command failure leaves providerError uns
     makeTask({ agent: "synthetic@1", verification: ["false"] }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(
@@ -454,6 +489,7 @@ test("PiAgentRunner no repo or fs binding: failed WorkspaceUnresolvableError", a
     makeTask(),
     makeContext({ repo: false }),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -469,7 +505,7 @@ test("PiAgentRunner both repo and fs bindings: failed InvalidContextError", asyn
   const runner = makeRunner();
 
   const ctx = [...makeContext(), { type: "filesystem", resourceId: "fs-001" }];
-  const result = await runner.run(makeTask(), ctx, PROVIDER);
+  const result = await runner.run(makeTask(), ctx, PROVIDER, LIVE_LEASE);
 
   assert.equal(result.outcome, "failed");
   assert.ok(
@@ -491,6 +527,7 @@ test("PiAgentRunner unknown profile key: failed UnknownAgentError", async () => 
     makeTask({ agent: "ghost@9" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -520,7 +557,12 @@ test("PiAgentRunner stream rejection: failed, runner resolves not throws", async
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(
     result.outcome,
@@ -587,8 +629,18 @@ test("PiAgentRunner two profiles produce different system prompts through same r
 
   const runner = makeRunner({ sessions, profiles });
 
-  await runner.run(makeTask({ agent: "alpha@1" }), makeContext(), PROVIDER);
-  await runner.run(makeTask({ agent: "beta@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "alpha@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
+  await runner.run(
+    makeTask({ agent: "beta@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(capturedPrompts.length, 2, "two runs captured");
   assert.ok(
@@ -626,7 +678,12 @@ test("PiAgentRunner escalate tool: scripted call results in escalated outcome re
     ]),
   });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(
     result.outcome,
@@ -679,7 +736,7 @@ test("PiAgentRunner getPriorRejection returns decision: prompt contains feedback
     },
   });
 
-  await runner.run(makeTask(), makeContext(), PROVIDER);
+  await runner.run(makeTask(), makeContext(), PROVIDER, LIVE_LEASE);
 
   // The user message prompt should contain the rejection feedback block
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
@@ -728,7 +785,7 @@ test("PiAgentRunner getPriorRejection returns undefined: prompt contains no feed
 
   const runner = makeRunner({ sessions, getPriorRejection: () => undefined });
 
-  await runner.run(makeTask(), makeContext(), PROVIDER);
+  await runner.run(makeTask(), makeContext(), PROVIDER, LIVE_LEASE);
 
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
   const promptText = userMsgs
@@ -808,8 +865,18 @@ test("PiAgentRunner profile placement: placing profile puts instructions in proj
     newInstructionLoader: (_dir: string) => ({ load: () => instructions }),
   });
 
-  await runner.run(makeTask({ agent: "placing@1" }), makeContext(), PROVIDER);
-  await runner.run(makeTask({ agent: "ignoring@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "placing@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
+  await runner.run(
+    makeTask({ agent: "ignoring@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(capturedPrompts.length, 2, "two runs captured");
   assert.ok(
@@ -917,6 +984,7 @@ test("(a) happy run: emits agent.started, agent.progress, agent.finished in orde
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "completed", "outcome should be completed");
@@ -972,7 +1040,12 @@ test("(b) no capture-throttle: 4 tool calls (3 + 1 across turns) produce 4 agent
   // No clock injection needed — throttle is removed from pi.ts; emit fires on every tool call.
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.equal(
@@ -1005,7 +1078,12 @@ test("(A3) un-throttled: 3 tool_execution_start events within 1000 ms each produ
   ];
   const runner = makeEmitRunner08(turns, emitted, fakeClock);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.equal(
@@ -1047,6 +1125,7 @@ test("(c) failed run: agent.finished emitted with outcome failed", async () => {
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed", "outcome should be failed");
@@ -1081,6 +1160,7 @@ test("(c) escalated run: agent.finished emitted with outcome escalated", async (
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "escalated", "outcome should be escalated");
@@ -1108,7 +1188,12 @@ test("(d) tool args with credential value: progress summary must not contain it 
   ];
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.ok(
@@ -1153,6 +1238,7 @@ test("(d) provider error with credential value in message: result.reason must be
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -1178,7 +1264,12 @@ test("(e) progress summary never exceeds 200 characters", async () => {
   ];
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const progressEvents = emitted.filter((e) => e.type === "agent.progress");
   assert.ok(
@@ -1236,7 +1327,12 @@ test("(B2 regression) post-waitForIdle agent.state.errorMessage containing crede
   };
   const runner = makeRunner({ sessions });
 
-  const result = await runner.run(makeTask(), makeContext(), PROVIDER);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   assert.equal(
     result.outcome,
@@ -1284,6 +1380,7 @@ test("(a) turn budget: maxTurns=3, always tool-calling session → failed Budget
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(
@@ -1326,7 +1423,7 @@ test("(T3) task.verification: exit-0 command emits start then end event with exi
   const runner = makeEmitRunner08(turns, emitted);
   const task = makeTask({ agent: "synthetic@1", verification: ["true"] });
 
-  await runner.run(task, makeContext(), PROVIDER);
+  await runner.run(task, makeContext(), PROVIDER, LIVE_LEASE);
 
   const verifEvents = emitted.filter((e) => e.type === "task.verification");
   assert.equal(
@@ -1381,7 +1478,7 @@ test("(T3) task.verification: exit-1 command emits end event with exitClass 'fai
   const task = makeTask({ agent: "synthetic@1", verification: ["false"] });
 
   // outcome will be "failed" because the verification command exits 1
-  const result = await runner.run(task, makeContext(), PROVIDER);
+  const result = await runner.run(task, makeContext(), PROVIDER, LIVE_LEASE);
 
   assert.equal(
     result.outcome,
@@ -1430,7 +1527,12 @@ test("(T4) A6: agent.finished payload carries turns, tokensIn, tokensOut", async
   ];
   const runner = makeEmitRunner08(turns, emitted);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const finishedEvents = emitted.filter((e) => e.type === "agent.finished");
   assert.equal(
@@ -1651,6 +1753,7 @@ test("(F2 T1) multi-turn usage: agent.finished tokensIn/tokensOut sum every assi
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "completed", "task completed");
@@ -1698,6 +1801,7 @@ test("(F2 T1) failed run (verification failure) still emits non-zero tokensIn/to
     makeTask({ agent: "synthetic@1", verification: ["false"] }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed", "verification failure → failed");
@@ -1728,6 +1832,7 @@ test("(F2 T1) escalated run still emits non-zero tokensIn/tokensOut from the tur
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "escalated", "escalate tool → escalated");
@@ -1826,6 +1931,7 @@ test("(F3 T2) pi runner: changed workspace resolves to candidate (not completed/
       makeTask({ agent: "generic@1" }),
       makeContext(),
       PROVIDER,
+      LIVE_LEASE,
     );
 
     assert.equal(
@@ -1884,6 +1990,7 @@ test("(F3 T2) pi runner: no-change workspace resolves to completed (not failed)"
       makeTask({ agent: "generic@1" }),
       makeContext(),
       PROVIDER,
+      LIVE_LEASE,
     );
 
     assert.equal(
@@ -1948,7 +2055,12 @@ test("(S3-j-getPriorFeedback-value) PiAgentRunner getPriorFeedback returns { not
     },
   } as unknown as PiAgentRunnerOptions);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
   const promptText = userMsgs
@@ -2015,7 +2127,12 @@ test("(S3-j-getPriorFeedback-undefined) PiAgentRunner getPriorFeedback returns u
     getPriorFeedback: () => undefined,
   } as unknown as PiAgentRunnerOptions);
 
-  await runner.run(makeTask({ agent: "synthetic@1" }), makeContext(), PROVIDER);
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    LIVE_LEASE,
+  );
 
   const userMsgs = capturedMessages.filter((m) => m.role === "user");
   const promptText = userMsgs
@@ -2070,7 +2187,12 @@ test("(008.3 Story A) PiAgentRunner with resolved provider: runs without ai_prov
 
   // No ai_provider or credential in context — this would normally fail
   // with CredentialError. With a resolved provider arg it must succeed.
-  const result = await runner.run(makeTask(), makeContext(), provider);
+  const result = await runner.run(
+    makeTask(),
+    makeContext(),
+    provider,
+    LIVE_LEASE,
+  );
 
   assert.equal(
     result.outcome,
@@ -2138,6 +2260,7 @@ test("(Story B / 007.12) pi runner: a 'workspace' context binding routes the run
     makeTask({ agent: "synthetic@1" }),
     ctx,
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(
@@ -2191,6 +2314,7 @@ test("(BLOCKER 4) PiAgentRunner with provider arg: passes credentialVersion to s
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PI_PROVIDER,
+    LIVE_LEASE,
   );
   // Current code (pi.ts:461) passes only 3 args — this should be undefined.
   // Fix: pass provider.credentialVersion as 4th arg.
@@ -2259,6 +2383,7 @@ test("(008.4 Story A) runner: a mid-stream failure after a 429 response → {pro
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -2287,6 +2412,7 @@ test("(008.4 Story A) runner: a mid-stream failure after a 503 response → {pro
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -2315,6 +2441,7 @@ test("(008.4 Story A) runner: a mid-stream failure with a 200 response is NOT a 
     makeTask({ agent: "synthetic@1" }),
     makeContext(),
     PROVIDER,
+    LIVE_LEASE,
   );
 
   assert.equal(result.outcome, "failed");
@@ -2371,6 +2498,7 @@ test("(008.4 Story B) runner clean-attempt boundary: an initiative-clone run sta
     makeTask({ agent: "synthetic@1" }),
     ctx,
     PROVIDER,
+    LIVE_LEASE,
   );
   assert.equal(
     (first as unknown as { providerError?: boolean }).providerError,
@@ -2425,6 +2553,7 @@ test("(008.4 Story B) runner clean-attempt boundary: an initiative-clone run sta
     makeTask({ agent: "synthetic@1" }),
     ctx,
     PROVIDER,
+    LIVE_LEASE,
   );
   assert.equal(
     second.outcome,
@@ -2445,5 +2574,179 @@ test("(008.4 Story B) runner clean-attempt boundary: an initiative-clone run sta
     dirtyDuringSecondRun.some((l) => l.includes("half-written.mjs")),
     true,
     "sanity: the debris was still present when attempt 2 started (so the reset — not the test — removed it)",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 3 — drain at the next tool-call boundary. The lease observer
+// is consulted by a `beforeToolCall` hook this story wires for the first time
+// (`src/agent-runner/pi.ts`). When the hook sees `isCurrent() === false`, it
+// blocks that one tool call AND calls `agent.abort()` (per pi's contract,
+// `{ block: true }` alone fails the tool call but does NOT stop the loop —
+// the abort is the second half of the drain). The run then returns
+// `{ outcome: "abandoned" }` and starts no further tool call.
+// ---------------------------------------------------------------------------
+
+const BASH_PARAMS_S3 = Type.Object({ cmd: Type.String() });
+const bashToolS3: AgentTool<typeof BASH_PARAMS_S3> = {
+  name: "bash",
+  label: "Bash",
+  description: "Run a shell command (no-op for the test harness)",
+  parameters: BASH_PARAMS_S3,
+  execute: async (_id, params) => ({
+    content: [{ type: "text" as const, text: `ran: ${params.cmd}` }],
+    details: {},
+  }),
+};
+
+const profileWithBashS3: SyntheticProfile = {
+  name: "synthetic@1",
+  systemPrompt: ({
+    task,
+  }: {
+    task: Task;
+    workspace: Workspace;
+    instructions: Instruction[];
+  }) => `System for ${task.title}`,
+  createTools: (_: { workspace: Workspace }) => [
+    bashToolS3 as unknown as { name: string },
+  ],
+  verify: async (_: unknown) => ({ accepted: true }),
+};
+
+/** Lease observer that returns `true` for the first `isCurrent()` call and
+ * `false` afterwards — the exact "drain at the next turn boundary" shape. */
+class ToggleOnceLease implements LeaseObserver {
+  private isFirstCall = true;
+  isCurrent(): boolean {
+    if (this.isFirstCall) {
+      this.isFirstCall = false;
+      return true;
+    }
+    return false;
+  }
+}
+
+test("(013 S3) regression guard: with a live lease throughout, a 3-tool + 1-text scripted session reaches the text turn and returns a non-`abandoned` outcome", async () => {
+  const turns: FakeTurn[] = [
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo a" } }],
+    },
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo b" } }],
+    },
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo c" } }],
+    },
+    { text: "all done" },
+  ];
+  const emitted: EmitRecord08[] = [];
+  const runner = makeEmitRunner08(turns, emitted, undefined, profileWithBashS3);
+  const staticLease: LeaseObserver = { isCurrent: () => true };
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    staticLease,
+  );
+
+  assert.notEqual(
+    result.outcome,
+    "abandoned",
+    "with a live lease throughout, the run must NOT report 'abandoned'",
+  );
+  // A scripted 3-tool + 1-text session with no verification and no changes
+  // produces a no-changes finalization → `completed`.
+  assert.equal(
+    result.outcome,
+    "completed",
+    "a clean scripted multi-turn run with a live lease finishes 'completed'",
+  );
+});
+
+test("(013 S3) lease revoked at the next turn boundary: runner resolves to {outcome:'abandoned'}, stops before any further tool executes, then drains", async () => {
+  const turns: FakeTurn[] = [
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo a" } }],
+    },
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo b" } }],
+    },
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo c" } }],
+    },
+    { text: "would have completed" },
+  ];
+  const emitted: EmitRecord08[] = [];
+  const runner = makeEmitRunner08(turns, emitted, undefined, profileWithBashS3);
+  const lease = new ToggleOnceLease();
+
+  const result = await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    lease,
+  );
+
+  assert.deepEqual(
+    result,
+    { outcome: "abandoned" },
+    "a lease revoked after the first isCurrent() check must short-circuit to 'abandoned'",
+  );
+
+  // Count tool_execution_start events via the `agent.progress` re-emit
+  // (pi.ts maps tool_execution_start → agent.progress exactly once per call,
+  // and Story 08 confirmed the mapping is un-throttled).
+  //
+  // Per pi-agent-core's agent-loop, `tool_execution_start` is emitted for
+  // every tool call BEFORE `beforeToolCall` is invoked for that call. So:
+  //   - Turn 1 (bash "echo a"): start fires → beforeToolCall (lease ok) →
+  //     tool runs → end fires.
+  //   - Turn 2 (bash "echo b"): start fires → beforeToolCall (lease revoked,
+  //     blocks + agent.abort()) → end NEVER fires.
+  //   - Turn 3 (bash "echo c") and Turn 4 (text): never start (loop aborted).
+  // The observed count is therefore 2: one fully-executed tool, one
+  // blocked-at-the-start. The load-bearing invariant is that no tool
+  // AFTER Tool 1 starts — Turn 3 and Turn 4 never run, which is exactly
+  // what "drain at the next turn boundary" means.
+  const progressEvents = emitted.filter((e) => e.type === "agent.progress");
+  assert.equal(
+    progressEvents.length,
+    2,
+    `a revoked lease must stop the loop at the next turn boundary — 1 tool fully executed + 1 tool blocked-at-the-start (Turn 3 + Turn 4 must never start); got ${progressEvents.length}`,
+  );
+});
+
+test("(013 S3) the drained run's `agent.finished` emit carries outcome: 'abandoned'", async () => {
+  const turns: FakeTurn[] = [
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo a" } }],
+    },
+    {
+      toolCalls: [{ name: "bash", arguments: { cmd: "echo b" } }],
+    },
+    { text: "would have completed" },
+  ];
+  const emitted: EmitRecord08[] = [];
+  const runner = makeEmitRunner08(turns, emitted, undefined, profileWithBashS3);
+  const lease = new ToggleOnceLease();
+
+  await runner.run(
+    makeTask({ agent: "synthetic@1" }),
+    makeContext(),
+    PROVIDER,
+    lease,
+  );
+
+  const finished = emitted.find((e) => e.type === "agent.finished");
+  assert.ok(
+    finished !== undefined,
+    "an `agent.finished` event must be emitted even when the run drains",
+  );
+  assert.equal(
+    finished!.payload["outcome"],
+    "abandoned",
+    `agent.finished must carry outcome: 'abandoned' on a drained run; got: ${JSON.stringify(finished!.payload)}`,
   );
 });

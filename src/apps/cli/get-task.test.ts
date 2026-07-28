@@ -361,6 +361,7 @@ describe("runGetTask", () => {
       result: TaskResultRow | undefined;
       context: Record<string, string> | undefined;
       landingCandidate: LandingCandidateOutput;
+      abandoning: boolean;
     }>,
   ): GetTask {
     return {
@@ -377,6 +378,9 @@ describe("runGetTask", () => {
           output.landingCandidate === undefined
             ? null
             : output.landingCandidate,
+        // Story 6 — EPIC 013 abandoned marker (default false: a non-abandoning
+        // task is byte-identical to today's JSON / human output).
+        abandoning: output.abandoning ?? false,
       }),
     } as unknown as GetTask;
   }
@@ -534,5 +538,76 @@ describe("runGetTask", () => {
       landingCandidate: LandingCandidateOutput;
     };
     assert.equal(parsed.landingCandidate, null);
+  });
+
+  // ---------------------------------------------------------------------------
+  // EPIC 013 Story 6 — `abandoning` field surfaces on `get task --json` and on
+  // the human-readable output. The field is a marker on a `running` task whose
+  // lease has been revoked; it is not a new lifecycle state.
+  // ---------------------------------------------------------------------------
+
+  test("(013 S6) runGetTask --json includes 'abandoning: false' by default (no RunningJobSource)", async () => {
+    const getTask = makeStubGetTask({});
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID, json: true },
+      getTask,
+    );
+
+    assert.equal(r.exitCode, 0);
+    const parsed = JSON.parse(r.stdout[0]!) as { abandoning: boolean };
+    assert.equal(
+      parsed.abandoning,
+      false,
+      "abandoning must default to false on --json output",
+    );
+  });
+
+  test("(013 S6) runGetTask human output gains the 'abandoning: true' line only when the output carries abandoning=true", async () => {
+    const getTaskAbandoning = makeStubGetTask({});
+    const r: HandlerResult = await runGetTask(
+      { id: TASK_ID },
+      getTaskAbandoning,
+    );
+    // The stub does NOT carry `abandoning: true` — the human output must be
+    // unchanged (no `abandoning:` line). This pins the regression-guard that
+    // a non-abandoning task is byte-identical to today's output.
+    assert.equal(r.exitCode, 0);
+    assert.ok(
+      !r.stdout.some((l) => l.startsWith("abandoning:")),
+      `human output must NOT include an 'abandoning:' line for a non-abandoning task; got: ${JSON.stringify(r.stdout)}`,
+    );
+
+    // Now drive the same handler with a GetTask that has abandoning=true.
+    // Re-use the underlying GetTask (mem) instead of a stub so the new
+    // `abandoning` plumbing round-trips end to end.
+    const RUNNING_TASK: Task = { ...COMPLETED_TASK, status: "running" };
+    const tasks = new MemTaskSource([RUNNING_TASK]);
+    const results = new MemResultSource(new Map());
+    const jobs = {
+      listRunningJobsForTask: (_id: string): Array<{ revoked: boolean }> => [
+        { revoked: true },
+      ],
+    };
+    const getTaskAbandoningReal = new GetTask(
+      tasks,
+      results,
+      nullContextSource,
+      undefined,
+      jobs,
+    );
+    const r2: HandlerResult = await runGetTask(
+      { id: TASK_ID },
+      getTaskAbandoningReal,
+    );
+    assert.equal(r2.exitCode, 0);
+    assert.ok(
+      r2.stdout.some((l) => l === "abandoning: true"),
+      `human output must include 'abandoning: true' when the source reports a revoked job; got: ${JSON.stringify(r2.stdout)}`,
+    );
+    // And status stays `running` — the marker is on a `running` task.
+    assert.ok(
+      r2.stdout.some((l) => l === "status: running"),
+      `status must stay 'running' alongside the abandoning marker; got: ${JSON.stringify(r2.stdout)}`,
+    );
   });
 });

@@ -1,6 +1,7 @@
 import type { Task } from "../domain/task.ts";
 import type {
   AgentRunner,
+  LeaseObserver,
   ResolvedProvider,
   TaskContextBinding,
   TaskResult,
@@ -23,9 +24,15 @@ export class FakeRunner implements AgentRunner {
   async run(
     task: Task,
     context: TaskContextBinding[],
-    _provider?: ResolvedProvider,
+    _provider: ResolvedProvider | undefined,
+    lease: LeaseObserver,
   ): Promise<TaskResult> {
     this.calls.push({ taskId: task.id, context });
+
+    // EPIC 013 Story 3 — drain at the next turn boundary. A revoked lease
+    // short-circuits the run to `abandoned` BEFORE any scripted failure
+    // path is consulted.
+    if (!lease.isCurrent()) return { outcome: "abandoned" };
 
     if (this.#failTaskIds.has(task.id)) {
       return { outcome: "failed", reason: "scripted failure" };

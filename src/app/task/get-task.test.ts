@@ -350,3 +350,83 @@ test("(Story A) GetTask.landingCandidate is null when the task has no candidate 
     "landingCandidate must be null, not undefined, when absent",
   );
 });
+
+// ---------------------------------------------------------------------------
+// EPIC 013 Story 6 — `abandoning` field on GetTaskOutput
+//
+// `abandoning` is a marker on a `running` task whose lease has been revoked.
+// The use case reads it from a narrow `RunningJobSource` consumer
+// (default: undefined → `abandoning: false`). `TASK_STATUSES` is NOT widened
+// — the task itself stays at `status: "running"`, only the marker flips.
+// ---------------------------------------------------------------------------
+
+interface FakeRunningJobSource {
+  listRunningJobsForTask(taskId: string): Array<{ revoked: boolean }>;
+}
+
+class MemRunningJobSource implements FakeRunningJobSource {
+  readonly #byTask: Map<string, Array<{ revoked: boolean }>>;
+  constructor(byTask: Record<string, Array<{ revoked: boolean }>>) {
+    this.#byTask = new Map(Object.entries(byTask));
+  }
+  listRunningJobsForTask(taskId: string): Array<{ revoked: boolean }> {
+    return this.#byTask.get(taskId) ?? [];
+  }
+}
+
+test("(013 S6) GetTask output.abandoning is false when no RunningJobSource is wired (default)", async () => {
+  const RUNNING_TASK: Task = { ...FAKE_TASK, status: "running" };
+  const tasks = new MemTaskSource([RUNNING_TASK]);
+  const results = new MemResultSource(new Map());
+  // 4-arg ctor: no jobs source wired.
+  const uc = new GetTask(tasks, results, nullContextSource);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.abandoning,
+    false,
+    "abandoning must default to false when no RunningJobSource is wired",
+  );
+});
+
+test("(013 S6) GetTask output.abandoning is false when the source reports no running jobs for the task", async () => {
+  const RUNNING_TASK: Task = { ...FAKE_TASK, status: "running" };
+  const tasks = new MemTaskSource([RUNNING_TASK]);
+  const results = new MemResultSource(new Map());
+  const jobs = new MemRunningJobSource({}); // empty — no running jobs
+  const uc = new GetTask(tasks, results, nullContextSource, undefined, jobs);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.abandoning,
+    false,
+    "abandoning must be false when the source reports no running jobs",
+  );
+});
+
+test("(013 S6) GetTask output.abandoning is true when the source reports a revoked running job, while status stays 'running'", async () => {
+  const RUNNING_TASK: Task = { ...FAKE_TASK, status: "running" };
+  const tasks = new MemTaskSource([RUNNING_TASK]);
+  const results = new MemResultSource(new Map());
+  const jobs = new MemRunningJobSource({
+    [TASK_ID]: [{ revoked: true }],
+  });
+  const uc = new GetTask(tasks, results, nullContextSource, undefined, jobs);
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.abandoning,
+    true,
+    "abandoning must be true when the source reports a revoked running job",
+  );
+  // Status is NOT widened — it stays at `running`. The marker is on a
+  // running task, not a new lifecycle state.
+  assert.equal(
+    output.status,
+    "running",
+    "status must stay 'running' — abandoning is a marker, not a status",
+  );
+});

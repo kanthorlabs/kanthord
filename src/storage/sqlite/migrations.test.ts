@@ -67,9 +67,9 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 26 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
+test("migrates to version 28 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
     assert.deepEqual(userTables(db), [
       "ai_provider_default",
       "ai_providers",
@@ -152,7 +152,13 @@ test("schema columns match locked DDL for all tables", () => {
       "dependency",
       "position",
     ]);
-    assert.deepEqual(columnNames(db, "jobs"), ["id", "taskId", "status"]);
+    assert.deepEqual(columnNames(db, "jobs"), [
+      "id",
+      "taskId",
+      "status",
+      "revoked",
+      "revokeReason",
+    ]);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -447,7 +453,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 26);
+    assert.equal(second.version, 28);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -798,7 +804,7 @@ test("migration 7 creates workspace_cached_policies with repo_id PRIMARY KEY", (
 
 // ── (p) migration 8 — S2: task.conflict schema + bidirectional drift guard ────
 
-test("S2: all 27 EVENT_TYPES members are accepted by the migrated events table", () => {
+test("S2: all 28 EVENT_TYPES members are accepted by the migrated events table", () => {
   withMigratedDb((db) => {
     const { taskId } = insertChain(db);
     for (const eventType of EVENT_TYPES) {
@@ -858,10 +864,15 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // Apply all migrations including the new migration 8 (and 9, 10).
     migrate(db, MIGRATIONS);
     // (a) Schema must now be at the latest version.
+    // EPIC 013 Story 5 bumped the count from 27 to 28 (migration 28 widened
+    // the events CHECK to add `task.abandoned`). The characterization shape
+    // is unchanged: bring up to the second-to-last rebuild boundary, seed
+    // event rows, run the full migration set, expect the latest version and
+    // every seeded row preserved verbatim.
     assert.equal(
       userVersion(db),
-      26,
-      "schema version must be 26 after all migrations",
+      28,
+      "schema version must be 28 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -993,7 +1004,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1098,7 +1109,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1177,7 +1188,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1214,7 +1225,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 26);
+    assert.equal(report.version, 28);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1509,7 +1520,7 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
@@ -1524,7 +1535,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,providerId) rejects dup
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-uniq', 'P');
@@ -1565,7 +1576,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two membe
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-rank', 'P');
@@ -1686,7 +1697,7 @@ test("migration 25 (008.3-s-retire-ai-provider-type): resources CHECK rejects ai
 
     // Apply all migrations including 25 (and any later migrations)
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 26);
+    assert.equal(userVersion(db), 28);
 
     // migration-7 columns still present
     assert.deepEqual(columnNames(db, "resources"), [
@@ -1813,10 +1824,15 @@ test("migration 26: pre-existing event rows survive the table rebuild (008.4 Sto
     );
 
     migrate(db, MIGRATIONS);
+    // EPIC 013 Story 5 added migration 28 (`task.abandoned` event type +
+    // events_new11 rebuild). The characterization shape is unchanged:
+    // bring up to the pre-rebuild boundary, seed event rows, run the full
+    // migration set, expect the latest version and every seeded row
+    // preserved verbatim.
     assert.equal(
       userVersion(db),
-      26,
-      "schema version must be 26 after all migrations",
+      28,
+      "schema version must be 28 after all migrations",
     );
     const countRow = db
       .prepare("SELECT COUNT(*) AS cnt FROM events WHERE taskId = ?")
@@ -1824,7 +1840,7 @@ test("migration 26: pre-existing event rows survive the table rebuild (008.4 Sto
     assert.equal(
       countRow.cnt,
       2,
-      "both seeded event rows must survive the migration 26 table rebuild",
+      "both seeded event rows must survive the migration 28 table rebuild",
     );
     const row = db
       .prepare("SELECT type FROM events WHERE id = ?")
@@ -1845,7 +1861,7 @@ test("migration 26: pre-existing event rows survive the table rebuild (008.4 Sto
 // `events_project_cursor` fails here, before it can silently empty every
 // project-scoped feed. EPIC 013 story 5 is the next such rebuild.
 
-test("migration 26: rebuild preserves all 8 events columns, including the projectId that scoped feeds read (008.4 Story D + 011 S3)", () => {
+test("migration 28: rebuild preserves all 8 events columns, including the projectId that scoped feeds read (008.4 Story D + 011 S3 + 013 S5)", () => {
   withMigratedDb((db) => {
     assert.deepEqual(columnNames(db, "events"), [
       "id",
@@ -1860,7 +1876,7 @@ test("migration 26: rebuild preserves all 8 events columns, including the projec
   });
 });
 
-test("migration 26: creates the events_project_cursor index (011 S3)", () => {
+test("migration 28: creates the events_project_cursor index (011 S3 + 013 S5)", () => {
   withMigratedDb((db) => {
     const rows = db
       .prepare(
@@ -1873,5 +1889,238 @@ test("migration 26: creates the events_project_cursor index (011 S3)", () => {
       "events_project_cursor index must exist after all migrations",
     );
     assert.equal(rows[0]?.name, "events_project_cursor");
+  });
+});
+
+// ── EPIC 013 Story 1 — jobs.revoked / jobs.revokeReason (migration 27) ──────
+
+test("migration 27: jobs has the new revoked + revokeReason columns (013 S1)", () => {
+  withMigratedDb((db) => {
+    assert.deepEqual(columnNames(db, "jobs"), [
+      "id",
+      "taskId",
+      "status",
+      "revoked",
+      "revokeReason",
+    ]);
+  });
+});
+
+test("migration 27: a pre-migration-27 jobs row survives and defaults revoked=0, revokeReason=null (013 S1)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-s1-job-lease-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 26 only (pre-migration-27 state), then seed a task
+    // chain + a jobs row using only the pre-migration-27 columns.
+    migrate(db, MIGRATIONS.slice(0, 26));
+    const { taskId } = insertChain(db);
+    db.prepare("INSERT INTO jobs(id, taskId, status) VALUES (?, ?, ?)").run(
+      "job-pre27",
+      taskId,
+      "queued",
+    );
+
+    migrate(db, MIGRATIONS);
+
+    const row = db
+      .prepare(
+        "SELECT id, taskId, status, revoked, revokeReason FROM jobs WHERE id = ?",
+      )
+      .get("job-pre27") as
+      | {
+          id: string;
+          taskId: string;
+          status: string;
+          revoked: number;
+          revokeReason: string | null;
+        }
+      | undefined;
+    assert.ok(row !== undefined, "pre-migration-27 jobs row must survive");
+    assert.equal(row.id, "job-pre27");
+    assert.equal(row.taskId, taskId);
+    assert.equal(row.status, "queued");
+    assert.equal(
+      row.revoked,
+      0,
+      "a pre-migration-27 jobs row must default revoked to 0",
+    );
+    assert.equal(
+      row.revokeReason,
+      null,
+      "a pre-migration-27 jobs row must default revokeReason to null",
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 27: partial unique index on jobs(taskId) WHERE status='queued' still rejects two queued jobs for one task (013 S1)", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+
+    db.prepare("INSERT INTO jobs(id, taskId, status) VALUES (?, ?, ?)").run(
+      "j1",
+      taskId,
+      "queued",
+    );
+
+    // second queued job for same taskId → still rejected after migration 27
+    assert.throws(() => {
+      db.prepare("INSERT INTO jobs(id, taskId, status) VALUES (?, ?, ?)").run(
+        "j2",
+        taskId,
+        "queued",
+      );
+    }, "the partial unique index must still reject two queued jobs for the same taskId after migration 27");
+  });
+});
+
+// ── EPIC 013 Story 5 — task.abandoned event type (migration 28) ──────────────
+// Story 5 widens the events.type CHECK to admit the new task.abandoned literal
+// (the operator's reason for revoking a run's lease). The rebuild uses the
+// events_new11 pattern and MUST preserve the projectId column that EPIC 011 S3
+// added — the index events_project_cursor is recreated by the migration, but
+// the column itself is what every scoped feed reads.
+
+test("EVENT_TYPES has 'task.abandoned' as a 28th member, positioned after 'task.discarded' (013 S5)", () => {
+  // The new member must be present, must sit between task.discarded and
+  // task.blocked so the task-lifecycle group stays contiguous, and the array
+  // must grow from 27 to 28 (the 28th literal in the events.type CHECK list).
+  const types = EVENT_TYPES as readonly string[];
+  assert.ok(
+    types.includes("task.abandoned"),
+    "EVENT_TYPES must include 'task.abandoned' after Story 5",
+  );
+  const discardedIdx = types.indexOf("task.discarded");
+  const abandonedIdx = types.indexOf("task.abandoned");
+  const blockedIdx = types.indexOf("task.blocked");
+  assert.equal(
+    abandonedIdx,
+    discardedIdx + 1,
+    "'task.abandoned' must sit immediately after 'task.discarded'",
+  );
+  assert.equal(
+    blockedIdx,
+    abandonedIdx + 1,
+    "'task.blocked' must sit immediately after 'task.abandoned'",
+  );
+  assert.equal(
+    types.length,
+    28,
+    "EVENT_TYPES must have 28 members after Story 5",
+  );
+});
+
+test("migration 28: events.type CHECK admits 'task.abandoned' (013 S5)", () => {
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.doesNotThrow(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-abandoned-1",
+        "task.abandoned",
+        taskId,
+      );
+    }, "'task.abandoned' must be a valid event type after migration 28");
+    // The inserted row must be readable back through the rebuilt table.
+    const row = db
+      .prepare("SELECT type FROM events WHERE id = ?")
+      .get("ev-abandoned-1") as { type: string } | undefined;
+    assert.ok(row !== undefined, "inserted task.abandoned row must survive");
+    assert.equal(row.type, "task.abandoned");
+  });
+});
+
+test("migration 28: events.type CHECK still rejects an unknown type (013 S5)", () => {
+  // Regression guard: widening the CHECK to admit task.abandoned must not
+  // accidentally turn the constraint into a no-op for every other literal.
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    assert.throws(() => {
+      db.prepare("INSERT INTO events(id, type, taskId) VALUES (?, ?, ?)").run(
+        "ev-bad-m28",
+        "task.bogus",
+        taskId,
+      );
+    }, "an unknown event type must still be rejected by the events.type CHECK after migration 28");
+  });
+});
+
+test("migration 28: pre-existing event rows survive the table rebuild (013 S5)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "kanthord-m28-rebuild-"));
+  const dbPath = join(dir, "kanthord.db");
+  const db = openDatabase(dbPath);
+  try {
+    // Bring up to version 27 only (pre-migration-28 state) and seed two event
+    // rows that the rebuild must preserve verbatim — including the payload
+    // column, which the INSERT…SELECT column list must carry explicitly.
+    migrate(db, MIGRATIONS.slice(0, 27));
+    db.exec(`
+      INSERT INTO projects(id, name) VALUES ('proj-m28', 'P');
+      INSERT INTO initiatives(id, projectId, name) VALUES ('init-m28', 'proj-m28', 'I');
+      INSERT INTO objectives(id, initiativeId, name) VALUES ('obj-m28', 'init-m28', 'O');
+      INSERT INTO tasks(id, objectiveId, title, status) VALUES ('task-m28', 'obj-m28', 'T', 'pending');
+    `);
+    db.prepare(
+      "INSERT INTO events(id, type, taskId, payload) VALUES (?, ?, ?, ?)",
+    ).run("ev-m28-1", "task.created", "task-m28", '{"seed":1}');
+    db.prepare(
+      "INSERT INTO events(id, type, taskId, payload) VALUES (?, ?, ?, ?)",
+    ).run("ev-m28-2", "task.verification", "task-m28", '{"seed":2}');
+
+    migrate(db, MIGRATIONS);
+    assert.equal(
+      userVersion(db),
+      28,
+      "schema version must be 28 after all migrations",
+    );
+    const countRow = db
+      .prepare("SELECT COUNT(*) AS cnt FROM events WHERE taskId = ?")
+      .get("task-m28") as { cnt: number };
+    assert.equal(
+      countRow.cnt,
+      2,
+      "both seeded event rows must survive the migration 28 table rebuild",
+    );
+    const row1 = db
+      .prepare("SELECT type, payload FROM events WHERE id = ?")
+      .get("ev-m28-1") as { type: string; payload: string } | undefined;
+    assert.ok(row1 !== undefined, "seeded event row ev-m28-1 must survive");
+    assert.equal(row1.type, "task.created");
+    assert.equal(
+      row1.payload,
+      '{"seed":1}',
+      "ev-m28-1 payload must round-trip through the rebuild",
+    );
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("migration 28: inserting 'task.abandoned' with a 'reason' payload round-trips through SELECT (013 S5)", () => {
+  // The new event carries the operator's reason in the payload column. The
+  // CHECK only validates the `type` literal; the payload must round-trip as a
+  // free-form string and never be silently dropped.
+  withMigratedDb((db) => {
+    const { taskId } = insertChain(db);
+    db.prepare(
+      "INSERT INTO events(id, type, taskId, payload) VALUES (?, ?, ?, ?)",
+    ).run(
+      "ev-abandoned-2",
+      "task.abandoned",
+      taskId,
+      '{"reason":"stuck on a slow tool"}',
+    );
+    const row = db
+      .prepare("SELECT payload FROM events WHERE id = ?")
+      .get("ev-abandoned-2") as { payload: string } | undefined;
+    assert.ok(row !== undefined, "task.abandoned row must exist after INSERT");
+    assert.equal(
+      row.payload,
+      '{"reason":"stuck on a slow tool"}',
+      "task.abandoned payload must round-trip through SELECT verbatim",
+    );
   });
 });

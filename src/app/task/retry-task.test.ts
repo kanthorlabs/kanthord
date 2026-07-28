@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RetryTask, TaskNotRetryableError } from "./retry-task.ts";
 import type { ConflictCandidateStore } from "./retry-task.ts";
-import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { JobQueue, ClaimedJob, RunningJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
@@ -63,6 +63,23 @@ class RecordingJobQueue implements JobQueue {
 
   listRunningJobs(): ClaimedJob[] {
     return [];
+  }
+
+  isLeaseCurrent(_leaseToken: string): boolean {
+    return true;
+  }
+
+  listRunningJobsForTask(_taskId: string): RunningJob[] {
+    return [];
+  }
+
+  // EPIC 013 Story 3 — `revoke` seam. retry-task never reaches it; default
+  // `not_found` keeps a stray call from silently no-op'ing.
+  revoke(
+    _leaseToken: string,
+    _reason: string,
+  ): "revoked" | "already_revoked" | "not_found" {
+    return "not_found";
   }
 }
 

@@ -218,7 +218,13 @@ export class AbandonTask {
 4. `jobs.length === 0` → `throw new NoRunningJobError(taskId)`.
 5. `jobs.length > 1` → `throw new AmbiguousRunningJobError(taskId, jobs.length)`.
 6. `jobs[0].revoked === true` → `return { outcome: "already_abandoning", taskId }` (no write, no event, reason not overwritten).
-7. `this.#queue.revoke(jobs[0].id, reason)`; `return { outcome: "abandoning", taskId }`.
+7. `const r = this.#queue.revoke(jobs[0].id, reason)`; `r !== "revoked"` → `throw new Error(...)`
+   naming the task id, the job id and the discriminant, then
+   `return { outcome: "abandoning", taskId }`. Step 3 read this row as non-revoked
+   inside the same `BEGIN IMMEDIATE` transaction, so any other discriminant is an
+   invariant violation. Do NOT map it onto `already_abandoning` or
+   `NoRunningJobError`: those are different operator-facing facts, and mapping would
+   hide both the broken isolation and the fact that the reason was never recorded.
 
 Follow the error-class shape convention of `src/app/task/retry-task.ts:10-20`.
 
@@ -258,7 +264,7 @@ Arrow wrapper, per AGENTS.md "Wiring". Add `abandonTask` to the returned bundle 
   - the whole body runs inside one transaction (`uow.txCount === 1`).
 - `node --test src/agent-runner/pi.test.ts` — add, using the file's existing `makeRunner` / `makeSessionFactory` helpers (`pi.test.ts:177-224`) and a scripted multi-turn session (three `bash` tool-call turns then a text turn):
   - lease current throughout → the run reaches the text turn and returns a non-`abandoned` outcome (regression guard).
-  - a lease observer that returns `true` for the first `isCurrent()` call and `false` afterwards → `run()` resolves to `{ outcome: "abandoned" }`, and the count of `tool_execution_start` events observed is exactly **1** (it stopped at the next boundary and started no further tool call).
+  - a lease observer that returns `true` for the first `isCurrent()` call and `false` afterwards → `run()` resolves to `{ outcome: "abandoned" }`, and the count of `tool_execution_start` events observed is exactly **2** — pi emits `tool_execution_start` _before_ `beforeToolCall`, so the blocked call still emits a start (1 executed + 1 blocked-at-start). Turns 3 and 4 must never start.
   - the drained run's `agent.finished` emit carries `outcome: "abandoned"` (assert via the `emit` option).
 - `node --test src/agent-runner/fake.test.ts` — `FakeRunner.run` with a lease whose `isCurrent()` is `false` returns `{ outcome: "abandoned" }` and does not consult `failTaskIds` / `failTransient`.
 - `node --test src/app/task/run-next-task.test.ts` — a scripted runner returning `{ outcome: "abandoned" }` makes `execute()` resolve to `{ outcome: "abandoned", taskId }`; the task is **not** saved, `finish` was **not** called, no `saveTaskResult`, and no event was appended.

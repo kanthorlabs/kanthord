@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { RunNextTask } from "./run-next-task.ts";
 import { RecoverInterruptedTasks } from "./recover-interrupted-tasks.ts";
-import type { JobQueue, ClaimedJob } from "../../queue/port.ts";
+import type { JobQueue, ClaimedJob, RunningJob } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
 import type { Event } from "../../domain/event.ts";
@@ -123,6 +123,23 @@ class SmartJobQueue implements JobQueue {
 
   listRunningJobs(): ClaimedJob[] {
     return [...this.#running.values()];
+  }
+
+  isLeaseCurrent(_leaseToken: string): boolean {
+    return true;
+  }
+
+  listRunningJobsForTask(_taskId: string): RunningJob[] {
+    return [];
+  }
+
+  // EPIC 013 Story 3 — `revoke` seam. escalation-persistence never reaches
+  // it; default `not_found` keeps a stray call debuggable.
+  revoke(
+    _leaseToken: string,
+    _reason: string,
+  ): "revoked" | "already_revoked" | "not_found" {
+    return "not_found";
   }
 }
 

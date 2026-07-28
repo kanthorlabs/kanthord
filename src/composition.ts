@@ -77,6 +77,7 @@ import { ListEvents } from "./app/task/list-events.ts";
 import { GetTask } from "./app/task/get-task.ts";
 import { ApproveTask } from "./app/task/approve-task.ts";
 import { RejectTask } from "./app/task/reject-task.ts";
+import { AbandonTask } from "./app/task/abandon-task.ts";
 import { ExportInitiative } from "./app/graph/export-initiative.ts";
 import { CreateGraph } from "./app/graph/create-graph.ts";
 import { ApplyGraph } from "./app/graph/apply-graph.ts";
@@ -377,6 +378,7 @@ export function buildDeps(
     taskRepository,
     taskRepository,
     landingRepository,
+    jobQueue,
   );
   const rejectTask = new RejectTask(
     {
@@ -397,6 +399,14 @@ export function buildDeps(
     },
     jobQueue,
     events,
+    unitOfWork,
+  );
+  // EPIC 013 Story 6 — `abandon task` use case. Operator-driven revocation
+  // of a `running` task's lease; the runner drains at its next turn
+  // boundary and Story 4's requeue + `task.abandoned` event closes the loop.
+  const abandonTask = new AbandonTask(
+    { get: (id) => taskRepository.get(id) },
+    jobQueue,
     unitOfWork,
   );
   const retryTask = new RetryTask(
@@ -891,6 +901,7 @@ export function buildDeps(
     retryObjective,
     rejectObjective,
     rejectTask,
+    abandonTask,
     buildDaemon,
     logger,
     listEvents,

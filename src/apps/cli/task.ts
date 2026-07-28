@@ -4,6 +4,7 @@ import type { GetTask } from "../../app/task/get-task.ts";
 import type { ApproveTask } from "../../app/task/approve-task.ts";
 import type { RejectTask } from "../../app/task/reject-task.ts";
 import type { GetConflict } from "../../app/task/get-conflict.ts";
+import type { AbandonTask } from "../../app/task/abandon-task.ts";
 import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 
@@ -330,7 +331,47 @@ export async function runGetTask(
       );
     }
 
+    // EPIC 013 Story 6 — `abandoning` is a marker on a `running` task whose
+    // lease has been revoked. Only print the line when true so a non-abandoning
+    // task is byte-identical to today's output.
+    if (output.abandoning) {
+      lines.push("abandoning: true");
+    }
+
     return { exitCode: 0, stdout: lines, stderr: [] };
+  } catch (err) {
+    return { ...toResult(err), stdout: [] };
+  }
+}
+
+/**
+ * EPIC 013 Story 6 — `abandon task --id <id> --reason <text>` handler.
+ *
+ * Both `abandoning` (lease revoked this call) and `already_abandoning`
+ * (idempotent second call) resolve to exit 0 so the second `abandon` in
+ * Proof phase B is a no-op and never fails. The 3 typed errors are
+ * registered in `error-map.ts` so the CLI surfaces them as single-line
+ * `error: …` messages instead of raw stack traces.
+ */
+export async function runAbandonTask(
+  args: Record<string, unknown>,
+  abandonTask: AbandonTask,
+): Promise<HandlerResult> {
+  const id = args["id"];
+  if (typeof id !== "string" || id === "") {
+    return { ...toResult(new MissingFlagError("--id")), stdout: [] };
+  }
+  const reason = args["reason"];
+  if (typeof reason !== "string" || reason === "") {
+    return { ...toResult(new MissingFlagError("--reason")), stdout: [] };
+  }
+  try {
+    const outcome = abandonTask.execute({ taskId: id, reason });
+    const note =
+      outcome.outcome === "abandoning"
+        ? `task abandoning: ${id} (lease revoked; draining at the next turn boundary)`
+        : `task already abandoning: ${id}`;
+    return { exitCode: 0, stdout: [id], stderr: [note] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
   }
