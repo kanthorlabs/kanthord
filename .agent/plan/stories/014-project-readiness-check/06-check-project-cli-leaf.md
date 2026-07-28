@@ -347,8 +347,9 @@ credentialIsCredentialType: true` → report `repository: "unverified"`; the
     probe → `verified === false` and that probe's `status === "failed"`.
   - `probeProvider: true` with a two-member resolved chain → `providerProbe.execute`
     called exactly once, with `resolved[0].id`; with an empty chain → called 0
-    times and `probes.provider` is present but empty; with a chain whose only
-    member came from the default → called once with that id.
+    times, and although `probes.provider` is present-but-empty, nothing ran, so
+    `verified === null` (Story 1); with a chain whose only member came from the
+    default → called once with that id.
   - `heartbeat.instances()` is called exactly once per `execute`.
 - `node --test src/apps/cli/project-readiness.test.ts` — new file, handler-level
   (inline fake `CheckProject`; mirror `src/apps/cli/project.test.ts:1-60`):

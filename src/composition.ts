@@ -25,6 +25,8 @@ import { RenameProject } from "./app/project/rename-project.ts";
 import { GetProject } from "./app/project/get-project.ts";
 import { FindProject } from "./app/project/find-project.ts";
 import { ListProjects } from "./app/project/list-projects.ts";
+import { ProbeAiProvider } from "./app/project/probe-ai-provider.ts";
+import { CheckProject } from "./app/project/check-project.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
 import { AddInitiativeDependency } from "./app/initiative/add-initiative-dependency.ts";
 import { RemoveInitiativeDependency } from "./app/initiative/remove-initiative-dependency.ts";
@@ -109,6 +111,14 @@ import { GetConflict } from "./app/task/get-conflict.ts";
 import { SqliteLandingRepository } from "./storage/sqlite/landing.ts";
 import { SqlitePublicationRepository } from "./storage/sqlite/publication.ts";
 import { SqliteAiProviderRegistry } from "./storage/sqlite/ai-provider-registry.ts";
+import { SqliteDaemonHeartbeatRepository } from "./storage/sqlite/daemon-heartbeat-repository.ts";
+import {
+  heartbeatAgeMs,
+  resolveIntervalMs,
+  resolveStaleMs,
+  startHeartbeat,
+} from "./app/task/daemon-heartbeat.ts";
+import { GitRepositoryProbe } from "./repository-probe/git.ts";
 import { RegisterAiProvider } from "./app/ai-provider/register-ai-provider.ts";
 import { registerGlobalProvider } from "./app/ai-provider/register-global-provider.ts";
 import { GetAiProvider } from "./app/ai-provider/get-ai-provider.ts";
@@ -260,6 +270,10 @@ export function buildDeps(
 
   const probe = new PiProviderProbe(aiProviderRegistry, sessions);
   const testAiProvider = new TestAiProvider(probe);
+  const probeAiProvider = new ProbeAiProvider(
+    testAiProvider,
+    (id) => aiProviderRegistry.get(id)?.value ?? null,
+  );
   const getResource = new GetResource(projectRepository, publicationRepository);
   const listResources = new ListResources(projectRepository);
   const homePathExists = async (path: string): Promise<boolean> => {
@@ -618,6 +632,102 @@ export function buildDeps(
     return cred.value;
   };
 
+  // EPIC 014 Story 6 — `kanthord check project` wiring. The heartbeat
+  // observation table (Story 3) and the read-only repository probe (Story 4)
+  // already exist; this turns them into the `CheckProject` fact collector
+  // the handler calls. The staleMs comes from the env override or the
+  // HEARTBEAT_STALE_MS default; `instances()` reads every row (live and
+  // stale) so the `daemon` check can derive `running` / `stopped` / `multiple`
+  // from age against the threshold.
+  //
+  // The heartbeat repository is constructed LAZILY on first `instances()` call:
+  // `SqliteDaemonHeartbeatRepository` prepares its statements in the
+  // constructor, which would crash against a not-yet-migrated database —
+  // and `buildDeps` is called by many tests BEFORE `db migrate` runs. The
+  // closure defers the prepare until a real readiness report is requested,
+  // at which point the migration is guaranteed to have run.
+  const heartbeatStaleMs = resolveStaleMs(
+    process.env["KANTHORD_HEARTBEAT_STALE_MS"],
+  );
+  let heartbeatRepository: SqliteDaemonHeartbeatRepository | undefined;
+  const heartbeatInstances = (): Array<{
+    instanceId: string;
+    ageMs: number;
+  }> => {
+    if (heartbeatRepository === undefined) {
+      heartbeatRepository = new SqliteDaemonHeartbeatRepository(db);
+    }
+    const now = Date.now();
+    return heartbeatRepository.list().map((row) => ({
+      instanceId: row.instanceId,
+      ageMs: heartbeatAgeMs(now, row.lastBeatMs),
+    }));
+  };
+  const repositoryProbe = new GitRepositoryProbe(resolveCredential);
+
+  // EPIC 014 Story 6 — the daemon heartbeat factory. The `run daemon` leaf
+  // calls `start()` before its loop and the returned function in `finally`
+  // so the `daemon` check in `check project` observes a live `running` row
+  // for the duration of the process. The lazy init of the repository keeps
+  // `buildDeps` callable against an unmigrated database (the heartbeat row
+  // is only written once the daemon actually starts). `pid` and
+  // `startedAtMs` are captured by the closure so the same instance is
+  // always re-beated under one `instanceId` (`pid + ":" + startedAtMs`).
+  // `now` is `Date.now`; `schedule` is `setInterval` returning a cancel
+  // handle. `resolveIntervalMs` (014 S3) clamps the interval into
+  // `[1, HEARTBEAT_INTERVAL_MS]` so a 1ms threshold still produces a valid
+  // interval — it is CALLED, not re-derived, so its hermetic "threshold stays
+  // a 3x multiple of the period" test guards this production path.
+  // `startedAtMs` is the real process start time, so `instanceId` means what
+  // it says; `t.unref()` keeps the interval from holding the event loop open.
+  const startedAtMs = Date.now() - Math.round(process.uptime() * 1000);
+  const heartbeat: { start(): () => void } = {
+    start: () => {
+      if (heartbeatRepository === undefined) {
+        heartbeatRepository = new SqliteDaemonHeartbeatRepository(db);
+      }
+      return startHeartbeat({
+        store: heartbeatRepository,
+        now: () => Date.now(),
+        pid: process.pid,
+        startedAtMs,
+        intervalMs: resolveIntervalMs(heartbeatStaleMs),
+        schedule: (fn, ms) => {
+          const t = setInterval(fn, ms);
+          t.unref();
+          return { cancel: () => clearInterval(t) };
+        },
+      });
+    },
+  };
+
+  const checkProject = new CheckProject({
+    projects: {
+      get: (id) => projectRepository.get(id),
+      listResources: (projectId) => projectRepository.listResources(projectId),
+      getResource: (id) => projectRepository.getResource(id),
+    },
+    initiatives: {
+      listInitiatives: (projectId) =>
+        initiativeRepository.listInitiatives(projectId),
+      listAllInitiatives: () => initiativeRepository.listAllInitiatives(),
+    },
+    tasks: { listByInitiative: (id) => taskRepository.listByInitiative(id) },
+    providers: {
+      chain: (projectId) => resolveProjectChain.execute(projectId),
+      assignedIds: (projectId) =>
+        aiProviderRegistry.listAssigned(projectId).map((p) => p.id),
+    },
+    status: { schemaVersion: () => store.schemaVersion() },
+    expectedSchemaVersion: MIGRATIONS[MIGRATIONS.length - 1]!.version,
+    heartbeat: {
+      staleMs: heartbeatStaleMs,
+      instances: heartbeatInstances,
+    },
+    repositoryProbe,
+    providerProbe: probeAiProvider,
+  });
+
   // Story 007.13-B — publish delivers a landed branch to its remote,
   // separate from (and never automatic on) approve/land.
   const repositoryPublisher = new GitRepositoryPublisher(resolveCredential);
@@ -926,6 +1036,10 @@ export function buildDeps(
     unassignAiProvider,
     resolveProjectChain,
     testAiProvider,
+    providerProbe: probeAiProvider,
+    checkProject,
+    heartbeat,
+    repositoryProbe,
     resolveHomeDir,
     workspaces,
     newId,

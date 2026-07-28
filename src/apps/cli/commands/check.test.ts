@@ -82,4 +82,39 @@ describe("src/apps/cli/commands/check.ts", () => {
     assert.match(cap.out.join(""), /Usage: kanthord check graph/);
     assert.match(cap.out.join(""), /Example/);
   });
+
+  // EPIC 014 Story 6 — `check project` is the project-readiness leaf.
+
+  test("documents the project command with its canonical usage and example", async () => {
+    const cap = capture();
+    const check = buildCheckCommand(
+      {} as Parameters<typeof buildCheckCommand>[0],
+      cap.io as Parameters<typeof buildCheckCommand>[1],
+    ).exitOverride();
+    check.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    const program = new Command("kanthord").addCommand(check).exitOverride();
+    program.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      program.parseAsync(["check", "project", "--help"], { from: "user" }),
+    );
+
+    assert.match(cap.out.join(""), /Usage: kanthord check project/);
+    assert.match(cap.out.join(""), /Example/);
+  });
+
+  test("rejects project without its required --id option", async () => {
+    const cap = capture();
+    const command = buildCheckCommand(
+      {} as Parameters<typeof buildCheckCommand>[0],
+      cap.io as Parameters<typeof buildCheckCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["project"], { from: "user" }),
+      (error: { code?: string }) =>
+        error.code === "commander.missingMandatoryOptionValue",
+    );
+  });
 });

@@ -49,6 +49,7 @@ import type { ProviderSession, ProviderSessionFactory } from "./pi-session.ts";
 import { CredentialError, UnknownModelError } from "./pi-session.ts";
 import type { OutcomeEvidence, VerificationEvidence } from "./verification.ts";
 import { renderTaskPrompt } from "./task-prompt.ts";
+import { makeRedactor } from "../domain/redact.ts";
 
 const execFile = promisify(execFileCb);
 
@@ -456,8 +457,7 @@ export class PiAgentRunner implements AgentRunner {
     }
 
     // Build redactor: replaces all occurrences of the credential value with ***
-    const redact = (s: string): string =>
-      provider.value ? s.split(provider.value).join("***") : s;
+    const redact = makeRedactor(provider.value);
 
     // 3. Session factory — errors here mean task fails, no workspace prepared
     let session: ProviderSession;

@@ -67,12 +67,13 @@ function withMigratedDb(run: (db: DatabaseSync) => void): void {
 
 // ── (a) version + tables ─────────────────────────────────────────────────────
 
-test("migrates to version 28 and creates all tables including ai_providers, edge tables, and project_ai_providers", () => {
+test("migrates to version 29 and creates all tables including ai_providers, edge tables, project_ai_providers, and daemon_heartbeats", () => {
   withMigratedDb((db) => {
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
     assert.deepEqual(userTables(db), [
       "ai_provider_default",
       "ai_providers",
+      "daemon_heartbeats",
       "events",
       "graph_import_map",
       "initiative_dependencies",
@@ -453,7 +454,7 @@ test("re-run of MIGRATIONS returns applied empty (idempotent)", () => {
   try {
     migrate(db, MIGRATIONS);
     const second: MigrationReport = migrate(db, MIGRATIONS);
-    assert.equal(second.version, 28);
+    assert.equal(second.version, 29);
     assert.deepEqual(second.applied, []);
   } finally {
     db.close();
@@ -871,8 +872,8 @@ test("S2: pre-existing event rows and indexes survive the migration 8 table rebu
     // every seeded row preserved verbatim.
     assert.equal(
       userVersion(db),
-      28,
-      "schema version must be 28 after all migrations",
+      29,
+      "schema version must be 29 after all migrations",
     );
     // (b) All seeded rows must survive the rebuild.
     const countRow = db
@@ -1004,7 +1005,7 @@ test("migration 12 adds objectiveId and initiativeId columns to events and makes
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
     assert.deepEqual(columnNames(db, "events"), [
       "id",
       "type",
@@ -1109,7 +1110,7 @@ test("migration 18 adds a repositoryId column to events and preserves a pre-exis
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
     assert.ok(
       columnNames(db, "events").includes("repositoryId"),
       "events table must gain a repositoryId column after migration 18",
@@ -1188,7 +1189,7 @@ test("migration 13 adds a nullable workspace column to initiatives, defaulting e
     `);
 
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
 
     type WorkspaceRow = { workspace: string | null };
     const row = db
@@ -1225,7 +1226,7 @@ test("migration 15 creates publications table keyed by (repo_id, branch) with a 
   const db = openDatabase(dbPath);
   try {
     const report = migrate(db, MIGRATIONS);
-    assert.equal(report.version, 28);
+    assert.equal(report.version, 29);
     assert.ok(
       userTables(db).includes("publications"),
       "publications table must exist after migration 15",
@@ -1520,7 +1521,7 @@ test("migration 21 migrates cleanly with an empty tasks table", () => {
   try {
     migrate(db, MIGRATIONS.slice(0, 20));
     assert.doesNotThrow(() => migrate(db, MIGRATIONS));
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
   } finally {
     db.close();
     rmSync(dir, { recursive: true, force: true });
@@ -1535,7 +1536,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,providerId) rejects dup
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-uniq', 'P');
@@ -1576,7 +1577,7 @@ test("migration 23 project_ai_providers UNIQUE(projectId,rank) rejects two membe
   const db = openDatabase(dbPath);
   try {
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
 
     db.exec(`
       INSERT INTO projects(id, name) VALUES ('proj-rank', 'P');
@@ -1697,7 +1698,7 @@ test("migration 25 (008.3-s-retire-ai-provider-type): resources CHECK rejects ai
 
     // Apply all migrations including 25 (and any later migrations)
     migrate(db, MIGRATIONS);
-    assert.equal(userVersion(db), 28);
+    assert.equal(userVersion(db), 29);
 
     // migration-7 columns still present
     assert.deepEqual(columnNames(db, "resources"), [
@@ -1831,8 +1832,8 @@ test("migration 26: pre-existing event rows survive the table rebuild (008.4 Sto
     // preserved verbatim.
     assert.equal(
       userVersion(db),
-      28,
-      "schema version must be 28 after all migrations",
+      29,
+      "schema version must be 29 after all migrations",
     );
     const countRow = db
       .prepare("SELECT COUNT(*) AS cnt FROM events WHERE taskId = ?")
@@ -2072,8 +2073,8 @@ test("migration 28: pre-existing event rows survive the table rebuild (013 S5)",
     migrate(db, MIGRATIONS);
     assert.equal(
       userVersion(db),
-      28,
-      "schema version must be 28 after all migrations",
+      29,
+      "schema version must be 29 after all migrations",
     );
     const countRow = db
       .prepare("SELECT COUNT(*) AS cnt FROM events WHERE taskId = ?")
@@ -2122,5 +2123,44 @@ test("migration 28: inserting 'task.abandoned' with a 'reason' payload round-tri
       '{"reason":"stuck on a slow tool"}',
       "task.abandoned payload must round-trip through SELECT verbatim",
     );
+  });
+});
+
+// ── EPIC 014 Story 3 — daemon_heartbeats (migration 29) ────────────────────
+// Observation only — one row per daemon instance (pid + process start time).
+// Not a lease; two rows is a reportable state, not an error. PRIMARY KEY is
+// `instanceId` so a re-beat upserts in place and a second daemon is visible
+// rather than overwriting the first.
+
+test("migration 29: daemon_heartbeats table exists with exactly the four required columns (014 S3)", () => {
+  withMigratedDb((db) => {
+    assert.ok(
+      userTables(db).includes("daemon_heartbeats"),
+      "daemon_heartbeats table must exist after migration 29",
+    );
+    assert.deepEqual(
+      columnNames(db, "daemon_heartbeats"),
+      ["instanceId", "pid", "startedAtMs", "lastBeatMs"],
+      "daemon_heartbeats must have exactly four columns in this order",
+    );
+  });
+});
+
+test("migration 29: daemon_heartbeats.instanceId is the PRIMARY KEY — re-beat upserts in place (014 S3)", () => {
+  withMigratedDb((db) => {
+    db.prepare(
+      "INSERT INTO daemon_heartbeats(instanceId, pid, startedAtMs, lastBeatMs) VALUES (?, ?, ?, ?)",
+    ).run("inst-a", 1, 100, 200);
+
+    // second insert with the same instanceId must fail on the PK — a re-beat
+    // must use ON CONFLICT(instanceId) DO UPDATE, not a plain INSERT. The
+    // repository adapter (`SqliteDaemonHeartbeatRepository.beat`) is the only
+    // caller; this assertion verifies the table has the constraint, so the
+    // adapter cannot accidentally regress to a plain insert.
+    assert.throws(() => {
+      db.prepare(
+        "INSERT INTO daemon_heartbeats(instanceId, pid, startedAtMs, lastBeatMs) VALUES (?, ?, ?, ?)",
+      ).run("inst-a", 1, 100, 300);
+    }, "instanceId PRIMARY KEY must reject a plain duplicate insert");
   });
 });

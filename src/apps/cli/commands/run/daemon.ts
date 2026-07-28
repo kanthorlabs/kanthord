@@ -44,6 +44,7 @@ export function buildRunDaemonCommand(deps: CliDeps, io: CliIo): Command {
             },
             deps.buildDaemon,
             deps.logger,
+            deps.heartbeat,
           ),
           io,
         );

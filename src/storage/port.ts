@@ -396,3 +396,37 @@ export interface SequencingRepository {
   addObjectiveAfter(objectiveId: string, dependencyId: string): void;
   removeObjectiveAfter(objectiveId: string, dependencyId: string): void;
 }
+
+/**
+ * One row in the `daemon_heartbeats` table (014 S3). Written by `startHeartbeat`
+ * (src/app/task/daemon-heartbeat.ts) on a fixed interval; read by the
+ * `daemon` check of `buildProjectReadiness` (src/app/project/project-readiness.ts)
+ * to derive `running` / `stopped` / `multiple` from age.
+ *
+ * `instanceId` is the primary key (`pid + ":" + startedAtMs`); a re-beat
+ * upserts in place. Two distinct instanceIds are a reportable "multiple"
+ * state, not an error.
+ */
+export interface DaemonHeartbeatRow {
+  instanceId: string;
+  pid: number;
+  startedAtMs: number;
+  lastBeatMs: number;
+}
+
+/**
+ * Repository for daemon heartbeats (014 S3). One row per daemon instance
+ * keyed by `instanceId`; `list()` returns all live and stale rows ordered
+ * by `instanceId` ASC.
+ */
+export interface DaemonHeartbeatRepository {
+  /** Upsert: insert a new row or update `lastBeatMs` for the existing one. */
+  beat(input: {
+    instanceId: string;
+    pid: number;
+    startedAtMs: number;
+    atMs: number;
+  }): void;
+  /** Every row, live and stale, ordered by `instanceId` ASC. */
+  list(): DaemonHeartbeatRow[];
+}

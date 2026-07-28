@@ -264,9 +264,7 @@ const ranProbes = [
   ...(facts.probes.provider ?? []),
 ];
 verified =
-  facts.probes.repositories === undefined && facts.probes.provider === undefined
-    ? null
-    : ranProbes.every((p) => p.status === "ok");
+  ranProbes.length === 0 ? null : ranProbes.every((p) => p.status === "ok");
 
 operational = daemonStatus === "running" || daemonStatus === "multiple";
 
@@ -274,7 +272,10 @@ ready = configured && verified === true && operational;
 ```
 
 A probe family key present but its array empty (e.g. `--probe-repositories` with
-zero repositories) means the family ran and vacuously passed: `verified === true`.
+zero repositories) means **nothing was probed**, so `verified === null` — exactly
+as if no flag had been passed. The gate is "at least one probe ran", never "a key
+was present": the EPIC's Gate and its Decisions both forbid a `true` by vacuous
+default, because a verdict nobody tested must not read as passing.
 
 ## Constraints
 
@@ -349,8 +350,9 @@ zero repositories) means the family ran and vacuously passed: `verified === true
     repository probe `failed`** (a probe result must not change `configured`).
   - **`verified`**: `null` when both probe keys are absent (never `true`);
     `true` when only the repositories key is present and all are `ok`; `false`
-    when one of several probes is `failed`; `true` when a probe key is present
-    with an empty array.
+    when one of several probes is `failed`; **`null` when a probe key is present
+    with an empty array** (nothing ran), including when both keys are present
+    and both arrays are empty; and a vacuous verdict never makes `ready` true.
   - **`operational`**: `false` for `stopped`, `true` for `running`, `true` for
     `multiple`.
   - **`ready`**: `true` only for `configured && verified === true &&

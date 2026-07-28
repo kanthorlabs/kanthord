@@ -71,6 +71,23 @@ export class MissingFlagError extends Error {
   }
 }
 
+/**
+ * Read a required string flag out of a parsed-args bag, or throw
+ * `MissingFlagError`. Lives beside the error it throws; shared by every CLI
+ * handler that has a required `--flag` (ai-provider, repo, resource,
+ * project-readiness).
+ */
+export function requireFlag(
+  args: Record<string, unknown>,
+  flag: string,
+): string {
+  const value = args[flag];
+  if (typeof value !== "string" || value === "") {
+    throw new MissingFlagError(`--${flag}`);
+  }
+  return value;
+}
+
 export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
   if (
     err instanceof UnknownReferenceError ||

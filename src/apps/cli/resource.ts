@@ -5,7 +5,7 @@ import type { UpdateCredential } from "../../app/resource/update-credential.ts";
 import type { UpdateRepository } from "../../app/resource/update-repository.ts";
 import type { UpdateNotification } from "../../app/resource/update-notification.ts";
 import type { UpdateFilesystem } from "../../app/resource/update-filesystem.ts";
-import { MissingFlagError, toResult } from "./error-map.ts";
+import { requireFlag, toResult } from "./error-map.ts";
 import {
   readCredentialValue,
   CredentialReadTimeoutError,
@@ -17,14 +17,6 @@ export type ResourceType =
   "repository" | "credential" | "notification" | "filesystem";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
-
-function requireFlag(args: Record<string, unknown>, flag: string): string {
-  const value = args[flag];
-  if (typeof value !== "string" || value === "") {
-    throw new MissingFlagError(`--${flag}`);
-  }
-  return value;
-}
 
 function parseValueTimeout(raw: unknown): number | undefined {
   if (typeof raw !== "string" || raw === "") return undefined;

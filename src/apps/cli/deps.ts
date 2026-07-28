@@ -58,6 +58,8 @@ import type { AssignAiProvider } from "../../app/ai-provider/assign-ai-provider.
 import type { UnassignAiProvider } from "../../app/ai-provider/unassign-ai-provider.ts";
 import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-chain.ts";
 import type { TestAiProvider } from "../../app/ai-provider/test-ai-provider.ts";
+import type { ProbeAiProvider } from "../../app/project/probe-ai-provider.ts";
+import type { CheckProject } from "../../app/project/check-project.ts";
 import type { CreateGraph } from "../../app/graph/create-graph.ts";
 import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
 import type { LoginDeps } from "./login.ts";
@@ -121,6 +123,29 @@ export interface CliRepositoryLanding {
       | { kind: "already-landed"; canonicalSHA: string };
     canonicalSHA: string;
   }>;
+}
+
+/**
+ * Minimal structural surface of the repository-probe capability that the CLI
+ * bundle exposes. Declared locally (rather than importing `RepositoryProbe` from
+ * `repository-probe/port.ts`) so this `apps/` module honors the architecture
+ * boundary: `apps/` may depend on `app/` only, never a capability port type. The
+ * concrete `GitRepositoryProbe` (an adapter) remains structurally assignable to
+ * this shape, so `composition.ts` can return it as part of `CliDeps`. Mirrors the
+ * `CliWorkspaceManager` pattern above. The `auth` union is inlined for the same
+ * reason `resource.ts:14-17` inlines `ResourceType`: `RepositoryAuth` lives in
+ * `domain/`. `REPOSITORY_PROBE_TIMEOUT_MS` stays owned by the port and is not
+ * mirrored — nothing in `apps/` reads it.
+ */
+export interface CliRepositoryProbe {
+  probe(input: {
+    remoteUrl: string;
+    branch: string;
+    auth:
+      | { kind: "ambient" }
+      | { kind: "https-token"; credentialId: string }
+      | { kind: "ssh-agent" };
+  }): Promise<{ status: "ok" | "failed"; detail: string }>;
 }
 
 export interface Logger {
@@ -203,6 +228,20 @@ export interface CliDeps {
   unassignAiProvider: UnassignAiProvider;
   resolveProjectChain: ResolveProjectChain;
   testAiProvider: TestAiProvider;
+  providerProbe: ProbeAiProvider;
+  checkProject: CheckProject;
+  /**
+   * EPIC 014 Story 6 — starts a daemon heartbeat (014 S3) so a live daemon
+   * is visible to `check project`'s `daemon` check. The returned function
+   * cancels the schedule; it is idempotent.
+   */
+  heartbeat: { start(): () => void };
+  /**
+   * EPIC 014 Story 4 — the read-only repository probe, exposed as a structural
+   * mirror so `apps/` never imports `repository-probe/port.ts`. Consumed by
+   * EPIC 015; nothing in the CLI reads it yet.
+   */
+  repositoryProbe: CliRepositoryProbe;
   resolveHomeDir: (repoId: string) => string;
   workspaces: CliWorkspaceManager;
   newId: () => string;

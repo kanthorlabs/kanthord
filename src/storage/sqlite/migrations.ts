@@ -871,4 +871,24 @@ ALTER TABLE events_new11 RENAME TO events;
 CREATE INDEX events_project_cursor ON events(projectId, id);
 `),
   },
+  {
+    version: 29,
+    name: "014-s3-daemon-heartbeats",
+    // EPIC 014 Story 3 — daemon heartbeat observation table. One row per
+    // daemon instance, keyed by `instanceId` (`pid + ":" + startedAtMs`).
+    // A re-beat upserts `lastBeatMs`; two distinct instanceIds are a
+    // reportable "multiple" state, not an error. The table is observation
+    // only — no lease, no FK to projects (a stopped daemon's project may
+    // have been deleted). Read by the `daemon` check in
+    // `buildProjectReadiness` (src/app/project/project-readiness.ts).
+    up: (db) =>
+      db.exec(`
+CREATE TABLE daemon_heartbeats (
+  instanceId  TEXT PRIMARY KEY,
+  pid         INTEGER NOT NULL,
+  startedAtMs INTEGER NOT NULL,
+  lastBeatMs  INTEGER NOT NULL
+);
+`),
+  },
 ];

@@ -8,17 +8,9 @@ import {
   LandingConflictError,
   LandingCASMismatchError,
 } from "../../app/errors.ts";
-import { MissingFlagError } from "./error-map.ts";
+import { requireFlag } from "./error-map.ts";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
-
-function requireFlag(args: Record<string, unknown>, flag: string): string {
-  const value = args[flag];
-  if (typeof value !== "string" || value === "") {
-    throw new MissingFlagError(`--${flag}`);
-  }
-  return value;
-}
 
 /**
  * `repo land` — fetch + fast-forward or merge the candidateSHA into the

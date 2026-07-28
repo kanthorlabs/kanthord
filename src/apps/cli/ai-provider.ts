@@ -12,18 +12,10 @@ import type { UnassignAiProvider } from "../../app/ai-provider/unassign-ai-provi
 import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-chain.ts";
 import { InvalidRankError } from "../../app/ai-provider/errors.ts";
 import type { TestAiProvider } from "../../app/ai-provider/test-ai-provider.ts";
-import { MissingFlagError, toResult } from "./error-map.ts";
+import { requireFlag, toResult } from "./error-map.ts";
 import { readCredentialValue } from "./credential-input.ts";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
-
-function requireFlag(args: Record<string, unknown>, flag: string): string {
-  const value = args[flag];
-  if (typeof value !== "string" || value === "") {
-    throw new MissingFlagError(`--${flag}`);
-  }
-  return value;
-}
 
 export async function runRegisterAiProvider(
   args: Record<string, unknown>,

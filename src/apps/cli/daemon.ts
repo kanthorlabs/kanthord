@@ -18,6 +18,7 @@ export async function runDaemon(
   args: Record<string, unknown>,
   buildDaemon: DaemonFactory,
   logger?: Logger,
+  heartbeat?: { start(): () => void },
 ): Promise<{ exitCode: number; stdout: string[]; stderr: string[] }> {
   // Validate --poll-interval (must be a positive integer string when provided)
   const pollIntervalRaw = args["poll-interval"] as string | undefined;
@@ -69,7 +70,19 @@ export async function runDaemon(
   // Wire SIGINT → daemon.stop() so an in-flight task finishes cleanly.
   const sigintHandler = () => daemon.stop();
   process.on("SIGINT", sigintHandler);
+  // EPIC 014 Story 6 — start the heartbeat (014 S3) before the daemon loop
+  // and stop it on exit. The heartbeat is what makes the `daemon` check in
+  // `check project` report `running` while this process is alive; without it,
+  // a live daemon reads as `stopped` because the `daemon_heartbeats` table
+  // would be empty. `start()` writes one beat immediately and schedules
+  // subsequent beats; the returned function cancels the schedule.
+  //
+  // It starts INSIDE the try so the `finally` always owns the stop: started
+  // outside, any throw between start and the try would leak the interval and
+  // leave a stale row that reads as a live daemon.
+  let stopHeartbeat: (() => void) | undefined;
   try {
+    stopHeartbeat = heartbeat?.start();
     const result = await daemon.execute({ untilIdle, pollIntervalMs });
     const objectivesAwaitingConfirmation =
       (result as { objectivesAwaitingConfirmation?: number })
@@ -106,5 +119,9 @@ export async function runDaemon(
     return { exitCode: result.exitCode, stdout: [], stderr };
   } finally {
     process.removeListener("SIGINT", sigintHandler);
+    // Stop the heartbeat LAST, so a SIGINT during teardown still leaves a
+    // row visible long enough for an immediate post-kill `check project`
+    // (the Proof's Phase H) to read `running`.
+    stopHeartbeat?.();
   }
 }

@@ -46,7 +46,7 @@ interface GitEnv {
  * auth resolve the credential into a chmod-600 temp file + static askpass
  * script wired via GIT_ASKPASS. `ambient`/`ssh-agent` skip askpass entirely.
  */
-async function buildGitEnv(
+export async function buildGitEnv(
   auth: RepositoryAuth,
   resolveCredential?: (credentialId: string) => Promise<string>,
 ): Promise<GitEnv> {
