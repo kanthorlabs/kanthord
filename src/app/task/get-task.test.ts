@@ -129,8 +129,8 @@ test("(016 B2) GetTask: TaskSource.listByInitiative/getInitiativeId are required
   // error — and typecheck turns green — only once the software-engineer
   // makes both methods required on `TaskSource`.
   const results = new MemResultSource(new Map());
-  // @ts-expect-error — listByInitiative/getInitiativeId must be required on TaskSource; a get-only source must be a type error
   const _guard = new GetTask(
+    // @ts-expect-error — listByInitiative/getInitiativeId must be required on TaskSource; a get-only source must be a type error
     new MemTaskSourceGetOnly([FAKE_TASK]),
     results,
     nullContextSource,
