@@ -23,24 +23,30 @@
     "*.{ts,js,mjs,json,md,yml,yaml}": "prettier --write"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "eslint": "^10.7.0",
-    "eslint-plugin-boundaries": "^7.0.2",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.0.8",
+    "@types/koa": "3.0.3",
+    "@types/koa__cors": "5.0.1",
+    "@types/node": "24.0.0",
+    "@types/supertest": "7.2.1",
+    "eslint": "10.7.0",
+    "eslint-plugin-boundaries": "7.0.2",
+    "husky": "9.1.7",
+    "lint-staged": "17.0.8",
     "prettier": "3.9.5",
-    "typescript": "^5.7.2",
-    "typescript-eslint": "^8.63.0"
+    "supertest": "7.2.2",
+    "typescript": "5.7.2",
+    "typescript-eslint": "8.63.0"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.80.6",
     "@earendil-works/pi-ai": "0.80.6",
     "@earendil-works/pi-coding-agent": "0.80.6",
-    "commander": "^15.0.0",
-    "find-my-way": "^9.7.0",
-    "pino": "^10.3.1",
-    "ulid": "^3.0.2",
-    "yaml": "^2.9.0"
+    "@koa/bodyparser": "6.1.0",
+    "@koa/cors": "5.0.0",
+    "commander": "15.0.0",
+    "koa": "3.2.1",
+    "pino": "10.3.1",
+    "ulid": "3.0.2",
+    "yaml": "2.9.0"
   },
   "allowScripts": {
     "@google/genai@1.52.0": true,
