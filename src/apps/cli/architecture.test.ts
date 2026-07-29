@@ -40,8 +40,10 @@ const EXPECTED_LEAF_FILE_COUNT = 73;
  *  016 Story 6 adds `get overview`;
  *  017 Story 6 adds `queue` as a new top-level leaf, directly in commands/,
  *  not a subdirectory, so it does not change EXPECTED_LEAF_FILE_COUNT;
- *  018 Story 4 adds `update ai-provider`). */
-const EXPECTED_LEAF_COUNT = 79;
+ *  018 Story 4 adds `update ai-provider`;
+ *  019 Story 07 adds the top-level `serve` leaf, directly in commands/, so
+ *  EXPECTED_LEAF_FILE_COUNT (73) is unchanged). */
+const EXPECTED_LEAF_COUNT = 80;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [

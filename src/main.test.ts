@@ -11,7 +11,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -82,6 +82,80 @@ test("KANTHORD_MAX_TURNS unset: startup succeeds with default 50 turns", () => {
     result.status,
     0,
     `exit code must be 0 when KANTHORD_MAX_TURNS is unset, got: ${result.status}\nstderr: ${result.stderr}`,
+  );
+});
+
+// Story 01 — `.env` (cwd-relative, optional) loading in main.ts.
+//
+// Spawns `node src/main.ts` with `cwd` set to a fresh temp dir holding a
+// written `.env`, so the process-boundary precedence rule (an already-set
+// process.env value wins over the `.env` file value) is asserted for real,
+// not just documented.
+
+function runMainWithEnvFile(
+  args: string[],
+  env: Record<string, string | undefined>,
+  envFileContents: string | undefined,
+): { status: number | null; stdout: string; stderr: string } {
+  const tmpDir = mkdtempSync(join(tmpdir(), "kanthord-main-envfile-"));
+  try {
+    if (envFileContents !== undefined) {
+      writeFileSync(join(tmpDir, ".env"), envFileContents, "utf-8");
+    }
+    const merged = {
+      ...process.env,
+      KANTHORD_DB: join(tmpDir, "test.db"),
+      ...env,
+    };
+    const result = spawnSync("node", [MAIN_TS, ...args], {
+      cwd: tmpDir,
+      env: merged,
+      encoding: "utf-8",
+      timeout: 10_000,
+    });
+    return {
+      status: result.status,
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+    };
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+test(".env in cwd is loaded: invalid KANTHORD_MAX_TURNS from .env exits 1 naming it", () => {
+  const result = runMainWithEnvFile(
+    ["db", "migrate"],
+    {},
+    "KANTHORD_MAX_TURNS=abc\n",
+  );
+  assert.equal(
+    result.status,
+    1,
+    `expected exit 1 when .env sets an invalid KANTHORD_MAX_TURNS, got: ${result.status}\nstderr: ${result.stderr}`,
+  );
+  assert.match(result.stderr, /KANTHORD_MAX_TURNS/);
+});
+
+test("an already-set process.env value wins over the .env file value", () => {
+  const result = runMainWithEnvFile(
+    ["db", "migrate"],
+    { KANTHORD_MAX_TURNS: "5" },
+    "KANTHORD_MAX_TURNS=abc\n",
+  );
+  assert.equal(
+    result.status,
+    0,
+    `expected exit 0 when the real env overrides an invalid .env value, got: ${result.status}\nstderr: ${result.stderr}`,
+  );
+});
+
+test("no .env in the cwd: startup is silent and succeeds", () => {
+  const result = runMainWithEnvFile(["db", "migrate"], {}, undefined);
+  assert.equal(
+    result.status,
+    0,
+    `expected exit 0 with no .env present, got: ${result.status}\nstderr: ${result.stderr}`,
   );
 });
 

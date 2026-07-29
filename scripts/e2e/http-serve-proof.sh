@@ -42,27 +42,53 @@ contains() { case "$2" in *"$3"*) ;; *) echo "FAILED: $1 — '$3' not found in: 
 absent() { case "$2" in *"$3"*) echo "FAILED: $1 — '$3' MUST NOT appear in: $2" >&2; exit 1 ;; *) ;; esac; }
 
 # --- curl-free request helper: status, headers and parsed body all assertable.
+# Built on node:http (not fetch/undici): the WHATWG fetch spec forbids a caller
+# from setting the `Host` header, so undici silently drops/overrides it — a
+# spoofed Host (phase F's hostile-host case) can never reach the server through
+# fetch. node:http.request has no such restriction and delivers it as sent.
 cat > "$PD/req.mjs" <<'EOF'
 // node req.mjs <METHOD> <URL> <AUTHORIZATION|-> [header:value ...]
-const [method, url, auth, ...raw] = process.argv.slice(2);
+import http from "node:http";
+const [method, rawUrl, auth, ...raw] = process.argv.slice(2);
 const headers = {};
 if (auth && auth !== "-") headers["authorization"] = auth;
 for (const h of raw) {
   const i = h.indexOf(":");
   headers[h.slice(0, i)] = h.slice(i + 1);
 }
-let res;
-try {
-  res = await fetch(url, { method, headers, redirect: "manual" });
-} catch (err) {
-  process.stdout.write(`STATUS 0\nBODY network-error ${err.code ?? err.message}\n`);
-  process.exit(0);
-}
-const body = (await res.text()).replace(/\r?\n/g, " ");
-const lines = [`STATUS ${res.status}`];
-for (const [k, v] of res.headers) lines.push(`HEADER ${k.toLowerCase()} ${v}`);
-lines.push(`BODY ${body}`);
-process.stdout.write(lines.join("\n") + "\n");
+const url = new URL(rawUrl);
+await new Promise((resolve) => {
+  const req = http.request(
+    {
+      method,
+      hostname: url.hostname,
+      port: url.port,
+      path: `${url.pathname}${url.search}`,
+      headers,
+    },
+    (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        const lines = [`STATUS ${res.statusCode}`];
+        for (const [k, v] of Object.entries(res.headers)) {
+          lines.push(`HEADER ${k.toLowerCase()} ${Array.isArray(v) ? v.join(", ") : v}`);
+        }
+        lines.push(`BODY ${body.replace(/\r?\n/g, " ")}`);
+        process.stdout.write(lines.join("\n") + "\n");
+        resolve();
+      });
+    },
+  );
+  req.on("error", (err) => {
+    process.stdout.write(`STATUS 0\nBODY network-error ${err.code ?? err.message}\n`);
+    resolve();
+  });
+  req.end();
+});
 EOF
 
 REQ() { node "$PD/req.mjs" "$@"; }
@@ -153,12 +179,31 @@ absent "key not in the log" "$(cat "$PD/serve.log")" "$KEY"
 
 echo "--- G: serve refuses to start with no API_KEY"
 ND="$(mktemp -d)"
+# An unused port, distinct from the already-bound $PORT, so a bind failure
+# (EADDRINUSE against the still-running phase-A server) can never be confused
+# with the intended key-validation failure — and so "nothing listens on it
+# afterward" is a meaningful assertion.
+NO_KEY_PORT="$(node -e '
+  const net = require("node:net");
+  const s = net.createServer();
+  s.listen(0, "127.0.0.1", () => {
+    process.stdout.write(String(s.address().port));
+    s.close();
+  });')"
+# The no-key serve failure is expected — disable errexit AND disarm the ERR
+# trap around it (set +e alone does not stop bash from still firing the ERR
+# trap) so a passing Proof prints no stray "FAILED:" line for this
+# intentional case.
 set +e
-( cd "$ND" && env -u API_KEY node "$ROOT/src/main.ts" serve --port "$PORT" ) >"$ND/out.log" 2>&1
+trap - ERR
+( cd "$ND" && env -u API_KEY node "$ROOT/src/main.ts" serve --port "$NO_KEY_PORT" ) >"$ND/out.log" 2>&1
 NO_KEY_RC=$?
+trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 set -e
 [ "$NO_KEY_RC" -ne 0 ] || { echo "FAILED: serve started with no API_KEY" >&2; exit 1; }
 contains "no-key message names API_KEY" "$(cat "$ND/out.log")" "API_KEY"
+OUT="$(REQ GET "http://127.0.0.1:$NO_KEY_PORT/healthz" "$BASIC")"
+eq "no-key: nothing listens on the chosen port" "0" "$(status_of "$OUT")"
 rm -rf "$ND"
 
 echo "--- H: SIGTERM shuts the server down"

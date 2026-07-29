@@ -103,6 +103,7 @@ import type { ModelCatalog } from "./model-catalog/port.ts";
 import { PiModelCatalog } from "./model-catalog/pi.ts";
 import { StdoutLogger } from "./logger/stdout.ts";
 import { NullLogger } from "./logger/null.ts";
+import { PinoLogger } from "./logger/pino.ts";
 import type { Logger } from "./logger/port.ts";
 import { DiagnosticsExport } from "./app/observability/diagnostics-export.ts";
 import { SqliteObservabilityRefs } from "./storage/sqlite/sqlite-observability-refs.ts";
@@ -1203,6 +1204,7 @@ export function buildDeps(
     abandonTask,
     buildDaemon,
     logger,
+    httpLogger: new PinoLogger(),
     listEvents,
     importResources,
     exportInitiative,

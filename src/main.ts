@@ -1,5 +1,7 @@
 // Composition root — the ONLY file that imports concrete adapters and wires
 // them to use cases and the CLI.
+import { existsSync } from "node:fs";
+
 import { buildProgram } from "./apps/cli/index.ts";
 import { buildDeps } from "./composition.ts";
 
@@ -11,6 +13,18 @@ for (const stream of [process.stdout, process.stderr]) {
     if (err.code === "EPIPE") process.exit(0);
     throw err;
   });
+}
+
+// `.env` (cwd-relative, optional) fills env vars for the whole program.
+// Precedence matches `node --env-file`: a variable already present in the
+// real environment wins over the file. The snapshot/restore makes that rule
+// true regardless of process.loadEnvFile's own precedence.
+if (existsSync(".env")) {
+  const preset = { ...process.env };
+  process.loadEnvFile(".env");
+  for (const [key, value] of Object.entries(preset)) {
+    if (value !== undefined) process.env[key] = value;
+  }
 }
 
 const dbPath = process.env.KANTHORD_DB ?? ".data/kanthord.db";

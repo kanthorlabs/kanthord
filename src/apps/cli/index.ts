@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-
 import { Command } from "commander";
 
 import { buildAddCommand } from "./commands/add.ts";
@@ -31,18 +29,14 @@ import { buildRenameCommand } from "./commands/rename.ts";
 import { buildResumeCommand } from "./commands/resume.ts";
 import { buildRetryCommand } from "./commands/retry.ts";
 import { buildRunCommand } from "./commands/run.ts";
+import { buildServeCommand } from "./commands/serve.ts";
 import { buildSetupCommand } from "./commands/setup.ts";
 import { buildTestCommand } from "./commands/test.ts";
 import { buildSetDefaultCommand } from "./commands/set-default.ts";
 import { buildUnassignCommand } from "./commands/unassign.ts";
 import { buildUpdateCommand } from "./commands/update.ts";
 import type { CliDeps } from "./deps.ts";
-
-const packageVersion = (
-  JSON.parse(
-    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
-  ) as { version: string }
-).version;
+import { packageVersion } from "../version.ts";
 
 /** Build the `kanthord` Commander command tree. */
 export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
@@ -76,6 +70,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const test = buildTestCommand(deps, io).name("test");
   const commands = buildCommandsCommand(io);
   const queue = buildQueueCommand(deps, io).name("queue");
+  const serve = buildServeCommand(deps, io).name("serve");
 
   return new Command()
     .name("kanthord")
@@ -115,5 +110,6 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(publish)
     .addCommand(test)
     .addCommand(commands)
+    .addCommand(serve)
     .addCommand(queue);
 }

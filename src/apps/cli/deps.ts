@@ -72,6 +72,7 @@ import type { CreateGraph } from "../../app/graph/create-graph.ts";
 import type { ApplyGraph } from "../../app/graph/apply-graph.ts";
 import type { LoginDeps } from "./login.ts";
 import type { ListModels } from "./models.ts";
+import type { HttpLogger } from "../http/logger.ts";
 
 /**
  * Minimal structural surface of the workspace manager that the CLI bundle
@@ -221,6 +222,8 @@ export interface CliDeps {
     logger?: Logger,
   ) => RunDaemon;
   logger: Logger;
+  /** Structured JSON logger for `serve`; pino-backed (composition root). */
+  httpLogger: HttpLogger;
   listEvents: ListEvents;
   importResources: ImportResources;
   exportInitiative: ExportInitiative;

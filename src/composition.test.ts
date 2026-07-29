@@ -107,6 +107,8 @@ test("buildDeps returns a RouterDeps bundle with all registered capabilities", (
     // Story F (007.12) — get initiative / get objective read use cases wired through composition
     assert.ok("getInitiative" in deps, "deps.getInitiative present");
     assert.ok("getObjective" in deps, "deps.getObjective present");
+    // 019 Story 07 — composition wires a pino-backed HttpLogger for `serve`.
+    assert.ok("httpLogger" in deps, "deps.httpLogger present");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
