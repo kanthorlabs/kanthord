@@ -165,7 +165,7 @@ test "$(jv "$DEPS.every(n=>n.waiting.length===1&&n.waiting[0].id==='$ROOT_A'&&n.
 echo "C ok: failed root offers retry; dependents are blocked but can still clear"
 
 # ── Phase D — discarding the root cascades over the pending dependent closure ──
-node src/main.ts reject task --id "$ROOT_A" --resolution discard >/dev/null
+node src/main.ts reject task --id "$ROOT_A" --resolution discard --yes >/dev/null
 graph "$INIT_A"
 test "$(nd "$ROOT_A" < "$G" | nf 'n.status')" = "discarded"
 test "$(jv 'v.nodes.every(n=>n.status==="discarded")' < "$G")" = "true"

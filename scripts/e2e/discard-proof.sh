@@ -79,7 +79,7 @@ test "$(status_of task "$ROOT_TASK")" = "failed"
 node src/main.ts get task --id "$ROOT_TASK" | grep -q '^reason: VerificationFailedError'
 
 # 2) discard from `failed` reaches a terminal state and CASCADES.
-node src/main.ts reject task --id "$ROOT_TASK" --resolution discard \
+node src/main.ts reject task --id "$ROOT_TASK" --resolution discard --yes \
         --reason 'unachievable' >/dev/null
 test "$(status_of task "$ROOT_TASK")" = "discarded"
 test "$(status_of task "$DEP_TASK")" = "discarded"
