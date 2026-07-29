@@ -17,7 +17,7 @@ import { PiModelCatalog } from "../model-catalog/pi.ts";
 import { PiProviderSessionFactory, UnsupportedApiError } from "./pi-session.ts";
 import type { ResolvedProvider } from "./port.ts";
 import type { ModelCatalog } from "../model-catalog/port.ts";
-import type { AiProviderRegistry } from "../storage/port.ts";
+import type { AiProviderRegistry, GlobalAiProvider } from "../storage/port.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,6 +49,7 @@ function makeFactory(): PiProviderSessionFactory {
     get: () => {
       throw new Error("not implemented");
     },
+    update: () => ({}) as GlobalAiProvider,
     getDefault: () => {
       throw new Error("not implemented");
     },

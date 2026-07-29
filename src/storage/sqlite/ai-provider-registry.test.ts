@@ -12,6 +12,7 @@ import { openDatabase } from "./open.ts";
 import { migrate } from "./migrate.ts";
 import { MIGRATIONS } from "./migrations.ts";
 import { SqliteAiProviderRegistry } from "./ai-provider-registry.ts";
+import { UnknownReferenceError } from "../../domain/errors.ts";
 
 function makeTempDb() {
   const dir = mkdtempSync(
@@ -808,4 +809,135 @@ test("(BLOCKER 4) SqliteAiProviderRegistry: updateCredentialCAS logged_out retur
     { applied: false },
     "logged_out provider must return {applied:false}",
   );
+});
+
+// ── 018 Story S2 — AiProviderRegistry.update (config columns only) ──
+
+test("SqliteAiProviderRegistry: update with a single-key patch changes only that column", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const created = registry.register({
+    name: "update-single",
+    provider: "openai-codex",
+    model: "model-old",
+    value: "sk-secret",
+  });
+
+  const updated = registry.update(created.id, { model: "model-new" });
+
+  assert.equal(updated.model, "model-new");
+  assert.equal(updated.id, created.id);
+  assert.equal(updated.name, created.name);
+  assert.equal(updated.provider, created.provider);
+  assert.equal(updated.value, created.value);
+  assert.equal(updated.state, created.state);
+  assert.equal(updated.credentialVersion, created.credentialVersion);
+});
+
+test("SqliteAiProviderRegistry: update with a multi-key patch writes all five config columns", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const created = registry.register({
+    name: "update-multi",
+    provider: "custom-vendor",
+    model: "model-a",
+    baseUrl: "https://old.example.com",
+    effort: "low",
+    api: "openai-completions",
+    contextWindow: 1000,
+    maxTokens: 100,
+    value: "sk-secret",
+  });
+
+  const updated = registry.update(created.id, {
+    baseUrl: "https://new.example.com",
+    effort: "high",
+    api: "openai-responses",
+    contextWindow: 2000,
+    maxTokens: 200,
+  });
+
+  assert.equal(updated.baseUrl, "https://new.example.com");
+  assert.equal(updated.effort, "high");
+  assert.equal(updated.api, "openai-responses");
+  assert.equal(updated.contextWindow, 2000);
+  assert.equal(updated.maxTokens, 200);
+});
+
+test("SqliteAiProviderRegistry: update with an empty patch issues no UPDATE and returns the current row", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const created = registry.register({
+    name: "update-empty",
+    provider: "openai-codex",
+    model: "model-x",
+    value: "sk-secret",
+  });
+
+  const result = registry.update(created.id, {});
+
+  assert.deepEqual(result, created);
+});
+
+test("SqliteAiProviderRegistry: update on an unknown id throws UnknownReferenceError", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  assert.throws(() => {
+    registry.update("nonexistent-id", { model: "model-new" });
+  }, UnknownReferenceError);
+});
+
+// BLOCKER S1 (review 20260729): an unknown id plus an EMPTY patch must also
+// throw UnknownReferenceError — the port doc says "Throws UnknownReferenceError
+// when no row has that id" with no carve-out for an empty patch. The current
+// adapter short-circuits on an empty patch via `this.get(id)!` before any
+// existence check, so it returns `undefined` (unsafely cast to
+// GlobalAiProvider) instead of throwing.
+test("SqliteAiProviderRegistry: update on an unknown id with an EMPTY patch still throws UnknownReferenceError", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  assert.throws(() => {
+    registry.update("nonexistent-id", {});
+  }, UnknownReferenceError);
+});
+
+test("SqliteAiProviderRegistry: update keeps the row's id stable and list() still returns exactly one row", () => {
+  const { db, dir, registry } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const created = registry.register({
+    name: "update-id-stable",
+    provider: "openai-codex",
+    model: "model-x",
+    value: "sk-secret",
+  });
+
+  registry.update(created.id, { model: "model-y" });
+
+  const list = registry.list();
+  assert.equal(list.length, 1);
+  assert.equal(list[0]!.id, created.id);
 });

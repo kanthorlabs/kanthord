@@ -3,25 +3,20 @@
 
 import type { AiProviderRegistry, UnitOfWork } from "../../storage/port.ts";
 import type { ModelCatalog } from "../../model-catalog/port.ts";
-import { UnknownModelError, EmbeddedCredentialError } from "../errors.ts";
+import { UnknownModelError } from "../errors.ts";
 import {
   UnknownProviderError,
   InvalidEffortError,
-  InvalidBaseUrlError,
   EmptyValueError,
-  InvalidApiFlavorError,
-  InsecureEndpointError,
-  MissingCustomProviderIdError,
-  MissingBaseUrlError,
-  InvalidNumericFlagError,
 } from "./errors.ts";
 import {
-  hasEmbeddedUserinfo,
-  isInsecureEndpoint,
-  REASONING_EFFORTS,
   CUSTOM_PROVIDER_DEFAULT_CONTEXT_WINDOW,
   CUSTOM_PROVIDER_DEFAULT_MAX_TOKENS,
 } from "../../domain/resource.ts";
+import {
+  validateCustomProviderConfig,
+  validateBuiltinBaseUrl,
+} from "./config-validation.ts";
 
 /**
  * Register provider callback (BLOCKER 9): routes through registerGlobalProvider
@@ -84,71 +79,22 @@ export class RegisterAiProvider {
     return this.#uow.transaction(() => {
       // ── Custom OpenAI-compatible provider path ──
       if (input.api !== undefined) {
-        // 1. Validate api flavor before anything else
-        if (
-          input.api !== "openai-completions" &&
-          input.api !== "openai-responses"
-        ) {
-          throw new InvalidApiFlavorError(input.api);
-        }
-
-        // S1: Validate effort against known reasoning efforts
-        if (
-          input.effort !== undefined &&
-          !(REASONING_EFFORTS as readonly string[]).includes(input.effort)
-        ) {
-          throw new InvalidEffortError(input.effort);
-        }
-
-        // 2. Validate required custom fields
-        if (
-          input.customProviderId === undefined ||
-          input.customProviderId === ""
-        ) {
-          throw new MissingCustomProviderIdError();
-        }
-        if (input.baseUrl === undefined || input.baseUrl === "") {
-          throw new MissingBaseUrlError();
-        }
-
-        // 3. Validate baseUrl shape — must be an absolute http(s) URL
-        try {
-          const url = new URL(input.baseUrl);
-          if (url.protocol !== "http:" && url.protocol !== "https:") {
-            throw new InvalidBaseUrlError(input.baseUrl);
-          }
-        } catch {
-          throw new InvalidBaseUrlError(input.baseUrl);
-        }
-
-        // S2: Validate numeric flags — must be positive integers
-        if (
-          input.contextWindow !== undefined &&
-          (!Number.isInteger(input.contextWindow) || input.contextWindow <= 0)
-        ) {
-          throw new InvalidNumericFlagError(
-            "context-window",
-            input.contextWindow,
-          );
-        }
-        if (
-          input.maxTokens !== undefined &&
-          (!Number.isInteger(input.maxTokens) || input.maxTokens <= 0)
-        ) {
-          throw new InvalidNumericFlagError("max-tokens", input.maxTokens);
-        }
-
-        // 4. Endpoint trust checks
-        if (hasEmbeddedUserinfo(input.baseUrl)) {
-          throw new EmbeddedCredentialError(input.baseUrl);
-        }
-        if (!input.allowInsecure && isInsecureEndpoint(input.baseUrl)) {
-          throw new InsecureEndpointError(input.baseUrl);
-        }
+        validateCustomProviderConfig(
+          {
+            api: input.api,
+            effort: input.effort,
+            customProviderId: input.customProviderId,
+            baseUrl: input.baseUrl,
+            contextWindow: input.contextWindow,
+            maxTokens: input.maxTokens,
+            allowInsecure: input.allowInsecure,
+          },
+          { customProviderId: true, baseUrl: true },
+        );
 
         const provider = this.#registry.register({
           name: input.name,
-          provider: input.customProviderId,
+          provider: input.customProviderId!,
           model: input.model,
           baseUrl: input.baseUrl,
           effort: input.effort,
@@ -187,16 +133,7 @@ export class RegisterAiProvider {
       }
 
       // S9: validate baseUrl — must be an absolute http(s) URL.
-      if (input.baseUrl !== undefined) {
-        try {
-          const url = new URL(input.baseUrl);
-          if (url.protocol !== "http:" && url.protocol !== "https:") {
-            throw new InvalidBaseUrlError(input.baseUrl);
-          }
-        } catch {
-          throw new InvalidBaseUrlError(input.baseUrl);
-        }
-      }
+      if (input.baseUrl !== undefined) validateBuiltinBaseUrl(input.baseUrl);
 
       // BLOCKER 9: when a registerProvider helper is wired, route the builtin
       // path through it (e.g. registerGlobalProvider) instead of inline register.

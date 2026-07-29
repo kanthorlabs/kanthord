@@ -1,9 +1,12 @@
 // src/storage/sqlite/ai-provider-registry.ts — SQLite adapter for
 // AiProviderRegistry (008.1 Story A: global ai_providers store + default pointer).
 
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type { AiProviderRegistry, GlobalAiProvider } from "../port.ts";
-import { DuplicateNameError } from "../../domain/errors.ts";
+import {
+  DuplicateNameError,
+  UnknownReferenceError,
+} from "../../domain/errors.ts";
 import { newId } from "../../domain/entity.ts";
 
 type GlobalAiProviderRow = {
@@ -91,6 +94,63 @@ export class SqliteAiProviderRegistry implements AiProviderRegistry {
         input.contextWindow ?? null,
         input.maxTokens ?? null,
       );
+    return this.get(id)!;
+  }
+
+  update(
+    id: string,
+    patch: {
+      model?: string;
+      baseUrl?: string;
+      effort?: string;
+      api?: "openai-completions" | "openai-responses";
+      contextWindow?: number;
+      maxTokens?: number;
+    },
+  ): GlobalAiProvider {
+    const columns: string[] = [];
+    const values: SQLInputValue[] = [];
+    if (patch.model !== undefined) {
+      columns.push("model");
+      values.push(patch.model);
+    }
+    if (patch.baseUrl !== undefined) {
+      columns.push("baseUrl");
+      values.push(patch.baseUrl);
+    }
+    if (patch.effort !== undefined) {
+      columns.push("effort");
+      values.push(patch.effort);
+    }
+    if (patch.api !== undefined) {
+      columns.push("api");
+      values.push(patch.api);
+    }
+    if (patch.contextWindow !== undefined) {
+      columns.push("contextWindow");
+      values.push(patch.contextWindow);
+    }
+    if (patch.maxTokens !== undefined) {
+      columns.push("maxTokens");
+      values.push(patch.maxTokens);
+    }
+
+    const existing = this.get(id);
+    if (existing === undefined) {
+      throw new UnknownReferenceError("ai_provider", id);
+    }
+
+    if (columns.length === 0) {
+      return existing;
+    }
+
+    const setClause = columns.map((col) => `${col} = ?`).join(", ");
+    const result = this.#db
+      .prepare(`UPDATE ai_providers SET ${setClause} WHERE id = ?`)
+      .run(...values, id);
+    if (result.changes === 0) {
+      throw new UnknownReferenceError("ai_provider", id);
+    }
     return this.get(id)!;
   }
 

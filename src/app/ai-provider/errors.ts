@@ -290,3 +290,46 @@ export class InvalidNumericFlagError extends Error {
     this.value = value;
   }
 }
+
+/**
+ * Thrown when `update ai-provider` is called with no field to change
+ * (018 S3).
+ */
+export class NoUpdateFieldsError extends Error {
+  constructor() {
+    super("update ai-provider requires at least one field to change");
+    this.name = "NoUpdateFieldsError";
+  }
+}
+
+/**
+ * Thrown when a builtin-provider (`api === null`) update patch includes a
+ * custom-only field (`api`, `baseUrl`, `contextWindow`, `maxTokens`) (018 S3).
+ */
+export class BuiltinProviderFieldError extends Error {
+  readonly field: string;
+
+  constructor(field: string) {
+    super(
+      `--${field} is only valid for a custom provider (registered with --api)`,
+    );
+    this.name = "BuiltinProviderFieldError";
+    this.field = field;
+  }
+}
+
+/**
+ * Thrown when `updateCredentialCAS` reports `{applied:false}` — the
+ * credential version changed between the read and the write (018 S3).
+ */
+export class StaleCredentialError extends Error {
+  readonly id: string;
+
+  constructor(id: string) {
+    super(
+      `credential for ai-provider ${id} changed concurrently — retry the update`,
+    );
+    this.name = "StaleCredentialError";
+    this.id = id;
+  }
+}

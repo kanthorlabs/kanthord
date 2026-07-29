@@ -10,7 +10,11 @@ import type {
   OAuthLoginProvider,
   OAuthLoginPresenter,
 } from "../../oauth/port.ts";
-import type { AiProviderRegistry, UnitOfWork } from "../../storage/port.ts";
+import type {
+  AiProviderRegistry,
+  GlobalAiProvider,
+  UnitOfWork,
+} from "../../storage/port.ts";
 import type { ModelCatalog } from "../../model-catalog/port.ts";
 import { UnknownModelError } from "../errors.ts";
 
@@ -83,6 +87,8 @@ function trackRegistry(): {
       },
       list: () => [],
       get: () => undefined,
+      update: (_id: string, patch: Record<string, unknown>) =>
+        ({ ...patch }) as unknown as GlobalAiProvider,
       getDefault: () => undefined,
       setDefault: () => {},
       clearDefault: () => {},

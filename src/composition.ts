@@ -127,6 +127,7 @@ import {
 } from "./app/task/daemon-heartbeat.ts";
 import { GitRepositoryProbe } from "./repository-probe/git.ts";
 import { RegisterAiProvider } from "./app/ai-provider/register-ai-provider.ts";
+import { UpdateAiProvider } from "./app/ai-provider/update-ai-provider.ts";
 import { registerGlobalProvider } from "./app/ai-provider/register-global-provider.ts";
 import { GetAiProvider } from "./app/ai-provider/get-ai-provider.ts";
 import { ListAiProviders } from "./app/ai-provider/list-ai-providers.ts";
@@ -263,6 +264,11 @@ export function buildDeps(
     modelCatalog,
     undefined, // warn
     registerGlobalProvider, // BLOCKER 9: route through shared helper
+  );
+  const updateAiProvider = new UpdateAiProvider(
+    aiProviderRegistry,
+    unitOfWork,
+    modelCatalog,
   );
   const getAiProvider = new GetAiProvider(aiProviderRegistry);
   const listAiProviders = new ListAiProviders(aiProviderRegistry);
@@ -1210,6 +1216,7 @@ export function buildDeps(
     repoLanding,
     publishRepository,
     registerAiProvider,
+    updateAiProvider,
     getAiProvider,
     listAiProviders,
     setDefaultAiProvider,

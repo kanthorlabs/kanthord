@@ -18,7 +18,7 @@ export type ResourceType =
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
-function parseValueTimeout(raw: unknown): number | undefined {
+export function parseValueTimeout(raw: unknown): number | undefined {
   if (typeof raw !== "string" || raw === "") return undefined;
   const m = raw.match(/^(\d+)(ms|s|m)$/);
   if (!m) return undefined;

@@ -7,6 +7,7 @@ import type { SetDefaultAiProvider } from "../../app/ai-provider/set-default-ai-
 import type { ListAiProviders } from "../../app/ai-provider/list-ai-providers.ts";
 import type { LogoutAiProvider } from "../../app/ai-provider/logout-ai-provider.ts";
 import type { RemoveAiProvider } from "../../app/ai-provider/remove-ai-provider.ts";
+import type { UpdateAiProvider } from "../../app/ai-provider/update-ai-provider.ts";
 import type { AssignAiProvider } from "../../app/ai-provider/assign-ai-provider.ts";
 import type { UnassignAiProvider } from "../../app/ai-provider/unassign-ai-provider.ts";
 import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-chain.ts";
@@ -14,6 +15,7 @@ import { InvalidRankError } from "../../app/ai-provider/errors.ts";
 import type { TestAiProvider } from "../../app/ai-provider/test-ai-provider.ts";
 import { requireFlag, toResult } from "./error-map.ts";
 import { readCredentialValue } from "./credential-input.ts";
+import { parseValueTimeout } from "./resource.ts";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
 
@@ -80,6 +82,82 @@ export async function runRegisterAiProvider(
       exitCode: 0,
       stdout: [id],
       stderr: [`ai-provider registered: ${id}`],
+    };
+  } catch (err) {
+    const mapped = toResult(err);
+    return { ...mapped, stdout: [] };
+  }
+}
+
+export async function runUpdateAiProvider(
+  args: Record<string, unknown>,
+  updateAiProvider: UpdateAiProvider,
+  io: {
+    tty?: NodeJS.ReadStream;
+    timeoutMs?: number;
+    stdin?: NodeJS.ReadableStream;
+  } = {},
+): Promise<HandlerResult> {
+  try {
+    const id = requireFlag(args, "id");
+    const model = typeof args["model"] === "string" ? args["model"] : undefined;
+    const baseUrl =
+      typeof args["baseUrl"] === "string" ? args["baseUrl"] : undefined;
+    const effort =
+      typeof args["effort"] === "string" ? args["effort"] : undefined;
+    const api: "openai-completions" | "openai-responses" | undefined =
+      typeof args["api"] === "string" && args["api"] !== ""
+        ? (args["api"] as "openai-completions" | "openai-responses")
+        : undefined;
+    const contextWindow =
+      typeof args["contextWindow"] === "string" && args["contextWindow"] !== ""
+        ? parseInt(args["contextWindow"] as string, 10)
+        : undefined;
+    const maxTokens =
+      typeof args["maxTokens"] === "string" && args["maxTokens"] !== ""
+        ? parseInt(args["maxTokens"] as string, 10)
+        : undefined;
+    const allowInsecure = args["allowInsecure"] === true;
+
+    let value: string | undefined;
+    if (typeof args["valueFile"] === "string" && args["valueFile"] !== "") {
+      const timeoutMs =
+        parseValueTimeout(args["value-timeout"]) ?? io.timeoutMs ?? 180_000;
+      try {
+        value = await readCredentialValue({
+          valuefile: args["valueFile"],
+          tty: io.tty,
+          stdin: io.stdin,
+          timeoutMs,
+        });
+      } catch (readErr) {
+        if (readErr instanceof Error) {
+          return {
+            exitCode: 1,
+            stdout: [],
+            stderr: [`error: ${readErr.message}`],
+          };
+        }
+        throw readErr;
+      }
+    }
+
+    const { id: resultId, changed } = updateAiProvider.execute({
+      id,
+      ...(model !== undefined ? { model } : {}),
+      ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...(effort !== undefined ? { effort } : {}),
+      ...(api !== undefined ? { api } : {}),
+      ...(contextWindow !== undefined ? { contextWindow } : {}),
+      ...(maxTokens !== undefined ? { maxTokens } : {}),
+      ...(allowInsecure ? { allowInsecure } : {}),
+      ...(value !== undefined ? { value } : {}),
+    });
+
+    return {
+      exitCode: 0,
+      stdout: [resultId],
+      stderr: [`ai-provider updated: ${resultId} (${changed.join(", ")})`],
     };
   } catch (err) {
     const mapped = toResult(err);

@@ -92,11 +92,10 @@ test("buildDeps returns a RouterDeps bundle with all registered capabilities", (
     assert.ok("removeDependency" in deps, "deps.removeDependency present");
     assert.ok("listTasks" in deps, "deps.listTasks present");
     assert.ok("getResource" in deps, "deps.getResource present");
-    // 008.3 BLOCKER 1: updateAiProvider retired — project-scoped ai_provider type removed (Story C)
-    assert.ok(
-      !("updateAiProvider" in deps),
-      "deps.updateAiProvider must be retired",
-    );
+    // 008.3 BLOCKER 1 retired the project-scoped ai_provider resource type (Story C).
+    // 018 S4 reintroduces the same key name for the unrelated global AI-provider
+    // registry's update use case — deps.updateAiProvider is expected again.
+    assert.ok("updateAiProvider" in deps, "deps.updateAiProvider present");
     assert.ok("updateCredential" in deps, "deps.updateCredential present");
     assert.ok("updateRepository" in deps, "deps.updateRepository present");
     assert.ok("updateNotification" in deps, "deps.updateNotification present");

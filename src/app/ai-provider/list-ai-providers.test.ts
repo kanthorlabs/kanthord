@@ -43,6 +43,22 @@ class FakeRegistry implements AiProviderRegistry {
   get(id: string): GlobalAiProvider | undefined {
     return this.#store.get(id);
   }
+  update(
+    id: string,
+    patch: {
+      model?: string;
+      baseUrl?: string;
+      effort?: string;
+      api?: "openai-completions" | "openai-responses";
+      contextWindow?: number;
+      maxTokens?: number;
+    },
+  ): GlobalAiProvider {
+    const current = this.#store.get(id);
+    const merged = { ...current, ...patch } as GlobalAiProvider;
+    this.#store.set(id, merged);
+    return { ...merged };
+  }
   list(): GlobalAiProvider[] {
     return Array.from(this.#store.values()).map((p) => ({ ...p }));
   }

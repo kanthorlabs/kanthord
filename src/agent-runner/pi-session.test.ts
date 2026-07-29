@@ -45,7 +45,7 @@ function oauthValue(
   return JSON.stringify({ type: "oauth", access, refresh, expires });
 }
 
-import type { AiProviderRegistry } from "../storage/port.ts";
+import type { AiProviderRegistry, GlobalAiProvider } from "../storage/port.ts";
 
 function makeFactory(
   saved?: Array<{ id: string; value: string; expectedVersion?: number }>,
@@ -67,6 +67,7 @@ function makeFactory(
     get: () => {
       throw new Error("not implemented");
     },
+    update: () => ({}) as GlobalAiProvider,
     getDefault: () => {
       throw new Error("not implemented");
     },
@@ -376,6 +377,7 @@ test("(BLOCKER S1) PiProviderSessionFactory OAuth credential: registry.updateCre
     get: () => {
       throw new Error("not implemented");
     },
+    update: () => ({}) as GlobalAiProvider,
     getDefault: () => {
       throw new Error("not implemented");
     },

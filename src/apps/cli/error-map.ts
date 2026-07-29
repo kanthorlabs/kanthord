@@ -56,6 +56,9 @@ import {
   MissingCustomProviderIdError,
   MissingBaseUrlError,
   InvalidNumericFlagError,
+  NoUpdateFieldsError,
+  BuiltinProviderFieldError,
+  StaleCredentialError,
 } from "../../app/ai-provider/errors.ts";
 import {
   TaskNotAbandonableError,
@@ -148,6 +151,9 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof MissingCustomProviderIdError ||
     err instanceof MissingBaseUrlError ||
     err instanceof InvalidNumericFlagError ||
+    err instanceof NoUpdateFieldsError ||
+    err instanceof BuiltinProviderFieldError ||
+    err instanceof StaleCredentialError ||
     err instanceof TaskNotAbandonableError ||
     err instanceof NoRunningJobError ||
     err instanceof AmbiguousRunningJobError ||

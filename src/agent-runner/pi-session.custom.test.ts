@@ -14,7 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ResolvedProvider } from "./port.ts";
 import { PiProviderSessionFactory } from "./pi-session.ts";
-import type { AiProviderRegistry } from "../storage/port.ts";
+import type { AiProviderRegistry, GlobalAiProvider } from "../storage/port.ts";
 
 // ---------- fixture builders -------------------------------------------------
 
@@ -66,6 +66,7 @@ function makeFactory(): PiProviderSessionFactory {
     get: () => {
       throw new Error("not implemented");
     },
+    update: () => ({}) as GlobalAiProvider,
     getDefault: () => {
       throw new Error("not implemented");
     },

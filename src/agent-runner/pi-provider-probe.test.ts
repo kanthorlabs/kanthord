@@ -32,6 +32,20 @@ class FakeRegistry implements AiProviderRegistry {
     return undefined;
   }
 
+  update(
+    id: string,
+    patch: {
+      model?: string;
+      baseUrl?: string;
+      effort?: string;
+      api?: "openai-completions" | "openai-responses";
+      contextWindow?: number;
+      maxTokens?: number;
+    },
+  ): GlobalAiProvider {
+    return { ...this.get(id), ...patch } as GlobalAiProvider;
+  }
+
   register(): GlobalAiProvider {
     throw new Error("not used in this test");
   }
@@ -103,6 +117,19 @@ class NormalFakeRegistry implements AiProviderRegistry {
       };
     }
     return undefined;
+  }
+  update(
+    id: string,
+    patch: {
+      model?: string;
+      baseUrl?: string;
+      effort?: string;
+      api?: "openai-completions" | "openai-responses";
+      contextWindow?: number;
+      maxTokens?: number;
+    },
+  ): GlobalAiProvider {
+    return { ...this.get(id), ...patch } as GlobalAiProvider;
   }
   register(): GlobalAiProvider {
     throw new Error("not used");

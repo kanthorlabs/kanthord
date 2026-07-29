@@ -51,6 +51,8 @@ function makeFakeRegistry(): {
       },
       list: () => [],
       get: () => undefined,
+      update: (_id: string, patch: Record<string, unknown>) =>
+        ({ ...patch }) as unknown as GlobalAiProvider,
       getDefault: () => undefined,
       setDefault: () => {},
       clearDefault: () => {},

@@ -146,6 +146,136 @@ describe("src/apps/cli/commands/update.ts", () => {
     assert.equal(cap.code(), 0);
   });
 
+  test("updates an ai-provider's model and emits the changed field names", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      updateAiProvider: {
+        execute: (input: unknown) => {
+          received = input;
+          return { id: "aip-1", changed: ["model"] };
+        },
+      },
+    } as unknown as Parameters<typeof buildUpdateCommand>[0];
+
+    await buildUpdateCommand(
+      deps,
+      cap.io as Parameters<typeof buildUpdateCommand>[1],
+    ).parseAsync(["ai-provider", "--id", "aip-1", "--model", "m2"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { id: "aip-1", model: "m2" });
+    assert.deepEqual(cap.out, ["aip-1\n"]);
+    assert.deepEqual(cap.err, ["ai-provider updated: aip-1 (model)\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("rotates an ai-provider's secret from stdin through --value-file and never echoes it", async () => {
+    const input = new PassThrough();
+    const originalStdin = Object.getOwnPropertyDescriptor(process, "stdin");
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      updateAiProvider: {
+        execute: (inp: unknown) => {
+          received = inp;
+          return { id: "aip-1", changed: ["value"] };
+        },
+      },
+    } as unknown as Parameters<typeof buildUpdateCommand>[0];
+
+    Object.defineProperty(process, "stdin", {
+      configurable: true,
+      value: input,
+    });
+    try {
+      input.end("sk-new-secret\n");
+      await buildUpdateCommand(
+        deps,
+        cap.io as Parameters<typeof buildUpdateCommand>[1],
+      ).parseAsync(["ai-provider", "--id", "aip-1", "--value-file", "-"], {
+        from: "user",
+      });
+    } finally {
+      if (originalStdin !== undefined) {
+        Object.defineProperty(process, "stdin", originalStdin);
+      }
+    }
+
+    assert.deepEqual(received, { id: "aip-1", value: "sk-new-secret" });
+    const combined = [...cap.out, ...cap.err].join("");
+    assert.doesNotMatch(combined, /sk-new-secret/);
+    assert.doesNotMatch(combined, /value-file/);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("rejects --name and --provider on update ai-provider as unknown options", async () => {
+    const cap = capture();
+    const deps = {} as unknown as Parameters<typeof buildUpdateCommand>[0];
+
+    await assert.rejects(
+      buildUpdateCommand(
+        deps,
+        cap.io as Parameters<typeof buildUpdateCommand>[1],
+      )
+        .exitOverride()
+        .parseAsync(["ai-provider", "--id", "aip-1", "--name", "x"], {
+          from: "user",
+        }),
+    );
+
+    await assert.rejects(
+      buildUpdateCommand(
+        deps,
+        cap.io as Parameters<typeof buildUpdateCommand>[1],
+      )
+        .exitOverride()
+        .parseAsync(["ai-provider", "--id", "aip-1", "--provider", "y"], {
+          from: "user",
+        }),
+    );
+  });
+
+  test("parses --context-window on update ai-provider as a number", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      updateAiProvider: {
+        execute: (input: unknown) => {
+          received = input;
+          return { id: "aip-1", changed: ["contextWindow"] };
+        },
+      },
+    } as unknown as Parameters<typeof buildUpdateCommand>[0];
+
+    await buildUpdateCommand(
+      deps,
+      cap.io as Parameters<typeof buildUpdateCommand>[1],
+    ).parseAsync(["ai-provider", "--id", "aip-1", "--context-window", "8"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { id: "aip-1", contextWindow: 8 });
+  });
+
+  test("documents ai-provider update with usage and example help text", async () => {
+    const cap = capture();
+    const command = buildUpdateCommand(
+      {} as unknown as Parameters<typeof buildUpdateCommand>[0],
+      cap.io as Parameters<typeof buildUpdateCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["ai-provider", "--help"], { from: "user" }),
+    );
+
+    const help = cap.out.join("");
+    assert.match(help, /Usage: kanthord update ai-provider/);
+    assert.match(help, /Example/);
+  });
+
   test("updates a filesystem with its path", async () => {
     let received: unknown;
     const cap = capture();

@@ -17,7 +17,10 @@ import {
   DuplicateAssignmentError,
   InsecureEndpointError,
   MissingCustomProviderIdError,
+  NoUpdateFieldsError,
 } from "../../app/ai-provider/errors.ts";
+import { runUpdateAiProvider } from "./ai-provider.ts";
+import type { UpdateAiProvider } from "../../app/ai-provider/update-ai-provider.ts";
 import { buildRegisterAiProviderCommand } from "./commands/register/ai-provider.ts";
 import { buildGetAiProviderCommand } from "./commands/get/ai-provider.ts";
 import { buildSetDefaultAiProviderCommand } from "./commands/set-default/ai-provider.ts";
@@ -1332,4 +1335,19 @@ test("test ai-provider --id of unknown provider: exits 1 with error mentioning t
   assert.equal(cap.code(), 1);
   assert.ok(cap.err.length > 0, "stderr must contain error message");
   assert.match(cap.err[0]!, /error:/);
+});
+
+test("runUpdateAiProvider: a thrown NoUpdateFieldsError becomes exit 1 with an error-prefixed stderr line and empty stdout", async () => {
+  const updateAiProvider = {
+    execute: () => {
+      throw new NoUpdateFieldsError();
+    },
+  } as unknown as UpdateAiProvider;
+
+  const result = await runUpdateAiProvider({ id: "aip-1" }, updateAiProvider);
+
+  assert.equal(result.exitCode, 1);
+  assert.deepEqual(result.stdout, []);
+  assert.equal(result.stderr.length, 1);
+  assert.match(result.stderr[0]!, /^error: /);
 });

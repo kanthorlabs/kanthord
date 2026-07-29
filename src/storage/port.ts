@@ -318,6 +318,24 @@ export interface AiProviderRegistry {
     contextWindow?: number;
     maxTokens?: number;
   }): GlobalAiProvider;
+  /**
+   * Update the CONFIG columns of an existing provider in place. Only the keys
+   * present in `patch` are written; the row keeps its id, name, provider,
+   * value, state and credentialVersion. The secret is rotated separately
+   * through `updateCredentialCAS`. Throws UnknownReferenceError when no row
+   * has that id.
+   */
+  update(
+    id: string,
+    patch: {
+      model?: string;
+      baseUrl?: string;
+      effort?: string;
+      api?: "openai-completions" | "openai-responses";
+      contextWindow?: number;
+      maxTokens?: number;
+    },
+  ): GlobalAiProvider;
   list(): GlobalAiProvider[];
   get(id: string): GlobalAiProvider | undefined;
   getDefault(): GlobalAiProvider | undefined;

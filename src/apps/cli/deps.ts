@@ -54,6 +54,7 @@ import type { RunDaemon } from "../../app/task/run-daemon.ts";
 import type { CreateTask } from "../../app/task/create-task.ts";
 import type { PublishRepository } from "../../app/repository/publish-repository.ts";
 import type { RegisterAiProvider } from "../../app/ai-provider/register-ai-provider.ts";
+import type { UpdateAiProvider } from "../../app/ai-provider/update-ai-provider.ts";
 import type { GetAiProvider } from "../../app/ai-provider/get-ai-provider.ts";
 import type { ListAiProviders } from "../../app/ai-provider/list-ai-providers.ts";
 import type { SetDefaultAiProvider } from "../../app/ai-provider/set-default-ai-provider.ts";
@@ -233,6 +234,7 @@ export interface CliDeps {
   repoLanding: CliRepositoryLanding;
   publishRepository: PublishRepository;
   registerAiProvider: RegisterAiProvider;
+  updateAiProvider: UpdateAiProvider;
   getAiProvider: GetAiProvider;
   listAiProviders: ListAiProviders;
   setDefaultAiProvider: SetDefaultAiProvider;
