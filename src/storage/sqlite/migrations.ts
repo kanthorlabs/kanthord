@@ -912,4 +912,19 @@ CREATE TABLE project_acks (
 );
 `),
   },
+  {
+    version: 31,
+    name: "017-objective-decision-metadata",
+    // EPIC 017 Story 1 — the guidance channel and conflict-cause persistence.
+    // `objectives` was last rebuilt by migration 19; a verbatim column copy
+    // here would risk dropping another epic's column, so this migration adds
+    // the four columns by plain ALTER TABLE, no rebuild.
+    up: (db) =>
+      db.exec(`
+ALTER TABLE objectives ADD COLUMN note TEXT;
+ALTER TABLE objectives ADD COLUMN conflictCause TEXT;
+ALTER TABLE objectives ADD COLUMN observedTipOid TEXT;
+ALTER TABLE objectives ADD COLUMN conflictReason TEXT;
+`),
+  },
 ];

@@ -197,7 +197,30 @@ export class SqliteEventFeed implements EventFeed {
    * `objectiveId` NULL (should not occur for the four types, but defensive)
    * are skipped. Absent `(type, entity)` pairs are absent from the Map.
    */
-  latestActionableEventIds(initiativeId: string): Map<string, string> {
+  latestActionableEventIds(initiativeId: string): Map<string, string>;
+  /**
+   * EPIC 017 Story 6 §B — the unscoped-by-element overload backing
+   * `GetDecisionQueue`'s `QueueActivitySource`. Returns the max event id per
+   * element id (never per `type:entity`) across a five-type actionable list
+   * that additionally includes `initiative.landed` (keyed by `initiativeId`).
+   * Empty input touches nothing and returns an empty map; an id with no
+   * matching row is absent from the map, not present with `undefined`. This
+   * overload never scopes by initiative — `elementIds` may mix task,
+   * objective, and initiative ids from any initiative/project.
+   */
+  latestActionableEventIds(elementIds: readonly string[]): Map<string, string>;
+  latestActionableEventIds(
+    scope: string | readonly string[],
+  ): Map<string, string> {
+    if (typeof scope === "string") {
+      return this.#latestActionableEventIdsByInitiative(scope);
+    }
+    return this.#latestActionableEventIdsByElement(scope);
+  }
+
+  #latestActionableEventIdsByInitiative(
+    initiativeId: string,
+  ): Map<string, string> {
     const rows = this.#db
       .prepare(
         `SELECT type, taskId, objectiveId, MAX(id) AS latest
@@ -217,6 +240,30 @@ export class SqliteEventFeed implements EventFeed {
       const entity = r.taskId ?? r.objectiveId;
       if (entity === null) continue;
       out.set(`${r.type}:${entity}`, r.latest);
+    }
+    return out;
+  }
+
+  #latestActionableEventIdsByElement(
+    elementIds: readonly string[],
+  ): Map<string, string> {
+    const out = new Map<string, string>();
+    if (elementIds.length === 0) {
+      return out;
+    }
+    const placeholders = elementIds.map(() => "?").join(",");
+    const rows = this.#db
+      .prepare(
+        `SELECT COALESCE(taskId, objectiveId, initiativeId) AS entity, MAX(id) AS latest
+           FROM events
+          WHERE type IN ('task.failed','task.escalated','objective.awaiting_confirmation','objective.conflict','initiative.landed')
+            AND COALESCE(taskId, objectiveId, initiativeId) IN (${placeholders})
+          GROUP BY entity`,
+      )
+      .all(...elementIds) as Array<{ entity: string | null; latest: string }>;
+    for (const r of rows) {
+      if (r.entity === null) continue;
+      out.set(r.entity, r.latest);
     }
     return out;
   }

@@ -1087,3 +1087,104 @@ test("latestActionableEventIds returns the max id per (type, entity) pair, scope
     cleanup();
   }
 });
+
+// -----------------------------------------------------------------------------
+// EPIC 017 Story 6 §B — a second, elementIds-keyed overload of
+// `latestActionableEventIds`, backing `GetDecisionQueue`'s `QueueActivitySource`
+// (`src/app/project/get-decision-queue.ts`). This is deliberately a DIFFERENT
+// call shape from the initiativeId-scoped overload above (016 Story 6, still
+// used unchanged by `GetProjectOverview`): it takes a flat list of element ids
+// (task/objective/initiative ids, not scoped to one initiative) and returns a
+// Map keyed by the element id itself (never `type:entity`), covering a fifth
+// actionable type, `initiative.landed`, that the initiativeId-scoped overload
+// does not.
+// -----------------------------------------------------------------------------
+
+test("(017-S6-activity-max-per-element) latestActionableEventIds(elementIds) returns the max event id per element across several events, keyed by element id", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const objId = (
+      db.prepare("SELECT id FROM objectives LIMIT 1").get() as { id: string }
+    ).id;
+    const initiativeId = (
+      db.prepare("SELECT id FROM initiatives LIMIT 1").get() as { id: string }
+    ).id;
+
+    const f1 = newEvent("task.failed", { taskId, initiativeId });
+    const f2 = newEvent("task.failed", { taskId, initiativeId }); // second wins
+    const conf = newEvent("objective.conflict", {
+      objectiveId: objId,
+      initiativeId,
+    });
+    const landed = newEvent("initiative.landed", { initiativeId });
+    feed.append(f1);
+    feed.append(conf);
+    feed.append(f2);
+    feed.append(landed);
+
+    const out = feed.latestActionableEventIds([taskId, objId, initiativeId]);
+    assert.equal(out.get(taskId), f2.id, "max id for the task element");
+    assert.equal(out.get(objId), conf.id, "id for the objective element");
+    assert.equal(
+      out.get(initiativeId),
+      landed.id,
+      "id for the initiative element (initiative.landed is actionable here)",
+    );
+    assert.equal(out.size, 3);
+  } finally {
+    cleanup();
+  }
+});
+
+test("(017-S6-activity-ignores-non-actionable) latestActionableEventIds(elementIds) excludes non-actionable event types", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const created = newEvent("task.created", { taskId });
+    const ready = newEvent("task.ready", { taskId });
+    feed.append(created);
+    feed.append(ready);
+
+    const out = feed.latestActionableEventIds([taskId]);
+    assert.equal(
+      out.get(taskId),
+      undefined,
+      "task.created/task.ready are not in the actionable-type list",
+    );
+    assert.equal(out.size, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("(017-S6-activity-empty-input) latestActionableEventIds([]) returns an empty map", () => {
+  const { db, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const out = feed.latestActionableEventIds([]);
+    assert.equal(out.size, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("(017-S6-activity-omits-missing) latestActionableEventIds(elementIds) omits ids with no matching event", () => {
+  const { db, taskId, cleanup } = setupDb();
+  try {
+    const feed = new SqliteEventFeed(db);
+    const f1 = newEvent("task.failed", { taskId });
+    feed.append(f1);
+
+    const out = feed.latestActionableEventIds([taskId, "no-such-id"]);
+    assert.equal(out.get(taskId), f1.id);
+    assert.equal(
+      out.has("no-such-id"),
+      false,
+      "an id with no matching event is absent from the map, not present with undefined",
+    );
+    assert.equal(out.size, 1);
+  } finally {
+    cleanup();
+  }
+});

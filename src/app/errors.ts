@@ -10,6 +10,9 @@ export { EmbeddedCredentialError } from "../domain/resource.ts";
 // StaleCandidateError (EPIC 012 Story 4) — re-exported here so apps/ (the CLI
 // error map) can catch it without importing the objective domain directly.
 export { StaleCandidateError } from "../domain/initiative.ts";
+// ObjectiveNotInConflictError (epic 017 Story 7) — re-exported here so apps/
+// (the CLI error map) can catch it without importing the use case directly.
+export { ObjectiveNotInConflictError } from "./objective/get-objective-conflict.ts";
 export {
   SequencingLockedError,
   SequencingScopeError,
@@ -41,6 +44,22 @@ export class ObjectiveNotAwaitingConfirmationError extends Error {
     this.name = "ObjectiveNotAwaitingConfirmationError";
     this.objectiveId = objectiveId;
     this.status = status;
+  }
+}
+
+/**
+ * Story 3 (017) — the confirm protocol's stale-impact guard. Shared by
+ * `RejectTask` and `RejectObjective` so `error-map.ts` catches both use
+ * cases' stale-impact rejections through one `instanceof` check.
+ */
+export class ImpactChangedError extends Error {
+  readonly expected: string;
+  readonly actual: string;
+  constructor(expected: string, actual: string) {
+    super(`impact changed: expected ${expected}, found ${actual}`);
+    this.name = "ImpactChangedError";
+    this.expected = expected;
+    this.actual = actual;
   }
 }
 

@@ -88,6 +88,15 @@ export async function runGetObjective(
         (i) => `integration: ${i.repository} ${i.state}`,
       ),
     );
+    if (output.conflictCause !== null) {
+      lines.push(`conflictCause: ${output.conflictCause}`);
+    }
+    if (output.conflictReason !== null) {
+      lines.push(`conflictReason: ${output.conflictReason}`);
+    }
+    if (output.note !== null) {
+      lines.push(`note: ${output.note}`);
+    }
     return { exitCode: 0, stdout: lines, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
@@ -206,17 +215,64 @@ export async function runRejectObjective(
   }
   const reason =
     typeof args["reason"] === "string" ? args["reason"] : undefined;
+
+  // Story 3 (017) §C — `--dry-run`/`--yes`/`--expect-impact`/`--json` apply
+  // to the `discard` branch only, never `retry`.
+  const dryRun = args["dryRun"] === true ? true : undefined;
+  const yes = args["yes"] === true;
+  const expectImpact =
+    typeof args["expectImpact"] === "string" ? args["expectImpact"] : undefined;
+  const json = args["json"] === true;
+
+  if (resolution === "discard" && dryRun === true && yes) {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: --dry-run and --yes are mutually exclusive"],
+    };
+  }
+
   try {
     if (resolution === "retry") {
       await retryObjective.execute({ objectiveId: id, expectedCommit });
-    } else {
-      await rejectObjective.execute({
-        objectiveId: id,
-        reason,
-        expectedCommit,
-      });
+      return { exitCode: 0, stdout: [id], stderr: [] };
     }
-    return { exitCode: 0, stdout: [id], stderr: [] };
+
+    const outcome = await rejectObjective.execute({
+      objectiveId: id,
+      reason,
+      expectedCommit,
+      ...(dryRun !== undefined ? { dryRun } : {}),
+      ...(expectImpact !== undefined ? { expectImpact } : {}),
+    });
+
+    const preview = outcome.preview;
+    const stdout: string[] = [];
+    if (json) {
+      stdout.push(JSON.stringify(preview));
+    } else {
+      for (const d of preview.damage) {
+        stdout.push(
+          `impact: ${d.effect} ${d.target.type} ${d.target.id} ${d.target.name}`,
+        );
+      }
+      stdout.push(`impact-digest: ${preview.digest}`);
+    }
+    // §C — the damage is printed above before this refusal, so it is
+    // visible in the same invocation that refuses.
+    if (dryRun !== true && !yes) {
+      return {
+        exitCode: 1,
+        stdout,
+        stderr: [
+          "error: reject objective --resolution discard requires --yes (or --dry-run to preview)",
+        ],
+      };
+    }
+    if (!json) {
+      stdout.push(id);
+    }
+    return { exitCode: 0, stdout, stderr: [] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
   }

@@ -190,12 +190,18 @@ echo "017 D ok: an operational failure carries structured verdicts and honest ev
 FP_BEFORE=$(fingerprint)
 DRY="$PD/dry.json"
 node src/main.ts reject task --id "$ROOT_A" --resolution discard --dry-run --json > "$DRY"
-eq "E: cascade count"  "4" "$(jv 'v.damage.filter(d=>d.effect==="discarded-by-cascade").length' < "$DRY")"
-eq "E: counts agree"   "4" "$(jv 'v.counts["discarded-by-cascade"]' < "$DRY")"
+# 4 dependent tasks + the objective + the initiative all roll up to
+# discarded-by-cascade, since the target task itself counts as discarded
+# for the rollup (017 blocker B1: the target must seed the post-cascade
+# discarded set, matching what RejectTask's real mutation already does).
+eq "E: cascade count"  "6" "$(jv 'v.damage.filter(d=>d.effect==="discarded-by-cascade").length' < "$DRY")"
+eq "E: counts agree"   "6" "$(jv 'v.counts["discarded-by-cascade"]' < "$DRY")"
 # Every dependent is named, not just counted.
 for d in "${DEPS_A[@]}"; do
   eq "E: dependent $d named" "1" "$(jv 'v.damage.filter(x=>x.target.id==="'"$d"'").length' < "$DRY")"
 done
+eq "E: objective rollup named" "1" "$(jv 'v.damage.filter(x=>x.target.id==="'"$OBJ_A"'" && x.effect==="discarded-by-cascade").length' < "$DRY")"
+eq "E: initiative rollup named" "1" "$(jv 'v.damage.filter(x=>x.target.id==="'"$INIT_A"'" && x.effect==="discarded-by-cascade").length' < "$DRY")"
 FP_AFTER=$(fingerprint)
 eq "E: --dry-run wrote nothing" "$FP_BEFORE" "$FP_AFTER"
 
@@ -225,9 +231,30 @@ echo "017 E ok: a destructive verdict names its damage and binds the confirmatio
 
 # ── Phase F — objective conflict: a distinct contract with a PERSISTED cause ──
 # Reached the only way a sequential CLI can: two objectives in one initiative,
-# integrate the second so the branch tip moves, then approve the first — whose
-# squash anchor is now stale, so countCommitsSince != 1
-# (src/app/objective/approve-objective.ts:86-89).
+# integrate the second so the branch tip moves, then approve the first.
+# `getObjectiveParentOid` (src/composition.ts:862-882) chains an objective's
+# squash anchor onto its immediately-preceding SIBLING's own `commitOid` —
+# UNLESS that predecessor has not yet squashed (`commitOid` still undefined),
+# in which case it falls back to the live initiative-branch ref. So BOTH
+# objectives anchor to the SAME original ref tip when their task sets settle
+# concurrently, before either is approved: the first objective to be created
+# still has no predecessor (index 0, always ref-anchored); the second only
+# skips chaining if it settles WHILE the first is still incomplete. That needs
+# both objectives' tasks pending in ONE daemon pass, not two sequential ones —
+# the tip-mover task is created before the first `run daemon`, and the queue is
+# FIFO by job id (src/queue/sqlite.ts:40), so the tip-mover job (enqueued right
+# after import, before the root's 4 dependents are unblocked) is claimed and
+# settles before those dependents — leaving the first objective's own
+# `commitOid` still undefined at that moment. Approving the SECOND objective
+# first then CAS-advances the ref out from under the first's stale anchor:
+# `commitCount` is still exactly 1 (each objective's own pair is
+# invariant-distance-1 by construction, src/workspace/local.ts:857-882), so
+# `countCommitsSince` never fires — the ref mismatch instead fails
+# `casUpdateRef` → `LandingCASMismatchError` → "cas-mismatch"
+# (src/app/objective/approve-objective.ts:96-104). The "non-single-commit"
+# cause needs the stored parentOid itself to diverge from the squash target, a
+# corruption/race no sequential CLI invocation can stage (see the EPIC's
+# "Not provable at program level" note) — it is covered hermetically only.
 GRAPH_B="$PD/graph-b"; scripts/e2e/make-landing-graph.sh "$GRAPH_B" >/dev/null
 node src/main.ts import graph "$GRAPH_B" --create --project "$PROJECT_B" \
   --bind source="$REPO_B" >/dev/null
@@ -235,13 +262,28 @@ INIT_B=$(exportval "$GRAPH_B" 'j.initiativeId')
 OBJ_B=$(exportval "$GRAPH_B" 'j.refToId.objectives["todo-api-obj"]')
 ROOT_B=$(exportval "$GRAPH_B" 'j.refToId.tasks["create-task"]')
 
-export KANTHORD_FAKE_AGENT="$GRAPH_B/.fake-agent.json"
-node src/main.ts run daemon --until-idle --poll-interval 200 >/dev/null
-
-# A second objective on the same initiative, integrated first, moves the tip.
+# The tip-mover objective + task are created BEFORE the daemon ever runs, so
+# its job is enqueued ahead of the root's not-yet-unblocked dependents and the
+# race above is real, not scripted around. It needs its OWN scripted turn: a
+# flat (unkeyed) FakeTurn[] is replayed identically to every task title, which
+# would rewrite `src/todo.mjs` with content already squashed elsewhere and
+# produce a no-net-diff squash. `fakeSessionFactoryFromTurns` (src/agent-runner/
+# fake-session.ts:96-104) instead selects turns BY TASK TITLE when given an
+# object map (`FakeTurnMap`) — keyed here so the fixture's own tasks keep their
+# `"*"` default turn (writes `src/todo.mjs`) and only "move the tip" gets a
+# distinct file.
 OBJ_B2=$(node src/main.ts create objective --initiative "$INIT_B" --name "tip mover")
 T_B2=$(node src/main.ts create task --objective "$OBJ_B2" --title "move the tip" \
-  --agent generic@1 --instructions "touch a file" --verification "true")
+  --agent generic@1 --instructions "touch a file" --ac "the tip moves" \
+  --verification "true" --context repository="$REPO_B")
+
+jq -n --slurpfile fixture "$GRAPH_B/.fake-agent.json" \
+  '{"*": $fixture[0], "move the tip": [
+     {"toolCalls":[{"name":"bash","arguments":{"command":"mkdir -p src && printf \"tip mover\\n\" > src/tip-mover.txt"}}]},
+     {"text":"moved the tip"}
+   ]}' > "$PD/combined-agent.json"
+
+export KANTHORD_FAKE_AGENT="$PD/combined-agent.json"
 node src/main.ts run daemon --until-idle --poll-interval 200 >/dev/null
 
 OID_B2=$(node src/main.ts get objective --id "$OBJ_B2" --json | jv 'v.commitOid')
@@ -255,16 +297,17 @@ eq "F: objective recorded a conflict" "conflict" \
 
 C_JSON="$PD/conflict.json"
 node src/main.ts get conflict --objective "$OBJ_B" --json > "$C_JSON"
-eq "F: cause is persisted, not inferred" "non-single-commit" "$(jv 'v.conflictCause' < "$C_JSON")"
+eq "F: cause is persisted, not inferred" "cas-mismatch"      "$(jv 'v.conflictCause' < "$C_JSON")"
 eq "F: tip moved since the anchor"       "true"              "$(jv 'v.tipMovedSinceAnchor' < "$C_JSON")"
 eq "F: parentOid present"                "true"              "$(jv 'typeof v.parentOid === "string" && v.parentOid.length > 0' < "$C_JSON")"
 eq "F: commitOid present"                "true"              "$(jv 'typeof v.commitOid === "string" && v.commitOid.length > 0' < "$C_JSON")"
+eq "F: observedTipOid present"           "true"              "$(jv 'typeof v.observedTipOid === "string" && v.observedTipOid.length > 0' < "$C_JSON")"
 # An objective conflict is NOT a file-level merge conflict: there is no file list.
 eq "F: no files key"                     "false"             "$(jv '"files" in v' < "$C_JSON")"
 # The inspect handle is structured, and it must actually run — a proof that
 # prints an unrunnable command proves nothing.
-eq "F: inspect executable"               "git"               "$(jv 'v.inspect.executable' < "$C_JSON")"
-node -e 'const{execFileSync}=require("node:child_process");const v=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));execFileSync(v.inspect.executable,v.inspect.args,{stdio:"ignore"})' "$C_JSON" \
+eq "F: inspect executable"               "git"               "$(jv 'v.evidence.inspect.executable' < "$C_JSON")"
+node -e 'const{execFileSync}=require("node:child_process");const v=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));execFileSync(v.evidence.inspect.executable,v.evidence.inspect.args,{stdio:"ignore"})' "$C_JSON" \
   || { echo "FAILED: F — inspect.args did not run" >&2; exit 1; }
 
 echo "017 F ok: an objective conflict carries a persisted cause, no file list, a runnable inspect"
@@ -282,7 +325,8 @@ echo "017 G ok: task and objective conflict paths are distinct"
 # A successful retry moves the objective to awaiting_confirmation, which
 # `get conflict --objective` refuses by contract — so the note is read from
 # `get objective`, and the conflict is recreated before any later assertion.
-node src/main.ts retry objective --id "$OBJ_B" --note "resolve at the new tip" >/dev/null
+node src/main.ts retry objective --id "$OBJ_B" --expected-commit "$OID_B" \
+  --note "resolve at the new tip" >/dev/null
 eq "H: note stored on the objective" "resolve at the new tip" \
   "$(node src/main.ts get objective --id "$OBJ_B" --json | jv 'v.note ?? "<ABSENT>"')"
 # Every task stayed completed — the case where fanning the note to tasks reaches
@@ -292,6 +336,19 @@ eq "H: task still completed" "completed" "$(tstatus "$ROOT_B")"
 echo "017 H ok: objective guidance persists independent of task status"
 
 # ── Phase I — cross-project ranking (needs BOTH projects) ───────────────────
+# Project A's own fixture tasks (ROOT_A + its 4 dependents) were all fully
+# `discarded` back in phase E, so project A now has NO decision item of its
+# own — a fresh task is created and driven to a real failure (`--verification
+# false` always fails, no scripted agent needed) so project A is genuinely
+# present in the queue again, not just assumed to still be there.
+T_A2=$(node src/main.ts create task --objective "$OBJ_A" --title "second failure" \
+  --agent generic@1 --instructions "no-op" --ac "always fails" \
+  --verification "false" --context repository="$REPO_A")
+unset KANTHORD_FAKE_AGENT
+KANTHORD_FAKE_AGENT="$PD/noop-agent.json" \
+  node src/main.ts run daemon --until-idle --poll-interval 200 >/dev/null 2>&1 || true
+eq "I: fixture — second project-A failure reached failed" "failed" "$(tstatus "$T_A2")"
+
 Q2="$PD/q2.json"
 node src/main.ts queue --json > "$Q2"
 eq "I: project A present" "true" "$(jv 'v.items.some(i=>i.projectId==="'"$PROJECT_A"'")' < "$Q2")"

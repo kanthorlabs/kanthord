@@ -14,6 +14,8 @@ import {
   SequencingLockedError,
   SequencingScopeError,
   StaleCandidateError,
+  ImpactChangedError,
+  ObjectiveNotInConflictError,
 } from "../../app/errors.ts";
 import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
 import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
@@ -106,6 +108,8 @@ export function toResult(err: unknown): { exitCode: number; stderr: string[] } {
     err instanceof UnknownAgentError ||
     err instanceof TaskNotAwaitingConfirmationError ||
     err instanceof ObjectiveNotAwaitingConfirmationError ||
+    err instanceof ObjectiveNotInConflictError ||
+    err instanceof ImpactChangedError ||
     err instanceof StaleCandidateError ||
     err instanceof ProposalWorkspaceMissingError ||
     err instanceof ProposalMissingError ||

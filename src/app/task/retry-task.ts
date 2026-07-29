@@ -1,5 +1,5 @@
 import type { Task, TaskStatus } from "../../domain/task.ts";
-import { transitionTask } from "../../domain/task.ts";
+import { retryTaskWithGuidance } from "../../domain/task.ts";
 import { newEvent } from "../../domain/event.ts";
 import type { ChangeCandidate, CandidateState } from "../../domain/landing.ts";
 import type { JobQueue } from "../../queue/port.ts";
@@ -70,8 +70,9 @@ export class RetryTask {
     taskId: string;
     note?: string;
     rebuild?: boolean;
+    carryNote?: boolean;
   }): Promise<void> {
-    const { taskId, note, rebuild } = input;
+    const { taskId, note, rebuild, carryNote } = input;
 
     const kind = this.#resolver.resolveKind(taskId);
     if (kind === undefined) {
@@ -96,10 +97,9 @@ export class RetryTask {
       const candidateId = candidate!.id;
       this.#uow.transaction(() => {
         this.#candidateStore!.updateCandidateState(candidateId, "pending");
-        const updated = transitionTask(task, "pending");
-        // Persist optional guidance note so it surfaces on get task --json
+        // Persist resolved guidance note so it surfaces on get task --json
         // and is readable by the prompt hook (getPriorFeedback).
-        const taskToSave = { ...updated, note: note ?? undefined };
+        const taskToSave = retryTaskWithGuidance(task, note, carryNote);
         this.#store.save(taskToSave);
         if (isConflict) {
           // Durably snapshot conflict context for deterministic rebuild prompt.
@@ -131,7 +131,7 @@ export class RetryTask {
     }
 
     this.#uow.transaction(() => {
-      const updated = transitionTask(task, "pending");
+      const updated = retryTaskWithGuidance(task, note, carryNote);
       this.#store.save(updated);
       const enqueued = this.#queue.enqueue(taskId);
       if (enqueued) {

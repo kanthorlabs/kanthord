@@ -99,6 +99,25 @@ function actionApproveTask(taskId: string): Action {
   };
 }
 
+function actionRejectTaskFailed(taskId: string): Action {
+  return {
+    kind: "reject",
+    target: { type: "task", id: taskId },
+    requiresInput: ["reason"],
+    command: `reject task --id ${taskId} --resolution discard --yes`,
+  };
+}
+
+function actionRejectTaskAwaiting(taskId: string): Action {
+  // `--resolution` is a genuine human choice (`retry` or `discard`) on an
+  // awaiting_confirmation task, so no command can be named.
+  return {
+    kind: "reject",
+    target: { type: "task", id: taskId },
+    requiresInput: ["resolution", "reason"],
+  };
+}
+
 function actionRemoveDependency(
   taskId: string,
   deadDependencyId: string,
@@ -263,11 +282,17 @@ export function decisionActions(context: DecisionContext): Action[] {
     const node = context.node;
     // rule 1: failed
     if (node.status === "failed") {
-      return [actionRetryTask(node.taskId)];
+      return [
+        actionRetryTask(node.taskId),
+        actionRejectTaskFailed(node.taskId),
+      ];
     }
     // rule 2: awaiting_confirmation
     if (node.status === "awaiting_confirmation") {
-      return [actionApproveTask(node.taskId)];
+      return [
+        actionApproveTask(node.taskId),
+        actionRejectTaskAwaiting(node.taskId),
+      ];
     }
     // rule 3: pending + blockedForever + deadDependencyId
     if (
@@ -348,4 +373,48 @@ export function initiativeAction(facts: InitiativeActionFacts): Action | null {
       expectedCommit: null,
     })[0] ?? null
   );
+}
+
+// ---------------------------------------------------------------------------
+// Display-only label. Never a sort key, never consulted by `decisionActions`.
+// ---------------------------------------------------------------------------
+
+export type DecisionKindLabel =
+  | "task-review"
+  | "operational-failure"
+  | "objective-conflict"
+  | "objective-candidate"
+  | "publication";
+
+export function decisionKindLabel(
+  context: DecisionContext,
+): DecisionKindLabel | null {
+  if (
+    context.node !== null &&
+    context.node.status === "awaiting_confirmation"
+  ) {
+    return "task-review";
+  }
+  if (context.node !== null && context.node.status === "failed") {
+    return "operational-failure";
+  }
+  if (context.group !== null && context.group.status === "conflict") {
+    return "objective-conflict";
+  }
+  if (
+    context.group !== null &&
+    context.group.status === "awaiting_confirmation"
+  ) {
+    return "objective-candidate";
+  }
+  if (
+    context.initiative !== null &&
+    context.initiative.status === "landed" &&
+    context.initiative.publication !== null &&
+    (context.initiative.publication.state === "unpublished" ||
+      context.initiative.publication.state === "diverged")
+  ) {
+    return "publication";
+  }
+  return null;
 }

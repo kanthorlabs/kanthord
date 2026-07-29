@@ -74,6 +74,9 @@ test("execute returns integrations=[{ repository, state }] with state=integrated
     integrations: [{ repository: REPO_ID, state: "integrated" }],
     after: [],
     waiting: [],
+    conflictCause: null,
+    conflictReason: null,
+    note: null,
   });
 });
 
@@ -263,6 +266,9 @@ test("(S3-1) execute returns commitOid and parentOid when both are set on the ob
     integrations: [{ repository: REPO_ID, state: "awaiting_confirmation" }],
     after: [],
     waiting: [],
+    conflictCause: null,
+    conflictReason: null,
+    note: null,
   });
 });
 
@@ -296,4 +302,44 @@ test("(S3-2) execute omits commitOid and parentOid keys when neither is set (a b
     undefined,
     "parentOid is undefined, never null or empty string",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Story 7 §D — conflictCause / conflictReason / note surfaced as string|null
+// ---------------------------------------------------------------------------
+
+test("(017-S7D-1) execute returns conflictCause, conflictReason and note verbatim when set on the objective", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "backend",
+    status: "conflict",
+    conflictCause: "non-single-commit",
+    conflictReason: "gate failed",
+    note: "use the anchor",
+  };
+  const { objectives, repos } = makeStore(objective, REPO_ID);
+  const useCase = new GetObjective(objectives, repos);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.equal(output.conflictCause, "non-single-commit");
+  assert.equal(output.conflictReason, "gate failed");
+  assert.equal(output.note, "use the anchor");
+});
+
+test("(017-S7D-2) execute reports conflictCause, conflictReason and note as null (not omitted) when unset", async () => {
+  const objective: Objective = {
+    id: OBJ_ID,
+    initiativeId: INIT_ID,
+    name: "backend",
+    status: "building",
+  };
+  const { objectives, repos } = makeStore(objective, REPO_ID);
+  const useCase = new GetObjective(objectives, repos);
+  const output = await useCase.execute({ id: OBJ_ID });
+  assert.equal("conflictCause" in output, true, "conflictCause key present");
+  assert.equal("conflictReason" in output, true, "conflictReason key present");
+  assert.equal("note" in output, true, "note key present");
+  assert.equal(output.conflictCause, null);
+  assert.equal(output.conflictReason, null);
+  assert.equal(output.note, null);
 });

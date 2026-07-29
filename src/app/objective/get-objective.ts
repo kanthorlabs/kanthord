@@ -24,6 +24,12 @@ export interface GetObjectiveOutput {
   integrations: Array<{ repository: string; state: string }>;
   after: string[];
   waiting: UnsatisfiedEdge[];
+  /** The ref-update conflict cause, or `null` when none is persisted. */
+  conflictCause: string | null;
+  /** The gate-failure reason from the most recent conflict, or `null`. */
+  conflictReason: string | null;
+  /** Guidance stored on the objective, or `null` when unset. */
+  note: string | null;
 }
 
 export class GetObjective {
@@ -76,6 +82,9 @@ export class GetObjective {
           : [],
       after,
       waiting,
+      conflictCause: objective.conflictCause ?? null,
+      conflictReason: objective.conflictReason ?? null,
+      note: objective.note ?? null,
     };
   }
 }

@@ -7,12 +7,14 @@ import {
   groupAction,
   initiativeAction,
   decisionActions,
+  decisionKindLabel,
   type Action,
   type ActionKind,
   type NodeActionFacts,
   type GroupActionFacts,
   type InitiativeActionFacts,
   type DecisionContext,
+  type DecisionKindLabel,
 } from "./actionability.ts";
 
 // ---------------------------------------------------------------------------
@@ -898,6 +900,184 @@ test("closed vocabulary: every Action kind returned by the three functions is in
     assert.ok(
       EXPECTED_KINDS.includes(a.kind),
       `action kind '${a.kind}' is not in the closed vocabulary`,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Story 4 — task-level reject producer + decisionKindLabel
+// ---------------------------------------------------------------------------
+
+test("(017-S4-failure-verdicts) decisionActions: a failed node yields kinds [retry, reject], retry command 'retry task --id t'", () => {
+  const ctx: DecisionContext = {
+    node: {
+      taskId: "t",
+      status: "failed",
+      objectiveId: "o",
+      objectiveStatus: "building",
+      blockedForever: false,
+      deadDependencyId: null,
+    },
+    group: null,
+    initiative: null,
+    expectedCommit: null,
+  };
+  const actions = decisionActions(ctx);
+  assert.deepEqual(
+    actions.map((a) => a.kind),
+    ["retry", "reject"],
+  );
+  assert.equal(actions[0]?.command, "retry task --id t");
+});
+
+test("(017-S4-failed-reject-has-yes) decisionActions: the failed node's reject action ends with --resolution discard --yes and requires only reason", () => {
+  const ctx: DecisionContext = {
+    node: {
+      taskId: "t",
+      status: "failed",
+      objectiveId: "o",
+      objectiveStatus: "building",
+      blockedForever: false,
+      deadDependencyId: null,
+    },
+    group: null,
+    initiative: null,
+    expectedCommit: null,
+  };
+  const actions = decisionActions(ctx);
+  const reject = actions[1];
+  assert.ok(reject !== undefined);
+  assert.equal(reject.kind, "reject");
+  assert.equal(reject.target.type, "task");
+  assert.equal(reject.target.id, "t");
+  assert.deepEqual(reject.requiresInput, ["reason"]);
+  assert.equal(reject.command, "reject task --id t --resolution discard --yes");
+});
+
+test("(017-S4-awaiting-task-reject-no-command) decisionActions: an awaiting_confirmation node's reject action omits command and requires resolution + reason", () => {
+  const ctx: DecisionContext = {
+    node: {
+      taskId: "t",
+      status: "awaiting_confirmation",
+      objectiveId: "o",
+      objectiveStatus: "building",
+      blockedForever: false,
+      deadDependencyId: null,
+    },
+    group: null,
+    initiative: null,
+    expectedCommit: null,
+  };
+  const actions = decisionActions(ctx);
+  assert.deepEqual(
+    actions.map((a) => a.kind),
+    ["approve", "reject"],
+  );
+  const reject = actions[1];
+  assert.ok(reject !== undefined);
+  assert.equal(reject.target.type, "task");
+  assert.equal(reject.target.id, "t");
+  assert.deepEqual(reject.requiresInput, ["resolution", "reason"]);
+  assert.equal(
+    "command" in reject,
+    false,
+    "reject on an awaiting_confirmation task has a genuine human choice of --resolution, so no command can be printed",
+  );
+});
+
+test("(017-S4-kind-labels) decisionKindLabel: each of the five labels is produced by its condition, and null otherwise", () => {
+  const cases: Array<{ ctx: DecisionContext; want: DecisionKindLabel | null }> =
+    [
+      {
+        ctx: {
+          node: {
+            taskId: "t",
+            status: "awaiting_confirmation",
+            objectiveId: "o",
+            objectiveStatus: "building",
+            blockedForever: false,
+            deadDependencyId: null,
+          },
+          group: null,
+          initiative: null,
+          expectedCommit: null,
+        },
+        want: "task-review",
+      },
+      {
+        ctx: {
+          node: {
+            taskId: "t",
+            status: "failed",
+            objectiveId: "o",
+            objectiveStatus: "building",
+            blockedForever: false,
+            deadDependencyId: null,
+          },
+          group: null,
+          initiative: null,
+          expectedCommit: null,
+        },
+        want: "operational-failure",
+      },
+      {
+        ctx: {
+          node: null,
+          group: { objectiveId: "o", status: "conflict" },
+          initiative: null,
+          expectedCommit: null,
+        },
+        want: "objective-conflict",
+      },
+      {
+        ctx: {
+          node: null,
+          group: { objectiveId: "o", status: "awaiting_confirmation" },
+          initiative: null,
+          expectedCommit: null,
+        },
+        want: "objective-candidate",
+      },
+      {
+        ctx: {
+          node: null,
+          group: null,
+          initiative: {
+            initiativeId: "i",
+            status: "landed",
+            paused: false,
+            publication: {
+              repositoryId: "r",
+              branch: "b",
+              state: "unpublished",
+            },
+          },
+          expectedCommit: null,
+        },
+        want: "publication",
+      },
+      {
+        ctx: {
+          node: {
+            taskId: "t",
+            status: "pending",
+            objectiveId: "o",
+            objectiveStatus: "building",
+            blockedForever: false,
+            deadDependencyId: null,
+          },
+          group: null,
+          initiative: null,
+          expectedCommit: null,
+        },
+        want: null,
+      },
+    ];
+  for (const { ctx, want } of cases) {
+    assert.equal(
+      decisionKindLabel(ctx),
+      want,
+      `decisionKindLabel mismatch for ${JSON.stringify(ctx)}`,
     );
   }
 });

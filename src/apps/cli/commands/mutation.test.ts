@@ -12,6 +12,22 @@ import { buildRejectCommand } from "./reject.ts";
 import { buildRemoveCommand } from "./remove.ts";
 import { buildRetryCommand } from "./retry.ts";
 import { buildResumeCommand } from "./resume.ts";
+import type { DiscardPreview } from "../../../domain/impact.ts";
+
+const samplePreview: DiscardPreview = {
+  damage: [
+    {
+      target: { type: "task", id: "dep-1", name: "Dependent" },
+      effect: "discarded-by-cascade",
+    },
+  ],
+  counts: {
+    "discarded-by-cascade": 1,
+    "permanently-unsatisfiable": 0,
+    "left-blocked": 0,
+  },
+  digest: "017-S3-MUTATION-DIGEST",
+};
 
 function capture() {
   const out: string[] = [];
@@ -267,6 +283,36 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       taskId: "task-1",
       note: undefined,
       rebuild: undefined,
+      carryNote: undefined,
+    });
+    assert.deepEqual(cap.out, []);
+    assert.deepEqual(cap.err, ["task re-queued: task-1\n"]);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(017-S1-cli-mutation-carry-note) retries a task with --carry-note and forwards carryNote:true", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      retryTask: {
+        execute: async (input: unknown) => {
+          received = input;
+        },
+      },
+    } as Parameters<typeof buildRetryCommand>[0];
+
+    await buildRetryCommand(
+      deps,
+      cap.io as Parameters<typeof buildRetryCommand>[1],
+    ).parseAsync(["task", "--id", "task-1", "--carry-note"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, {
+      taskId: "task-1",
+      note: undefined,
+      rebuild: undefined,
+      carryNote: true,
     });
     assert.deepEqual(cap.out, []);
     assert.deepEqual(cap.err, ["task re-queued: task-1\n"]);
@@ -388,6 +434,7 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       rejectObjective: {
         execute: async (input: unknown) => {
           discardReceived = input;
+          return { preview: samplePreview };
         },
       },
       retryObjective: {
@@ -398,10 +445,12 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       },
     } as unknown as Parameters<typeof buildRejectCommand>[0];
 
-    await buildRejectCommand(
+    const command = buildRejectCommand(
       deps,
       cap.io as Parameters<typeof buildRejectCommand>[1],
-    ).parseAsync(
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
       [
         "objective",
         "--id",
@@ -412,6 +461,7 @@ describe("src/apps/cli/commands/mutation.ts", () => {
         "discard",
         "--reason",
         "why",
+        "--yes",
       ],
       { from: "user" },
     );
@@ -421,8 +471,168 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       expectedCommit: "abc",
       reason: "why",
     });
-    assert.deepEqual(cap.out, ["obj-1\n"]);
+    assert.deepEqual(cap.out, [
+      "impact: discarded-by-cascade task dep-1 Dependent\n",
+      "impact-digest: 017-S3-MUTATION-DIGEST\n",
+      "obj-1\n",
+    ]);
+    assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 017-S3 §C: --dry-run / --yes / --expect-impact / --json leaf plumbing.
+  // ---------------------------------------------------------------------------
+
+  test("(017-S3-cli-obj-dry-run-plumbing) reject objective --dry-run forwards dryRun:true to RejectObjective.execute", async () => {
+    let discardReceived: unknown;
+    const cap = capture();
+    const deps = {
+      rejectObjective: {
+        execute: async (input: unknown) => {
+          discardReceived = input;
+          return { preview: samplePreview };
+        },
+      },
+      retryObjective: { execute: async () => {} },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "objective",
+        "--id",
+        "obj-1",
+        "--expected-commit",
+        "abc",
+        "--resolution",
+        "discard",
+        "--dry-run",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(
+      (discardReceived as { dryRun?: boolean } | undefined)?.dryRun,
+      true,
+    );
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(017-S3-cli-obj-expect-impact-plumbing) reject objective --expect-impact <d> --yes forwards expectImpact to RejectObjective.execute", async () => {
+    let discardReceived: unknown;
+    const cap = capture();
+    const deps = {
+      rejectObjective: {
+        execute: async (input: unknown) => {
+          discardReceived = input;
+          return { preview: samplePreview };
+        },
+      },
+      retryObjective: { execute: async () => {} },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "objective",
+        "--id",
+        "obj-1",
+        "--expected-commit",
+        "abc",
+        "--resolution",
+        "discard",
+        "--expect-impact",
+        "017-S3-MUTATION-DIGEST",
+        "--yes",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(
+      (discardReceived as { expectImpact?: string } | undefined)?.expectImpact,
+      "017-S3-MUTATION-DIGEST",
+    );
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(017-S3-cli-obj-json-plumbing) reject objective --dry-run --json prints exactly one JSON element parsing to {damage, counts, digest}", async () => {
+    const cap = capture();
+    const deps = {
+      rejectObjective: {
+        execute: async () => ({ preview: samplePreview }),
+      },
+      retryObjective: { execute: async () => {} },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "objective",
+        "--id",
+        "obj-1",
+        "--expected-commit",
+        "abc",
+        "--resolution",
+        "discard",
+        "--dry-run",
+        "--json",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(cap.out.length, 1, "exactly one JSON element");
+    const parsed = JSON.parse(cap.out[0]!);
+    assert.ok("damage" in parsed);
+    assert.ok("counts" in parsed);
+    assert.ok("digest" in parsed);
+  });
+
+  test("(017-S3-cli-obj-dry-run-yes-mutex) reject objective --dry-run --yes: exit 1 with exact mutual-exclusion message", async () => {
+    const cap = capture();
+    const deps = {
+      rejectObjective: {
+        execute: async () => ({ preview: samplePreview }),
+      },
+      retryObjective: { execute: async () => {} },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "objective",
+        "--id",
+        "obj-1",
+        "--expected-commit",
+        "abc",
+        "--resolution",
+        "discard",
+        "--dry-run",
+        "--yes",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(cap.code(), 1);
+    assert.deepEqual(cap.err, [
+      "error: --dry-run and --yes are mutually exclusive\n",
+    ]);
   });
 
   test("rejects an objective without --expected-commit: non-zero exit (commander requiredOption), no use-case call (Story 4, 012)", async () => {
@@ -450,15 +660,27 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       rejectTask: {
         execute: async (input: unknown) => {
           received = input;
+          return { skipped: [], preview: samplePreview };
         },
       },
-    } as Parameters<typeof buildRejectCommand>[0];
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
 
-    await buildRejectCommand(
+    const command = buildRejectCommand(
       deps,
       cap.io as Parameters<typeof buildRejectCommand>[1],
-    ).parseAsync(
-      ["task", "--id", "task-1", "--resolution", "discard", "--reason", "why"],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "task",
+        "--id",
+        "task-1",
+        "--resolution",
+        "discard",
+        "--reason",
+        "why",
+        "--yes",
+      ],
       { from: "user" },
     );
 
@@ -466,10 +688,149 @@ describe("src/apps/cli/commands/mutation.ts", () => {
       taskId: "task-1",
       resolution: "discard",
       reason: "why",
+      dryRun: undefined,
+      expectImpact: undefined,
     });
-    assert.deepEqual(cap.out, ["task-1\n"]);
+    assert.deepEqual(cap.out, [
+      "impact: discarded-by-cascade task dep-1 Dependent\n",
+      "impact-digest: 017-S3-MUTATION-DIGEST\n",
+      "task-1\n",
+    ]);
     assert.deepEqual(cap.err, []);
     assert.equal(cap.code(), 0);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 017-S3 §C: --dry-run / --yes / --expect-impact / --json leaf plumbing.
+  // ---------------------------------------------------------------------------
+
+  test("(017-S3-cli-task-dry-run-plumbing) reject task --dry-run forwards dryRun:true to RejectTask.execute", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      rejectTask: {
+        execute: async (input: unknown) => {
+          received = input;
+          return { skipped: [], preview: samplePreview };
+        },
+      },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      ["task", "--id", "task-1", "--resolution", "discard", "--dry-run"],
+      { from: "user" },
+    );
+
+    assert.equal((received as { dryRun?: boolean } | undefined)?.dryRun, true);
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(017-S3-cli-task-expect-impact-plumbing) reject task --expect-impact <d> --yes forwards expectImpact to RejectTask.execute", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      rejectTask: {
+        execute: async (input: unknown) => {
+          received = input;
+          return { skipped: [], preview: samplePreview };
+        },
+      },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "task",
+        "--id",
+        "task-1",
+        "--resolution",
+        "discard",
+        "--expect-impact",
+        "017-S3-MUTATION-DIGEST",
+        "--yes",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(
+      (received as { expectImpact?: string } | undefined)?.expectImpact,
+      "017-S3-MUTATION-DIGEST",
+    );
+    assert.equal(cap.code(), 0);
+  });
+
+  test("(017-S3-cli-task-json-plumbing) reject task --dry-run --json prints exactly one JSON element parsing to {damage, counts, digest}", async () => {
+    const cap = capture();
+    const deps = {
+      rejectTask: {
+        execute: async () => ({ skipped: [], preview: samplePreview }),
+      },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "task",
+        "--id",
+        "task-1",
+        "--resolution",
+        "discard",
+        "--dry-run",
+        "--json",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(cap.out.length, 1, "exactly one JSON element");
+    const parsed = JSON.parse(cap.out[0]!);
+    assert.ok("damage" in parsed);
+    assert.ok("counts" in parsed);
+    assert.ok("digest" in parsed);
+  });
+
+  test("(017-S3-cli-task-dry-run-yes-mutex) reject task --dry-run --yes: exit 1 with exact mutual-exclusion message", async () => {
+    const cap = capture();
+    const deps = {
+      rejectTask: {
+        execute: async () => ({ skipped: [], preview: samplePreview }),
+      },
+    } as unknown as Parameters<typeof buildRejectCommand>[0];
+
+    const command = buildRejectCommand(
+      deps,
+      cap.io as Parameters<typeof buildRejectCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+    await command.parseAsync(
+      [
+        "task",
+        "--id",
+        "task-1",
+        "--resolution",
+        "discard",
+        "--dry-run",
+        "--yes",
+      ],
+      { from: "user" },
+    );
+
+    assert.equal(cap.code(), 1);
+    assert.deepEqual(cap.err, [
+      "error: --dry-run and --yes are mutually exclusive\n",
+    ]);
   });
 
   test("(16) adds initiative-dependency from --initiative and --after inputs", async () => {

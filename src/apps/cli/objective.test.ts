@@ -19,6 +19,7 @@ import type { RetryObjective } from "../../app/objective/retry-objective.ts";
 import type { RejectObjective } from "../../app/objective/reject-objective.ts";
 import { UnknownReferenceError } from "../../app/errors.ts";
 import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
+import type { DiscardPreview } from "../../domain/impact.ts";
 
 class FakeInitiativeRepository implements InitiativeRepository {
   readonly #initiatives: Map<string, Initiative> = new Map();
@@ -435,6 +436,21 @@ describe("runRetryObjective handler", () => {
 // it should and never the other.
 // ---------------------------------------------------------------------------
 
+const samplePreview: DiscardPreview = {
+  damage: [
+    {
+      target: { type: "task", id: "dep-1", name: "Dependent" },
+      effect: "discarded-by-cascade",
+    },
+  ],
+  counts: {
+    "discarded-by-cascade": 1,
+    "permanently-unsatisfiable": 0,
+    "left-blocked": 0,
+  },
+  digest: "017-S3-CLI-OBJ-DIGEST",
+};
+
 class FakeRejectObjective {
   readonly calls: Array<{
     objectiveId: string;
@@ -451,11 +467,12 @@ class FakeRejectObjective {
     objectiveId: string;
     reason?: string;
     expectedCommit: string;
-  }): Promise<void> {
+  }): Promise<{ preview: DiscardPreview }> {
     this.calls.push(input);
     if (this.#error !== undefined) {
       throw this.#error;
     }
+    return { preview: samplePreview };
   }
 }
 
@@ -469,12 +486,17 @@ describe("runRejectObjective handler", () => {
         expectedCommit: "COMMIT_OID",
         resolution: "discard",
         reason: "unachievable",
+        yes: true,
       },
       fakeDiscard as unknown as RejectObjective,
       fakeRetry as unknown as RetryObjective,
     );
     assert.equal(result.exitCode, 0);
-    assert.deepEqual(result.stdout, ["obj-1"]);
+    assert.deepEqual(result.stdout, [
+      "impact: discarded-by-cascade task dep-1 Dependent",
+      "impact-digest: 017-S3-CLI-OBJ-DIGEST",
+      "obj-1",
+    ]);
     assert.deepEqual(fakeDiscard.calls, [
       {
         objectiveId: "obj-1",
@@ -587,5 +609,86 @@ describe("runRejectObjective handler", () => {
     assert.deepEqual(fakeDiscard.calls, []);
     assert.deepEqual(fakeRetry.calls, []);
     assert.match(result.stderr[0]!, /missing required flag --expected-commit/);
+  });
+
+  test("(017-S3-cli-obj-discard-requires-yes) runRejectObjective --resolution discard, no --yes/--dry-run: exit 1, stdout carries at least one impact: line", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      { id: "obj-1", expectedCommit: "COMMIT_OID", resolution: "discard" },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(
+      result.exitCode,
+      1,
+      "discard without --yes/--dry-run must exit 1",
+    );
+    assert.ok(
+      result.stdout.some((line) => line.startsWith("impact:")),
+      `expected an impact: line; got: ${JSON.stringify(result.stdout)}`,
+    );
+  });
+
+  test("(017-S3-cli-obj-discard-yes) runRejectObjective --resolution discard --yes: prints impact: lines and exits 0", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      {
+        id: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        resolution: "discard",
+        yes: true,
+      },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 0, "exit 0 with --yes");
+    assert.ok(
+      result.stdout.some((line) => line.startsWith("impact:")),
+      `expected an impact: line even with --yes; got: ${JSON.stringify(result.stdout)}`,
+    );
+  });
+
+  test("(017-S3-cli-obj-discard-json) runRejectObjective --resolution discard --dry-run --json: stdout is one element parsing to {damage, counts, digest}", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      {
+        id: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        resolution: "discard",
+        dryRun: true,
+        json: true,
+      },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 1, "exactly one JSON element");
+    const parsed = JSON.parse(result.stdout[0]!);
+    assert.ok("damage" in parsed, "parsed JSON must have a damage key");
+    assert.ok("counts" in parsed, "parsed JSON must have a counts key");
+    assert.ok("digest" in parsed, "parsed JSON must have a digest key");
+  });
+
+  test("(017-S3-cli-obj-dry-run-yes-mutex) runRejectObjective --dry-run --yes: exit 1 with exact mutual-exclusion message", async () => {
+    const fakeDiscard = new FakeRejectObjective();
+    const fakeRetry = new FakeRetryObjective();
+    const result = await runRejectObjective(
+      {
+        id: "obj-1",
+        expectedCommit: "COMMIT_OID",
+        resolution: "discard",
+        dryRun: true,
+        yes: true,
+      },
+      fakeDiscard as unknown as RejectObjective,
+      fakeRetry as unknown as RetryObjective,
+    );
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.stderr, [
+      "error: --dry-run and --yes are mutually exclusive",
+    ]);
   });
 });

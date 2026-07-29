@@ -362,10 +362,11 @@ test("execute resolves a conflict objective when the gate fails: stays conflict,
 });
 
 // ---------------------------------------------------------------------------
-// B5 regression — `--note` must NOT re-queue tasks (no `failed->pending`
-// transition invented). It only writes `note` onto every non-terminal task
-// of the objective (status untouched); terminal tasks (`completed`,
-// `discarded`) are left untouched; with no `--note`, nothing is rewritten.
+// 017 Story 1 D2/D5 — `--note` is stored on the OBJECTIVE (never fanned to
+// tasks: 007.12 makes every task already `completed`, so the old fan-out
+// reached nobody). Conflict-diagnosis fields (conflictCause, observedTipOid,
+// conflictReason) are cleared when the conflict resolves (gate passed) and
+// kept when it does not (gate failed).
 // ---------------------------------------------------------------------------
 
 function makeTask(overrides: Partial<Task>): Task {
@@ -373,13 +374,13 @@ function makeTask(overrides: Partial<Task>): Task {
     id: "task-a",
     objectiveId: "obj-a",
     title: "do the thing",
-    status: "failed",
+    status: "completed",
     dependencies: [],
     ...overrides,
   };
 }
 
-test("execute resolves a conflict objective with a note: writes the note onto every non-terminal task without changing status; completed/discarded tasks are untouched (B5 regression)", async () => {
+test("(017-S1-objective-note-gate-passed) execute stores --note on the objective, gate passes, all tasks already completed: no task is saved", async () => {
   const initiative: Initiative = {
     id: "init-1",
     projectId: "proj-1",
@@ -396,15 +397,8 @@ test("execute resolves a conflict objective with a note: writes the note onto ev
     commitOid: "STALE_OID",
     parentOid: "OLD_TIP",
   };
-  const taskFailed = makeTask({ id: "task-failed", status: "failed" });
-  const taskPending = makeTask({ id: "task-pending", status: "pending" });
-  const taskCompleted = makeTask({ id: "task-completed", status: "completed" });
-  const taskDiscarded = makeTask({ id: "task-discarded", status: "discarded" });
   const store = new FakeObjectiveStore([OBJ], initiative, [
-    taskFailed,
-    taskPending,
-    taskCompleted,
-    taskDiscarded,
+    makeTask({ id: "task-completed", status: "completed" }),
   ]);
   const broker = new FakeBroker("NEW_TIP");
   const squasher = new FakeSquasher("RESQUASHED_OID");
@@ -422,34 +416,20 @@ test("execute resolves a conflict objective with a note: writes the note onto ev
   await useCase.execute({
     objectiveId: OBJ.id,
     expectedCommit: "STALE_OID",
-    note: "guidance",
+    note: "resolve at the new tip",
   });
 
-  const savedFailed = store.savedTasks.find((t) => t.id === "task-failed");
-  assert.ok(savedFailed, "the failed task must have the note written onto it");
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.note, "resolve at the new tip");
   assert.equal(
-    savedFailed!.status,
-    "failed",
-    "the failed task's status must NOT be re-queued to pending",
-  );
-  assert.equal(savedFailed!.note, "guidance");
-
-  const savedPending = store.savedTasks.find((t) => t.id === "task-pending");
-  assert.ok(savedPending, "a non-terminal pending task must also get the note");
-  assert.equal(savedPending!.status, "pending");
-  assert.equal(savedPending!.note, "guidance");
-
-  assert.ok(
-    !store.savedTasks.some((t) => t.id === "task-completed"),
-    "a completed (terminal) task must not be touched",
-  );
-  assert.ok(
-    !store.savedTasks.some((t) => t.id === "task-discarded"),
-    "a discarded (terminal) task must not be touched",
+    store.savedTasks.length,
+    0,
+    "the task fan-out is deleted — no task is ever saved by this use case",
   );
 });
 
-test("execute resolves a conflict objective without a note: no task is rewritten at all (B5 regression)", async () => {
+test("(017-S1-objective-note-gate-failed) execute stores --note on the objective when the gate fails, alongside conflictReason", async () => {
   const initiative: Initiative = {
     id: "init-1",
     projectId: "proj-1",
@@ -466,16 +446,50 @@ test("execute resolves a conflict objective without a note: no task is rewritten
     commitOid: "STALE_OID",
     parentOid: "OLD_TIP",
   };
-  const taskFailed = makeTask({
-    id: "task-failed",
-    status: "failed",
-    note: "prior",
+  const store = new FakeObjectiveStore([OBJ], initiative);
+  const broker = new FakeBroker("NEW_TIP");
+  const squasher = new FakeSquasher("RESQUASHED_OID");
+  const gate = new FakeGate({ passed: false, reason: "tests failed: 2 red" });
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await useCase.execute({
+    objectiveId: OBJ.id,
+    expectedCommit: "STALE_OID",
+    note: "try a narrower squash",
   });
-  const taskPending = makeTask({ id: "task-pending", status: "pending" });
-  const store = new FakeObjectiveStore([OBJ], initiative, [
-    taskFailed,
-    taskPending,
-  ]);
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.note, "try a narrower squash");
+  assert.equal(saved.conflictReason, "tests failed: 2 red");
+});
+
+test("(017-S1-objective-no-note) execute with no --note: the saved objective has no note key", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    paused: false,
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "STALE_OID",
+    parentOid: "OLD_TIP",
+  };
+  const store = new FakeObjectiveStore([OBJ], initiative);
   const broker = new FakeBroker("NEW_TIP");
   const squasher = new FakeSquasher("RESQUASHED_OID");
   const gate = new FakeGate({ passed: true });
@@ -491,11 +505,105 @@ test("execute resolves a conflict objective without a note: no task is rewritten
 
   await useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" });
 
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
   assert.equal(
-    store.savedTasks.length,
-    0,
-    "with no --note, no task should be saved/rewritten",
+    "note" in saved,
+    false,
+    "no --note must leave the note key absent, not undefined",
   );
+});
+
+test("(017-S1-diagnosis-cleared-on-resolve) a resolved conflict clears conflictCause/observedTipOid/conflictReason but keeps note/commitOid/parentOid", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    paused: false,
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "STALE_OID",
+    parentOid: "OLD_TIP",
+    conflictCause: "cas-mismatch",
+    observedTipOid: "aaa",
+    conflictReason: "gate failed",
+  };
+  const store = new FakeObjectiveStore([OBJ], initiative);
+  const broker = new FakeBroker("NEW_TIP");
+  const squasher = new FakeSquasher("RESQUASHED_OID");
+  const gate = new FakeGate({ passed: true });
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await useCase.execute({
+    objectiveId: OBJ.id,
+    expectedCommit: "STALE_OID",
+    note: "resolved",
+  });
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal("conflictCause" in saved, false);
+  assert.equal("observedTipOid" in saved, false);
+  assert.equal("conflictReason" in saved, false);
+  assert.equal(saved.note, "resolved");
+  assert.equal(saved.commitOid, "RESQUASHED_OID");
+  assert.equal(saved.parentOid, "NEW_TIP");
+});
+
+test("(017-S1-diagnosis-kept-on-gate-failure) a gate failure keeps the objective in conflict with the new reason and unchanged conflictCause", async () => {
+  const initiative: Initiative = {
+    id: "init-1",
+    projectId: "proj-1",
+    name: "init",
+    paused: false,
+    status: "building",
+    workspace: "/clones/init-1",
+  };
+  const OBJ: Objective = {
+    id: "obj-a",
+    initiativeId: "init-1",
+    name: "backend",
+    status: "conflict",
+    commitOid: "STALE_OID",
+    parentOid: "OLD_TIP",
+    conflictCause: "non-single-commit",
+    conflictReason: "old reason from a prior gate run",
+  };
+  const store = new FakeObjectiveStore([OBJ], initiative);
+  const broker = new FakeBroker("NEW_TIP");
+  const squasher = new FakeSquasher("RESQUASHED_OID");
+  const gate = new FakeGate({ passed: false, reason: "new failure reason" });
+  const feed = new RecordingEventFeed();
+  const useCase = new RetryObjective(
+    store,
+    broker,
+    squasher,
+    gate,
+    feed,
+    noopUow,
+  );
+
+  await useCase.execute({ objectiveId: OBJ.id, expectedCommit: "STALE_OID" });
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.status, "conflict");
+  assert.equal(saved.conflictReason, "new failure reason");
+  assert.equal(saved.conflictCause, "non-single-commit");
 });
 
 // ---------------------------------------------------------------------------

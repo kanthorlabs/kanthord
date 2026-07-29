@@ -3,8 +3,8 @@ import {
   transitionObjective,
   canRetryObjective,
   assertCandidateFresh,
+  clearConflictDiagnosis,
 } from "../../domain/initiative.ts";
-import type { Task } from "../../domain/task.ts";
 import { newEvent } from "../../domain/event.ts";
 import type { Event } from "../../domain/event.ts";
 import type { UnitOfWork } from "../../storage/port.ts";
@@ -32,8 +32,6 @@ interface ObjectiveStore {
   getInitiative(initiativeId: string): Initiative | undefined;
   saveObjective(objective: Objective): void;
   resolveHomeDir(initiativeId: string): string;
-  listTasksByObjective(objectiveId: string): Task[];
-  saveTask(task: Task): void;
 }
 
 interface ObjectiveTipReader {
@@ -176,29 +174,37 @@ export class RetryObjective {
         const fresh = this.#store.getObjective(objectiveId);
         assertCandidateFresh(objectiveId, expectedCommit, fresh?.commitOid);
 
+        // 017 Story 1 (D2/D5) — the note is stored on the objective itself
+        // (the old task fan-out reached zero tasks, since every task under a
+        // retryable objective is already completed), and conflict-diagnosis
+        // fields (conflictCause/observedTipOid/conflictReason) are cleared
+        // once the conflict resolves, so a resolved objective never keeps
+        // reporting a stale cause/reason.
+        const transitioned = clearConflictDiagnosis(
+          transitionObjective(objective, "awaiting_confirmation"),
+        );
         const updated: Objective = {
-          ...transitionObjective(objective, "awaiting_confirmation"),
+          ...transitioned,
           commitOid: oid,
           parentOid: newParentOid,
+          ...(note !== undefined ? { note } : {}),
         };
         this.#store.saveObjective(updated);
         feed.append(
           newEvent("objective.awaiting_confirmation", { objectiveId }),
         );
-        if (note !== undefined) {
-          for (const task of this.#store.listTasksByObjective(objectiveId)) {
-            if (task.status === "completed" || task.status === "discarded") {
-              continue;
-            }
-            this.#store.saveTask({ ...task, note });
-          }
-        }
       });
       return;
     }
 
     uow.transaction(() => {
-      const updated: Objective = { ...objective, conflictReason: reason };
+      // 017 Story 1 (D2) — the note is stored on the objective on the
+      // gate-failed path too, alongside the recorded failure reason.
+      const updated: Objective = {
+        ...objective,
+        conflictReason: reason,
+        ...(note !== undefined ? { note } : {}),
+      };
       this.#store.saveObjective(updated);
     });
   }

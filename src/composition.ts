@@ -38,12 +38,14 @@ import { GetInitiativeGraph } from "./app/initiative/get-initiative-graph.ts";
 import { PauseInitiative } from "./app/initiative/pause-initiative.ts";
 import { ResumeInitiative } from "./app/initiative/resume-initiative.ts";
 import { GetProjectOverview } from "./app/project/get-project-overview.ts";
+import { GetDecisionQueue } from "./app/project/get-decision-queue.ts";
 import { CreateObjective } from "./app/objective/create-objective.ts";
 import { AddObjectiveDependency } from "./app/objective/add-objective-dependency.ts";
 import { RemoveObjectiveDependency } from "./app/objective/remove-objective-dependency.ts";
 import { RenameObjective } from "./app/objective/rename-objective.ts";
 import { FindObjective } from "./app/objective/find-objective.ts";
 import { GetObjective } from "./app/objective/get-objective.ts";
+import { GetObjectiveConflict } from "./app/objective/get-objective-conflict.ts";
 import { AddResource } from "./app/resource/add-resource.ts";
 import { FindResource } from "./app/resource/find-resource.ts";
 import { GetResource } from "./app/resource/get-resource.ts";
@@ -143,6 +145,7 @@ import { ApproveObjective } from "./app/objective/approve-objective.ts";
 import { RetryObjective } from "./app/objective/retry-objective.ts";
 import { RejectObjective } from "./app/objective/reject-objective.ts";
 import { GitObjectiveBroker } from "./objective-broker/git.ts";
+import { GitCommitPresence } from "./commit-presence/git.ts";
 
 /**
  * Build the agent-lifecycle event emitter used by the pi runner.
@@ -430,6 +433,14 @@ export function buildDeps(
         initiativeRepository.listObjectives(initiativeId),
       getInitiative: (initiativeId) => initiativeRepository.get(initiativeId),
       saveInitiative: (initiative) => initiativeRepository.save(initiative),
+      listInitiativesByProject: (projectId) =>
+        initiativeRepository.listInitiatives(projectId),
+      getProjectId: (initiativeId) =>
+        initiativeRepository.get(initiativeId)?.projectId,
+      listInitiativeAfter: (initiativeId) =>
+        sequencingRepository.listInitiativeAfter(initiativeId),
+      listObjectiveAfter: (objectiveId) =>
+        sequencingRepository.listObjectiveAfter(objectiveId),
     },
     jobQueue,
     events,
@@ -969,6 +980,58 @@ export function buildDeps(
     sequencingRepository,
   );
 
+  // Story 7 (EPIC 017) — `get conflict --objective`. Read-only.
+  const objectiveConflictBroker = new GitObjectiveBroker();
+  const commitPresence = new GitCommitPresence();
+  const getObjectiveConflict = new GetObjectiveConflict(
+    { getObjective: (id) => initiativeRepository.getObjective(id) },
+    {
+      currentTip: (dir, ref) => objectiveConflictBroker.currentTip!(dir, ref),
+    },
+    resolveInitiativeHomeDir,
+    {
+      hasCommits: (homeDir, oids) => commitPresence.hasCommits(homeDir, oids),
+    },
+  );
+
+  // Story 6 (EPIC 017) — the cross-project decision queue. Reuses
+  // `landingRepository` (the same instance passed to `getConflict`),
+  // `publicationRepository`, `resolveHomeDir`/`resolveInitiativeRepository`,
+  // and `events`' array-keyed `latestActionableEventIds` overload. Read-only:
+  // no `UnitOfWork`, no event append.
+  const getDecisionQueue = new GetDecisionQueue(
+    { listProjects: () => projectRepository.listProjects() },
+    {
+      listInitiatives: (projectId) =>
+        initiativeRepository.listInitiatives(projectId),
+      listObjectives: (initiativeId) =>
+        initiativeRepository.listObjectives(initiativeId),
+    },
+    {
+      listByInitiative: (initiativeId) =>
+        taskRepository.listByInitiative(initiativeId),
+    },
+    {
+      getLatestPublication: (repoId) =>
+        publicationRepository.getLatestPublication(repoId),
+    },
+    {
+      latestActionableEventIds: (ids) => events.latestActionableEventIds(ids),
+    },
+    {
+      getTaskResult: (taskId) => taskRepository.getTaskResult(taskId),
+      resolveHomeDir,
+      resolveInitiativeRepository,
+    },
+    {
+      getCandidateByTask: (taskId) =>
+        landingRepository.getCandidateByTask?.(taskId),
+    },
+    {
+      hasCommits: (homeDir, oids) => commitPresence.hasCommits(homeDir, oids),
+    },
+  );
+
   const approveObjective = new ApproveObjective(
     {
       getObjective: (id) => initiativeRepository.getObjective(id),
@@ -998,9 +1061,6 @@ export function buildDeps(
       saveObjective: (objective) =>
         initiativeRepository.saveObjective(objective),
       resolveHomeDir: resolveInitiativeHomeDir,
-      listTasksByObjective: (objectiveId) =>
-        taskRepository.listTasksByObjective(objectiveId),
-      saveTask: (task) => taskRepository.save(task),
     },
     new GitObjectiveBroker(),
     workspaces,
@@ -1021,6 +1081,16 @@ export function buildDeps(
       listTasksByObjective: (objectiveId) =>
         taskRepository.listTasksByObjective(objectiveId),
       saveTask: (task) => taskRepository.save(task),
+      listObjectiveAfter: (objectiveId) =>
+        sequencingRepository.listObjectiveAfter(objectiveId),
+      listInitiativeAfter: (initiativeId) =>
+        sequencingRepository.listInitiativeAfter(initiativeId),
+      listInitiatives: (projectId) =>
+        initiativeRepository.listInitiatives(projectId),
+      getProjectId: (initiativeId) =>
+        initiativeRepository.get(initiativeId)?.projectId,
+      listTasksByInitiative: (initiativeId) =>
+        taskRepository.listByInitiative(initiativeId),
     },
     events,
     unitOfWork,
@@ -1158,6 +1228,8 @@ export function buildDeps(
     workspaces,
     newId,
     getConflict,
+    getObjectiveConflict,
+    getDecisionQueue,
     getPriorFeedback,
     resolveCredential,
     setupPrompt,

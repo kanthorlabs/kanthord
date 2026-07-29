@@ -131,6 +131,9 @@ describe("runGetObjective", () => {
       integrations: [{ repository: "repo-1", state: "integrated" }],
       after: [],
       waiting: [],
+      conflictCause: null,
+      conflictReason: null,
+      note: null,
     });
   });
 

@@ -90,7 +90,7 @@ export class ApproveObjective {
     );
 
     if (commitCount !== 1) {
-      this.#recordConflict(objective, objectiveId);
+      this.#recordConflict(objective, objectiveId, "non-single-commit");
       return { outcome: "conflict" };
     }
 
@@ -103,7 +103,12 @@ export class ApproveObjective {
       );
     } catch (err) {
       if (err instanceof LandingCASMismatchError) {
-        this.#recordConflict(objective, objectiveId);
+        this.#recordConflict(
+          objective,
+          objectiveId,
+          "cas-mismatch",
+          err.newTargetOID,
+        );
         return { outcome: "conflict" };
       }
       throw err;
@@ -148,9 +153,20 @@ export class ApproveObjective {
     });
   }
 
-  #recordConflict(objective: Objective, objectiveId: string): void {
+  #recordConflict(
+    objective: Objective,
+    objectiveId: string,
+    cause: "non-single-commit" | "cas-mismatch",
+    observedTipOid?: string,
+  ): void {
     this.#uow.transaction(() => {
-      const updated = transitionObjective(objective, "conflict");
+      const transitioned = transitionObjective(objective, "conflict");
+      const { conflictReason: _conflictReason, ...rest } = transitioned;
+      const updated: Objective = {
+        ...rest,
+        conflictCause: cause,
+        ...(observedTipOid !== undefined ? { observedTipOid } : {}),
+      };
       this.#store.saveObjective(updated);
       this.#feed.append(newEvent("objective.conflict", { objectiveId }));
     });

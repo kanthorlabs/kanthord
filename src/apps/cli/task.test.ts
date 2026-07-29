@@ -28,6 +28,7 @@ import type { Task } from "../../domain/task.ts";
 import type { Initiative, Objective } from "../../domain/initiative.ts";
 import type { Project } from "../../domain/project.ts";
 import type { Resource } from "../../domain/resource.ts";
+import type { DiscardPreview } from "../../domain/impact.ts";
 import type { AgentCatalog } from "../../agent-runner/port.ts";
 import { CreateTask } from "../../app/task/create-task.ts";
 
@@ -870,7 +871,54 @@ describe("runRetryTask handler", () => {
     assert.ok(capturedInput !== undefined, "execute must have been called");
     assert.ok(
       !capturedInput["rebuild"],
-      `rebuild must be falsy when --rebuild is not passed; got: ${JSON.stringify(capturedInput["rebuild"])}`,
+      "rebuild must be undefined/false when --rebuild is not passed",
+    );
+  });
+
+  // Story 1 §G (017) — --carry-note forwarded to RetryTask.execute
+  test("(017-S1-cli-retry-carry-note) runRetryTask --id <id> --carry-note: exit 0 and carryNote:true passed to RetryTask.execute", async () => {
+    let capturedInput: Record<string, unknown> | undefined;
+
+    const mockUc = {
+      async execute(input: Record<string, unknown>): Promise<void> {
+        capturedInput = input;
+      },
+    } as unknown as RetryTask;
+
+    const result = await runRetryTask(
+      { id: RETRY_TASK_ID, carryNote: true },
+      mockUc,
+    );
+
+    assert.equal(
+      result.exitCode,
+      0,
+      `exit 0 expected; stderr: ${result.stderr.join(", ")}`,
+    );
+    assert.ok(capturedInput !== undefined, "execute must have been called");
+    assert.equal(
+      capturedInput["carryNote"],
+      true,
+      "carryNote:true must be forwarded to RetryTask.execute from the --carry-note CLI flag",
+    );
+  });
+
+  test("(017-S1-cli-retry-no-carry-note) runRetryTask --id <id> (no --carry-note): carryNote is undefined on RetryTask.execute", async () => {
+    let capturedInput: Record<string, unknown> | undefined;
+
+    const mockUc = {
+      async execute(input: Record<string, unknown>): Promise<void> {
+        capturedInput = input;
+      },
+    } as unknown as RetryTask;
+
+    await runRetryTask({ id: RETRY_TASK_ID }, mockUc);
+
+    assert.ok(capturedInput !== undefined, "execute must have been called");
+    assert.equal(
+      capturedInput["carryNote"],
+      undefined,
+      "carryNote must be undefined when --carry-note is not provided",
     );
   });
 });
@@ -1198,17 +1246,38 @@ describe("runRejectTask", () => {
     taskId: string;
     resolution: "retry" | "discard";
     reason?: string;
+    dryRun?: boolean;
+    expectImpact?: string;
   };
+  type RejectOutcome =
+    { skipped: string[]; preview: DiscardPreview } | undefined;
 
   // Inline fake for RejectTask duck-typed interface
-  function makeRejectUc(onExecute: (input: RejectInput) => Promise<void>): {
-    execute(input: RejectInput): Promise<void>;
+  function makeRejectUc(
+    onExecute: (input: RejectInput) => Promise<RejectOutcome>,
+  ): {
+    execute(input: RejectInput): Promise<RejectOutcome>;
   } {
     return { execute: onExecute };
   }
 
+  const samplePreview: DiscardPreview = {
+    damage: [
+      {
+        target: { type: "task", id: "dep-1", name: "Dependent" },
+        effect: "discarded-by-cascade",
+      },
+    ],
+    counts: {
+      "discarded-by-cascade": 1,
+      "permanently-unsatisfiable": 0,
+      "left-blocked": 0,
+    },
+    digest: "017-S3-CLI-DIGEST",
+  };
+
   test("runRejectTask --resolution retry: returns exit 0", async () => {
-    const uc = makeRejectUc(async () => {});
+    const uc = makeRejectUc(async () => undefined);
     const result = await runRejectTask(
       { id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT", resolution: "retry" },
       uc as Parameters<typeof runRejectTask>[1],
@@ -1216,8 +1285,93 @@ describe("runRejectTask", () => {
     assert.equal(result.exitCode, 0, "exit 0 on success");
   });
 
+  test("(017-S3-cli-discard-requires-yes) runRejectTask --resolution discard, no --yes/--dry-run: exit 1, stdout carries at least one impact: line", async () => {
+    const uc = makeRejectUc(async () => ({
+      skipped: [],
+      preview: samplePreview,
+    }));
+    const result = await runRejectTask(
+      {
+        id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT",
+        resolution: "discard",
+      },
+      uc as Parameters<typeof runRejectTask>[1],
+    );
+    assert.equal(
+      result.exitCode,
+      1,
+      "discard without --yes/--dry-run must exit 1",
+    );
+    assert.ok(
+      result.stdout.some((line) => line.startsWith("impact:")),
+      `expected an impact: line; got: ${JSON.stringify(result.stdout)}`,
+    );
+  });
+
+  test("(017-S3-cli-discard-yes) runRejectTask --resolution discard --yes: prints impact: lines and exits 0", async () => {
+    const uc = makeRejectUc(async () => ({
+      skipped: [],
+      preview: samplePreview,
+    }));
+    const result = await runRejectTask(
+      {
+        id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT",
+        resolution: "discard",
+        yes: true,
+      },
+      uc as Parameters<typeof runRejectTask>[1],
+    );
+    assert.equal(result.exitCode, 0, "exit 0 with --yes");
+    assert.ok(
+      result.stdout.some((line) => line.startsWith("impact:")),
+      `expected an impact: line even with --yes; got: ${JSON.stringify(result.stdout)}`,
+    );
+  });
+
+  test("(017-S3-cli-discard-json) runRejectTask --resolution discard --dry-run --json: stdout is one element parsing to {damage, counts, digest}", async () => {
+    const uc = makeRejectUc(async () => ({
+      skipped: [],
+      preview: samplePreview,
+    }));
+    const result = await runRejectTask(
+      {
+        id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT",
+        resolution: "discard",
+        dryRun: true,
+        json: true,
+      },
+      uc as Parameters<typeof runRejectTask>[1],
+    );
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.length, 1, "exactly one JSON element");
+    const parsed = JSON.parse(result.stdout[0]!);
+    assert.ok("damage" in parsed, "parsed JSON must have a damage key");
+    assert.ok("counts" in parsed, "parsed JSON must have a counts key");
+    assert.ok("digest" in parsed, "parsed JSON must have a digest key");
+  });
+
+  test("(017-S3-cli-dry-run-yes-mutex) runRejectTask --dry-run --yes: exit 1 with exact mutual-exclusion message", async () => {
+    const uc = makeRejectUc(async () => ({
+      skipped: [],
+      preview: samplePreview,
+    }));
+    const result = await runRejectTask(
+      {
+        id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT",
+        resolution: "discard",
+        dryRun: true,
+        yes: true,
+      },
+      uc as Parameters<typeof runRejectTask>[1],
+    );
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.stderr, [
+      "error: --dry-run and --yes are mutually exclusive",
+    ]);
+  });
+
   test("runRejectTask missing --resolution: returns exit 1 with one error line (g)", async () => {
-    const uc = makeRejectUc(async () => {});
+    const uc = makeRejectUc(async () => undefined);
     const result = await runRejectTask(
       { id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT" },
       uc as Parameters<typeof runRejectTask>[1],
@@ -1232,7 +1386,7 @@ describe("runRejectTask", () => {
   });
 
   test("runRejectTask invalid --resolution badval: returns exit 1 with one error line (g)", async () => {
-    const uc = makeRejectUc(async () => {});
+    const uc = makeRejectUc(async () => undefined);
     const result = await runRejectTask(
       { id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT", resolution: "badval" },
       uc as Parameters<typeof runRejectTask>[1],
@@ -1260,12 +1414,19 @@ describe("runRejectTask", () => {
       "01JZZZZZZZZZZZZZZZZZZZSKIP002",
     ];
     const uc = {
-      execute: async (): Promise<{ skipped: string[] } | undefined> => ({
+      execute: async (): Promise<
+        { skipped: string[]; preview: DiscardPreview } | undefined
+      > => ({
         skipped: skippedIds,
+        preview: samplePreview,
       }),
     };
     const result = await runRejectTask(
-      { id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT", resolution: "discard" },
+      {
+        id: "01JZZZZZZZZZZZZZZZZZZZTSKREJECT",
+        resolution: "discard",
+        yes: true,
+      },
       uc as unknown as Parameters<typeof runRejectTask>[1],
     );
     assert.equal(result.exitCode, 0, "exit 0 on success");

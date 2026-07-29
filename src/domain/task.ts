@@ -128,6 +128,27 @@ export function transitionTask(task: Task, to: TaskStatus): Task {
   return { ...task, status: to };
 }
 
+/**
+ * The task as re-queued for another attempt, with guidance resolved.
+ * An explicit `note` replaces; otherwise `carryNote` decides whether the
+ * existing note survives. Carry-forward is OFF by default: a stale note
+ * poisons the next agent run.
+ */
+export function retryTaskWithGuidance(
+  task: Task,
+  note: string | undefined,
+  carryNote: boolean | undefined,
+): Task {
+  const pending = transitionTask(task, "pending");
+  const resolved =
+    note !== undefined ? note : carryNote === true ? task.note : undefined;
+  if (resolved === undefined) {
+    const { note: _drop, ...rest } = pending;
+    return rest as Task;
+  }
+  return { ...pending, note: resolved };
+}
+
 export class DependenciesLockedError extends Error {
   readonly taskId: string;
   readonly status: TaskStatus;

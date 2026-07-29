@@ -726,3 +726,132 @@ test("(S3-retry-failed-regression) RetryTask S3 failed-retry transitions to pend
     "task must be enqueued (regression)",
   );
 });
+
+// ---------------------------------------------------------------------------
+// EPIC 017 Story 1 — D1 regression: note on the `failed` retry branch, and
+// the carry-note opt-in shared by both branches via retryTaskWithGuidance.
+// ---------------------------------------------------------------------------
+
+test("(017-S1-failed-note) RetryTask execute with a note on a failed task persists the note on the saved task (D1 regression)", async () => {
+  const store = new SimpleTaskStore([makeTask("failed")]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await uc.execute({
+    taskId: TASK_ID,
+    note: "use the anchor",
+  } as Parameters<typeof uc.execute>[0]);
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  const saved = store.saved[0] as Task & { note?: string };
+  assert.equal(
+    saved.note,
+    "use the anchor",
+    "note must be persisted on the failed branch's saved task",
+  );
+});
+
+test("(017-S1-failed-note-cleared) RetryTask execute with no note and no carryNote on a failed task with an existing note clears it", async () => {
+  const existing = { ...makeTask("failed"), note: "X" } as Task & {
+    note?: string;
+  };
+  const store = new SimpleTaskStore([existing]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await uc.execute({ taskId: TASK_ID });
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  assert.equal(
+    "note" in store.saved[0]!,
+    false,
+    "absent --note and absent --carry-note must clear an existing note on the failed branch",
+  );
+});
+
+test("(017-S1-failed-carry-note) RetryTask execute with carryNote:true on a failed task with an existing note preserves it", async () => {
+  const existing = { ...makeTask("failed"), note: "X" } as Task & {
+    note?: string;
+  };
+  const store = new SimpleTaskStore([existing]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  // No cast: carryNote does not exist on execute()'s input type yet — this
+  // line must fail `npm run typecheck` until the seam is added, so the test
+  // is sensitive to the missing field even though the failed branch's current
+  // accidental note-preserving bug (D1) would otherwise let this pass at
+  // runtime for the wrong reason.
+  await uc.execute({
+    taskId: TASK_ID,
+    carryNote: true,
+  });
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  const saved = store.saved[0] as Task & { note?: string };
+  assert.equal(
+    saved.note,
+    "X",
+    "carryNote:true must preserve the existing note on the failed branch",
+  );
+});
+
+test("(017-S1-awaiting-carry-note) RetryTask execute with carryNote:true on an awaiting_confirmation conflict task with an existing note preserves it", async () => {
+  const existing = {
+    ...makeTask("awaiting_confirmation"),
+    note: "X",
+  } as Task & { note?: string };
+  const store = new SimpleTaskStore([existing]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+  const candidateStore = new FakeConflictCandidateStore([
+    makeConflictCandidate(),
+  ]);
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver, candidateStore);
+  await uc.execute({
+    taskId: TASK_ID,
+    carryNote: true,
+  });
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  const saved = store.saved[0] as Task & { note?: string };
+  assert.equal(
+    saved.note,
+    "X",
+    "carryNote:true must preserve the existing note on the awaiting_confirmation branch",
+  );
+});
+
+test("(017-S1-note-wins-over-carry) RetryTask execute with an explicit note AND carryNote:true on a failed task uses the explicit note", async () => {
+  const existing = { ...makeTask("failed"), note: "old" } as Task & {
+    note?: string;
+  };
+  const store = new SimpleTaskStore([existing]);
+  const queue = new RecordingJobQueue();
+  const feed = new RecordingEventFeed();
+  const uow = new RecordingUnitOfWork();
+  const resolver = new MockKindResolver("task");
+
+  const uc = new RetryTask(store, queue, feed, uow, resolver);
+  await uc.execute({
+    taskId: TASK_ID,
+    note: "new",
+    carryNote: true,
+  });
+
+  assert.equal(store.saved.length, 1, "task must be saved once");
+  const saved = store.saved[0] as Task & { note?: string };
+  assert.equal(saved.note, "new", "an explicit note must win over carryNote");
+});

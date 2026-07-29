@@ -13,6 +13,42 @@ import {
   canonicalObjective,
 } from "./node-sha.ts";
 
+type SqliteObjectiveRow = {
+  id: string;
+  initiativeId: string;
+  name: string;
+  status: ObjectiveStatus;
+  commitOid: string | null;
+  parentOid: string | null;
+  note: string | null;
+  conflictCause: string | null;
+  observedTipOid: string | null;
+  conflictReason: string | null;
+};
+
+function hydrateObjective(row: SqliteObjectiveRow): Objective {
+  const objective: Objective = {
+    id: row.id,
+    initiativeId: row.initiativeId,
+    name: row.name,
+    status: row.status,
+  };
+  if (row.commitOid !== null) objective.commitOid = row.commitOid;
+  if (row.parentOid !== null) objective.parentOid = row.parentOid;
+  if (row.note !== null) objective.note = row.note;
+  if (
+    row.conflictCause === "non-single-commit" ||
+    row.conflictCause === "cas-mismatch"
+  ) {
+    objective.conflictCause = row.conflictCause;
+  }
+  if (row.observedTipOid !== null)
+    objective.observedTipOid = row.observedTipOid;
+  if (row.conflictReason !== null)
+    objective.conflictReason = row.conflictReason;
+  return objective;
+}
+
 /** `node:sqlite` adapter for the `InitiativeRepository` port. */
 export class SqliteInitiativeRepository implements InitiativeRepository {
   readonly #db: DatabaseSync;
@@ -94,9 +130,13 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
     const status = objective.status ?? "building";
     const commitOid = objective.commitOid ?? null;
     const parentOid = objective.parentOid ?? null;
+    const note = objective.note ?? null;
+    const conflictCause = objective.conflictCause ?? null;
+    const observedTipOid = objective.observedTipOid ?? null;
+    const conflictReason = objective.conflictReason ?? null;
     this.#db
       .prepare(
-        "INSERT INTO objectives (id, initiativeId, name, sha256, status, commitOid, parentOid) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256, status = excluded.status, commitOid = excluded.commitOid, parentOid = excluded.parentOid",
+        "INSERT INTO objectives (id, initiativeId, name, sha256, status, commitOid, parentOid, note, conflictCause, observedTipOid, conflictReason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, sha256 = excluded.sha256, status = excluded.status, commitOid = excluded.commitOid, parentOid = excluded.parentOid, note = excluded.note, conflictCause = excluded.conflictCause, observedTipOid = excluded.observedTipOid, conflictReason = excluded.conflictReason",
       )
       .run(
         objective.id,
@@ -106,60 +146,30 @@ export class SqliteInitiativeRepository implements InitiativeRepository {
         status,
         commitOid,
         parentOid,
+        note,
+        conflictCause,
+        observedTipOid,
+        conflictReason,
       );
   }
 
   getObjective(id: string): Objective | undefined {
     const row = this.#db
       .prepare(
-        "SELECT id, initiativeId, name, status, commitOid, parentOid FROM objectives WHERE id = ?",
+        "SELECT id, initiativeId, name, status, commitOid, parentOid, note, conflictCause, observedTipOid, conflictReason FROM objectives WHERE id = ?",
       )
-      .get(id) as
-      | {
-          id: string;
-          initiativeId: string;
-          name: string;
-          status: ObjectiveStatus;
-          commitOid: string | null;
-          parentOid: string | null;
-        }
-      | undefined;
+      .get(id) as SqliteObjectiveRow | undefined;
     if (row === undefined) return undefined;
-    const objective: Objective = {
-      id: row.id,
-      initiativeId: row.initiativeId,
-      name: row.name,
-      status: row.status,
-    };
-    if (row.commitOid !== null) objective.commitOid = row.commitOid;
-    if (row.parentOid !== null) objective.parentOid = row.parentOid;
-    return objective;
+    return hydrateObjective(row);
   }
 
   listObjectives(initiativeId: string): Objective[] {
     const rows = this.#db
       .prepare(
-        "SELECT id, initiativeId, name, status, commitOid, parentOid FROM objectives WHERE initiativeId = ? ORDER BY id ASC",
+        "SELECT id, initiativeId, name, status, commitOid, parentOid, note, conflictCause, observedTipOid, conflictReason FROM objectives WHERE initiativeId = ? ORDER BY id ASC",
       )
-      .all(initiativeId) as Array<{
-      id: string;
-      initiativeId: string;
-      name: string;
-      status: ObjectiveStatus;
-      commitOid: string | null;
-      parentOid: string | null;
-    }>;
-    return rows.map((r) => {
-      const objective: Objective = {
-        id: r.id,
-        initiativeId: r.initiativeId,
-        name: r.name,
-        status: r.status,
-      };
-      if (r.commitOid !== null) objective.commitOid = r.commitOid;
-      if (r.parentOid !== null) objective.parentOid = r.parentOid;
-      return objective;
-    });
+      .all(initiativeId) as SqliteObjectiveRow[];
+    return rows.map(hydrateObjective);
   }
 
   listInitiatives(projectId: string): Initiative[] {

@@ -15,17 +15,30 @@ export function buildRetryTaskCommand(deps: CliDeps, io: CliIo): Command {
       "--rebuild",
       "explicitly rebuild a stale (pending) candidate from awaiting_confirmation",
     )
+    .option("--carry-note", "keep the note from the previous retry")
     .addHelpText(
       "after",
       '\nExample:\n  kanthord retry task --id task-1 --note "merge at anchor"\n',
     )
-    .action(async (opts: { id: string; note?: string; rebuild?: boolean }) => {
-      emitResult(
-        await runRetryTask(
-          { id: opts.id, note: opts.note, rebuild: opts.rebuild },
-          deps.retryTask,
-        ),
-        io,
-      );
-    });
+    .action(
+      async (opts: {
+        id: string;
+        note?: string;
+        rebuild?: boolean;
+        carryNote?: boolean;
+      }) => {
+        emitResult(
+          await runRetryTask(
+            {
+              id: opts.id,
+              note: opts.note,
+              rebuild: opts.rebuild,
+              carryNote: opts.carryNote,
+            },
+            deps.retryTask,
+          ),
+          io,
+        );
+      },
+    );
 }

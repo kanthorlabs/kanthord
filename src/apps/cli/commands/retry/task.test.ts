@@ -18,7 +18,12 @@ import type { CliIo } from "../action.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-type CapturedInput = { taskId: string; note?: string; rebuild?: boolean };
+type CapturedInput = {
+  taskId: string;
+  note?: string;
+  rebuild?: boolean;
+  carryNote?: boolean;
+};
 
 function makeMockRetryTask() {
   let captured: CapturedInput | undefined;
@@ -178,5 +183,45 @@ test("(StoryB-cli-command-rebuild) retry task --id t1 --rebuild parses via build
     result.captured!.rebuild,
     true,
     "rebuild:true must be forwarded to RetryTask.execute from the --rebuild CLI flag",
+  );
+});
+
+// Story 1 §G (017) — --carry-note flag parses via buildRetryTaskCommand
+test("(017-S1-cli-command-carry-note) retry task --id t1 --carry-note parses via buildRetryTaskCommand and passes carryNote:true to RetryTask.execute", async () => {
+  const result = await parseRetryTask(["--id", "t1", "--carry-note"]);
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `retry task with --carry-note must exit 0; got ${result.exitCode}, stderr: ${result.stderr.join(", ")}`,
+  );
+  assert.ok(
+    result.captured !== undefined,
+    "RetryTask.execute must have been called",
+  );
+  assert.equal(result.captured!.taskId, "t1", "taskId must be forwarded");
+  assert.equal(
+    result.captured!.carryNote,
+    true,
+    "carryNote:true must be forwarded to RetryTask.execute from the --carry-note CLI flag",
+  );
+});
+
+test("(017-S1-cli-command-no-carry-note) retry task --id t1 (no --carry-note) passes carryNote: undefined to RetryTask.execute", async () => {
+  const result = await parseRetryTask(["--id", "t1"]);
+
+  assert.equal(
+    result.exitCode,
+    0,
+    `retry task without --carry-note must exit 0; got ${result.exitCode}, stderr: ${result.stderr.join(", ")}`,
+  );
+  assert.ok(
+    result.captured !== undefined,
+    "RetryTask.execute must have been called",
+  );
+  assert.equal(
+    result.captured!.carryNote,
+    undefined,
+    "carryNote must be undefined when --carry-note is not provided",
   );
 });

@@ -1,19 +1,30 @@
 import { transitionTask } from "../../domain/task.ts";
 import type { Task } from "../../domain/task.ts";
-import { dependentClosure } from "../../domain/graph.ts";
 import {
   transitionObjective,
   transitionInitiative,
 } from "../../domain/initiative.ts";
 import type { Objective, Initiative } from "../../domain/initiative.ts";
 import { newEvent } from "../../domain/event.ts";
+import {
+  previewDiscard,
+  type DiscardPreview,
+  type ImpactTask,
+  type ImpactObjective,
+  type ImpactInitiative,
+} from "../../domain/impact.ts";
 import type { JobQueue } from "../../queue/port.ts";
 import type { EventFeed } from "../../events/port.ts";
 import type { UnitOfWork, TaskResultRow } from "../../storage/port.ts";
 import {
   UnknownReferenceError,
   TaskNotAwaitingConfirmationError,
+  ImpactChangedError,
 } from "../errors.ts";
+// Story 3 (017) §A.3 — re-exported so existing imports of
+// `ImpactChangedError` from this module keep resolving; the canonical class
+// lives in `app/errors.ts`, shared with `RejectObjective`.
+export { ImpactChangedError };
 
 export class RejectionConflictError extends Error {
   readonly taskId: string;
@@ -43,6 +54,10 @@ interface RejectTaskStore {
   listObjectives(initiativeId: string): Objective[];
   getInitiative(initiativeId: string): Initiative | undefined;
   saveInitiative(initiative: Initiative): void;
+  listInitiativesByProject(projectId: string): Initiative[];
+  getProjectId(initiativeId: string): string | undefined;
+  listInitiativeAfter(initiativeId: string): string[];
+  listObjectiveAfter(objectiveId: string): string[];
 }
 
 export class RejectTask {
@@ -63,12 +78,74 @@ export class RejectTask {
     this.#uow = uow;
   }
 
+  /**
+   * Story 3 (017) §A.5 — assembles the `ImpactInput` from read-only store
+   * calls (this initiative's project, every initiative in that project, and
+   * each one's objectives/tasks) and hands it to the pure `previewDiscard`.
+   */
+  #buildPreview(
+    taskId: string,
+    initiativeId: string | undefined,
+  ): DiscardPreview {
+    const projectId =
+      initiativeId !== undefined
+        ? this.#store.getProjectId(initiativeId)
+        : undefined;
+    const initiatives: Initiative[] =
+      projectId !== undefined
+        ? this.#store.listInitiativesByProject(projectId)
+        : (() => {
+            if (initiativeId === undefined) return [];
+            const initiative = this.#store.getInitiative(initiativeId);
+            return initiative !== undefined ? [initiative] : [];
+          })();
+
+    const objectives: ImpactObjective[] = [];
+    const tasks: ImpactTask[] = [];
+    for (const initiative of initiatives) {
+      for (const objective of this.#store.listObjectives(initiative.id)) {
+        objectives.push({
+          id: objective.id,
+          name: objective.name,
+          initiativeId: objective.initiativeId,
+          status: objective.status,
+          after: this.#store.listObjectiveAfter(objective.id),
+        });
+      }
+      for (const t of this.#store.listByInitiative(initiative.id)) {
+        tasks.push({
+          id: t.id,
+          title: t.title,
+          objectiveId: t.objectiveId,
+          status: t.status,
+          dependencies: t.dependencies,
+        });
+      }
+    }
+
+    const impactInitiatives: ImpactInitiative[] = initiatives.map((i) => ({
+      id: i.id,
+      name: i.name,
+      status: i.status,
+      after: this.#store.listInitiativeAfter(i.id),
+    }));
+
+    return previewDiscard({
+      target: { type: "task", id: taskId },
+      tasks,
+      objectives,
+      initiatives: impactInitiatives,
+    });
+  }
+
   async execute(input: {
     taskId: string;
     resolution: "retry" | "discard";
     reason?: string;
-  }): Promise<{ skipped: string[] } | undefined> {
-    const { taskId, resolution, reason } = input;
+    dryRun?: boolean;
+    expectImpact?: string;
+  }): Promise<{ skipped: string[]; preview: DiscardPreview } | undefined> {
+    const { taskId, resolution, reason, dryRun, expectImpact } = input;
 
     const task = this.#store.get(taskId);
     if (task === undefined) {
@@ -93,9 +170,23 @@ export class RejectTask {
 
     const storedResolution = result?.rejectionResolution ?? null;
 
+    // Story 3 (017) — `dryRun`/`expectImpact` never apply to `retry` (§A.9);
+    // its preview is always the empty one. `initiativeId` is read here, before
+    // the transaction, since the preview needs it either way.
+    const initiativeId = this.#store.getInitiativeId(taskId);
+    const preview: DiscardPreview =
+      resolution === "discard"
+        ? this.#buildPreview(taskId, initiativeId)
+        : previewDiscard({
+            target: { type: "task", id: taskId },
+            tasks: [],
+            objectives: [],
+            initiatives: [],
+          });
+
     // (h-same) idempotent: same resolution already stored
     if (storedResolution === resolution) {
-      return { skipped: [] };
+      return { skipped: [], preview };
     }
 
     // (h-conflict) different resolution already stored
@@ -103,7 +194,30 @@ export class RejectTask {
       throw new RejectionConflictError(taskId, storedResolution, resolution);
     }
 
+    if (resolution === "discard") {
+      // §A.6 — `--dry-run` returns before the transaction: nothing is written.
+      if (dryRun === true) {
+        return { skipped: [], preview };
+      }
+      // §A.6 — the digest is checked once here, before the transaction, so a
+      // stale `--expect-impact` never needs to enter it.
+      if (expectImpact !== undefined && expectImpact !== preview.digest) {
+        throw new ImpactChangedError(expectImpact, preview.digest);
+      }
+    }
+
     return this.#uow.transaction(() => {
+      // §A.7 — in-transaction re-check against a freshly-read graph; throwing
+      // here rolls back the transaction, so no transition or event persists.
+      let effectivePreview = preview;
+      if (resolution === "discard" && expectImpact !== undefined) {
+        const fresh = this.#buildPreview(taskId, initiativeId);
+        if (fresh.digest !== expectImpact) {
+          throw new ImpactChangedError(expectImpact, fresh.digest);
+        }
+        effectivePreview = fresh;
+      }
+
       // Persist decision into result row
       const updatedResult: TaskResultRow =
         result !== undefined
@@ -148,7 +262,7 @@ export class RejectTask {
       if (resolution === "retry") {
         const pendingTask = transitionTask(task, "pending");
         this.#store.save(pendingTask);
-        return { skipped: [] };
+        return { skipped: [], preview: effectivePreview };
       }
 
       // discard
@@ -156,33 +270,35 @@ export class RejectTask {
       this.#store.save(discardedTask);
       this.#feed.append(newEvent("task.discarded", { taskId }));
 
-      const initiativeId = this.#store.getInitiativeId(taskId);
       const allTasks = initiativeId
         ? this.#store.listByInitiative(initiativeId)
         : [];
 
-      // Cascade: discard the transitive dependent closure, restricted to
-      // `pending` tasks; every other status is skipped and reported. Computed
-      // first so the task.blocked emission below can tell which direct
-      // dependents survive as merely "blocked" versus which are discarded.
+      // Story 3 (017) §A.8 — the discarded/skipped task ids are exactly the
+      // preview's `discarded-by-cascade` / `left-blocked` task entries, so
+      // preview and mutation cannot drift. The objective/initiative rollup
+      // below is unchanged (its own ad-hoc statusOverride computation).
       const statusOverride = new Map<string, "discarded">([
         [taskId, "discarded"],
       ]);
-      const skipped: string[] = [];
-      const dependentIds = dependentClosure(allTasks, taskId);
       const tasksById = new Map(allTasks.map((t) => [t.id, t]));
-      const discardedDependentIds = new Set<string>();
-      for (const dependentId of dependentIds) {
+      const discardedDependentIds = new Set(
+        effectivePreview.damage
+          .filter(
+            (d) =>
+              d.target.type === "task" && d.effect === "discarded-by-cascade",
+          )
+          .map((d) => d.target.id),
+      );
+      const skipped = effectivePreview.damage
+        .filter((d) => d.effect === "left-blocked")
+        .map((d) => d.target.id);
+      for (const dependentId of discardedDependentIds) {
         const dependentTask = tasksById.get(dependentId);
         if (dependentTask === undefined) continue;
-        if (dependentTask.status !== "pending") {
-          skipped.push(dependentId);
-          continue;
-        }
         const cascadedTask = transitionTask(dependentTask, "discarded");
         this.#store.save(cascadedTask);
         statusOverride.set(dependentId, "discarded");
-        discardedDependentIds.add(dependentId);
         this.#feed.append(
           newEvent("task.discarded", {
             taskId: dependentId,
@@ -266,7 +382,7 @@ export class RejectTask {
         }
       }
 
-      return { skipped };
+      return { skipped, preview: effectivePreview };
     });
   }
 }

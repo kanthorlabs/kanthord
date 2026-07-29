@@ -22,6 +22,7 @@ import { buildLoginCommand } from "./commands/login.ts";
 import { buildLogoutCommand } from "./commands/logout.ts";
 import { buildPauseCommand } from "./commands/pause.ts";
 import { buildPublishCommand } from "./commands/publish.ts";
+import { buildQueueCommand } from "./commands/queue.ts";
 import { buildRejectCommand } from "./commands/reject.ts";
 import { buildAbandonCommand } from "./commands/abandon.ts";
 import { buildRegisterCommand } from "./commands/register.ts";
@@ -74,6 +75,7 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
   const publish = buildPublishCommand(deps, io).name("publish");
   const test = buildTestCommand(deps, io).name("test");
   const commands = buildCommandsCommand(io);
+  const queue = buildQueueCommand(deps, io).name("queue");
 
   return new Command()
     .name("kanthord")
@@ -112,5 +114,6 @@ export function buildProgram(deps: CliDeps, io: CliIo = processIo): Command {
     .addCommand(land)
     .addCommand(publish)
     .addCommand(test)
-    .addCommand(commands);
+    .addCommand(commands)
+    .addCommand(queue);
 }

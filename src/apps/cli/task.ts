@@ -5,10 +5,17 @@ import type { ApproveTask } from "../../app/task/approve-task.ts";
 import type { RejectTask } from "../../app/task/reject-task.ts";
 import type { GetConflict } from "../../app/task/get-conflict.ts";
 import type { AbandonTask } from "../../app/task/abandon-task.ts";
+import type { GetObjectiveConflict } from "../../app/objective/get-objective-conflict.ts";
 import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
 import { MissingFlagError, toResult } from "./error-map.ts";
 
 type HandlerResult = { exitCode: number; stdout: string[]; stderr: string[] };
+
+/** POSIX shell-quote one argument, only when it needs it (copy-paste safe). */
+function shellQuoteArg(arg: string): string {
+  if (/^[A-Za-z0-9_.,:/=@%+-]+$/.test(arg)) return arg;
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
+}
 
 export async function runCreateTask(
   args: Record<string, unknown>,
@@ -119,8 +126,9 @@ export async function runRetryTask(
   const id = args["id"] as string;
   const note = typeof args["note"] === "string" ? args["note"] : undefined;
   const rebuild = args["rebuild"] === true ? true : undefined;
+  const carryNote = args["carryNote"] === true ? true : undefined;
   try {
-    await retryTask.execute({ taskId: id, note, rebuild });
+    await retryTask.execute({ taskId: id, note, rebuild, carryNote });
     return { exitCode: 0, stdout: [], stderr: [`task re-queued: ${id}`] };
   } catch (err) {
     return { ...toResult(err), stdout: [] };
@@ -202,12 +210,65 @@ export async function runRejectTask(
   const resolution = rawResolution as "retry" | "discard";
   const reason =
     typeof args["reason"] === "string" ? args["reason"] : undefined;
+  const dryRun = args["dryRun"] === true ? true : undefined;
+  const yes = args["yes"] === true;
+  const expectImpact =
+    typeof args["expectImpact"] === "string" ? args["expectImpact"] : undefined;
+  const json = args["json"] === true;
+
+  // Story 3 (017) §C — `--dry-run` and `--yes` are mutually exclusive.
+  if (dryRun === true && yes) {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: --dry-run and --yes are mutually exclusive"],
+    };
+  }
+
   try {
     const outcome = await rejectTask.execute({
       taskId: id,
       resolution,
       reason,
+      dryRun,
+      expectImpact,
     });
+
+    if (resolution === "discard") {
+      const preview = outcome?.preview;
+      const stdout: string[] = [];
+      if (json) {
+        stdout.push(JSON.stringify(preview));
+      } else {
+        for (const d of preview?.damage ?? []) {
+          stdout.push(
+            `impact: ${d.effect} ${d.target.type} ${d.target.id} ${d.target.name}`,
+          );
+        }
+        stdout.push(`impact-digest: ${preview?.digest}`);
+      }
+      // §C — the damage is printed above before this refusal, so it is
+      // visible in the same invocation that refuses.
+      if (dryRun !== true && !yes) {
+        return {
+          exitCode: 1,
+          stdout,
+          stderr: [
+            "error: reject task --resolution discard requires --yes (or --dry-run to preview)",
+          ],
+        };
+      }
+      if (!json) {
+        stdout.push(
+          id,
+          ...(outcome?.skipped ?? []).map(
+            (skippedId) => `skipped: ${skippedId}`,
+          ),
+        );
+      }
+      return { exitCode: 0, stdout, stderr: [] };
+    }
+
     const stdout = [
       id,
       ...(outcome?.skipped ?? []).map((skippedId) => `skipped: ${skippedId}`),
@@ -221,13 +282,56 @@ export async function runRejectTask(
 export async function runGetConflict(
   args: Record<string, unknown>,
   getConflict: GetConflict,
+  getObjectiveConflict: GetObjectiveConflict,
 ): Promise<HandlerResult> {
   const id = args["id"];
-  if (typeof id !== "string" || id === "") {
-    return { ...toResult(new MissingFlagError("--id")), stdout: [] };
+  const objective = args["objective"];
+  const hasId = typeof id === "string" && id !== "";
+  const hasObjective = typeof objective === "string" && objective !== "";
+
+  if (hasId && hasObjective) {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: --id and --objective are mutually exclusive"],
+    };
   }
+  if (!hasId && !hasObjective) {
+    return {
+      exitCode: 1,
+      stdout: [],
+      stderr: ["error: one of --id or --objective is required"],
+    };
+  }
+
+  if (hasObjective) {
+    try {
+      const output = await getObjectiveConflict.execute({
+        objectiveId: objective as string,
+      });
+      if (args["json"] === true) {
+        return { exitCode: 0, stdout: [JSON.stringify(output)], stderr: [] };
+      }
+      const lines: string[] = Object.entries(output)
+        .filter(([key]) => key !== "evidence")
+        .map(
+          ([key, value]) =>
+            `${key}: ${typeof value === "object" ? JSON.stringify(value) : value}`,
+        );
+      if (output.evidence.inspect !== null) {
+        const { executable, args } = output.evidence.inspect;
+        lines.push(
+          `inspect: ${[executable, ...args].map(shellQuoteArg).join(" ")}`,
+        );
+      }
+      return { exitCode: 0, stdout: lines, stderr: [] };
+    } catch (err) {
+      return { ...toResult(err), stdout: [] };
+    }
+  }
+
   try {
-    const overview = await getConflict.execute({ taskId: id });
+    const overview = await getConflict.execute({ taskId: id as string });
     const lines: string[] = [];
     lines.push(`target ${overview.branch}@${overview.targetOID}`);
     lines.push(`candidate ${overview.taskId}@${overview.candidateOID}`);

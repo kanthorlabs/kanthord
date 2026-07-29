@@ -1049,4 +1049,75 @@ describe("src/apps/cli/commands/read.ts", () => {
       "execute must not be called when --project is missing",
     );
   });
+
+  test("(017 S7) get conflict --objective <id> --json: routes to getObjectiveConflict, never getConflict, forwards {objectiveId}", async () => {
+    let received: unknown;
+    const cap = capture();
+    const deps = {
+      getConflict: {
+        execute: async () => {
+          throw new Error(
+            "getConflict.execute must never be called on the --objective path",
+          );
+        },
+      },
+      getObjectiveConflict: {
+        execute: async (input: unknown) => {
+          received = input;
+          return {
+            objectiveId: "obj-1",
+            initiativeId: "init-1",
+            status: "conflict",
+            conflictCause: "non-single-commit",
+            parentOid: "a".repeat(40),
+            commitOid: "b".repeat(40),
+            observedTipOid: null,
+            currentTip: "a".repeat(40),
+            tipMovedSinceAnchor: false,
+            conflictReason: null,
+            note: null,
+            evidence: {
+              basis: "verification-and-summary",
+              diffAvailable: false,
+              inspect: null,
+            },
+          };
+        },
+      },
+    } as unknown as Parameters<typeof buildGetCommand>[0];
+
+    const command = buildGetCommand(
+      deps,
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await command.parseAsync(["conflict", "--objective", "obj-1", "--json"], {
+      from: "user",
+    });
+
+    assert.deepEqual(received, { objectiveId: "obj-1" });
+    assert.equal(cap.code(), 0);
+    assert.deepEqual(cap.err, []);
+    assert.equal(cap.out.length, 1);
+    assert.equal(JSON.parse(cap.out[0]!).objectiveId, "obj-1");
+  });
+
+  test("(017 S7) get conflict --help: lists Usage, --objective <id>, and Example", async () => {
+    const cap = capture();
+    const command = buildGetCommand(
+      {} as unknown as Parameters<typeof buildGetCommand>[0],
+      cap.io as Parameters<typeof buildGetCommand>[1],
+    ).exitOverride();
+    command.configureOutput({ writeOut: cap.io.out, writeErr: cap.io.err });
+
+    await assert.rejects(
+      command.parseAsync(["conflict", "--help"], { from: "user" }),
+    );
+
+    const help = cap.out.join("");
+    assert.match(help, /^Usage: kanthord get conflict \[options\]/m);
+    assert.match(help, /--objective <id>/);
+    assert.match(help, /Example/);
+  });
 });

@@ -11,6 +11,7 @@ import {
   TaskSpecLockedError,
   applyTaskSpec,
   reparentTask,
+  retryTaskWithGuidance,
 } from "./task.ts";
 import type { TaskStatus, TaskSpecPatch } from "./task.ts";
 
@@ -754,6 +755,66 @@ test("reparentTask on a running task throws TaskSpecLockedError", () => {
       assert.ok(err instanceof TaskSpecLockedError);
       assert.equal(err.taskId, task.id);
       assert.equal(err.status, "running");
+      return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 017 Story 1 (D1/D2 guidance channel) — retryTaskWithGuidance
+// ---------------------------------------------------------------------------
+
+test("(017-S1-guidance-note-wins) retryTaskWithGuidance with an explicit note replaces an existing one", () => {
+  const failed = transitionTask(
+    transitionTask(newTask({ ...BASE }), "running"),
+    "failed",
+  );
+  const withOldNote = { ...failed, note: "old note" };
+  const result = retryTaskWithGuidance(
+    withOldNote,
+    "use the anchor",
+    undefined,
+  );
+  assert.equal(result.status, "pending");
+  assert.equal(result.note, "use the anchor");
+});
+
+test("(017-S1-guidance-clears) retryTaskWithGuidance with no note and no carryNote omits the note key", () => {
+  const failed = transitionTask(
+    transitionTask(newTask({ ...BASE }), "running"),
+    "failed",
+  );
+  const withOldNote = { ...failed, note: "old note" };
+  const result = retryTaskWithGuidance(withOldNote, undefined, undefined);
+  assert.equal(result.status, "pending");
+  assert.equal(
+    "note" in result,
+    false,
+    "note key must be absent, not set to undefined",
+  );
+});
+
+test("(017-S1-guidance-carries) retryTaskWithGuidance with carryNote:true preserves the existing note", () => {
+  const failed = transitionTask(
+    transitionTask(newTask({ ...BASE }), "running"),
+    "failed",
+  );
+  const withOldNote = { ...failed, note: "old note" };
+  const result = retryTaskWithGuidance(withOldNote, undefined, true);
+  assert.equal(result.note, "old note");
+});
+
+test("(017-S1-guidance-illegal-status) retryTaskWithGuidance on a completed task throws IllegalTransitionError", () => {
+  const completed = transitionTask(
+    transitionTask(newTask({ ...BASE }), "running"),
+    "completed",
+  );
+  assert.throws(
+    () => retryTaskWithGuidance(completed, "note", undefined),
+    (err) => {
+      assert.ok(err instanceof IllegalTransitionError);
+      assert.equal((err as IllegalTransitionError).from, "completed");
+      assert.equal((err as IllegalTransitionError).to, "pending");
       return true;
     },
   );

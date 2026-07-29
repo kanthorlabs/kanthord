@@ -44,6 +44,7 @@ describe("src/apps/cli/index.ts", () => {
     assert.match(help, /db/);
     assert.match(help, /assign/, "help must list assign command");
     assert.match(help, /unassign/, "help must list unassign command");
+    assert.match(help, /\bqueue\b/, "help must list queue command");
   });
 
   test("routes db migrate through the injected use case and CLI I/O", async () => {

@@ -245,6 +245,117 @@ test("SqliteInitiativeRepository saveObjective persists commitOid and parentOid;
   assert.equal(loaded?.parentOid, "0123456789abcdef");
 });
 
+test("SqliteInitiativeRepository saveObjective persists note, conflictCause, observedTipOid, conflictReason; getObjective and listObjectives round-trip them (017 S1)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-decision-metadata" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-decision-metadata",
+    paused: false,
+  });
+
+  const objective: Objective = {
+    id: newId(),
+    initiativeId,
+    name: "Obj with decision metadata",
+    status: "conflict",
+    note: "resolve at the new tip",
+    conflictCause: "cas-mismatch",
+    observedTipOid: "abc123",
+    conflictReason: "gate failed",
+  };
+  repo.saveObjective(objective);
+
+  const loaded = repo.getObjective(objective.id);
+  assert.equal(loaded?.note, "resolve at the new tip");
+  assert.equal(loaded?.conflictCause, "cas-mismatch");
+  assert.equal(loaded?.observedTipOid, "abc123");
+  assert.equal(loaded?.conflictReason, "gate failed");
+
+  const [listed] = repo.listObjectives(initiativeId);
+  assert.equal(listed?.note, "resolve at the new tip");
+  assert.equal(listed?.conflictCause, "cas-mismatch");
+  assert.equal(listed?.observedTipOid, "abc123");
+  assert.equal(listed?.conflictReason, "gate failed");
+});
+
+test("SqliteInitiativeRepository saveObjective without note/conflictCause/observedTipOid/conflictReason omits those keys on getObjective and listObjectives (017 S1)", () => {
+  const { db, dir } = makeTempDb();
+  after(() => {
+    db.close();
+    rmSync(dir, { recursive: true });
+  });
+
+  const projectRepo = new SqliteProjectRepository(db);
+  const projectId = newId();
+  projectRepo.save({ id: projectId, name: "P-decision-metadata-absent" });
+
+  const repo = new SqliteInitiativeRepository(db);
+  const initiativeId = newId();
+  repo.save({
+    id: initiativeId,
+    projectId,
+    name: "I-decision-metadata-absent",
+    paused: false,
+  });
+
+  const objective: Objective = {
+    id: newId(),
+    initiativeId,
+    name: "Obj without decision metadata",
+  };
+  repo.saveObjective(objective);
+
+  const loaded = repo.getObjective(objective.id);
+  assert.ok(loaded !== undefined);
+  assert.equal("note" in loaded, false, "note key must be absent");
+  assert.equal(
+    "conflictCause" in loaded,
+    false,
+    "conflictCause key must be absent",
+  );
+  assert.equal(
+    "observedTipOid" in loaded,
+    false,
+    "observedTipOid key must be absent",
+  );
+  assert.equal(
+    "conflictReason" in loaded,
+    false,
+    "conflictReason key must be absent",
+  );
+
+  const [listed] = repo.listObjectives(initiativeId);
+  assert.ok(listed !== undefined);
+  assert.equal("note" in listed, false, "note key must be absent (list)");
+  assert.equal(
+    "conflictCause" in listed,
+    false,
+    "conflictCause key must be absent (list)",
+  );
+  assert.equal(
+    "observedTipOid" in listed,
+    false,
+    "observedTipOid key must be absent (list)",
+  );
+  assert.equal(
+    "conflictReason" in listed,
+    false,
+    "conflictReason key must be absent (list)",
+  );
+});
+
 test("SqliteInitiativeRepository resolveInitiativeByName returns [id] for matching name in project scope", () => {
   const { db, dir } = makeTempDb();
   after(() => {

@@ -600,11 +600,11 @@ anchor"`. **This is the single failure point against the current tree** — the
 - **F** — objective conflict, built the only way it is reachable: two objectives
   in one initiative, integrate the second so the branch tip moves, then
   `approve objective --id <first> --expected-commit <oid>` records
-  `objective.conflict` through the `commitCount !== 1` path
-  (`approve-objective.ts:86-89`). `get conflict --objective <first> --json` then
-  reports `conflictCause: "non-single-commit"`, `parentOid`, `commitOid`,
-  `currentTip`, `tipMovedSinceAnchor: true`, and **no `files` key**. Its
-  `inspect.args` are **executed** and must exit 0 — a proof that prints an
+  `objective.conflict` through the `casUpdateRef` path
+  (`approve-objective.ts:96-104`). `get conflict --objective <first> --json` then
+  reports `conflictCause: "cas-mismatch"`, `observedTipOid`, `parentOid`,
+  `commitOid`, `currentTip`, `tipMovedSinceAnchor: true`, and **no `files` key**.
+  Its `inspect.args` are **executed** and must exit 0 — a proof that prints an
   unrunnable command proves nothing.
 - **G** — `get conflict --id <taskId>` for a task under that objective exits
   non-zero (`no conflict candidate found`), proving the task and objective paths
@@ -633,12 +633,18 @@ new tip"`. The note is read back from the **objective** with every task still
 Every assertion compares an exact expected value. No `!= missing`, no `grep -q`
 on a substring that a missing command would also satisfy.
 
-**Not provable at program level:** the `cas-mismatch` conflict cause. Reaching it
-needs a concurrent ref update between `countCommitsSince` and `casUpdateRef`
-(`approve-objective.ts:80-104`), which no sequential CLI invocation can stage.
-It is covered hermetically only, and the Proof asserts the
-`non-single-commit` cause. Recording this beats a proof phase that pretends to
-reach a race.
+**Not provable at program level:** the `non-single-commit` conflict cause.
+`countCommitsSince` (`approve-objective.ts:86-89`) reads the objective's **own**
+stored `(parentOid, commitOid)` pair, and `squashObjective`
+(`src/workspace/local.ts:857-882`) always does `git reset --soft <parentOid>`
+plus at most one commit — so that pair is invariantly 0 or 1 commits apart by
+construction. Moving the branch tip does not change it; the tip move fails
+`casUpdateRef` instead. Reaching `commitCount !== 1` therefore needs the stored
+`parentOid` to diverge from the commit git actually squashed onto, which is a
+corruption/race condition no sequential CLI invocation can stage. It is covered
+hermetically only, and the Proof asserts the `cas-mismatch` cause — which two
+sequential `approve objective` calls **do** reach. Recording this beats a proof
+phase that pretends to reach an unreachable state.
 
 ## Stories
 
@@ -682,8 +688,9 @@ reach a race.
 - **`OPEN:` no feedback history.** `Task.note` and the new `Objective.note` are
   single overwritable fields (binding decision 3 accepts this). "What did I ask
   last time" is unanswerable. A `task_feedback` table is its own epic.
-- **`OPEN:` the `cas-mismatch` conflict cause is not reachable from the CLI.** See
-  the Proof note. A deterministic hook to stage the race is its own small epic.
+- **`OPEN:` the `non-single-commit` conflict cause is not reachable from the
+  CLI.** See the Proof note. A deterministic hook to stage a stored `parentOid`
+  that diverges from the squash target is its own small epic.
 
 ## Non-goals
 

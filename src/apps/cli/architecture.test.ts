@@ -37,8 +37,10 @@ const EXPECTED_LEAF_FILE_COUNT = 72;
  *  015 Story 5 adds `setup project`;
  *  016 Story 4 adds `get graph`;
  *  016 Story 5 adds `ack` as a new top-level group containing `ack project`;
- *  016 Story 6 adds `get overview`). */
-const EXPECTED_LEAF_COUNT = 77;
+ *  016 Story 6 adds `get overview`;
+ *  017 Story 6 adds `queue` as a new top-level leaf, directly in commands/,
+ *  not a subdirectory, so it does not change EXPECTED_LEAF_FILE_COUNT). */
+const EXPECTED_LEAF_COUNT = 78;
 
 /** Methods that must not appear in index.ts (leaf-only concerns). */
 const BANNED_IN_INDEX = [

@@ -39,6 +39,12 @@ export interface Objective extends Entity {
   parentOid?: string;
   /** Set when a conflict-resolution gate run fails; absent otherwise. */
   conflictReason?: string;
+  /** Consolidated human guidance recorded at `retry objective` time. */
+  note?: string;
+  /** Why `approve objective` recorded a conflict. Absent on pre-migration rows. */
+  conflictCause?: "non-single-commit" | "cas-mismatch";
+  /** The ref's actual OID observed at CAS-failure time. Only set for `cas-mismatch`. */
+  observedTipOid?: string;
 }
 
 export function newInitiative(input: {
@@ -142,6 +148,21 @@ export function assertCandidateFresh(
   if (actual === undefined || actual !== expectedCommit) {
     throw new StaleCandidateError(objectiveId, expectedCommit, actual ?? "");
   }
+}
+
+/**
+ * Clears conflict diagnosis fields (`conflictCause`, `observedTipOid`,
+ * `conflictReason`) so a resolved objective stops reporting a stale cause or
+ * reason. `note` is guidance, not diagnosis, and is deliberately kept.
+ */
+export function clearConflictDiagnosis(objective: Objective): Objective {
+  const {
+    conflictCause: _conflictCause,
+    observedTipOid: _observedTipOid,
+    conflictReason: _conflictReason,
+    ...rest
+  } = objective;
+  return rest as Objective;
 }
 
 export function transitionObjective(

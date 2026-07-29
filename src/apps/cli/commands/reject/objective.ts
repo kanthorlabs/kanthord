@@ -19,6 +19,16 @@ export function buildRejectObjectiveCommand(deps: CliDeps, io: CliIo): Command {
       "the candidate commit OID read from `get objective --json`",
     )
     .option("--reason <reason>", "reason for rejecting the objective")
+    .option("--dry-run", "print the damage and exit without writing")
+    .option(
+      "--yes",
+      "skip the confirmation prompt; the damage is still printed",
+    )
+    .option(
+      "--expect-impact <digest>",
+      "impact digest from a previous --dry-run",
+    )
+    .option("--json", "print the damage report as JSON")
     .addHelpText(
       "after",
       "\nExample:\n  kanthord reject objective --id objective-1 --resolution discard --expected-commit <oid> --reason 'unachievable'\n",
@@ -29,6 +39,10 @@ export function buildRejectObjectiveCommand(deps: CliDeps, io: CliIo): Command {
         resolution: string;
         reason?: string;
         expectedCommit: string;
+        dryRun?: boolean;
+        yes?: boolean;
+        expectImpact?: string;
+        json?: boolean;
       }) => {
         emitResult(
           await runRejectObjective(
@@ -37,6 +51,10 @@ export function buildRejectObjectiveCommand(deps: CliDeps, io: CliIo): Command {
               resolution: opts.resolution,
               reason: opts.reason,
               expectedCommit: opts.expectedCommit,
+              dryRun: opts.dryRun,
+              yes: opts.yes,
+              expectImpact: opts.expectImpact,
+              json: opts.json,
             },
             deps.rejectObjective,
             deps.retryObjective,

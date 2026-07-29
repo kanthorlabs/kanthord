@@ -10,6 +10,7 @@ import {
   canRetryObjective,
   assertCandidateFresh,
   StaleCandidateError,
+  clearConflictDiagnosis,
 } from "./initiative.ts";
 import type { ObjectiveStatus } from "./initiative.ts";
 
@@ -281,4 +282,29 @@ test("assertCandidateFresh('o','abc',undefined) throws StaleCandidateError with 
       return true;
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// EPIC 017 Story 1 (D5) — clearConflictDiagnosis
+// ---------------------------------------------------------------------------
+
+test("(017-S1-clear-conflict-diagnosis) clearConflictDiagnosis omits conflictCause, observedTipOid, conflictReason and keeps note, commitOid, parentOid, status", () => {
+  const obj = {
+    ...newObjective("ini-01", "obj beta"),
+    status: "conflict" as ObjectiveStatus,
+    note: "resolve at the new tip",
+    commitOid: "commit-oid",
+    parentOid: "parent-oid",
+    conflictCause: "cas-mismatch" as const,
+    observedTipOid: "observed-oid",
+    conflictReason: "gate failed",
+  };
+  const cleared = clearConflictDiagnosis(obj);
+  assert.equal("conflictCause" in cleared, false);
+  assert.equal("observedTipOid" in cleared, false);
+  assert.equal("conflictReason" in cleared, false);
+  assert.equal(cleared.note, "resolve at the new tip");
+  assert.equal(cleared.commitOid, "commit-oid");
+  assert.equal(cleared.parentOid, "parent-oid");
+  assert.equal(cleared.status, "conflict");
 });

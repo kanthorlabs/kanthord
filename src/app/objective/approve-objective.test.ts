@@ -449,6 +449,98 @@ test("execute lands the initiative when the last objective is an empty no-op", a
 });
 
 // ---------------------------------------------------------------------------
+// Story 1 (017) — persist the objective conflict cause, not just the status.
+// ---------------------------------------------------------------------------
+
+test("(017-S1-cause-non-single-commit) execute records conflictCause 'non-single-commit' and no observedTipOid when more than one commit was fetched since the recorded parent", async () => {
+  const objective = baseObjective();
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FakeBroker();
+  broker.countSinceResult = 2;
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.status, "conflict");
+  assert.equal(saved.conflictCause, "non-single-commit");
+  assert.equal(
+    "observedTipOid" in saved,
+    false,
+    "no observed tip is read on the commitCount path, so none must be invented",
+  );
+});
+
+test("(017-S1-cause-cas-mismatch) execute records conflictCause 'cas-mismatch' and observedTipOid from LandingCASMismatchError.newTargetOID", async () => {
+  const objective = baseObjective();
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FakeBroker();
+  broker.casUpdateRef = async () => {
+    throw new LandingCASMismatchError("abc123");
+  };
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.status, "conflict");
+  assert.equal(saved.conflictCause, "cas-mismatch");
+  assert.equal(saved.observedTipOid, "abc123");
+});
+
+test("(017-S1-integrated-no-cause) the happy path leaves conflictCause and observedTipOid absent", async () => {
+  const objective = baseObjective();
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FakeBroker();
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.status, "integrated");
+  assert.equal("conflictCause" in saved, false);
+  assert.equal("observedTipOid" in saved, false);
+});
+
+test("(017-S1-stale-reason-dropped) an objective carrying a conflictReason from an earlier gate run, driven into a new conflict, has no conflictReason key", async () => {
+  const objective = baseObjective({ conflictReason: "old gate failure" });
+  const store = new FakeStore({
+    objective,
+    initiative: baseInitiative(),
+  });
+  const broker = new FakeBroker();
+  broker.countSinceResult = 2;
+  const feed = new FakeFeed();
+  const useCase = new ApproveObjective(store, broker, feed, new FakeUow());
+
+  await useCase.execute({ objectiveId: "obj-1", expectedCommit: "COMMIT_OID" });
+
+  assert.equal(store.savedObjectives.length, 1);
+  const saved = store.savedObjectives[0]!;
+  assert.equal(saved.status, "conflict");
+  assert.equal(
+    "conflictReason" in saved,
+    false,
+    "a stale reason from an earlier gate run must not attach to this ref-update failure",
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Story 4 (012) — Required `--expected-commit` on objective verdicts.
 //
 // (a) the early guard runs BEFORE any broker call (SQLite cannot roll back a

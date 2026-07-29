@@ -7,7 +7,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { RejectTask, RejectionConflictError } from "./reject-task.ts";
+import {
+  RejectTask,
+  RejectionConflictError,
+  ImpactChangedError,
+} from "./reject-task.ts";
 import { TaskNotAwaitingConfirmationError } from "./approve-task.ts";
 import type { Task } from "../../domain/task.ts";
 import type { TaskResultRow } from "../../storage/port.ts";
@@ -33,6 +37,10 @@ interface RejectTaskStore {
   listObjectives(initiativeId: string): Objective[];
   getInitiative(initiativeId: string): Initiative | undefined;
   saveInitiative(initiative: Initiative): void;
+  listInitiativesByProject(projectId: string): Initiative[];
+  getProjectId(initiativeId: string): string | undefined;
+  listInitiativeAfter(initiativeId: string): string[];
+  listObjectiveAfter(objectiveId: string): string[];
 }
 
 class MemStore implements RejectTaskStore {
@@ -119,6 +127,24 @@ class MemStore implements RejectTaskStore {
     this.#initiatives.set(initiative.id, initiative);
     this.savedInitiatives.push(initiative);
   }
+
+  listInitiativesByProject(projectId: string): Initiative[] {
+    return [...this.#initiatives.values()].filter(
+      (i) => i.projectId === projectId,
+    );
+  }
+
+  getProjectId(initiativeId: string): string | undefined {
+    return this.#initiatives.get(initiativeId)?.projectId;
+  }
+
+  listInitiativeAfter(_initiativeId: string): string[] {
+    return [];
+  }
+
+  listObjectiveAfter(_objectiveId: string): string[] {
+    return [];
+  }
 }
 
 class MemQueue implements JobQueue {
@@ -163,6 +189,58 @@ class MemFeed implements EventFeed {
 class MemUow implements UnitOfWork {
   transaction<T>(fn: () => T): T {
     return fn();
+  }
+}
+
+// A flag flipped only while `uow.transaction` is actually running — shared
+// between the uow and the store below so the store can tell a pre-transaction
+// read from an in-transaction one, not merely a "first call vs. later call".
+class TransactionFlag {
+  inTransaction = false;
+}
+
+class FlaggingUow implements UnitOfWork {
+  readonly #flag: TransactionFlag;
+  constructor(flag: TransactionFlag) {
+    this.#flag = flag;
+  }
+  transaction<T>(fn: () => T): T {
+    this.#flag.inTransaction = true;
+    try {
+      return fn();
+    } finally {
+      this.#flag.inTransaction = false;
+    }
+  }
+}
+
+// A store whose `listByInitiative` returns a different graph depending on
+// whether `uow.transaction` is currently running — used to prove the
+// `expectImpact` re-check reads a freshly-changed graph specifically *inside*
+// the transaction (017-S3-in-transaction-recheck), not merely on some later
+// call regardless of transaction state. Every read taken before the
+// transaction (the dry-run, and the pre-transaction digest compare) must see
+// `firstGraph`; only a read taken while `flag.inTransaction` is `true` may see
+// `secondGraph`.
+class VaryingStore extends MemStore {
+  readonly #flag: TransactionFlag;
+  readonly #firstGraph: Task[];
+  readonly #secondGraph: Task[];
+
+  constructor(
+    firstGraph: Task[],
+    secondGraph: Task[],
+    initiativeId: string,
+    flag: TransactionFlag,
+  ) {
+    super(firstGraph, new Map(), initiativeId);
+    this.#firstGraph = firstGraph;
+    this.#secondGraph = secondGraph;
+    this.#flag = flag;
+  }
+
+  override listByInitiative(_id: string): Task[] {
+    return this.#flag.inTransaction ? this.#secondGraph : this.#firstGraph;
   }
 }
 
@@ -754,5 +832,300 @@ test("(S8) RejectTask discard: task.blocked is emitted only for direct dependent
     blockedForCascaded,
     undefined,
     "no task.blocked event may be emitted for a dependent the cascade already discarded",
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Story 3 (017) — the confirm protocol: preview, dry-run, expectImpact,
+// in-transaction re-check, and preview/mutation sharing one cascade.
+// ---------------------------------------------------------------------------
+
+function makeDiscardScenario(): {
+  store: MemStore;
+  feed: MemFeed;
+  uc: RejectTask;
+} {
+  const root: Task = {
+    id: TASK_ID,
+    objectiveId: OBJ_ID,
+    title: "root (unachievable)",
+    status: "failed",
+    dependencies: [],
+  };
+  const depPending: Task = {
+    id: DEP_PENDING_ID,
+    objectiveId: OBJ_ID,
+    title: "dependent, never ran",
+    status: "pending",
+    dependencies: [TASK_ID],
+  };
+  const depCompleted: Task = {
+    id: DEP_COMPLETED_ID,
+    objectiveId: OBJ_ID,
+    title: "dependent, already done",
+    status: "completed",
+    dependencies: [TASK_ID],
+  };
+
+  const store = new MemStore(
+    [root, depPending, depCompleted],
+    new Map(),
+    INI_ID,
+    [
+      { id: OBJ_ID, initiativeId: INI_ID, name: "O1", status: "building" },
+      { id: OBJ2_ID, initiativeId: INI_ID, name: "O2", status: "integrated" },
+    ],
+    [
+      {
+        id: INI_ID,
+        projectId: "proj-1",
+        name: "I",
+        paused: false,
+        status: "building",
+      },
+    ],
+  );
+  const feed = new MemFeed();
+  const uc = new RejectTask(store, new MemQueue(), feed, new MemUow());
+  return { store, feed, uc };
+}
+
+test("(017-S3-dry-run-no-writes) RejectTask discard --dry-run: returns a preview naming the pending dependent, writes nothing", async () => {
+  const { store, feed, uc } = makeDiscardScenario();
+
+  const result = await uc.execute({
+    taskId: TASK_ID,
+    resolution: "discard",
+    dryRun: true,
+  });
+
+  assert.ok(result !== undefined, "a dry-run must still return a preview");
+  assert.ok(
+    result.preview.damage.some(
+      (d) =>
+        d.target.id === DEP_PENDING_ID && d.effect === "discarded-by-cascade",
+    ),
+    `preview must name the pending dependent as discarded-by-cascade; got: ${JSON.stringify(result.preview.damage)}`,
+  );
+  assert.equal(store.savedTasks.length, 0, "dry-run must save no task");
+  assert.equal(store.savedResults.length, 0, "dry-run must save no result");
+  assert.equal(feed.events.length, 0, "dry-run must emit no event");
+});
+
+test("(017-S3-stale-digest-refused) RejectTask discard with a stale --expect-impact digest: rejects with ImpactChangedError, nothing saved or emitted", async () => {
+  const { store, feed, uc } = makeDiscardScenario();
+
+  await assert.rejects(
+    () =>
+      uc.execute({
+        taskId: TASK_ID,
+        resolution: "discard",
+        expectImpact: "deadbeef",
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof ImpactChangedError,
+        `must be ImpactChangedError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+    "a stale expectImpact digest must be refused",
+  );
+  assert.equal(store.savedTasks.length, 0, "no task saved on a stale digest");
+  assert.equal(
+    store.savedResults.length,
+    0,
+    "no result saved on a stale digest",
+  );
+  assert.equal(feed.events.length, 0, "no event emitted on a stale digest");
+});
+
+test("(017-S3-fresh-digest-proceeds) RejectTask discard with the digest from a prior dry-run: proceeds; target + pending dependent reach discarded, skipped equals the non-pending closure ids", async () => {
+  const { uc: dryUc } = makeDiscardScenario();
+  const dryResult = await dryUc.execute({
+    taskId: TASK_ID,
+    resolution: "discard",
+    dryRun: true,
+  });
+  assert.ok(dryResult !== undefined);
+  const digest = dryResult.preview.digest;
+
+  const { store, uc } = makeDiscardScenario();
+  const result = await uc.execute({
+    taskId: TASK_ID,
+    resolution: "discard",
+    expectImpact: digest,
+  });
+
+  assert.ok(result !== undefined);
+  assert.equal(store.get(TASK_ID)?.status, "discarded");
+  assert.equal(store.get(DEP_PENDING_ID)?.status, "discarded");
+  assert.deepEqual(result.skipped, [DEP_COMPLETED_ID]);
+});
+
+test("(017-S3-in-transaction-recheck) RejectTask discard: a store whose listByInitiative changes between the pre-check and the in-transaction re-check is refused with ImpactChangedError, no task saved", async () => {
+  const root: Task = {
+    id: TASK_ID,
+    objectiveId: OBJ_ID,
+    title: "root",
+    status: "awaiting_confirmation",
+    dependencies: [],
+  };
+  const depPending: Task = {
+    id: DEP_PENDING_ID,
+    objectiveId: OBJ_ID,
+    title: "pending dependent",
+    status: "pending",
+    dependencies: [TASK_ID],
+  };
+  const extraDep: Task = {
+    id: CHILD_ID,
+    objectiveId: OBJ_ID,
+    title: "a dependent that appears only on the second read",
+    status: "pending",
+    dependencies: [TASK_ID],
+  };
+
+  const flag = new TransactionFlag();
+  const store = new VaryingStore(
+    [root, depPending],
+    [root, depPending, extraDep],
+    INI_ID,
+    flag,
+  );
+  const uc = new RejectTask(
+    store,
+    new MemQueue(),
+    new MemFeed(),
+    new FlaggingUow(flag),
+  );
+
+  const dryResult = await uc.execute({
+    taskId: TASK_ID,
+    resolution: "discard",
+    dryRun: true,
+  });
+  assert.ok(dryResult !== undefined);
+  const staleDigest = dryResult.preview.digest;
+
+  await assert.rejects(
+    () =>
+      uc.execute({
+        taskId: TASK_ID,
+        resolution: "discard",
+        expectImpact: staleDigest,
+      }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof ImpactChangedError,
+        `must be ImpactChangedError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+    "a graph that changed between the pre-check and the in-transaction re-check must be refused",
+  );
+  assert.equal(
+    store.savedTasks.length,
+    0,
+    "the in-transaction re-check must run before any task is saved",
+  );
+});
+
+test("(017-S3-retry-unaffected) RejectTask retry: no preview flags apply, still reaches pending and emits exactly one task.rejected", async () => {
+  const store = new MemStore(
+    [makeAwaitingTask(TASK_ID)],
+    new Map([[TASK_ID, makeResultRow()]]),
+    INI_ID,
+  );
+  const feed = new MemFeed();
+  const uc = new RejectTask(store, new MemQueue(), feed, new MemUow());
+
+  const result = await uc.execute({
+    taskId: TASK_ID,
+    resolution: "retry",
+    reason: "wrong file edited",
+  });
+
+  const last = store.savedTasks[store.savedTasks.length - 1];
+  assert.ok(last !== undefined);
+  assert.equal(last.status, "pending");
+  const rejectedEvents = feed.events.filter((e) => e.type === "task.rejected");
+  assert.equal(rejectedEvents.length, 1);
+  assert.ok(result !== undefined);
+  assert.deepEqual(result.skipped, []);
+});
+
+test("(017-S3-cascade-matches-preview) RejectTask discard: the ids saved as discarded equal the preview's discarded-by-cascade task ids, skipped equals its left-blocked ids", async () => {
+  const { uc } = makeDiscardScenario();
+
+  const dryResult = await uc.execute({
+    taskId: TASK_ID,
+    resolution: "discard",
+    dryRun: true,
+  });
+  assert.ok(dryResult !== undefined);
+  const previewDiscardedTaskIds = dryResult.preview.damage
+    .filter(
+      (d) => d.effect === "discarded-by-cascade" && d.target.type === "task",
+    )
+    .map((d) => d.target.id)
+    .sort();
+  const previewLeftBlockedIds = dryResult.preview.damage
+    .filter((d) => d.effect === "left-blocked")
+    .map((d) => d.target.id)
+    .sort();
+  // (S6, review blocker) the preview must also name the objective/initiative
+  // it rolls up — `makeDiscardScenario()`'s OBJ_ID has only the target
+  // (failed, treated as discarded), a pending cascade-discarded dependent,
+  // and an already-completed task, so it (and, since its sibling OBJ2_ID is
+  // already `integrated`, the INI_ID initiative) must roll up to
+  // `discarded-by-cascade` in the preview exactly as `RejectTask#execute`
+  // itself rolls them up (reject-task.ts:330-380).
+  const previewDiscardedObjectiveIds = dryResult.preview.damage
+    .filter(
+      (d) =>
+        d.effect === "discarded-by-cascade" && d.target.type === "objective",
+    )
+    .map((d) => d.target.id)
+    .sort();
+  const previewDiscardedInitiativeIds = dryResult.preview.damage
+    .filter(
+      (d) =>
+        d.effect === "discarded-by-cascade" && d.target.type === "initiative",
+    )
+    .map((d) => d.target.id)
+    .sort();
+
+  const { store: freshStore, uc: freshUc } = makeDiscardScenario();
+  const result = await freshUc.execute({
+    taskId: TASK_ID,
+    resolution: "discard",
+  });
+  assert.ok(result !== undefined);
+
+  const actuallyDiscardedIds = freshStore.savedTasks
+    .filter((t) => t.status === "discarded" && t.id !== TASK_ID)
+    .map((t) => t.id)
+    .sort();
+  const actuallyDiscardedObjectiveIds = freshStore.savedObjectives
+    .filter((o) => o.status === "discarded")
+    .map((o) => o.id)
+    .sort();
+  const actuallyDiscardedInitiativeIds = freshStore.savedInitiatives
+    .filter((i) => i.status === "discarded")
+    .map((i) => i.id)
+    .sort();
+
+  assert.deepEqual(actuallyDiscardedIds, previewDiscardedTaskIds);
+  assert.deepEqual(result.skipped.slice().sort(), previewLeftBlockedIds);
+  assert.deepEqual(
+    actuallyDiscardedObjectiveIds,
+    previewDiscardedObjectiveIds,
+    `the preview must name the same objective(s) the mutation actually discards; preview: ${JSON.stringify(previewDiscardedObjectiveIds)}, actual: ${JSON.stringify(actuallyDiscardedObjectiveIds)}`,
+  );
+  assert.deepEqual(
+    actuallyDiscardedInitiativeIds,
+    previewDiscardedInitiativeIds,
+    `the preview must name the same initiative(s) the mutation actually discards; preview: ${JSON.stringify(previewDiscardedInitiativeIds)}, actual: ${JSON.stringify(actuallyDiscardedInitiativeIds)}`,
   );
 });

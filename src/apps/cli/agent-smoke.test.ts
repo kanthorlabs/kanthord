@@ -838,7 +838,15 @@ test("Phase 3b: discard rejection — task discarded, pending dependent cascade-
 
     // discard
     const rj = await dispatch(
-      ["reject", "task", "--id", TASK_DISCARD, "--resolution", "discard"],
+      [
+        "reject",
+        "task",
+        "--id",
+        TASK_DISCARD,
+        "--resolution",
+        "discard",
+        "--yes",
+      ],
       deps,
     );
     assert.equal(rj.exitCode, 0, "reject with discard exits 0");
