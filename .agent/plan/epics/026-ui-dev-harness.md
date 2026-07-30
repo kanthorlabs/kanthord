@@ -5,6 +5,13 @@
 > conflicts the debate surfaced were put to Ulrich and are settled in
 > "Decisions" below — do not re-open them at build time.
 >
+> **Order changed 2026-07-30 (Ulrich):** the earlier call "API prerequisites
+> first, harness after" is reversed. Execution order is 026 → 026.1 → 026.2 →
+> 026.3 → … → 026.7: this harness, then the screen epics, then **EPIC 026.8**,
+> which adds the missing API routes and wires them into the screens.
+> Number order is execution order. See `docs/ui-design.md` § "Consequence: what
+> the first UI product is".
+>
 > This is a **maintainer epic** by the AGENTS.md rule: it edits `package.json`,
 > `tsconfig*.json`, `*.config.*` and `scripts/lane-check.sh`, all lane-forbidden
 > to both TDD roles. Story S1 exists precisely so that every LATER dashboard
@@ -113,6 +120,43 @@ work rather than redesign.
    software-engineer, while root `package.json`, the lockfile and `*.config.*`
    stay maintainer-only. Without this, every future screen would be
    maintainer-only forever. **[debate]**
+9. **This epic installs the WHOLE UI dependency set, for every epic through
+   026.8** — Ulrich, 2026-07-30, after the 026.1 debate found the hole. The
+   lockfile is maintainer-only under decision 8, so a normal `/work` screen
+   epic cannot add a package. Installing here is what makes 026.1–026.8 run
+   unattended. Versions measured on the registry 2026-07-30:
+   - runtime: `react@19.2.8`, `react-dom@19.2.8`, `react-router-dom@7.18.2`,
+     `@tanstack/react-query@5.101.4`, `@xyflow/react@12.11.2`,
+     `class-variance-authority@0.7.1`, `clsx@2.1.1`, `tailwind-merge@3.6.0`,
+     `lucide-react@1.28.0`
+   - build: `vite@8.2.0`, `@vitejs/plugin-react@6.0.5`, `tailwindcss@4.3.3`,
+     `@tailwindcss/vite@4.3.3`, `vite-plugin-pwa@1.3.0`
+   - test: `vitest@4.1.10` (peer allows `vite ^8`), `jsdom@30.0.1`,
+     `@testing-library/react@16.3.2` (peer allows React 19),
+     `@testing-library/user-event@14.6.1`, `@testing-library/jest-dom@7.0.0`
+   - root devDependency for the Proofs: `playwright@1.62.0` (decision 10)
+
+   **`shadcn add` also runs here for the full component set**, because it
+   installs Radix packages: `button`, `card`, `table`, `tabs`, `sheet`,
+   `dialog`, `alert-dialog`, `dropdown-menu`, `breadcrumb`, `badge`, `input`,
+   `label`, `select`, `separator`, `skeleton`, `tooltip`, `command`,
+   `popover`, `scroll-area`, `textarea`, `checkbox`, `sonner`. A later epic
+   that needs a component or package not on these lists raises an `OPEN:`
+   blocker; it never installs. Accepted cost, stated plainly: 026 ships
+   dependencies and copied component source before their first consumer exists.
+
+10. **The UI program Proof is a real browser** — Ulrich, 2026-07-30, over a
+    jsdom loader and over a relaxed definition of "program proof". The debate
+    proved the jsdom option cannot work: jsdom does not execute
+    `<script type="module">`, and a Vite build emits exactly that, so a jsdom
+    proof would load the served page, run nothing, and assert against an empty
+    `#root`. From 026.1 on, a UI Proof starts the real daemon, opens the real
+    served build in Playwright's pinned Chromium, drives hash routes and asserts
+    rendered DOM. **The Proof itself makes no network request beyond loopback**:
+    the browser is installed at environment setup, and a proof that cannot find
+    it fails with the exact install command. 026 installs the `playwright`
+    package and documents the browser install; the shared browser helper under
+    `scripts/e2e/` lands in 026.1, its first consumer. **[debate]**
 
 ### The six Electron/dual-mode rules (binding on all `ui/` code)
 
@@ -236,8 +280,9 @@ does not exist and `npm run build:ui` is not a script yet.
 - **S2 — the `ui/` workspace.** `ui/package.json`, `ui/tsconfig*.json` with the
   `@/*` alias, `ui/vite.config.ts` (React + Tailwind v4 + `base: "./"` + the
   proxy of decision 4 + `vite-plugin-pwa` with a root-scope `sw.js`),
-  `components.json`, `ui/index.html` with R5's CSP, Tailwind entry CSS, and
-  exactly two shadcn components (`button`, `card`). No screens.
+  `components.json`, `ui/index.html` with R5's CSP, Tailwind entry CSS, **the
+  full dependency set and the full shadcn component set of decision 9**, and
+  root `playwright` per decision 10. No screens.
 - **S3 — the transport seam.** `ui/src/lib/runtime.ts` and
   `ui/src/lib/api-client.ts` (R3, R6) with their Vitest tests, plus the hash
   router shell (R2) holding one page.
@@ -257,8 +302,10 @@ does not exist and `npm run build:ui` is not a script yet.
 ## Non-goals
 
 - **No dashboard screens.** No Control Center, no inbox, no queue, no review.
-  This epic ends at one health card. The screens are later epics, and they are
-  normal `/work` because S1 opened the lane.
+  This epic ends at one health card. The screens are epics 026.1–026.7, and they
+  are normal `/work` because S1 opened the lane.
+- **No new API routes.** Every gap the screens hit is EPIC 026.8's scope. A
+  screen epic ships the blocked control disabled; it never adds a route.
 - **No Electron packaging.** No `electron/` directory, no Forge, no installer.
   Only the six rules land. Decision 6 fixes the approach so the later epic is
   packaging work.

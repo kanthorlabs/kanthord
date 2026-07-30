@@ -57,9 +57,73 @@ invent a stronger prioritisation in the client.
 
 ## Consequence: what the first UI product is
 
-Ulrich's call — **the API prerequisites are built first**, and the UI screens
-follow. Until they exist, no screen may pretend to act. The prerequisite set,
-in the order it unblocks the daily loop:
+**Order reversed by Ulrich, 2026-07-30 (supersedes the earlier "API
+prerequisites first, harness after" call).** The whole UI is built first,
+against the API that exists today. The missing API integration is split out
+into **EPIC 026.8**, the last UI epic, which adds the routes **and** wires them
+into the screens that were shipped disabled.
+
+Binding consequences of the reversal:
+
+- **No screen may pretend to act.** A control that needs a gap route ships
+  **visibly disabled or as an explicit empty state**, with the reason named and
+  a `CommandHandoff` where a CLI command exists. It never calls a route that
+  does not exist.
+- **A gap-dependent control is not optional decoration.** Each one is listed in
+  its epic and re-listed in 026.8, so 026.8 enables a known set, not a
+  discovered one.
+
+### UI epic order (roadmap; each epic is authored one at a time)
+
+Epic number order **is** execution order.
+
+| Epic   | Scope                                                                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 026    | Dev harness: `ui/` workspace, served build, dual-mode rules, one health card, the whole UI dependency set. Maintainer epic.                      |
+| 026.1  | Shell + system: L1/L2 shells, hash router, token layer, the five shared parts, Operations health card.                                           |
+| 026.2  | Collections: Projects (W1), project Overview, Resources (W1), read-only detail panes, the polling engine.                                        |
+| 026.3  | Entity workspaces, read-only: nested canonical routes, breadcrumbs, the four W2 pages, task evidence, disabled inventory.                        |
+| 026.4  | Hierarchy writes + concurrency: project/initiative/objective/task creates and renames, dependency edges, `If-Match`, 412.                        |
+| 026.5  | Resource writes: the four resource schemas, write-only credential secrets, repository auth, guarded `reclone`.                                   |
+| 026.6  | Graph + readiness: W4 `@xyflow/react` canvas with objective lanes, task inspector, export, project readiness.                                    |
+| 026.7  | Decisions: Inbox (W1, read-only queue) and conflict resolution (W3, real diff exists today).                                                     |
+| 026.8+ | The API gaps below **plus** their UI wiring, as a family of loop-sized epics (026.8–026.15); enables every control 026.1–026.7 shipped disabled. |
+
+The screen epics were split twice as the debates measured their real surface
+(Ulrich, 2026-07-30): collections separated from entity work, then entity
+workspaces, hierarchy writes and resource writes separated again. The test each
+time was whether one honest Proof could cover the slice.
+
+### The 026.8 family — organised by operator loop, not by API inventory
+
+EPIC 026.8's debate (2026-07-31) rejected one giant epic **and** rejected a
+split by API prerequisite: several of those slices still failed the "one honest
+Proof" test, and one was a miscellaneous bucket. The family is ordered by the
+loop it closes. Each is authored one at a time, and each pairs its API addition
+with the UI that addition unlocks.
+
+| Epic   | Operator loop it closes                                                                                                                                                          |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 026.8  | **Inbox addressability** — persisted decision occurrences, machine kind, names in the DTO, an open/resolved/expired detail representation, server-side filters.                  |
+| 026.9  | **Candidate review end to end** — the candidate diff read model **with** task approve/reject and stale-proposal protection, so evidence lands before the response can act on it. |
+| 026.10 | **Recovery decisions** — reattempt and abandonment for failed and escalated work.                                                                                                |
+| 026.11 | **Initiative control** — pause and resume, and the workspace controls they unlock.                                                                                               |
+| 026.12 | **Freshness** — Target 022's event feed, project acknowledgement and digest paging, with the UI behaviour they allow.                                                            |
+| 026.13 | **Resource integrity** — typed-route enforcement, project-owned credential validation, the credential revision and rotation concurrency.                                         |
+| 026.14 | **Operations telemetry** — daemon heartbeat, outcome and counters, and the dead-man card.                                                                                        |
+| 026.15 | **Plan / import** — package parse and validate, dry run on create, binding validation, task context on apply, then W5's first instance.                                          |
+
+**Agents are deferred**, not reserved an epic: if a task-create picker is the
+only need, a list endpoint joins 026.10's slice. Agent _management_ outside the
+CLI is speculative until asked for.
+
+**Approval must never ship before its evidence.** Putting all of Target 023
+ahead of the candidate diff would make approve live while the browser still
+cannot show what approval judges — a capability-level breach of W3's
+"evidence first, response last".
+
+The prerequisite inventory below is what the family consumes, in the order it
+unblocks the daily loop:
 
 1. **Stable decision identity** — an id per decision, `GET /api/queue/:id`, a
    resolved/expired representation, and enough naming in the DTO to render a row
@@ -71,7 +135,9 @@ in the order it unblocks the daily loop:
 4. **Target 022 event feed + acknowledgement** — `GET /api/event?after=<ulid>`
    and `POST /api/project/:id/acknowledgement`.
 5. **Daemon telemetry** — last ping, outcome, tasks-processed-today.
-6. **Agent API**, if agents are to be managed outside the CLI.
+6. **Agent API**, if agents are to be managed outside the CLI. EPIC 026.4
+   decision 8 also needs it to offer a task's `agent` field as anything better
+   than free text.
 7. **Cursor paging over the event digest** — Ulrich, 2026-07-30. The client must
    be able to page events instead of receiving one fixed head window. Both design
    questions are **settled** (Ulrich, 2026-07-30); do not re-open them at build
@@ -96,10 +162,32 @@ in the order it unblocks the daily loop:
      history there would recompute the whole project per page. Bulk history is
      Target 022's dedicated `GET /api/event?after=<ulid>`, and the UI's
      "load more" past the first extra page must switch to that route.
+8. **A non-secret credential revision** — `secretRevision` or `valueUpdatedAt`
+   on the credential view, added by EPIC 026.5's debate (2026-07-31). The
+   credential DTO omits `value`, so today a value-only rotation can leave the
+   `ETag` unchanged: the UI cannot confirm a rotation landed and two rotations
+   cannot conflict.
+9. **Server-side enforcement for typed resource routes and `auth.credentialId`**
+   — same debate. The `type` body probe is only a client-side defence, and
+   nothing verifies that a repository's `credentialId` exists, is a credential,
+   or belongs to the project.
+10. **An importable package surface for the browser** — EPIC 026.6's debate
+    (2026-07-31) proved the Plan screen cannot be built today. Four parts:
+    a route that accepts and authoritatively validates the **real markdown
+    package** (the HTTP `pkg` is already-parsed JSON, and markdown parsing,
+    manifest rewriting and `--bind alias=name` resolution are CLI-only); a
+    **dry run for `POST /api/project/:id/graph`**, which today creates
+    immediately; **validation of request `bindings`** as project-owned resources
+    of the declared type; and **task context for tasks created during apply**,
+    which today receive none. Until these exist, the Plan tab renders an
+    explicit unavailable state with the CLI handoff, and **EPIC 026.8 builds the
+    import screen**.
 
-Items 1, 2, 5 and 7 have **no epic number yet** and must be inserted into
-`.agent/plan/stories/019-http-server/retirement.md`, which currently reserves
-022–025 for events, transitions, high-impact operations and async jobs.
+Items 1, 2, 5, 7, 8, 9 and 10 belong to the **026.8 family** above. Items 3 and 4 are Targets 023
+and 022 in `.agent/plan/stories/019-http-server/retirement.md`; 026.8 either
+consumes those epics or absorbs the part the UI needs — that call is made when
+026.8 is authored, not before. Item 6 (agents) is deferred unless a screen
+epic proves it blocking.
 
 ## Layout: two shells, no global project switcher
 
@@ -122,16 +210,30 @@ Six workspaces plus five shared parts. A screen that fits none of them is a
 design question to raise — not a reason to add a seventh silently, and not a
 reason to force the screen into the closest fit.
 
-| id  | Template                                                                   | Shape                                                 | Used by                                 |
-| --- | -------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------- |
-| L1  | GlobalShell                                                                | sidebar + header + slot                               | all global surfaces                     |
-| L2  | ProjectShell                                                               | sidebar + breadcrumb + slot                           | all project surfaces                    |
-| W1  | CollectionWorkspace                                                        | toolbar + dense `Table`, optional detail pane         | Inbox, Projects, Resources, Initiatives |
-| W2  | EntityWorkspace                                                            | header + summary + `Tabs` + actions                   | initiative, objective, task, resource   |
-| W3  | DecisionWorkspace                                                          | evidence first, response last                         | Review, conflict resolution             |
-| W4  | GraphWorkspace                                                             | canvas + inspector                                    | initiative graph                        |
-| W5  | StagedWorkflow                                                             | validate → preview → apply, **full page, stable URL** | import / apply                          |
-| —   | StatusChip · AsyncBoundary · FreshnessBar · CommandHandoff · DangerConfirm | shared                                                | everywhere                              |
+| id  | Template                                                                   | Shape                                                 | Used by                               |
+| --- | -------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------- |
+| L1  | GlobalShell                                                                | sidebar + header + slot                               | all global surfaces                   |
+| L2  | ProjectShell                                                               | sidebar + breadcrumb + slot                           | all project surfaces                  |
+| W1  | CollectionWorkspace                                                        | toolbar + dense `Table`, optional detail pane         | Inbox, Projects, Resources            |
+| W2  | EntityWorkspace                                                            | header + summary + `Tabs` + actions                   | initiative, objective, task, resource |
+| W3  | DecisionWorkspace                                                          | evidence first, response last                         | Review, conflict resolution           |
+| W4  | GraphWorkspace                                                             | canvas + inspector                                    | initiative graph                      |
+| W5  | StagedWorkflow                                                             | validate → preview → apply, **full page, stable URL** | import / apply                        |
+| —   | StatusChip · AsyncBoundary · FreshnessBar · CommandHandoff · DangerConfirm | shared                                                | everywhere                            |
+
+**Initiatives are not a W1 screen** (EPIC 026.2 decision 7, 2026-07-30). The
+settled ProjectShell nav has no Initiatives item, so the initiative collection
+surface is the Overview's initiative cards plus the graph. The W1 "Used by"
+column above is corrected accordingly.
+
+**Project Overview is an approved composition, not a seventh template** —
+Ulrich, 2026-07-30, raised as the design question this section demands, after
+the 026.2 debate showed Overview fits none of W1–W5. It is a fixed composition
+of existing parts inside ProjectShell: initiative summary cards (StatusChip +
+the six task counts + `needsHuman`), then the decisions list, then the digest
+head window. It is **not reusable**: no other screen may cite "the Overview
+composition" as its template. A second screen wanting this shape re-opens the
+seventh-template question.
 
 Binding notes on the templates:
 
@@ -148,6 +250,8 @@ Binding notes on the templates:
   auto-navigate**. "Next" is only honest when the API can express order and
   filtering over the whole queue — until then the UI must say it is paging a
   capped window.
+- **W5 has no instance until EPIC 026.8** (2026-07-31): import is the only
+  staged workflow, and the API cannot support it yet — see prerequisite 10.
 - **W5 is a full page, never a `Sheet`.** Import is staged and destructive
   (`deleteMissing`, `confirmDelete`, dry run). A drawer is how an operator loses
   context. Simple create/edit forms may use a `Sheet`/`Drawer`.
