@@ -776,13 +776,13 @@ export const ROUTES: readonly Route[] = [
   defineRoute({
     id: "task.dependency.create",
     method: "POST",
-    path: "/api/task/:id/dependency/:dependencyId",
+    path: "/api/task/:id/dependency",
     successStatus: 204,
     kind: "json",
     cliCommands: ["add dependency"],
-    decode: ({ params }) => ({
+    decode: ({ params, body }) => ({
       taskId: requirePathParam(params, "id"),
-      dependencyId: requirePathParam(params, "dependencyId"),
+      dependencyId: requireBodyString(body, "dependencyId"),
     }),
     run: async (deps, input) => deps.addDependency.execute(input),
   }),
@@ -802,13 +802,13 @@ export const ROUTES: readonly Route[] = [
   defineRoute({
     id: "initiative.dependency.create",
     method: "POST",
-    path: "/api/initiative/:id/dependency/:dependencyId",
+    path: "/api/initiative/:id/dependency",
     successStatus: 204,
     kind: "json",
     cliCommands: ["add initiative-dependency"],
-    decode: ({ params }) => ({
+    decode: ({ params, body }) => ({
       initiativeId: requirePathParam(params, "id"),
-      dependencyId: requirePathParam(params, "dependencyId"),
+      dependencyId: requireBodyString(body, "dependencyId"),
     }),
     run: async (deps, input) => deps.addInitiativeDependency.execute(input),
   }),
@@ -828,13 +828,13 @@ export const ROUTES: readonly Route[] = [
   defineRoute({
     id: "objective.dependency.create",
     method: "POST",
-    path: "/api/objective/:id/dependency/:dependencyId",
+    path: "/api/objective/:id/dependency",
     successStatus: 204,
     kind: "json",
     cliCommands: ["add objective-dependency"],
-    decode: ({ params }) => ({
+    decode: ({ params, body }) => ({
       objectiveId: requirePathParam(params, "id"),
-      dependencyId: requirePathParam(params, "dependencyId"),
+      dependencyId: requireBodyString(body, "dependencyId"),
     }),
     run: async (deps, input) => deps.addObjectiveDependency.execute(input),
   }),

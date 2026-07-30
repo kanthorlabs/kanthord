@@ -88,13 +88,13 @@ function app(deps: HttpDeps) {
   return buildHttpApp(deps, { apiKey: KEY, newRequestId: () => REQUEST_ID });
 }
 
-test("POST /api/task/t2/dependency/t1 -> 204, empty body, no ETag, no Content-Type, fake received {taskId,dependencyId}", async () => {
+test("POST /api/task/t2/dependency {dependencyId:t1} -> 204, empty body, no ETag, no Content-Type, fake received {taskId,dependencyId}", async () => {
   const { deps, recs } = makeDeps();
   const res = await request(app(deps).callback())
-    .post("/api/task/t2/dependency/t1")
+    .post("/api/task/t2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "t1" });
   assert.equal(res.status, 204);
   assert.equal(res.text, "");
   assert.equal(res.headers.etag, undefined);
@@ -117,13 +117,13 @@ test("DELETE /api/task/t2/dependency/t1 (no body, no Content-Type) -> 204, fake 
   });
 });
 
-test("POST /api/initiative/i2/dependency/i1 -> 204, fake received {initiativeId,dependencyId}", async () => {
+test("POST /api/initiative/i2/dependency {dependencyId:i1} -> 204, fake received {initiativeId,dependencyId}", async () => {
   const { deps, recs } = makeDeps();
   const res = await request(app(deps).callback())
-    .post("/api/initiative/i2/dependency/i1")
+    .post("/api/initiative/i2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "i1" });
   assert.equal(res.status, 204);
   assert.deepEqual(recs.addInitiativeDependencyRec.received, {
     initiativeId: "i2",
@@ -143,13 +143,13 @@ test("DELETE /api/initiative/i2/dependency/i1 -> 204, fake received {initiativeI
   });
 });
 
-test("POST /api/objective/o2/dependency/o1 -> 204, fake received {objectiveId,dependencyId}", async () => {
+test("POST /api/objective/o2/dependency {dependencyId:o1} -> 204, fake received {objectiveId,dependencyId}", async () => {
   const { deps, recs } = makeDeps();
   const res = await request(app(deps).callback())
-    .post("/api/objective/o2/dependency/o1")
+    .post("/api/objective/o2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "o1" });
   assert.equal(res.status, 204);
   assert.deepEqual(recs.addObjectiveDependencyRec.received, {
     objectiveId: "o2",
@@ -169,118 +169,132 @@ test("DELETE /api/objective/o2/dependency/o1 -> 204, fake received {objectiveId,
   });
 });
 
-test("POST /api/task/%20/dependency/t1 -> 400 invalid_input, fake never called", async () => {
+test("POST /api/task/%20/dependency {dependencyId:t1} -> 400 invalid_input, fake never called", async () => {
   const { deps, recs } = makeDeps();
   const res = await request(app(deps).callback())
-    .post("/api/task/%20/dependency/t1")
+    .post("/api/task/%20/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "t1" });
   assert.equal(res.status, 400);
   assert.equal(res.body.error.code, "invalid_input");
   assert.equal(recs.addDependencyRec.calls, 0);
 });
 
-test("POST /api/task/t2/dependency/%20 -> 400 invalid_input, fake never called", async () => {
+test("POST /api/task/t2/dependency {dependencyId:' '} -> 400 invalid_input, fake never called", async () => {
   const { deps, recs } = makeDeps();
   const res = await request(app(deps).callback())
-    .post("/api/task/t2/dependency/%20")
+    .post("/api/task/t2/dependency")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({ dependencyId: "   " });
+  assert.equal(res.status, 400);
+  assert.equal(res.body.error.code, "invalid_input");
+  assert.match(res.body.error.message, /dependencyId/);
+  assert.equal(recs.addDependencyRec.calls, 0);
+});
+
+test("POST /api/task/t2/dependency {} -> 400 invalid_input naming dependencyId, fake never called", async () => {
+  const { deps, recs } = makeDeps();
+  const res = await request(app(deps).callback())
+    .post("/api/task/t2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
     .send({});
   assert.equal(res.status, 400);
   assert.equal(res.body.error.code, "invalid_input");
+  assert.match(res.body.error.message, /dependencyId/);
   assert.equal(recs.addDependencyRec.calls, 0);
 });
 
-test("POST /api/task/t1/dependency/t1 where the fake throws CycleError -> 409 cycle_detected", async () => {
+test("POST /api/task/t1/dependency {dependencyId:t1} where the fake throws CycleError -> 409 cycle_detected", async () => {
   const { deps, setAddDependencyImpl } = makeDeps();
   setAddDependencyImpl(() => {
     throw new CycleError(["t1"]);
   });
   const res = await request(app(deps).callback())
-    .post("/api/task/t1/dependency/t1")
+    .post("/api/task/t1/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "t1" });
   assert.equal(res.status, 409);
   assert.equal(res.body.error.code, "cycle_detected");
 });
 
-test("POST /api/task/t2/dependency/x where the fake throws UnknownReferenceError -> 404 unknown_reference", async () => {
+test("POST /api/task/t2/dependency {dependencyId:x} where the fake throws UnknownReferenceError -> 404 unknown_reference", async () => {
   const { deps, setAddDependencyImpl } = makeDeps();
   setAddDependencyImpl(() => {
     throw new UnknownReferenceError("task", "x");
   });
   const res = await request(app(deps).callback())
-    .post("/api/task/t2/dependency/x")
+    .post("/api/task/t2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "x" });
   assert.equal(res.status, 404);
   assert.equal(res.body.error.code, "unknown_reference");
 });
 
-test("POST /api/task/t2/dependency/t1 where the fake throws WrongTypeReferenceError -> 400 wrong_type_reference", async () => {
+test("POST /api/task/t2/dependency {dependencyId:t1} where the fake throws WrongTypeReferenceError -> 400 wrong_type_reference", async () => {
   const { deps, setAddDependencyImpl } = makeDeps();
   setAddDependencyImpl(() => {
     throw new WrongTypeReferenceError("task", "project", "x");
   });
   const res = await request(app(deps).callback())
-    .post("/api/task/t2/dependency/t1")
+    .post("/api/task/t2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "t1" });
   assert.equal(res.status, 400);
   assert.equal(res.body.error.code, "wrong_type_reference");
 });
 
-test("POST /api/task/t2/dependency/t1 where the fake throws DependenciesLockedError -> 409 dependencies_locked", async () => {
+test("POST /api/task/t2/dependency {dependencyId:t1} where the fake throws DependenciesLockedError -> 409 dependencies_locked", async () => {
   const { deps, setAddDependencyImpl } = makeDeps();
   setAddDependencyImpl(() => {
     throw new DependenciesLockedError("t2", "running");
   });
   const res = await request(app(deps).callback())
-    .post("/api/task/t2/dependency/t1")
+    .post("/api/task/t2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "t1" });
   assert.equal(res.status, 409);
   assert.equal(res.body.error.code, "dependencies_locked");
 });
 
-test("POST /api/initiative/i2/dependency/i1 where the fake throws SequencingScopeError -> 400 sequencing_scope", async () => {
+test("POST /api/initiative/i2/dependency {dependencyId:i1} where the fake throws SequencingScopeError -> 400 sequencing_scope", async () => {
   const { deps, setAddInitiativeDependencyImpl } = makeDeps();
   setAddInitiativeDependencyImpl(() => {
     throw new SequencingScopeError("i2", "i1", "project");
   });
   const res = await request(app(deps).callback())
-    .post("/api/initiative/i2/dependency/i1")
+    .post("/api/initiative/i2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "i1" });
   assert.equal(res.status, 400);
   assert.equal(res.body.error.code, "sequencing_scope");
 });
 
-test("POST /api/initiative/i2/dependency/i1 where the fake throws SequencingLockedError -> 409 sequencing_locked", async () => {
+test("POST /api/initiative/i2/dependency {dependencyId:i1} where the fake throws SequencingLockedError -> 409 sequencing_locked", async () => {
   const { deps, setAddInitiativeDependencyImpl } = makeDeps();
   setAddInitiativeDependencyImpl(() => {
     throw new SequencingLockedError("i2", []);
   });
   const res = await request(app(deps).callback())
-    .post("/api/initiative/i2/dependency/i1")
+    .post("/api/initiative/i2/dependency")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
-    .send({});
+    .send({ dependencyId: "i1" });
   assert.equal(res.status, 409);
   assert.equal(res.body.error.code, "sequencing_locked");
 });
 
-test("POST /api/task/t2/dependency/t1 WITHOUT Content-Type -> 415 unsupported_media_type, fake never called", async () => {
+test("POST /api/task/t2/dependency {dependencyId:t1} WITHOUT Content-Type -> 415 unsupported_media_type, fake never called", async () => {
   const { deps, recs } = makeDeps();
   const res = await request(app(deps).callback())
-    .post("/api/task/t2/dependency/t1")
+    .post("/api/task/t2/dependency")
     .set("Authorization", AUTH)
     .send("{}");
   assert.equal(res.status, 415);
@@ -288,7 +302,7 @@ test("POST /api/task/t2/dependency/t1 WITHOUT Content-Type -> 415 unsupported_me
   assert.equal(recs.addDependencyRec.calls, 0);
 });
 
-test("PUT /api/task/t2/dependency/t1 -> 405 with Allow: DELETE, POST", async () => {
+test("PUT /api/task/t2/dependency/t1 -> 405 with Allow: DELETE (the edge path takes DELETE only)", async () => {
   const { deps } = makeDeps();
   const res = await request(app(deps).callback())
     .put("/api/task/t2/dependency/t1")
@@ -296,7 +310,18 @@ test("PUT /api/task/t2/dependency/t1 -> 405 with Allow: DELETE, POST", async () 
     .set("Content-Type", "application/json")
     .send({});
   assert.equal(res.status, 405);
-  assert.equal(res.headers.allow, "DELETE, POST");
+  assert.equal(res.headers.allow, "DELETE");
+});
+
+test("PUT /api/task/t2/dependency -> 405 with Allow: POST (the collection path takes POST only)", async () => {
+  const { deps } = makeDeps();
+  const res = await request(app(deps).callback())
+    .put("/api/task/t2/dependency")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res.status, 405);
+  assert.equal(res.headers.allow, "POST");
 });
 
 test("021 S6: each of the six dependency rows declares no present, no location, no readRow", () => {

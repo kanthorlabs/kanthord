@@ -25,8 +25,8 @@ writes a human does before any agent runs — as REST over the same singular-nou
 surface 020 established. A `POST` on a collection creates and answers `201` with
 a `Location` that is a real, readable route; a `PATCH` on an item requires
 `If-Match` and answers `200` with the item DTO and a fresh `ETag`; a dependency
-is a sub-resource toggled by `POST`/`DELETE` on
-`…/dependency/:dependencyId`. `import graph` becomes a `POST` carrying the graph
+is a sub-resource added by `POST …/dependency` with the id in the body and
+removed by `DELETE …/dependency/:dependencyId`. `import graph` becomes a `POST` carrying the graph
 package as JSON, `export initiative` a `GET`, and the two `check` leaves split
 by whether the computation is over the posted document (`POST`) or over stored
 state (`GET`). After 021 the request-body reader exists with its `415`/`413`/
@@ -120,11 +120,13 @@ errors decision 6 enumerates. 021's job on `415`/`413`/`400` is to **prove** the
 that.
 
 **Body-less `POST` still sends `Content-Type: application/json`.** The gate at
-`app.ts:170` keys off the method, not the presence of bytes, so
-`POST /api/task/:id/dependency/:otherId` must carry the header (the Proof sends
-`{}`). Deliberately unchanged: relaxing the gate to "only when a body is
-present" trades a one-line client convention for a weaker CSRF-adjacent check,
-and every `fetch` the UI makes sets the header anyway.
+`app.ts:170` keys off the method, not the presence of bytes, so a `POST` whose
+fields are all optional — `POST /api/initiative/:id/diagnostic`, which takes
+`taskId?`/`debug?` — must carry the header even when it sends `{}`. Deliberately
+unchanged: relaxing the gate to "only when a body is present" trades a one-line
+client convention for a weaker CSRF-adjacent check, and every `fetch` the UI
+makes sets the header anyway. (The dependency `POST` is not such a case: after
+decision 4 it carries `{"dependencyId":"…"}`.)
 
 ### 3. The `ETag` / `If-Match` convention 019 deferred
 
@@ -174,19 +176,35 @@ and every `fetch` the UI makes sets the header anyway.
 
 ### 4. Dependencies are sub-resources, and they answer `204`
 
-`POST /api/task/:id/dependency/:dependencyId` and `DELETE` on the same path;
-the same shape for `initiative` and `objective`:
+`POST` on the edge **collection** with the id in the body, `DELETE` on the edge
+itself; the same shape for `initiative` and `objective`:
 
 ```
-POST|DELETE /api/task/:id/dependency/:dependencyId
-POST|DELETE /api/initiative/:id/dependency/:dependencyId
-POST|DELETE /api/objective/:id/dependency/:dependencyId
+POST   /api/task/:id/dependency          {"dependencyId": "…"}
+DELETE /api/task/:id/dependency/:dependencyId
+POST   /api/initiative/:id/dependency    {"dependencyId": "…"}
+DELETE /api/initiative/:id/dependency/:dependencyId
+POST   /api/objective/:id/dependency     {"dependencyId": "…"}
+DELETE /api/objective/:id/dependency/:dependencyId
 ```
+
+**Why `POST` does not name the edge in its path** (review, 2026-07-30): a `POST`
+addresses the collection it appends to and identifies the new member in the
+body. A `POST` to `…/dependency/:dependencyId` with an empty body names the thing
+it is about to create, which is the `PUT` idiom under a banned method, and it
+leaves the request body meaningless. `DELETE` is the opposite case: it addresses
+one existing edge, so the id stays in the path. The `dependencyId` field is read
+with `requireBodyString`, so a missing or blank id answers
+`400 invalid_input` naming the field, before `run`.
+
+Consequence for `Allow`: the two paths carry one method each, so
+`PUT …/dependency/:dependencyId` answers `405` with `Allow: DELETE` and
+`PUT …/dependency` answers `405` with `Allow: POST`.
 
 Six use cases, six rows, `run` one line each. The CLI's three verb pairs
 (`add dependency` / `remove dependency`, and the `initiative-` and `objective-`
-variants) collapse into one path shape with two methods, so the "which noun does
-this verb belong to" ambiguity disappears into the path.
+variants) collapse into two path shapes, so the "which noun does this verb belong
+to" ambiguity disappears into the path.
 
 **`204`, not `201` + `Location`** — the stated exception to decision 1. The edge
 has no representation of its own: there is no `GET
@@ -352,11 +370,11 @@ unauthenticated write, and asserts the rejected write changed nothing.
 | `notification.patch`           | `/api/notification/:id`                        | PATCH  | 200    | `UpdateNotification`                  | `update notification`          |
 | `filesystem.patch`             | `/api/filesystem/:id`                          | PATCH  | 200    | `UpdateFilesystem`                    | `update filesystem`            |
 | `project.resource.create`      | `/api/project/:id/resource`                    | POST   | 200    | `ImportResources`                     | `import resource`              |
-| `task.dependency.create`       | `/api/task/:id/dependency/:dependencyId`       | POST   | 204    | `AddDependency`                       | `add dependency`               |
+| `task.dependency.create`       | `/api/task/:id/dependency`                     | POST   | 204    | `AddDependency`                       | `add dependency`               |
 | `task.dependency.delete`       | `/api/task/:id/dependency/:dependencyId`       | DELETE | 204    | `RemoveDependency`                    | `remove dependency`            |
-| `initiative.dependency.create` | `/api/initiative/:id/dependency/:dependencyId` | POST   | 204    | `AddInitiativeDependency`             | `add initiative-dependency`    |
+| `initiative.dependency.create` | `/api/initiative/:id/dependency`               | POST   | 204    | `AddInitiativeDependency`             | `add initiative-dependency`    |
 | `initiative.dependency.delete` | `/api/initiative/:id/dependency/:dependencyId` | DELETE | 204    | `RemoveInitiativeDependency`          | `remove initiative-dependency` |
-| `objective.dependency.create`  | `/api/objective/:id/dependency/:dependencyId`  | POST   | 204    | `AddObjectiveDependency`              | `add objective-dependency`     |
+| `objective.dependency.create`  | `/api/objective/:id/dependency`                | POST   | 204    | `AddObjectiveDependency`              | `add objective-dependency`     |
 | `objective.dependency.delete`  | `/api/objective/:id/dependency/:dependencyId`  | DELETE | 204    | `RemoveObjectiveDependency`           | `remove objective-dependency`  |
 | `project.graph.create`         | `/api/project/:id/graph`                       | POST   | 201    | `CreateGraph`                         | `import graph`                 |
 | `initiative.graph.apply`       | `/api/initiative/:id/graph`                    | POST   | 200    | `ApplyGraph`                          | `import graph`                 |
@@ -538,8 +556,10 @@ It must print `021 ok: …`. Phases:
   `412`** (the lost update, proved). Then the other five PATCH rows, an
   immutable field → `409 immutable_field`, and a credential value rotation whose
   response contains neither the old nor the new secret.
-- **F** — dependencies: `POST …/dependency/:id` → `204` and the edge appears in
-  the task DTO; `DELETE` → `204` and it is gone; a self edge →
+- **F** — dependencies: `POST …/dependency` with `{"dependencyId":"<id>"}` →
+  `204` and the edge appears in
+  the task DTO; `DELETE …/dependency/:dependencyId` → `204` and it is gone; a
+  missing or blank `dependencyId` → `400 invalid_input` naming the field; a self edge →
   `409 cycle_detected`; an unknown dependency → `404 unknown_reference`; the
   initiative and objective pairs both directions; a cross-project initiative
   edge → `400 sequencing_scope`.

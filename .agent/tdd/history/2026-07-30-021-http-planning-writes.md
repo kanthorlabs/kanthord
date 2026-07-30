@@ -1680,3 +1680,27 @@ IMPLEMENTATION_READY_FOR_REVIEW:
 END: TEST-ENGINEER
 
 HUMAN_REVIEW: PASS
+
+## FOLLOW-UP — dependency POST shape (post-commit review, 2026-07-30)
+
+A review after commit `8d7684a` found 021's three dependency `POST` rows used
+`POST /api/task/:id/dependency/:dependencyId` with an empty body — a `POST` that
+names the resource it is about to create. Corrected to
+`POST /api/task/:id/dependency` with `{"dependencyId":"…"}`; `DELETE` keeps the
+id in the path. The review's premise that "021 is not built, so no production
+code changes" was wrong — 021 was already committed — so the change covered
+`src/apps/http/routes.ts`, `src/apps/http/routes.dependency.test.ts` and
+`scripts/e2e/http-writes-proof.sh` as well as the three plan files.
+
+Two consequences recorded in EPIC decision 4: the two paths now carry one method
+each, so `PUT …/dependency/:dependencyId` answers `405 Allow: DELETE` and
+`PUT …/dependency` answers `405 Allow: POST`; and a missing or blank
+`dependencyId` in the body answers `400 invalid_input` naming the field before
+`run` (new test). Decision 2's body-less-`POST` example was repointed at
+`POST /api/initiative/:id/diagnostic`, whose fields are all optional.
+
+Gates re-run after the change: `npm run verify` exit 0 (tests 3199, pass 3199,
+fail 0, `VERIFY: PASS`, lint clean); `scripts/e2e/http-writes-proof.sh` exit 0
+(`021 ok: …`); `scripts/e2e/http-reads-proof.sh` exit 0 (`020 ok: …`).
+
+HUMAN_REVIEW: PASS

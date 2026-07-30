@@ -53,7 +53,8 @@ Implemented: `.agent/plan/epics/020-http-reads.md`, proved by
 `update notification`, `update repository`, `import resource`, `import graph`,
 `export initiative`, `export diagnostic`, `check graph`, `check project`.
 Shape: `POST` on the collection (`201` + `Location`), `PATCH` on the item.
-Dependencies are sub-resources: `POST|DELETE /api/task/:id/dependency/:otherId`.
+Dependencies are sub-resources: `POST /api/task/:id/dependency` with
+`{"dependencyId":"…"}`, `DELETE /api/task/:id/dependency/:dependencyId`.
 `import graph` is a `POST` with a JSON body; the interactive form stays CLI-only
 until the async job API. This is the epic that adds the request-body reader's
 first real consumer and the `If-Match`/`ETag` convention.

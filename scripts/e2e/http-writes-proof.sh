@@ -9,7 +9,7 @@
 #   * PATCH on an item requires `If-Match` (428 without, 412 when stale) and
 #     answers 200 with the item DTO plus a FRESH ETag,
 #   * a credential's secret travels IN the request body and never comes back,
-#   * dependencies are sub-resources: POST|DELETE …/dependency/:dependencyId,
+#   * dependencies are sub-resources: POST …/dependency {dependencyId} | DELETE …/dependency/:dependencyId,
 #     for task, initiative and objective, answering 204,
 #   * `import graph` is a POST with the package as a JSON body (create mode on a
 #     project, apply mode on an initiative), `export initiative` is a GET,
@@ -291,21 +291,21 @@ CRED_TAG="$(hdr_of "$(GET "/api/resource/$CRED")" etag)"
 OUT="$(WSTATUS "rotate credential value" "200" PATCH "/api/credential/$CRED" '{"value":"rotated-secret"}' "if-match:$CRED_TAG")"
 absent "a rotated secret never comes back" "$(body_of "$OUT")" "rotated-secret"
 
-echo "--- F: dependencies are sub-resources (POST|DELETE …/dependency/:id)"
-eq "add task dependency" "204" "$(status_of "$(W POST "/api/task/$T2/dependency/$T1" '{}')")"
+echo "--- F: dependencies are sub-resources (POST …/dependency {dependencyId}, DELETE …/dependency/:id)"
+eq "add task dependency" "204" "$(status_of "$(W POST "/api/task/$T2/dependency" "{\"dependencyId\":\"$T1\"}")")"
 eq "the edge is readable" "true" "$(jv "$(OK "task item" "/api/task/$T2")" 'v.dependencies.includes("'"$T1"'")')"
 eq "remove task dependency" "204" "$(status_of "$(W DELETE "/api/task/$T2/dependency/$T1" -)")"
 eq "the edge is gone" "0" "$(jv "$(OK "task item" "/api/task/$T2")" 'v.dependencies.length')"
-WERR "self edge" "409" "cycle_detected" POST "/api/task/$T1/dependency/$T1" '{}'
-WERR "unknown dependency" "404" "unknown_reference" POST "/api/task/$T1/dependency/01BX5ZZKBKACTAV9WEVGEMMVRZ" '{}'
+WERR "self edge" "409" "cycle_detected" POST "/api/task/$T1/dependency" "{\"dependencyId\":\"$T1\"}"
+WERR "unknown dependency" "404" "unknown_reference" POST "/api/task/$T1/dependency" '{"dependencyId":"01BX5ZZKBKACTAV9WEVGEMMVRZ"}'
 INIT2="$(CREATED "create sibling initiative" "/api/project/$PROJECT_A/initiative" '{"name":"init-two"}' "initiative")"
-eq "add initiative dependency" "204" "$(status_of "$(W POST "/api/initiative/$INIT2/dependency/$INIT" '{}')")"
+eq "add initiative dependency" "204" "$(status_of "$(W POST "/api/initiative/$INIT2/dependency" "{\"dependencyId\":\"$INIT\"}")")"
 eq "remove initiative dependency" "204" "$(status_of "$(W DELETE "/api/initiative/$INIT2/dependency/$INIT" -)")"
 OBJ2="$(CREATED "create sibling objective" "/api/initiative/$INIT/objective" '{"name":"obj-two"}' "objective")"
-eq "add objective dependency" "204" "$(status_of "$(W POST "/api/objective/$OBJ2/dependency/$OBJ" '{}')")"
+eq "add objective dependency" "204" "$(status_of "$(W POST "/api/objective/$OBJ2/dependency" "{\"dependencyId\":\"$OBJ\"}")")"
 eq "remove objective dependency" "204" "$(status_of "$(W DELETE "/api/objective/$OBJ2/dependency/$OBJ" -)")"
 INIT_B="$(CREATED "create cross-project initiative" "/api/project/$PROJECT_B/initiative" '{"name":"init-beta"}' "initiative")"
-WERR "cross-project edge" "400" "sequencing_scope" POST "/api/initiative/$INIT_B/dependency/$INIT" '{}'
+WERR "cross-project edge" "400" "sequencing_scope" POST "/api/initiative/$INIT_B/dependency" "{\"dependencyId\":\"$INIT\"}"
 
 echo "--- G: import graph (POST, JSON body), export initiative (GET)"
 PKG_DIR="$PD/pkg"; mkdir -p "$PKG_DIR"
