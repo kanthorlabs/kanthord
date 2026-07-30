@@ -91,7 +91,17 @@ src/apps/http/cli-coverage.test.ts` and confirm the remaining entries are only
 
 ## Human follow-up (NOT part of this story)
 
-- `.agent/plan/stories/019-http-server/retirement.md` — mark Target 024 covered
-  and record that `check project --probe-*` stays an operator CLI action.
+Already done at authoring time (2026-07-30), so do NOT redo it:
+`retirement.md`'s Target 024 already carries the `Authored as …` line, the note
+that the Proof is written and RED, the record that `test ai-provider` is covered
+in FULL, and the record that `check project --probe-repositories` /
+`--probe-provider` stay operator CLI flags and are never exposed over HTTP.
+
+Left for a human AFTER this story turns the Proof green:
+
+- `.agent/plan/stories/019-http-server/retirement.md` — add the
+  **`Implemented: …, proved by …`** line to Target 024, in the exact form Target
+  020 uses (`retirement.md:42-43`). That line means BUILT, so it must not be
+  written before `scripts/e2e/http-provider-writes-proof.sh` prints `024 ok: …`.
 - Consider whether `POST /api/ai-provider/:id/probe` should be surfaced to the
   readiness screen as EPIC 025's first provider call.
