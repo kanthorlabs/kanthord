@@ -13,9 +13,8 @@
 #   * serve runs the daemon (readiness reports daemon: running),
 #   * a PAUSED initiative enqueues nothing even while the daemon demonstrably
 #     scans (a probe initiative's task completes in the same window),
-#   * PATCH /api/initiative/:id honours If-Match — absent -> 428,
-#     stale -> 412, unknown id -> 404 (the pre-read runs first), valid -> 200
-#     with a CHANGED ETag,
+#   * EPIC 023's `PUT | DELETE /api/initiative/:id/suspension` is the run
+#     control, and this server obeys it,
 #   * resume starts work; pause DURING an in-flight task lets that task finish
 #     and holds back its dependent (the advertised enqueue-time semantics),
 #   * GET /api/database answers with no project scope,
@@ -31,33 +30,13 @@
 # against the existing `run daemon`, which exercises every later phase's
 # predicate without `serve`.
 #
-# UPDATE-SEMANTICS DECISIONS these phases encode (read the code before changing
-# them — each was checked against the tree, not assumed):
-#   * NO new domain transition functions. `PauseInitiative` / `ResumeInitiative`
-#     are `resolveKind` + `repo.setPaused(id, bool)` — no rule, no state machine —
-#     and `domain/initiative.ts` documents `paused` as an "explicit-activation
-#     gate; orthogonal to status" whose only post-creation mutator is `setPaused`.
-#     There is nothing to extract into `domain/`.
-#   * Pause/resume are IDEMPOTENT for free: `setPaused` is an unconditional write,
-#     so a repeated pause is a 200 with an unchanged ETag (phase D2).
-#   * Three refusals, all registered by 019/024: `InvalidInputError` -> 400
-#     `invalid_input`, `NoUpdateFieldsError` -> 400 `no_update_fields` (added by
-#     EPIC 024), `UnknownReferenceError` -> 404. 025 adds no registry entry.
-#   * `wrong_type_reference` is UNOBSERVABLE on a PATCH. `PauseInitiative` raises
-#     it for a non-initiative id, but the dispatcher's pre-read (`initiative.get`)
-#     runs first and 404s. Do not write a test expecting 400 here.
-#   * Validate-then-write, so no partial mutation: `decode` rejects bad SHAPE
-#     (mistyped `paused`, blank `name`) -> 400 invalid_input, and the USE CASE
-#     rejects an EMPTY patch -> 400 no_update_fields (EPIC 024's convention, so
-#     the CLI shares the guard). Both fire before the aggregate is touched.
-#   * A combined name+paused update is ONE write. Rename is `get`+`save` and pause
-#     is `setPaused`; the use case must apply both inside
-#     `UnitOfWork.transaction` — usable here precisely because it is synchronous
-#     and the use case is too (contrast story S10, where the async dispatcher
-#     cannot use it).
-#   * NO `initiative.paused` event. None exists in EVENT_TYPES and 025 adds none:
-#     it would cost a twelfth `events` table rebuild for no consumer. Run control
-#     is not the event feed's job.
+# RUN-CONTROL OWNERSHIP — read before changing a phase:
+#   * `PUT | DELETE /api/initiative/:id/suspension` belongs to EPIC 023
+#     (its decision 2), NOT to 025. 025 adds no run-control route; it makes a
+#     server obey the flag 023 exposes.
+#   * `EnqueueReadyTasks` consults `paused` at ENQUEUE time, so a task already
+#     claimed is not interrupted — phase F asserts exactly that.
+#   * 025's only new row is `GET /api/database` (phase H).
 #
 # DETERMINISM NOTES (why there are no bare sleeps around behaviour):
 #   * "the daemon had a chance and did not take it" is never a timeout. The probe
@@ -221,57 +200,25 @@ eq "gate a untouched"  "pending" "$(tstatus "$GATED" 'gate a')"
 eq "after a untouched" "pending" "$(tstatus "$GATED" 'after a')"
 echo "C ok: a full enqueue+dispatch cycle ran while the paused initiative stayed idle"
 
-echo "--- D: If-Match on PATCH /api/initiative/:id"
-# The dispatcher order is pre-read -> 428 -> 412 -> write, so an unknown id 404s
-# before either precondition check. Asserting all three locks that order.
-eq "absent If-Match"  "428" "$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" --body '{"paused":false}' | rstatus)"
-eq "stale If-Match"   "412" "$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" 'if-match:"stale"' --body '{"paused":false}' | rstatus)"
-eq "unknown id first" "404" "$(REQ PATCH "$BASE/api/initiative/01ZZZZZZZZZZZZZZZZZZZZZZZZ" "$BASIC" --body '{"paused":false}' | rstatus)"
-echo "D ok: 428 / 412 / 404 all as specified"
-
-echo "--- D2: PATCH body semantics (S4) and combined-update behaviour (B4)"
-# `decode` runs AFTER the precondition checks (app.ts), so every body-shape case
-# below carries a CURRENT validator — otherwise it would 428 before decode.
-etag_now() { REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | retag; }
-# The empty patch is refused by the USE CASE (`NoUpdateFieldsError`), not by
-# `decode` — EPIC 024's convention, reused here. Assert the CODE, not just 400,
-# so a decode-level guard would fail this line.
-EMPTY="$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$(etag_now)" --body '{}')"
-eq "empty patch status" "400"                "$(echo "$EMPTY" | rstatus)"
-eq "empty patch code"   "no_update_fields"   "$(echo "$EMPTY" | jv 'v.body.error.code')"
-eq "paused null"        "400" "$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$(etag_now)" --body '{"paused":null}' | rstatus)"
-eq "paused wrong type"  "400" "$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$(etag_now)" --body '{"paused":"yes"}' | rstatus)"
-eq "blank name"         "400" "$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$(etag_now)" --body '{"name":"   "}' | rstatus)"
-# A name-only patch must NOT disturb `paused` — absent means unchanged, never false.
-NAMEONLY="$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$(etag_now)" --body '{"name":"renamed"}')"
-eq "name-only status"        "200"      "$(echo "$NAMEONLY" | rstatus)"
-eq "name-only applied"       "renamed"  "$(echo "$NAMEONLY" | jv 'v.body.data.name')"
-eq "name-only left paused"   "true"     "$(echo "$NAMEONLY" | rpaused)"
-# Both fields in one request, and pausing an already-paused initiative is a
-# no-op success rather than a refusal.
-BOTH="$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$(etag_now)" --body '{"name":"025 gated","paused":true}')"
-eq "combined status"     "200"        "$(echo "$BOTH" | rstatus)"
-eq "combined name"       "025 gated"  "$(echo "$BOTH" | jv 'v.body.data.name')"
-eq "pause is idempotent" "true"       "$(echo "$BOTH" | rpaused)"
-# The CLI read model agrees — the write went to one aggregate, not two.
-eq "CLI agrees on name" "025 gated" "$(K get initiative --id "$GATED" --json | jv 'v.name')"
-echo "D2 ok: empty/null/mistyped bodies refused, name-only preserves paused, combined update is one write"
+echo "--- D: 023's suspension singleton is the run control"
+# Run control is EPIC 023's `PUT | DELETE /api/initiative/:id/suspension`, both
+# 204 with no body (023 decision 2, which supersedes the earlier
+# `PATCH {"paused":true}` sketch: that row is 021's rename row). 025 adds no
+# run-control route of its own — it only makes a server obey the flag.
+eq "paused is readable" "true" "$(REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | rpaused)"
+eq "unknown id"  "404" "$(REQ DELETE "$BASE/api/initiative/01ZZZZZZZZZZZZZZZZZZZZZZZZ/suspension" "$BASIC" | rstatus)"
+eq "unauthenticated" "401" "$(REQ DELETE "$BASE/api/initiative/$GATED/suspension" "-" | rstatus)"
+echo "D ok: the suspension singleton answers, and paused is readable"
 
 echo "--- E: resume over HTTP; gate a runs and blocks in flight"
-ETAG1="$(REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | retag)"
-[ -n "$ETAG1" ] && [ "$ETAG1" != "undefined" ] || { echo "FAILED: E — no ETag on the initiative read" >&2; exit 1; }
-RES="$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$ETAG1" --body '{"paused":false}')"
-eq "resume status"     "200"   "$(echo "$RES" | rstatus)"
-eq "paused now false"  "false" "$(echo "$RES" | rpaused)"
-ne "ETag changed"      "$ETAG1" "$(echo "$RES" | retag)"
+eq "resume status" "204" "$(REQ DELETE "$BASE/api/initiative/$GATED/suspension" "$BASIC" | rstatus)"
+eq "paused now false" "false" "$(REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | rpaused)"
 wait_task "$GATED" "gate a" 120 "running"
 echo "E ok: resume started work and gate a is in flight"
 
 echo "--- F: pause DURING flight — gate a finishes, after a is held back"
-ETAG2="$(REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | retag)"
-PAU="$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$ETAG2" --body '{"paused":true}')"
-eq "pause status"    "200"  "$(echo "$PAU" | rstatus)"
-eq "paused now true" "true" "$(echo "$PAU" | rpaused)"
+eq "pause status" "204" "$(REQ PUT "$BASE/api/initiative/$GATED/suspension" "$BASIC" | rstatus)"
+eq "paused now true" "true" "$(REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | rpaused)"
 touch "$GATE_A"                      # release the in-flight tool call
 wait_task "$GATED" "gate a" 180 "completed"
 # probe 2 completing is the WITNESS that a fresh cycle ran after gate a finished,
@@ -281,8 +228,7 @@ eq "after a held back" "pending" "$(tstatus "$GATED" 'after a')"
 echo "F ok: the in-flight task completed and its dependent was not enqueued"
 
 echo "--- G: resume again; after a runs, then gate b takes flight"
-ETAG3="$(REQ GET "$BASE/api/initiative/$GATED" "$BASIC" | retag)"
-eq "resume again" "200" "$(REQ PATCH "$BASE/api/initiative/$GATED" "$BASIC" "if-match:$ETAG3" --body '{"paused":false}' | rstatus)"
+eq "resume again" "204" "$(REQ DELETE "$BASE/api/initiative/$GATED/suspension" "$BASIC" | rstatus)"
 wait_task "$GATED" "after a" 180 "completed"
 wait_task "$GATED" "gate b"  180 "running"
 echo "G ok: work resumed and gate b is in flight"

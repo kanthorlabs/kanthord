@@ -1,7 +1,7 @@
-# Story S7 — retirement and coverage bookkeeping
+# Story S5 — retirement and coverage bookkeeping
 
-Epic: `.agent/plan/epics/025-serve-hosted-daemon.md` (Decisions 11, 12)
-Depends on: Stories S5 and S6 (they make the claims this records)
+Epic: `.agent/plan/epics/025-serve-hosted-daemon.md` (Decisions 9, 10)
+Depends on: Story S4 (it makes the one claim this records)
 
 Documentation only, plus one test comment. No production code, no new test.
 
@@ -15,36 +15,28 @@ state; if an earlier epic edited the file first, match on the quoted text.
 
 Under `## Inventory — 79 leaves today (80 with `serve`)`, append:
 
-> EPIC 025 claims three leaves (`pause initiative`, `resume initiative`,
-> `db status`) but **retires none**. The retirement rule needs the UI to use the
+> EPIC 025 claims one leaf (`db status`) and **retires none**. The retirement rule needs the UI to use the
 > route, and the UI is Target 026 — it lands after this epic. Removal is deferred
 > anyway: the retirement plan is on hold until Ulrich revisits it after the UI and
 > integration.
 
-### 2. Lines 97-106 — Target 023 loses two leaves
+### 2. Target 023 is NOT edited
 
-Remove `pause initiative` and `resume initiative` from the leaf list (`:100-101`)
-and delete the sentence
-`Pausing is state: `PATCH /api/initiative/:id {"paused":true}`.` (`:104-105`).
-Append:
+An earlier draft of this story moved `pause initiative` / `resume initiative` out
+of Target 023 and into 025. That is reversed: EPIC 023 decision 2 owns them via
+`PUT | DELETE /api/initiative/:id/suspension`, and 023 runs first. Leave the
+Target 023 section exactly as it is.
 
-> `pause initiative` / `resume initiative` moved to EPIC 025, which extends
-> `initiative.patch` to accept `paused`. 023 keeps the four decision verbs.
-
-The remaining 023 list is `approve task`, `approve objective`, `reject task`,
-`reject objective`, `retry task`, `retry objective`, `abandon task`.
-
-### 3. Lines 121-126 — rewrite Target 025
+### 3. Lines 152-157 — rewrite Target 025
 
 Replace the whole section:
 
 ```
 ### Target 025 — serve-hosted daemon and run control
 
-`run daemon` (covered by composition), `pause initiative`, `resume initiative`,
-`db status`.
+`run daemon` (covered by composition), `db status`.
 Shape: `serve` runs the execution loop in-process under an atomic single-daemon
-lease; `PATCH /api/initiative/:id {"paused":<bool>}` is the run control;
+lease; run control is 023's `PUT | DELETE /api/initiative/:id/suspension`;
 `GET /api/database` is the bootstrap-safe schema read (`check project`'s
 `database` check needs a project id, so it cannot answer before one exists).
 The async job API this target originally named was rejected after three debate
@@ -56,7 +48,7 @@ Authored as `.agent/plan/epics/025-serve-hosted-daemon.md`, proved by
 `scripts/e2e/http-daemon-ownership-proof.sh`.
 ```
 
-### 4. Lines 183-185 — three categories replace one
+### 4. Lines 212-214 — three categories replace one
 
 ```
 ### Never retired (operator-only, stays CLI)
@@ -78,7 +70,7 @@ headless use and the secret never crosses the client. Deferred on scope, not
 refused.
 ```
 
-### 5. Lines 187-192 — resolve one open question
+### 5. Lines 216-222 — resolve one open question
 
 Under `## Deliberately unresolved here`, delete the `login provider` bullet
 ("Decide in 025 with the flow in hand"): EPIC 025 Decision 12 answers
@@ -114,8 +106,7 @@ Keep the numbers consistent with whatever the assertion holds after S6.
   S6's value and the non-empty assertion still holds.
 - `npm run verify` exits 0.
 - `grep -n "pause initiative" .agent/plan/stories/019-http-server/retirement.md`
-  shows the string in the Target 025 list and the 023 move note, and NOT inside
-  the Target 023 leaf list.
+  still shows it inside the Target 023 leaf list — 025 must NOT move it.
 - `grep -c "Decide in 025" .agent/plan/stories/019-http-server/retirement.md`
   returns 0.
 - Proof: none. S7 records what S5 and S6 proved.

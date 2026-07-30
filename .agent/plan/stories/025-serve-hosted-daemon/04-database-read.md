@@ -1,6 +1,6 @@
-# Story S6 — `GET /api/database`
+# Story S4 — `GET /api/database`
 
-Epic: `.agent/plan/epics/025-serve-hosted-daemon.md` (Decisions 8, 14)
+Epic: `.agent/plan/epics/025-serve-hosted-daemon.md` (Decisions 6, 12)
 
 ## Change
 
@@ -148,8 +148,9 @@ No ETag code: `src/apps/http/app.ts:282-284` sets it for every `200` json row.
 - `src/apps/http/routes.test.ts:299-300` — apply **`+1`** to the asserted
   `ROUTES.length` (52 → 53 at authoring) and update the test name to mention the
   025 row.
-- `src/apps/http/cli-coverage.test.ts:143-150` — apply **`−1`** to whatever S5
-  left (24 → 23 at authoring).
+- `src/apps/http/cli-coverage.test.ts:143-150` — apply **`−1`** for the
+  `db status` claim. This is 025's ONLY coverage change: `pause initiative` and
+  `resume initiative` are claimed by 023, not here.
 
 ## Constraints
 
@@ -176,7 +177,7 @@ No ETag code: `src/apps/http/app.ts:282-284` sets it for every `200` json row.
   `{data:{schemaVersion, expectedSchemaVersion, pendingMigrations}}`, **no
   `dbPath` key**, an `ETag` header present; without auth → `401`.
 - `node --test src/apps/http/cli-coverage.test.ts` — `"db status"` is a real leaf
-  and the uncovered count dropped by one.
+  and the uncovered count dropped by exactly one.
 - `node --test src/apps/cli/db.test.ts` — the existing text-output tests stay
   green unchanged, plus a new case: `db status --json` emits exactly one stdout
   line that `JSON.parse`s to an object carrying `schemaVersion`,

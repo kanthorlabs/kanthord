@@ -1,10 +1,14 @@
 # EPIC 025 — serve-hosted daemon and run control — stories
 
 Epic: `.agent/plan/epics/025-serve-hosted-daemon.md`
-Prereq: sequence order is **024 ai-provider writes → 025 (this epic) → 026 the
-UI**. 022 (event feed) and 024 (ai-provider writes) are authored; 023 (state
-transitions) is not, so `/author`'s N-1 pre-flight will note the gap at 023
-until that slice is planned.
+Prereq: sequence order is **022 event feed → 023 state transitions → 024
+ai-provider writes → 025 (this epic) → 026 the UI**. All of 022, 023 and 024 are
+authored, so the chain is complete and `/author`'s N-1 pre-flight is satisfied.
+
+**023 owns run control.** `PUT | DELETE /api/initiative/:id/suspension` and the
+`pause initiative` / `resume initiative` leaves belong to EPIC 023 (its decision
+2). 025 adds no run-control route — it makes a server obey the flag, and its
+Proof drives 023's rows.
 
 `kanthord serve` runs the execution loop in-process under an atomic
 single-daemon lease; an initiative's `paused` flag is the run control over HTTP;
@@ -12,12 +16,12 @@ single-daemon lease; an initiative's `paused` flag is the run control over HTTP;
 
 ## Dispatch order
 
-`S1 → S2 → S3` then `S4 → S5` then `S6` then `S7`.
+`S1 → S2 → S3`, then `S4`, then `S5`.
 
 - **S1 before S2** — S2 claims the lease S1 creates.
-- **S4 before S5** — the row calls the use case.
 - **S3 after S2** — the failure seam wraps the host S2 builds.
-- **S6 and S7** are independent of S1–S3 and may run any time after S5.
+- **S4** is independent of S1–S3 and may run any time.
+- **S5 last** — it records what S4 claims.
 - Coupled commit: **S2 must edit the three fixture proofs in the same commit**,
   or `npm run verify` and the sibling proofs disagree between commits.
 - The two Proof scripts and the fixture maker are **already in the tree**
@@ -29,19 +33,17 @@ single-daemon lease; an initiative's `paused` flag is the run control over HTTP;
 022–025 are planned but unbuilt and each moves the assertions. Baseline at
 authoring: `ROUTES.length` = **52** (`src/apps/http/routes.test.ts:299-300`),
 uncovered leaves = **26** (`src/apps/http/cli-coverage.test.ts:143-150`). This
-epic applies **`+1` row** (S6) and **`−3` uncovered** (S5 −2, S6 −1) to whatever
-the assertions hold when 025 runs. 022's own text says `ROUTES` goes 52 → 54, so
-a different starting number is expected, not a surprise.
+epic applies **`+1` row** (S4) and **`−1` uncovered leaf** (S4, for `db status`)
+to whatever the assertions hold when 025 runs. 022 takes `ROUTES` 52 → 54 and 023
+takes it 54 → 63, so a different starting number is expected, not a surprise.
 
 ## Stories
 
 - S1 — the daemon lease: migration, port, adapter, atomic claim → `01-daemon-lease.md`
 - S2 — the execution host: `serve` runs the daemon, `--no-daemon`, drain → `02-execution-host.md`
 - S3 — daemon-failure observability: `KANTHORD_DAEMON_FAIL_AT`, release-on-failure → `03-daemon-failure-observability.md`
-- S4 — `UpdateInitiative`: `{id, name?, paused?}` in one unit of work → `04-update-initiative.md`
-- S5 — `initiative.patch` accepts `paused` → `05-initiative-patch-paused.md`
-- S6 — `GET /api/database` → `06-database-read.md`
-- S7 — retirement + coverage bookkeeping → `07-retirement-bookkeeping.md`
+- S4 — `GET /api/database` (+ `db status --json`) → `04-database-read.md`
+- S5 — retirement + coverage bookkeeping → `05-retirement-bookkeeping.md`
 
 ## Facts (needed for implementation)
 
@@ -98,41 +100,10 @@ a different starting number is expected, not a surprise.
   Each is followed by a poll grepping `serve.log` for
   `{"msg":"listening","port":N}` — daemon output must not break that grep.
 
-**Initiative update**
-
-- `RenameInitiative` (`src/app/initiative/rename-initiative.ts`, 19 lines) keys on
-  `input.id`, validates via `repo.get()`. `PauseInitiative`/`ResumeInitiative`
-  (30 lines each) key on `input.initiativeId`, validate via `resolveKind()`.
-- **`RenameInitiative` has no test file.** Every sibling use case has one.
-- `InvalidInputError` is HTTP-layer (`src/apps/http/errors.ts:15-23`), so a use
-  case cannot throw it — it is for BODY SHAPE only, raised inside `decode`.
-- The EMPTY-PATCH guard uses `NoUpdateFieldsError`
-  (`src/app/ai-provider/errors.ts:298`), the convention EPIC 024 establishes:
-  its story `024-ai-provider-writes/02-register-and-update.md:61` says _"The
-  empty patch is NOT rejected in `decode`"_, and its registry table
-  (`024-ai-provider-writes.md:458`) maps it to `no_update_fields` → `400`. S4
-  moves the class to the shared catalog `src/app/errors.ts` and re-exports it
-  from its old home.
-- `UnitOfWork.transaction<T>(fn: () => T)` is **synchronous** (`src/storage/port.ts:32-39`).
-  Template: `src/app/ai-provider/update-ai-provider.ts:52-79` — validate shape
-  BEFORE the transaction, resolve + write inside, `execute` non-async.
-- UoW fake convention: `transaction: <T>(fn: () => T) => fn()`
-  (`src/app/auth/login-provider.test.ts:50`), or an `"enter"`/`"exit"` spy when
-  order matters (`src/app/ai-provider/remove-ai-provider.test.ts:223-297`).
-- `initiativeRepository` (`composition.ts:196`) and `unitOfWork` (`:202`) are both
-  in scope before the initiative use cases are built at `:220-229`.
-
 **HTTP**
 
-- `initiative.patch` is `src/apps/http/routes.ts:545-558`.
-- Multi-optional-field decode idiom: `repository.patch` `:669-698`,
-  `credential.patch` `:699-719`.
-- `optionalBodyBool` (`src/apps/http/body.ts:66-78`): absent → `undefined`;
-  non-boolean (including `null`) → `InvalidInputError`. `requireBodyString`
-  (`:20-30`) trims and rejects blank. Measured against the committed tree, with a
-  current `If-Match`: `{}` → 400, `{"paused":null}` → 400, `{"paused":"yes"}` →
-  400, `{"name":"   "}` → 400, `{"paused":true}` → **400 today** (the behaviour
-  025 changes to 200), `{"name":"x"}` → 200.
+- 025 does NOT touch `initiative.patch` (`src/apps/http/routes.ts:545-558`).
+  Run control is 023's suspension singleton.
 - ETag is AUTOMATIC: `src/apps/http/app.ts:282-284` for every `200` json row; the
   PATCH path sets its own at `:247`. No per-row code.
 - `initiativeView`/`initiativeDetailView` already emit `paused`, so a pause flips
@@ -166,15 +137,15 @@ a different starting number is expected, not a surprise.
 **retirement.md (merged state, `f2251c0`)**
 
 - Headings: Target 020 `:24`, 021 `:45`, 022 `:78`, 023 `:97`, 024 ai-provider
-  writes `:108`, 025 async job API `:121`, 026 the UI `:128`, "Not yet assigned to
+  writes `:108`, 025 async job API `:152`, 026 the UI `:159`, "Not yet assigned to
   a target" `:138`, "Why the numbering changed" `:145`, "Never retired" `:172`,
   "Deliberately unresolved here" `:176`.
 - **The retirement plan is on hold** — no leaf is removed until Ulrich revisits
-  the file after the UI and integration. S7 records routes; it retires nothing.
-- Target 023 (`:97-106`) still lists `pause initiative` / `resume initiative` and
-  says _"Pausing is state: `PATCH /api/initiative/:id {"paused":true}`"_ — S7
-  moves both out.
-- Target 025 (`:121-126`) is the async-job-API text this epic replaces.
+  the file after the UI and integration. S5 records the one route 025 adds; it
+  retires nothing.
+- Target 023 (`:97-...`) owns `pause initiative` / `resume initiative` via the
+  suspension singleton and is **NOT** edited by this epic.
+- Target 025 (`:152-157`) is the async-job-API text this epic replaces.
 - "Never retired" (`:183-185`) is only `serve` and `commands`.
 - "Deliberately unresolved" (`:187-192`) still asks whether `login provider`'s
   device flow can run behind the API, "Decide in 025" — S7 answers it.

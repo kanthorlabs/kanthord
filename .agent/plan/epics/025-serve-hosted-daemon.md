@@ -30,11 +30,11 @@
 > `retirement.md`, `.agent/plan/epics/022-event-feed.md` and
 > `.agent/plan/epics/024-ai-provider-writes.md` are corrected to match.
 >
-> **025 changes 023's planned scope.** `pause initiative` / `resume initiative`
-> are still listed under "Target 023 — state transitions"
-> (`retirement.md:97-106`). They move here. 023 keeps `approve` / `reject` /
-> `retry` / `abandon`. `retirement.md` is edited in this epic's last story so the
-> two never both claim those leaves.
+> **025 does NOT change 023's scope.** An earlier draft moved
+> `pause initiative` / `resume initiative` into this epic by extending
+> `initiative.patch`. EPIC 023 landed first with a different, reviewed answer —
+> `PUT | DELETE /api/initiative/:id/suspension` — so that move is reversed and
+> 023 keeps all nine of its leaves. See Decision 5.
 >
 > **025 delivers no UI, and retires no CLI leaf.** The UI is Target 026 and lands
 > **after** this epic, so when 025 ships no screen calls its rows. The retirement
@@ -42,17 +42,17 @@
 > their epic's Proof, and the UI uses them"_, and 025 satisfies two of three.
 > Beyond that, **the retirement plan is on hold**: Ulrich revisits it after the UI
 > and integration are done (`retirement.md`, 2026-07-30). So 025 records that
-> `pause initiative`, `resume initiative` and `db status` have routes, and removes
-> nothing. The title says "run control", not "execution surface", so the scope is
+> `db status` has a route, and removes nothing. The title says "run control", not "execution surface", so the scope is
 > not overstated.
 
 ## Goal
 
 `kanthord serve` becomes the whole running program: it serves the API **and**
 runs the execution loop, so work no longer needs a second terminal running
-`kanthord run daemon`. An initiative's `paused` flag is the run control, driven
-over HTTP through the `PATCH /api/initiative/:id` row 021 already ships — resume
-starts work, pause stops new work from being enqueued. Exactly one daemon runs
+`kanthord run daemon`. An initiative's `paused` flag is the run control and EPIC
+023 already exposes it over HTTP (`PUT | DELETE /api/initiative/:id/suspension`);
+025 is what makes a server actually obey it — resume starts work, pause stops new
+work from being enqueued. Exactly one daemon runs
 per database, enforced by an atomic lease rather than a heartbeat guess, and a
 daemon that dies or fails releases that lease immediately instead of blocking its
 replacement. `db status` joins the read surface so a client can ask "is this
@@ -103,79 +103,26 @@ code, no migration, and one new route.
    exists (`CHECK_ORDER` includes `daemon`, `DAEMON_STATUSES` is
    `running | stopped | multiple`).
 
-5. **Pause/resume adds NO new route — it extends `initiative.patch`.**
-   `src/apps/http/routes.ts:545-558` already defines the row with
-   `cliCommands: ["rename initiative"]` and `readRow: "initiative.get"`. The
-   change is: `cliCommands` gains `pause initiative` and `resume initiative`;
-   `decode` accepts `name?` **and** `paused?` with at least one required; `run`
-   calls the Decision 6 use case. `ROUTES.length` does not change for this row.
+5. **Run control belongs to EPIC 023, not here.** 023 ships
+   `PUT | DELETE /api/initiative/:id/suspension` (both `204`, `paused` stays
+   readable on `GET /api/initiative/:id`) and claims `pause initiative` /
+   `resume initiative`. Its decision 2 explicitly supersedes this file's earlier
+   plan to extend `initiative.patch` with a `paused` field, on the ground that
+   _"that row is 021's rename row, and one row cannot serve rename and pause
+   without logic inside `run`"_ — approved by Ulrich after an adversarial review
+   and gated by a one-entry `PUT_ROWS` allowlist.
 
-   Confirmed, not assumed: `initiativeView` and `initiativeDetailView`
-   (`src/apps/http/views/initiative.ts`) already emit `paused`, so the ETag
-   already changes when the flag flips. `If-Match`, the `200` and the fresh
-   `ETag` all come free from 021's dispatcher.
+   That directive is binding and 023 runs first, so **025 adds no run-control
+   route and no `UpdateInitiative` use case.** Three things are dropped from
+   earlier drafts of this epic: extending `initiative.patch`, the
+   `UpdateInitiative` unit-of-work, and the PATCH body-semantics table. 025's
+   Proof drives 023's suspension rows instead.
 
-6. **`UpdateInitiative` is one use case in one unit of work — and there are NO
-   new domain functions.** A debate round proposed extracting "shared transition
-   rules" into `domain/`. Reading the code shows there are none:
-   `PauseInitiative` and `ResumeInitiative` are `resolveKind` +
-   `repo.setPaused(id, bool)`, with no rule and no state machine, and
-   `domain/initiative.ts` documents `paused` as an _"explicit-activation gate;
-   orthogonal to `status`"_ whose only post-creation mutator is `setPaused`.
-   Extracting that would be ceremony.
+   What remains true and load-bearing: `EnqueueReadyTasks` consults `paused`, so
+   whoever flips it, the daemon obeys at enqueue time (Decision 9). 023 supplies
+   the switch; 025 is what makes something listen to it.
 
-   `UpdateInitiative.execute({ id, name?, paused? })` rejects an empty patch,
-   loads the aggregate, applies each supplied field, and saves once inside
-   `UnitOfWork.transaction`. Rename is `get`+`save` and pause is `setPaused` —
-   two repository calls are not one write, so the transaction is required.
-   `UnitOfWork.transaction` is usable here precisely because it and the use case
-   are both synchronous. `PauseInitiative`, `ResumeInitiative` and
-   `RenameInitiative` stay for the CLI; no use case calls another.
-
-7. **PATCH body semantics, decided and proved.** Measured against the committed
-   tree before deciding — five of six already hold:
-
-   | body (with a current `If-Match`) | status                 | note                                                |
-   | -------------------------------- | ---------------------- | --------------------------------------------------- |
-   | `{}`                             | `400 no_update_fields` | rejected in the USE CASE — see the correction below |
-   | `{"paused": null}`               | `400 invalid_input`    | `optionalBodyBool` refuses a non-boolean            |
-   | `{"paused": "yes"}`              | `400 invalid_input`    | shape, rejected in `decode`                         |
-   | `{"name": "   "}`                | `400 invalid_input`    | `requireBodyString` trims then refuses blank        |
-   | `{"paused": true}`               | **`200`**              | `400` today — this is the behaviour 025 adds        |
-   | `{"name": "x"}`                  | `200`                  | unchanged; `paused` MUST be left alone              |
-
-   Absent means unchanged, never `false`. Pause and resume are idempotent for
-   free (`setPaused` is an unconditional write), so a repeated pause is a `200`
-   with an unchanged ETag. `decode` runs AFTER the precondition checks
-   (`src/apps/http/app.ts`), so every body error needs a valid `If-Match` to be
-   reachable — absent `If-Match` is `428` first.
-
-   **Correction, revised twice.** An earlier wording put the empty-patch guard in
-   the use case; a second wording moved it to `decode` because
-   `InvalidInputError` lives in `src/apps/http/errors.ts:15` and an app use case
-   cannot throw it. Both are superseded: **EPIC 024 already establishes the right
-   convention and the right error.** Its story
-   `.agent/plan/stories/024-ai-provider-writes/02-register-and-update.md:61` says
-   _"The empty patch is NOT rejected in `decode`"_, and its registry table
-   (`024-ai-provider-writes.md:458`) maps `NoUpdateFieldsError` →
-   `no_update_fields` → `400`.
-
-   025 follows that convention rather than inventing a second one:
-   `UpdateInitiative` throws `NoUpdateFieldsError`, so the CLI shares the guard,
-   and `{}` answers `400 no_update_fields`. The error moves from
-   `src/app/ai-provider/errors.ts:298` to the shared catalog `src/app/errors.ts`
-   (documented there as _"the single error catalog the CLI maps"_), re-exported
-   from its old home so 024's own wiring is untouched.
-
-   Refusals on this row: `NoUpdateFieldsError` → `400`, `InvalidInputError` →
-   `400` (bad body shape, from `decode`), `UnknownReferenceError` → `404`. 024
-   runs first and adds the `no_update_fields` registry entry, so **025 adds no
-   registry entry** and 019 decision 11 is satisfied unchanged. If 025 is built
-   before 024, the entry is added here instead — see Story S4. `wrong_type_reference` is _unobservable_
-   on a PATCH — the pre-read `initiative.get` `404`s on a non-initiative id
-   before the write path can raise it. Do not write a test expecting `400` there.
-
-8. **`GET /api/database` is the only new row.** `200` + `ETag`, body
+6. **`GET /api/database` is the only new row.** `200` + `ETag`, body
    `{ schemaVersion, expectedSchemaVersion, pendingMigrations }`, claiming the
    `db status` leaf.
 
@@ -210,31 +157,31 @@ code, no migration, and one new route.
    called. `database` is a new reviewed `PATH_SEGMENTS` entry. `ROUTES.length`
    **+1**.
 
-9. **Pause is enqueue-time only.** `EnqueueReadyTasks` consults `paused` when it
+7. **Pause is enqueue-time only.** `EnqueueReadyTasks` consults `paused` when it
    enqueues; a task already claimed and running is **not** interrupted and runs
    to completion. "Pause" means "start no more work in this initiative".
    Interrupting an in-flight run is `abandon task` (EPIC 013) — a different
    control with a different guarantee. Resume latency is one poll interval.
    Empirically confirmed against `run daemon` while authoring this epic.
 
-10. **No new event types.** `EVENT_TYPES` has no `initiative.paused` and 025 adds
-    none: the `events.type` CHECK is enforced by a full table rebuild (already
-    done eleven times, `events_new` … `events_new11`), and a twelfth rebuild for
-    a type with no consumer is unjustified. Run control is not the event feed's
-    job.
+8. **No new event types.** `EVENT_TYPES` has no `initiative.paused` and 025 adds
+   none: the `events.type` CHECK is enforced by a full table rebuild (already
+   done eleven times, `events_new` … `events_new11`), and a twelfth rebuild for
+   a type with no consumer is unjustified. Run control is not the event feed's
+   job.
 
-11. **Leaf accounting.** Claimed: `pause initiative`, `resume initiative` (both
-    by `initiative.patch`), `db status` (by `database.get`). Not claimed:
-    `run daemon` — covered by composition, since `serve` now does it and `serve`
-    is already excluded from the coverage set. `retirement.md` gains three
-    categories: _operator-only / never retired_ (`serve`, `commands`,
-    `db migrate`, `login provider --method browser`), _covered by composition_
-    (`run daemon`, `setup project`), _deferred but feasible_
-    (`login provider --method device_code`). The
-    "uncovered set is non-empty" assertion at
-    `src/apps/http/cli-coverage.test.ts:53-63` still holds after 025.
+9. **Leaf accounting.** Claimed: `db status` only, by `database.get`.
+   `pause initiative` / `resume initiative` are claimed by **023**, not here
+   (Decision 5). Not claimed: `run daemon` — covered by composition, since `serve`
+   now runs it and `serve` is already excluded from the coverage set.
+   `retirement.md` gains three categories: _operator-only / never retired_
+   (`serve`, `commands`, `db migrate`, `login provider --method browser`),
+   _covered by composition_ (`run daemon`, `setup project`), _deferred but
+   feasible_ (`login provider --method device_code`). The "uncovered set is
+   non-empty" assertion at `src/apps/http/cli-coverage.test.ts:53-63` still holds
+   after 025.
 
-12. **Out of scope, decided here so it is not re-litigated.** `setup project`
+10. **Out of scope, decided here so it is not re-litigated.** `setup project`
     stays CLI-only: its writes are ordinary 021 rows and its value is the
     interview, which is a client concern. `login provider --method browser` can
     never work behind the API — it needs a browser on the operator's machine.
@@ -242,7 +189,7 @@ code, no migration, and one new route.
     `login provider --method device_code` is feasible headless and is deferred on
     scope, not refused.
 
-13. **The `If-Match` atomicity work is NOT in this epic.** It is
+11. **The `If-Match` atomicity work is NOT in this epic.** It is
     `.agent/plan/stories/021-http-planning-writes/10-if-match-atomicity.md`, a
     021 follow-up. Measured: ten concurrent PATCHes on one initiative with one
     validator gave `200,412×9` — there is no lost update today. The invariant
@@ -251,12 +198,12 @@ code, no migration, and one new route.
     its `POST /api/ai-provider/:id/probe` is the first planned row whose write
     path performs real I/O.
 
-14. **Route and coverage counters are DELTAS, not absolutes.** At authoring time
+12. **Route and coverage counters are DELTAS, not absolutes.** At authoring time
     `ROUTES.length` is **52** (`src/apps/http/routes.test.ts:299-300`) and the
     uncovered-leaf count is **26** (`src/apps/http/cli-coverage.test.ts:143-150`).
     Epics 022–025 are planned but unbuilt, and each moves both numbers (022's own
     text says `ROUTES` goes 52 → 54). So this epic's stories specify
-    **`+1` row** and **`−3` uncovered leaves** against whatever the assertions
+    **`+1` row** and **`−1` uncovered leaf** against whatever the assertions
     hold when 025 runs, and record today's values only as the authoring baseline.
     An implementer who finds a different starting number applies the delta; that
     is arithmetic, not a design decision.
@@ -267,12 +214,6 @@ Gates: `npm run verify` (typecheck + test + verify:handoff + lint + db status).
 
 Hermetic coverage required beyond the Proofs:
 
-- **`UpdateInitiative`** — every Decision 7 row, plus: absent field leaves the
-  value unchanged, combined update is one transaction, empty patch is a typed
-  error, unknown id is `UnknownReferenceError`.
-- **`initiative.patch`** — `decode` accepts each legal body shape and refuses
-  each illegal one; `cliCommands` names the two new leaves; the route-policy
-  tests still pass with the row's `readRow` unchanged.
 - **The lease** — a unit test drives two claims against one store and asserts
   exactly one wins; a released lease is immediately claimable; an expired lease
   is claimable; a renewed lease is not.
@@ -344,16 +285,11 @@ the two post-shutdown invariants, where no server is left to ask.
 - **S3 — daemon-failure observability.** The `KANTHORD_DAEMON_FAIL_AT` seam, plus
   release-and-keep-serving on rejection. Its own story and its own test, not a
   clause inside S2.
-- **S4 — `UpdateInitiative`.** The use case, the unit of work, the empty-patch
-  refusal, and every Decision 7 semantic.
-- **S5 — `initiative.patch` extended.** `decode`, `cliCommands`, `HttpDeps`
-  field, `serve.ts` wiring, and the body-shape tests.
-- **S6 — `GET /api/database`.** Query, view, row, `PATH_SEGMENTS`,
-  `ROUTES.length` +1, wiring.
-- **S7 — retirement and coverage bookkeeping.** The three `retirement.md`
-  categories, the 023 → 025 leaf move, and the record of the UI epic with its
-  deferred acceptance criteria (daemon state shown beside resume; pause worded as
-  "start no more work"; resume must not claim work started).
+- **S4 — `GET /api/database`.** Query, view, row, `PATH_SEGMENTS`,
+  `ROUTES.length` +1, `db status --json`, wiring.
+- **S5 — retirement and coverage bookkeeping.** The three `retirement.md`
+  categories and the Target 025 rewrite. Retires nothing — the retirement plan is
+  on hold until after the UI and integration.
 
 ## Non-goals
 
