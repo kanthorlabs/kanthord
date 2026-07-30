@@ -42,6 +42,7 @@
     "@earendil-works/pi-coding-agent": "0.80.6",
     "@koa/bodyparser": "6.1.0",
     "@koa/cors": "5.0.0",
+    "@koa/send": "6.0.0",
     "commander": "15.0.0",
     "koa": "3.2.1",
     "pino": "10.3.1",

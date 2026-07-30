@@ -176,6 +176,14 @@ distinguishable from a completed remote delivery. The deferred `pr@1` agent
 - Domain and use cases test hermetically with fakes implementing ports — no
   network, no real SQLite required (SQLite adapters get their own tests).
 
+### UI
+
+- Before any work under `ui/`, read `docs/ui-design.md`. It is **binding**: the
+  two shells, the six workspace templates, the operator-role tokens, the graph
+  lane rule and the freshness rule are settled decisions, not suggestions. A UI
+  story cites the section it implements; a story that needs a shape the document
+  does not cover raises an `OPEN:` blocker instead of inventing one.
+
 ## Others
 
 - A Prettier pre-commit hook (husky + lint-staged) auto-formats staged files on
