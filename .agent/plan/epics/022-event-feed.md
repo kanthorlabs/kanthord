@@ -5,8 +5,8 @@
 > `.agent/plan/stories/019-http-server/retirement.md`. It adds 2 rows: `ROUTES`
 > goes 52 → 54. It removes no CLI leaf.
 >
-> The same planning session renumbered that roadmap (024 frontend host, 025
-> ai-provider writes, 026 async job API, 027 delivery) — the reasons live in
+> The same planning session renumbered that roadmap (024 ai-provider writes,
+> 025 serve-hosted daemon, 026 the UI) — the reasons live in
 > `retirement.md` under "Why the numbering changed".
 
 ## Goal
@@ -439,7 +439,7 @@ Each story keeps `npm run verify` green on its own.
   query (decision 2).
 - **Any change to `ListEvents`, `src/apps/cli/events.ts`, or the CLI's
   `--follow` / progress-throttle behaviour**, and no CLI leaf is retired.
-- **Any UI work** — the Control Center inbox that polls this feed is Target 024;
+- **Any UI work** — the Control Center inbox that polls this feed is Target 026 (the UI);
   022's UI-facing deliverable is the surface it polls.
 - **Any change to auth, CORS, the Host check, the CSRF gate, the middleware
   order, the logger, the envelope, or 021's `location` / `readRow` / `If-Match`

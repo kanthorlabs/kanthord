@@ -6,18 +6,18 @@
 > `GET /api/ai-provider`, `GET /api/ai-provider/:id`,
 > `GET /api/project/:id/ai-provider` and `src/apps/http/views/ai-provider.ts`.
 >
-> **Why this precedes the job API (EPIC 026).** When the resolved provider chain
+> **Why this precedes the daemon epic (EPIC 025).** When the resolved provider chain
 > is empty, `run-next-task` does not attempt the task at all — it fails it with
 > `no_provider_available` before calling the runner
 > (`src/app/task/run-next-task.ts:289-295`). And `ai_provider` is one of the four
 > blocking config checks (`src/app/project/project-readiness.ts:45-50`,
-> `evalAiProvider` at :277-305). A UI that can start the daemon (026) but cannot
+> `evalAiProvider` at :277-305). A UI that can start the daemon (025) but cannot
 > register a provider starts a daemon that fails every task on the first tick.
 > Setup precedes execution. This is why `retirement.md`'s old "Target 024 —
 > high-impact operations" is split: the provider writes land here as Target 024,
-> and `land repository` / `publish repository` become Target 027 (delivery).
-> The roadmap order is 024 provider writes → 025 frontend host → 026 job API →
-> 027 delivery (Ulrich, 2026-07-30).
+> and `land repository` / `publish repository` are left unassigned (the old
+> "Target 027 — delivery" was cut on 2026-07-30). The roadmap order is 024
+> provider writes → 025 serve-hosted daemon → 026 the UI (Ulrich, 2026-07-30).
 
 ## Goal
 
@@ -74,7 +74,7 @@ OpenAI-compatible path (`008.1-custom-openai-compatible-provider.md`) is the
 same shape with `api` + `customProviderId` + `baseUrl`.
 
 **Binding boundary:** `POST /api/ai-provider` covers `register ai-provider` in
-full and nothing else. `login provider` — the OAuth device flow — is EPIC 026's
+full and nothing else. `login provider` — the OAuth device flow — is EPIC 025's
 problem, because it is a long-lived interactive flow with no request/response
 shape, and `retirement.md` still records it as "deliberately unresolved: whether
 it can run behind the API at all". 024 does not register
@@ -497,7 +497,7 @@ instead. A hermetic test asserts no registered message for a 024 code contains
 `"--"`.
 
 **Deliberately NOT registered, with the reason:** `NonOAuthProviderError` (only
-`LoginProvider` throws it — EPIC 026); `IncompatibleProviderCredentialError` (no
+`LoginProvider` throws it — EPIC 025); `IncompatibleProviderCredentialError` (no
 production module throws it — 021 already recorded this); the probe raises
 nothing at all (decision 6).
 
@@ -510,8 +510,10 @@ nothing at all (decision 6).
 claimed by EPIC 020** (`cli-coverage.test.ts:65-93`), so the epic's net effect on
 the inventory is +8. The "uncovered set is non-empty" assertion at
 `cli-coverage.test.ts:53-63` still holds afterwards and is **not** touched.
-EPIC 026 (the job API) and EPIC 027 (delivery) hold the last uncovered leaves, so
-**027 is the epic that flips it** — 025 is the frontend host and claims no leaf.
+EPIC 025 (the daemon epic) claims three more; `land repository` and
+`publish repository` are unassigned after the old Target 027 was cut, so **no
+planned epic flips it** — the uncovered set stays non-empty until Ulrich
+revisits the retirement plan after the UI and integration.
 
 **`test ai-provider` is claimed in FULL, with no narrowing** (Ulrich,
 2026-07-30). `ai-provider.completion.create` takes the caller's `prompt` and
@@ -758,10 +760,12 @@ edit in the whole epic** — the new `secretOf` argument to `TestAiProvider`
 
 ## Non-goals
 
-- **`login provider`'s OAuth device flow** — EPIC 026 (decision 1). 024's
+- **`login provider`'s OAuth device flow** — EPIC 025 (decision 1). 024's
   registration is URL + key only.
-- **The daemon** (`run daemon`) and the async job API — EPIC 026.
-- **`land repository` and `publish repository`** — EPIC 027 (delivery), split
+- **The daemon** (`run daemon`) — EPIC 025, which hosts it in `serve` rather
+  than shipping the async job API this roadmap once planned.
+- **`land repository` and `publish repository`** — unassigned since the old
+  Target 027 (delivery) was cut on 2026-07-30; previously split
   out of `retirement.md`'s original Target 024.
 - **Any change to how the daemon folds a credential**, to `resolveProviderChain`,
   or to provider selection in `run-next-task`.
@@ -792,7 +796,7 @@ edit in the whole epic** — the new `secretOf` argument to `TestAiProvider`
   neither sub-resource needs a representation.
 - **Actually retiring any CLI leaf.** 024 makes eight leaves retirable and
   updates the inventory; removal happens when the UI uses the routes.
-- **Any UI work** — the Preact screens that consume these routes are EPIC 025,
-  the frontend host, deliberately sequenced after this epic. Also no change to
+- **Any UI work** — the Preact screens that consume these routes are EPIC 026
+  (the UI), deliberately sequenced after this epic. Also no change to
   auth, CORS, the Host check, the CSRF gate,
   the middleware order, the logger or the envelope.

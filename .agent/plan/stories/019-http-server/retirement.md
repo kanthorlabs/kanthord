@@ -105,18 +105,7 @@ Shape: `POST /api/task/:id/approval`, `…/rejection`, `…/retry` → a noun
 `PATCH /api/initiative/:id {"paused":true}`. The REST-shape test in
 `src/apps/http/routes.test.ts` enforces the noun rule.
 
-### Target 024 — the frontend host
-
-No CLI leaf. The Preact screens the 020/021/022 routes exist for: the Control
-Center home, the planning editors, and the inbox that polls
-`GET /api/event?after=…`.
-
-This slice consumes **only** the 020–022 surfaces — reads, planning writes, the
-feed. It needs no provider write and no job API, which is what lets it sit
-before 025 and 026. Stated so a later session cannot grow the frontend a
-dependency on an epic that has not run yet.
-
-### Target 025 — ai-provider writes
+### Target 024 — ai-provider writes
 
 `register ai-provider`, `update ai-provider`, `remove ai-provider`,
 `set-default ai-provider`, `assign ai-provider`, `unassign ai-provider`,
@@ -129,43 +118,56 @@ chain, `POST /api/ai-provider/:id/probe`. Human-gated operations keep their
 This is the provider half of what this file used to call "Target 024 —
 high-impact operations" (renumbered 2026-07-30, Ulrich; see the note below).
 
-### Target 026 — the async job API
+### Target 025 — the async job API
 
 `run daemon`, `setup project`, `login provider`, `db migrate`, `db status`.
 Shape: `POST /api/job` → `202` + a job resource, `GET /api/job/:id` for
 progress. These are the leaves with no request/response shape: they stream,
 prompt, or run forever. `db status` may instead join 020 as a read.
 
-### Target 027 — delivery
+### Target 026 — the UI
 
-`land repository`, `publish repository`.
-Shape: `POST /api/repository/:id/landing`, `POST /api/repository/:id/publication`.
-Human-gated, so the `--yes` equivalent is an explicit request field, never a
-default; `publish` stays fast-forward-only and never force-pushes (AGENTS.md,
-delivery contract).
+The UI, built on whatever surface 020–025 already provide. **Scope is deliberately
+not fixed here** (Ulrich, 2026-07-30): it is decided while building, and anything
+the screens turn out to need is added then rather than predicted now. The earlier
+"frontend host" section — which pinned it to "only the 020–022 surfaces" — is cut,
+because that constraint was a guess about a slice nobody had started.
 
-This is the delivery half of the old "Target 024".
+Claims no CLI leaf of its own.
+
+### Not yet assigned to a target
+
+`land repository`, `publish repository`. Previously planned as "Target 027 —
+delivery" (`POST /api/repository/:id/landing`, `POST /api/repository/:id/publication`,
+human-gated, fast-forward-only per AGENTS.md's delivery contract). That target is
+cut; the two leaves stay uncovered and unplanned until someone picks them up.
 
 ### Why the numbering changed (2026-07-30, Ulrich)
 
 AGENTS.md binds dependency order to numeric order ("epic N always depends on
-epic N-1"), so the roadmap must be listed in the order it can be built:
+epic N-1"), so the roadmap is listed in the order it can be built.
 
-- **025 (provider writes) before 026 (the daemon job API).** An empty resolved
+- **024 (provider writes) before 025 (the daemon epic).** An empty resolved
   provider chain fails every task without attempting it —
   `src/app/task/run-next-task.ts:289-295` fails it with `no_provider_available`
   — and `ai_provider` is a config check
   (`src/app/project/project-readiness.ts:45-50`). Provider setup must exist
   before the daemon can be driven over HTTP.
-- **024 (frontend) before both.** It uses only the 020–022 surfaces, so it
-  depends on nothing in 025 or 026.
-- **027 (delivery) after 026.** `land` and `publish` need a landed candidate,
-  which only a daemon run produces. Delivery therefore depends on the job API,
-  not the reverse.
+- **026 (the UI) after 025**, so the screens can use everything 020–025 ship.
 
 EPIC 021 decision 6 defers `check project --probe-*` and
-`POST /api/ai-provider/:id/probe` to "EPIC 024"; that reference now reads
-**025**.
+`POST /api/ai-provider/:id/probe` to "EPIC 024"; that reference still reads
+**024**.
+
+**Numbering history, so a superseded state is not reintroduced.** This file once
+had 024/025 as frontend/provider-writes (swapped — the 024 epic file was right),
+and the serve-hosted daemon epic briefly sat at 026. Final: 024 provider writes,
+025 serve-hosted daemon, 026 the UI. "Target 027 — delivery" is cut; its two
+leaves moved to "Not yet assigned to a target".
+
+**The retirement plan is on hold.** No CLI leaf is removed until Ulrich revisits
+this file after the UI and integration are done. Targets 020–025 record which
+routes exist; they do not authorise a removal.
 
 ### Never retired (operator-only, stays CLI)
 
@@ -174,6 +176,6 @@ EPIC 021 decision 6 defers `check project --probe-*` and
 ## Deliberately unresolved here
 
 - Whether `login provider`'s OAuth device flow can run behind the API at all, or
-  stays a terminal-only operation. Decide in 026 with the flow in hand.
+  stays a terminal-only operation. Decide in 025 with the flow in hand.
 - Whether the UI needs `export diagnostic` at all, or whether a support bundle
   download replaces it.

@@ -41,11 +41,12 @@ decide, raise an `OPEN:` blocker instead of editing the assertion.
   should not have.
 - **The "uncovered set is non-empty" assertion stays and is NOT edited**
   (`cli-coverage.test.ts:53-63`). After 024 the uncovered set still holds the
-  EPIC 026 leaves (`run daemon`, `setup project`, `login provider`, `db migrate`,
-  `db status`) and the EPIC 027 leaves (`land repository`,
-  `publish repository`), plus `serve` and `commands` which are never retired.
-  **EPIC 027 is the epic that flips it** — not this one, and not 025 (the frontend
-  host claims no leaf).
+  EPIC 025 leaves (`run daemon`, `setup project`, `login provider`, `db migrate`,
+  `db status`) and `land repository` / `publish repository`, which are unassigned
+  since the old "Target 027 — delivery" was cut (2026-07-30), plus `serve` and
+  `commands` which are never retired. **No planned epic flips it** — the
+  retirement plan is on hold until Ulrich revisits it after the UI and
+  integration, so this assertion stays true indefinitely.
 - **Claim exactly eight leaves.** `get ai-provider` and `list ai-provider` were
   already claimed by EPIC 020 (`cli-coverage.test.ts:65-93`); do not re-add them,
   and do not claim a ninth for the probe row — its `cliCommands` is `[]` by

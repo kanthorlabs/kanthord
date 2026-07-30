@@ -55,8 +55,8 @@ rather than guessing. The three counters that move together for a new row:
 
 `leaves.length === 80` (`cli-coverage.test.ts:48-51`) stays true: 024 adds no CLI
 leaf. The "uncovered set is non-empty" assertion (`cli-coverage.test.ts:53-63`)
-also stays true and is **NOT** edited — EPIC 027 (delivery) is the epic that
-flips it.
+also stays true and is **NOT** edited — no planned epic flips it. The retirement
+plan is on hold until Ulrich revisits it after the UI and integration.
 
 **`.agent/plan/**` is lane-forbidden to every role**
 (`scripts/lane-check.sh:13-19`). No story edits any file under `.agent/plan/`.
