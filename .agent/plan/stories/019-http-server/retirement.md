@@ -82,35 +82,66 @@ prevent nothing. 022 does inherit the rest of 021: singular segments, the
 `approve task`, `approve objective`, `reject task`, `reject objective`,
 `retry task`, `retry objective`, `abandon task`, `pause initiative`,
 `resume initiative`.
-Shape: `POST /api/task/:id/approval`, `…/rejection`, `…/retry` → a noun
-(`…/retry` is a verb; use `POST /api/task/:id/reattempt` or
-`/api/task/:id/attempt`), `POST /api/task/:id/abandonment`. Pausing is state:
-`PATCH /api/initiative/:id {"paused":true}`. The REST-shape test in
+Shape: `POST /api/task/:id/approval`, `…/rejection`, `…/reattempt`,
+`…/abandonment`, and the same `approval` / `rejection` / `reattempt` trio on
+`/api/objective/:id`. The retry noun is **`reattempt`**, not `attempt`:
+`attempt` is the vocabulary of an execution attempt, which the 026 job API will
+own as a real resource with a representation. Pausing is state on a **singleton
+sub-resource**: `PUT | DELETE /api/initiative/:id/suspension`, both `204`, with
+`paused` staying readable on `GET /api/initiative/:id`. The REST-shape test in
 `src/apps/http/routes.test.ts` enforces the noun rule.
 
-### Target 024 — the frontend host
+Corrected 2026-07-30 by `.agent/plan/epics/023-http-state-transitions.md`
+decision 2, which supersedes this file's earlier
+`PATCH /api/initiative/:id {"paused":true}` sketch: that row is 021's rename row,
+and one row cannot serve rename and pause without logic inside `run`. The same
+decision admits `PUT` for that one row — reversing 019's `PUT` non-goal, approved
+by Ulrich after an adversarial review, and gated by a one-entry `PUT_ROWS`
+allowlist in `routes.test.ts` so no other epic may add a `PUT` row without its own
+reviewed entry.
 
-No CLI leaf. The Preact screens the 020/021/022 routes exist for: the Control
-Center home, the planning editors, and the inbox that polls
-`GET /api/event?after=…`.
+Authored as `.agent/plan/epics/023-http-state-transitions.md` (2026-07-30): 9
+rows for 9 leaves, `ROUTES` 54 → 63, proved by
+`scripts/e2e/http-transitions-proof.sh`.
 
-This slice consumes **only** the 020–022 surfaces — reads, planning writes, the
-feed. It needs no provider write and no job API, which is what lets it sit
-before 025 and 026. Stated so a later session cannot grow the frontend a
-dependency on an epic that has not run yet.
-
-### Target 025 — ai-provider writes
+### Target 024 — ai-provider writes
 
 `register ai-provider`, `update ai-provider`, `remove ai-provider`,
 `set-default ai-provider`, `assign ai-provider`, `unassign ai-provider`,
 `logout ai-provider`, `test ai-provider`.
 Shape: `POST /api/ai-provider` (`201`), `PATCH /api/ai-provider/:id`,
-`DELETE /api/ai-provider/:id`, `POST /api/project/:id/ai-provider` for the
-chain, `POST /api/ai-provider/:id/probe`. Human-gated operations keep their
+`DELETE /api/ai-provider/:id`, `PUT /api/ai-provider/default`,
+`DELETE /api/ai-provider/:id/credential`, `POST /api/project/:id/ai-provider`
+for the chain (provider id in the BODY), `POST /api/ai-provider/:id/probe` and
+`POST /api/ai-provider/:id/completion`. Human-gated operations keep their
 `--yes`-equivalent as an explicit request field, never a default.
 
 This is the provider half of what this file used to call "Target 024 —
-high-impact operations" (renumbered 2026-07-30, Ulrich; see the note below).
+high-impact operations". Authored as
+`.agent/plan/epics/024-ai-provider-writes.md` (2026-07-30): 9 rows for 8 leaves,
+`ROUTES` 63 → 72, stories expanded under
+`.agent/plan/stories/024-ai-provider-writes/`, with
+`scripts/e2e/http-provider-writes-proof.sh` written and RED until the epic runs.
+Not implemented yet — the `Implemented:` line lands when Story S6 turns that
+Proof green.
+
+Two decisions worth carrying forward, because they change what a UI can do:
+`test ai-provider` is covered in FULL (`POST /api/ai-provider/:id/completion`
+takes the caller's prompt and returns the model's reply), and
+`POST /api/ai-provider/:id/probe` claims no CLI leaf — it is a new capability the
+readiness screen needs, and it plus `…/completion` are the only two routes in the
+whole surface allowed a real outbound call.
+
+### Target 025 — the frontend host
+
+No CLI leaf. The Preact screens the 020/021/022/023/024 routes exist for: the
+Control Center home, the planning editors, the provider settings screen, and the
+inbox that polls `GET /api/event?after=…`.
+
+This slice consumes **only** the 020–024 surfaces — reads, planning writes, the
+feed, the verdicts, the provider writes. It needs no job API, which is what lets
+it sit before 026. Stated so a later session cannot grow the frontend a
+dependency on an epic that has not run yet.
 
 ### Target 026 — the async job API
 
@@ -134,21 +165,29 @@ This is the delivery half of the old "Target 024".
 AGENTS.md binds dependency order to numeric order ("epic N always depends on
 epic N-1"), so the roadmap must be listed in the order it can be built:
 
-- **025 (provider writes) before 026 (the daemon job API).** An empty resolved
+- **024 (provider writes) before 026 (the daemon job API).** An empty resolved
   provider chain fails every task without attempting it —
   `src/app/task/run-next-task.ts:289-295` fails it with `no_provider_available`
   — and `ai_provider` is a config check
   (`src/app/project/project-readiness.ts:45-50`). Provider setup must exist
   before the daemon can be driven over HTTP.
-- **024 (frontend) before both.** It uses only the 020–022 surfaces, so it
-  depends on nothing in 025 or 026.
+- **025 (frontend) after 024, before 026** (Ulrich, 2026-07-30). The frontend
+  depends on nothing in the provider writes, so it _could_ sit earlier; it is
+  placed after them so the settings screen it needs is already there, and so
+  `configured: true` is reachable from the UI on the day the UI exists. It still
+  needs nothing from the job API.
 - **027 (delivery) after 026.** `land` and `publish` need a landed candidate,
   which only a daemon run produces. Delivery therefore depends on the job API,
   not the reverse.
 
 EPIC 021 decision 6 defers `check project --probe-*` and
-`POST /api/ai-provider/:id/probe` to "EPIC 024"; that reference now reads
-**025**.
+`POST /api/ai-provider/:id/probe` to "EPIC 024"; that reference is correct as
+written — the provider writes ARE 024. Of the two, only the probe ROUTE joins
+024: **`check project --probe-repositories` / `--probe-provider` stay operator
+CLI flags** and are NOT exposed over HTTP, because `GET
+/api/project/:id/readiness` (021) must stay a pure read over stored state.
+A UI that wants a live provider check calls `POST /api/ai-provider/:id/probe`
+instead.
 
 ### Never retired (operator-only, stays CLI)
 
