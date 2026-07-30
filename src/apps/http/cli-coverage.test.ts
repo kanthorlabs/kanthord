@@ -62,7 +62,7 @@ test("the uncovered set (leaves minus every row's cliCommands, minus serve/comma
   }
 });
 
-test("the CLI leaves claimed by EPIC 020 all appear across ROUTES' cliCommands", () => {
+test("the 27 CLI leaves claimed by EPIC 020 and 022 all appear across ROUTES' cliCommands", () => {
   const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
   const expectedCovered = [
     "get project",
@@ -90,8 +90,10 @@ test("the CLI leaves claimed by EPIC 020 all appear across ROUTES' cliCommands",
     "find initiative",
     "find objective",
     "find resource",
+    "list event",
+    "ack project",
   ];
-  assert.equal(expectedCovered.length, 25);
+  assert.equal(expectedCovered.length, 27);
   for (const cliCommand of expectedCovered) {
     assert.ok(
       covered.has(cliCommand),
@@ -140,11 +142,11 @@ test("the 27 CLI leaves claimed by EPIC 021 all appear across ROUTES' cliCommand
   }
 });
 
-test("the uncovered set shrank by the 27 leaves EPIC 021 claims", () => {
+test("the uncovered set shrank by the 27 leaves EPIC 021 claims plus the 2 leaves EPIC 022 claims", () => {
   const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
   const uncovered = leaves.filter(
     (leaf) => !covered.has(leaf) && leaf !== "serve" && leaf !== "commands",
   );
-  // 78 retirable leaves, 25 claimed by 020, 27 claimed by 021.
-  assert.equal(uncovered.length, 26);
+  // 78 retirable leaves, 25 claimed by 020, 27 claimed by 021, 2 claimed by 022.
+  assert.equal(uncovered.length, 24);
 });

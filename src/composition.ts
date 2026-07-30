@@ -82,6 +82,7 @@ import { RunNextTask } from "./app/task/run-next-task.ts";
 import { RunDaemon } from "./app/task/run-daemon.ts";
 import { SettleObjectives } from "./app/objective/settle-objectives.ts";
 import { ListEvents } from "./app/task/list-events.ts";
+import { ReadEventPage } from "./app/task/read-event-page.ts";
 import { GetTask } from "./app/task/get-task.ts";
 import { ApproveTask } from "./app/task/approve-task.ts";
 import { RejectTask } from "./app/task/reject-task.ts";
@@ -414,6 +415,7 @@ export function buildDeps(
     sequencing: sequencingRepository,
   });
   const listEvents = new ListEvents(events);
+  const readEventPage = new ReadEventPage(events);
   // Constructed here (above GetTask/RetryTask) so it can be passed as the 4th
   // GetTask arg and the 6th ConflictCandidateStore argument — it is also
   // referenced later for repoLanding, approveTask, and RunNextTask (all
@@ -1211,6 +1213,7 @@ export function buildDeps(
     logger,
     httpLogger: new PinoLogger(),
     listEvents,
+    readEventPage,
     importResources,
     exportInitiative,
     createGraph,

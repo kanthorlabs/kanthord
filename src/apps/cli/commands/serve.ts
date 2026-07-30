@@ -82,6 +82,8 @@ export function buildServeCommand(deps: CliDeps, io: CliIo): Command {
         diagnosticsExport: deps.diagnosticsExport,
         checkGraph: deps.checkGraph,
         checkProject: deps.checkProject,
+        readEventPage: deps.readEventPage,
+        ackProject: deps.ackProject,
         newId: deps.newId,
       };
       const app = buildHttpApp(httpDeps, { apiKey });

@@ -140,8 +140,10 @@ new query talks to the port.
   cursor is now in effect" when it is not. `200 {"cursor":"<in effect>"}` is the
   only honest answer.
 - **Not `201` + `Location`.** Nothing addressable is created; the resource is a
-  singleton whose readable form already exists as `since` on the project overview
-  (`src/apps/http/views/project.ts:57,103`). 021 already set the precedent that a
+  singleton whose readable form already exists as `digest.since` on the project
+  overview — it is NESTED under `digest`, not a top-level field, so the wire path
+  is `overview.digest.since` (`src/apps/http/views/project.ts:56-57,102-103`).
+  021 already set the precedent that a
   POST which creates no addressable thing answers `200`
   (`initiative.graph.apply`, `graph.readiness.check`,
   `project.resource.create`), and `location` is required only iff
@@ -342,7 +344,7 @@ Phases:
 - **D** — scoping and the ack: `?project=<p1>` and `?project=<p2>` return
   disjoint sets; the global cursor is asserted GREATER than p1's scoped cursor;
   acking p1 with its scoped cursor → `200` with the same value, and
-  `GET /api/project/<p1>/overview` shows `since` equal to it; replaying the SAME
+  `GET /api/project/<p1>/overview` shows `digest.since` equal to it; replaying the SAME
   ack → `200` with the SAME cursor (idempotent no-op, not an error); acking an
   EARLIER cursor → `200` carrying the cursor STILL IN EFFECT, not the one sent
   (the monotonic no-op, proved on the wire); acking p1 with the GLOBAL cursor →
@@ -351,7 +353,7 @@ Phases:
   `404 unknown_reference`; p3 (zero events) → `409 cursor_ahead_of_feed`.
 - **E** — the inherited gates over the new rows: no `If-Match` on the ack →
   `200` (NOT `428` — the ack is a POST); an unauthenticated feed read and an
-  unauthenticated ack → `401`, **and the overview proves `since` did not move**;
+  unauthenticated ack → `401`, **and the overview proves `digest.since` did not move**;
   `Content-Type: text/plain` on the ack → `415`; `Host: evil.example` → `403`;
   `PUT /api/event` → `405`; `/api/events` (plural) → `404 unknown_route`.
 - **F** — the `API_KEY` appears in no log line; `SIGTERM` shuts the server down

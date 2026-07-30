@@ -88,11 +88,24 @@ apply to either — corrected 2026-07-30 by
 `.agent/plan/epics/022-event-feed.md` decision 5, which supersedes this file's
 earlier "it inherits 021's POST/`201`/`Location` and `If-Match` conventions".
 Nothing addressable is created by an acknowledgement (the cursor is readable as
-`since` on the project overview), and `AckProject` is monotonic, so a stale
+`digest.since` — nested, not top-level — on the project overview), and
+`AckProject` is monotonic, so a stale
 submission no-ops instead of overwriting newer state — a precondition would
 prevent nothing. 022 does inherit the rest of 021: singular segments, the
 `PATH_SEGMENTS` allowlist, `defineRoute`, one view module per resource, the
 `ETag` on every `200` json response, and the registry rule.
+
+Covered. Implemented as `.agent/plan/epics/022-event-feed.md`, proved by
+`scripts/e2e/http-events-proof.sh`. Both leaves above are claimed by the two new
+rows (`event.list`, `project.acknowledgement.create`), taking the route table to
+54 rows. Nothing is carved out — unlike 021, neither leaf keeps a CLI-only part.
+Two behaviours are recorded so a later epic does not "fix" them:
+
+- The CLI's `list event --after 0` sentinel is NOT accepted on the wire. The
+  route requires a 26-char uppercase ULID, so `?after=0` is
+  `400 invalid_input` (022 decision 2). An HTTP client omits `after` instead.
+- `?project=<unknown>` is a filter, not a lookup: it answers `200` with zero
+  events, never `404`.
 
 ### Target 023 — state transitions
 

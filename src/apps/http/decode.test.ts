@@ -5,6 +5,7 @@ import {
   optionalQueryInt,
   queryList,
   optionalQueryString,
+  optionalQueryUlid,
 } from "./decode.ts";
 import { InvalidInputError } from "./errors.ts";
 
@@ -115,5 +116,57 @@ test("optionalQueryString throws InvalidInputError naming the field for a blank/
   assert.throws(
     () => optionalQueryString({ name: "   " }, "name"),
     (err: unknown) => err instanceof InvalidInputError && err.field === "name",
+  );
+});
+
+// ─── EPIC 022 Story S1 — optionalQueryUlid ──────────────────────────────────
+
+test("optionalQueryUlid returns undefined when absent", () => {
+  assert.equal(optionalQueryUlid({}, "after"), undefined);
+});
+
+test("optionalQueryUlid returns a valid ULID unchanged", () => {
+  assert.equal(
+    optionalQueryUlid({ after: "01ARZ3NDEKTSV4RRFFQ69G5FAV" }, "after"),
+    "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  );
+});
+
+test("optionalQueryUlid throws InvalidInputError naming the field for the CLI's '0' sentinel", () => {
+  assert.throws(
+    () => optionalQueryUlid({ after: "0" }, "after"),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "after",
+  );
+});
+
+test("optionalQueryUlid throws InvalidInputError naming the field for an empty string", () => {
+  assert.throws(
+    () => optionalQueryUlid({ after: "" }, "after"),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "after",
+  );
+});
+
+test("optionalQueryUlid throws InvalidInputError for a lowercase ULID", () => {
+  assert.throws(
+    () => optionalQueryUlid({ after: "01arz3ndektsv4rrffq69g5fav" }, "after"),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "after",
+  );
+});
+
+test("optionalQueryUlid throws InvalidInputError for a padded ULID (not trimmed)", () => {
+  assert.throws(
+    () => optionalQueryUlid({ after: " 01ARZ3NDEKTSV4RRFFQ69G5FAV " }, "after"),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "after",
+  );
+});
+
+test("optionalQueryUlid throws InvalidInputError naming the field for an array value", () => {
+  assert.throws(
+    () =>
+      optionalQueryUlid(
+        { after: ["01ARZ3NDEKTSV4RRFFQ69G5FAV", "x"] },
+        "after",
+      ),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "after",
   );
 });

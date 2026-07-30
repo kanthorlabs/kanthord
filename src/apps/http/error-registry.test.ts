@@ -32,6 +32,10 @@ import {
   StaleManifestError,
   UncreatableObjectiveError,
 } from "../../app/graph/import-errors.ts";
+import {
+  CursorNotUlidError,
+  CursorAheadOfFeedError,
+} from "../../app/project/ack-project.ts";
 import { InvalidInputError } from "./errors.ts";
 import {
   DOMAIN_ERROR_MAPPINGS,
@@ -147,8 +151,8 @@ test("TRANSPORT_ERRORS carries the two 021 precondition codes", () => {
 
 // ─── Story S3 — 21 domain mappings ──────────────────────────────────────────
 
-test("021 S3: DOMAIN_ERROR_MAPPINGS.length is 25 (4 existing + 21 new)", () => {
-  assert.equal(DOMAIN_ERROR_MAPPINGS.length, 25);
+test("021 S3: DOMAIN_ERROR_MAPPINGS.length is 27 (4 existing + 21 new + 022 S1's 2 new)", () => {
+  assert.equal(DOMAIN_ERROR_MAPPINGS.length, 27);
 });
 
 test("021 S3: one class per code — every mapping's type is unique", () => {
@@ -277,4 +281,41 @@ test("021 S3: registry hygiene still passes with the 23 new codes (21 domain + S
     ...Object.values(TRANSPORT_ERRORS).map((m) => m.code),
   ];
   assert.equal(new Set(codes).size, codes.length, "codes must be unique");
+});
+
+// ─── EPIC 022 Story S1 — the two new domain mappings ────────────────────────
+
+test("022 S1: mapError maps CursorNotUlidError to cursor_not_ulid/400 with the registry's own message, not the submitted cursor", () => {
+  const mapped = mapError(new CursorNotUlidError("nope"));
+  assert.equal(mapped.code, "cursor_not_ulid");
+  assert.equal(mapped.status, 400);
+  assert.equal(mapped.message, "the cursor is not a ULID");
+  assert.doesNotMatch(mapped.message, /nope/);
+});
+
+test("022 S1: mapError maps CursorAheadOfFeedError to cursor_ahead_of_feed/409", () => {
+  const mapped = mapError(
+    new CursorAheadOfFeedError("01ARZ3NDEKTSV4RRFFQ69G5FAV", null),
+  );
+  assert.equal(mapped.code, "cursor_ahead_of_feed");
+  assert.equal(mapped.status, 409);
+  assert.equal(mapped.message, "the cursor is ahead of the project event feed");
+});
+
+test("022 S1: registry hygiene still passes with the two new codes", () => {
+  const codes: string[] = [
+    ...DOMAIN_ERROR_MAPPINGS.map((m) => m.code),
+    ...Object.values(TRANSPORT_ERRORS).map((m) => m.code),
+  ];
+  const cursorNotUlid = DOMAIN_ERROR_MAPPINGS.find(
+    (m) => m.type === CursorNotUlidError,
+  )!;
+  const cursorAheadOfFeed = DOMAIN_ERROR_MAPPINGS.find(
+    (m) => m.type === CursorAheadOfFeedError,
+  )!;
+  assert.match(cursorNotUlid.code, /^[a-z]+(_[a-z]+)*$/);
+  assert.match(cursorAheadOfFeed.code, /^[a-z]+(_[a-z]+)*$/);
+  assert.equal(new Set(codes).size, codes.length, "codes must be unique");
+  assert.ok(ALLOWED_STATUSES.has(cursorNotUlid.status));
+  assert.ok(ALLOWED_STATUSES.has(cursorAheadOfFeed.status));
 });

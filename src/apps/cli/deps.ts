@@ -43,6 +43,7 @@ import type { RetryObjective } from "../../app/objective/retry-objective.ts";
 import type { RejectObjective } from "../../app/objective/reject-objective.ts";
 import type { GetTask } from "../../app/task/get-task.ts";
 import type { ListEvents } from "../../app/task/list-events.ts";
+import type { ReadEventPage } from "../../app/task/read-event-page.ts";
 import type { ListTasks } from "../../app/task/list-tasks.ts";
 import type { RejectTask } from "../../app/task/reject-task.ts";
 import type { AbandonTask } from "../../app/task/abandon-task.ts";
@@ -226,6 +227,8 @@ export interface CliDeps {
   /** Structured JSON logger for `serve`; pino-backed (composition root). */
   httpLogger: HttpLogger;
   listEvents: ListEvents;
+  /** EPIC 022 — one page of the feed plus the continuation cursor, for `GET /api/event`. */
+  readEventPage: ReadEventPage;
   importResources: ImportResources;
   exportInitiative: ExportInitiative;
   createGraph: CreateGraph;

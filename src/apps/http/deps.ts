@@ -43,6 +43,8 @@ import type { ExportInitiative } from "../../app/graph/export-initiative.ts";
 import type { DiagnosticsExport } from "../../app/observability/diagnostics-export.ts";
 import type { CheckGraph } from "../../app/graph/check-graph.ts";
 import type { CheckProject } from "../../app/project/check-project.ts";
+import type { ReadEventPage } from "../../app/task/read-event-page.ts";
+import type { AckProject } from "../../app/project/ack-project.ts";
 
 /**
  * What the HTTP routes need. One field per capability, added by the epic that
@@ -94,6 +96,8 @@ export interface HttpDeps {
   readonly diagnosticsExport: DiagnosticsExport;
   readonly checkGraph: CheckGraph;
   readonly checkProject: CheckProject;
+  readonly readEventPage: ReadEventPage;
+  readonly ackProject: AckProject;
   /**
    * `import graph --create` needs a caller-minted packageId
    * (`create-graph.ts:44`); the CLI passes `deps.newId`, so the row mints it.

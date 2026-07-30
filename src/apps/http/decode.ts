@@ -55,6 +55,32 @@ export function optionalQueryString(
   return trimmed;
 }
 
+/**
+ * A cursor query parameter. `undefined` when absent — for the event feed
+ * "absent" means "from the start of the feed", so the row maps it to `""`.
+ * When present it must be an exact 26-char uppercase Crockford ULID: the same
+ * shape `AckProject` enforces (`src/app/project/ack-project.ts:44`). The value
+ * is NOT trimmed — a ULID never carries surrounding space, and trimming would
+ * silently accept `" <ulid> "`. The CLI's `--after 0` sentinel
+ * (`src/apps/cli/events.ts:51`) is therefore rejected here by design.
+ */
+export function optionalQueryUlid(
+  query: Readonly<Record<string, string | string[] | undefined>>,
+  name: string,
+): string | undefined {
+  const raw = query[name];
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(raw)) {
+    throw new InvalidInputError(name, "must be a single value");
+  }
+  if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(raw)) {
+    throw new InvalidInputError(name, "must be a ULID");
+  }
+  return raw;
+}
+
 export function queryList(
   query: Readonly<Record<string, string | string[] | undefined>>,
   name: string,

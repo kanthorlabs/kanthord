@@ -30,6 +30,10 @@ import {
   StaleManifestError,
   UncreatableObjectiveError,
 } from "../../app/graph/import-errors.ts";
+import {
+  CursorNotUlidError,
+  CursorAheadOfFeedError,
+} from "../../app/project/ack-project.ts";
 import { HttpFailure } from "./errors.ts";
 
 export interface ErrorMapping {
@@ -88,6 +92,18 @@ export const DOMAIN_ERROR_MAPPINGS: ReadonlyArray<{
     status: 409,
   },
   { type: GraphPackageDocumentError, code: "invalid_package", status: 400 },
+  {
+    type: CursorNotUlidError,
+    code: "cursor_not_ulid",
+    status: 400,
+    message: "the cursor is not a ULID",
+  },
+  {
+    type: CursorAheadOfFeedError,
+    code: "cursor_ahead_of_feed",
+    status: 409,
+    message: "the cursor is ahead of the project event feed",
+  },
 ];
 
 export const TRANSPORT_ERRORS = {

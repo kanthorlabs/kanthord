@@ -61,6 +61,8 @@ const PATH_SEGMENTS = [
   "package",
   "diagnostic",
   "readiness",
+  "event",
+  "acknowledgement",
 ];
 
 /**
@@ -296,8 +298,8 @@ test("health.get row: present returns a DTO with exactly status and version keys
   assert.deepEqual(Object.keys(view as object).sort(), ["status", "version"]);
 });
 
-test("ROUTES holds exactly 52 rows: 24 from 019+020, plus the 28 rows of EPIC 021", () => {
-  assert.equal(ROUTES.length, 52);
+test("ROUTES holds exactly 54 rows: 24 from 019+020, plus the 28 rows of EPIC 021, plus the 2 rows of EPIC 022", () => {
+  assert.equal(ROUTES.length, 54);
 });
 
 test("every route id from the EPIC 020 and 021 route tables is present in ROUTES", () => {
@@ -353,6 +355,8 @@ test("every route id from the EPIC 020 and 021 route tables is present in ROUTES
     "initiative.diagnostic.export",
     "graph.readiness.check",
     "project.readiness.get",
+    "event.list",
+    "project.acknowledgement.create",
   ];
   for (const id of expected) {
     assert.ok(ids.has(id), `missing route id ${id}`);

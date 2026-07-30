@@ -293,7 +293,7 @@ P1_CURSOR="$(jv "$P1_FEED" 'v.nextCursor')"
 gt "global cursor is ahead of p1's" "$GLOBAL_CURSOR" "$P1_CURSOR"
 
 eq "ack p1 with its scoped cursor" "$P1_CURSOR" "$(ACK "ack p1" "$P1" "$P1_CURSOR")"
-eq "overview.since matches the ack" "$P1_CURSOR" "$(jv "$(OK "p1 overview" "/api/project/$P1/overview")" 'v.since')"
+eq "overview.since matches the ack" "$P1_CURSOR" "$(jv "$(OK "p1 overview" "/api/project/$P1/overview")" 'v.digest.since')"
 # Replaying the same ack is a 200 no-op, never an error.
 eq "replayed ack is idempotent" "$P1_CURSOR" "$(ACK "replay" "$P1" "$P1_CURSOR")"
 # The monotonic no-op, proved on the wire: the response carries the cursor STILL
@@ -301,7 +301,7 @@ eq "replayed ack is idempotent" "$P1_CURSOR" "$(ACK "replay" "$P1" "$P1_CURSOR")
 EARLIER="$(jv "$P1_FEED" 'v.events[0].id')"
 ne "an earlier cursor exists" "$EARLIER" "$P1_CURSOR"
 eq "backwards ack keeps the stored cursor" "$P1_CURSOR" "$(ACK "backwards" "$P1" "$EARLIER")"
-eq "overview.since did not move back" "$P1_CURSOR" "$(jv "$(OK "p1 overview again" "/api/project/$P1/overview")" 'v.since')"
+eq "overview.since did not move back" "$P1_CURSOR" "$(jv "$(OK "p1 overview again" "/api/project/$P1/overview")" 'v.digest.since')"
 # A GLOBAL cursor may be ahead of one project's feed — decision 5's trap.
 WERR "global cursor acked on p1" "409" "cursor_ahead_of_feed" \
   POST "/api/project/$P1/acknowledgement" "{\"cursor\":\"$GLOBAL_CURSOR\"}"
@@ -322,12 +322,12 @@ OUT="$(REQ GET "$BASE/api/event" "-" -)"
 eq "unauthenticated feed" "401" "$(status_of "$OUT")"
 OUT="$(REQ POST "$BASE/api/project/$P1/acknowledgement" "-" "$(J "{\"cursor\":\"$P1_CURSOR\"}")")"
 eq "unauthenticated ack" "401" "$(status_of "$OUT")"
-eq "the rejected ack wrote nothing" "$P1_CURSOR" "$(jv "$(OK "p1 overview after 401" "/api/project/$P1/overview")" 'v.since')"
+eq "the rejected ack wrote nothing" "$P1_CURSOR" "$(jv "$(OK "p1 overview after 401" "/api/project/$P1/overview")" 'v.digest.since')"
 WERR "wrong content-type on the ack" "415" "unsupported_media_type" \
   POST "/api/project/$P1/acknowledgement" "{\"cursor\":\"$P1_CURSOR\"}" "content-type:text/plain"
 OUT="$(REQ GET "$BASE/api/event" "$BASIC" - "host:evil.example")"
 eq "foreign Host on the feed" "403" "$(status_of "$OUT")"
-OUT="$(REQ PUT "$BASE/api/event" "$BASIC" -)"
+OUT="$(REQ PUT "$BASE/api/event" "$BASIC" "$(J '{}')")"
 eq "PUT on the feed" "405" "$(status_of "$OUT")"
 ERR "plural feed path" "/api/events" "404" "unknown_route"
 

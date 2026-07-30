@@ -24,9 +24,12 @@ import { graphPackageView } from "./views/graph-package.ts";
 import { graphCreateView, graphApplyView } from "./views/graph-apply.ts";
 import { readinessEntryView, projectReadinessView } from "./views/readiness.ts";
 import { diagnosticView } from "./views/diagnostic.ts";
+import { eventPageView } from "./views/event.ts";
+import { acknowledgementView } from "./views/acknowledgement.ts";
 import {
   optionalQueryString,
   optionalQueryInt,
+  optionalQueryUlid,
   requirePathParam,
 } from "./decode.ts";
 import {
@@ -972,5 +975,48 @@ export const ROUTES: readonly Route[] = [
     }),
     run: async (deps, input) => deps.checkProject.execute(input),
     present: (result) => projectReadinessView(result),
+  }),
+  defineRoute({
+    id: "event.list",
+    method: "GET",
+    path: "/api/event",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["list event"],
+    decode: ({ query }) => {
+      // `after` absent means "from the start of the feed": `id > ''` is true for
+      // every ULID, so the use case needs no special case. `?limit=` mirrors
+      // `queue.get` (`:366`) exactly. The query key is `project`; the use-case
+      // field is `projectId`.
+      const after = optionalQueryUlid(query, "after");
+      const limit = optionalQueryInt(query, "limit", { min: 1, max: 500 });
+      const projectId = optionalQueryString(query, "project");
+      return {
+        after: after ?? "",
+        ...(limit !== undefined ? { limit } : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
+      };
+    },
+    run: async (deps, input) => deps.readEventPage.execute(input),
+    present: (result) => eventPageView(result),
+  }),
+  defineRoute({
+    id: "project.acknowledgement.create",
+    method: "POST",
+    path: "/api/project/:id/acknowledgement",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["ack project"],
+    // 200 (not 204) because the answer is the cursor now IN EFFECT, which is the
+    // STORED one for a backwards or repeat ack (`ack-project.ts:85-90`). No
+    // `location` (nothing addressable is created) and no `readRow`/`If-Match`:
+    // the operation is monotonic, so a stale submission cannot overwrite newer
+    // state — it no-ops and the response reports the real cursor.
+    decode: ({ params, body }) => ({
+      projectId: requirePathParam(params, "id"),
+      cursor: requireBodyString(body, "cursor"),
+    }),
+    run: async (deps, input) => deps.ackProject.execute(input),
+    present: (result) => acknowledgementView(result),
   }),
 ];
