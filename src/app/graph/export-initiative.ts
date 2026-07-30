@@ -1,4 +1,5 @@
 import { newId } from "../../domain/entity.ts";
+import { UnknownReferenceError } from "../errors.ts";
 import type {
   InitiativeRepository,
   TaskRepository,
@@ -45,7 +46,7 @@ export class ExportInitiative {
   async execute(initiativeId: string): Promise<GraphPackage> {
     const initiative = this.#initiatives.get(initiativeId);
     if (initiative === undefined) {
-      throw new Error(`Initiative not found: ${initiativeId}`);
+      throw new UnknownReferenceError("initiative", initiativeId);
     }
 
     const objectives = this.#initiatives.listObjectives(initiativeId);

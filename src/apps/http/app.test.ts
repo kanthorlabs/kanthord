@@ -16,6 +16,8 @@ import { MissingApiKeyError } from "./api-key.ts";
 import { UI_SHELL_HTML } from "./ui.ts";
 import { PinoLogger } from "../../logger/pino.ts";
 import type { DestinationStream } from "pino";
+import { UnknownReferenceError } from "../../app/errors.ts";
+import { etagOf } from "./etag.ts";
 
 const KEY = "0123456789abcdef0123456789abcdef";
 const AUTH = "Basic " + Buffer.from("kanthord:" + KEY).toString("base64");
@@ -750,6 +752,248 @@ test("a non-204 row with present omitted returns 500 internal, not a TypeError",
   );
   assert.equal(errorLines.length, 1);
   assert.ok(!JSON.parse(errorLines[0]!).cause.includes("is not a function"));
+});
+
+test("021 S1: a 201 row sets Location from location(), no ETag, and the presented body", async () => {
+  const { deps } = makeDeps();
+  const createRoute: Route = {
+    id: "test.create",
+    method: "POST",
+    path: "/api/thing",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: [],
+    location: (result) => `/api/thing/${result as string}`,
+    decode: () => ({}),
+    run: async () => "abc",
+    present: (result) => ({ id: result as string }),
+  };
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [createRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .post("/api/thing")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res.status, 201);
+  assert.equal(res.headers["location"], "/api/thing/abc");
+  assert.equal(res.headers["etag"], undefined);
+  assert.deepEqual(res.body.data, { id: "abc" });
+});
+
+test("021 S1: a 201 row with location omitted answers 500 internal", async () => {
+  const { deps } = makeDeps();
+  const brokenCreateRoute: Route = {
+    id: "test.create.broken",
+    method: "POST",
+    path: "/api/broken-thing",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: [],
+    decode: () => ({}),
+    run: async () => "abc",
+    present: (result) => ({ id: result as string }),
+  };
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [brokenCreateRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .post("/api/broken-thing")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res.status, 500);
+  assert.equal(res.body.error.code, "internal");
+});
+
+test("021 S1: a 200 json row's ETag equals etagOf(dto)", async () => {
+  const { deps } = makeDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [getByIdTestRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .get("/api/test/xyz")
+    .set("Authorization", AUTH);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers["etag"], etagOf(res.body.data));
+});
+
+test("021 S1: a 204 row answers 204 with no body, no ETag, no Content-Type", async () => {
+  const { deps } = makeDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [deleteTestRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .delete("/api/test")
+    .set("Authorization", AUTH);
+  assert.equal(res.status, 204);
+  assert.equal(res.headers["etag"], undefined);
+  assert.equal(res.headers["content-type"], undefined);
+  assert.equal(res.text, "");
+});
+
+function makePatchFixture(behavior: "ok" | "unknown-reference") {
+  let readCalls = 0;
+  let runCalls = 0;
+  let hasRun = false;
+  const readRoute: Route = {
+    id: "test.patchable.get",
+    method: "GET",
+    path: "/api/patchable/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: [],
+    decode: (i) => i.params,
+    run: async () => {
+      readCalls++;
+      if (behavior === "unknown-reference") {
+        throw new UnknownReferenceError("project", "p1");
+      }
+      return hasRun
+        ? { id: "p1", name: "after" }
+        : { id: "p1", name: "before" };
+    },
+    present: (r) => r,
+  };
+  const patchRoute: Route = {
+    id: "test.patchable.patch",
+    method: "PATCH",
+    path: "/api/patchable/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: [],
+    readRow: "test.patchable.get",
+    decode: (i) => i.body,
+    run: async () => {
+      runCalls++;
+      hasRun = true;
+      return undefined;
+    },
+  };
+  return {
+    readRoute,
+    patchRoute,
+    getReadCalls: () => readCalls,
+    getRunCalls: () => runCalls,
+  };
+}
+
+test("021 S1: PATCH with readRow and no If-Match answers 428, run not called", async () => {
+  const { deps } = makeDeps();
+  const fx = makePatchFixture("ok");
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [fx.readRoute, fx.patchRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .patch("/api/patchable/p1")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({ name: "new" });
+  assert.equal(res.status, 428);
+  assert.equal(res.body.error.code, "precondition_required");
+  assert.equal(fx.getRunCalls(), 0);
+});
+
+test("021 S1: PATCH with a stale If-Match answers 412, run not called", async () => {
+  const { deps } = makeDeps();
+  const fx = makePatchFixture("ok");
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [fx.readRoute, fx.patchRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .patch("/api/patchable/p1")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .set("If-Match", '"deadbeef"')
+    .send({ name: "new" });
+  assert.equal(res.status, 412);
+  assert.equal(res.body.error.code, "precondition_failed");
+  assert.equal(fx.getRunCalls(), 0);
+});
+
+test("021 S1: PATCH with a matching If-Match runs once and answers 200 with the re-read DTO and a fresh ETag", async () => {
+  const { deps } = makeDeps();
+  const fx = makePatchFixture("ok");
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [fx.readRoute, fx.patchRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const before = await request(app.callback())
+    .get("/api/patchable/p1")
+    .set("Authorization", AUTH);
+  const sentIfMatch = before.headers["etag"] as string;
+
+  const res = await request(app.callback())
+    .patch("/api/patchable/p1")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .set("If-Match", sentIfMatch)
+    .send({ name: "new" });
+  assert.equal(res.status, 200);
+  assert.equal(fx.getRunCalls(), 1);
+  assert.deepEqual(res.body.data, { id: "p1", name: "after" });
+  assert.notEqual(res.headers["etag"], sentIfMatch);
+});
+
+test("021 S1: PATCH whose read row throws UnknownReferenceError answers 404, run not called", async () => {
+  const { deps } = makeDeps();
+  const fx = makePatchFixture("unknown-reference");
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [fx.readRoute, fx.patchRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .patch("/api/patchable/p1")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .set("If-Match", '"deadbeef"')
+    .send({ name: "new" });
+  assert.equal(res.status, 404);
+  assert.equal(res.body.error.code, "unknown_reference");
+  assert.equal(fx.getRunCalls(), 0);
+});
+
+test("021 S1: PATCH whose readRow names a non-existent id answers 500 internal", async () => {
+  const { deps } = makeDeps();
+  const brokenPatchRoute: Route = {
+    id: "test.patchable.patch.broken",
+    method: "PATCH",
+    path: "/api/patchable-broken/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: [],
+    readRow: "no.such.row",
+    decode: (i) => i.body,
+    run: async () => undefined,
+  };
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [brokenPatchRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .patch("/api/patchable-broken/p1")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .set("If-Match", '"deadbeef"')
+    .send({ name: "new" });
+  assert.equal(res.status, 500);
+  assert.equal(res.body.error.code, "internal");
 });
 
 test("redaction over a real pino stream: captured lines contain neither the API key nor 'authorization'", async () => {

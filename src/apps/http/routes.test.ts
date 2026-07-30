@@ -57,6 +57,10 @@ const PATH_SEGMENTS = [
   "overview",
   "graph",
   "conflict",
+  "dependency",
+  "package",
+  "diagnostic",
+  "readiness",
 ];
 
 /**
@@ -65,7 +69,7 @@ const PATH_SEGMENTS = [
  * on real singular nouns (`status`, `progress`), and a test people must disable
  * is worse than no test. A genuine singular ending in `s` is named here.
  */
-const NOT_PLURAL: string[] = [];
+const NOT_PLURAL: string[] = ["readiness"];
 
 function staticSegmentsOf(path: string): string[] {
   return path
@@ -135,17 +139,55 @@ test("route policy: every ROUTES row satisfies the declared contract", () => {
       `run must be a function (${route.id})`,
     );
 
-    if (route.successStatus === 204) {
+    if (route.successStatus === 201) {
+      assert.equal(
+        typeof route.location,
+        "function",
+        `location required for 201 (${route.id})`,
+      );
+    } else {
+      assert.equal(
+        route.location,
+        undefined,
+        `location forbidden unless 201 (${route.id})`,
+      );
+    }
+
+    if (route.method === "PATCH") {
+      assert.equal(
+        typeof route.readRow,
+        "string",
+        `readRow required for PATCH (${route.id})`,
+      );
+      const target = ROUTES.find((r) => r.id === route.readRow);
+      assert.ok(
+        target !== undefined,
+        `readRow "${route.readRow}" names no row (${route.id})`,
+      );
+      assert.equal(
+        target.method,
+        "GET",
+        `readRow "${route.readRow}" must be a GET row (${route.id})`,
+      );
+    } else {
+      assert.equal(
+        route.readRow,
+        undefined,
+        `readRow forbidden unless PATCH (${route.id})`,
+      );
+    }
+
+    if (route.successStatus === 204 || route.readRow !== undefined) {
       assert.equal(
         route.present,
         undefined,
-        `present forbidden for 204 (${route.id})`,
+        `present forbidden for 204 and for readRow rows (${route.id})`,
       );
     } else {
       assert.equal(
         typeof route.present,
         "function",
-        `present required unless 204 (${route.id})`,
+        `present required unless 204 or readRow (${route.id})`,
       );
     }
 
@@ -206,6 +248,16 @@ test("path vocabulary: no allowlisted segment is a plural", () => {
   }
 });
 
+test("path vocabulary: NOT_PLURAL names exactly readiness, and every NOT_PLURAL entry is allowlisted", () => {
+  assert.deepEqual(NOT_PLURAL, ["readiness"]);
+  for (const segment of NOT_PLURAL) {
+    assert.ok(
+      PATH_SEGMENTS.includes(segment),
+      `NOT_PLURAL entry "${segment}" must also be in PATH_SEGMENTS`,
+    );
+  }
+});
+
 test("path vocabulary negative control: a plural segment is rejected, the singular is accepted", () => {
   assert.equal(
     staticSegmentsOf("/api/projects").every((s) => PATH_SEGMENTS.includes(s)),
@@ -244,11 +296,11 @@ test("health.get row: present returns a DTO with exactly status and version keys
   assert.deepEqual(Object.keys(view as object).sort(), ["status", "version"]);
 });
 
-test("ROUTES holds exactly 24 rows: health.get, ui.get, plus the 22 rows of EPIC 020", () => {
-  assert.equal(ROUTES.length, 24);
+test("ROUTES holds exactly 52 rows: 24 from 019+020, plus the 28 rows of EPIC 021", () => {
+  assert.equal(ROUTES.length, 52);
 });
 
-test("every route id from the EPIC 020 route table is present in ROUTES", () => {
+test("every route id from the EPIC 020 and 021 route tables is present in ROUTES", () => {
   const ids = new Set(ROUTES.map((r) => r.id));
   const expected = [
     "project.list",
@@ -273,6 +325,34 @@ test("every route id from the EPIC 020 route table is present in ROUTES", () => 
     "ai-provider.get",
     "model.list",
     "queue.get",
+    "project.create",
+    "project.patch",
+    "project.initiative.create",
+    "initiative.patch",
+    "initiative.objective.create",
+    "objective.patch",
+    "objective.task.create",
+    "project.repository.create",
+    "project.credential.create",
+    "project.notification.create",
+    "project.filesystem.create",
+    "repository.patch",
+    "credential.patch",
+    "notification.patch",
+    "filesystem.patch",
+    "project.resource.create",
+    "task.dependency.create",
+    "task.dependency.delete",
+    "initiative.dependency.create",
+    "initiative.dependency.delete",
+    "objective.dependency.create",
+    "objective.dependency.delete",
+    "project.graph.create",
+    "initiative.graph.apply",
+    "initiative.package.get",
+    "initiative.diagnostic.export",
+    "graph.readiness.check",
+    "project.readiness.get",
   ];
   for (const id of expected) {
     assert.ok(ids.has(id), `missing route id ${id}`);

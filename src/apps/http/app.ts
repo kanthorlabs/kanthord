@@ -12,6 +12,7 @@ import { HttpFailure } from "./errors.ts";
 import { TRANSPORT_ERRORS, mapError } from "./error-registry.ts";
 import { dataEnvelope, errorEnvelope } from "./envelope.ts";
 import { matchRoute } from "./router.ts";
+import { etagOf } from "./etag.ts";
 
 export interface HttpAppOptions {
   /** Already validated by requireApiKey; buildHttpApp never reads process.env. */
@@ -213,11 +214,42 @@ export function buildHttpApp(deps: HttpDeps, opts: HttpAppOptions): Koa {
     }
 
     const route = outcome.route;
-    const input = route.decode({
+    const rawInput = {
       params: outcome.params,
       query: ctx.query,
       body: ctx.request.body,
-    });
+    };
+
+    // A row that declares `readRow` is a PATCH: pre-read → If-Match → run →
+    // re-read (decision 3). Enforcement is declarative — never logic in `run`.
+    if (route.readRow !== undefined) {
+      const readRow = routes.find((r) => r.id === route.readRow);
+      const readPresent = readRow?.present;
+      if (readRow === undefined || readPresent === undefined) {
+        const e = TRANSPORT_ERRORS.internal;
+        throw new HttpFailure(e.code, e.status, e.message);
+      }
+      // A missing entity 404s here, before any write.
+      const readInput = readRow.decode(rawInput);
+      const before = readPresent(await readRow.run(deps, readInput));
+      const ifMatch = ctx.get("if-match");
+      if (!ifMatch) {
+        const e = TRANSPORT_ERRORS.precondition_required;
+        throw new HttpFailure(e.code, e.status, e.message);
+      }
+      if (ifMatch !== etagOf(before)) {
+        const e = TRANSPORT_ERRORS.precondition_failed;
+        throw new HttpFailure(e.code, e.status, e.message);
+      }
+      await route.run(deps, route.decode(rawInput));
+      const after = readPresent(await readRow.run(deps, readInput));
+      ctx.status = route.successStatus;
+      ctx.set("ETag", etagOf(after));
+      ctx.body = dataEnvelope(after);
+      return;
+    }
+
+    const input = route.decode(rawInput);
     const result = await route.run(deps, input);
 
     if (route.successStatus === 204) {
@@ -236,8 +268,21 @@ export function buildHttpApp(deps: HttpDeps, opts: HttpAppOptions): Koa {
       ctx.body = present(result) as string;
       return;
     }
+
+    const dto = present(result);
+    if (route.successStatus === 201) {
+      const location = route.location;
+      if (location === undefined) {
+        const e = TRANSPORT_ERRORS.internal;
+        throw new HttpFailure(e.code, e.status, e.message);
+      }
+      ctx.set("Location", location(result));
+    }
     ctx.status = route.successStatus;
-    ctx.body = dataEnvelope(present(result));
+    if (route.successStatus === 200) {
+      ctx.set("ETag", etagOf(dto));
+    }
+    ctx.body = dataEnvelope(dto);
   });
 
   return app;

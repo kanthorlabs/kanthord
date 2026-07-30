@@ -5,8 +5,33 @@ import {
   UnknownReferenceError,
   DuplicateNameError,
   ObjectiveNotInConflictError,
+  WrongTypeReferenceError,
+  CycleError,
+  DuplicateTaskError,
+  UnknownDependencyError,
+  DependenciesLockedError,
+  SequencingScopeError,
+  SequencingLockedError,
+  UnknownAgentError,
+  InvalidTaskFieldError,
+  EmbeddedCredentialError,
 } from "../../app/errors.ts";
 import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
+import {
+  ImmutableFieldError,
+  CacheConflictError,
+} from "../../app/resource/update-resource.ts";
+import { ImportValidationError } from "../../app/resource/import-resources.ts";
+import { GraphPackageDocumentError } from "../../app/graph/decode-graph-package.ts";
+import {
+  CreateModeIdError,
+  UnboundAliasError,
+  ExecutorBindingSetError,
+  UnknownNodeError,
+  CrossInitiativeError,
+  StaleManifestError,
+  UncreatableObjectiveError,
+} from "../../app/graph/import-errors.ts";
 import { InvalidInputError } from "./errors.ts";
 import {
   DOMAIN_ERROR_MAPPINGS,
@@ -15,7 +40,7 @@ import {
 } from "./error-registry.ts";
 
 const ALLOWED_STATUSES = new Set([
-  400, 401, 403, 404, 405, 409, 412, 413, 415, 500,
+  400, 401, 403, 404, 405, 409, 412, 413, 415, 428, 500,
 ]);
 
 test("registry hygiene: unique snake_case codes, allowed statuses only", () => {
@@ -109,4 +134,147 @@ test("mapError falls back to internal/500 for a plain Error, hiding its message"
 test("mapError falls back to internal for non-Error thrown values", () => {
   assert.equal(mapError("a string").code, "internal");
   assert.equal(mapError(undefined).code, "internal");
+});
+
+test("TRANSPORT_ERRORS carries the two 021 precondition codes", () => {
+  assert.deepEqual(TRANSPORT_ERRORS.precondition_required, {
+    code: "precondition_required",
+    status: 428,
+    message: "If-Match is required",
+  });
+  assert.equal(TRANSPORT_ERRORS.precondition_failed.status, 412);
+});
+
+// ─── Story S3 — 21 domain mappings ──────────────────────────────────────────
+
+test("021 S3: DOMAIN_ERROR_MAPPINGS.length is 25 (4 existing + 21 new)", () => {
+  assert.equal(DOMAIN_ERROR_MAPPINGS.length, 25);
+});
+
+test("021 S3: one class per code — every mapping's type is unique", () => {
+  assert.equal(
+    new Set(DOMAIN_ERROR_MAPPINGS.map((m) => m.type)).size,
+    DOMAIN_ERROR_MAPPINGS.length,
+  );
+});
+
+test("021 S3: each of the 21 new classes maps to its exact code/status pair", () => {
+  const table: Array<{ err: Error; code: string; status: number }> = [
+    {
+      err: new WrongTypeReferenceError("project", "objective", "X"),
+      code: "wrong_type_reference",
+      status: 400,
+    },
+    { err: new CycleError(["a", "b"]), code: "cycle_detected", status: 409 },
+    { err: new DuplicateTaskError("T1"), code: "duplicate_task", status: 409 },
+    {
+      err: new UnknownDependencyError("T1", "T2"),
+      code: "unknown_dependency",
+      status: 400,
+    },
+    {
+      err: new DependenciesLockedError("T1", "running"),
+      code: "dependencies_locked",
+      status: 409,
+    },
+    {
+      err: new SequencingScopeError("A", "B", "cross-project"),
+      code: "sequencing_scope",
+      status: 400,
+    },
+    {
+      err: new SequencingLockedError("N1", ["T1"]),
+      code: "sequencing_locked",
+      status: 409,
+    },
+    {
+      err: new UnknownAgentError("nope@1"),
+      code: "unknown_agent",
+      status: 400,
+    },
+    {
+      err: new InvalidTaskFieldError("title"),
+      code: "invalid_task_field",
+      status: 400,
+    },
+    {
+      err: new EmbeddedCredentialError("https://u:p@h/r"),
+      code: "embedded_credential",
+      status: 400,
+    },
+    {
+      err: new ImmutableFieldError("path"),
+      code: "immutable_field",
+      status: 409,
+    },
+    { err: new CacheConflictError("R1"), code: "cache_conflict", status: 409 },
+    {
+      err: new ImportValidationError(0, "e"),
+      code: "import_validation",
+      status: 400,
+    },
+    {
+      err: new CreateModeIdError("obj1.md", "T1"),
+      code: "create_mode_id",
+      status: 400,
+    },
+    {
+      err: new UnboundAliasError("source"),
+      code: "unbound_alias",
+      status: 400,
+    },
+    {
+      err: new ExecutorBindingSetError([
+        { taskRef: "t1", agent: "a1", missing: ["source"] },
+      ]),
+      code: "executor_binding_set",
+      status: 400,
+    },
+    {
+      err: new UnknownNodeError("obj1.md", "ref"),
+      code: "unknown_node",
+      status: 404,
+    },
+    {
+      err: new CrossInitiativeError("obj1.md", "ref", "I1", "I2"),
+      code: "cross_initiative",
+      status: 409,
+    },
+    {
+      err: new StaleManifestError(1, 2, "I1"),
+      code: "stale_manifest",
+      status: 409,
+    },
+    {
+      err: new UncreatableObjectiveError("I1", []),
+      code: "uncreatable_objective",
+      status: 409,
+    },
+    {
+      err: new GraphPackageDocumentError("pkg", "must be an object"),
+      code: "invalid_package",
+      status: 400,
+    },
+  ];
+
+  assert.equal(table.length, 21, "table covers every new class once");
+
+  for (const { err, code, status } of table) {
+    const mapped = mapError(err);
+    assert.equal(mapped.code, code, `${err.constructor.name} -> code`);
+    assert.equal(mapped.status, status, `${err.constructor.name} -> status`);
+    assert.equal(
+      mapped.message,
+      err.message,
+      `${err.constructor.name} keeps its own thrown message`,
+    );
+  }
+});
+
+test("021 S3: registry hygiene still passes with the 23 new codes (21 domain + S1's 2 transport)", () => {
+  const codes: string[] = [
+    ...DOMAIN_ERROR_MAPPINGS.map((m) => m.code),
+    ...Object.values(TRANSPORT_ERRORS).map((m) => m.code),
+  ];
+  assert.equal(new Set(codes).size, codes.length, "codes must be unique");
 });

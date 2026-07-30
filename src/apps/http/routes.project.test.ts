@@ -48,6 +48,7 @@ function makeDeps(): {
     listProjects?: unknown;
     getProject?: unknown;
     getProjectOverview?: unknown;
+    createProject?: unknown;
   };
   getProjectCalls: () => number;
 } {
@@ -55,6 +56,7 @@ function makeDeps(): {
     listProjects?: unknown;
     getProject?: unknown;
     getProjectOverview?: unknown;
+    createProject?: unknown;
   } = {};
   let getProjectCalls = 0;
   const deps = {
@@ -82,6 +84,12 @@ function makeDeps(): {
         return overviewFixture((input as { projectId: string }).projectId);
       },
     } as HttpDeps["getProjectOverview"],
+    createProject: {
+      execute: async (input: unknown) => {
+        received.createProject = input;
+        return "p1";
+      },
+    } as HttpDeps["createProject"],
   } as unknown as HttpDeps;
   return { deps, received, getProjectCalls: () => getProjectCalls };
 }
@@ -191,7 +199,7 @@ test("GET /api/project/p1/overview returns 200; fake received { projectId: 'p1' 
   assert.equal(res.body.data.projectId, "p1");
 });
 
-test("POST /api/project is 405 with Allow: GET", async () => {
+test("POST /api/project with a valid body now answers 201 (021 write row)", async () => {
   const { deps } = makeDeps();
   const app = buildHttpApp(deps, {
     apiKey: KEY,
@@ -201,7 +209,21 @@ test("POST /api/project is 405 with Allow: GET", async () => {
     .post("/api/project")
     .set("Authorization", AUTH)
     .set("Content-Type", "application/json")
+    .send({ name: "alpha" });
+  assert.equal(res.status, 201);
+});
+
+test("PUT /api/project is 405 with Allow: GET, POST", async () => {
+  const { deps } = makeDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .put("/api/project")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
     .send({});
   assert.equal(res.status, 405);
-  assert.equal(res.headers.allow, "GET");
+  assert.equal(res.headers.allow, "GET, POST");
 });

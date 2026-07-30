@@ -121,6 +121,26 @@ export interface TaskResultView {
   readonly [key: string]: unknown;
 }
 
+export interface IdView {
+  readonly id: string;
+  readonly [key: string]: unknown;
+}
+
+/** The minimal identity DTO every create answers with (decision 1). */
+export function idView(id: string): IdView {
+  return { id };
+}
+
+export interface IdsView {
+  readonly ids: string[];
+  readonly [key: string]: unknown;
+}
+
+/** A bulk create has no single created resource, so it answers with the ids. */
+export function idsView(ids: readonly string[]): IdsView {
+  return { ids: [...ids] };
+}
+
 export function taskResultView(result: {
   readonly workspace: string | null;
   readonly branch: string | null;

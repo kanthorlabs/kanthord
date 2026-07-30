@@ -62,7 +62,7 @@ test("the uncovered set (leaves minus every row's cliCommands, minus serve/comma
   }
 });
 
-test("the 25 CLI leaves claimed by EPIC 020 all appear across ROUTES' cliCommands", () => {
+test("the CLI leaves claimed by EPIC 020 all appear across ROUTES' cliCommands", () => {
   const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
   const expectedCovered = [
     "get project",
@@ -91,10 +91,60 @@ test("the 25 CLI leaves claimed by EPIC 020 all appear across ROUTES' cliCommand
     "find objective",
     "find resource",
   ];
+  assert.equal(expectedCovered.length, 25);
   for (const cliCommand of expectedCovered) {
     assert.ok(
       covered.has(cliCommand),
       `expected "${cliCommand}" to be covered by ROUTES' cliCommands`,
     );
   }
+});
+
+test("the 27 CLI leaves claimed by EPIC 021 all appear across ROUTES' cliCommands", () => {
+  const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
+  const expectedCovered = [
+    "create project",
+    "create initiative",
+    "create objective",
+    "create task",
+    "create credential",
+    "create filesystem",
+    "create notification",
+    "create repository",
+    "rename project",
+    "rename initiative",
+    "rename objective",
+    "add dependency",
+    "add initiative-dependency",
+    "add objective-dependency",
+    "remove dependency",
+    "remove initiative-dependency",
+    "remove objective-dependency",
+    "update credential",
+    "update filesystem",
+    "update notification",
+    "update repository",
+    "import resource",
+    "import graph",
+    "export initiative",
+    "export diagnostic",
+    "check graph",
+    "check project",
+  ];
+  assert.equal(expectedCovered.length, 27);
+  for (const cliCommand of expectedCovered) {
+    assert.ok(
+      covered.has(cliCommand),
+      `expected "${cliCommand}" to be covered by ROUTES' cliCommands`,
+    );
+  }
+});
+
+test("the uncovered set shrank by the 27 leaves EPIC 021 claims", () => {
+  const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
+  const uncovered = leaves.filter(
+    (leaf) => !covered.has(leaf) && leaf !== "serve" && leaf !== "commands",
+  );
+  // 78 retirable leaves, 25 claimed by 020, 27 claimed by 021.
+  assert.equal(uncovered.length, 26);
 });

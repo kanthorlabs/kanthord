@@ -5,6 +5,8 @@ import {
   unsatisfiedEdgeView,
   taskResultView,
   repositoryAuthView,
+  idView,
+  idsView,
   type EventResult,
 } from "./shared.ts";
 
@@ -100,4 +102,18 @@ test("taskResultView maps a populated evidence array element-wise, exactly three
   assert.equal(first.command, "npm test");
   assert.equal(first.exitCode, 0);
   assert.equal(first.output, "ok");
+});
+
+test("idView('x') gives exactly ['id']", () => {
+  const view = idView("x");
+  assert.deepEqual(Object.keys(view), ["id"]);
+  assert.equal(view.id, "x");
+});
+
+test("idsView gives exactly ['ids'], a deep-equal but distinct array reference", () => {
+  const input = ["a", "b"];
+  const view = idsView(input);
+  assert.deepEqual(Object.keys(view), ["ids"]);
+  assert.deepEqual(view.ids, ["a", "b"]);
+  assert.notEqual(view.ids, input);
 });

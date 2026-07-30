@@ -19,13 +19,31 @@ import { aiProviderView } from "./views/ai-provider.ts";
 import { modelView } from "./views/model.ts";
 import { decisionQueueView } from "./views/queue.ts";
 import { taskConflictView, objectiveConflictView } from "./views/conflict.ts";
+import { idView, idsView } from "./views/shared.ts";
+import { graphPackageView } from "./views/graph-package.ts";
+import { graphCreateView, graphApplyView } from "./views/graph-apply.ts";
+import { readinessEntryView, projectReadinessView } from "./views/readiness.ts";
+import { diagnosticView } from "./views/diagnostic.ts";
 import {
   optionalQueryString,
   optionalQueryInt,
   requirePathParam,
 } from "./decode.ts";
+import {
+  requireBodyString,
+  optionalBodyString,
+  optionalBodyStringArray,
+  optionalBodyBool,
+  optionalBodyRecord,
+  requireBodyObjectArray,
+  requireBodyRepositoryAuth,
+  optionalBodyRepositoryAuth,
+  requireBodyObject,
+} from "./body.ts";
+import { parseGraphPackageDocument } from "../../app/graph/decode-graph-package.ts";
 import { InvalidInputError } from "./errors.ts";
 import type { TaskStatus } from "../../app/errors.ts";
+import type { AddResourceInput } from "../../app/resource/add-resource.ts";
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -78,6 +96,23 @@ export interface RouteDefinition<Input, Output> extends RouteMeta {
    * skipped — that is how `GET /` serves the UI shell.
    */
   readonly present?: (result: Output) => unknown;
+  /**
+   * Builds the `Location` header value for a create. Required iff
+   * `successStatus === 201`, forbidden otherwise, and enforced by the
+   * route-policy test exactly as `present` is. Never derived from `path`: two
+   * rows point at a DIFFERENT resource than the one they posted to
+   * (`project.credential.create` → `/api/resource/<id>`, `project.graph.create`
+   * → `/api/initiative/<id>`), so string surgery on `path` would be wrong.
+   */
+  readonly location?: (result: Output) => string;
+  /**
+   * The `id` of the GET row that IS this item's representation. Required iff
+   * `method === "PATCH"`, forbidden otherwise. The dispatcher runs that row's
+   * `decode`/`run`/`present` over the SAME params to compute the `If-Match`
+   * validator, then again after the write to answer `200` with the fresh DTO —
+   * so a PATCH row declares no `present` of its own.
+   */
+  readonly readRow?: string;
 }
 
 /** The erased row the dispatcher and the policy tests iterate. */
@@ -85,6 +120,8 @@ export interface Route extends RouteMeta {
   readonly decode: (input: RouteInput) => unknown;
   readonly run: (deps: HttpDeps, input: unknown) => Promise<unknown>;
   readonly present?: (result: unknown) => unknown;
+  readonly location?: (result: unknown) => string;
+  readonly readRow?: string;
 }
 
 /**
@@ -124,6 +161,72 @@ function resourceCollectionRoute(
     run: async (deps, input) => deps.listResources.execute(input),
     present: (result) => result.map(resourceView),
   });
+}
+
+/**
+ * The four typed resource creates (decision 5). Each decoder's return type is
+ * ANNOTATED so `type` and `provider` keep their literal types without a cast,
+ * and each `type` is bound literally here — never read from the body.
+ */
+function decodeRepositoryCreate({
+  params,
+  body,
+}: RouteInput): AddResourceInput {
+  return {
+    type: "repository",
+    projectId: requirePathParam(params, "id"),
+    name: requireBodyString(body, "name"),
+    remoteUrl: requireBodyString(body, "remoteUrl"),
+    branch: requireBodyString(body, "branch"),
+    // AddResource derives the home path from remoteUrl when path is ""
+    // (add-resource.ts:102-109).
+    path: optionalBodyString(body, "path") ?? "",
+    auth: requireBodyRepositoryAuth(body, "auth"),
+  };
+}
+
+function decodeCredentialCreate({
+  params,
+  body,
+}: RouteInput): AddResourceInput {
+  return {
+    type: "credential",
+    projectId: requirePathParam(params, "id"),
+    name: requireBodyString(body, "name"),
+    provider: requireBodyString(body, "provider"),
+    // The only secret 021 carries. It travels in the body because the CLI's
+    // --value-file has no HTTP twin, and it is never presented back.
+    value: requireBodyString(body, "value"),
+  };
+}
+
+function decodeNotificationCreate({
+  params,
+  body,
+}: RouteInput): AddResourceInput {
+  const provider = requireBodyString(body, "provider");
+  if (provider !== "slack" && provider !== "telegram") {
+    throw new InvalidInputError("provider", 'must be "slack" or "telegram"');
+  }
+  return {
+    type: "notification",
+    projectId: requirePathParam(params, "id"),
+    name: requireBodyString(body, "name"),
+    provider,
+    destination: requireBodyString(body, "destination"),
+  };
+}
+
+function decodeFilesystemCreate({
+  params,
+  body,
+}: RouteInput): AddResourceInput {
+  return {
+    type: "filesystem",
+    projectId: requirePathParam(params, "id"),
+    name: requireBodyString(body, "name"),
+    path: requireBodyString(body, "path"),
+  };
 }
 
 export const ROUTES: readonly Route[] = [
@@ -392,5 +495,482 @@ export const ROUTES: readonly Route[] = [
     }),
     run: async (deps, input) => deps.getObjectiveConflict.execute(input),
     present: (result) => objectiveConflictView(result),
+  }),
+  defineRoute({
+    id: "project.create",
+    method: "POST",
+    path: "/api/project",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create project"],
+    decode: ({ body }) => ({ name: requireBodyString(body, "name") }),
+    run: async (deps, input) => deps.createProject.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/project/${result}`,
+  }),
+  defineRoute({
+    id: "project.patch",
+    method: "PATCH",
+    path: "/api/project/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["rename project"],
+    readRow: "project.get",
+    decode: ({ params, body }) => ({
+      id: requirePathParam(params, "id"),
+      name: requireBodyString(body, "name"),
+    }),
+    run: async (deps, input) => deps.renameProject.execute(input),
+  }),
+  defineRoute({
+    id: "project.initiative.create",
+    method: "POST",
+    path: "/api/project/:id/initiative",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create initiative"],
+    decode: ({ params, body }) => {
+      const after = optionalBodyStringArray(body, "after");
+      return {
+        projectId: requirePathParam(params, "id"),
+        name: requireBodyString(body, "name"),
+        paused: optionalBodyBool(body, "paused") ?? false,
+        ...(after !== undefined ? { after } : {}),
+      };
+    },
+    run: async (deps, input) => deps.createInitiative.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/initiative/${result}`,
+  }),
+  defineRoute({
+    id: "initiative.patch",
+    method: "PATCH",
+    path: "/api/initiative/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["rename initiative"],
+    readRow: "initiative.get",
+    decode: ({ params, body }) => ({
+      id: requirePathParam(params, "id"),
+      name: requireBodyString(body, "name"),
+    }),
+    run: async (deps, input) => deps.renameInitiative.execute(input),
+  }),
+  defineRoute({
+    id: "initiative.objective.create",
+    method: "POST",
+    path: "/api/initiative/:id/objective",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create objective"],
+    decode: ({ params, body }) => {
+      const after = optionalBodyStringArray(body, "after");
+      return {
+        initiativeId: requirePathParam(params, "id"),
+        name: requireBodyString(body, "name"),
+        ...(after !== undefined ? { after } : {}),
+      };
+    },
+    run: async (deps, input) => deps.createObjective.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/objective/${result}`,
+  }),
+  defineRoute({
+    id: "objective.patch",
+    method: "PATCH",
+    path: "/api/objective/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["rename objective"],
+    readRow: "objective.get",
+    decode: ({ params, body }) => ({
+      id: requirePathParam(params, "id"),
+      name: requireBodyString(body, "name"),
+    }),
+    run: async (deps, input) => deps.renameObjective.execute(input),
+  }),
+  defineRoute({
+    id: "objective.task.create",
+    method: "POST",
+    path: "/api/objective/:id/task",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create task"],
+    decode: ({ params, body }) => {
+      const instructions = optionalBodyString(body, "instructions");
+      const ac = optionalBodyStringArray(body, "ac");
+      const verification = optionalBodyStringArray(body, "verification");
+      const agent = optionalBodyString(body, "agent");
+      const dependencies = optionalBodyStringArray(body, "dependencies");
+      const context = optionalBodyRecord(body, "context");
+      return {
+        objectiveId: requirePathParam(params, "id"),
+        title: requireBodyString(body, "title"),
+        ...(instructions !== undefined ? { instructions } : {}),
+        ...(ac !== undefined ? { ac } : {}),
+        ...(verification !== undefined ? { verification } : {}),
+        ...(agent !== undefined ? { agent } : {}),
+        ...(dependencies !== undefined ? { dependencies } : {}),
+        ...(context !== undefined ? { context } : {}),
+      };
+    },
+    run: async (deps, input) => deps.createTask.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/task/${result}`,
+  }),
+  defineRoute({
+    id: "project.repository.create",
+    method: "POST",
+    path: "/api/project/:id/repository",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create repository"],
+    decode: decodeRepositoryCreate,
+    run: async (deps, input) => deps.addResource.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/resource/${result}`,
+  }),
+  defineRoute({
+    id: "project.credential.create",
+    method: "POST",
+    path: "/api/project/:id/credential",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create credential"],
+    decode: decodeCredentialCreate,
+    run: async (deps, input) => deps.addResource.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/resource/${result}`,
+  }),
+  defineRoute({
+    id: "project.notification.create",
+    method: "POST",
+    path: "/api/project/:id/notification",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create notification"],
+    decode: decodeNotificationCreate,
+    run: async (deps, input) => deps.addResource.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/resource/${result}`,
+  }),
+  defineRoute({
+    id: "project.filesystem.create",
+    method: "POST",
+    path: "/api/project/:id/filesystem",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["create filesystem"],
+    decode: decodeFilesystemCreate,
+    run: async (deps, input) => deps.addResource.execute(input),
+    present: (result) => idView(result),
+    location: (result) => `/api/resource/${result}`,
+  }),
+  defineRoute({
+    id: "repository.patch",
+    method: "PATCH",
+    path: "/api/repository/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["update repository"],
+    readRow: "resource.get",
+    decode: ({ params, body }) => {
+      const name = optionalBodyString(body, "name");
+      const branch = optionalBodyString(body, "branch");
+      const path = optionalBodyString(body, "path");
+      const remoteUrl = optionalBodyString(body, "remoteUrl");
+      const auth = optionalBodyRepositoryAuth(body, "auth");
+      const reclone = optionalBodyBool(body, "reclone");
+      // `type` is the ONE immutable probe forwarded — see Constraints.
+      const type = optionalBodyString(body, "type");
+      return {
+        id: requirePathParam(params, "id"),
+        ...(name !== undefined ? { name } : {}),
+        ...(branch !== undefined ? { branch } : {}),
+        ...(path !== undefined ? { path } : {}),
+        ...(remoteUrl !== undefined ? { remoteUrl } : {}),
+        ...(auth !== undefined ? { auth } : {}),
+        ...(reclone !== undefined ? { reclone } : {}),
+        ...(type !== undefined ? { type } : {}),
+      };
+    },
+    run: async (deps, input) => deps.updateRepository.execute(input),
+  }),
+  defineRoute({
+    id: "credential.patch",
+    method: "PATCH",
+    path: "/api/credential/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["update credential"],
+    readRow: "resource.get",
+    decode: ({ params, body }) => {
+      const name = optionalBodyString(body, "name");
+      const value = optionalBodyString(body, "value");
+      const type = optionalBodyString(body, "type");
+      return {
+        id: requirePathParam(params, "id"),
+        ...(name !== undefined ? { name } : {}),
+        ...(value !== undefined ? { value } : {}),
+        ...(type !== undefined ? { type } : {}),
+      };
+    },
+    run: async (deps, input) => deps.updateCredential.execute(input),
+  }),
+  defineRoute({
+    id: "notification.patch",
+    method: "PATCH",
+    path: "/api/notification/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["update notification"],
+    readRow: "resource.get",
+    decode: ({ params, body }) => {
+      const name = optionalBodyString(body, "name");
+      const destination = optionalBodyString(body, "destination");
+      const type = optionalBodyString(body, "type");
+      return {
+        id: requirePathParam(params, "id"),
+        ...(name !== undefined ? { name } : {}),
+        ...(destination !== undefined ? { destination } : {}),
+        ...(type !== undefined ? { type } : {}),
+      };
+    },
+    run: async (deps, input) => deps.updateNotification.execute(input),
+  }),
+  defineRoute({
+    id: "filesystem.patch",
+    method: "PATCH",
+    path: "/api/filesystem/:id",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["update filesystem"],
+    readRow: "resource.get",
+    decode: ({ params, body }) => {
+      const name = optionalBodyString(body, "name");
+      const path = optionalBodyString(body, "path");
+      const type = optionalBodyString(body, "type");
+      return {
+        id: requirePathParam(params, "id"),
+        ...(name !== undefined ? { name } : {}),
+        ...(path !== undefined ? { path } : {}),
+        ...(type !== undefined ? { type } : {}),
+      };
+    },
+    run: async (deps, input) => deps.updateFilesystem.execute(input),
+  }),
+  defineRoute({
+    id: "project.resource.create",
+    method: "POST",
+    path: "/api/project/:id/resource",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["import resource"],
+    decode: ({ params, body }) => ({
+      projectId: requirePathParam(params, "id"),
+      entries: requireBodyObjectArray(body, "entries"),
+    }),
+    run: async (deps, input) => deps.importResources.execute(input),
+    present: (result) => idsView(result),
+  }),
+  defineRoute({
+    id: "task.dependency.create",
+    method: "POST",
+    path: "/api/task/:id/dependency/:dependencyId",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["add dependency"],
+    decode: ({ params }) => ({
+      taskId: requirePathParam(params, "id"),
+      dependencyId: requirePathParam(params, "dependencyId"),
+    }),
+    run: async (deps, input) => deps.addDependency.execute(input),
+  }),
+  defineRoute({
+    id: "task.dependency.delete",
+    method: "DELETE",
+    path: "/api/task/:id/dependency/:dependencyId",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["remove dependency"],
+    decode: ({ params }) => ({
+      taskId: requirePathParam(params, "id"),
+      dependencyId: requirePathParam(params, "dependencyId"),
+    }),
+    run: async (deps, input) => deps.removeDependency.execute(input),
+  }),
+  defineRoute({
+    id: "initiative.dependency.create",
+    method: "POST",
+    path: "/api/initiative/:id/dependency/:dependencyId",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["add initiative-dependency"],
+    decode: ({ params }) => ({
+      initiativeId: requirePathParam(params, "id"),
+      dependencyId: requirePathParam(params, "dependencyId"),
+    }),
+    run: async (deps, input) => deps.addInitiativeDependency.execute(input),
+  }),
+  defineRoute({
+    id: "initiative.dependency.delete",
+    method: "DELETE",
+    path: "/api/initiative/:id/dependency/:dependencyId",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["remove initiative-dependency"],
+    decode: ({ params }) => ({
+      initiativeId: requirePathParam(params, "id"),
+      dependencyId: requirePathParam(params, "dependencyId"),
+    }),
+    run: async (deps, input) => deps.removeInitiativeDependency.execute(input),
+  }),
+  defineRoute({
+    id: "objective.dependency.create",
+    method: "POST",
+    path: "/api/objective/:id/dependency/:dependencyId",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["add objective-dependency"],
+    decode: ({ params }) => ({
+      objectiveId: requirePathParam(params, "id"),
+      dependencyId: requirePathParam(params, "dependencyId"),
+    }),
+    run: async (deps, input) => deps.addObjectiveDependency.execute(input),
+  }),
+  defineRoute({
+    id: "objective.dependency.delete",
+    method: "DELETE",
+    path: "/api/objective/:id/dependency/:dependencyId",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["remove objective-dependency"],
+    decode: ({ params }) => ({
+      objectiveId: requirePathParam(params, "id"),
+      dependencyId: requirePathParam(params, "dependencyId"),
+    }),
+    run: async (deps, input) => deps.removeObjectiveDependency.execute(input),
+  }),
+  defineRoute({
+    id: "project.graph.create",
+    method: "POST",
+    path: "/api/project/:id/graph",
+    successStatus: 201,
+    kind: "json",
+    cliCommands: ["import graph"],
+    decode: ({ params, body }) => {
+      const bindings = optionalBodyRecord(body, "bindings");
+      return {
+        pkg: parseGraphPackageDocument(requireBodyObject(body, "pkg")),
+        projectId: requirePathParam(params, "id"),
+        paused: optionalBodyBool(body, "paused") ?? false,
+        ...(bindings !== undefined ? { bindings } : {}),
+      };
+    },
+    // packageId is minted here because only `run` sees deps (decision 6).
+    run: async (deps, input) =>
+      deps.createGraph.execute({
+        pkg: input.pkg,
+        projectId: input.projectId,
+        packageId: deps.newId(),
+        paused: input.paused,
+        ...(input.bindings !== undefined ? { bindings: input.bindings } : {}),
+      }),
+    present: (result) => graphCreateView(result),
+    location: (result) => `/api/initiative/${result.initiativeId}`,
+  }),
+  defineRoute({
+    id: "initiative.graph.apply",
+    method: "POST",
+    path: "/api/initiative/:id/graph",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["import graph"],
+    decode: ({ params, body }) => {
+      const dryRun = optionalBodyBool(body, "dryRun");
+      const deleteMissing = optionalBodyBool(body, "deleteMissing");
+      const confirmDelete = optionalBodyBool(body, "confirmDelete");
+      return {
+        pkg: parseGraphPackageDocument(requireBodyObject(body, "pkg")),
+        initiativeId: requirePathParam(params, "id"),
+        ...(dryRun !== undefined ? { dryRun } : {}),
+        ...(deleteMissing !== undefined ? { deleteMissing } : {}),
+        ...(confirmDelete !== undefined ? { confirmDelete } : {}),
+      };
+    },
+    run: async (deps, input) => deps.applyGraph.execute(input),
+    present: (result) => graphApplyView(result),
+  }),
+  defineRoute({
+    id: "initiative.package.get",
+    method: "GET",
+    path: "/api/initiative/:id/package",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["export initiative"],
+    decode: ({ params }) => ({ id: requirePathParam(params, "id") }),
+    // ExportInitiative takes a POSITIONAL string, not an input object.
+    run: async (deps, input) => deps.exportInitiative.execute(input.id),
+    present: (result) => graphPackageView(result),
+  }),
+  defineRoute({
+    id: "initiative.diagnostic.export",
+    method: "POST",
+    path: "/api/initiative/:id/diagnostic",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["export diagnostic"],
+    decode: ({ params, body }) => {
+      // The CLI's `--out` is deliberately NOT accepted: a client-supplied server
+      // filesystem path is an arbitrary-file-write primitive. The document is
+      // returned, never written.
+      const taskId = optionalBodyString(body, "task");
+      const debug = optionalBodyBool(body, "debug");
+      return {
+        initiativeId: requirePathParam(params, "id"),
+        ...(taskId !== undefined ? { taskId } : {}),
+        ...(debug !== undefined ? { debug } : {}),
+      };
+    },
+    run: async (deps, input) => deps.diagnosticsExport.build(input),
+    present: (result) => diagnosticView(result),
+  }),
+  defineRoute({
+    id: "graph.readiness.check",
+    method: "POST",
+    path: "/api/graph/readiness",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["check graph"],
+    decode: ({ body }) => ({
+      tasks: requireBodyObjectArray(body, "tasks").map((entry) => {
+        const dependencies = optionalBodyStringArray(entry, "dependencies");
+        return {
+          id: requireBodyString(entry, "id"),
+          ...(dependencies !== undefined ? { dependencies } : {}),
+        };
+      }),
+    }),
+    // CheckGraph.execute is synchronous; `run` is async, which is legal as is.
+    run: async (deps, input) => deps.checkGraph.execute(input),
+    present: (result) => result.map(readinessEntryView),
+  }),
+  defineRoute({
+    id: "project.readiness.get",
+    method: "GET",
+    path: "/api/project/:id/readiness",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["check project"],
+    decode: ({ params }) => ({
+      id: requirePathParam(params, "id"),
+      // The two probe flags are deliberately NOT exposed: --probe-provider makes
+      // a real billable model call and --probe-repositories runs git ls-remote.
+      // Probing belongs with EPIC 024's POST /api/ai-provider/:id/probe.
+      probeRepositories: false,
+      probeProvider: false,
+    }),
+    run: async (deps, input) => deps.checkProject.execute(input),
+    present: (result) => projectReadinessView(result),
   }),
 ];

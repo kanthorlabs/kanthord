@@ -4,8 +4,8 @@ import {
   type SafeFactsKind,
   type SafeFactsErrorCode,
   type SafeFactsRecord,
+  type SafeFactsExport,
   validateSafeFactsRecord,
-  serializeSafeFactsRecord,
 } from "../../domain/safe-facts.ts";
 
 // ── Narrow dependency interfaces ──────────────────────────────────────────────
@@ -84,6 +84,20 @@ function mapToolCategory(
   return "other";
 }
 
+/** Preview counts grouped by kind, in first-seen order (unchanged behaviour). */
+function previewOf(
+  records: readonly SafeFactsRecord[],
+): Array<{ kind: SafeFactsKind; count: number }> {
+  const kindCounts = new Map<SafeFactsKind, number>();
+  for (const r of records) {
+    kindCounts.set(r.kind, (kindCounts.get(r.kind) ?? 0) + 1);
+  }
+  return Array.from(kindCounts.entries()).map(([kind, count]) => ({
+    kind,
+    count,
+  }));
+}
+
 // ── DiagnosticsExport use case ────────────────────────────────────────────────
 
 export class DiagnosticsExport {
@@ -112,13 +126,12 @@ export class DiagnosticsExport {
     this.#writeFile = writeFile;
   }
 
-  async execute(input: {
+  async build(input: {
     initiativeId: string;
     taskId?: string;
-    outPath: string;
     debug?: boolean;
-  }): Promise<DiagnosticsExportResult> {
-    const { initiativeId, outPath } = input;
+  }): Promise<SafeFactsExport> {
+    const { initiativeId } = input;
 
     // Per-run session ref — fresh opaque id per execute() call.
     const runKey = newId();
@@ -296,31 +309,35 @@ export class DiagnosticsExport {
       }
     }
 
-    // Build preview summary grouped by kind.
-    const kindCounts = new Map<SafeFactsKind, number>();
-    for (const r of records) {
-      kindCounts.set(r.kind, (kindCounts.get(r.kind) ?? 0) + 1);
-    }
-    const preview = Array.from(kindCounts.entries()).map(([kind, count]) => ({
-      kind,
-      count,
-    }));
-
-    // Serialize — explicit field-by-field via serializeSafeFactsRecord (NEVER spread).
-    const serializedRecords = records.map(serializeSafeFactsRecord);
-
     // Build SafeFactsExport — explicit field construction (no spread, no Object.assign).
-    const exportObj = {
+    // `records` are already domain SafeFactsRecord objects built field-by-field
+    // above (no stray keys), so no further serialization is needed here; the
+    // presentation boundary (views/diagnostic.ts's diagnosticView) does its own
+    // field-by-field mapping when the HTTP response is built.
+    const exportObj: SafeFactsExport = {
       schemaVersion: SCHEMA_VERSION,
       exportedAt,
       initiativeRef,
-      records: serializedRecords,
+      records,
     };
 
-    await this.#writeFile(outPath, JSON.stringify(exportObj, null, 2), {
+    return exportObj;
+  }
+
+  async execute(input: {
+    initiativeId: string;
+    taskId?: string;
+    outPath: string;
+    debug?: boolean;
+  }): Promise<DiagnosticsExportResult> {
+    const document = await this.build(input);
+    await this.#writeFile(input.outPath, JSON.stringify(document, null, 2), {
       mode: 0o600,
     });
-
-    return { recordCount: records.length, outPath, preview };
+    return {
+      recordCount: document.records.length,
+      outPath: input.outPath,
+      preview: previewOf(document.records),
+    };
   }
 }

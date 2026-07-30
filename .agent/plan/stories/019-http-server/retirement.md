@@ -58,6 +58,22 @@ Dependencies are sub-resources: `POST|DELETE /api/task/:id/dependency/:otherId`.
 until the async job API. This is the epic that adds the request-body reader's
 first real consumer and the `If-Match`/`ETag` convention.
 
+Covered. Implemented as `.agent/plan/epics/021-http-planning-writes.md`, proved
+by `scripts/e2e/http-writes-proof.sh`. All 27 leaves above are claimed by the
+28-row route table. Two things stay CLI-only and are NOT retired by 021:
+
+- `check project --probe-repositories` / `--probe-provider` — the route binds
+  both flags to `false` literally. Probing makes a billable model call and runs
+  `git ls-remote`, so it belongs with EPIC 024's
+  `POST /api/ai-provider/:id/probe`. Until then it is an operator CLI action.
+- The interactive `import graph` form — the HTTP row takes an already-parsed
+  JSON package; markdown-package parsing, manifest rewriting and
+  `--bind alias=name` resolution stay in the CLI.
+
+Also recorded: 021's `If-Match` is advisory against a stale editor, not a
+serializable compare-and-swap (EPIC 021 decision 3). Targets 022 and 023 inherit
+that convention as-is, with the same limit.
+
 ### Target 022 — the event feed
 
 `list event`, `ack project`.

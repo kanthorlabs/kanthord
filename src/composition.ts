@@ -27,6 +27,7 @@ import { FindProject } from "./app/project/find-project.ts";
 import { ListProjects } from "./app/project/list-projects.ts";
 import { ProbeAiProvider } from "./app/project/probe-ai-provider.ts";
 import { CheckProject } from "./app/project/check-project.ts";
+import { CheckGraph } from "./app/graph/check-graph.ts";
 import { ObserveSetupFacts } from "./app/project/observe-setup-facts.ts";
 import { CreateInitiative } from "./app/initiative/create-initiative.ts";
 import { AddInitiativeDependency } from "./app/initiative/add-initiative-dependency.ts";
@@ -768,6 +769,8 @@ export function buildDeps(
     providerProbe: probeAiProvider,
   });
 
+  const checkGraph = new CheckGraph();
+
   // Story 007.13-B — publish delivers a landed branch to its remote,
   // separate from (and never automatic on) approve/land.
   const repositoryPublisher = new GitRepositoryPublisher(resolveCredential);
@@ -1232,6 +1235,7 @@ export function buildDeps(
     testAiProvider,
     providerProbe: probeAiProvider,
     checkProject,
+    checkGraph,
     observeSetupFacts,
     heartbeat,
     repositoryProbe,

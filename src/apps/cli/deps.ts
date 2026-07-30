@@ -66,6 +66,7 @@ import type { ResolveProjectChain } from "../../app/ai-provider/resolve-project-
 import type { TestAiProvider } from "../../app/ai-provider/test-ai-provider.ts";
 import type { ProbeAiProvider } from "../../app/project/probe-ai-provider.ts";
 import type { CheckProject } from "../../app/project/check-project.ts";
+import type { CheckGraph } from "../../app/graph/check-graph.ts";
 import type { ObserveSetupFacts } from "../../app/project/observe-setup-facts.ts";
 import type { SetupPrompt } from "./setup/prompt.ts";
 import type { CreateGraph } from "../../app/graph/create-graph.ts";
@@ -249,6 +250,7 @@ export interface CliDeps {
   testAiProvider: TestAiProvider;
   providerProbe: ProbeAiProvider;
   checkProject: CheckProject;
+  checkGraph: CheckGraph;
   /**
    * EPIC 015 Story 1 — fact collector for the guided setup wizard. Returns
    * the `ObservedFacts` value the pure `SetupPlan` decides against.

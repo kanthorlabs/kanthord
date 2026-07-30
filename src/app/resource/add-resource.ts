@@ -16,6 +16,10 @@ import {
   WrongTypeReferenceError,
 } from "../errors.ts";
 
+// Republished so driving adapters can name the auth shape they must decode
+// without importing domain/ (AGENTS.md).
+export type { RepositoryAuth } from "../../domain/resource.ts";
+
 export type AddResourceInput =
   | {
       type: "repository";

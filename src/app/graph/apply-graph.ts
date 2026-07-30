@@ -1014,7 +1014,10 @@ export class ApplyGraph {
     }
 
     return {
-      applied: conflicts.length === 0 && refusedEdgeRemovals.length === 0,
+      applied:
+        !input.dryRun &&
+        conflicts.length === 0 &&
+        refusedEdgeRemovals.length === 0,
       classifications,
       summary,
       conflicts,

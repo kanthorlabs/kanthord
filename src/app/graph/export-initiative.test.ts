@@ -14,6 +14,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { ExportInitiative } from "./export-initiative.ts";
 import { GRAPH_FORMAT_VERSION } from "./format.ts";
+import { UnknownReferenceError } from "../errors.ts";
 import type {
   TaskRepository,
   InitiativeRepository,
@@ -372,6 +373,25 @@ test("ExportInitiative PkgTask.dependencies / objectiveRef / initiativeRef carry
       "each objective initiativeRef is the initiative ULID",
     );
   }
+});
+
+// ─── Story S3 — a classifiable error for an unknown initiative ─────────────
+
+test("021 S3: execute rejects an unknown initiative with UnknownReferenceError(kind='initiative', id)", async () => {
+  const uc = new ExportInitiative({
+    tasks: new FakeTaskRepository(),
+    initiatives: new FakeInitiativeRepository(),
+  });
+
+  await assert.rejects(
+    () => uc.execute("nope"),
+    (err: unknown) => {
+      assert.ok(err instanceof UnknownReferenceError);
+      assert.equal(err.kind, "initiative");
+      assert.equal(err.id, "nope");
+      return true;
+    },
+  );
 });
 
 // ─── Story 5b — after: on export ────────────────────────────────────────────

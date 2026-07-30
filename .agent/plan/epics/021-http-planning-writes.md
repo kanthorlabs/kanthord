@@ -162,6 +162,15 @@ and every `fetch` the UI makes sets the header anyway.
   decision 6 made `GET /api/resource/:id` the single, type-agnostic
   representation. `readRow` names a ROW, not a path, so this works even though
   the PATCH paths are typed (decision 5).
+- **`If-Match` here is advisory, not a serializable compare-and-swap.** The
+  pre-read → compare → `run` → re-read sequence spans three separate `await`s
+  with no transaction and no per-entity lock, so two concurrent `PATCH`es
+  carrying the same valid validator both pass the compare and both write. It
+  guards a stale editor — a client that fetched the DTO, waited, and sent a
+  write — which is the case the UI actually has. The Proof proves that one
+  (phase E replays the old validator and gets `412`); it does not prove the
+  concurrent one. A real CAS needs a version column or a write transaction, and
+  neither is in 021's scope.
 
 ### 4. Dependencies are sub-resources, and they answer `204`
 
@@ -203,6 +212,11 @@ The asymmetry is deliberate and stated: reads use one type-agnostic item route,
 writes use four typed ones, because reading a resource needs no knowledge of
 which fields are mutable and writing one needs all of it.
 
+The four resource PATCH rows accept `type` in the request body as an
+immutable-field probe. `decode` passes it into `Update*Input`, whose runtime
+guard throws `ImmutableFieldError`. Without this field, `409 immutable_field` is
+unreachable, while the registry and Proof phase E both require it.
+
 `create credential` carries the secret **in the request body** (`{"value":"…"}`)
 because the CLI's `--value-file <path|->` reads it from a file or stdin and
 neither exists over HTTP. This is the only 021 field that is a secret; it is
@@ -238,6 +252,11 @@ CLI-only: over HTTP `bindings` is an alias → resource **id** map, so
 manifest rewriting also stay CLI-only — the HTTP body is an already-parsed
 package.
 
+The JSON graph package is validated server-side by a new app-layer decoder
+(`src/app/graph/decode-graph-package.ts`) that throws
+`GraphPackageDocumentError`. The client-side `graph-codec.parseGraphPackage` is
+not the server's validator.
+
 ### 7. App-layer changes 021 requires — found by reading the use cases
 
 Two, both deliberate, both mirroring 020 decision 7's precedent:
@@ -268,6 +287,7 @@ Checked and deliberately NOT changed:
 - `Update*Input` carries an `[key: string]: unknown` index signature
   (`update-resource.ts:5`) used by the runtime immutable-field guard. `decode`
   builds its object with a literal field list regardless, so nothing changes.
+  That literal list includes `type`, the immutable-field probe — see decision 5.
 - `UpdateCredential` calls `addResource(cred.projectId ?? "", …)`
   (`update-credential.ts:39`). Harmless: the upsert's `ON CONFLICT` clause never
   updates `projectId`
@@ -419,6 +439,7 @@ Domain mappings, each justified by the module that throws it:
 | `CrossInitiativeError`      | `cross_initiative`      | 409    |
 | `StaleManifestError`        | `stale_manifest`        | 409    |
 | `UncreatableObjectiveError` | `uncreatable_objective` | 409    |
+| `GraphPackageDocumentError` | `invalid_package`       | 400    |
 
 Deliberately NOT registered, with the reason: `AmbiguousNameError` (020
 decision 5 — no route calls `Find*`); `AmbiguousBindingNameError`,
@@ -536,8 +557,9 @@ It must print `021 ok: …`. Phases:
   unknown dependency with `400 unknown_dependency`;
   `GET /api/project/:id/readiness` returns the report shape;
   `POST /api/initiative/:id/diagnostic` returns a document with `records` and
-  `schemaVersion`, **no `outPath` field** (no server path is ever named) and an
-  `initiativeRef` that is not the real initiative id.
+  `schemaVersion === "007.1"` (a string — `src/domain/safe-facts.ts:1` is
+  `export const SCHEMA_VERSION = "007.1"`), **no `outPath` field** (no server
+  path is ever named) and an `initiativeRef` that is not the real initiative id.
 - **I** — the gates of decision 9: `Host: evil.example` → `403
 host_not_allowed`; `Origin: http://127.0.0.1:1` → `403 origin_not_allowed` on
   `POST` and on `DELETE`; no `Origin` → `201`; the server's own `Origin` →

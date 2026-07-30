@@ -2,6 +2,8 @@
 // here so `app/errors.ts` is the single error catalog the CLI maps, keeping
 // `apps/` importing `app/` rather than reaching into `domain/` directly.
 export { CycleError } from "../domain/graph.ts";
+export { DuplicateTaskError, UnknownDependencyError } from "../domain/graph.ts";
+export { InvalidTaskFieldError } from "../domain/task.ts";
 export { DependenciesLockedError } from "../domain/task.ts";
 export type { TaskStatus } from "../domain/task.ts";
 // EmbeddedCredentialError lives in domain; re-exported here so apps/ can

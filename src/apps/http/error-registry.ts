@@ -3,8 +3,33 @@ import {
   UnknownReferenceError,
   DuplicateNameError,
   ObjectiveNotInConflictError,
+  WrongTypeReferenceError,
+  CycleError,
+  DuplicateTaskError,
+  UnknownDependencyError,
+  DependenciesLockedError,
+  SequencingScopeError,
+  SequencingLockedError,
+  UnknownAgentError,
+  InvalidTaskFieldError,
+  EmbeddedCredentialError,
 } from "../../app/errors.ts";
 import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
+import {
+  ImmutableFieldError,
+  CacheConflictError,
+} from "../../app/resource/update-resource.ts";
+import { ImportValidationError } from "../../app/resource/import-resources.ts";
+import { GraphPackageDocumentError } from "../../app/graph/decode-graph-package.ts";
+import {
+  CreateModeIdError,
+  UnboundAliasError,
+  ExecutorBindingSetError,
+  UnknownNodeError,
+  CrossInitiativeError,
+  StaleManifestError,
+  UncreatableObjectiveError,
+} from "../../app/graph/import-errors.ts";
 import { HttpFailure } from "./errors.ts";
 
 export interface ErrorMapping {
@@ -34,6 +59,35 @@ export const DOMAIN_ERROR_MAPPINGS: ReadonlyArray<{
     status: 409,
     message: "the objective is not in conflict",
   },
+  { type: WrongTypeReferenceError, code: "wrong_type_reference", status: 400 },
+  { type: CycleError, code: "cycle_detected", status: 409 },
+  { type: DuplicateTaskError, code: "duplicate_task", status: 409 },
+  { type: UnknownDependencyError, code: "unknown_dependency", status: 400 },
+  { type: DependenciesLockedError, code: "dependencies_locked", status: 409 },
+  { type: SequencingScopeError, code: "sequencing_scope", status: 400 },
+  { type: SequencingLockedError, code: "sequencing_locked", status: 409 },
+  { type: UnknownAgentError, code: "unknown_agent", status: 400 },
+  { type: InvalidTaskFieldError, code: "invalid_task_field", status: 400 },
+  { type: EmbeddedCredentialError, code: "embedded_credential", status: 400 },
+  { type: ImmutableFieldError, code: "immutable_field", status: 409 },
+  { type: CacheConflictError, code: "cache_conflict", status: 409 },
+  { type: ImportValidationError, code: "import_validation", status: 400 },
+  { type: CreateModeIdError, code: "create_mode_id", status: 400 },
+  { type: UnboundAliasError, code: "unbound_alias", status: 400 },
+  {
+    type: ExecutorBindingSetError,
+    code: "executor_binding_set",
+    status: 400,
+  },
+  { type: UnknownNodeError, code: "unknown_node", status: 404 },
+  { type: CrossInitiativeError, code: "cross_initiative", status: 409 },
+  { type: StaleManifestError, code: "stale_manifest", status: 409 },
+  {
+    type: UncreatableObjectiveError,
+    code: "uncreatable_objective",
+    status: 409,
+  },
+  { type: GraphPackageDocumentError, code: "invalid_package", status: 400 },
 ];
 
 export const TRANSPORT_ERRORS = {
@@ -81,6 +135,16 @@ export const TRANSPORT_ERRORS = {
     code: "invalid_input",
     status: 400,
     message: "invalid input",
+  },
+  precondition_required: {
+    code: "precondition_required",
+    status: 428,
+    message: "If-Match is required",
+  },
+  precondition_failed: {
+    code: "precondition_failed",
+    status: 412,
+    message: "precondition failed",
   },
   internal: {
     code: "internal",

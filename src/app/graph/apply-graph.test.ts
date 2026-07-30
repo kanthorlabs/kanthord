@@ -677,6 +677,80 @@ test("ApplyGraph — edited task ac: that task updated, siblings unchanged; init
   assert.equal(obj1Class.class, "unchanged");
 });
 
+test("ApplyGraph — clean dry-run reports applied:false, the same package applied for real reports applied:true (021 R2-B1)", async () => {
+  // Same clean-update setup as the previous test, but run once with
+  // dryRun:true and once with dryRun (unset) — the two `applied` values must
+  // differ even though neither run has a conflict or a refused edge removal.
+  const makeDeps = () => {
+    const { initiatives } = makeBaseDb();
+    const tasks = new FakeTaskRepositoryWithCas();
+    tasks.seed(
+      {
+        id: TASK1_ID,
+        objectiveId: OBJ1_ID,
+        title: "Implement API",
+        instructions: "do it",
+        ac: ["returns 200"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [],
+      },
+      TASK1_BASE_SHA,
+    );
+    tasks.seed(
+      {
+        id: TASK2_ID,
+        objectiveId: OBJ1_ID,
+        title: "Deploy",
+        instructions: "deploy it",
+        ac: ["health check green"],
+        agent: "generic@1",
+        status: "pending",
+        dependencies: [TASK1_ID],
+      },
+      TASK2_BASE_SHA,
+    );
+    return {
+      initiatives,
+      tasks,
+      storeGraph: new StoreGraph(tasks),
+      importMap: new FakeGraphImportMap(),
+      uow: new FakeUnitOfWork(),
+      newId: () => "01NEWID0000000000000000001",
+    };
+  };
+  const makePkg = () => {
+    const pkg = makeBasePackage();
+    pkg.tasks[0]!.ac = ["returns 200", "rejects bad creds with 401"];
+    return pkg;
+  };
+
+  const dryRunUc = new ApplyGraph(makeDeps());
+  const dryRunResult = await dryRunUc.execute({
+    pkg: makePkg(),
+    initiativeId: INIT_ID,
+    dryRun: true,
+  });
+  assert.equal(dryRunResult.conflicts.length, 0);
+  assert.equal(
+    dryRunResult.applied,
+    false,
+    "a clean dry run must report applied:false — nothing was written",
+  );
+
+  const realUc = new ApplyGraph(makeDeps());
+  const realResult = await realUc.execute({
+    pkg: makePkg(),
+    initiativeId: INIT_ID,
+  });
+  assert.equal(realResult.conflicts.length, 0);
+  assert.equal(
+    realResult.applied,
+    true,
+    "the identical clean apply for real must report applied:true",
+  );
+});
+
 test("ApplyGraph — drifted: live DB sha != baseline when package edits it → conflict, applied:false", async () => {
   const { initiatives, tasks } = makeBaseDb();
   // Re-seed task1 with a DIFFERENT sha (simulating a concurrent mutation)

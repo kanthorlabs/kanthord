@@ -271,7 +271,7 @@ ne "PATCH answers a fresh ETag" "$ETAG" "$NEW_ETAG"
 eq "the rename is readable" "alpha-2" "$(jv "$(OK "renamed project" "/api/project/$PROJECT_A")" 'v.name')"
 # The lost-update case: the same request replayed with the OLD validator loses.
 WERR "replayed stale PATCH" "412" "precondition_failed" PATCH "/api/project/$PROJECT_A" '{"name":"alpha-3"}' "if-match:$ETAG"
-# The other five item PATCHes.
+# The other six item PATCHes.
 patch_item() {
   local label="$1" path="$2" json="$3"
   local tag; tag="$(hdr_of "$(GET "$4")" etag)"
@@ -352,6 +352,11 @@ import { readGraphPackageDir } from "./src/apps/cli/graph-md/parse.ts";
 import { parseGraphPackage } from "./src/app/graph/graph-codec.ts";
 const files = await readGraphPackageDir(process.argv[1]);
 const pkg = parseGraphPackage(files);
+// The CLI --create path leaves packageId "" (graph-codec.ts:304). The
+// server-side validator (review blocker S1) does not require a non-empty
+// packageId — project.graph.create mints its own via deps.newId() and
+// discards the client value — so the CLI parser output is posted UNMODIFIED,
+// proving the route against a real client body, not a hand-patched one.
 process.stdout.write(JSON.stringify({ pkg, bindings: { source: process.argv[2] } }));
 ' "$PKG_DIR" "$REPO" > "$PD/create-graph.json"
 OUT="$(REQ POST "$BASE/api/project/$PROJECT_A/graph" "$BASIC" "$PD/create-graph.json")"
@@ -371,8 +376,21 @@ eq "package carries the task" "1" "$(jv "$PKG_DATA" 'v.tasks.length')"
 node -e 'const {writeFileSync,readFileSync}=require("node:fs");writeFileSync(process.argv[2],JSON.stringify({pkg:JSON.parse(process.argv[1]),dryRun:true}))' "$PKG_DATA" "$PD/apply-graph.json"
 OUT="$(REQ POST "$BASE/api/initiative/$GRAPH_INIT/graph" "$BASIC" "$PD/apply-graph.json")"
 eq "import graph --apply status" "200" "$(status_of "$OUT")"
-eq "a dry run writes nothing" "false" "$(jv "$(body_of "$OUT")" 'String(v.data.applied)')"
 eq "the apply report classifies every node" "true" "$(jv "$(body_of "$OUT")" 'v.data.classifications.length>=3&&typeof v.data.summary.unchanged==="number"')"
+# `freshNodeShas`/`createdNodes` are documented as absent on dry-run
+# (apply-graph.ts:82-85) — assert that directly, not a summary count that
+# holds identically whether dryRun is true or false.
+eq "a dry run withholds fresh node data" "true" "$(jv "$(body_of "$OUT")" 'v.data.freshNodeShas===undefined&&v.data.createdNodes===undefined')"
+eq "a dry run applies nothing" "false" "$(jv "$(body_of "$OUT")" 'String(v.data.applied)')"
+# A real (non-dry-run) apply of the SAME package proves the withholding above
+# is dry-run-specific, not an accident of an untouched fixture: freshNodeShas
+# is populated whenever the apply actually runs (absent only on dry-run or
+# conflicts — there are none here, it is a conflict-free re-import).
+node -e 'const {writeFileSync,readFileSync}=require("node:fs");writeFileSync(process.argv[2],JSON.stringify({pkg:JSON.parse(process.argv[1])}))' "$PKG_DATA" "$PD/apply-graph-real.json"
+OUT2="$(REQ POST "$BASE/api/initiative/$GRAPH_INIT/graph" "$BASIC" "$PD/apply-graph-real.json")"
+eq "import graph --apply (real) status" "200" "$(status_of "$OUT2")"
+eq "a real apply defines fresh node data" "true" "$(jv "$(body_of "$OUT2")" 'v.data.freshNodeShas!==undefined')"
+eq "a real apply reports applied" "true" "$(jv "$(body_of "$OUT2")" 'String(v.data.applied)')"
 
 echo "--- H: check graph (POST), check project (GET), export diagnostic (POST)"
 OUT="$(WSTATUS "check graph" "200" POST "/api/graph/readiness" '{"tasks":[{"id":"a"},{"id":"b","dependencies":["a"]}]}')"
@@ -387,7 +405,7 @@ eq "readiness report shape" "true" "$(jv "$READY" 'typeof v.ready==="boolean"&&t
 # (src/storage/sqlite/sqlite-observability-refs.ts:25), so it is not a read.
 OUT="$(WSTATUS "export diagnostic" "200" POST "/api/initiative/$INIT/diagnostic" '{}')"
 DIAG="$(jv "$(body_of "$OUT")" 'JSON.stringify(v.data)')"
-eq "diagnostic carries records" "true" "$(jv "$DIAG" 'Array.isArray(v.records)&&typeof v.schemaVersion==="number"')"
+eq "diagnostic carries records" "true" "$(jv "$DIAG" 'Array.isArray(v.records)&&v.schemaVersion==="007.1"')"
 eq "diagnostic never names a server path" "true" "$(jv "$DIAG" 'v.outPath===undefined')"
 eq "diagnostic never names the real initiative id" "true" "$(jv "$DIAG" 'v.initiativeRef!=="'"$INIT"'"')"
 
