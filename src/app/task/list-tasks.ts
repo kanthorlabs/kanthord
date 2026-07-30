@@ -12,11 +12,17 @@ export interface TaskRow {
   waiting: string[];
 }
 
+interface InitiativeSource {
+  get(id: string): { id: string } | undefined;
+}
+
 export class ListTasks {
   readonly #taskRepo: TaskRepository;
+  readonly #initiatives: InitiativeSource;
 
-  constructor(taskRepo: TaskRepository) {
+  constructor(taskRepo: TaskRepository, initiatives: InitiativeSource) {
     this.#taskRepo = taskRepo;
+    this.#initiatives = initiatives;
   }
 
   async execute(input: {
@@ -24,11 +30,10 @@ export class ListTasks {
     status?: TaskStatus;
     objectiveId?: string;
   }): Promise<TaskRow[]> {
-    const tasks = this.#taskRepo.listByInitiative(input.initiativeId);
-
-    if (tasks.length === 0) {
+    if (this.#initiatives.get(input.initiativeId) === undefined) {
       throw new UnknownReferenceError("initiative", input.initiativeId);
     }
+    const tasks = this.#taskRepo.listByInitiative(input.initiativeId);
 
     const nodes = tasks.map((t) => ({
       id: t.id,

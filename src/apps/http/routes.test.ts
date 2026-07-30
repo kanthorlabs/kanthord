@@ -34,6 +34,46 @@ const BANNED_VERBS = [
   "set-default",
 ];
 
+/**
+ * Every legal STATIC path segment. Decision 1 (EPIC 020): resource segments are
+ * SINGULAR nouns, so a new resource is a deliberate, reviewed entry here — the
+ * same discipline BANNED_VERBS applies to verbs.
+ */
+const PATH_SEGMENTS = [
+  "api",
+  "healthz",
+  "project",
+  "initiative",
+  "objective",
+  "task",
+  "resource",
+  "repository",
+  "credential",
+  "notification",
+  "filesystem",
+  "ai-provider",
+  "model",
+  "queue",
+  "overview",
+  "graph",
+  "conflict",
+];
+
+/**
+ * A plural segment is caught by the trailing `s` rule applied to the CURATED
+ * list above, not to arbitrary paths: over arbitrary paths `/s$/` false-positives
+ * on real singular nouns (`status`, `progress`), and a test people must disable
+ * is worse than no test. A genuine singular ending in `s` is named here.
+ */
+const NOT_PLURAL: string[] = [];
+
+function staticSegmentsOf(path: string): string[] {
+  return path
+    .split("/")
+    .filter((s) => s.length > 0)
+    .filter((s) => !s.startsWith(":"));
+}
+
 function hasBannedVerbSegment(path: string): boolean {
   const segments = path.split("/").filter((s) => s.length > 0);
   return segments.some(
@@ -142,6 +182,43 @@ test("REST shape negative control: /api/tasks/approve is rejected by the predica
   assert.equal(hasBannedVerbSegment("/api/tasks/approve"), true);
 });
 
+test("path vocabulary: every static segment is in the PATH_SEGMENTS allowlist", () => {
+  for (const route of ROUTES) {
+    for (const segment of staticSegmentsOf(route.path)) {
+      assert.ok(
+        PATH_SEGMENTS.includes(segment),
+        `route ${route.id} path ${route.path} uses unlisted segment "${segment}" — add it to PATH_SEGMENTS (singular, decision 1)`,
+      );
+    }
+  }
+});
+
+test("path vocabulary: no allowlisted segment is a plural", () => {
+  for (const segment of PATH_SEGMENTS) {
+    if (NOT_PLURAL.includes(segment)) {
+      continue;
+    }
+    assert.equal(
+      segment.endsWith("s"),
+      false,
+      `segment "${segment}" looks plural — resource segments are singular (decision 1); if it is genuinely singular, name it in NOT_PLURAL`,
+    );
+  }
+});
+
+test("path vocabulary negative control: a plural segment is rejected, the singular is accepted", () => {
+  assert.equal(
+    staticSegmentsOf("/api/projects").every((s) => PATH_SEGMENTS.includes(s)),
+    false,
+  );
+  assert.equal(
+    staticSegmentsOf("/api/project/:id").every((s) =>
+      PATH_SEGMENTS.includes(s),
+    ),
+    true,
+  );
+});
+
 test("health.get row: decode ignores input and returns {}", () => {
   const row = ROUTES.find((r) => r.id === "health.get") as Route;
   assert.ok(row, "health.get row must exist");
@@ -156,7 +233,7 @@ test("health.get row: run returns { status: 'ok', version: packageVersion }", as
     warn: () => {},
     error: () => {},
   };
-  const fakeDeps: HttpDeps = { logger: fakeLogger };
+  const fakeDeps = { logger: fakeLogger } as unknown as HttpDeps;
   const result = await row.run(fakeDeps, {});
   assert.deepEqual(result, { status: "ok", version: packageVersion });
 });
@@ -165,4 +242,39 @@ test("health.get row: present returns a DTO with exactly status and version keys
   const row = ROUTES.find((r) => r.id === "health.get") as Route;
   const view = row.present!({ status: "ok", version: packageVersion });
   assert.deepEqual(Object.keys(view as object).sort(), ["status", "version"]);
+});
+
+test("ROUTES holds exactly 24 rows: health.get, ui.get, plus the 22 rows of EPIC 020", () => {
+  assert.equal(ROUTES.length, 24);
+});
+
+test("every route id from the EPIC 020 route table is present in ROUTES", () => {
+  const ids = new Set(ROUTES.map((r) => r.id));
+  const expected = [
+    "project.list",
+    "project.get",
+    "project.overview.get",
+    "project.initiative.list",
+    "project.repository.list",
+    "project.credential.list",
+    "project.notification.list",
+    "project.filesystem.list",
+    "project.ai-provider.list",
+    "initiative.get",
+    "initiative.graph.get",
+    "initiative.objective.list",
+    "initiative.task.list",
+    "objective.get",
+    "objective.conflict.get",
+    "task.get",
+    "task.conflict.get",
+    "resource.get",
+    "ai-provider.list",
+    "ai-provider.get",
+    "model.list",
+    "queue.get",
+  ];
+  for (const id of expected) {
+    assert.ok(ids.has(id), `missing route id ${id}`);
+  }
 });

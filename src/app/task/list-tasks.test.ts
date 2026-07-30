@@ -102,7 +102,7 @@ describe("ListTasks", () => {
       dependencies: [TASK_API],
     });
 
-    const useCase = new ListTasks(taskRepo);
+    const useCase = new ListTasks(taskRepo, { get: () => ({ id: INIT_ID }) });
     const rows = await useCase.execute({ initiativeId: INIT_ID });
 
     assert.equal(rows.length, 2, "should return 2 rows");
@@ -123,31 +123,10 @@ describe("ListTasks", () => {
     assert.deepEqual(deployRow.waiting, [TASK_API]);
   });
 
-  test("ListTasks unknown initiativeId throws UnknownReferenceError", async () => {
+  test("absent initiative throws UnknownReferenceError", async () => {
     const taskRepo = new FakeTaskRepository();
-    // No tasks seeded — listByInitiative returns []
-    // But we want to test that the use case validates the scope.
-    // The use case should detect an empty/unknown initiative by checking
-    // if listByInitiative returns [] and the id is unknown.
-    // Per story: an unknown scope id → UnknownReferenceError
-    // We seed a task for a DIFFERENT initiative; INIT_ID has none.
-    taskRepo.seed({
-      id: TASK_API,
-      objectiveId: OBJ_ID,
-      title: "implement api",
-      status: "pending",
-      dependencies: [],
-    });
+    const useCase = new ListTasks(taskRepo, { get: () => undefined });
 
-    // Override listByInitiative so UNKNOWN_INIT returns []
-    const badTaskRepo = new (class extends FakeTaskRepository {
-      override listByInitiative(initiativeId: string): Task[] {
-        if (initiativeId === INIT_ID) return [];
-        return super.listByInitiative(initiativeId);
-      }
-    })();
-
-    const useCase = new ListTasks(badTaskRepo);
     await assert.rejects(
       () => useCase.execute({ initiativeId: INIT_ID }),
       (err: unknown) => {
@@ -162,6 +141,19 @@ describe("ListTasks", () => {
     );
   });
 
+  test("existing initiative with zero tasks returns []", async () => {
+    const taskRepo = new FakeTaskRepository();
+    // No tasks seeded — listByInitiative returns [] for INIT_ID.
+    const useCase = new ListTasks(taskRepo, {
+      get: () => ({ id: INIT_ID }),
+    });
+
+    await assert.doesNotReject(async () => {
+      const rows = await useCase.execute({ initiativeId: INIT_ID });
+      assert.deepEqual(rows, []);
+    });
+  });
+
   test("ListTasks single ready task with no dependencies", async () => {
     const taskRepo = new FakeTaskRepository();
     taskRepo.seed({
@@ -172,7 +164,7 @@ describe("ListTasks", () => {
       dependencies: [],
     });
 
-    const useCase = new ListTasks(taskRepo);
+    const useCase = new ListTasks(taskRepo, { get: () => ({ id: INIT_ID }) });
     const rows = await useCase.execute({ initiativeId: INIT_ID });
 
     assert.equal(rows.length, 1);
@@ -198,7 +190,7 @@ describe("ListTasks", () => {
       dependencies: [TASK_API],
     });
 
-    const useCase = new ListTasks(taskRepo);
+    const useCase = new ListTasks(taskRepo, { get: () => ({ id: INIT_ID }) });
     const rows = await useCase.execute({ initiativeId: INIT_ID });
 
     const apiRow = rows.find((r) => r.id === TASK_API);
@@ -229,7 +221,7 @@ describe("ListTasks", () => {
       dependencies: [TASK_API],
     });
 
-    const useCase = new ListTasks(taskRepo);
+    const useCase = new ListTasks(taskRepo, { get: () => ({ id: INIT_ID }) });
     const rows = await useCase.execute({ initiativeId: INIT_ID });
 
     const deployRow = rows.find((r) => r.id === TASK_DEPLOY);
@@ -260,7 +252,7 @@ describe("ListTasks", () => {
       dependencies: [TASK_API],
     });
 
-    const useCase = new ListTasks(taskRepo);
+    const useCase = new ListTasks(taskRepo, { get: () => ({ id: INIT_ID }) });
     const rows = await useCase.execute({ initiativeId: INIT_ID });
 
     const deployRow = rows.find((r) => r.id === TASK_DEPLOY);
@@ -306,7 +298,7 @@ describe("ListTasks", () => {
       dependencies: [],
     });
 
-    const useCase = new ListTasks(taskRepo);
+    const useCase = new ListTasks(taskRepo, { get: () => ({ id: INIT_ID }) });
     const rows = await useCase.execute({
       initiativeId: INIT_ID,
       status: "awaiting_confirmation",

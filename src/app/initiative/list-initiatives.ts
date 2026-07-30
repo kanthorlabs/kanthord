@@ -8,7 +8,11 @@ export class ListInitiatives {
     this.#initiatives = initiatives;
   }
 
-  execute(input: { projectId: string }): Initiative[] {
-    return this.#initiatives.listInitiatives(input.projectId);
+  execute(input: { projectId: string; name?: string }): Initiative[] {
+    const initiatives = this.#initiatives.listInitiatives(input.projectId);
+    if (input.name === undefined) {
+      return initiatives;
+    }
+    return initiatives.filter((i) => i.name === input.name);
   }
 }

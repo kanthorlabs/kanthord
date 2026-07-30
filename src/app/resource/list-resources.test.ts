@@ -216,4 +216,61 @@ describe("src/app/resource/list-resources.ts", () => {
     assert.equal(v["name"], "scratch");
     assert.equal(v["path"], "/w");
   });
+
+  // -------------------------------------------------------------------------
+  // 020 S3 — optional exact `name` filter (decision 5)
+  // -------------------------------------------------------------------------
+
+  test("(020 S3) execute({ name }) keeps only the exact match", () => {
+    const call: { results: Resource[] } = {
+      results: [credA, credB],
+    };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({
+      projectId: PROJECT_ID,
+      type: "credential",
+      name: "k1",
+    });
+    assert.equal(views.length, 1);
+    assert.equal(views[0]?.id, "cred-a");
+  });
+
+  test("(020 S3) execute({ name }) returns [] on a miss", () => {
+    const call: { results: Resource[] } = { results: [credA, credB] };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({
+      projectId: PROJECT_ID,
+      type: "credential",
+      name: "nope",
+    });
+    assert.deepEqual(views, []);
+  });
+
+  test("(020 S3) execute with no name forwards only { projectId, type } to the repo, unchanged", () => {
+    const call: {
+      received?: { projectId: string; type: string };
+      results: Resource[];
+    } = { results: [credA, credB] };
+    const uc = new ListResources(makeFakeRepo(call));
+    uc.execute({ projectId: PROJECT_ID, type: "credential" });
+    assert.deepEqual(call.received, {
+      projectId: PROJECT_ID,
+      type: "credential",
+    });
+  });
+
+  test("(020 S3) execute({ name }) still redacts the secret on the kept row", () => {
+    const call: { results: Resource[] } = { results: [credA, credB] };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({
+      projectId: PROJECT_ID,
+      type: "credential",
+      name: "k1",
+    });
+    assert.equal(views.length, 1);
+    for (const view of views) {
+      assert.equal("value" in view, false);
+    }
+    assert.equal(JSON.stringify(views).includes(CANARY), false);
+  });
 });

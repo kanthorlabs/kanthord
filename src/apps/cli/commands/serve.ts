@@ -36,7 +36,28 @@ export function buildServeCommand(deps: CliDeps, io: CliIo): Command {
         throw err;
       }
 
-      const httpDeps: HttpDeps = { logger: deps.httpLogger };
+      const httpDeps: HttpDeps = {
+        logger: deps.httpLogger,
+        getProject: deps.getProject,
+        listProjects: deps.listProjects,
+        getProjectOverview: deps.getProjectOverview,
+        listInitiatives: deps.listInitiatives,
+        getInitiative: deps.getInitiative,
+        getInitiativeGraph: deps.getInitiativeGraph,
+        listObjectives: deps.listObjectives,
+        getObjective: deps.getObjective,
+        listTasks: deps.listTasks,
+        getTask: deps.getTask,
+        listResources: deps.listResources,
+        getResource: deps.getResource,
+        listAiProviders: deps.listAiProviders,
+        getAiProvider: deps.getAiProvider,
+        resolveProjectChain: deps.resolveProjectChain,
+        listModels: deps.listModels,
+        getDecisionQueue: deps.getDecisionQueue,
+        getConflict: deps.getConflict,
+        getObjectiveConflict: deps.getObjectiveConflict,
+      };
       const app = buildHttpApp(httpDeps, { apiKey });
       const server = await startHttpServer(app, {
         port,

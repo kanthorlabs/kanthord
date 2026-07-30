@@ -8,7 +8,11 @@ export class ListProjects {
     this.#projects = projects;
   }
 
-  execute(): Project[] {
-    return this.#projects.listProjects();
+  execute(input?: { name?: string }): Project[] {
+    const projects = this.#projects.listProjects();
+    if (input?.name === undefined) {
+      return projects;
+    }
+    return projects.filter((p) => p.name === input.name);
   }
 }

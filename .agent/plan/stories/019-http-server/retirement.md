@@ -10,6 +10,13 @@ re-planned without touching a test.
 **Retirement rule:** a CLI leaf is removed only when its HTTP route(s) exist, are
 proved by their epic's Proof, and the UI uses them. 019 removes nothing.
 
+**Path spelling:** every resource segment below is a SINGULAR noun
+(`GET /api/project`, `GET /api/project/:id`) — EPIC 020 decision 1, Ulrich,
+2026-07-30, which supersedes EPIC 019 decision 2. This file was written with
+plural paths and is corrected throughout; `src/apps/http/routes.test.ts` carries
+the machine check (a curated `PATH_SEGMENTS` allowlist plus a no-trailing-`s`
+rule over that list).
+
 ## Inventory — 79 leaves today (80 with `serve`)
 
 `serve` and `commands` are HTTP-irrelevant and never counted as uncovered.
@@ -23,16 +30,25 @@ proved by their epic's Proof, and the UI uses them. 019 removes nothing.
 `list notification`, `list repository`), `list ai-provider`, `list model`,
 `queue`.
 
-Shape: `GET /api/<plural>` and `GET /api/<plural>/:id`. `find <kind> --name` does
-not become a route — it becomes a query parameter on the collection
-(`GET /api/projects?name=…`), so `find project`, `find initiative`,
+Shape: `GET /api/<singular>` and `GET /api/<singular>/:id`. `find <kind> --name`
+does not become a route — it becomes a query parameter on the collection
+(`GET /api/project?name=…`), so `find project`, `find initiative`,
 `find objective`, `find resource` retire with their collection.
+
+Authored as `.agent/plan/epics/020-http-reads.md` (2026-07-30), whose route table
+is the exact 22-row list; a required parent scope is a path segment
+(`GET /api/project/:id/initiative`) and an optional filter is a query parameter.
+
+Implemented: `.agent/plan/epics/020-http-reads.md`, proved by
+`scripts/e2e/http-reads-proof.sh`.
 
 ### Target 021 — the event feed
 
 `list event`, `ack project`.
-Shape: `GET /api/events?after=<ulid>` and
-`POST /api/projects/:id/acknowledgement`. Pull-based per AGENTS.md; no SSE.
+Shape: `GET /api/event?after=<ulid>` and
+`POST /api/project/:id/acknowledgement`. Pull-based per AGENTS.md; no SSE.
+(AGENTS.md sketches the feed as `GET /events?after=…`; that wording predates the
+singular decision. 021 confirms the final path.)
 
 ### Target 022 — planning writes
 
@@ -45,7 +61,7 @@ Shape: `GET /api/events?after=<ulid>` and
 `update notification`, `update repository`, `import resource`, `import graph`,
 `export initiative`, `export diagnostic`, `check graph`, `check project`.
 Shape: `POST` on the collection (`201` + `Location`), `PATCH` on the item.
-Dependencies are sub-resources: `POST|DELETE /api/tasks/:id/dependencies/:otherId`.
+Dependencies are sub-resources: `POST|DELETE /api/task/:id/dependency/:otherId`.
 `import graph` is a `POST` with a JSON body; the interactive form stays CLI-only
 until the async job API. This is the epic that adds the request-body reader's
 first real consumer and the `If-Match`/`ETag` convention.
@@ -55,10 +71,10 @@ first real consumer and the `If-Match`/`ETag` convention.
 `approve task`, `approve objective`, `reject task`, `reject objective`,
 `retry task`, `retry objective`, `abandon task`, `pause initiative`,
 `resume initiative`.
-Shape: `POST /api/tasks/:id/approval`, `…/rejection`, `…/retry` → a noun
-(`…/retry` is a verb; use `POST /api/tasks/:id/reattempt` or
-`/api/tasks/:id/attempts`), `POST /api/tasks/:id/abandonment`. Pausing is state:
-`PATCH /api/initiatives/:id {"paused":true}`. The REST-shape test in
+Shape: `POST /api/task/:id/approval`, `…/rejection`, `…/retry` → a noun
+(`…/retry` is a verb; use `POST /api/task/:id/reattempt` or
+`/api/task/:id/attempt`), `POST /api/task/:id/abandonment`. Pausing is state:
+`PATCH /api/initiative/:id {"paused":true}`. The REST-shape test in
 `src/apps/http/routes.test.ts` enforces the noun rule.
 
 ### Target 024 — high-impact operations
@@ -67,16 +83,16 @@ Shape: `POST /api/tasks/:id/approval`, `…/rejection`, `…/retry` → a noun
 `set-default ai-provider`, `assign ai-provider`, `unassign ai-provider`,
 `register ai-provider`, `update ai-provider`, `logout ai-provider`,
 `test ai-provider`.
-Shape: `POST /api/repositories/:id/landing`, `…/publication`,
-`POST /api/ai-providers` (`201`), `PATCH /api/ai-providers/:id`,
-`DELETE /api/ai-providers/:id`, `POST /api/projects/:id/ai-providers` for the
-chain, `POST /api/ai-providers/:id/probe`. Human-gated operations keep their
+Shape: `POST /api/repository/:id/landing`, `…/publication`,
+`POST /api/ai-provider` (`201`), `PATCH /api/ai-provider/:id`,
+`DELETE /api/ai-provider/:id`, `POST /api/project/:id/ai-provider` for the
+chain, `POST /api/ai-provider/:id/probe`. Human-gated operations keep their
 `--yes`-equivalent as an explicit request field, never a default.
 
 ### Target 025 — the async job API
 
 `run daemon`, `setup project`, `login provider`, `db migrate`, `db status`.
-Shape: `POST /api/jobs` → `202` + a job resource, `GET /api/jobs/:id` for
+Shape: `POST /api/job` → `202` + a job resource, `GET /api/job/:id` for
 progress. These are the leaves with no request/response shape: they stream,
 prompt, or run forever. `db status` may instead join 020 as a read.
 

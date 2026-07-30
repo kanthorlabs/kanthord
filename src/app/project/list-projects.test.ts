@@ -85,4 +85,43 @@ describe("ListProjects", () => {
     assert.equal(repo.listProjectsCalls, 1);
     assert.deepEqual(repo.lastListProjectsArg, []);
   });
+
+  test("execute({ name: 'alpha' }) returns only the exact match", () => {
+    const repo = new FakeProjectRepository();
+    repo.seed([
+      { id: "p1", name: "alpha" },
+      { id: "p2", name: "beta" },
+    ]);
+    const uc = new ListProjects(repo);
+    const result = uc.execute({ name: "alpha" });
+    assert.deepEqual(result, [{ id: "p1", name: "alpha" }]);
+    assert.deepEqual(repo.lastListProjectsArg, []);
+  });
+
+  test("execute({ name: 'ALPHA' }) returns [] — exact match only, no case folding", () => {
+    const repo = new FakeProjectRepository();
+    repo.seed([{ id: "p1", name: "alpha" }]);
+    const uc = new ListProjects(repo);
+    assert.deepEqual(uc.execute({ name: "ALPHA" }), []);
+  });
+
+  test("execute({ name: 'alph' }) returns [] — exact match only, no substring", () => {
+    const repo = new FakeProjectRepository();
+    repo.seed([{ id: "p1", name: "alpha" }]);
+    const uc = new ListProjects(repo);
+    assert.deepEqual(uc.execute({ name: "alph" }), []);
+  });
+
+  test("execute({}) with no name returns all rows", () => {
+    const repo = new FakeProjectRepository();
+    repo.seed([
+      { id: "p1", name: "alpha" },
+      { id: "p2", name: "beta" },
+    ]);
+    const uc = new ListProjects(repo);
+    assert.deepEqual(uc.execute({}), [
+      { id: "p1", name: "alpha" },
+      { id: "p2", name: "beta" },
+    ]);
+  });
 });

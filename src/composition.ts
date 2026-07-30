@@ -379,7 +379,9 @@ export function buildDeps(
     referenceResolver,
     transactor,
   );
-  const listTasks = new ListTasks(taskRepository);
+  const listTasks = new ListTasks(taskRepository, {
+    get: (id) => initiativeRepository.get(id),
+  });
   const listInitiatives = new ListInitiatives(initiativeRepository);
   const listObjectives = new ListObjectives(initiativeRepository);
   const exportInitiative = new ExportInitiative(

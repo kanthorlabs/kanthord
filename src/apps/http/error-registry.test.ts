@@ -1,7 +1,12 @@
 // src/apps/http/error-registry.test.ts — mapError resolution + registry hygiene (Story 02).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { UnknownReferenceError, DuplicateNameError } from "../../app/errors.ts";
+import {
+  UnknownReferenceError,
+  DuplicateNameError,
+  ObjectiveNotInConflictError,
+} from "../../app/errors.ts";
+import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
 import { InvalidInputError } from "./errors.ts";
 import {
   DOMAIN_ERROR_MAPPINGS,
@@ -47,6 +52,18 @@ test("mapError maps UnknownReferenceError to unknown_reference/404 with its own 
 test("mapError maps DuplicateNameError to duplicate_name/409", () => {
   const mapped = mapError(new DuplicateNameError("project", "global", "x"));
   assert.equal(mapped.code, "duplicate_name");
+  assert.equal(mapped.status, 409);
+});
+
+test("mapError maps NoConflictCandidateError to no_conflict_candidate/409", () => {
+  const mapped = mapError(new NoConflictCandidateError("t1"));
+  assert.equal(mapped.code, "no_conflict_candidate");
+  assert.equal(mapped.status, 409);
+});
+
+test("mapError maps ObjectiveNotInConflictError to objective_not_in_conflict/409", () => {
+  const mapped = mapError(new ObjectiveNotInConflictError("o1", "building"));
+  assert.equal(mapped.code, "objective_not_in_conflict");
   assert.equal(mapped.status, 409);
 });
 

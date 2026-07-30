@@ -37,6 +37,24 @@ export function optionalQueryInt(
   return value;
 }
 
+export function optionalQueryString(
+  query: Readonly<Record<string, string | string[] | undefined>>,
+  name: string,
+): string | undefined {
+  const raw = query[name];
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (Array.isArray(raw)) {
+    throw new InvalidInputError(name, "must be a single value");
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    throw new InvalidInputError(name, "must not be blank");
+  }
+  return trimmed;
+}
+
 export function queryList(
   query: Readonly<Record<string, string | string[] | undefined>>,
   name: string,

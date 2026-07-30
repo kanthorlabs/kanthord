@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { requirePathParam, optionalQueryInt, queryList } from "./decode.ts";
+import {
+  requirePathParam,
+  optionalQueryInt,
+  queryList,
+  optionalQueryString,
+} from "./decode.ts";
 import { InvalidInputError } from "./errors.ts";
 
 test("requirePathParam returns the value when present", () => {
@@ -89,4 +94,26 @@ test("queryList splits a string on commas, trims, and drops empties", () => {
 
 test("queryList flattens an array of comma-lists per element", () => {
   assert.deepEqual(queryList({ ids: ["a", "b,c"] }, "ids"), ["a", "b", "c"]);
+});
+
+test("optionalQueryString returns undefined when absent", () => {
+  assert.equal(optionalQueryString({}, "name"), undefined);
+});
+
+test("optionalQueryString trims the value", () => {
+  assert.equal(optionalQueryString({ name: " alpha " }, "name"), "alpha");
+});
+
+test("optionalQueryString throws InvalidInputError naming the field for an array value", () => {
+  assert.throws(
+    () => optionalQueryString({ name: ["a", "b"] }, "name"),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "name",
+  );
+});
+
+test("optionalQueryString throws InvalidInputError naming the field for a blank/whitespace value", () => {
+  assert.throws(
+    () => optionalQueryString({ name: "   " }, "name"),
+    (err: unknown) => err instanceof InvalidInputError && err.field === "name",
+  );
 });

@@ -163,7 +163,9 @@ class FakeTaskRepositoryB1 implements TaskRepository {
 
 test("(B1 regression) dispatch list task --status awaiting_confirmation exits 0 and returns only matching tasks", async () => {
   const deps = {
-    listTasks: new ListTasks(new FakeTaskRepositoryB1()),
+    listTasks: new ListTasks(new FakeTaskRepositoryB1(), {
+      get: () => ({ id: INITIATIVE_ID_B1 }),
+    }),
   } as unknown as CliDeps;
 
   const result = await dispatch(
@@ -202,7 +204,9 @@ describe("runListTasks", () => {
     const args: Record<string, unknown> = { initiative: INITIATIVE_ID };
     const result = await runListTasks(
       args,
-      new ListTasks(new FakeTaskRepository()),
+      new ListTasks(new FakeTaskRepository(), {
+        get: () => ({ id: INITIATIVE_ID }),
+      }),
     );
     assert.equal(result.exitCode, 0);
     // Stdout must be non-empty (human table)
@@ -234,7 +238,9 @@ describe("runListTasks", () => {
     };
     const result = await runListTasks(
       args,
-      new ListTasks(new FakeTaskRepository()),
+      new ListTasks(new FakeTaskRepository(), {
+        get: () => ({ id: INITIATIVE_ID }),
+      }),
     );
     assert.equal(result.exitCode, 0);
     assert.equal(
@@ -268,7 +274,9 @@ describe("runListTasks", () => {
     };
     const result = await runListTasks(
       args,
-      new ListTasks(new FakeTaskRepository()),
+      new ListTasks(new FakeTaskRepository(), {
+        get: () => ({ id: INITIATIVE_ID }),
+      }),
     );
     assert.equal(result.exitCode, 0);
     assert.equal(result.stdout.length, 1);

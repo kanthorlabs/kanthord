@@ -61,3 +61,40 @@ test("the uncovered set (leaves minus every row's cliCommands, minus serve/comma
     process.stdout.write(uncovered.sort().join("\n") + "\n");
   }
 });
+
+test("the 25 CLI leaves claimed by EPIC 020 all appear across ROUTES' cliCommands", () => {
+  const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
+  const expectedCovered = [
+    "get project",
+    "get initiative",
+    "get objective",
+    "get task",
+    "get resource",
+    "get repository",
+    "get ai-provider",
+    "get graph",
+    "get overview",
+    "get conflict",
+    "list project",
+    "list initiative",
+    "list objective",
+    "list task",
+    "list credential",
+    "list filesystem",
+    "list notification",
+    "list repository",
+    "list ai-provider",
+    "list model",
+    "queue",
+    "find project",
+    "find initiative",
+    "find objective",
+    "find resource",
+  ];
+  for (const cliCommand of expectedCovered) {
+    assert.ok(
+      covered.has(cliCommand),
+      `expected "${cliCommand}" to be covered by ROUTES' cliCommands`,
+    );
+  }
+});

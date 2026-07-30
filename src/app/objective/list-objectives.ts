@@ -8,7 +8,11 @@ export class ListObjectives {
     this.#initiatives = initiatives;
   }
 
-  execute(input: { initiativeId: string }): Objective[] {
-    return this.#initiatives.listObjectives(input.initiativeId);
+  execute(input: { initiativeId: string; name?: string }): Objective[] {
+    const objectives = this.#initiatives.listObjectives(input.initiativeId);
+    if (input.name === undefined) {
+      return objectives;
+    }
+    return objectives.filter((o) => o.name === input.name);
   }
 }

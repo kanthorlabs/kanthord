@@ -1,5 +1,10 @@
 // src/apps/http/error-registry.ts — maps a thrown error to a stable transport code (Story 02).
-import { UnknownReferenceError, DuplicateNameError } from "../../app/errors.ts";
+import {
+  UnknownReferenceError,
+  DuplicateNameError,
+  ObjectiveNotInConflictError,
+} from "../../app/errors.ts";
+import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
 import { HttpFailure } from "./errors.ts";
 
 export interface ErrorMapping {
@@ -13,9 +18,22 @@ export const DOMAIN_ERROR_MAPPINGS: ReadonlyArray<{
   readonly type: new (...args: never[]) => Error;
   readonly code: string;
   readonly status: number;
+  readonly message?: string;
 }> = [
   { type: UnknownReferenceError, code: "unknown_reference", status: 404 },
   { type: DuplicateNameError, code: "duplicate_name", status: 409 },
+  {
+    type: NoConflictCandidateError,
+    code: "no_conflict_candidate",
+    status: 409,
+    message: "the task has no conflicted landing candidate",
+  },
+  {
+    type: ObjectiveNotInConflictError,
+    code: "objective_not_in_conflict",
+    status: 409,
+    message: "the objective is not in conflict",
+  },
 ];
 
 export const TRANSPORT_ERRORS = {
@@ -95,7 +113,7 @@ export function mapError(err: unknown): ErrorMapping {
       return {
         code: mapping.code,
         status: mapping.status,
-        message: (err as Error).message,
+        message: mapping.message ?? (err as Error).message,
       };
     }
   }

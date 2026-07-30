@@ -225,14 +225,19 @@ export function buildHttpApp(deps: HttpDeps, opts: HttpAppOptions): Koa {
       ctx.body = null;
       return;
     }
+    const present = route.present;
+    if (present === undefined) {
+      const e = TRANSPORT_ERRORS.internal;
+      throw new HttpFailure(e.code, e.status, e.message);
+    }
     if (route.kind === "html") {
       ctx.status = route.successStatus;
       ctx.type = "text/html; charset=utf-8";
-      ctx.body = route.present!(result) as string;
+      ctx.body = present(result) as string;
       return;
     }
     ctx.status = route.successStatus;
-    ctx.body = dataEnvelope(route.present!(result));
+    ctx.body = dataEnvelope(present(result));
   });
 
   return app;

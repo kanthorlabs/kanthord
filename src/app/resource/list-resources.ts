@@ -13,12 +13,20 @@ export class ListResources {
     this.projectRepository = projectRepository;
   }
 
-  execute(input: { projectId: string; type: ResourceType }): ResourceView[] {
+  execute(input: {
+    projectId: string;
+    type: ResourceType;
+    name?: string;
+  }): ResourceView[] {
     const resources =
       this.projectRepository.listResourcesByProject?.(
         input.projectId,
         input.type,
       ) ?? [];
-    return resources.map(toResourceView);
+    const filtered =
+      input.name === undefined
+        ? resources
+        : resources.filter((r) => r.name === input.name);
+    return filtered.map(toResourceView);
   }
 }

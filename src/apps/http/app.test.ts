@@ -39,7 +39,7 @@ function makeLogger() {
 
 function makeDeps(): { deps: HttpDeps; logger: ReturnType<typeof makeLogger> } {
   const logger = makeLogger();
-  return { deps: { logger }, logger };
+  return { deps: { logger } as unknown as HttpDeps, logger };
 }
 
 const postTestRoute: Route = {
@@ -722,9 +722,41 @@ function buildCaptureStream(lines: string[]): DestinationStream {
   } as DestinationStream;
 }
 
+test("a non-204 row with present omitted returns 500 internal, not a TypeError", async () => {
+  const { deps, logger } = makeDeps();
+  const noPresentRoute: Route = {
+    id: "test.noPresent",
+    method: "GET",
+    path: "/api/no-present",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: [],
+    decode: () => ({}),
+    run: async () => ({}),
+  };
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    routes: [noPresentRoute],
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .get("/api/no-present")
+    .set("Authorization", AUTH);
+  assert.equal(res.status, 500);
+  assert.equal(res.body.error.code, "internal");
+  assert.equal(res.body.error.requestId, REQUEST_ID);
+  const errorLines = logger.lines.filter(
+    (l) => JSON.parse(l).level === "error",
+  );
+  assert.equal(errorLines.length, 1);
+  assert.ok(!JSON.parse(errorLines[0]!).cause.includes("is not a function"));
+});
+
 test("redaction over a real pino stream: captured lines contain neither the API key nor 'authorization'", async () => {
   const lines: string[] = [];
-  const deps: HttpDeps = { logger: new PinoLogger(buildCaptureStream(lines)) };
+  const deps = {
+    logger: new PinoLogger(buildCaptureStream(lines)),
+  } as unknown as HttpDeps;
   const app = buildHttpApp(deps, {
     apiKey: KEY,
     newRequestId: () => REQUEST_ID,
