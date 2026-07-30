@@ -64,8 +64,18 @@ first real consumer and the `If-Match`/`ETag` convention.
 Shape: `GET /api/event?after=<ulid>` and
 `POST /api/project/:id/acknowledgement`. Pull-based per AGENTS.md; no SSE.
 (AGENTS.md sketches the feed as `GET /events?after=…`; that wording predates the
-singular decision. 022 confirms the final path.) It inherits 021's POST/`201`/
-`Location` and `If-Match` conventions rather than inventing its own.
+singular decision. 022 confirms the final path.)
+
+Both rows answer `200`, so 021's `201`/`Location` and `If-Match` rules do not
+apply to either — corrected 2026-07-30 by
+`.agent/plan/epics/022-event-feed.md` decision 5, which supersedes this file's
+earlier "it inherits 021's POST/`201`/`Location` and `If-Match` conventions".
+Nothing addressable is created by an acknowledgement (the cursor is readable as
+`since` on the project overview), and `AckProject` is monotonic, so a stale
+submission no-ops instead of overwriting newer state — a precondition would
+prevent nothing. 022 does inherit the rest of 021: singular segments, the
+`PATH_SEGMENTS` allowlist, `defineRoute`, one view module per resource, the
+`ETag` on every `200` json response, and the registry rule.
 
 ### Target 023 — state transitions
 
@@ -78,24 +88,67 @@ Shape: `POST /api/task/:id/approval`, `…/rejection`, `…/retry` → a noun
 `PATCH /api/initiative/:id {"paused":true}`. The REST-shape test in
 `src/apps/http/routes.test.ts` enforces the noun rule.
 
-### Target 024 — high-impact operations
+### Target 024 — the frontend host
 
-`land repository`, `publish repository`, `remove ai-provider`,
+No CLI leaf. The Preact screens the 020/021/022 routes exist for: the Control
+Center home, the planning editors, and the inbox that polls
+`GET /api/event?after=…`.
+
+This slice consumes **only** the 020–022 surfaces — reads, planning writes, the
+feed. It needs no provider write and no job API, which is what lets it sit
+before 025 and 026. Stated so a later session cannot grow the frontend a
+dependency on an epic that has not run yet.
+
+### Target 025 — ai-provider writes
+
+`register ai-provider`, `update ai-provider`, `remove ai-provider`,
 `set-default ai-provider`, `assign ai-provider`, `unassign ai-provider`,
-`register ai-provider`, `update ai-provider`, `logout ai-provider`,
-`test ai-provider`.
-Shape: `POST /api/repository/:id/landing`, `…/publication`,
-`POST /api/ai-provider` (`201`), `PATCH /api/ai-provider/:id`,
+`logout ai-provider`, `test ai-provider`.
+Shape: `POST /api/ai-provider` (`201`), `PATCH /api/ai-provider/:id`,
 `DELETE /api/ai-provider/:id`, `POST /api/project/:id/ai-provider` for the
 chain, `POST /api/ai-provider/:id/probe`. Human-gated operations keep their
 `--yes`-equivalent as an explicit request field, never a default.
 
-### Target 025 — the async job API
+This is the provider half of what this file used to call "Target 024 —
+high-impact operations" (renumbered 2026-07-30, Ulrich; see the note below).
+
+### Target 026 — the async job API
 
 `run daemon`, `setup project`, `login provider`, `db migrate`, `db status`.
 Shape: `POST /api/job` → `202` + a job resource, `GET /api/job/:id` for
 progress. These are the leaves with no request/response shape: they stream,
 prompt, or run forever. `db status` may instead join 020 as a read.
+
+### Target 027 — delivery
+
+`land repository`, `publish repository`.
+Shape: `POST /api/repository/:id/landing`, `POST /api/repository/:id/publication`.
+Human-gated, so the `--yes` equivalent is an explicit request field, never a
+default; `publish` stays fast-forward-only and never force-pushes (AGENTS.md,
+delivery contract).
+
+This is the delivery half of the old "Target 024".
+
+### Why the numbering changed (2026-07-30, Ulrich)
+
+AGENTS.md binds dependency order to numeric order ("epic N always depends on
+epic N-1"), so the roadmap must be listed in the order it can be built:
+
+- **025 (provider writes) before 026 (the daemon job API).** An empty resolved
+  provider chain fails every task without attempting it —
+  `src/app/task/run-next-task.ts:289-295` fails it with `no_provider_available`
+  — and `ai_provider` is a config check
+  (`src/app/project/project-readiness.ts:45-50`). Provider setup must exist
+  before the daemon can be driven over HTTP.
+- **024 (frontend) before both.** It uses only the 020–022 surfaces, so it
+  depends on nothing in 025 or 026.
+- **027 (delivery) after 026.** `land` and `publish` need a landed candidate,
+  which only a daemon run produces. Delivery therefore depends on the job API,
+  not the reverse.
+
+EPIC 021 decision 6 defers `check project --probe-*` and
+`POST /api/ai-provider/:id/probe` to "EPIC 024"; that reference now reads
+**025**.
 
 ### Never retired (operator-only, stays CLI)
 
@@ -104,6 +157,6 @@ prompt, or run forever. `db status` may instead join 020 as a read.
 ## Deliberately unresolved here
 
 - Whether `login provider`'s OAuth device flow can run behind the API at all, or
-  stays a terminal-only operation. Decide in 025 with the flow in hand.
+  stays a terminal-only operation. Decide in 026 with the flow in hand.
 - Whether the UI needs `export diagnostic` at all, or whether a support bundle
   download replaces it.
