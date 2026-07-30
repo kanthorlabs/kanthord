@@ -161,7 +161,7 @@ resource", "get repository"]`) because `GetResource` takes only an id and
     inventing one here would touch every list. `queue` keeps its existing
     `?limit=` (the only limit-shaped input that exists,
     `src/app/project/get-decision-queue.ts:225`); `GET /api/model` takes
-    `?provider=`. The event feed's cursor is 021's problem.
+    `?provider=`. The event feed's cursor is 022's problem.
 12. **Auth, envelope, CORS, Host and CSRF gates are untouched.** Auth already
     covers every route (019 decision 4); 020 adds no per-route auth, no new
     middleware, and no new middleware order. The unsafe-method gates are not
@@ -343,8 +343,8 @@ capability (`GET /api/project` is not a route yet), not a broken fixture.
 ## Non-goals
 
 - Every write. No `POST`, `PATCH` or `DELETE` row lands in 020; planning writes
-  are 022, state transitions 023, high-impact operations 024.
-- The event feed and `ack project` (`GET /api/event?after=…`) — that is 021,
+  are 021, state transitions 023, high-impact operations 024.
+- The event feed and `ack project` (`GET /api/event?after=…`) — that is 022,
   and it owns the cursor convention.
 - Pagination, sorting and cursors on the 020 collections (decision 11).
 - Actually retiring any CLI leaf. 020 makes 25 leaves retirable and updates the

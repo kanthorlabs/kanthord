@@ -42,15 +42,7 @@ is the exact 22-row list; a required parent scope is a path segment
 Implemented: `.agent/plan/epics/020-http-reads.md`, proved by
 `scripts/e2e/http-reads-proof.sh`.
 
-### Target 021 — the event feed
-
-`list event`, `ack project`.
-Shape: `GET /api/event?after=<ulid>` and
-`POST /api/project/:id/acknowledgement`. Pull-based per AGENTS.md; no SSE.
-(AGENTS.md sketches the feed as `GET /events?after=…`; that wording predates the
-singular decision. 021 confirms the final path.)
-
-### Target 022 — planning writes
+### Target 021 — planning writes
 
 `create project`, `create initiative`, `create objective`, `create task`,
 `create credential`, `create filesystem`, `create notification`,
@@ -65,6 +57,15 @@ Dependencies are sub-resources: `POST|DELETE /api/task/:id/dependency/:otherId`.
 `import graph` is a `POST` with a JSON body; the interactive form stays CLI-only
 until the async job API. This is the epic that adds the request-body reader's
 first real consumer and the `If-Match`/`ETag` convention.
+
+### Target 022 — the event feed
+
+`list event`, `ack project`.
+Shape: `GET /api/event?after=<ulid>` and
+`POST /api/project/:id/acknowledgement`. Pull-based per AGENTS.md; no SSE.
+(AGENTS.md sketches the feed as `GET /events?after=…`; that wording predates the
+singular decision. 022 confirms the final path.) It inherits 021's POST/`201`/
+`Location` and `If-Match` conventions rather than inventing its own.
 
 ### Target 023 — state transitions
 

@@ -112,7 +112,7 @@ const deps = {
 used by this epic exist today); `:48-51` asserts `leaves.length === 80` — no
 story adds or removes a CLI leaf, so it stays true; `:53-63` asserts the
 uncovered set is NON-empty — still true after 25 leaves are claimed (80 leaves,
-`serve` + `commands` excluded, 022–025 targets remain).
+`serve` + `commands` excluded, 021–025 targets remain).
 
 **`src/apps/http/error-registry.test.ts:12-14`** allows statuses
 `{400,401,403,404,405,409,412,413,415,500}` and requires `snake_case`, unique

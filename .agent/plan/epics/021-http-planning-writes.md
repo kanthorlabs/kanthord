@@ -1,4 +1,4 @@
-# EPIC 022 — HTTP planning writes: the first non-GET rows
+# EPIC 021 — HTTP planning writes: the first non-GET rows
 
 > Authored 2026-07-30, on top of EPIC 020 (commit `88b9df9`). 020 shipped the
 > read surface: 22 `/api` GET rows beside `/healthz` and `/` (24 rows today),
@@ -6,16 +6,16 @@
 > `PATH_SEGMENTS` allowlist. Every 020 row is a `GET`, so the unsafe-method
 > gates 019 shipped have never run against a real row.
 >
-> 022 is the third step of `.agent/plan/stories/019-http-server/retirement.md`
-> ("Target 022 — planning writes"). It extends the 019/020 seams; it removes no
+> 021 is the third step of `.agent/plan/stories/019-http-server/retirement.md`
+> ("Target 021 — planning writes"). It extends the 019/020 seams; it removes no
 > CLI leaf.
 >
-> **022 does NOT depend on EPIC 021** (the event feed + `ack project`), which is
-> not authored yet. No 022 row reads or writes the feed cursor: `CreateTask`,
+> **021 does NOT depend on EPIC 022** (the event feed + `ack project`), which is
+> not authored yet. No 021 row reads or writes the feed cursor: `CreateTask`,
 > `AddDependency` and `RemoveDependency` append events through the `EventFeed`
-> port that `composition.ts` already wires, and nothing in 022 needs
-> `GET /api/event?after=…`. 022 can be built first, and that is the better
-> order: 021's `POST /api/project/:id/acknowledgement` should inherit 022's
+> port that `composition.ts` already wires, and nothing in 021 needs
+> `GET /api/event?after=…`. 021 can be built first, and that is the better
+> order: 022's `POST /api/project/:id/acknowledgement` should inherit 021's
 > POST/201/`Location` and `If-Match` conventions rather than invent its own.
 
 ## Goal
@@ -29,26 +29,26 @@ is a sub-resource toggled by `POST`/`DELETE` on
 `…/dependency/:dependencyId`. `import graph` becomes a `POST` carrying the graph
 package as JSON, `export initiative` a `GET`, and the two `check` leaves split
 by whether the computation is over the posted document (`POST`) or over stored
-state (`GET`). After 022 the request-body reader exists with its `415`/`413`/
+state (`GET`). After 021 the request-body reader exists with its `415`/`413`/
 malformed-JSON behaviour, the `ETag`/`If-Match` convention 019 deferred is real
 and proved, and the Host, CSRF and content-type gates 019 shipped are exercised
 by actual rows. 27 CLI write leaves are covered by 28 rows and become retirable;
-none is removed in 022.
+none is removed in 021.
 
 ## Decisions (binding; do not re-open at build time)
 
-### 0. What 022 inherits and may NOT re-open
+### 0. What 021 inherits and may NOT re-open
 
 - **Singular path segments** and the `PATH_SEGMENTS` allowlist test (020
-  decision 1 + 2). 022 adds four segments — see decision 8.
+  decision 1 + 2). 021 adds four segments — see decision 8.
 - **`defineRoute` / `RouteDefinition<Input, Output>`** (020 decision 3). No
-  per-row `as` cast, no `route.present!`. 022 extends the definition type; it
+  per-row `as` cast, no `route.present!`. 021 extends the definition type; it
   does not weaken it.
 - **One view module per resource** under `src/apps/http/views/`, each with a
   LITERAL field list, no `domain/` import and no object spread (020 decision
   10).
 - **The 019 envelope, Basic auth, the error registry and the middleware order.**
-  022 adds no middleware and does not reorder the eight that exist.
+  021 adds no middleware and does not reorder the eight that exist.
 
 ### 1. `POST` on the collection → `201` + `Location`; `PATCH` on the item → `200` + the DTO
 
@@ -87,7 +87,7 @@ establishes — `requireBodyString(body, field)`,
 `optionalBodyString`, `optionalBodyStringArray`, `optionalBodyBool`,
 `requireBodyObject`, `optionalBodyRecord`. Each throws the existing
 `InvalidInputError(field, reason)` → `400 invalid_input`. Rationale: `decode.ts`
-holds the _params/query_ readers and 022's rows need the _body_ readers in the
+holds the _params/query_ readers and 021's rows need the _body_ readers in the
 same `decode` function; splitting by input location keeps both files small and
 keeps `decode.ts` untouched by this epic.
 
@@ -98,7 +98,7 @@ keeps `decode.ts` untouched by this epic.
 
 **Size limit: unchanged at 1 MiB.** 019 already configured
 `bodyParser({ enableTypes: ["json"], jsonLimit: "1mb" })`
-(`src/apps/http/app.ts:200`). The largest 022 body is a graph package; the
+(`src/apps/http/app.ts:200`). The largest 021 body is a graph package; the
 biggest package in `scripts/e2e/` is a few KiB, so 1 MiB is ample and raising a
 limit nobody has hit is speculative.
 
@@ -113,9 +113,9 @@ Verified in the current tree, not assumed:
   (`error-registry.ts:92-96`), and the error boundary drains the request first
   (`app.ts:78-85`).
 
-**So the only NEW registry codes 022 needs are the two preconditions of
+**So the only NEW registry codes 021 needs are the two preconditions of
 decision 3** (`precondition_required`, `precondition_failed`) plus the domain
-errors decision 6 enumerates. 022's job on `415`/`413`/`400` is to **prove** the
+errors decision 6 enumerates. 021's job on `415`/`413`/`400` is to **prove** the
 019 wiring over a real row, not to add code — the Proof's phase B does exactly
 that.
 
@@ -205,7 +205,7 @@ which fields are mutable and writing one needs all of it.
 
 `create credential` carries the secret **in the request body** (`{"value":"…"}`)
 because the CLI's `--value-file <path|->` reads it from a file or stdin and
-neither exists over HTTP. This is the only 022 field that is a secret; it is
+neither exists over HTTP. This is the only 021 field that is a secret; it is
 never presented back (020's credential view has no `value` field) and the Proof
 asserts it appears in neither a response nor a log line.
 
@@ -238,7 +238,7 @@ CLI-only: over HTTP `bindings` is an alias → resource **id** map, so
 manifest rewriting also stay CLI-only — the HTTP body is an already-parsed
 package.
 
-### 7. App-layer changes 022 requires — found by reading the use cases
+### 7. App-layer changes 021 requires — found by reading the use cases
 
 Two, both deliberate, both mirroring 020 decision 7's precedent:
 
@@ -247,12 +247,12 @@ Two, both deliberate, both mirroring 020 decision 7's precedent:
    (`src/app/graph/export-initiative.ts:46-48`), which `mapError` cannot
    classify, so `GET /api/initiative/<unknown>/package` would answer
    `500 internal` while every other unknown-id read answers
-   `404 unknown_reference`. 022 changes it to
+   `404 unknown_reference`. 021 changes it to
    `throw new UnknownReferenceError("initiative", initiativeId)`. The CLI
    inherits a better message; no backward-compatibility duty (AGENTS.md).
 2. **`DiagnosticsExport` must separate building from writing.**
    `execute(input)` builds the export object and then writes it to
-   `input.outPath` in one method (`diagnostics-export.ts:115-322`). 022 extracts
+   `input.outPath` in one method (`diagnostics-export.ts:115-322`). 021 extracts
    `build(input: {initiativeId, taskId?, debug?}): Promise<SafeFactsExport>`
    and leaves `execute` as `build` + `writeFile` + preview, unchanged for the
    CLI. The HTTP row calls `build`, so no request can name a server path.
@@ -277,7 +277,7 @@ Checked and deliberately NOT changed:
 - `InvalidObjectiveIdError` is thrown by the SQLite task repository
   (`sqlite-task-repository.ts`), but `CreateTask` resolves the objective's kind
   first and 404s on a bad id (`create-task.ts:57-60`), so it is unreachable from
-  a 022 row and is NOT registered.
+  a 021 row and is NOT registered.
 
 ### 8. Four new path segments, and the first use of 020's escape hatch
 
@@ -293,13 +293,13 @@ the row `id` (`initiative.graph.apply`, `initiative.diagnostic.export`,
 
 ### 9. The unsafe-method gates: what actually runs now
 
-022 is the first epic with non-GET rows, so state exactly which of 019's gates
+021 is the first epic with non-GET rows, so state exactly which of 019's gates
 each write passes through, in middleware order:
 
-| gate              | where            | behaviour on a 022 row                                                                                                                                                                                                                                                                           |
+| gate              | where            | behaviour on a 021 row                                                                                                                                                                                                                                                                           |
 | ----------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Host check        | `app.ts:138-145` | Runs on every method. A `Host` that is not `127.0.0.1`/`localhost` → `403 host_not_allowed`. Already ran for GETs; unchanged.                                                                                                                                                                    |
-| `@koa/cors`       | `app.ts:148-156` | `allowMethods` already lists `GET, POST, PATCH, DELETE`, so a preflight for a 022 row is answered correctly with no change.                                                                                                                                                                      |
+| `@koa/cors`       | `app.ts:148-156` | `allowMethods` already lists `GET, POST, PATCH, DELETE`, so a preflight for a 021 row is answered correctly with no change.                                                                                                                                                                      |
 | Basic auth        | `app.ts:159-166` | Covers writes with no per-route work (019 decision 4).                                                                                                                                                                                                                                           |
 | content-type gate | `app.ts:170-176` | **First time it fires.** `POST`/`PATCH` (`requiresJsonContentType`) without `application/json` → `415`. `DELETE` is exempt.                                                                                                                                                                      |
 | CSRF origin gate  | `app.ts:177-195` | **First time it fires.** For `POST`/`PATCH`/`DELETE` (`requiresOriginCheck`), a present `Origin` must equal the server's own scheme+host+port → else `403 origin_not_allowed`. An ABSENT `Origin` passes, by design: a non-browser client (curl, the CLI) sends none, and a browser always does. |
@@ -488,7 +488,7 @@ root:
 scripts/e2e/http-writes-proof.sh
 ```
 
-It must print `022 ok: …`. Phases:
+It must print `021 ok: …`. Phases:
 
 - **A** — a temp `KANTHORD_DB` is migrated and `serve --port 0` starts in an
   isolated working directory carrying its own `.env`; the bound port is read
@@ -599,26 +599,26 @@ Each story keeps `npm run verify` green on its own.
   `HttpDeps` field including `newId`; `routes.test.ts`'s row count becomes 52;
   `cli-coverage.test.ts` records the 27 claimed leaves;
   `scripts/e2e/http-writes-proof.sh` (already written, already failing for the
-  right reason) must print `022 ok: …`; `retirement.md` marks Target 022 covered
+  right reason) must print `021 ok: …`; `retirement.md` marks Target 021 covered
   and records that `check project --probe-*` and the interactive `import graph`
   form stay CLI-only.
 
 ## Non-goals
 
 - **State transitions** (`approve`, `reject`, `retry`, `abandon`, `pause`,
-  `resume`) — EPIC 023. 022 writes only the plan, never the run state. The one
+  `resume`) — EPIC 023. 021 writes only the plan, never the run state. The one
   exception that is NOT a transition: an initiative may be created `paused`,
   because `CreateInitiative` requires the flag at creation.
 - **High-impact operations** (`land`, `publish`, every `ai-provider` write) —
-  EPIC 024. Nothing in 022 touches a remote, a credential store or a provider.
-- **The event feed and `ack project`** — EPIC 021, which owns the cursor
-  convention. 022 does not depend on it (see the header).
-- **`DELETE` on an entity.** Only the dependency edges are deletable in 022;
+  EPIC 024. Nothing in 021 touches a remote, a credential store or a provider.
+- **The event feed and `ack project`** — EPIC 022, which owns the cursor
+  convention. 021 does not depend on it (see the header).
+- **`DELETE` on an entity.** Only the dependency edges are deletable in 021;
   deleting a project, initiative, objective or task has no use case today and
   inventing one here is out of scope.
 - **`If-None-Match` / `304`, `PUT`, content negotiation, pagination, OpenAPI or
   client codegen, a `/v1` prefix** — still deferred exactly as 019 and 020
-  recorded them. 022 adds `ETag` and `If-Match` only.
+  recorded them. 021 adds `ETag` and `If-Match` only.
 - **`check project --probe-repositories` / `--probe-provider` over HTTP** —
   decision 6. Probing joins EPIC 024.
 - **The interactive `import graph` form** (a graph directory, `--bind name=…`
@@ -627,11 +627,11 @@ Each story keeps `npm run verify` green on its own.
   async job API (EPIC 025).
 - **`export diagnostic --out`** — a client-supplied server path is never
   accepted; the document is returned instead (decision 6).
-- **Actually retiring any CLI leaf.** 022 makes 27 leaves retirable and updates
+- **Actually retiring any CLI leaf.** 021 makes 27 leaves retirable and updates
   the inventory; removal happens when the UI uses the routes.
 - **Any UI work.** The Preact editing screens that consume these writes are a
-  later epic; 022's UI-facing deliverable is the typed request/response surface
+  later epic; 021's UI-facing deliverable is the typed request/response surface
   and the `ETag` the editors need.
 - **Any change to auth, CORS, the Host check, the CSRF gate, the middleware
-  order, the logger or the envelope.** 022 proves those gates; it does not
+  order, the logger or the envelope.** 021 proves those gates; it does not
   modify them.

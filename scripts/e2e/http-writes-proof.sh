@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# http-writes-proof.sh — EPIC 022 Proof (deterministic, no model, no outbound
+# http-writes-proof.sh — EPIC 021 Proof (deterministic, no model, no outbound
 # network — loopback only — no server left running).
 #
 # Proves that the running `kanthord serve` program answers every PLANNING WRITE
@@ -418,4 +418,4 @@ if kill -0 "$SERVE_PID" 2>/dev/null; then echo "FAILED: serve survived SIGTERM" 
 SERVE_PID=""
 eq "port closed after SIGTERM" "0" "$(status_of "$(GET /api/project)")"
 
-echo "022 ok: planning writes on 127.0.0.1:$PORT — POST creates with 201+Location, PATCH needs If-Match (428/412) and answers 200+fresh ETag, dependency sub-resources 204, import graph create+apply over JSON, export initiative GET / export diagnostic POST, check graph POST / check project GET, body reader maps 400/413/415, Host+CSRF+auth gates hold, no secret logged, shutdown clean"
+echo "021 ok: planning writes on 127.0.0.1:$PORT — POST creates with 201+Location, PATCH needs If-Match (428/412) and answers 200+fresh ETag, dependency sub-resources 204, import graph create+apply over JSON, export initiative GET / export diagnostic POST, check graph POST / check project GET, body reader maps 400/413/415, Host+CSRF+auth gates hold, no secret logged, shutdown clean"
