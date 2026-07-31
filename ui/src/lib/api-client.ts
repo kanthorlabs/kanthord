@@ -5,6 +5,13 @@
 // Vite proxy (`ui/vite.config.ts`); Electron gets it from the main process via
 // `webRequest.onBeforeSendHeaders`. The API key therefore appears in no module
 // that ships to the browser.
+import type {
+  ProjectDto,
+  ProjectOverviewDto,
+  ResourceDto,
+  ResourceTypeKey,
+  ResourceOfType,
+} from "./dto";
 import { apiBaseUrl } from "./runtime";
 
 /** The daemon wraps every success in `{"data": …}` (src/apps/http/envelope.ts). */
@@ -77,4 +84,69 @@ export async function apiGet<T>(
   }
 
   return (body as DataEnvelope<T>).data;
+}
+
+// --- Story 02: api-path builder and fetch helpers ---
+
+export interface RequestInitLike {
+  readonly signal?: AbortSignal;
+}
+
+/** `path` + a query string built from the defined, non-empty params. */
+export function apiPath(
+  path: string,
+  params?: Readonly<Record<string, string | undefined>>,
+): string {
+  if (!params) return path;
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") {
+      search.set(k, v);
+    }
+  }
+  const qs = search.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
+export function fetchProjects(
+  name?: string,
+  init?: RequestInitLike,
+): Promise<ProjectDto[]> {
+  return apiGet<ProjectDto[]>(apiPath("/api/project", { name }), init);
+}
+
+export function fetchProject(
+  id: string,
+  init?: RequestInitLike,
+): Promise<ProjectDto> {
+  return apiGet<ProjectDto>(`/api/project/${encodeURIComponent(id)}`, init);
+}
+
+export function fetchProjectOverview(
+  id: string,
+  init?: RequestInitLike,
+): Promise<ProjectOverviewDto> {
+  return apiGet<ProjectOverviewDto>(
+    `/api/project/${encodeURIComponent(id)}/overview`,
+    init,
+  );
+}
+
+export function fetchResources<T extends ResourceTypeKey>(
+  projectId: string,
+  type: T,
+  name?: string,
+  init?: RequestInitLike,
+): Promise<ResourceOfType<T>[]> {
+  return apiGet<ResourceOfType<T>[]>(
+    apiPath(`/api/project/${encodeURIComponent(projectId)}/${type}`, { name }),
+    init,
+  );
+}
+
+export function fetchResource(
+  id: string,
+  init?: RequestInitLike,
+): Promise<ResourceDto> {
+  return apiGet<ResourceDto>(`/api/resource/${encodeURIComponent(id)}`, init);
 }

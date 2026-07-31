@@ -218,10 +218,60 @@ describe("src/app/resource/list-resources.ts", () => {
   });
 
   // -------------------------------------------------------------------------
-  // 020 S3 — optional exact `name` filter (decision 5)
+  // 026.2 Story 01 — case-insensitive substring `name` filter
   // -------------------------------------------------------------------------
 
-  test("(020 S3) execute({ name }) keeps only the exact match", () => {
+  test("(026.2 S01) execute({ name: 'k' }) returns both credentials — substring match", () => {
+    const call: { results: Resource[] } = { results: [credA, credB] };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({
+      projectId: PROJECT_ID,
+      type: "credential",
+      name: "k",
+    });
+    assert.equal(views.length, 2);
+    assert.equal(views[0]?.id, "cred-a");
+    assert.equal(views[1]?.id, "cred-b");
+  });
+
+  test("(026.2 S01) execute({ name: 'K1' }) returns only cred-a — case-insensitive", () => {
+    const call: { results: Resource[] } = { results: [credA, credB] };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({
+      projectId: PROJECT_ID,
+      type: "credential",
+      name: "K1",
+    });
+    assert.equal(views.length, 1);
+    assert.equal(views[0]?.id, "cred-a");
+    assert.equal(
+      "value" in views[0]!,
+      false,
+      "credential view must not carry a 'value' key",
+    );
+    assert.equal(
+      JSON.stringify(views).includes(CANARY),
+      false,
+      "CANARY_SECRET_VALUE absent from views",
+    );
+  });
+
+  test("(026.2 S01) execute({ name: 'nope' }) returns [] — no match", () => {
+    const call: { results: Resource[] } = { results: [credA, credB] };
+    const uc = new ListResources(makeFakeRepo(call));
+    const views = uc.execute({
+      projectId: PROJECT_ID,
+      type: "credential",
+      name: "nope",
+    });
+    assert.deepEqual(views, []);
+  });
+
+  // -------------------------------------------------------------------------
+  // 020 S3 — optional case-insensitive substring `name` filter (decisions 5, 12)
+  // -------------------------------------------------------------------------
+
+  test("(020 S3) execute({ name }) keeps the substring match", () => {
     const call: { results: Resource[] } = {
       results: [credA, credB],
     };

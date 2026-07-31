@@ -8,17 +8,18 @@ import type { ReactElement } from "react";
 import { RouterProvider } from "react-router-dom";
 
 import { ROUTE_TABLE, createAppRouter } from "./routes";
-import { apiGet, ApiError } from "@/lib/api-client";
+import { apiGet, fetchProjects, ApiError } from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/api-client")>(
       "@/lib/api-client",
     );
-  return { ...actual, apiGet: vi.fn() };
+  return { ...actual, apiGet: vi.fn(), fetchProjects: vi.fn() };
 });
 
 const apiGetMock = vi.mocked(apiGet);
+const fetchProjectsMock = vi.mocked(fetchProjects);
 
 function renderWithQuery(ui: ReactElement) {
   const client = new QueryClient({
@@ -124,17 +125,19 @@ describe("routing", () => {
     );
   });
 
-  test("#/project renders global-shell and not-built-yet 026.2", async () => {
+  test("#/project renders global-shell and ProjectsPage screen (026.2 implemented)", async () => {
     apiGetMock.mockResolvedValue({ id: "p1", name: "alpha" });
+    fetchProjectsMock.mockResolvedValue([]);
     window.location.hash = "#/project";
     renderWithQuery(<RouterProvider router={createAppRouter()} />);
 
     await waitFor(() => {
       expect(screen.getByTestId("global-shell")).toBeInTheDocument();
     });
-    expect(screen.getByTestId("not-built-yet").getAttribute("data-epic")).toBe(
-      "026.2",
-    );
+    await waitFor(() => {
+      expect(screen.getByTestId("collection-search")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("not-built-yet")).not.toBeInTheDocument();
   });
 
   test("#/operations renders the health card (screen, not not-built-yet)", async () => {
@@ -149,10 +152,8 @@ describe("routing", () => {
   });
 
   test.each([
-    ["overview", "026.2"],
     ["graph", "026.6"],
     ["plan", "026.8"],
-    ["resource", "026.5"],
     ["readiness", "026.6"],
   ] as const)(
     "#/project/p1/%s renders project-shell with not-built-yet %s",

@@ -77,6 +77,9 @@ try {
       // ui/ module may set this header, so the proof inspects what the PAGE
       // asked for, before the context's credential is applied.
       authorization: req.headers()["authorization"] ?? null,
+      // EPIC 026.9: a verdict proof must show WHAT the page sent — the decision
+      // occurrence id and the head OID it reviewed — not merely that it posted.
+      postData: req.postData() ?? null,
       fromPage: req.frame() !== null,
     });
   });

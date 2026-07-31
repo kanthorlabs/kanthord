@@ -12,7 +12,10 @@ import {
 } from "react-router-dom";
 
 import { OperationsPage } from "@/pages/operations";
+import { ProjectsPage } from "@/pages/projects";
 import { NotBuiltYet } from "@/components/not-built-yet";
+import { ProjectOverviewPage } from "@/pages/project-overview";
+import { ProjectResourcesPage } from "@/pages/project-resources";
 import { GlobalShell, ProjectShell } from "@/components/shell";
 import { AsyncBoundary } from "@/components/async-boundary";
 import { asyncStateOf } from "@/lib/async-state";
@@ -31,12 +34,12 @@ export interface AppRoute {
 export const ROUTE_TABLE: readonly AppRoute[] = [
   { path: "/", kind: "redirect" },
   { path: "/inbox", kind: "not-built-yet", epic: "026.7" },
-  { path: "/project", kind: "not-built-yet", epic: "026.2" },
+  { path: "/project", kind: "screen" },
   { path: "/operations", kind: "screen" },
-  { path: "/project/:id/overview", kind: "not-built-yet", epic: "026.2" },
+  { path: "/project/:id/overview", kind: "screen" },
   { path: "/project/:id/graph", kind: "not-built-yet", epic: "026.6" },
   { path: "/project/:id/plan", kind: "not-built-yet", epic: "026.8" },
-  { path: "/project/:id/resource", kind: "not-built-yet", epic: "026.5" },
+  { path: "/project/:id/resource", kind: "screen" },
   { path: "/project/:id/readiness", kind: "not-built-yet", epic: "026.6" },
   { path: "*", kind: "missing" },
 ];
@@ -86,7 +89,7 @@ export function createAppRouter(queryClient?: QueryClient) {
         },
         {
           path: "/project",
-          element: <NotBuiltYet surface="Projects" epic="026.2" />,
+          element: <ProjectsPage />,
         },
         {
           path: "*",
@@ -114,7 +117,7 @@ export function createAppRouter(queryClient?: QueryClient) {
         { index: true, element: <Navigate to="overview" replace /> },
         {
           path: "overview",
-          element: <NotBuiltYet surface="Overview" epic="026.2" />,
+          element: <ProjectOverviewPage />,
         },
         {
           path: "graph",
@@ -126,7 +129,11 @@ export function createAppRouter(queryClient?: QueryClient) {
         },
         {
           path: "resource",
-          element: <NotBuiltYet surface="Resources" epic="026.5" />,
+          element: <Navigate to="repository" replace />,
+        },
+        {
+          path: "resource/:type",
+          element: <ProjectResourcesPage />,
         },
         {
           path: "readiness",

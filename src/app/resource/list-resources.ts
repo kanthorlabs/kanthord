@@ -26,7 +26,9 @@ export class ListResources {
     const filtered =
       input.name === undefined
         ? resources
-        : resources.filter((r) => r.name === input.name);
+        : resources.filter((r) =>
+            r.name.toLowerCase().includes(input.name!.toLowerCase()),
+          );
     return filtered.map(toResourceView);
   }
 }

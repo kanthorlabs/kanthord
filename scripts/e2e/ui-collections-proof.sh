@@ -116,14 +116,15 @@ export default async ({ goto, text, count, visible, consoleErrors, requests, pag
   eq("both seeded projects are listed", 2, await count('[data-testid="project-table"] tbody tr'));
   eq("the seeded project has its own row", 1, await count(`tr[data-project-id="${projectId}"]`));
   const before = requests.length;
+  const searchResponse = page.waitForResponse(r => r.url().includes("/api/project") && r.url().includes("name="));
   await page.locator('[data-testid="collection-search"]').fill("alpha");
-  await page.waitForLoadState("networkidle");
+  await searchResponse;
   const searched = requests.slice(before).filter((r) => r.url.includes("/api/project") && r.url.includes("name="));
   if (searched.length === 0) throw new Error("the toolbar search did not send ?name= to the server");
   eq("the table narrowed to the matching project", 1, await count('[data-testid="project-table"] tbody tr'));
 
   // --- D: the Overview composition, in its fixed order.
-  await goto(`#/project/${projectId}/overview`);
+  await goto(`#/project/${projectId}/overview`, '[data-testid="overview-initiative-card"]');
   eq("one card per initiative", 2, await count('[data-testid="overview-initiative-card"]'));
   const card = `[data-initiative-id="${initiativeId}"]`;
   has("the card names the real initiative", await text(card), "initiative-one");
@@ -142,23 +143,24 @@ export default async ({ goto, text, count, visible, consoleErrors, requests, pag
   }
 
   // --- E: Resources — four typed tabs, the tab lives in the URL.
-  await goto(`#/project/${projectId}/resource/credential`);
+  await goto(`#/project/${projectId}/resource/credential`, '[data-testid="resource-table"]');
   eq("four resource tabs", 4, await count('[data-testid="resource-tabs"] a'));
   eq("one seeded credential", 1, await count('[data-testid="resource-table"] tbody tr'));
   eq("the credential tab has no repository-only column", 0, await count('[data-testid="resource-col-branch"]'));
   has("the credential secret is never rendered", await text("body"), "cred-one");
   if ((await text("body")).includes("s3cr3t-not-rendered")) throw new Error("a credential secret was rendered");
   await page.locator('[data-testid="resource-tabs"] a', { hasText: "Repositor" }).first().click();
-  await page.waitForLoadState("networkidle");
+  await page.locator('[data-testid="resource-col-branch"]').first().waitFor({ state: "visible", timeout: 10_000 });
   has("switching tab changes the URL", page.url(), `/resource/repository`);
   eq("the repository grammar has a branch column", 1, await count('[data-testid="resource-col-branch"]'));
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload();
+  await page.locator('[data-testid="resource-col-branch"]').first().waitFor({ state: "visible", timeout: 10_000 });
   eq("a reload keeps the repository tab", 1, await count('[data-testid="resource-col-branch"]'));
   await goto(`#/project/${projectId}/resource/not-a-type`);
   eq("an unknown resource type is the missing state", true, await visible('[data-testid="async-missing"]'));
 
   // --- F: the polling engine. The page is untouched from here on.
-  await goto(`#/project/${projectId}/overview`);
+  await goto(`#/project/${projectId}/overview`, '[data-testid="overview-initiative-card"]');
   const pendingBefore = Number((await text(`${card} [data-testid="count-pending"]`)).replace(/\D/g, ""));
   const created = await page.evaluate(async ({ base, key, objectiveId }) => {
     const res = await fetch(`${base}/api/objective/${objectiveId}/task`, {

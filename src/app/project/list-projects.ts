@@ -13,6 +13,7 @@ export class ListProjects {
     if (input?.name === undefined) {
       return projects;
     }
-    return projects.filter((p) => p.name === input.name);
+    const needle = input.name.toLowerCase();
+    return projects.filter((p) => p.name.toLowerCase().includes(needle));
   }
 }
