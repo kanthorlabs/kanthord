@@ -55,6 +55,7 @@ test("initiativeView includes status and workspace when present in the source", 
 test("initiativeDetailView key set is exactly the declared list; waiting is mapped through unsatisfiedEdgeView, dropping an injected extra on the edge", () => {
   const result = {
     id: "i1",
+    projectId: "p1",
     name: "init one",
     status: "building",
     paused: false,
@@ -69,9 +70,11 @@ test("initiativeDetailView key set is exactly the declared list; waiting is mapp
     "id",
     "name",
     "paused",
+    "projectId",
     "status",
     "waiting",
   ]);
+  assert.equal(view.projectId, "p1");
   assert.deepEqual(view.after, ["i0"]);
   assert.deepEqual(view.waiting, [{ id: "i0", neverSatisfies: false }]);
 });
@@ -79,6 +82,7 @@ test("initiativeDetailView key set is exactly the declared list; waiting is mapp
 test("initiativeDetailView includes workspace when present in the source", () => {
   const result: GetInitiativeOutput = {
     id: "i1",
+    projectId: "p1",
     name: "init one",
     status: "building",
     paused: false,
@@ -94,6 +98,7 @@ test("initiativeDetailView includes workspace when present in the source", () =>
     "id",
     "name",
     "paused",
+    "projectId",
     "status",
     "waiting",
     "workspace",

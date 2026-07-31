@@ -11,6 +11,12 @@ import type {
   ResourceDto,
   ResourceTypeKey,
   ResourceOfType,
+  InitiativeRowDto,
+  InitiativeDetailDto,
+  ObjectiveRowDto,
+  ObjectiveDetailDto,
+  TaskRowDto,
+  TaskDetailDto,
 } from "./dto";
 import { apiBaseUrl } from "./runtime";
 
@@ -149,4 +155,66 @@ export function fetchResource(
   init?: RequestInitLike,
 ): Promise<ResourceDto> {
   return apiGet<ResourceDto>(`/api/resource/${encodeURIComponent(id)}`, init);
+}
+
+// --- Story 01: entity workspace fetch helpers ---
+
+export function fetchInitiatives(
+  projectId: string,
+  init?: RequestInitLike,
+): Promise<InitiativeRowDto[]> {
+  return apiGet<InitiativeRowDto[]>(
+    `/api/project/${encodeURIComponent(projectId)}/initiative`,
+    init,
+  );
+}
+
+export function fetchInitiative(
+  id: string,
+  init?: RequestInitLike,
+): Promise<InitiativeDetailDto> {
+  return apiGet<InitiativeDetailDto>(
+    `/api/initiative/${encodeURIComponent(id)}`,
+    init,
+  );
+}
+
+export function fetchObjectives(
+  initiativeId: string,
+  init?: RequestInitLike,
+): Promise<ObjectiveRowDto[]> {
+  return apiGet<ObjectiveRowDto[]>(
+    `/api/initiative/${encodeURIComponent(initiativeId)}/objective`,
+    init,
+  );
+}
+
+export function fetchObjective(
+  id: string,
+  init?: RequestInitLike,
+): Promise<ObjectiveDetailDto> {
+  return apiGet<ObjectiveDetailDto>(
+    `/api/objective/${encodeURIComponent(id)}`,
+    init,
+  );
+}
+
+export function fetchTasks(
+  initiativeId: string,
+  objectiveId?: string,
+  init?: RequestInitLike,
+): Promise<TaskRowDto[]> {
+  return apiGet<TaskRowDto[]>(
+    apiPath(`/api/initiative/${encodeURIComponent(initiativeId)}/task`, {
+      objective: objectiveId,
+    }),
+    init,
+  );
+}
+
+export function fetchTask(
+  id: string,
+  init?: RequestInitLike,
+): Promise<TaskDetailDto> {
+  return apiGet<TaskDetailDto>(`/api/task/${encodeURIComponent(id)}`, init);
 }

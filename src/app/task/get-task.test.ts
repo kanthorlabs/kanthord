@@ -880,6 +880,67 @@ test("(016 S7) GetTask: getInitiativeId returning undefined → waiting:[] block
     null,
     "action must be null in the degraded shape",
   );
+  assert.equal(
+    output.initiativeId,
+    null,
+    "initiativeId must be null when getInitiativeId returns undefined",
+  );
+});
+
+test("GetTask: initiativeId is the resolved initiative", async () => {
+  const task: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "task with initiative",
+    status: "pending",
+    dependencies: [],
+  };
+  const byInitiative = new Map<string, Task[]>();
+  byInitiative.set("i1", [task]);
+  const initiativeIdByTaskId = new Map<string, string>();
+  initiativeIdByTaskId.set(TASK_ID, "i1");
+  const tasks = new MemTaskSourceWithSiblings(
+    [task],
+    byInitiative,
+    initiativeIdByTaskId,
+  );
+  const uc = new GetTask(
+    tasks,
+    new MemResultSource(new Map()),
+    nullContextSource,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(
+    output.initiativeId,
+    "i1",
+    "initiativeId must be the resolved initiative",
+  );
+});
+
+test("GetTask: initiativeId is null when the initiative cannot be resolved (degraded defaults hold)", async () => {
+  const orphan: Task = {
+    id: TASK_ID,
+    objectiveId: S7_OBJ_BUILD,
+    title: "orphan task",
+    status: "pending",
+    dependencies: [],
+  };
+  // byInitiative is empty AND getInitiativeId returns undefined.
+  const tasks = new MemTaskSourceWithSiblings([orphan], new Map(), new Map());
+  const uc = new GetTask(
+    tasks,
+    new MemResultSource(new Map()),
+    nullContextSource,
+  );
+
+  const output = await uc.execute({ id: TASK_ID });
+
+  assert.equal(output.initiativeId, null);
+  assert.deepEqual(output.waiting, []);
+  assert.equal(output.blockedForever, false);
+  assert.equal(output.downstream, 0);
 });
 
 test("(016 S7) GetTask: optional `objectives` source omitted → completed task under awaiting objective yields action:null (degraded shape)", async () => {

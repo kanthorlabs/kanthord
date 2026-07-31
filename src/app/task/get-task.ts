@@ -68,6 +68,7 @@ export interface GetTaskOutput {
   status: string;
   agent: string | undefined;
   objectiveId: string;
+  initiativeId: string | null;
   dependencies: string[];
   note?: string;
   instructions?: string;
@@ -184,6 +185,7 @@ export class GetTask {
       status: task.status,
       agent: task.agent,
       objectiveId: task.objectiveId,
+      initiativeId: initiativeId ?? null,
       dependencies: task.dependencies,
       ...(task.note !== undefined ? { note: task.note } : {}),
       ...(task.instructions !== undefined

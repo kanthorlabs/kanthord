@@ -126,6 +126,7 @@ describe("runGetObjective", () => {
     const parsed = JSON.parse(r.stdout[0]!);
     assert.deepEqual(parsed, {
       id: OBJ_ID,
+      initiativeId: "init-1",
       name: "backend-slice",
       status: "integrated",
       integrations: [{ repository: "repo-1", state: "integrated" }],

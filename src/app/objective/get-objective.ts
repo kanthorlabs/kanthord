@@ -15,6 +15,7 @@ interface RepositoryResolver {
 
 export interface GetObjectiveOutput {
   id: string;
+  initiativeId: string;
   name: string;
   status: string;
   /** The squashed candidate commit a client must echo back on a verdict. */
@@ -68,6 +69,7 @@ export class GetObjective {
 
     return {
       id: objective.id,
+      initiativeId: objective.initiativeId,
       name: objective.name,
       status,
       ...(objective.commitOid !== undefined

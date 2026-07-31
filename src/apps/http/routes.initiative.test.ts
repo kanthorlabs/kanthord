@@ -22,6 +22,7 @@ function makeLogger() {
 function initiativeFixture(id: string): GetInitiativeOutput {
   return {
     id,
+    projectId: "p1",
     name: "init one",
     status: "building",
     paused: false,
@@ -63,6 +64,7 @@ function graphFixture(id: string): GetInitiativeGraphOutput {
 function objectiveFixture(id: string): GetObjectiveOutput {
   return {
     id,
+    initiativeId: "i1",
     name: "objective one",
     status: "building",
     integrations: [],

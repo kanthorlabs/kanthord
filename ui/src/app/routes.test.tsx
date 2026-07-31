@@ -51,6 +51,10 @@ const EXPECTED_PATHS = [
   "/project/:id/plan",
   "/project/:id/resource",
   "/project/:id/readiness",
+  "/project/:projectId/initiative/:initiativeId",
+  "/project/:projectId/initiative/:initiativeId/objective/:objectiveId",
+  "/project/:projectId/initiative/:initiativeId/objective/:objectiveId/task/:taskId",
+  "/project/:projectId/resource/:type/:resourceId",
   "*",
 ] as const;
 
@@ -86,7 +90,9 @@ describe("ROUTE_TABLE shape", () => {
     for (const route of ROUTE_TABLE) {
       expect(route.path).not.toMatch(/^\/inbox\//);
       const hasParam = route.path.includes(":");
-      const isProjectLeaf = route.path.startsWith("/project/:id/");
+      const isProjectLeaf =
+        route.path.startsWith("/project/:id/") ||
+        route.path.startsWith("/project/:projectId/");
       if (!isProjectLeaf) {
         expect(hasParam).toBe(false);
       }

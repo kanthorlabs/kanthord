@@ -127,6 +127,7 @@ describe("runGetInitiative", () => {
     const parsed = JSON.parse(r.stdout[0]!);
     assert.deepEqual(parsed, {
       id: INIT_ID,
+      projectId: "proj-1",
       name: "oauth-rollout",
       status: "building",
       paused: false,

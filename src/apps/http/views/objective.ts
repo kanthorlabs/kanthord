@@ -46,6 +46,7 @@ export function objectiveView(result: ObjectiveResult): ObjectiveView {
 
 export interface ObjectiveDetailView {
   readonly id: string;
+  readonly initiativeId: string;
   readonly name: string;
   readonly status: string;
   readonly commitOid?: string;
@@ -57,6 +58,7 @@ export interface ObjectiveDetailView {
   readonly after: readonly string[];
   readonly waiting: readonly UnsatisfiedEdgeView[];
   readonly conflictReason: string | null;
+  readonly conflictCause: string | null;
   readonly note: string | null;
   readonly [key: string]: unknown;
 }
@@ -66,6 +68,7 @@ export function objectiveDetailView(
 ): ObjectiveDetailView {
   return {
     id: result.id,
+    initiativeId: result.initiativeId,
     name: result.name,
     status: result.status,
     ...(result.commitOid !== undefined ? { commitOid: result.commitOid } : {}),
@@ -77,6 +80,7 @@ export function objectiveDetailView(
     after: [...result.after],
     waiting: result.waiting.map(unsatisfiedEdgeView),
     conflictReason: result.conflictReason,
+    conflictCause: result.conflictCause,
     note: result.note,
   };
 }

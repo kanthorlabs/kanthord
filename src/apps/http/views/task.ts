@@ -43,6 +43,7 @@ export interface TaskDetailView {
   readonly status: string;
   readonly agent?: string;
   readonly objectiveId: string;
+  readonly initiativeId: string | null;
   readonly dependencies: readonly string[];
   readonly note?: string;
   readonly instructions?: string;
@@ -78,6 +79,7 @@ export function taskDetailView(result: GetTaskOutput): TaskDetailView {
     status: result.status,
     ...(result.agent !== undefined ? { agent: result.agent } : {}),
     objectiveId: result.objectiveId,
+    initiativeId: result.initiativeId,
     dependencies: [...result.dependencies],
     ...(result.note !== undefined ? { note: result.note } : {}),
     ...(result.instructions !== undefined

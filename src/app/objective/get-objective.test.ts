@@ -69,6 +69,7 @@ test("execute returns integrations=[{ repository, state }] with state=integrated
   const output = await useCase.execute({ id: OBJ_ID });
   assert.deepEqual(output, {
     id: OBJ_ID,
+    initiativeId: INIT_ID,
     name: "backend",
     status: "integrated",
     integrations: [{ repository: REPO_ID, state: "integrated" }],
@@ -259,6 +260,7 @@ test("(S3-1) execute returns commitOid and parentOid when both are set on the ob
   assert.equal(output.parentOid, S3_PARENT, "parentOid carried into output");
   assert.deepEqual(output, {
     id: OBJ_ID,
+    initiativeId: INIT_ID,
     name: "backend",
     status: "awaiting_confirmation",
     commitOid: S3_COMMIT,

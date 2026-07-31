@@ -39,6 +39,7 @@ export function initiativeView(result: InitiativeResult): InitiativeView {
 
 export interface InitiativeDetailView {
   readonly id: string;
+  readonly projectId: string;
   readonly name: string;
   readonly status: string;
   readonly paused: boolean;
@@ -54,6 +55,7 @@ export function initiativeDetailView(
 ): InitiativeDetailView {
   return {
     id: result.id,
+    projectId: result.projectId,
     name: result.name,
     status: result.status,
     paused: result.paused,

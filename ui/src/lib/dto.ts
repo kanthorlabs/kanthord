@@ -89,6 +89,13 @@ export function isResourceType(value: string): value is ResourceTypeKey {
   return (RESOURCE_TYPES as readonly string[]).includes(value);
 }
 
+export const RESOURCE_TYPE_LABEL: Readonly<Record<ResourceTypeKey, string>> = {
+  repository: "Repositories",
+  credential: "Credentials",
+  notification: "Notifications",
+  filesystem: "Filesystems",
+};
+
 export type RepositoryAuthDto =
   | { readonly kind: "ambient" }
   | { readonly kind: "https-token"; readonly credentialId: string }
@@ -139,3 +146,124 @@ export type ResourceOfType<T extends ResourceTypeKey> = Extract<
   ResourceDto,
   { type: T }
 >;
+
+// --- Story 01: entity workspace DTOs ---
+
+export interface UnsatisfiedEdgeDto {
+  readonly id: string;
+  readonly neverSatisfies: boolean;
+}
+
+export interface InitiativeRowDto {
+  readonly id: string;
+  readonly projectId: string;
+  readonly name: string;
+  readonly paused: boolean;
+  readonly status?: string;
+  readonly workspace?: string;
+}
+
+export interface InitiativeDetailDto {
+  readonly id: string;
+  readonly projectId: string;
+  readonly name: string;
+  readonly status: string;
+  readonly paused: boolean;
+  readonly branch: string;
+  readonly workspace?: string;
+  readonly after: readonly string[];
+  readonly waiting: readonly UnsatisfiedEdgeDto[];
+}
+
+export interface ObjectiveRowDto {
+  readonly id: string;
+  readonly initiativeId: string;
+  readonly name: string;
+  readonly status?: string;
+  readonly commitOid?: string;
+  readonly parentOid?: string;
+  readonly note?: string;
+  readonly conflictReason?: string;
+}
+
+export interface IntegrationDto {
+  readonly repository: string;
+  readonly state: string;
+}
+
+export interface ObjectiveDetailDto {
+  readonly id: string;
+  readonly initiativeId: string;
+  readonly name: string;
+  readonly status: string;
+  readonly commitOid?: string;
+  readonly parentOid?: string;
+  readonly integrations: readonly IntegrationDto[];
+  readonly after: readonly string[];
+  readonly waiting: readonly UnsatisfiedEdgeDto[];
+  readonly conflictCause: string | null;
+  readonly conflictReason: string | null;
+  readonly note: string | null;
+}
+
+export interface TaskRowDto {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly state: string;
+  readonly dependencies: readonly string[];
+  readonly waiting: readonly string[];
+}
+
+export interface EvidenceDto {
+  readonly command: string;
+  readonly exitCode: number;
+  readonly output: string;
+}
+
+export interface TaskResultDto {
+  readonly workspace: string | null;
+  readonly branch: string | null;
+  readonly baseCommit: string | null;
+  readonly proposalCommit: string | null;
+  readonly commitSha: string | null;
+  readonly summary: string | null;
+  readonly reason: string | null;
+  readonly rejectionResolution: string | null;
+  readonly rejectionReason: string | null;
+  readonly evidence: readonly EvidenceDto[] | null;
+}
+
+export interface LandingCandidateDto {
+  readonly state: "pending" | "landed" | "conflict";
+  readonly baseSHA: string;
+  readonly candidateSHA: string;
+  readonly target: string;
+}
+
+export interface TaskDetailDto {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly agent?: string;
+  readonly objectiveId: string;
+  /** On the wire from Story 00 onward; `null` is the degraded shape. */
+  readonly initiativeId: string | null;
+  readonly dependencies: readonly string[];
+  readonly note?: string;
+  readonly instructions?: string;
+  readonly ac?: readonly string[];
+  readonly verification?: readonly string[];
+  readonly result: TaskResultDto | null;
+  readonly dependencyStatus?: ReadonlyArray<{
+    readonly id: string;
+    readonly status: string;
+  }>;
+  readonly context?: Readonly<Record<string, string>>;
+  readonly landingCandidate: LandingCandidateDto | null;
+  readonly abandoning: boolean;
+  readonly waiting: readonly UnsatisfiedEdgeDto[];
+  readonly blockedForever: boolean;
+  readonly downstream: number;
+  readonly action: ActionDto | null;
+}

@@ -11,6 +11,7 @@ interface InitiativeSource {
 
 export interface GetInitiativeOutput {
   id: string;
+  projectId: string;
   name: string;
   status: string;
   paused: boolean;
@@ -49,6 +50,7 @@ export class GetInitiative {
 
     return {
       id: initiative.id,
+      projectId: initiative.projectId,
       name: initiative.name,
       status: initiative.status ?? "building",
       paused: initiative.paused,

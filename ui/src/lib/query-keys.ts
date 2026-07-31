@@ -32,3 +32,29 @@ export function invalidateOverview(
     exact: true,
   });
 }
+
+// --- Story 01: entity workspace query keys ---
+
+export const initiativeKeys = {
+  list: (projectId: string) => ["project", projectId, "initiative"] as const,
+  detail: (id: string) => ["initiative", id] as const,
+};
+
+export const objectiveKeys = {
+  list: (initiativeId: string) =>
+    ["initiative", initiativeId, "objective"] as const,
+  detail: (id: string) => ["objective", id] as const,
+};
+
+export const taskKeys = {
+  list: (initiativeId: string, objectiveId?: string) =>
+    objectiveId === undefined
+      ? (["initiative", initiativeId, "task"] as const)
+      : ([
+          "initiative",
+          initiativeId,
+          "task",
+          { objective: objectiveId },
+        ] as const),
+  detail: (id: string) => ["task", id] as const,
+};

@@ -23,6 +23,7 @@ function taskFixture(id: string): GetTaskOutput {
     status: "pending",
     agent: undefined,
     objectiveId: "obj-1",
+    initiativeId: "i1",
     dependencies: [],
     result: undefined,
     landingCandidate: null,

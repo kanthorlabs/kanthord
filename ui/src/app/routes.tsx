@@ -16,6 +16,10 @@ import { ProjectsPage } from "@/pages/projects";
 import { NotBuiltYet } from "@/components/not-built-yet";
 import { ProjectOverviewPage } from "@/pages/project-overview";
 import { ProjectResourcesPage } from "@/pages/project-resources";
+import { EntityInitiativePage } from "@/pages/entity-initiative";
+import { EntityObjectivePage } from "@/pages/entity-objective";
+import { EntityTaskPage } from "@/pages/entity-task";
+import { EntityResourcePage } from "@/pages/entity-resource";
 import { GlobalShell, ProjectShell } from "@/components/shell";
 import { AsyncBoundary } from "@/components/async-boundary";
 import { asyncStateOf } from "@/lib/async-state";
@@ -41,6 +45,22 @@ export const ROUTE_TABLE: readonly AppRoute[] = [
   { path: "/project/:id/plan", kind: "not-built-yet", epic: "026.8" },
   { path: "/project/:id/resource", kind: "screen" },
   { path: "/project/:id/readiness", kind: "not-built-yet", epic: "026.6" },
+  {
+    path: "/project/:projectId/initiative/:initiativeId",
+    kind: "screen",
+  },
+  {
+    path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId",
+    kind: "screen",
+  },
+  {
+    path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId/task/:taskId",
+    kind: "screen",
+  },
+  {
+    path: "/project/:projectId/resource/:type/:resourceId",
+    kind: "screen",
+  },
   { path: "*", kind: "missing" },
 ];
 
@@ -140,6 +160,22 @@ export function createAppRouter(queryClient?: QueryClient) {
           element: <NotBuiltYet surface="Readiness" epic="026.6" />,
         },
       ],
+    },
+    {
+      path: "/project/:projectId/initiative/:initiativeId",
+      element: <EntityInitiativePage />,
+    },
+    {
+      path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId",
+      element: <EntityObjectivePage />,
+    },
+    {
+      path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId/task/:taskId",
+      element: <EntityTaskPage />,
+    },
+    {
+      path: "/project/:projectId/resource/:type/:resourceId",
+      element: <EntityResourcePage />,
     },
   ]);
 }

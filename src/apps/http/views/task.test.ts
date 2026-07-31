@@ -38,6 +38,7 @@ function absentOptionalFixture(): GetTaskOutput {
     status: "pending",
     agent: undefined,
     objectiveId: "obj-1",
+    initiativeId: "i1",
     dependencies: [],
     result: undefined,
     landingCandidate: null,
@@ -58,9 +59,11 @@ test("taskDetailView case 1: every optional absent, every nullable null", () => 
   assert.ok(keys.includes("result"));
   assert.ok(keys.includes("landingCandidate"));
   assert.ok(keys.includes("action"));
+  assert.ok(keys.includes("initiativeId"));
   assert.equal(view.result, null);
   assert.equal(view.landingCandidate, null);
   assert.equal(view.action, null);
+  assert.equal(view.initiativeId, "i1");
   assert.equal(keys.includes("note"), false);
   assert.equal(keys.includes("instructions"), false);
   assert.equal(keys.includes("ac"), false);
@@ -77,6 +80,7 @@ function fullFixture(): GetTaskOutput {
     status: "running",
     agent: "agent-x",
     objectiveId: "obj-1",
+    initiativeId: "i1",
     dependencies: ["dep-1"],
     note: "note text",
     instructions: "do it",
@@ -145,6 +149,7 @@ test("taskDetailView case 2: every field populated, nested key sets exact, no in
     "dependencyStatus",
     "downstream",
     "id",
+    "initiativeId",
     "instructions",
     "landingCandidate",
     "note",
@@ -202,4 +207,15 @@ test("taskDetailView case 2: every field populated, nested key sets exact, no in
     "requiresInput",
     "target",
   ]);
+});
+
+test("taskDetailView: initiativeId is emitted as null when the use case returns null (degraded shape)", () => {
+  const fixture = absentOptionalFixture();
+  fixture.initiativeId = null;
+  const view = taskDetailView(fixture) as unknown as Record<string, unknown>;
+  assert.ok(
+    "initiativeId" in view,
+    "initiativeId key must be present even when null",
+  );
+  assert.equal(view.initiativeId, null);
 });

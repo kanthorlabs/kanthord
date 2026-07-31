@@ -50,6 +50,7 @@ test("execute returns { id, name, status, workspace } for a provisioned initiati
   const output = await useCase.execute({ id: INIT_ID });
   assert.deepEqual(output, {
     id: INIT_ID,
+    projectId: "proj-1",
     name: "init-wf",
     status: "building",
     paused: false,
@@ -73,6 +74,7 @@ test("execute omits workspace when the initiative has not been provisioned yet",
   assert.equal("workspace" in output, false);
   assert.deepEqual(output, {
     id: INIT_ID,
+    projectId: "proj-1",
     name: "init-wf",
     status: "building",
     paused: false,
@@ -80,6 +82,19 @@ test("execute omits workspace when the initiative has not been provisioned yet",
     after: [],
     waiting: [],
   });
+});
+
+test("execute returns projectId from the entity, not derived", async () => {
+  const initiative: Initiative = {
+    id: INIT_ID,
+    projectId: "proj-2",
+    name: "init-wf",
+    paused: false,
+    status: "building",
+  };
+  const useCase = new GetInitiative(makeStore(initiative));
+  const output = await useCase.execute({ id: INIT_ID });
+  assert.equal(output.projectId, "proj-2");
 });
 
 // Story 6 — after / waiting rendering
