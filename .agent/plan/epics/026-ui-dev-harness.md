@@ -62,12 +62,14 @@ work rather than redesign.
 - `router.ts` `matchSegments` requires equal segment counts and supports literal
   and `:param` segments only. No wildcard. Vite's default output is a single
   level (`dist/assets/<name>-<hash>.js`), so `/assets/:file` is sufficient.
-- Registry versions (`npm view`, 2026-07-30): `vite@8.2.0`,
-  `@vitejs/plugin-react@6.0.5` (peer `vite ^8`), `tailwindcss@4.3.3` +
-  `@tailwindcss/vite@4.3.3` (peer allows `^8`), `vite-plugin-pwa@1.3.0` (peer
-  allows `^8`), `@koa/send@6.0.0` (ships its own `.d.ts`, 2 deps,
-  published 2024-10-12). `@koa/static` does not exist; `koa-static@5.0.0` is
-  stale (2023) and untyped.
+- Registry versions (`npm view`, 2026-07-30 — a dated snapshot of what the
+  registry then held, NOT the versions to install: `.npmrc`'s `min-release-age=3`
+  hides anything published in the last three days, so **decision 9 carries the
+  authoritative list**): `vite@8.2.0`, `@vitejs/plugin-react@6.0.5` (peer
+  `vite ^8`), `tailwindcss@4.3.3` + `@tailwindcss/vite@4.3.3` (peer allows `^8`),
+  `vite-plugin-pwa@1.3.0` (peer allows `^8`), `@koa/send@6.0.0` (ships its own
+  `.d.ts`, 2 deps, published 2024-10-12). `@koa/static` does not exist;
+  `koa-static@5.0.0` is stale (2023) and untyped.
 - shadcn/ui's official Vite path: Tailwind v4 via `@tailwindcss/vite`, `@/*`
   alias in tsconfig + `resolve.alias`, `shadcn init`, `shadcn add`. Components
   are **copied into the repo** — they are source, not a dependency.
@@ -124,26 +126,51 @@ work rather than redesign.
    026.8** — Ulrich, 2026-07-30, after the 026.1 debate found the hole. The
    lockfile is maintainer-only under decision 8, so a normal `/work` screen
    epic cannot add a package. Installing here is what makes 026.1–026.8 run
-   unattended. Versions measured on the registry 2026-07-30:
-   - runtime: `react@19.2.8`, `react-dom@19.2.8`, `react-router-dom@7.18.2`,
+   unattended.
+
+   **Versions as installed 2026-07-31 (amended at implementation time — this is
+   the authoritative list; the numbers first written here on 2026-07-30 were
+   not installable).** The repo's `.npmrc` sets `min-release-age=3`, so npm
+   cannot resolve any version published in the last three days: it reports the
+   package as `undefined` and fails on an unrelated peer range. Six of the
+   original pins were 0.3–2.0 days old. Ulrich's call, 2026-07-31, over
+   bypassing the guard: **pin the newest version at least three days old.**
+   The six that moved are marked `←`.
+   - runtime: `react@19.2.8`, `react-dom@19.2.8`, `react-router-dom@7.18.1` ←,
      `@tanstack/react-query@5.101.4`, `@xyflow/react@12.11.2`,
      `class-variance-authority@0.7.1`, `clsx@2.1.1`, `tailwind-merge@3.6.0`,
-     `lucide-react@1.28.0`
-   - build: `vite@8.2.0`, `@vitejs/plugin-react@6.0.5`, `tailwindcss@4.3.3`,
-     `@tailwindcss/vite@4.3.3`, `vite-plugin-pwa@1.3.0`
-   - test: `vitest@4.1.10` (peer allows `vite ^8`), `jsdom@30.0.1`,
+     `lucide-react@1.27.0` ←
+   - build: `vite@8.1.5` ←, `@vitejs/plugin-react@6.0.4` ←,
+     `tailwindcss@4.3.3`, `@tailwindcss/vite@4.3.3`, `vite-plugin-pwa@1.3.0`
+   - test: `vitest@4.1.10` (peer allows `vite ^8`), `jsdom@30.0.0` ←,
      `@testing-library/react@16.3.2` (peer allows React 19),
      `@testing-library/user-event@14.6.1`, `@testing-library/jest-dom@7.0.0`
-   - root devDependency for the Proofs: `playwright@1.62.0` (decision 10)
+   - types the workspace needs to typecheck, not named in the original list:
+     `@types/react@19.2.17`, `@types/react-dom@19.2.3`
+   - root devDependency for the Proofs: `playwright@1.62.0` ← (decision 10;
+     the original pin here was already the newest allowed one)
+
+   Consequence recorded, not designed around: `react-router-dom@7.18.1` matches
+   advisory GHSA-qwww-vcr4-c8h2 (high, "RSC Mode CSRF Bypass",
+   `>=7.12.0 <8.3.0`). It affects React Router's RSC **server** mode; this UI is
+   a client-only hash-routed SPA and SSR is a non-goal of this epic, so the
+   vulnerable path does not exist. The only clean fixes are `8.3.0+` (a major
+   step) or `7.11.0` (below this pin). Ulrich accepted the pin 2026-07-31.
+   Revisit when React Router 8 is chosen.
 
    **`shadcn add` also runs here for the full component set**, because it
    installs Radix packages: `button`, `card`, `table`, `tabs`, `sheet`,
    `dialog`, `alert-dialog`, `dropdown-menu`, `breadcrumb`, `badge`, `input`,
    `label`, `select`, `separator`, `skeleton`, `tooltip`, `command`,
-   `popover`, `scroll-area`, `textarea`, `checkbox`, `sonner`. A later epic
-   that needs a component or package not on these lists raises an `OPEN:`
-   blocker; it never installs. Accepted cost, stated plainly: 026 ships
-   dependencies and copied component source before their first consumer exists.
+   `popover`, `scroll-area`, `textarea`, `checkbox`, `sonner`. Those 22
+   components pulled in four packages the list above does not name, and a later
+   epic may use them without asking: `radix-ui@1.6.7` (the single-package Radix
+   distribution), `cmdk@1.1.1` (`command`), `sonner@2.0.7` and
+   `next-themes@0.4.6` (both from the `sonner` wrapper; `next-themes` works in
+   any React app, Next.js is not involved). A later epic that needs a component
+   or package not on these lists raises an `OPEN:` blocker; it never installs.
+   Accepted cost, stated plainly: 026 ships dependencies and copied component
+   source before their first consumer exists.
 
 10. **The UI program Proof is a real browser** — Ulrich, 2026-07-30, over a
     jsdom loader and over a relaxed definition of "program proof". The debate
