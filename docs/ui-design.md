@@ -102,16 +102,17 @@ Proof" test, and one was a miscellaneous bucket. The family is ordered by the
 loop it closes. Each is authored one at a time, and each pairs its API addition
 with the UI that addition unlocks.
 
-| Epic   | Operator loop it closes                                                                                                                                                          |
-| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 026.8  | **Inbox addressability** — persisted decision occurrences, machine kind, names in the DTO, an open/resolved/expired detail representation, server-side filters.                  |
-| 026.9  | **Candidate review end to end** — the candidate diff read model **with** task approve/reject and stale-proposal protection, so evidence lands before the response can act on it. |
-| 026.10 | **Recovery decisions** — reattempt and abandonment for failed and escalated work.                                                                                                |
-| 026.11 | **Initiative control** — pause and resume, and the workspace controls they unlock.                                                                                               |
-| 026.12 | **Freshness** — Target 022's event feed, project acknowledgement and digest paging, with the UI behaviour they allow.                                                            |
-| 026.13 | **Resource integrity** — typed-route enforcement, project-owned credential validation, the credential revision and rotation concurrency.                                         |
-| 026.14 | **Operations telemetry** — daemon heartbeat, outcome and counters, and the dead-man card.                                                                                        |
-| 026.15 | **Plan / import** — package parse and validate, dry run on create, binding validation, task context on apply, then W5's first instance.                                          |
+| Epic   | Operator loop it closes                                                                                                                                                     |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 026.8  | **Inbox addressability** — persisted decision occurrences, machine kind, names in the DTO, an open/resolved/expired detail representation, server-side filters.             |
+| 026.9  | **Candidate review end to end** — the candidate diff read model **with** approve/reject and stale-proposal protection, so evidence lands before the response can act on it. |
+| 026.10 | **Recovery decisions** — reattempt and abandonment for failed and escalated work.                                                                                           |
+| 026.11 | **Initiative control** — pause and resume, and the workspace controls they unlock.                                                                                          |
+| 026.12 | **Freshness** — Target 022's event feed, project acknowledgement and digest paging, with the UI behaviour they allow.                                                       |
+| 026.13 | **Resource integrity** — typed-route enforcement, project-owned credential validation, the credential revision and rotation concurrency.                                    |
+| 026.14 | **Operations telemetry** — daemon heartbeat, outcome and counters, and the dead-man card.                                                                                   |
+| 026.15 | **Plan / import** — package parse and validate, dry run on create, binding validation, task context on apply, then W5's first instance.                                     |
+| 026.16 | **Deferred refactors** — the code changes the family found but did not own. Authored last, from the ledger at `.agent/plan/deferred-refactors.md`.                          |
 
 **Agents are deferred**, not reserved an epic: if a task-create picker is the
 only need, a list endpoint joins 026.10's slice. Agent _management_ outside the
@@ -121,6 +122,15 @@ CLI is speculative until asked for.
 ahead of the candidate diff would make approve live while the browser still
 cannot show what approval judges — a capability-level breach of W3's
 "evidence first, response last".
+
+**026.9 covers objective verdicts as well as task verdicts** — Ulrich,
+2026-07-31, after the 026.9 debate. The row above said "task approve/reject".
+Measurement says the per-task approve gate is no longer the ordinary delivery
+path (`scripts/e2e/landing-proof.sh:63-64`): the human gate moved to
+`approve objective`, so a task-only 026.9 would leave the commonest decision on
+the queue unanswerable in the browser. The same rule as above then binds the
+widening: objective verdicts ship **with** objective evidence
+(`parentOid..commitOid`), never before it.
 
 The prerequisite inventory below is what the family consumes, in the order it
 unblocks the daily loop:
