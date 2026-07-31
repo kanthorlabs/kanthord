@@ -180,8 +180,8 @@ unblocks the daily loop:
     immediately; **validation of request `bindings`** as project-owned resources
     of the declared type; and **task context for tasks created during apply**,
     which today receive none. Until these exist, the Plan tab renders an
-    explicit unavailable state with the CLI handoff, and **EPIC 026.8 builds the
-    import screen**.
+    explicit unavailable state with the CLI handoff, and **EPIC 026.15 builds
+    the import screen** (the family row above).
 
 Items 1, 2, 5, 7, 8, 9 and 10 belong to the **026.8 family** above. Items 3 and 4 are Targets 023
 and 022 in `.agent/plan/stories/019-http-server/retirement.md`; 026.8 either
