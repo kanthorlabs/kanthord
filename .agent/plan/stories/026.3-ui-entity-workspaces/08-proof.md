@@ -32,7 +32,7 @@ Every failure is a product defect in Stories 01–07. The phase→story map:
 | E     | five tabs; `empty-result`; `empty-landing`; Dependencies names the blocker id; `task-downstream` equals the API's count                                   | 05                     |
 | F     | wrong-objective task → `scope-mismatch` and zero `async-missing`; made-up task id → `async-missing` and zero `scope-mismatch`                             | 01                     |
 | G     | resource header names the repository; the credential secret is nowhere in the document                                                                    | 07                     |
-| H     | no request carried `Authorization`; no POST, PATCH or DELETE; zero console errors                                                                         | every story            |
+| H     | no request carried `Authorization`; no POST, PATCH or DELETE; zero console errors outside phase F's deliberate 404                                        | every story            |
 
 Three failure modes this tree makes likely — fix them in the owning story's
 files, not here:
@@ -74,9 +74,10 @@ pass unchanged. The specific tripwires to confirm, not to edit:
   pattern must not shadow `/project/:id/resource/:type`; if it does, the fix is in
   `ui/src/app/routes.tsx`, not in the proof.
 - `ui-system-proof.sh:146-147` — the `not-built-yet` placeholder naming an epic.
-  EPIC 026.2 Story 07 already moved this assertion off the Overview leaf; if it
-  still points at a leaf this epic built, that is a 026.2 regression to report,
-  **not** a file for this story to edit.
+  EPIC 026.2 Story 07 was supposed to move this assertion off the Overview leaf
+  and did not, so it failed. Fixed 2026-08-01 in a maintainer session: it now
+  loads the Graph leaf and expects `026.6`. Still **not** a file this story may
+  edit.
 
 ### 3. Gates
 
@@ -94,6 +95,27 @@ Must exit 0. It runs `typecheck`, `test`, `verify:handoff`, `lint`,
   raise an `OPEN:` blocker; do not weaken it.
 - No edit to `ui-shell-proof.sh`, `ui-system-proof.sh` or
   `ui-collections-proof.sh` — they belong to EPIC 026, 026.1 and 026.2.
+
+**Amendment, 2026-08-01 (Ulrich), after the 026.3 review.** Two edits were needed
+and are now sanctioned. Both were made in a maintainer session, not by `/work`;
+the "no edit" rule above stands for every other case.
+
+1. `ui-entities-proof.sh` reads tab panels through `activeText()` and waits
+   through `waitVisible()`, both now owned by `scripts/e2e/ui-browser.mjs`
+   (index.md F16). This was forced by F13 being factually wrong: the base script
+   read the first, hidden, empty panel and could never pass. The helpers live in
+   the harness so the proof script stays assertion-only.
+2. Phase H keeps `consoleErrors.length === 0`, but phase F first removes the
+   console errors of its own deliberate absent-entity load and asserts they are
+   404s and nothing else. Reason: the browser logs that 404 whatever the app
+   does. No other page gets any carve-out, and the earlier blanket
+   `!includes("404")` filter — which would have hidden a real error whose text
+   mentions 404 — is removed.
+3. `ui-system-proof.sh:146-147` was re-pointed from the Overview leaf (built by
+   EPIC 026.2, so its `not-built-yet` assertion was stale and failing) to the
+   Graph leaf, owned by EPIC 026.6. That is a 026.2 regression fixed in the
+   maintainer session, not by this story.
+
 - No edit to `package.json` (lane-forbidden; every script the Proof needs already
   exists — index.md F1).
 - No new dependency. `playwright@1.62.0` is already pinned
@@ -107,9 +129,10 @@ Must exit 0. It runs `typecheck`, `test`, `verify:handoff`, `lint`,
 ## Verify
 
 - `scripts/e2e/ui-entities-proof.sh` exits 0 and its final line starts with
-  `026.3 ok:`, with no assertion in the file modified
-  (`git diff --stat scripts/e2e/ui-entities-proof.sh` is empty).
+  `026.3 ok:`, with no assertion in the file modified beyond the two amendments
+  above.
 - `scripts/e2e/ui-shell-proof.sh`, `scripts/e2e/ui-system-proof.sh` and
-  `scripts/e2e/ui-collections-proof.sh` each exit 0, all three unmodified.
+  `scripts/e2e/ui-collections-proof.sh` each exit 0; only `ui-system-proof.sh`
+  is modified, by amendment 3 above.
 - `npm run verify` exits 0.
 - Proof: the whole `Proof:` block of the epic — phases A through H.

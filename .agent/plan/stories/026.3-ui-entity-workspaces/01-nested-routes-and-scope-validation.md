@@ -507,8 +507,10 @@ Body, pinned:
 </ProjectShell>
 ```
 
-- Never pass `forceMount` (index.md F13): exactly one `tab-panel` is mounted, so
-  a hidden tab's query never runs.
+- Never pass `forceMount` (index.md F13, corrected 2026-08-01): Radix mounts one
+  `tab-panel` element per tab, but the **children** of an inactive one are
+  unmounted, so a hidden tab's query never runs. `forceMount` is what would
+  break that.
 - The first tab is always the default. Tab selection is component state, never
   the URL — 026.1 S4 forbids new route params.
 - When `gate !== null` there is **no** `entity-header`, no `entity-tabs` and no
@@ -707,9 +709,11 @@ does not change.
   `npm run test --workspace ui -- src/components/entity-workspace.test.tsx`:
   - `gate: null` with three tabs: `[data-testid="entity-header"]` contains the
     name and the `kindLabel`; `[data-testid="entity-tabs"] [role="tab"]` is
-    exactly 3; `[data-testid="tab-panel"]` count is exactly **1** and holds the
-    first tab's panel; after `userEvent.click` on the second tab the single
-    `tab-panel` holds the second panel and the first panel's text is gone.
+    exactly 3; `[data-testid="tab-panel"]` count is **3** (index.md F13,
+    corrected 2026-08-01) where panel 0 holds the first tab's content and panels
+    1–2 are `hidden` and empty; after `userEvent.click` on the second tab,
+    panel 1 holds the second panel's content while panel 0 is `hidden` and
+    empty — the first panel's text is gone from the document.
   - `gate: null` with `tabs: []` → no `entity-tabs` and no `tab-panel`, and the
     header still renders.
   - `gate: {kind:"async", state:"missing", what:"task"}` → exactly one

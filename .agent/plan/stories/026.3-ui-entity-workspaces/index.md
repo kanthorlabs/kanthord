@@ -201,10 +201,17 @@ segment is always a real name or the level is dropped, never an id fallback.
 
 **F13 — shadcn `Tabs`.** `ui/src/components/ui/tabs.tsx:91` exports
 `Tabs, TabsList, TabsTrigger, TabsContent`. `role="tab"` / `role="tablist"` /
-`role="tabpanel"` come from the Radix primitive, not from this file. Radix
-**unmounts inactive `TabsContent`** unless `forceMount` is passed — that is what
-keeps exactly one `[data-testid="tab-panel"]` in the DOM and keeps a hidden
-tab's query unmounted and unfetched.
+`role="tabpanel"` come from the Radix primitive, not from this file.
+**Corrected 2026-08-01 after the 026.3 review — the original wording was wrong.**
+Radix **force-mounts every `TabsContent` element** and unmounts only its
+**children** (`@radix-ui/react-tabs/dist/index.mjs:163-170` passes a function
+child to `Presence`). So the DOM holds one `[data-testid="tab-panel"]` per tab;
+all but the active one carry `hidden` and are empty. The property the epic
+depends on still holds — a hidden tab's query is unmounted and never fetches —
+but **never assert "exactly one panel in the DOM"**. Assert instead: the active
+panel has the content, and every other panel is `hidden` and empty. Never pass
+`forceMount`: that is what would keep the hidden children mounted and fetching.
+In a Proof, read the visible panel with `activeText()` (F16), never `text()`.
 
 **F14 — UI test conventions** (`ui/vite.config.ts:149-154`): Vitest 4 + jsdom,
 `globals: false` (import `describe/test/expect/vi` from `vitest`), include
@@ -225,7 +232,7 @@ verb `api-client.ts` exports and no story adds another.
 
 **F16 — the Proof harness** (`scripts/e2e/ui-browser.mjs`). `--script` must be
 an absolute path. The steps module receives
-`{page, context, goto, text, count, visible, consoleErrors, requests, responses, base}`.
+`{page, context, goto, text, count, visible, waitVisible, activeText, consoleErrors, requests, responses, base}`.
 `goto(hash)` is a **full page load** (`page.goto`, `waitUntil: "networkidle"`),
 never a client-side navigation — so every assertion in the Proof is a cold load.
 `text(selector)` **throws** when nothing matches (it does not return `""`).
@@ -233,6 +240,12 @@ never a client-side navigation — so every assertion in the Proof is a cold loa
 **page** set, because Playwright applies the context's `httpCredentials` after
 the `request` event fires. `consoleErrors.length === 0` is asserted at the end,
 so a React key warning fails the phase.
+**Added 2026-08-01 after the 026.3 review**: `waitVisible(selector, timeout?)`
+waits for a selector to be visible, and `activeText(selector, timeout?)` reads
+the **visible** match and polls until its content stops changing — required for
+tab panels because of F13. A proof script must use these helpers rather than
+define its own: `ui-browser.mjs` is the helper home, so proof scripts stay
+assertion-only.
 
 **F17 — Proof selectors (binding, do not rename).**
 
