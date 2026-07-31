@@ -272,6 +272,14 @@ export interface CliDeps {
   repositoryProbe: CliRepositoryProbe;
   resolveHomeDir: (repoId: string) => string;
   workspaces: CliWorkspaceManager;
+  /**
+   * EPIC 026: absolute path to the built UI (`ui/dist`), resolved by the
+   * composition root from `KANTHORD_UI_DIST` and defaulting to the package's own
+   * `ui/dist` — never to `process.cwd()`, because `serve` runs from an isolated
+   * working directory in every proof. `serve` hands it to `buildHttpApp`; the
+   * directory need not exist.
+   */
+  uiDistRoot: string;
   newId: () => string;
   /** S3 (007.6): reads back the note (and optional conflict context) persisted at retry time. */
   getPriorFeedback: (

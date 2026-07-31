@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      EPIC 026 rule R5. Decision 6 makes the API same-origin in every deployment
+      mode — web, container and Electron all reach the daemon at the daemon's own
+      origin — so `connect-src 'self'` needs no host list. `style-src` allows
+      inline because Tailwind and @xyflow/react inject style elements at runtime.
+      `vite.config.ts` relaxes `script-src` for `vite dev` only; the built
+      artifact ships exactly this policy.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <link rel="icon" href="./favicon.ico" sizes="any" />
+    <!-- vite-plugin-pwa injects the <link rel="manifest"> tag itself. -->
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>kanthord</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

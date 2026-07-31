@@ -50,6 +50,31 @@ test("unknown path is not_found", () => {
   assert.equal(matchRoute(ROUTES, "GET", "/nope").kind, "not_found");
 });
 
+// EPIC 026: HTTP requires HEAD wherever GET is supported. No row declares HEAD.
+test("HEAD matches the GET row of the same path", () => {
+  for (const path of ["/healthz", "/", "/sw.js"]) {
+    const outcome = matchRoute(ROUTES, "HEAD", path);
+    assert.equal(outcome.kind, "match", `HEAD ${path} must match`);
+    if (outcome.kind === "match") {
+      assert.equal(outcome.route.method, "GET");
+    }
+  }
+  assert.equal(
+    ROUTES.some((r) => (r.method as string) === "HEAD"),
+    false,
+    "no row may declare HEAD itself",
+  );
+});
+
+test("HEAD on a path with no GET row is still method_not_allowed", () => {
+  const outcome = matchRoute(ROUTES, "HEAD", "/api/graph/readiness");
+  assert.equal(outcome.kind, "method_not_allowed");
+});
+
+test("HEAD on an unknown path is not_found", () => {
+  assert.equal(matchRoute(ROUTES, "HEAD", "/nope").kind, "not_found");
+});
+
 test("extra path segment beyond a known route is not_found", () => {
   assert.equal(matchRoute(ROUTES, "GET", "/healthz/extra").kind, "not_found");
 });

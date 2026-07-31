@@ -21,10 +21,10 @@
 # under Basic auth (EPIC 026 decision 5: Ulrich keeps Basic on every path and
 # accepts that the browser may refuse to register the service worker).
 #
-# EXPECTED FAILURE against the CURRENT tree: phase A fails at the first check,
-# because `package.json`'s `test` script is still bare `node --test` and the
-# `ui/` workspace does not exist. Nothing before that check can fail, so the
-# first failure is the missing capability, not a broken fixture.
+# History, kept because the epic cites it: authored 2026-07-30 against commit
+# 3db820d, this script failed at the FIRST check of phase A, because
+# `package.json`'s `test` script was still bare `node --test` and the `ui/`
+# workspace did not exist. EPIC 026 was implemented 2026-07-31 and it passes.
 set -Eeuo pipefail
 trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
@@ -32,9 +32,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PD="$(mktemp -d)"
 SERVE_PID=""
 VITE_PID=""
+# The R4 fixture of A3b lives INSIDE the repo, because a flat eslint config only
+# applies to files under its own root. It is removed on every exit path.
+R4_FIXTURE="$ROOT/ui/src/r4-proof-fixture.tsx"
 cleanup() {
   if [ -n "$VITE_PID" ]; then kill "$VITE_PID" 2>/dev/null || true; fi
   if [ -n "$SERVE_PID" ]; then kill "$SERVE_PID" 2>/dev/null || true; fi
+  rm -f "$R4_FIXTURE"
   rm -rf "$PD"
 }
 trap cleanup EXIT
@@ -132,6 +136,21 @@ absent "the glob does not run UI tests" "$SCOPED" "ui-leaked"
 UI_CONFIG="$(cd "$ROOT" && npx --no-install eslint --print-config ui/src/probe.tsx 2>&1 || true)"
 contains "eslint configures ui/**/*.tsx" "$UI_CONFIG" "no-restricted-imports"
 contains "R4 bans node: imports in the UI" "$UI_CONFIG" "node:"
+# A3b — and the rule FIRES, not just appears in the printed config: a real file
+# importing node:fs must be reported by `eslint .` run from the repo root. A
+# printed config proves wiring; only a reported error proves enforcement.
+cat > "$R4_FIXTURE" <<'EOF'
+import { readFileSync } from "node:fs";
+export const leak = readFileSync;
+EOF
+R4_OUT="$(cd "$ROOT" && npx --no-install eslint . 2>&1 || true)"
+rm -f "$R4_FIXTURE"
+contains "eslint . reports the R4 fixture file" "$R4_OUT" "r4-proof-fixture.tsx"
+contains "eslint . names the R4 rule" "$R4_OUT" "no-restricted-imports"
+# and the same tree is clean once the fixture is gone, so R4 is not firing on
+# real UI source.
+CLEAN_OUT="$(cd "$ROOT" && npx --no-install eslint . 2>&1 || true)"
+absent "eslint . is clean without the fixture" "$CLEAN_OUT" "no-restricted-imports"
 # A4 — the TDD roles own ui/**, otherwise every future screen is maintainer-only.
 "$ROOT/scripts/lane-check.sh" software-engineer "ui/src/lib/api-client.ts"
 "$ROOT/scripts/lane-check.sh" test-engineer "ui/src/lib/api-client.test.ts"

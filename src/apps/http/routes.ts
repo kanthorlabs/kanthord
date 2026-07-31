@@ -1,6 +1,6 @@
 import { packageVersion } from "../version.ts";
 import type { HttpDeps } from "./deps.ts";
-import { uiShell } from "./ui.ts";
+import type { StaticFileTarget } from "./static.ts";
 import { healthView } from "./views/health.ts";
 import { projectView, projectOverviewView } from "./views/project.ts";
 import {
@@ -61,8 +61,13 @@ export interface RouteMeta {
   readonly method: HttpMethod;
   readonly path: string;
   readonly successStatus: 200 | 201 | 204;
-  /** "json" → envelope; "html" → `present` returns the document body. */
-  readonly kind: "json" | "html";
+  /**
+   * "json" → the `{"data": …}` envelope; "static" → `present` returns a
+   * `StaticFileTarget` and the dispatcher streams that file from the injected
+   * UI dist root (EPIC 026 decision 2). There is no "html" kind: the UI is a
+   * built artifact now, not a string this process holds.
+   */
+  readonly kind: "json" | "static";
   /** CLI leaf paths this row covers, e.g. ["get project"]. May be empty. */
   readonly cliCommands: readonly string[];
 }
@@ -92,8 +97,9 @@ export interface RouteDefinition<Input, Output> extends RouteMeta {
    * `apps/` → `domain/`, so naming the fields here is the only legal answer
    * — and it stops an internal entity field leaking onto the wire.
    * Two exemptions: forbidden when `successStatus` is 204 (no body at all);
-   * when `kind` is "html" it returns the document string and the envelope is
-   * skipped — that is how `GET /` serves the UI shell.
+   * when `kind` is "static" it returns the `StaticFileTarget` the dispatcher
+   * streams, and the envelope is skipped — that is how `GET /` serves the built
+   * UI.
    */
   readonly present?: (result: Output) => unknown;
   /**
@@ -229,6 +235,33 @@ function decodeFilesystemCreate({
   };
 }
 
+/**
+ * One row of the built UI (EPIC 026 S6). Six rows, one helper, so the cache
+ * policy and the dist-relative path of each surface are declared in one place.
+ *
+ * Every row is `GET`, `200` and `kind: "static"`; `run` echoes what `decode`
+ * resolved because there is no use case behind a file. The `:file` param is
+ * already percent-decoded by the router, and `sendUiFile` validates it — this
+ * helper only names the sub-directory.
+ */
+function staticRow(
+  id: string,
+  path: string,
+  resolve: (params: Readonly<Record<string, string>>) => StaticFileTarget,
+): Route {
+  return defineRoute({
+    id,
+    method: "GET",
+    path,
+    successStatus: 200,
+    kind: "static",
+    cliCommands: [],
+    decode: ({ params }) => resolve(params),
+    run: async (_deps, input) => input,
+    present: (result) => result,
+  });
+}
+
 export const ROUTES: readonly Route[] = [
   defineRoute({
     id: "health.get",
@@ -241,17 +274,33 @@ export const ROUTES: readonly Route[] = [
     run: async () => ({ status: "ok" as const, version: packageVersion }),
     present: (result) => healthView(result),
   }),
-  defineRoute({
-    id: "ui.get",
-    method: "GET",
-    path: "/",
-    successStatus: 200,
-    kind: "html",
-    cliCommands: [],
-    decode: () => ({}),
-    run: async () => uiShell(),
-    present: (result) => result,
-  }),
+  // The built UI. Decision 3 (hash routing) is what lets this list stay a set
+  // of literal paths with no wildcard and no SPA fallback, so `GET /nope` keeps
+  // answering `404 unknown_route`.
+  staticRow("ui.index.get", "/", () => ({
+    file: "index.html",
+    cache: "no-cache",
+  })),
+  staticRow("ui.asset.get", "/assets/:file", (params) => ({
+    file: `assets/${params["file"] ?? ""}`,
+    cache: "immutable",
+  })),
+  staticRow("ui.sw.get", "/sw.js", () => ({
+    file: "sw.js",
+    cache: "no-cache",
+  })),
+  staticRow("ui.manifest.get", "/manifest.webmanifest", () => ({
+    file: "manifest.webmanifest",
+    cache: "no-cache",
+  })),
+  staticRow("ui.icon.get", "/icons/:file", (params) => ({
+    file: `icons/${params["file"] ?? ""}`,
+    cache: "immutable",
+  })),
+  staticRow("ui.favicon.get", "/favicon.ico", () => ({
+    file: "favicon.ico",
+    cache: "no-cache",
+  })),
   defineRoute({
     id: "project.list",
     method: "GET",

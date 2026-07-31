@@ -84,7 +84,10 @@ export function buildServeCommand(deps: CliDeps, io: CliIo): Command {
         checkProject: deps.checkProject,
         newId: deps.newId,
       };
-      const app = buildHttpApp(httpDeps, { apiKey });
+      const app = buildHttpApp(httpDeps, {
+        apiKey,
+        uiDistRoot: deps.uiDistRoot,
+      });
       const server = await startHttpServer(app, {
         port,
         logger: deps.httpLogger,

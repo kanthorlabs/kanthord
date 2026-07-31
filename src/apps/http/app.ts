@@ -13,6 +13,7 @@ import { TRANSPORT_ERRORS, mapError } from "./error-registry.ts";
 import { dataEnvelope, errorEnvelope } from "./envelope.ts";
 import { matchRoute } from "./router.ts";
 import { etagOf } from "./etag.ts";
+import { sendUiFile, type StaticFileTarget } from "./static.ts";
 
 export interface HttpAppOptions {
   /** Already validated by requireApiKey; buildHttpApp never reads process.env. */
@@ -21,6 +22,16 @@ export interface HttpAppOptions {
   readonly routes?: readonly Route[];
   /** Injectable for deterministic ids in tests. Defaults to ulid(). */
   readonly newRequestId?: () => string;
+  /**
+   * Absolute path to the built UI (`ui/dist`), resolved by the composition root
+   * from `KANTHORD_UI_DIST` — never from `process.cwd()`, because `serve` runs
+   * from an isolated working directory in every proof.
+   *
+   * Optional on purpose: `ui/dist` is gitignored, so app construction must not
+   * depend on a prior UI build. Absent here, an absent directory and a missing
+   * file all answer the same `404 unknown_route`, and `/healthz` still answers.
+   */
+  readonly uiDistRoot?: string;
 }
 
 /** true for POST, PUT, PATCH — the methods that carry a JSON body. */
@@ -262,10 +273,14 @@ export function buildHttpApp(deps: HttpDeps, opts: HttpAppOptions): Koa {
       const e = TRANSPORT_ERRORS.internal;
       throw new HttpFailure(e.code, e.status, e.message);
     }
-    if (route.kind === "html") {
-      ctx.status = route.successStatus;
-      ctx.type = "text/html; charset=utf-8";
-      ctx.body = present(result) as string;
+    // A static row's `present` returns the dist-relative file and its cache
+    // policy; the adapter owns MIME, ETag/304, HEAD and traversal refusal.
+    if (route.kind === "static") {
+      await sendUiFile(
+        ctx,
+        opts.uiDistRoot,
+        present(result) as StaticFileTarget,
+      );
       return;
     }
 

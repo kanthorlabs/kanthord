@@ -58,6 +58,11 @@ export function matchRoute(
 ): MatchOutcome {
   const requestSegments = segmentsOf(path);
   const upperMethod = method.toUpperCase();
+  // HTTP requires HEAD wherever GET is supported, so a HEAD matches the GET row
+  // and koa suppresses the body. Rows never declare HEAD themselves — that would
+  // double the table and let the two answers drift apart. EPIC 026 needs this for
+  // `HEAD /assets/:file`; it applies to every GET row alike.
+  const matchMethod = upperMethod === "HEAD" ? "GET" : upperMethod;
 
   const pathMatches: Array<{ route: Route; params: Record<string, string> }> =
     [];
@@ -72,7 +77,7 @@ export function matchRoute(
     return { kind: "not_found" };
   }
 
-  const methodMatch = pathMatches.find((m) => m.route.method === upperMethod);
+  const methodMatch = pathMatches.find((m) => m.route.method === matchMethod);
   if (methodMatch) {
     return {
       kind: "match",

@@ -13,7 +13,6 @@ import type { HttpDeps } from "./deps.ts";
 import type { Route } from "./routes.ts";
 import { packageVersion } from "../version.ts";
 import { MissingApiKeyError } from "./api-key.ts";
-import { UI_SHELL_HTML } from "./ui.ts";
 import { PinoLogger } from "../../logger/pino.ts";
 import type { DestinationStream } from "pino";
 import { UnknownReferenceError } from "../../app/errors.ts";
@@ -683,13 +682,16 @@ test("buildHttpApp has no process.env fallback even when API_KEY is set", () => 
   }
 });
 
-test("GET / with valid auth returns 200, text/html, and the exact UI shell body", async () => {
+// EPIC 026: `GET /` is a static row over the injected dist root, not an inline
+// document. With no root injected there is nothing to serve, and the answer must
+// stay inside the error envelope. The served-document assertions live in
+// ui.test.ts, which injects a real dist root.
+test("GET / with valid auth but no UI dist root returns 404 unknown_route", async () => {
   const { deps } = makeDeps();
   const app = buildHttpApp(deps, { apiKey: KEY });
   const res = await request(app.callback()).get("/").set("Authorization", AUTH);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers["content-type"]?.startsWith("text/html"), true);
-  assert.equal(res.text, UI_SHELL_HTML);
+  assert.equal(res.status, 404);
+  assert.equal(res.body.error.code, "unknown_route");
 });
 
 test("GET / without credentials returns 401 with the www-authenticate challenge", async () => {

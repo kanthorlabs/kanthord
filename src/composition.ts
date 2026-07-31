@@ -1,6 +1,7 @@
 // Composition factory — extracted from main.ts so tests can instantiate deps
 // without launching a process. Only this file (and main.ts) import concrete adapters.
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { access } from "node:fs/promises";
 import type { CliDeps } from "./apps/cli/deps.ts";
 import { openDatabase } from "./storage/sqlite/open.ts";
@@ -795,6 +796,16 @@ export function buildDeps(
     lockDir,
   });
 
+  // EPIC 026: where the built UI lives. Resolved from the PACKAGE root via
+  // import.meta.url, never from process.cwd() — `serve` runs from an isolated
+  // working directory in every proof, so a cwd-relative default would silently
+  // resolve to a directory that does not hold the build. `ui/dist` is gitignored
+  // and may be absent; the static rows then answer 404 unknown_route.
+  const uiDistRoot = resolve(
+    process.env["KANTHORD_UI_DIST"] ??
+      fileURLToPath(new URL("../ui/dist", import.meta.url)),
+  );
+
   // Wire the real ApproveTask WITH landing: the RepositoryLanding adapter
   // (Story 05 T3) plus the persisted candidate store + workspace manager so a
   // repository-bound approve lands onto the configured branch of the home repo.
@@ -1241,6 +1252,7 @@ export function buildDeps(
     repositoryProbe,
     resolveHomeDir,
     workspaces,
+    uiDistRoot,
     newId,
     getConflict,
     getObjectiveConflict,

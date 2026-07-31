@@ -61,6 +61,13 @@ const PATH_SEGMENTS = [
   "package",
   "diagnostic",
   "readiness",
+  // EPIC 026: the six static rows of the built UI. These are file surfaces, not
+  // REST resources, which is why three of them carry a file extension.
+  "assets",
+  "icons",
+  "sw.js",
+  "manifest.webmanifest",
+  "favicon.ico",
 ];
 
 /**
@@ -68,8 +75,12 @@ const PATH_SEGMENTS = [
  * list above, not to arbitrary paths: over arbitrary paths `/s$/` false-positives
  * on real singular nouns (`status`, `progress`), and a test people must disable
  * is worse than no test. A genuine singular ending in `s` is named here.
+ *
+ * `assets` and `icons` are exempted by EPIC 026, not by the singular rule: they
+ * are directory names inside a Vite build, not resource collections, so the REST
+ * singular discipline does not reach them.
  */
-const NOT_PLURAL: string[] = ["readiness"];
+const NOT_PLURAL: string[] = ["readiness", "assets", "icons", "sw.js"];
 
 function staticSegmentsOf(path: string): string[] {
   return path
@@ -112,7 +123,7 @@ test("route policy: every ROUTES row satisfies the declared contract", () => {
       `successStatus invalid for ${route.id}`,
     );
     assert.ok(
-      ["json", "html"].includes(route.kind),
+      ["json", "static"].includes(route.kind),
       `kind invalid for ${route.id}`,
     );
 
@@ -191,16 +202,22 @@ test("route policy: every ROUTES row satisfies the declared contract", () => {
       );
     }
 
-    if (route.kind === "html") {
+    if (route.kind === "static") {
+      assert.equal(route.method, "GET", `static row must be GET (${route.id})`);
       assert.equal(
         route.successStatus,
         200,
-        `html row must be 200 (${route.id})`,
+        `static row must be 200 (${route.id})`,
       );
       assert.equal(
         typeof route.present,
         "function",
-        `html row requires present (${route.id})`,
+        `static row requires present (${route.id})`,
+      );
+      assert.deepEqual(
+        route.cliCommands,
+        [],
+        `static row claims no CLI leaf (${route.id})`,
       );
     }
 
@@ -248,8 +265,8 @@ test("path vocabulary: no allowlisted segment is a plural", () => {
   }
 });
 
-test("path vocabulary: NOT_PLURAL names exactly readiness, and every NOT_PLURAL entry is allowlisted", () => {
-  assert.deepEqual(NOT_PLURAL, ["readiness"]);
+test("path vocabulary: NOT_PLURAL names exactly readiness plus the three EPIC 026 build paths, and every entry is allowlisted", () => {
+  assert.deepEqual(NOT_PLURAL, ["readiness", "assets", "icons", "sw.js"]);
   for (const segment of NOT_PLURAL) {
     assert.ok(
       PATH_SEGMENTS.includes(segment),
@@ -296,8 +313,23 @@ test("health.get row: present returns a DTO with exactly status and version keys
   assert.deepEqual(Object.keys(view as object).sort(), ["status", "version"]);
 });
 
-test("ROUTES holds exactly 52 rows: 24 from 019+020, plus the 28 rows of EPIC 021", () => {
-  assert.equal(ROUTES.length, 52);
+test("ROUTES holds exactly 57 rows: 23 from 019+020 after the inline shell retired, 28 from EPIC 021, 6 static UI rows from EPIC 026", () => {
+  assert.equal(ROUTES.length, 57);
+});
+
+test("EPIC 026: the six static UI rows are present and the inline shell row is gone", () => {
+  const ids = new Set(ROUTES.map((r) => r.id));
+  for (const id of [
+    "ui.index.get",
+    "ui.asset.get",
+    "ui.sw.get",
+    "ui.manifest.get",
+    "ui.icon.get",
+    "ui.favicon.get",
+  ]) {
+    assert.ok(ids.has(id), `missing route id ${id}`);
+  }
+  assert.equal(ids.has("ui.get"), false, "the inline ui.get row must be gone");
 });
 
 test("every route id from the EPIC 020 and 021 route tables is present in ROUTES", () => {

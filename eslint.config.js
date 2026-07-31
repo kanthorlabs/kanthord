@@ -9,7 +9,14 @@ import boundaries from "eslint-plugin-boundaries";
 
 export default [
   {
-    ignores: ["node_modules/**", ".data/**", "src/**/__fixtures__/**"],
+    ignores: [
+      "node_modules/**",
+      ".data/**",
+      "src/**/__fixtures__/**",
+      "ui/dist/**",
+      "ui/dev-dist/**",
+      "ui/src/components/ui/**",
+    ],
   },
   {
     files: ["src/**/*.ts"],
@@ -92,5 +99,61 @@ export default [
     // Test carve-out: tests import node:test/assert and (co-located) adapters.
     files: ["src/**/*.test.ts"],
     rules: { "boundaries/dependencies": "off" },
+  },
+  {
+    // EPIC 026 rule R4: ui/ is browser code in every deployment mode, so it may
+    // import neither Node built-ins nor Electron. Prose was not enough — the
+    // rule is what makes the later Electron epic packaging work rather than a
+    // rewrite. ui/vite.config.ts is the ONE Node-side file and is exempt below.
+    files: ["ui/**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: tseslint.parser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    rules: {
+      "no-restricted-imports": [
+        2,
+        {
+          paths: [
+            "electron",
+            "assert",
+            "buffer",
+            "child_process",
+            "crypto",
+            "events",
+            "fs",
+            "http",
+            "https",
+            "net",
+            "os",
+            "path",
+            "process",
+            "stream",
+            "url",
+            "util",
+            "worker_threads",
+            "zlib",
+          ].map((name) => ({
+            name,
+            message:
+              "R4 (EPIC 026): ui/ is browser code — no Node or Electron imports.",
+          })),
+          patterns: [
+            {
+              group: ["node:*", "electron/*"],
+              message:
+                "R4 (EPIC 026): ui/ is browser code — no Node or Electron imports.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // The Node side of the workspace: vite.config.ts runs in Node by design.
+    files: ["ui/vite.config.ts", "ui/vitest.setup.ts"],
+    rules: { "no-restricted-imports": "off" },
   },
 ];
