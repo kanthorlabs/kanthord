@@ -4,7 +4,8 @@
 #
 # Proves, in a real browser against the real daemon serving the real build:
 #   * the operator can build a plan through the UI — initiative, objective and
-#     task created in the browser and verified through the API,
+#     task created in the browser (phase C) and verified through the API
+#     afterwards (phase C2),
 #   * the conditional-edit layer really freezes the validator: a stale submit is
 #     a 412, seen on the response stream, with the operator's draft still on
 #     screen and base/draft/current all rendered,
@@ -18,8 +19,10 @@
 # this script's own HTTP client, and the browser submits a validator it froze
 # when the form opened.
 #
-# EXPECTED FAILURE against the CURRENT tree: phase A fails at the first check,
-# because `ui/` does not exist and `npm run build:ui` is not a script yet.
+# EXPECTED FAILURE against the CURRENT tree (re-measured 2026-07-31, after
+# EPIC 026.1 landed the shell): phases A and B pass — the build exists, Chromium
+# is installed and the daemon serves the build — and the run fails in phase C at
+# `[data-testid="create-initiative"]`, which no screen renders yet.
 set -Eeuo pipefail
 trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
@@ -129,10 +132,30 @@ if (res.status !== 200) throw new Error(`intervening PATCH expected 200, got ${r
 process.stdout.write("intervened");
 EOF
 
+# Resolves an id by name from a collection endpoint, for the steps module and for
+# phase C2. It exits 1 on zero or on more than one match, so nothing downstream
+# can pass on an ambiguity.
+cat > "$PD/lookup.mjs" <<'EOF'
+// node lookup.mjs <base> <basic> <collectionPath> <field> <value>
+const [base, basic, path, field, value] = process.argv.slice(2);
+const res = await fetch(`${base}${path}`, { headers: { authorization: basic } });
+if (res.status !== 200) throw new Error(`GET ${path} expected 200, got ${res.status}`);
+const body = await res.json();
+const matches = (body.data ?? []).filter((entry) => entry[field] === value);
+if (matches.length !== 1) {
+  throw new Error(`GET ${path} — expected exactly 1 entry with ${field}='${value}', got ${matches.length}`);
+}
+process.stdout.write(String(matches[0].id));
+EOF
+
 cat > "$PD/steps.mjs" <<'STEPS'
 export default async ({ goto, text, count, visible, consoleErrors, requests, responses, page }) => {
-  const { PROOF_PROJECT: project, PROOF_INTERVENE: intervene } = process.env;
+  const { PROOF_PROJECT: project, PROOF_INTERVENE: intervene, PROOF_LOOKUP: lookup } = process.env;
   const { execFileSync } = await import("node:child_process");
+  const idByName = (collectionPath, field, value) =>
+    execFileSync(process.execPath, [
+      lookup, process.env.PROOF_BASE, process.env.PROOF_BASIC, collectionPath, field, value,
+    ]).toString().trim();
   const eq = (what, expected, actual) => {
     if (String(expected) !== String(actual)) throw new Error(`${what} — expected '${expected}', got '${actual}'`);
   };
@@ -149,6 +172,30 @@ export default async ({ goto, text, count, visible, consoleErrors, requests, res
   await page.locator('[data-testid="create-initiative-submit"]').click();
   await page.waitForLoadState("networkidle");
   has("the new initiative appears on the Overview", await text("body"), "ui-made-initiative");
+
+  // The objective, on the initiative's own page — the surface that lists them.
+  const init2 = idByName(`/api/project/${project}/initiative`, "name", "ui-made-initiative");
+  await goto(`#/project/${project}/initiative/${init2}`);
+  await page.locator('[data-testid="entity-tabs"] [role="tab"]', { hasText: "Objectives" }).first().click();
+  await page.locator('[data-testid="create-objective"]').click();
+  await page.locator('[data-testid="create-objective-name"]').fill("ui-made-objective");
+  await page.locator('[data-testid="create-objective-submit"]').click();
+  await page.waitForLoadState("networkidle");
+  has("the new objective appears on the initiative page", await text("body"), "ui-made-objective");
+
+  // The task, through the full-page create form of decision 8.
+  const obj2 = idByName(`/api/initiative/${init2}/objective`, "name", "ui-made-objective");
+  await goto(`#/project/${project}/initiative/${init2}/objective/${obj2}`);
+  await page.locator('[data-testid="entity-tabs"] [role="tab"]', { hasText: "Tasks" }).first().click();
+  await page.locator('[data-testid="create-task"]').click();
+  await page.waitForLoadState("networkidle");
+  await page.locator('[data-testid="task-title"]').fill("ui-made-task");
+  await page.locator('[data-testid="create-task-submit"]').click();
+  await page.waitForLoadState("networkidle");
+  const landed = new URL(page.url()).hash;
+  if (!/\/task\/[^/]+$/.test(landed)) {
+    throw new Error(`task create did not land on the created task's page: ${landed}`);
+  }
 
   // --- D: the deterministic 412.
   await goto("#/project");
@@ -212,13 +259,23 @@ export default async ({ goto, text, count, visible, consoleErrors, requests, res
 };
 STEPS
 
-PROOF_PROJECT="$PROJECT" PROOF_INTERVENE="$PD/intervene.mjs" PROOF_BASE="$BASE" PROOF_BASIC="$BASIC" \
+PROOF_PROJECT="$PROJECT" PROOF_INTERVENE="$PD/intervene.mjs" PROOF_LOOKUP="$PD/lookup.mjs" \
+PROOF_BASE="$BASE" PROOF_BASIC="$BASIC" \
 PROOF_INIT="$INIT" PROOF_OBJ="$OBJ" PROOF_TASK_A="$TASK_A" PROOF_TASK_B="$TASK_B" \
   node "$ROOT/scripts/e2e/ui-browser.mjs" --base="$BASE" --key="$KEY" --script="$PD/steps.mjs" \
   || { echo "FAILED: browser phases C–F" >&2; exit 1; }
+
+echo "--- C2: the API agrees the plan was built through the UI"
+INITIATIVES="$(curl -sS "$BASE/api/project/$PROJECT/initiative" -H "authorization: $BASIC")"
+contains "the UI-made initiative is on the wire" "$INITIATIVES" "ui-made-initiative"
+UI_INIT="$(node "$PD/lookup.mjs" "$BASE" "$BASIC" "/api/project/$PROJECT/initiative" name ui-made-initiative)"
+OBJECTIVES="$(curl -sS "$BASE/api/initiative/$UI_INIT/objective" -H "authorization: $BASIC")"
+contains "the UI-made objective is on the wire" "$OBJECTIVES" "ui-made-objective"
+TASKS="$(curl -sS "$BASE/api/initiative/$UI_INIT/task" -H "authorization: $BASIC")"
+contains "the UI-made task is on the wire" "$TASKS" "ui-made-task"
 
 echo "--- D2: the API agrees with the screen"
 FINAL="$(curl -sS "$BASE/api/project/$PROJECT" -H "authorization: $BASIC")"
 contains "the server holds the operator's name, not the intervening one" "$FINAL" "name-typed-by-operator"
 
-echo "026.4 ok: plan built through the UI, frozen validator produced a real 412, draft survived, recovery resubmit landed and invalidated the breadcrumb"
+echo "026.4 ok: initiative, objective and task built through the UI and confirmed through the API, frozen validator produced a real 412, draft survived, recovery resubmit landed and invalidated the breadcrumb"

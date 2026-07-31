@@ -6,10 +6,13 @@ Depends on: Story 02, Story 03 (`CollectionToolbar`, `DetailPane`,
 
 ## Change
 
-### Edit `ui/src/app/router.tsx`
+### Edit `createAppRouter()` in `ui/src/app/routes.tsx`
 
-Under the ProjectShell branch, replace the `…/resource` leaf (026.1's
-`NotBuiltYet`) with:
+026.1 delivered the table and the router factory in one file
+(`ui/src/app/routes.tsx`); `ui/src/app/router.tsx` no longer exists. Under the
+`ProjectRoute` branch — which already renders `<ProjectShell>`, so
+`ProjectResourcesPage` must **not** render a shell of its own — replace the
+`…/resource` child (026.1's `NotBuiltYet`) with:
 
 - `#/project/:id/resource` → `<Navigate to="repository" replace />`
   (react-router `Navigate`, relative), so the URL becomes

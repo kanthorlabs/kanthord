@@ -172,23 +172,26 @@ which action kinds a _later UI epic_ owns, because "a route exists" and "the
 browser can drive it" are different properties and only the second decides what
 renders.
 
-**F10 — the route table is data, owned by 026.1 S4.**
-`ui/src/app/routes.tsx` exports `ROUTE_TABLE: readonly AppRoute[]`
-(`AppRoute = {path, kind, epic?, element}`) and `ui/src/app/router.tsx` maps it
-into `createHashRouter`. **The project-id param is spelled `:id`** in every
-existing entry (`/project/:id/overview`, and 026.2 S6's
-`/project/:id/resource/:type`), and `ProjectRoute` reads
-`useParams()["id"]`. EPIC 026.3 decision 1 spells the new routes with
-`:projectId`, so Story 01 registers `:projectId` and its pages read
-`useParams()["projectId"]`. The two spellings coexist because the table is flat
-(no nested `<Outlet />`, 026.1 S4) — each pattern is matched independently.
-`ROUTE_TABLE` order stays "`*` last".
+**F10 — the route table is data; the router beside it is nested.** Corrected
+2026-07-31 against 026.1's delivery. `ui/src/app/routes.tsx` exports **both**
+`ROUTE_TABLE: readonly AppRoute[]` — where `AppRoute = {path, kind, epic?}`,
+with **no `element` field** — and `createAppRouter()`. `ui/src/app/router.tsx`
+no longer exists. Registering a screen is therefore two edits in one file: the
+`ROUTE_TABLE` entry and the matching route object in `createAppRouter()`.
+`createAppRouter()` is nested: a `GlobalShellLayout` parent over `/inbox`,
+`/project` and `*`; a standalone `/operations`; a `ProjectRoute` parent at
+`/project/:id` over the five leaves. `ROUTE_TABLE` order stays "`*` last".
 
-**F11 — the entity pages render their own shell.** 026.1 S4 pinned "no shared
-layout route and no `<Outlet />`: every route element renders its own shell", so
-the four 026.3 pages render `<ProjectShell projectId segments>` themselves and
-do **not** wrap in `ProjectRoute` — `ProjectRoute` hardcodes
-`segments={[project.name]}` and cannot carry a deeper breadcrumb.
+**F11 — the four entity routes are top-level siblings, and render their own
+shell.** They are **not** children of `ProjectRoute`, for one reason:
+`ProjectRoute` hardcodes `segments={[project.name]}` (`routes.tsx:59-60`) and
+cannot carry the deeper breadcrumb these pages need. So each of the four renders
+`<ProjectShell projectId segments>` itself. A page that _is_ a `ProjectRoute`
+child (026.2's Overview, Resources) must **not** render a shell of its own.
+That the entity routes spell the param `:projectId` while `ProjectRoute` spells
+it `:id` is an inconsistency, not the reason for the split; both spellings
+resolve safely because the branches are separate. **Debt, recorded for EPIC
+026.9: normalize the project-id param to one spelling.**
 
 **F12 — `ProjectShell` and the breadcrumb.** `ui/src/components/shell.tsx:124`
 `ProjectShell({projectId, segments, pendingCount?, children})`; the breadcrumb

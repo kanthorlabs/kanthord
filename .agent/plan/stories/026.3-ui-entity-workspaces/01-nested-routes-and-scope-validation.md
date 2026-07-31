@@ -619,10 +619,13 @@ resource's own `type`, so `#/project/p1/resource/not-a-type/<realId>` is a
 `resource-type` mismatch, not a missing page. A missing `:resourceId` is the
 entity query's `missing`.
 
-### 10. Edit `ui/src/app/routes.tsx` (026.1 S4's `ROUTE_TABLE`)
+### 10. Edit `ui/src/app/routes.tsx` (026.1 S4's `ROUTE_TABLE` **and** `createAppRouter()`)
 
-Insert four `kind: "screen"` entries **immediately before the `path: "*"` entry**
-and change nothing else:
+The table carries no `element` field, so this is two edits in the one file:
+insert four `kind: "screen"` entries into `ROUTE_TABLE` **immediately before the
+`path: "*"` entry**, and add four route objects to `createAppRouter()` as
+**top-level siblings** — not children of `ProjectRoute` (index.md F11) — each
+rendering the element below. Change nothing else:
 
 | path                                                                               | element                    |
 | ---------------------------------------------------------------------------------- | -------------------------- |
@@ -632,7 +635,8 @@ and change nothing else:
 | `/project/:projectId/resource/:type/:resourceId`                                   | `<EntityResourcePage />`   |
 
 No `epic` key (that is `not-built-yet`-only). No `ProjectRoute` wrapper
-(index.md F11). `ui/src/app/router.tsx` and `ui/src/main.tsx` do not change.
+(index.md F11) — each page renders its own `<ProjectShell>`. `ui/src/main.tsx`
+does not change.
 
 ## Constraints
 
@@ -647,7 +651,8 @@ No `epic` key (that is `not-built-yet`-only). No `ProjectRoute` wrapper
   `[data-testid="async-missing"]`; when the gate is `missing` it contains zero
   `[data-testid="scope-mismatch"]`. The Proof asserts both directions.
 - `ProjectShell` renders in every gate state, so the operator keeps the nav.
-- Do not touch `ui/src/app/project-route.tsx`, `ui/src/components/shell.tsx`,
+- Do not touch `ProjectRoute` or `GlobalShellLayout` in `ui/src/app/routes.tsx`
+  (026.1 kept them internal to that file), `ui/src/components/shell.tsx`,
   `ui/src/pages/project-overview.tsx` or `ui/src/pages/project-resources.tsx`.
 - Do not add `forceMount` to `TabsContent`, and do not put the tab in the URL.
 

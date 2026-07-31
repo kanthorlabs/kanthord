@@ -85,10 +85,16 @@ queryFn: ({ signal }) => fetchProjects(term || undefined, { signal }) })`.
   routes exist but are EPIC 026.4's, and an unbuilt control is omitted, not
   disabled.
 
-### Edit `ui/src/app/router.tsx`
+### Edit `createAppRouter()` in `ui/src/app/routes.tsx`
 
-Replace the `#/project` leaf element (026.1 registered it with `NotBuiltYet`)
-with `<ProjectsPage />`. Change nothing else in the route table.
+026.1 delivered the table and the router factory in **one file**
+(`ui/src/app/routes.tsx`); `ui/src/app/router.tsx` no longer exists, and
+`AppRoute` carries no `element` field. Replace the `#/project` child element
+(026.1 registered it with `NotBuiltYet`) with `<ProjectsPage />`, inside the
+`GlobalShellLayout` branch. Change nothing else in `ROUTE_TABLE` or the factory.
+
+`#/project` is a **child of `GlobalShellLayout`**, which already renders
+`<GlobalShell>`: `ProjectsPage` must **not** render a shell of its own.
 
 ## Constraints
 

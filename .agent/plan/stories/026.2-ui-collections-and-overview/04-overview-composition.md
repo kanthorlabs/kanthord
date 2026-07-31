@@ -13,7 +13,7 @@ export function ProjectOverviewPage(): ReactElement;
 ```
 
 - Project id from `useParams()`, using the param spelling declared in
-  `ui/src/app/router.tsx` (index.md F6).
+  `ui/src/app/routes.tsx` (index.md F6) — 026.1 delivered it as `:id`.
 - `useQuery({ queryKey: projectKeys.overview(projectId),
 queryFn: ({ signal }) => fetchProjectOverview(projectId, { signal }) })`.
 - `FreshnessBar` fed exactly:
@@ -73,10 +73,24 @@ queryFn: ({ signal }) => fetchProjectOverview(projectId, { signal }) })`.
   data of its own is never an error (decision 4 / the gate).
 - No write control on this page (decision 8).
 
-### Edit `ui/src/app/router.tsx`
+### Edit `createAppRouter()` in `ui/src/app/routes.tsx`
 
-Replace the `#/project/:id/overview` leaf (026.1's `NotBuiltYet`) with
+026.1 delivered the table and the router factory in one file
+(`ui/src/app/routes.tsx`); `ui/src/app/router.tsx` no longer exists. Replace the
+`#/project/:id/overview` child (026.1's `NotBuiltYet`) with
 `<ProjectOverviewPage />`. Change nothing else.
+
+The page is a **child of `ProjectRoute`**, which already renders
+`<ProjectShell projectId segments={[project.name]}>`: `ProjectOverviewPage` must
+**not** render a shell of its own, and it does not own the breadcrumb.
+**`OPEN:` — where the `FreshnessBar` goes.** `docs/ui-design.md:301-324` is
+binding: "Every page shows `Updated HH:MM` plus a refresh control, from
+`FreshnessBar` **in the shell header**." `ProjectShell`
+(`ui/src/components/shell.tsx:124`) has **no `freshness` slot** — only
+`GlobalShell` does. This story cannot satisfy the binding rule as the shell
+stands. Resolve before dispatch, do not improvise: either add
+`freshness?: ReactNode` to `ProjectShellProps`, mirroring `GlobalShell`, or the
+human amends the freshness rule for project surfaces.
 
 ## Constraints
 

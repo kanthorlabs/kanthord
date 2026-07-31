@@ -105,8 +105,19 @@ rg -n "export (function|const|type) <Name>" ui/src
 
 Import from the single file that matches. If nothing matches, 026.1 did not
 ship it — raise an `OPEN:` blocker instead of writing a second copy. The same
-rule resolves the route param name: read `ui/src/app/router.tsx` and use the
-param spelling its own route table declares for the project id.
+rule resolves the route param name: read `ui/src/app/routes.tsx` — 026.1
+delivered `ROUTE_TABLE` **and** `createAppRouter()` in that one file, and
+`ui/src/app/router.tsx` no longer exists — and use the param spelling its route
+table declares for the project id (`:id`).
+
+**F6b — the router is nested, and a page never renders a shell twice.** 026.1's
+`createAppRouter()` has three branches: a `GlobalShellLayout` parent over
+`/inbox`, `/project` and `*`; a standalone `/operations`; and a `ProjectRoute`
+parent at `/project/:id` over the five leaves. A page registered as a child of
+either parent **must not render `GlobalShell` or `ProjectShell` itself** — the
+parent already did. `AppRoute` is `{path, kind, epic?}`: the table is pure data
+and carries **no `element`**, so registering a screen is two edits — the
+`ROUTE_TABLE` entry and the matching route object in `createAppRouter()`.
 
 **F7 — decision-row link targets.** EPIC 026.3 fixes the canonical entity hash
 paths (`.agent/plan/epics/026.3-ui-entity-workspaces.md:55-58`). A decision row
