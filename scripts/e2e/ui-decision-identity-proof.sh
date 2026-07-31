@@ -10,14 +10,17 @@
 #     server never issued, and NEVER 410,
 #   * closing the decision for real keeps the id addressable: it answers 200
 #     with a closed state and historical names, not 404,
+#   * a RECURRENCE of the same decision is a new occurrence with a new id, while
+#     the closed one stays addressable,
 #   * filtering happens on the SERVER, before ranking and limiting, while the
 #     counts stay global,
 #   * the Inbox shows the real title, filters through the server, and
 #     #/inbox/<id> cold-loads a decision,
 #   * R3 holds — no request the page issued carried an Authorization header.
 #
-# EXPECTED FAILURE against the CURRENT tree: phase A fails at the first check
-# (no `build:ui`). Phase C would fail next, because the queue DTO has no `id`.
+# EXPECTED FAILURE against the CURRENT tree: phase C fails, because the queue
+# DTO carries no `id` (`src/apps/http/views/queue.ts:11-32`). Phase A passes now
+# that `build:ui` exists (EPIC 026).
 set -Eeuo pipefail
 trap 'echo "FAILED: $0 line $LINENO" >&2' ERR
 
@@ -147,8 +150,14 @@ eq "an id the server never issued is 404" "404" "$UNKNOWN_CODE"
 OPEN_CODE="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE/api/queue/$DEC_ID" -H "authorization: $BASIC")"
 eq "a known decision is 200, never 410" "200" "$OPEN_CODE"
 
-echo "--- E: closing it for real keeps it addressable"
+echo "--- E: closing it for real keeps it addressable, and a recurrence is a NEW id"
 node src/main.ts retry task --id "$TASK" --note "proof retry" >/dev/null
+# The retry only re-readies the task. Run the daemon again so it fails a second
+# time: that closes the first occurrence AND produces the recurrence phases F
+# and G need — a queue with one open decision again.
+KANTHORD_FAKE_AGENT="$PD/noop-agent.json" \
+  node src/main.ts run daemon --until-idle --poll-interval 200 >/dev/null 2>&1 || true
+eq "fixture: the retried task failed again" "failed" "$(tstatus "$TASK")"
 CLOSED_CODE="$(curl -sS -o "$PD/closed.json" -w '%{http_code}' "$BASE/api/queue/$DEC_ID" -H "authorization: $BASIC")"
 eq "a closed decision is still 200" "200" "$CLOSED_CODE"
 CLOSED_STATE="$(jf "$(cat "$PD/closed.json")" "state")"
@@ -158,9 +167,18 @@ case "$CLOSED_STATE" in
   *) echo "FAILED: closed state must be resolved or expired, got '$CLOSED_STATE'" >&2; exit 1 ;;
 esac
 echo "    closed state: $CLOSED_STATE"
+Q3="$(curl -sS "$BASE/api/queue" -H "authorization: $BASIC")"
+NEW_ID="$(node -e '
+  const q = JSON.parse(process.argv[1]).data;
+  const it = q.items.find((i) => i.taskId === process.argv[2]);
+  if (!it) { process.stderr.write("the recurrence produced no queue item\n"); process.exit(1); }
+  process.stdout.write(it.id);' "$Q3" "$TASK")"
+ne "the recurrence is a different occurrence" "$DEC_ID" "$NEW_ID"
+eq "the recurrence is open" "open" "$(jf "$(curl -sS "$BASE/api/queue/$NEW_ID" -H "authorization: $BASIC")" "state")"
+echo "    recurrence: $NEW_ID"
 
 echo "--- F: filtering happens on the server, and the counts stay global"
-TOTAL="$(jf "$Q1" "counts.total")"
+TOTAL="$(jf "$Q3" "counts.total")"
 OTHER_KIND="$([ "$KIND" = "task-review" ] && echo "operational-failure" || echo "task-review")"
 FILTERED="$(curl -sS "$BASE/api/queue?kind=$OTHER_KIND" -H "authorization: $BASIC")"
 eq "the other kind matches nothing" "0" "$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.items.length))' "$FILTERED")"
@@ -189,6 +207,7 @@ export default async ({ goto, text, count, visible, consoleErrors, requests, pag
   // The deep link 026.1 forbade and 026.7 called unsupported.
   await goto(`#/inbox/${decision}`);
   eq("the decision cold-loads", true, await visible('[data-testid="decision-state"]'));
+  eq("a closed decision marks its names historical", true, await visible('[data-testid="decision-historical"]'));
   await goto("#/inbox/01KYZZUNKNOWNDECISION00000");
   eq("an unknown decision is the missing state", true, await visible('[data-testid="async-missing"]'));
 
@@ -205,4 +224,4 @@ PROOF_DECISION="$DEC_ID" PROOF_TITLE="$TITLE" PROOF_KIND="$KIND" \
   node "$ROOT/scripts/e2e/ui-browser.mjs" --base="$BASE" --key="$KEY" --script="$PD/steps.mjs" \
   || { echo "FAILED: browser phases G–H" >&2; exit 1; }
 
-echo "026.8 ok: decision $DEC_ID stable across recomputation, kind=$KIND, addressable while open and after closing ($CLOSED_STATE), server-side filter with global counts, Inbox deep link works"
+echo "026.8 ok: decision $DEC_ID stable across recomputation, kind=$KIND, addressable while open and after closing ($CLOSED_STATE), recurrence minted a new id $NEW_ID, server-side filter with global counts, Inbox deep link works"
