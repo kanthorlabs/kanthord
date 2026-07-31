@@ -65,7 +65,7 @@ export interface DecisionOccurrenceRow {
   subjectId: string;
   kind: string;
   state: "open" | "resolved" | "expired";
-  closedReason: "verdict" | "vanished" | null;
+  closedReason: "verdict" | "superseded" | "vanished" | null;
   openingEventId: string | null;
   closingEventId: string | null;
   projectId: string;

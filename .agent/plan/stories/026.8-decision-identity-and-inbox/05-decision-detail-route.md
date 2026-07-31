@@ -76,7 +76,7 @@ recomputed — and Proof phase E retries the task through the CLI and then reads
   as "taken when it closed" — see the report's open items).
 - `historical = state !== "open"`.
 - `DecisionOccurrenceRowLike` is the structural row type declared in
-  `get-decision-queue.ts` (Story 3); import the type from there.
+  `reconcile-decisions.ts` (Story 3); import the type from there.
 
 2. **View** `src/apps/http/views/decision.ts`:
    `DecisionView` + `decisionView(result: GetDecisionOutput): DecisionView` — a
