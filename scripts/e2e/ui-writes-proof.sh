@@ -88,7 +88,7 @@ CODE="$(curl -sS -o "$PD/p.json" -w '%{http_code}' -X POST "$BASE/api/project" \
   -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
   --data '{"name":"proof-026-4-original"}')"
 eq "seed project created" "201" "$CODE"
-PROJECT="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id)' "$PD/p.json")"
+PROJECT="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id)' "$PD/p.json")"
 
 POST() {
   local path="$1" body="$2" code
@@ -96,7 +96,7 @@ POST() {
     -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
     --data "$body")"
   [ "$code" = "201" ] || { echo "FAILED: POST $path — expected 201, got $code: $(cat "$PD/post.json")" >&2; exit 1; }
-  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id))' "$PD/post.json"
+  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id))' "$PD/post.json"
 }
 
 # Phase E needs an edge that would close a cycle: A already depends on B, so

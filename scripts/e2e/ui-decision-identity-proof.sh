@@ -38,7 +38,7 @@ BASIC="Basic $(printf 'kanthord:%s' "$KEY" | base64 | tr -d '\n')"
 
 eq() { [ "$2" = "$3" ] || { echo "FAILED: $1 — expected '$2', got '$3'" >&2; exit 1; }; }
 ne() { [ "$2" != "$3" ] || { echo "FAILED: $1 — must not equal '$2'" >&2; exit 1; }; }
-jf() { node -e 'const v=JSON.parse(process.argv[1]);process.stdout.write(String(process.argv[2].split(".").reduce((a,k)=>a?.[k],v)))' "$1" "$2"; }
+jf() { node -e 'const v=JSON.parse(process.argv[1]).data;process.stdout.write(String(process.argv[2].split(".").reduce((a,k)=>a?.[k],v)))' "$1" "$2"; }
 
 echo "--- A: the build exists and the browser is installed"
 BUILD_SCRIPT="$(node -e 'const fs=require("node:fs");const p=process.argv[1];process.stdout.write(fs.existsSync(p)?(JSON.parse(fs.readFileSync(p,"utf8")).scripts?.["build:ui"] ?? ""):"")' "$ROOT/package.json")"
@@ -116,25 +116,25 @@ echo "    daemon port: $PORT   task: $TASK"
 echo "--- C: the queue carries identity, machine kind and the real name — stably"
 Q1="$(curl -sS "$BASE/api/queue" -H "authorization: $BASIC")"
 DEC_ID="$(node -e '
-  const q = JSON.parse(process.argv[1]);
+  const q = JSON.parse(process.argv[1]).data;
   const it = q.items.find((i) => i.taskId === process.argv[2]) ?? q.items[0];
   if (!it) { process.stderr.write("no queue item\n"); process.exit(1); }
   if (!it.id) { process.stderr.write("the queue item has no id\n"); process.exit(1); }
   process.stdout.write(it.id);' "$Q1" "$TASK")"
 KIND="$(node -e '
-  const q = JSON.parse(process.argv[1]);
+  const q = JSON.parse(process.argv[1]).data;
   const it = q.items.find((i) => i.id === process.argv[2]);
   if (!it.kind) { process.stderr.write("the queue item has no machine kind\n"); process.exit(1); }
   process.stdout.write(it.kind);' "$Q1" "$DEC_ID")"
 TITLE="$(node -e '
-  const q = JSON.parse(process.argv[1]);
+  const q = JSON.parse(process.argv[1]).data;
   const it = q.items.find((i) => i.id === process.argv[2]);
   const t = it.taskTitle ?? it.title;
   if (!t) { process.stderr.write("the queue item carries no entity name\n"); process.exit(1); }
   process.stdout.write(t);' "$Q1" "$DEC_ID")"
 Q2="$(curl -sS "$BASE/api/queue" -H "authorization: $BASIC")"
 SAME="$(node -e '
-  const q = JSON.parse(process.argv[1]);
+  const q = JSON.parse(process.argv[1]).data;
   process.stdout.write(q.items.some((i) => i.id === process.argv[2]) ? "yes" : "no");' "$Q2" "$DEC_ID")"
 eq "the id survives recomputation of the projection" "yes" "$SAME"
 echo "    decision: $DEC_ID   kind: $KIND   title: $TITLE"
@@ -163,7 +163,7 @@ echo "--- F: filtering happens on the server, and the counts stay global"
 TOTAL="$(jf "$Q1" "counts.total")"
 OTHER_KIND="$([ "$KIND" = "task-review" ] && echo "operational-failure" || echo "task-review")"
 FILTERED="$(curl -sS "$BASE/api/queue?kind=$OTHER_KIND" -H "authorization: $BASIC")"
-eq "the other kind matches nothing" "0" "$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).items.length))' "$FILTERED")"
+eq "the other kind matches nothing" "0" "$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.items.length))' "$FILTERED")"
 eq "counts stay global under a filter" "$TOTAL" "$(jf "$FILTERED" "counts.total")"
 
 cat > "$PD/steps.mjs" <<'STEPS'

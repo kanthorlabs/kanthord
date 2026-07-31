@@ -93,7 +93,7 @@ CODE="$(curl -sS -o "$PD/p.json" -w '%{http_code}' -X POST "$BASE/api/project" \
   -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
   --data '{"name":"proof-026-5"}')"
 eq "seed project created" "201" "$CODE"
-PROJECT="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id)' "$PD/p.json")"
+PROJECT="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id)' "$PD/p.json")"
 echo "    project: $PROJECT"
 
 cat > "$PD/steps.mjs" <<'STEPS'
@@ -212,13 +212,13 @@ PROOF_PROJECT="$PROJECT" PROOF_SECRET="$SECRET" \
 echo "--- C2: the read APIs never return the secret"
 CRED_LIST="$(curl -sS "$BASE/api/project/$PROJECT/credential" -H "authorization: $BASIC")"
 absent "the credential collection has no value" "$CRED_LIST" "$SECRET"
-CRED_ID="$(node -e 'process.stdout.write(JSON.parse(process.argv[1])[0].id)' "$CRED_LIST")"
+CRED_ID="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).data[0].id)' "$CRED_LIST")"
 absent "the credential detail has no value" "$(curl -sS "$BASE/api/resource/$CRED_ID" -H "authorization: $BASIC")" "$SECRET"
 absent "the daemon log has no value" "$(cat "$PD/serve.log")" "$SECRET"
 
 echo "--- F2: the remote change emptied the stored path, and did nothing else"
 REPO_LIST="$(curl -sS "$BASE/api/project/$PROJECT/repository" -H "authorization: $BASIC")"
-REPO_PATH="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1])[0].path))' "$REPO_LIST")"
+REPO_PATH="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data[0].path))' "$REPO_LIST")"
 contains "the repository now points at the new remote" "$REPO_LIST" "example.invalid/two.git"
 eq "the cached home pointer was discarded" "" "$REPO_PATH"
 

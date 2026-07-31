@@ -92,7 +92,7 @@ CREATE="$(curl -sS -o "$PD/create.json" -w '%{http_code}' -X POST "$BASE/api/pro
   -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
   --data "{\"name\":\"$PROJECT_NAME\"}")"
 eq "project created" "201" "$CREATE"
-PROJECT_ID="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id)' "$PD/create.json")"
+PROJECT_ID="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id)' "$PD/create.json")"
 ne "project id captured" "" "$PROJECT_ID"
 VERSION="$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).version)' "$ROOT/package.json")"
 echo "    project: $PROJECT_ID   version: $VERSION"

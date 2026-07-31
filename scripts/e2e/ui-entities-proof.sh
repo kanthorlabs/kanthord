@@ -85,7 +85,7 @@ POST() {
     -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
     --data "$body")"
   [ "$code" = "201" ] || { echo "FAILED: POST $path — expected 201, got $code: $(cat "$PD/post.json")" >&2; exit 1; }
-  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id))' "$PD/post.json"
+  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id))' "$PD/post.json"
 }
 GETJSON() { curl -sS "$BASE$1" -H "authorization: $BASIC"; }
 
@@ -103,7 +103,7 @@ POST "/api/project/$PROJECT/credential" \
 # The exact downstream count the API reports for the blocker — the page must
 # show this number, not a number the proof invented.
 DOWNSTREAM="$(node -e '
-  process.stdout.write(String(JSON.parse(process.argv[1]).downstream));' "$(GETJSON "/api/task/$TASK_BLOCKER")")"
+  process.stdout.write(String(JSON.parse(process.argv[1]).data.downstream));' "$(GETJSON "/api/task/$TASK_BLOCKER")")"
 echo "    project=$PROJECT initiative=$INIT objectiveA=$OBJ_A objectiveB=$OBJ_B blocker=$TASK_BLOCKER downstream=$DOWNSTREAM"
 
 cat > "$PD/steps.mjs" <<'STEPS'

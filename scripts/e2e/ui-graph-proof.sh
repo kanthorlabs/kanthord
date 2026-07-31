@@ -89,7 +89,7 @@ POST() {
     -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
     --data "$body")"
   [ "$code" = "201" ] || { echo "FAILED: POST $path — expected 201, got $code: $(cat "$PD/post.json")" >&2; exit 1; }
-  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id))' "$PD/post.json"
+  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id))' "$PD/post.json"
 }
 
 PROJECT="$(POST /api/project '{"name":"proof-026-6"}')"
@@ -102,17 +102,17 @@ T3="$(POST "/api/objective/$OBJ_TWO/task" "{\"title\":\"task-three\",\"dependenc
 
 # Every expectation below comes from the API, never from a guess.
 GRAPH="$(curl -sS "$BASE/api/initiative/$INIT/graph" -H "authorization: $BASIC")"
-EXPECT_LANES="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).groups.length))' "$GRAPH")"
-EXPECT_NODES="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).nodes.length))' "$GRAPH")"
-EXPECT_EDGES="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).edges.length))' "$GRAPH")"
-CRITICAL="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).criticalPath.nodeIds.join(","))' "$GRAPH")"
+EXPECT_LANES="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.groups.length))' "$GRAPH")"
+EXPECT_NODES="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.nodes.length))' "$GRAPH")"
+EXPECT_EDGES="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.edges.length))' "$GRAPH")"
+CRITICAL="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).data.criticalPath.nodeIds.join(","))' "$GRAPH")"
 echo "    lanes=$EXPECT_LANES nodes=$EXPECT_NODES edges=$EXPECT_EDGES criticalPath=[$CRITICAL]"
 eq "the seeded graph really has two lanes" "2" "$EXPECT_LANES"
 eq "the seeded graph really has three nodes" "3" "$EXPECT_NODES"
 
 READINESS="$(curl -sS "$BASE/api/project/$PROJECT/readiness" -H "authorization: $BASIC")"
-EXPECT_CHECKS="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).checks.length))' "$READINESS")"
-NEXT_COMMAND="$(node -e 'const r=JSON.parse(process.argv[1]);process.stdout.write(r.next?.command ?? "")' "$READINESS")"
+EXPECT_CHECKS="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.checks.length))' "$READINESS")"
+NEXT_COMMAND="$(node -e 'const r=JSON.parse(process.argv[1]).data;process.stdout.write(r.next?.command ?? "")' "$READINESS")"
 echo "    readiness checks=$EXPECT_CHECKS next.command=${NEXT_COMMAND:-<none>}"
 
 cat > "$PD/steps.mjs" <<'STEPS'

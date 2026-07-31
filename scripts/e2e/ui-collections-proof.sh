@@ -85,7 +85,7 @@ POST() { # POST <path> <json> -> prints the created id
     -H "authorization: $BASIC" -H "origin: $BASE" -H 'content-type: application/json' \
     --data "$body")"
   [ "$code" = "201" ] || { echo "FAILED: POST $path — expected 201, got $code: $(cat "$PD/post.json")" >&2; exit 1; }
-  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).id))' "$PD/post.json"
+  node -e 'process.stdout.write(String(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).data.id))' "$PD/post.json"
 }
 
 PROJECT_A="$(POST /api/project '{"name":"proof-026-2-alpha"}')"

@@ -133,10 +133,10 @@ done
 BASE="http://127.0.0.1:$PORT"
 
 QUEUE="$(curl -sS "$BASE/api/queue" -H "authorization: $BASIC")"
-EXPECT_ROWS="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).items.length))' "$QUEUE")"
+EXPECT_ROWS="$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).data.items.length))' "$QUEUE")"
 ne "the queue really has an item" "0" "$EXPECT_ROWS"
 ITEM="$(node -e '
-  const q = JSON.parse(process.argv[1]);
+  const q = JSON.parse(process.argv[1]).data;
   const it = q.items.find((i) => i.taskId === process.argv[2]) ?? q.items[0];
   process.stdout.write(JSON.stringify({
     kindLabel: it.kindLabel,
