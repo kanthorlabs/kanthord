@@ -94,11 +94,19 @@ try {
 
   // A cold load at a hash: the browser must resolve the whole route from the
   // URL, exactly as a shared deep link does. Never a client-side navigation.
-  const goto = async (hash) => {
+  // Optional waitFor: after networkidle, wait for a selector to be visible
+  // before returning (fixes React concurrent commit races).
+  const goto = async (hash, waitFor) => {
     const url = hash
       ? `${args.base}/${hash.startsWith("#") ? hash : `#${hash}`}`
       : `${args.base}/`;
     await page.goto(url, { waitUntil: "networkidle" });
+    if (waitFor) {
+      await page
+        .locator(waitFor)
+        .first()
+        .waitFor({ state: "visible", timeout: 10_000 });
+    }
   };
   const text = async (selector) =>
     (await page.locator(selector).first().innerText()).trim();

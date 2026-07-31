@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { registerSW } from "virtual:pwa-register";
-import { router } from "@/app/router";
+import { createAppRouter } from "@/app/routes";
 import "@/index.css";
 
 const queryClient = new QueryClient({
@@ -18,7 +18,7 @@ if (root === null) {
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <RouterProvider router={createAppRouter(queryClient)} />
     </QueryClientProvider>
   </StrictMode>,
 );

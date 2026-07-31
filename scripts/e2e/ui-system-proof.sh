@@ -127,7 +127,7 @@ export default async ({ goto, text, count, visible, consoleErrors, requests, pag
   eq("the page booted with no console error", 0, consoleErrors.length);
 
   // --- C: Operations is a real screen over a real query.
-  await goto("#/operations");
+  await goto("#/operations", '[data-testid="health-version"]');
   eq("Operations renders the health card", true, await visible('[data-testid="health-version"]'));
   has("the card shows the daemon's real version", await text('[data-testid="health-version"]'), version);
   has("FreshnessBar shows a fetch time", await text('[data-testid="freshness-updated"]'), "Updated");

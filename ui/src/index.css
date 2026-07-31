@@ -1,18 +1,15 @@
 @import "tailwindcss";
 
-/*
-  shadcn/ui base theme (new-york, neutral) for Tailwind v4 (EPIC 026 S2).
-
-  The six operator-role tokens of docs/ui-design.md § "Semantic tokens" are NOT
-  defined here: EPIC 026 ships one health card and no status surface, so the
-  first epic that renders a status (026.1) adds them. This file holds only the
-  shadcn primitives its components need.
-*/
-
 @custom-variant dark (&:is(.dark *));
 
 :root {
   --radius: 0.625rem;
+  --role-neutral: oklch(0.556 0 0);
+  --role-active: oklch(0.588 0.158 241.966);
+  --role-attention: oklch(0.769 0.188 70.08);
+  --role-blocked: oklch(0.554 0.135 66.442);
+  --role-danger: oklch(0.577 0.245 27.325);
+  --role-success: oklch(0.596 0.145 163.225);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -43,6 +40,12 @@
 }
 
 .dark {
+  --role-neutral: oklch(0.708 0 0);
+  --role-active: oklch(0.707 0.165 254.624);
+  --role-attention: oklch(0.828 0.189 84.429);
+  --role-blocked: oklch(0.666 0.126 66.442);
+  --role-danger: oklch(0.704 0.191 22.216);
+  --role-success: oklch(0.696 0.17 162.48);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -104,6 +107,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-role-neutral: var(--role-neutral);
+  --color-role-active: var(--role-active);
+  --color-role-attention: var(--role-attention);
+  --color-role-blocked: var(--role-blocked);
+  --color-role-danger: var(--role-danger);
+  --color-role-success: var(--role-success);
 }
 
 @layer base {
