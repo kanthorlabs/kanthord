@@ -1,6 +1,7 @@
 ---
 description: Expand one EPIC into deterministic, /work-ready Story/Task files grounded in read-only code exploration.
 agent: build
+subtask: false
 ---
 
 # /author — expand an EPIC into deterministic Story/Task files
