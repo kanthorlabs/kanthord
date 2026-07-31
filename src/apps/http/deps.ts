@@ -45,6 +45,15 @@ import type { CheckGraph } from "../../app/graph/check-graph.ts";
 import type { CheckProject } from "../../app/project/check-project.ts";
 import type { ReadEventPage } from "../../app/task/read-event-page.ts";
 import type { AckProject } from "../../app/project/ack-project.ts";
+import type { ApproveTask } from "../../app/task/approve-task.ts";
+import type { RejectTask } from "../../app/task/reject-task.ts";
+import type { RetryTask } from "../../app/task/retry-task.ts";
+import type { AbandonTask } from "../../app/task/abandon-task.ts";
+import type { ApproveObjective } from "../../app/objective/approve-objective.ts";
+import type { RejectObjective } from "../../app/objective/reject-objective.ts";
+import type { RetryObjective } from "../../app/objective/retry-objective.ts";
+import type { PauseInitiative } from "../../app/initiative/pause-initiative.ts";
+import type { ResumeInitiative } from "../../app/initiative/resume-initiative.ts";
 
 /**
  * What the HTTP routes need. One field per capability, added by the epic that
@@ -98,6 +107,15 @@ export interface HttpDeps {
   readonly checkProject: CheckProject;
   readonly readEventPage: ReadEventPage;
   readonly ackProject: AckProject;
+  readonly approveTask: ApproveTask;
+  readonly rejectTask: RejectTask;
+  readonly retryTask: RetryTask;
+  readonly abandonTask: AbandonTask;
+  readonly approveObjective: ApproveObjective;
+  readonly rejectObjective: RejectObjective;
+  readonly retryObjective: RetryObjective;
+  readonly pauseInitiative: PauseInitiative;
+  readonly resumeInitiative: ResumeInitiative;
   /**
    * `import graph --create` needs a caller-minted packageId
    * (`create-graph.ts:44`); the CLI passes `deps.newId`, so the row mints it.

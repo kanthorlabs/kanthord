@@ -300,6 +300,21 @@ test("CORS preflight from allowed origin succeeds without credentials", async ()
   assert.ok(res.status === 204 || res.status === 200);
 });
 
+test("CORS preflight for PUT advertises PUT in Access-Control-Allow-Methods (EPIC 023 Story S5)", async () => {
+  const { deps } = makeDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .options("/api/initiative/i1/suspension")
+    .set("Origin", "http://127.0.0.1:4100")
+    .set("Access-Control-Request-Method", "PUT");
+  assert.ok(
+    (res.headers["access-control-allow-methods"] ?? "").includes("PUT"),
+  );
+});
+
 test("unsafe-method gates: Content-Type text/plain on POST is 415", async () => {
   const { deps } = makeDeps();
   const app = buildHttpApp(deps, {

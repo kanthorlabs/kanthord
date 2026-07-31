@@ -13,8 +13,22 @@ import {
   UnknownAgentError,
   InvalidTaskFieldError,
   EmbeddedCredentialError,
+  StaleCandidateError,
+  ObjectiveNotAwaitingConfirmationError,
+  TaskNotAwaitingConfirmationError,
+  ImpactChangedError,
+  ProposalWorkspaceMissingError,
 } from "../../app/errors.ts";
 import { NoConflictCandidateError } from "../../app/task/get-conflict.ts";
+import { RejectionConflictError } from "../../app/task/reject-task.ts";
+import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
+import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
+import {
+  TaskNotAbandonableError,
+  NoRunningJobError,
+  AmbiguousRunningJobError,
+} from "../../app/task/abandon-task.ts";
+import { ProposalMissingError } from "../../app/task/approve-task.ts";
 import {
   ImmutableFieldError,
   CacheConflictError,
@@ -103,6 +117,42 @@ export const DOMAIN_ERROR_MAPPINGS: ReadonlyArray<{
     code: "cursor_ahead_of_feed",
     status: 409,
     message: "the cursor is ahead of the project event feed",
+  },
+  { type: StaleCandidateError, code: "stale_candidate", status: 409 },
+  {
+    type: ObjectiveNotAwaitingConfirmationError,
+    code: "objective_not_awaiting_confirmation",
+    status: 409,
+  },
+  {
+    type: TaskNotAwaitingConfirmationError,
+    code: "task_not_awaiting_confirmation",
+    status: 409,
+  },
+  { type: ImpactChangedError, code: "impact_changed", status: 409 },
+  { type: RejectionConflictError, code: "rejection_conflict", status: 409 },
+  { type: TaskNotRetryableError, code: "task_not_retryable", status: 409 },
+  {
+    type: ObjectiveNotRetryableError,
+    code: "objective_not_retryable",
+    status: 409,
+  },
+  {
+    type: TaskNotAbandonableError,
+    code: "task_not_abandonable",
+    status: 409,
+  },
+  { type: NoRunningJobError, code: "no_running_job", status: 409 },
+  {
+    type: AmbiguousRunningJobError,
+    code: "ambiguous_running_job",
+    status: 409,
+  },
+  { type: ProposalMissingError, code: "proposal_missing", status: 409 },
+  {
+    type: ProposalWorkspaceMissingError,
+    code: "proposal_workspace_missing",
+    status: 409,
   },
 ];
 

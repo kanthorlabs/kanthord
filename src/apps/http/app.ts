@@ -151,7 +151,7 @@ export function buildHttpApp(deps: HttpDeps, opts: HttpAppOptions): Koa {
       origin: (ctx) =>
         isAllowedOrigin(ctx.get("origin")) ? ctx.get("origin") : "",
       credentials: false,
-      allowMethods: ["GET", "POST", "PATCH", "DELETE"],
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
       allowHeaders: ["Content-Type", "Authorization"],
     }),
   );

@@ -337,7 +337,11 @@ echo "H ok: a stale If-Match still loses on the item PATCH, and the fresh one wi
 
 echo "--- I: no bulk approval, and the 019 gates still fire on a transition row"
 # There is no collection-level verdict route, and the verb form is not a route.
-W_ERR "collection-level approval" POST "/api/task/approval" '{}' 404 unknown_route
+# /api/task/approval has the same shape as the existing GET-only /api/task/:id
+# row, so it path-matches with id="approval" and loses on method, not path
+# (src/apps/http/router.ts:53-83) — 405 method_not_allowed, not 404, exactly
+# as scripts/e2e/http-writes-proof.sh:427 already asserts for PUT /api/project/:id.
+W_ERR "collection-level approval" POST "/api/task/approval" '{}' 405 method_not_allowed
 W_ERR "the verb form" POST "/api/task/$TASK_APPROVE/approve" '{}' 404 unknown_route
 OUT="$(REQ_BODY='{}' REQ POST "$BASE/api/task/$TASK_APPROVE/approval" "$BASIC" "content-type:text/plain")"
 eq "text/plain is rejected" "415" "$(status_of "$OUT")"

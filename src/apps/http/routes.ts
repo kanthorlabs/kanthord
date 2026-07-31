@@ -19,6 +19,12 @@ import { aiProviderView } from "./views/ai-provider.ts";
 import { modelView } from "./views/model.ts";
 import { decisionQueueView } from "./views/queue.ts";
 import { taskConflictView, objectiveConflictView } from "./views/conflict.ts";
+import {
+  taskApprovalView,
+  abandonmentView,
+  objectiveApprovalView,
+} from "./views/verdict.ts";
+import { taskRejectionView, objectiveRejectionView } from "./views/impact.ts";
 import { idView, idsView } from "./views/shared.ts";
 import { graphPackageView } from "./views/graph-package.ts";
 import { graphCreateView, graphApplyView } from "./views/graph-apply.ts";
@@ -48,7 +54,7 @@ import { InvalidInputError } from "./errors.ts";
 import type { TaskStatus } from "../../app/errors.ts";
 import type { AddResourceInput } from "../../app/resource/add-resource.ts";
 
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 /** Raw request material handed to a row's `decode`. */
 export interface RouteInput {
@@ -1018,5 +1024,156 @@ export const ROUTES: readonly Route[] = [
     }),
     run: async (deps, input) => deps.ackProject.execute(input),
     present: (result) => acknowledgementView(result),
+  }),
+  defineRoute({
+    id: "task.approval.create",
+    method: "POST",
+    path: "/api/task/:id/approval",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["approve task"],
+    decode: ({ params }) => ({ taskId: requirePathParam(params, "id") }),
+    run: async (deps, input) => deps.approveTask.execute(input),
+    present: (result) => taskApprovalView(result),
+  }),
+  defineRoute({
+    id: "task.rejection.create",
+    method: "POST",
+    path: "/api/task/:id/rejection",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["reject task"],
+    decode: ({ params, body }) => {
+      const resolution = requireBodyString(body, "resolution");
+      if (resolution !== "retry" && resolution !== "discard") {
+        throw new InvalidInputError(
+          "resolution",
+          'must be "retry" or "discard"',
+        );
+      }
+      const reason = optionalBodyString(body, "reason");
+      const dryRun = optionalBodyBool(body, "dryRun");
+      const expectImpact = optionalBodyString(body, "expectImpact");
+      return {
+        taskId: requirePathParam(params, "id"),
+        resolution: resolution as "retry" | "discard",
+        ...(reason !== undefined ? { reason } : {}),
+        ...(dryRun !== undefined ? { dryRun } : {}),
+        ...(expectImpact !== undefined ? { expectImpact } : {}),
+      };
+    },
+    run: async (deps, input) => deps.rejectTask.execute(input),
+    present: (result) => taskRejectionView(result),
+  }),
+  defineRoute({
+    id: "task.reattempt.create",
+    method: "POST",
+    path: "/api/task/:id/reattempt",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["retry task"],
+    decode: ({ params, body }) => {
+      const note = optionalBodyString(body, "note");
+      const rebuild = optionalBodyBool(body, "rebuild");
+      const carryNote = optionalBodyBool(body, "carryNote");
+      return {
+        taskId: requirePathParam(params, "id"),
+        ...(note !== undefined ? { note } : {}),
+        ...(rebuild !== undefined ? { rebuild } : {}),
+        ...(carryNote !== undefined ? { carryNote } : {}),
+      };
+    },
+    run: async (deps, input) => deps.retryTask.execute(input),
+  }),
+  defineRoute({
+    id: "task.abandonment.create",
+    method: "POST",
+    path: "/api/task/:id/abandonment",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["abandon task"],
+    decode: ({ params, body }) => ({
+      taskId: requirePathParam(params, "id"),
+      reason: requireBodyString(body, "reason"),
+    }),
+    run: async (deps, input) => deps.abandonTask.execute(input),
+    present: (result) => abandonmentView(result),
+  }),
+  defineRoute({
+    id: "objective.approval.create",
+    method: "POST",
+    path: "/api/objective/:id/approval",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["approve objective"],
+    decode: ({ params, body }) => ({
+      objectiveId: requirePathParam(params, "id"),
+      expectedCommit: requireBodyString(body, "expectedCommit"),
+    }),
+    run: async (deps, input) => deps.approveObjective.execute(input),
+    present: (result) => objectiveApprovalView(result),
+  }),
+  defineRoute({
+    id: "objective.rejection.create",
+    method: "POST",
+    path: "/api/objective/:id/rejection",
+    successStatus: 200,
+    kind: "json",
+    cliCommands: ["reject objective"],
+    decode: ({ params, body }) => {
+      const reason = optionalBodyString(body, "reason");
+      const dryRun = optionalBodyBool(body, "dryRun");
+      const expectImpact = optionalBodyString(body, "expectImpact");
+      return {
+        objectiveId: requirePathParam(params, "id"),
+        expectedCommit: requireBodyString(body, "expectedCommit"),
+        ...(reason !== undefined ? { reason } : {}),
+        ...(dryRun !== undefined ? { dryRun } : {}),
+        ...(expectImpact !== undefined ? { expectImpact } : {}),
+      };
+    },
+    run: async (deps, input) => deps.rejectObjective.execute(input),
+    present: (result) => objectiveRejectionView(result),
+  }),
+  defineRoute({
+    id: "objective.reattempt.create",
+    method: "POST",
+    path: "/api/objective/:id/reattempt",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["retry objective"],
+    decode: ({ params, body }) => {
+      const note = optionalBodyString(body, "note");
+      return {
+        objectiveId: requirePathParam(params, "id"),
+        expectedCommit: requireBodyString(body, "expectedCommit"),
+        ...(note !== undefined ? { note } : {}),
+      };
+    },
+    run: async (deps, input) => deps.retryObjective.execute(input),
+  }),
+  defineRoute({
+    id: "initiative.suspension.put",
+    method: "PUT",
+    path: "/api/initiative/:id/suspension",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["pause initiative"],
+    decode: ({ params }) => ({
+      initiativeId: requirePathParam(params, "id"),
+    }),
+    run: async (deps, input) => deps.pauseInitiative.execute(input),
+  }),
+  defineRoute({
+    id: "initiative.suspension.delete",
+    method: "DELETE",
+    path: "/api/initiative/:id/suspension",
+    successStatus: 204,
+    kind: "json",
+    cliCommands: ["resume initiative"],
+    decode: ({ params }) => ({
+      initiativeId: requirePathParam(params, "id"),
+    }),
+    run: async (deps, input) => deps.resumeInitiative.execute(input),
   }),
 ];

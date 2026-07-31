@@ -142,11 +142,36 @@ test("the 27 CLI leaves claimed by EPIC 021 all appear across ROUTES' cliCommand
   }
 });
 
-test("the uncovered set shrank by the 27 leaves EPIC 021 claims plus the 2 leaves EPIC 022 claims", () => {
+test("the uncovered set shrank by the 27 leaves EPIC 021 claims plus the 2 leaves EPIC 022 claims plus EPIC 023's 9 leaves (S2 2, S3 2, S4 3, S5 2)", () => {
   const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
   const uncovered = leaves.filter(
     (leaf) => !covered.has(leaf) && leaf !== "serve" && leaf !== "commands",
   );
-  // 78 retirable leaves, 25 claimed by 020, 27 claimed by 021, 2 claimed by 022.
-  assert.equal(uncovered.length, 24);
+  // 78 retirable leaves, 25 claimed by 020, 27 claimed by 021, 2 claimed by 022,
+  // 2 claimed by 023 S2 ("approve task", "reject task"), 2 claimed by 023 S3
+  // ("retry task", "abandon task"), 3 claimed by 023 S4 ("approve objective",
+  // "reject objective", "retry objective"), 2 claimed by 023 S5 ("pause
+  // initiative", "resume initiative").
+  assert.equal(uncovered.length, 15);
+});
+
+test("the 9 CLI leaves claimed by EPIC 023 all appear across ROUTES' cliCommands", () => {
+  const covered = new Set(ROUTES.flatMap((route) => route.cliCommands));
+  const expectedCovered = [
+    "approve task",
+    "approve objective",
+    "reject task",
+    "reject objective",
+    "retry task",
+    "retry objective",
+    "abandon task",
+    "pause initiative",
+    "resume initiative",
+  ];
+  for (const cliCommand of expectedCovered) {
+    assert.ok(
+      covered.has(cliCommand),
+      `expected "${cliCommand}" to be covered by ROUTES' cliCommands`,
+    );
+  }
 });

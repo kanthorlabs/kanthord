@@ -63,6 +63,11 @@ const PATH_SEGMENTS = [
   "readiness",
   "event",
   "acknowledgement",
+  "approval",
+  "rejection",
+  "reattempt",
+  "abandonment",
+  "suspension",
 ];
 
 /**
@@ -72,6 +77,17 @@ const PATH_SEGMENTS = [
  * is worse than no test. A genuine singular ending in `s` is named here.
  */
 const NOT_PLURAL: string[] = ["readiness"];
+
+/**
+ * PUT is admitted for state singletons ONLY, one reviewed row at a time (EPIC
+ * 023 decision 2, which reverses 019's blanket PUT non-goal). Every other row
+ * must use GET/POST/PATCH/DELETE.
+ */
+const PUT_ROWS = ["initiative.suspension.put"];
+
+function isAllowedPutRow(route: { method: string; id: string }): boolean {
+  return route.method !== "PUT" || PUT_ROWS.includes(route.id);
+}
 
 function staticSegmentsOf(path: string): string[] {
   return path
@@ -96,13 +112,12 @@ test("route policy: every ROUTES row satisfies the declared contract", () => {
     seenIds.add(route.id);
 
     assert.ok(
-      ["GET", "POST", "PATCH", "DELETE"].includes(route.method),
+      ["GET", "POST", "PUT", "PATCH", "DELETE"].includes(route.method),
       `method ${route.method} not allowed for ${route.id}`,
     );
-    assert.notEqual(
-      (route.method as string) === "PUT",
-      true,
-      "PUT must never appear",
+    assert.ok(
+      isAllowedPutRow(route),
+      `PUT is allowed only for a row named in PUT_ROWS (${route.id})`,
     );
 
     assert.ok(
@@ -273,6 +288,47 @@ test("path vocabulary negative control: a plural segment is rejected, the singul
   );
 });
 
+test("PUT policy negative control: a PUT row outside PUT_ROWS is rejected", () => {
+  assert.equal(
+    isAllowedPutRow({ method: "PUT", id: "initiative.suspension.put" }),
+    true,
+  );
+  assert.equal(
+    isAllowedPutRow({ method: "PUT", id: "task.approval.put" }),
+    false,
+  );
+  assert.equal(
+    isAllowedPutRow({ method: "POST", id: "task.approval.put" }),
+    true,
+  );
+});
+
+test("transition rows are item-scoped: every verdict path carries :id", () => {
+  const transitionSegments = [
+    "/approval",
+    "/rejection",
+    "/reattempt",
+    "/abandonment",
+    "/suspension",
+  ];
+  for (const route of ROUTES) {
+    if (!transitionSegments.some((seg) => route.path.includes(seg))) {
+      continue;
+    }
+    assert.ok(
+      route.path.includes("/:id/"),
+      `transition route ${route.id} (${route.path}) must be item-scoped`,
+    );
+    const segments = staticSegmentsOf(route.path);
+    const secondSegment = segments[1];
+    assert.ok(
+      secondSegment === undefined ||
+        !transitionSegments.includes(`/${secondSegment}`),
+      `route ${route.id} (${route.path}) has a collection-level transition segment`,
+    );
+  }
+});
+
 test("health.get row: decode ignores input and returns {}", () => {
   const row = ROUTES.find((r) => r.id === "health.get") as Route;
   assert.ok(row, "health.get row must exist");
@@ -298,8 +354,8 @@ test("health.get row: present returns a DTO with exactly status and version keys
   assert.deepEqual(Object.keys(view as object).sort(), ["status", "version"]);
 });
 
-test("ROUTES holds exactly 54 rows: 24 from 019+020, plus the 28 rows of EPIC 021, plus the 2 rows of EPIC 022", () => {
-  assert.equal(ROUTES.length, 54);
+test("ROUTES holds exactly 63 rows: 54 from 019+020+021+022, plus the 2 task-verdict rows of EPIC 023 Story S2, the 2 reattempt/abandonment rows of Story S3, the 3 objective verdict rows of Story S4, and the 2 suspension rows of Story S5", () => {
+  assert.equal(ROUTES.length, 63);
 });
 
 test("every route id from the EPIC 020 and 021 route tables is present in ROUTES", () => {
@@ -357,6 +413,15 @@ test("every route id from the EPIC 020 and 021 route tables is present in ROUTES
     "project.readiness.get",
     "event.list",
     "project.acknowledgement.create",
+    "task.approval.create",
+    "task.rejection.create",
+    "task.reattempt.create",
+    "task.abandonment.create",
+    "objective.approval.create",
+    "objective.rejection.create",
+    "objective.reattempt.create",
+    "initiative.suspension.put",
+    "initiative.suspension.delete",
   ];
   for (const id of expected) {
     assert.ok(ids.has(id), `missing route id ${id}`);

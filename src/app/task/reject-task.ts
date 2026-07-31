@@ -144,7 +144,7 @@ export class RejectTask {
     reason?: string;
     dryRun?: boolean;
     expectImpact?: string;
-  }): Promise<{ skipped: string[]; preview: DiscardPreview } | undefined> {
+  }): Promise<{ skipped: string[]; preview: DiscardPreview }> {
     const { taskId, resolution, reason, dryRun, expectImpact } = input;
 
     const task = this.#store.get(taskId);
@@ -153,22 +153,33 @@ export class RejectTask {
     }
 
     const result = this.#store.getTaskResult(taskId);
+    const storedResolution = result?.rejectionResolution ?? null;
 
     // (h-after-approve) completed task → conflict with "approved" decision
     if (task.status === "completed") {
       throw new RejectionConflictError(taskId, "approved", resolution);
     }
 
-    // (c) wrong status — `failed` is only accepted for `discard` (Story 05 §6);
-    // `retry` from `failed` is `retry task`'s job, not this one's.
-    if (
+    // (h-after-discard) already discarded — a real discard is terminal, so a
+    // repeat never reaches the (h-same)/(h-conflict) branches below via the
+    // general status guard. Same resolution stays idempotent (falls through
+    // to (h-same)); a different one is a conflict, mirroring the completed
+    // case above. This only applies when a resolution was actually stored by
+    // this use case — a task that reached `discarded` purely via cascade
+    // from another task's discard never went through a confirmed rejection
+    // here, so it falls to the general status guard below instead.
+    if (task.status === "discarded" && storedResolution !== null) {
+      if (storedResolution !== resolution) {
+        throw new RejectionConflictError(taskId, storedResolution, resolution);
+      }
+    } else if (
+      // (c) wrong status — `failed` is only accepted for `discard` (Story 05
+      // §6); `retry` from `failed` is `retry task`'s job, not this one's.
       task.status !== "awaiting_confirmation" &&
       !(task.status === "failed" && resolution === "discard")
     ) {
       throw new TaskNotAwaitingConfirmationError(taskId, task.status);
     }
-
-    const storedResolution = result?.rejectionResolution ?? null;
 
     // Story 3 (017) — `dryRun`/`expectImpact` never apply to `retry` (§A.9);
     // its preview is always the empty one. `initiativeId` is read here, before

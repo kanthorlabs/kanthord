@@ -511,7 +511,15 @@ Phases:
   this phase is a deliberate regression check on 021 — a lost update on a verdict
   screen is the risk that motivated the convention.
 - **I** — no bulk approval, and the gates still fire on a transition row:
-  `POST /api/task/approval` → `404 unknown_route`;
+  `POST /api/task/approval` → `405 method_not_allowed` — that path has the same
+  three-segment shape as the existing GET-only `/api/task/:id` row, so it
+  path-matches with `id="approval"` and loses on the method, not on the path
+  (`src/apps/http/router.ts:53-83`; `scripts/e2e/http-writes-proof.sh:427`
+  already asserts the same for `PUT /api/project/:id`). `405` is a slightly
+  weaker signal than `404` — it would keep passing if a later epic added an
+  item-level `POST /api/task/:id` — so decision 10's structural guarantee is
+  carried hermetically by `routes.test.ts`'s item-scope assertion, not by this
+  phase alone;
   `POST /api/task/<id>/approve` → `404 unknown_route`;
   `Content-Type: text/plain` → `415`; `Origin: http://127.0.0.1:1` → `403`; an
   unauthenticated `PUT` on the suspension → `401` and `paused` proves nothing was

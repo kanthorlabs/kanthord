@@ -84,6 +84,15 @@ export function buildServeCommand(deps: CliDeps, io: CliIo): Command {
         checkProject: deps.checkProject,
         readEventPage: deps.readEventPage,
         ackProject: deps.ackProject,
+        approveTask: deps.approveTask,
+        rejectTask: deps.rejectTask,
+        retryTask: deps.retryTask,
+        abandonTask: deps.abandonTask,
+        approveObjective: deps.approveObjective,
+        rejectObjective: deps.rejectObjective,
+        retryObjective: deps.retryObjective,
+        pauseInitiative: deps.pauseInitiative,
+        resumeInitiative: deps.resumeInitiative,
         newId: deps.newId,
       };
       const app = buildHttpApp(httpDeps, { apiKey });

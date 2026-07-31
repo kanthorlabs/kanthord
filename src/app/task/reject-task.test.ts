@@ -836,6 +836,70 @@ test("(S8) RejectTask discard: task.blocked is emitted only for direct dependent
 });
 
 // ---------------------------------------------------------------------------
+// (review blocker B1/B2) discarded-branch conflict must not fabricate a
+// stored resolution when none is actually stored (a cascade-discarded task).
+// ---------------------------------------------------------------------------
+
+test("(B2-1) RejectTask on an already-discarded task with a stored 'discard' resolution and a conflicting 'retry' request → RejectionConflictError with stored === 'discard'", async () => {
+  const discardedTask: Task = {
+    id: TASK_ID,
+    objectiveId: OBJ_ID,
+    title: "discarded task",
+    status: "discarded",
+    dependencies: [],
+  };
+  const store = new MemStore(
+    [discardedTask],
+    new Map([[TASK_ID, makeResultRow({ rejectionResolution: "discard" })]]),
+    INI_ID,
+  );
+  const uc = new RejectTask(store, new MemQueue(), new MemFeed(), new MemUow());
+
+  await assert.rejects(
+    () => uc.execute({ taskId: TASK_ID, resolution: "retry" }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof RejectionConflictError,
+        `must be RejectionConflictError; got: ${(err as Error).constructor.name}`,
+      );
+      assert.equal(
+        (err as RejectionConflictError).stored,
+        "discard",
+        "err.stored must be the real stored resolution",
+      );
+      return true;
+    },
+    "a genuinely conflicting resolution on a discarded task must throw RejectionConflictError",
+  );
+});
+
+test("(B2-2) RejectTask on an already-discarded task with NO stored resolution (cascade-discarded) → TaskNotAwaitingConfirmationError, not a fabricated RejectionConflictError", async () => {
+  const discardedTask: Task = {
+    id: TASK_ID,
+    objectiveId: OBJ_ID,
+    title: "cascade-discarded task",
+    status: "discarded",
+    dependencies: [],
+  };
+  // No result row at all — nothing was ever stored for this task; it reached
+  // `discarded` purely via cascade from another task's discard.
+  const store = new MemStore([discardedTask], new Map(), INI_ID);
+  const uc = new RejectTask(store, new MemQueue(), new MemFeed(), new MemUow());
+
+  await assert.rejects(
+    () => uc.execute({ taskId: TASK_ID, resolution: "discard" }),
+    (err: unknown) => {
+      assert.ok(
+        err instanceof TaskNotAwaitingConfirmationError,
+        `a cascade-discarded task with no stored resolution must throw TaskNotAwaitingConfirmationError, not a fabricated RejectionConflictError; got: ${(err as Error).constructor.name}`,
+      );
+      return true;
+    },
+    "no stored resolution on a discarded task must never fabricate a RejectionConflictError",
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Story 3 (017) — the confirm protocol: preview, dry-run, expectImpact,
 // in-transaction re-check, and preview/mutation sharing one cascade.
 // ---------------------------------------------------------------------------

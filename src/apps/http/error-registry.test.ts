@@ -36,6 +36,22 @@ import {
   CursorNotUlidError,
   CursorAheadOfFeedError,
 } from "../../app/project/ack-project.ts";
+import {
+  StaleCandidateError,
+  ObjectiveNotAwaitingConfirmationError,
+  TaskNotAwaitingConfirmationError,
+  ImpactChangedError,
+  ProposalWorkspaceMissingError,
+} from "../../app/errors.ts";
+import { RejectionConflictError } from "../../app/task/reject-task.ts";
+import { TaskNotRetryableError } from "../../app/task/retry-task.ts";
+import { ObjectiveNotRetryableError } from "../../app/objective/retry-objective.ts";
+import {
+  TaskNotAbandonableError,
+  NoRunningJobError,
+  AmbiguousRunningJobError,
+} from "../../app/task/abandon-task.ts";
+import { ProposalMissingError } from "../../app/task/approve-task.ts";
 import { InvalidInputError } from "./errors.ts";
 import {
   DOMAIN_ERROR_MAPPINGS,
@@ -151,8 +167,8 @@ test("TRANSPORT_ERRORS carries the two 021 precondition codes", () => {
 
 // ─── Story S3 — 21 domain mappings ──────────────────────────────────────────
 
-test("021 S3: DOMAIN_ERROR_MAPPINGS.length is 27 (4 existing + 21 new + 022 S1's 2 new)", () => {
-  assert.equal(DOMAIN_ERROR_MAPPINGS.length, 27);
+test("021 S3: DOMAIN_ERROR_MAPPINGS.length is 39 (27 existing + 023 S1's 12 new)", () => {
+  assert.equal(DOMAIN_ERROR_MAPPINGS.length, 39);
 });
 
 test("021 S3: one class per code — every mapping's type is unique", () => {
@@ -318,4 +334,96 @@ test("022 S1: registry hygiene still passes with the two new codes", () => {
   assert.equal(new Set(codes).size, codes.length, "codes must be unique");
   assert.ok(ALLOWED_STATUSES.has(cursorNotUlid.status));
   assert.ok(ALLOWED_STATUSES.has(cursorAheadOfFeed.status));
+});
+
+// ─── EPIC 023 Story S1 — the 12 verdict-row error mappings ──────────────────
+
+test("023 S1: mapError maps StaleCandidateError to stale_candidate/409", () => {
+  const err = new StaleCandidateError(
+    "o1",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  );
+  const mapped = mapError(err);
+  assert.equal(mapped.code, "stale_candidate");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps ObjectiveNotAwaitingConfirmationError to objective_not_awaiting_confirmation/409", () => {
+  const mapped = mapError(
+    new ObjectiveNotAwaitingConfirmationError("o1", "integrated"),
+  );
+  assert.equal(mapped.code, "objective_not_awaiting_confirmation");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps TaskNotAwaitingConfirmationError to task_not_awaiting_confirmation/409", () => {
+  const mapped = mapError(
+    new TaskNotAwaitingConfirmationError("t1", "completed"),
+  );
+  assert.equal(mapped.code, "task_not_awaiting_confirmation");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps ImpactChangedError to impact_changed/409", () => {
+  const mapped = mapError(new ImpactChangedError("d1", "d2"));
+  assert.equal(mapped.code, "impact_changed");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps RejectionConflictError to rejection_conflict/409", () => {
+  const mapped = mapError(new RejectionConflictError("t1", "discard", "retry"));
+  assert.equal(mapped.code, "rejection_conflict");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps TaskNotRetryableError to task_not_retryable/409", () => {
+  const mapped = mapError(new TaskNotRetryableError("t1", "pending"));
+  assert.equal(mapped.code, "task_not_retryable");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps ObjectiveNotRetryableError to objective_not_retryable/409", () => {
+  const mapped = mapError(new ObjectiveNotRetryableError("o1"));
+  assert.equal(mapped.code, "objective_not_retryable");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps TaskNotAbandonableError to task_not_abandonable/409", () => {
+  const mapped = mapError(new TaskNotAbandonableError("t1", "running"));
+  assert.equal(mapped.code, "task_not_abandonable");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps NoRunningJobError to no_running_job/409", () => {
+  const mapped = mapError(new NoRunningJobError("t1"));
+  assert.equal(mapped.code, "no_running_job");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps AmbiguousRunningJobError to ambiguous_running_job/409", () => {
+  const mapped = mapError(new AmbiguousRunningJobError("t1", 2));
+  assert.equal(mapped.code, "ambiguous_running_job");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps ProposalMissingError to proposal_missing/409", () => {
+  const mapped = mapError(new ProposalMissingError("t1"));
+  assert.equal(mapped.code, "proposal_missing");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: mapError maps ProposalWorkspaceMissingError to proposal_workspace_missing/409", () => {
+  const mapped = mapError(new ProposalWorkspaceMissingError("t1"));
+  assert.equal(mapped.code, "proposal_workspace_missing");
+  assert.equal(mapped.status, 409);
+});
+
+test("023 S1: registry hygiene still passes with the 12 new codes (27 + 12 = 39 mappings)", () => {
+  assert.equal(DOMAIN_ERROR_MAPPINGS.length, 39);
+  const codes: string[] = [
+    ...DOMAIN_ERROR_MAPPINGS.map((m) => m.code),
+    ...Object.values(TRANSPORT_ERRORS).map((m) => m.code),
+  ];
+  assert.equal(new Set(codes).size, codes.length, "codes must be unique");
 });

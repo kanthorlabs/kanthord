@@ -31,6 +31,9 @@ export {
   LandingConflictError,
   LandingCASMismatchError,
 } from "../landing/port.ts";
+// Impact types — re-exported so apps/ can present a discard preview without
+// importing domain/.
+export type { DiscardPreview, Damage, DamageEffect } from "../domain/impact.ts";
 
 import type { TaskStatus } from "../domain/task.ts";
 import type { ObjectiveStatus } from "../domain/initiative.ts";

@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 import request from "supertest";
 import { buildHttpApp } from "./app.ts";
 import type { HttpDeps } from "./deps.ts";
-import { UnknownReferenceError } from "../../app/errors.ts";
+import {
+  UnknownReferenceError,
+  WrongTypeReferenceError,
+} from "../../app/errors.ts";
 import type { GetInitiativeOutput } from "../../app/initiative/get-initiative.ts";
 import type { GetInitiativeGraphOutput } from "../../app/initiative/get-initiative-graph.ts";
 import type { GetObjectiveOutput } from "../../app/objective/get-objective.ts";
@@ -237,4 +240,220 @@ test("GET /api/objective/o1 forwards { id: 'o1' }", async () => {
     .set("Authorization", AUTH);
   assert.equal(res.status, 200);
   assert.deepEqual(received.getObjective, { id: "o1" });
+});
+
+// ─── EPIC 023 Story S5 — initiative.suspension.put, initiative.suspension.delete ───
+
+function makeSuspensionDeps(): {
+  deps: HttpDeps;
+  pauseInitiativeCalls: unknown[];
+  resumeInitiativeCalls: unknown[];
+  pauseThrows?: Error;
+  resumeThrows?: Error;
+} {
+  const state: {
+    pauseInitiativeCalls: unknown[];
+    resumeInitiativeCalls: unknown[];
+    pauseThrows?: Error;
+    resumeThrows?: Error;
+  } = { pauseInitiativeCalls: [], resumeInitiativeCalls: [] };
+  const deps: HttpDeps = {
+    logger: makeLogger(),
+    pauseInitiative: {
+      execute: async (input: unknown) => {
+        state.pauseInitiativeCalls.push(input);
+        if (state.pauseThrows) throw state.pauseThrows;
+      },
+    } as HttpDeps["pauseInitiative"],
+    resumeInitiative: {
+      execute: async (input: unknown) => {
+        state.resumeInitiativeCalls.push(input);
+        if (state.resumeThrows) throw state.resumeThrows;
+      },
+    } as HttpDeps["resumeInitiative"],
+  } as unknown as HttpDeps;
+  return Object.assign(state, { deps });
+}
+
+test("decode for initiative.suspension.put and .delete each produce exactly { initiativeId: 'i1' }; a blank id is 400 invalid_input", async () => {
+  const { deps, pauseInitiativeCalls, resumeInitiativeCalls } =
+    makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  await request(app.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.deepEqual(pauseInitiativeCalls[0], { initiativeId: "i1" });
+
+  await request(app.callback())
+    .delete("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH);
+  assert.deepEqual(resumeInitiativeCalls[0], { initiativeId: "i1" });
+
+  const blankPut = await request(app.callback())
+    .put("/api/initiative/%20/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(blankPut.status, 400);
+  assert.equal(blankPut.body.error.code, "invalid_input");
+
+  const blankDelete = await request(app.callback())
+    .delete("/api/initiative/%20/suspension")
+    .set("Authorization", AUTH);
+  assert.equal(blankDelete.status, 400);
+  assert.equal(blankDelete.body.error.code, "invalid_input");
+});
+
+test("PUT /api/initiative/i1/suspension calls pauseInitiative exactly once, resumeInitiative zero times, answers 204 with no body and no etag header", async () => {
+  const { deps, pauseInitiativeCalls, resumeInitiativeCalls } =
+    makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res.status, 204);
+  assert.equal(res.headers.etag, undefined);
+  assert.equal(res.body && Object.keys(res.body).length, 0);
+  assert.equal(pauseInitiativeCalls.length, 1);
+  assert.equal(resumeInitiativeCalls.length, 0);
+});
+
+test("two consecutive PUTs both answer 204 and call pauseInitiative twice (idempotent at the protocol level)", async () => {
+  const { deps, pauseInitiativeCalls } = makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res1 = await request(app.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  const res2 = await request(app.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res1.status, 204);
+  assert.equal(res2.status, 204);
+  assert.equal(pauseInitiativeCalls.length, 2);
+});
+
+test("DELETE /api/initiative/i1/suspension with no Content-Type answers 204 and calls resumeInitiative once", async () => {
+  const { deps, resumeInitiativeCalls } = makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .delete("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH);
+  assert.equal(res.status, 204);
+  assert.equal(resumeInitiativeCalls.length, 1);
+});
+
+test("two consecutive DELETEs both answer 204", async () => {
+  const { deps } = makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res1 = await request(app.callback())
+    .delete("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH);
+  const res2 = await request(app.callback())
+    .delete("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH);
+  assert.equal(res1.status, 204);
+  assert.equal(res2.status, 204);
+});
+
+test("PUT /api/initiative/i1/suspension with Content-Type: text/plain is 415 unsupported_media_type", async () => {
+  const { deps } = makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "text/plain")
+    .send("hi");
+  assert.equal(res.status, 415);
+  assert.equal(res.body.error.code, "unsupported_media_type");
+});
+
+test("PUT /api/initiative/i1/suspension with Origin: http://127.0.0.1:1 is 403 origin_not_allowed", async () => {
+  const { deps } = makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .set("Origin", "http://127.0.0.1:1")
+    .send({});
+  assert.equal(res.status, 403);
+  assert.equal(res.body.error.code, "origin_not_allowed");
+});
+
+test("a fake pauseInitiative raising UnknownReferenceError is 404 unknown_reference; WrongTypeReferenceError is 400 wrong_type_reference", async () => {
+  const notFound = makeSuspensionDeps();
+  notFound.pauseThrows = new UnknownReferenceError("initiative", "i1");
+  const app1 = buildHttpApp(notFound.deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res1 = await request(app1.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res1.status, 404);
+  assert.equal(res1.body.error.code, "unknown_reference");
+
+  const wrongType = makeSuspensionDeps();
+  wrongType.pauseThrows = new WrongTypeReferenceError(
+    "initiative",
+    "project",
+    "i1",
+  );
+  const app2 = buildHttpApp(wrongType.deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res2 = await request(app2.callback())
+    .put("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res2.status, 400);
+  assert.equal(res2.body.error.code, "wrong_type_reference");
+});
+
+test("POST /api/initiative/i1/suspension is 405 with an Allow header containing both DELETE and PUT", async () => {
+  const { deps } = makeSuspensionDeps();
+  const app = buildHttpApp(deps, {
+    apiKey: KEY,
+    newRequestId: () => REQUEST_ID,
+  });
+  const res = await request(app.callback())
+    .post("/api/initiative/i1/suspension")
+    .set("Authorization", AUTH)
+    .set("Content-Type", "application/json")
+    .send({});
+  assert.equal(res.status, 405);
+  assert.equal(res.headers.allow, "DELETE, PUT");
 });
