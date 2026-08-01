@@ -8,6 +8,7 @@ import { Link, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AsyncBoundary } from "@/components/async-boundary";
+import { CreateInitiative } from "@/components/create-initiative";
 import { FreshnessBar } from "@/components/freshness-bar";
 import { StatusChip } from "@/components/status-chip";
 import { CommandHandoff } from "@/components/command-handoff";
@@ -87,6 +88,8 @@ export function ProjectOverviewPage(): ReactElement {
           {poll.error.message}
         </p>
       )}
+
+      {query.data && <CreateInitiative projectId={projectId} />}
 
       <AsyncBoundary
         state={state}

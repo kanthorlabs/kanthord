@@ -1,10 +1,14 @@
 // Story 01 — EntityTaskPage: reads params, uses chain hook, renders workspace.
 // Story 05 — five tabs: Summary, Instructions & AC, Dependencies, Result, Landing.
+// Story 07 — DependencyEditor on the Dependencies tab.
 import type { ReactElement } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useTaskChain } from "@/app/entity-chain";
 import { ActionInventory } from "@/components/action-inventory";
+import { DependencyEditor } from "@/components/dependency-editor";
 import { EntityWorkspace } from "@/components/entity-workspace";
 import { EntityStatus } from "@/lib/status-display";
 import {
@@ -16,6 +20,9 @@ import {
   TableBody,
 } from "@/components/ui/table";
 import { siblingTaskHref } from "@/lib/entity-scope";
+import { fetchTasks } from "@/lib/api-client";
+import { taskKeys } from "@/lib/query-keys";
+import { invalidateFor } from "@/lib/invalidation";
 
 // --- DependencyId (decision 6: link only when in same objective) ---
 
@@ -214,6 +221,12 @@ function TaskDependencies({
   readonly objectiveId: string;
   readonly siblingIds: readonly string[] | undefined;
 }): ReactElement {
+  const queryClient = useQueryClient();
+  const candidateQuery = useQuery({
+    queryKey: taskKeys.list(initiativeId),
+    queryFn: ({ signal }) => fetchTasks(initiativeId, undefined, { signal }),
+    staleTime: Infinity,
+  });
   const hasDeps =
     task.dependencyStatus !== undefined && task.dependencyStatus.length > 0;
 
@@ -251,6 +264,29 @@ function TaskDependencies({
           <p data-testid="empty-task-dependencies">No dependencies.</p>
         )}
       </section>
+
+      {candidateQuery.data !== undefined && (
+        <DependencyEditor
+          kind="task"
+          sourceId={task.id}
+          sourceLabel={task.title}
+          dependencies={task.dependencies}
+          candidates={candidateQuery.data.map((t) => ({
+            id: t.id,
+            label: t.title,
+          }))}
+          labelOf={(id) => {
+            const found = candidateQuery.data.find((t) => t.id === id);
+            return found !== undefined ? found.title : id;
+          }}
+          onWritten={() =>
+            invalidateFor(queryClient, "dependency.write", {
+              projectId,
+              entityKey: taskKeys.detail(task.id),
+            })
+          }
+        />
+      )}
 
       <section data-testid="task-waiting">
         {task.waiting.length === 0 ? (

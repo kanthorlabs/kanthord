@@ -25,6 +25,8 @@ export interface EntityWorkspaceProps {
   readonly name: string;
   /** Fixed per page; `[]` until Stories 03/04/05/07 fill it. */
   readonly tabs: readonly EntityTab[];
+  /** Actions rendered in the header area (rename controls, etc.). */
+  readonly actions?: ReactNode;
 }
 
 export function EntityWorkspace({
@@ -34,6 +36,7 @@ export function EntityWorkspace({
   kindLabel,
   name,
   tabs,
+  actions,
 }: EntityWorkspaceProps): ReactElement {
   return (
     <ProjectShell projectId={projectId} segments={segments}>
@@ -49,9 +52,16 @@ export function EntityWorkspace({
         )
       ) : (
         <div className="flex flex-col gap-4">
-          <header data-testid="entity-header" data-kind={kindLabel}>
-            <p className="text-muted-foreground text-xs">{kindLabel}</p>
-            <h1 className="text-lg font-semibold">{name}</h1>
+          <header
+            data-testid="entity-header"
+            data-kind={kindLabel}
+            className="flex items-center justify-between"
+          >
+            <div>
+              <p className="text-muted-foreground text-xs">{kindLabel}</p>
+              <h1 className="text-lg font-semibold">{name}</h1>
+            </div>
+            {actions}
           </header>
           {tabs.length > 0 && (
             <Tabs defaultValue={tabs[0]!.value}>

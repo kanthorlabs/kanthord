@@ -462,23 +462,88 @@ describe("initiative workspace tabs", () => {
     });
   });
 
-  // --- no mutation ---
+  // --- write controls (026.4 S5 — rename) ---
 
-  test("no mutation: no accessible button or link matching mutation patterns, no forms", async () => {
+  test("rename: Rename button renders as rename-open, no other mutation controls", async () => {
     initiativeUrl();
     await waitFor(() => {
       expect(screen.getByTestId("entity-header")).toBeInTheDocument();
     });
 
-    const mutationPattern = /new|create|edit|rename|delete|pause|resume/i;
+    // Rename button (from RenameInitiative) renders
+    const renameBtn = screen.getByTestId("rename-open");
+    expect(renameBtn).toBeInTheDocument();
+    expect(renameBtn).toHaveTextContent("Rename");
+
+    // No other mutation buttons (no new, create, delete, pause, resume)
+    const mutationPattern = /new|create|edit|delete|pause|resume/i;
     const buttons = screen.getAllByRole("button");
     for (const btn of buttons) {
+      if (btn === renameBtn) continue;
       expect(btn.textContent).not.toMatch(mutationPattern);
     }
     const links = screen.queryAllByRole("link");
     for (const link of links) {
       expect(link.textContent).not.toMatch(mutationPattern);
     }
-    expect(document.querySelectorAll("form")).toHaveLength(0);
+  });
+
+  // --- B8: DependencyEditor mounts in Dependencies tab ---
+
+  test("B8: DependencyEditor mounts in Dependencies tab with kind initiative; tab set unchanged; dependency-add present when zero edges", async () => {
+    const user = userEvent.setup();
+    mockAll({
+      initiativeDetail: {
+        ...INITIATIVE_DETAIL,
+        after: [],
+        waiting: [],
+      },
+    });
+    const router = createMemoryRouter(ROUTE_TREE, {
+      initialEntries: ["/project/p1/initiative/i1"],
+    });
+    renderWithQuery(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: "Dependencies" }),
+      ).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("tab", { name: "Dependencies" }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("dependency-add")).toBeInTheDocument();
+    });
+
+    // Tab set unchanged
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Summary", "Objectives", "Dependencies"]);
+
+    // dependency-add present when zero edges
+    expect(screen.getByTestId("dependency-add")).toBeInTheDocument();
+
+    // Precondition note is always visible
+    expect(
+      screen.getByTestId("dependency-precondition-note"),
+    ).toBeInTheDocument();
+  });
+
+  // --- B9: create-objective inside objectives panel ---
+
+  test("B9: create-objective renders inside objectives panel, absent while summary tab active", async () => {
+    initiativeUrl();
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Summary" })).toBeInTheDocument();
+    });
+
+    // Summary tab is default — create-objective should NOT be present
+    expect(screen.queryByTestId("create-objective")).not.toBeInTheDocument();
+
+    // Click Objectives tab
+    await userEvent.click(screen.getByRole("tab", { name: "Objectives" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-objective")).toBeInTheDocument();
+    });
   });
 });

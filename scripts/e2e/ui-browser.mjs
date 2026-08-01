@@ -64,6 +64,7 @@ let exitCode = 0;
 try {
   const context = await browser.newContext({
     httpCredentials: { username: "kanthord", password: args.key },
+    serviceWorkers: "block",
   });
   const page = await context.newPage();
   page.on("console", (msg) => {
@@ -116,6 +117,28 @@ try {
   const count = async (selector) => page.locator(selector).count();
   const visible = async (selector) =>
     page.locator(selector).first().isVisible();
+  const waitVisible = async (selector, timeout = 10_000) => {
+    await page.locator(selector).first().waitFor({ state: "visible", timeout });
+  };
+  const activeText = async (
+    selector,
+    { interval = 200, stableMs = 500, timeout = 10_000 } = {},
+  ) => {
+    const deadline = Date.now() + timeout;
+    let prev = "";
+    let stableSince = 0;
+    while (Date.now() < deadline) {
+      const cur = await text(selector);
+      if (cur === prev) {
+        if (Date.now() - stableSince >= stableMs) return cur;
+      } else {
+        prev = cur;
+        stableSince = Date.now();
+      }
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    return prev;
+  };
 
   const steps = (await import(args.script)).default;
   await steps({
@@ -125,6 +148,8 @@ try {
     text,
     count,
     visible,
+    waitVisible,
+    activeText,
     consoleErrors,
     requests,
     responses,

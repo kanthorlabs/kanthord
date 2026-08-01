@@ -325,6 +325,9 @@ describe("ProjectOverviewPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("async-empty")).toBeInTheDocument();
     });
+    expect(screen.getByTestId("async-empty")).toHaveTextContent(
+      "No initiatives results",
+    );
     expect(screen.queryByTestId("async-error")).not.toBeInTheDocument();
     // Decisions and digest still render
     expect(screen.getByTestId("overview-decisions")).toBeInTheDocument();
@@ -381,7 +384,7 @@ describe("ProjectOverviewPage", () => {
     });
   });
 
-  test("decision 8: no create/rename/delete control", async () => {
+  test("decision 8: no rename/delete control; create-initiative renders for new initiatives", async () => {
     fetchProjectOverviewMock.mockResolvedValue(fixture);
     renderOverview(fixture);
 
@@ -389,14 +392,20 @@ describe("ProjectOverviewPage", () => {
       expect(screen.getAllByTestId("overview-initiative-card")).toHaveLength(2);
     });
 
-    const buttons = screen.queryAllByRole("button", {
-      name: /new|create|rename|delete/i,
+    // No rename/delete controls
+    const deleteButtons = screen.queryAllByRole("button", {
+      name: /rename|delete/i,
     });
-    expect(buttons).toHaveLength(0);
+    expect(deleteButtons).toHaveLength(0);
 
-    const links = screen.queryAllByRole("link", {
-      name: /new|create|rename|delete/i,
+    const deleteLinks = screen.queryAllByRole("link", {
+      name: /rename|delete/i,
     });
-    expect(links).toHaveLength(0);
+    expect(deleteLinks).toHaveLength(0);
+
+    // Create-initiative button is present (026.4 S5)
+    expect(screen.getByTestId("create-initiative")).toHaveTextContent(
+      "New initiative",
+    );
   });
 });

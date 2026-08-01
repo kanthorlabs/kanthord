@@ -10,16 +10,19 @@ import type { ActionDto } from "@/lib/dto";
  * a statement about what this UI has built, NOT a client-side mirror of the
  * daemon's route table: "a route exists" and "the browser can drive it" are
  * different properties, and only the second one decides what renders.
- *
- * `remove-dependency` is here because `DELETE /api/task/:id/dependency/:dependencyId`
- * exists (`src/apps/http/routes.ts:838-850`, index.md F9) and EPIC 026.4 wires
- * it. 026.4 removes its own entry when it does.
  */
 export const ACTION_KINDS_DEFERRED_TO_LATER_EPICS: Readonly<
   Record<string, string>
-> = {
-  "remove-dependency": "026.4",
-};
+> = {};
+
+/**
+ * Action kinds driven entirely by the UI (e.g. dependency editor). These
+ * rows are skipped in the action inventory because the UI renders its own
+ * controls for them elsewhere.
+ */
+export const ACTION_KINDS_DRIVEN_BY_UI: ReadonlySet<string> = new Set([
+  "remove-dependency",
+]);
 
 /** `src/domain/actionability.ts:9-15`. */
 export const ACTION_KIND_LABEL: Readonly<Record<string, string>> = {
@@ -47,7 +50,10 @@ export function ActionInventory({
   // 2. action.kind in ACTION_KINDS_DEFERRED_TO_LATER_EPICS → return null
   if (action.kind in ACTION_KINDS_DEFERRED_TO_LATER_EPICS) return null;
 
-  // 3. otherwise render the disabled control
+  // 3. action.kind in ACTION_KINDS_DRIVEN_BY_UI → return null
+  if (ACTION_KINDS_DRIVEN_BY_UI.has(action.kind)) return null;
+
+  // 4. otherwise render the disabled control
   return (
     <section
       data-testid="disabled-action"

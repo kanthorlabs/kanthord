@@ -19,6 +19,7 @@ import { ProjectResourcesPage } from "@/pages/project-resources";
 import { EntityInitiativePage } from "@/pages/entity-initiative";
 import { EntityObjectivePage } from "@/pages/entity-objective";
 import { EntityTaskPage } from "@/pages/entity-task";
+import { EntityTaskCreatePage } from "@/pages/entity-task-create";
 import { EntityResourcePage } from "@/pages/entity-resource";
 import { GlobalShell, ProjectShell } from "@/components/shell";
 import { AsyncBoundary } from "@/components/async-boundary";
@@ -51,6 +52,10 @@ export const ROUTE_TABLE: readonly AppRoute[] = [
   },
   {
     path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId",
+    kind: "screen",
+  },
+  {
+    path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId/task/new",
     kind: "screen",
   },
   {
@@ -168,6 +173,10 @@ export function createAppRouter(queryClient?: QueryClient) {
     {
       path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId",
       element: <EntityObjectivePage />,
+    },
+    {
+      path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId/task/new",
+      element: <EntityTaskCreatePage />,
     },
     {
       path: "/project/:projectId/initiative/:initiativeId/objective/:objectiveId/task/:taskId",

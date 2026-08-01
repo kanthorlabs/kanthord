@@ -1030,9 +1030,9 @@ describe("no mutation", () => {
     fetchResourcesMock.mockResolvedValue([]);
   }
 
-  test("no form elements and no mutation-named buttons or links across all entity pages", async () => {
+  test("no unexpected write controls: rename-open is the only active mutation control on initiative/objective; task and resource pages have no mutation buttons", async () => {
     const MUTATION =
-      /new|create|edit|rename|delete|retry|approve|reject|abandon|publish|resume/i;
+      /new|create|edit|delete|retry|approve|reject|abandon|publish|resume/i;
 
     const entityUrls = [
       "/project/p1/initiative/i1",
@@ -1063,12 +1063,25 @@ describe("no mutation", () => {
         expect(screen.getByTestId("entity-header")).toBeInTheDocument();
       });
 
+      // No forms open by default (rename/crate forms are Sheet-based)
       expect(document.querySelectorAll("form")).toHaveLength(0);
-      const controls = [
+
+      // No mutation-named buttons/links besides rename-open
+      const mutationControls = [
         ...screen.queryAllByRole("button", { name: MUTATION }),
         ...screen.queryAllByRole("link", { name: MUTATION }),
       ];
-      for (const c of controls) expect(c).toBeDisabled();
+      for (const c of mutationControls) expect(c).toBeDisabled();
+
+      // Initiative and objective pages have rename-open (active, not disabled)
+      if (
+        url === "/project/p1/initiative/i1" ||
+        url === "/project/p1/initiative/i1/objective/o1"
+      ) {
+        const renameBtn = screen.getByTestId("rename-open");
+        expect(renameBtn).toBeInTheDocument();
+        expect(renameBtn).not.toBeDisabled();
+      }
 
       unmount();
       cleanup();

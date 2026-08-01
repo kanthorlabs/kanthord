@@ -696,24 +696,71 @@ describe("objective workspace tabs", () => {
     expect(fetchTasksMock).not.toHaveBeenCalled();
   });
 
-  // --- no mutation ---
+  // --- write controls (026.4 S5 — rename) ---
 
-  test("no mutation: no accessible button or link matching mutation patterns, no forms", async () => {
+  test("rename: Rename button renders as rename-open, no other mutation controls", async () => {
     objectiveUrl();
     await waitFor(() => {
       expect(screen.getByTestId("entity-header")).toBeInTheDocument();
     });
 
-    const mutationPattern =
-      /new|create|edit|rename|delete|approve|reject|retry/i;
+    // Rename button (from RenameObjective) renders
+    const renameBtn = screen.getByTestId("rename-open");
+    expect(renameBtn).toBeInTheDocument();
+    expect(renameBtn).toHaveTextContent("Rename");
+
+    // No other mutation buttons (no new, create, edit, delete, approve, reject, retry)
+    const mutationPattern = /new|create|edit|delete|approve|reject|retry/i;
     const buttons = screen.getAllByRole("button");
     for (const btn of buttons) {
+      if (btn === renameBtn) continue;
       expect(btn.textContent).not.toMatch(mutationPattern);
     }
     const links = screen.queryAllByRole("link");
     for (const link of links) {
       expect(link.textContent).not.toMatch(mutationPattern);
     }
-    expect(document.querySelectorAll("form")).toHaveLength(0);
+  });
+
+  // --- B8: DependencyEditor mounts in Summary panel ---
+
+  test("B8: DependencyEditor mounts in Summary panel with kind objective; tab set unchanged; dependency-add present when zero edges", async () => {
+    objectiveUrl();
+    await waitFor(() => {
+      expect(screen.getByTestId("entity-header")).toBeInTheDocument();
+    });
+
+    // Summary tab is default, DependencyEditor should be present with dependency-add
+    await waitFor(() => {
+      expect(screen.getByTestId("dependency-add")).toBeInTheDocument();
+    });
+
+    // Tab set unchanged
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Summary", "Tasks", "Integration"]);
+  });
+
+  // --- B9: create-task link in Tasks panel ---
+
+  test("B9: create-task links to task/new URL and tab set unchanged", async () => {
+    objectiveUrl();
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Tasks" })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("tab", { name: "Tasks" }));
+    await waitFor(() => {
+      expect(screen.getByTestId("create-task")).toBeInTheDocument();
+    });
+
+    const link = screen.getByTestId("create-task");
+    expect(link).toHaveAttribute(
+      "href",
+      "/project/p1/initiative/i1/objective/o1/task/new",
+    );
+
+    // Tab set unchanged
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs).toEqual(["Summary", "Tasks", "Integration"]);
   });
 });

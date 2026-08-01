@@ -12,6 +12,11 @@ import {
   fetchProjectOverview,
   fetchResources,
   fetchResource,
+  apiGetWithEtag,
+  apiPatch,
+  apiPostCreated,
+  apiPostNoContent,
+  apiDeleteNoContent,
 } from "./api-client";
 import { apiBaseUrl } from "./runtime";
 
@@ -346,5 +351,367 @@ describe("ApiError from helpers", () => {
       });
     });
     restore();
+  });
+});
+
+// --- Story 01: write transport helpers ---
+
+function stubFetchWithHeaders(
+  status: number,
+  body: unknown,
+  responseHeaders: Record<string, string> = {},
+): { calls: RecordedCall[]; restore: () => void } {
+  const calls: RecordedCall[] = [];
+  const spy = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (input, init) => {
+      const headers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(
+        (init?.headers ?? {}) as Record<string, string>,
+      )) {
+        headers[k.toLowerCase()] = v;
+      }
+      calls.push({ url: String(input), headers });
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: {
+          "content-type": "application/json",
+          ...responseHeaders,
+        },
+      });
+    });
+  return { calls, restore: () => spy.mockRestore() };
+}
+
+describe("apiGetWithEtag", () => {
+  test("200 with etag returns data and etag", async () => {
+    const { calls, restore } = stubFetchWithHeaders(
+      200,
+      { data: { id: "p1", name: "test" } },
+      { etag: '"abc"' },
+    );
+    await withRuntime(undefined, async () => {
+      const result = await apiGetWithEtag<{ id: string; name: string }>(
+        "/api/project/p1",
+      );
+      expect(result).toEqual({
+        data: { id: "p1", name: "test" },
+        etag: '"abc"',
+      });
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual(["accept"]);
+    restore();
+  });
+
+  test("200 with no etag header throws ApiError(500, missing_etag)", async () => {
+    const { restore } = stubFetchWithHeaders(200, { data: {} });
+    await withRuntime(undefined, async () => {
+      await expect(apiGetWithEtag("/api/project/p1")).rejects.toMatchObject({
+        name: "ApiError",
+        status: 500,
+        code: "missing_etag",
+      });
+    });
+    restore();
+  });
+});
+
+describe("apiPatch", () => {
+  test("sends method PATCH, headers exactly accept/content-type/if-match, if-match byte-identical", async () => {
+    const { calls, restore } = stubFetchWithHeaders(
+      200,
+      { data: { id: "p1", name: "x" } },
+      { etag: '"v2"' },
+    );
+    await withRuntime(undefined, async () => {
+      const result = await apiPatch<{ id: string; name: string }>(
+        "/api/project/p1",
+        { name: "x" },
+        '"abc"',
+      );
+      expect(result).toEqual({ data: { id: "p1", name: "x" }, etag: '"v2"' });
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual([
+      "accept",
+      "content-type",
+      "if-match",
+    ]);
+    expect(calls[0]?.headers["if-match"]).toBe('"abc"');
+    restore();
+  });
+
+  test("412 throws ApiError with code from envelope", async () => {
+    const { restore } = stubFetchWithHeaders(412, {
+      error: {
+        code: "precondition_failed",
+        message: "precondition failed",
+        requestId: "r1",
+      },
+    });
+    await withRuntime(undefined, async () => {
+      await expect(
+        apiPatch("/api/project/p1", { name: "x" }, '"abc"'),
+      ).rejects.toMatchObject({
+        name: "ApiError",
+        status: 412,
+        code: "precondition_failed",
+        requestId: "r1",
+      });
+    });
+    restore();
+  });
+
+  test("428 throws ApiError with status 428", async () => {
+    const { restore } = stubFetchWithHeaders(428, {
+      error: {
+        code: "precondition_required",
+        message: "precondition required",
+      },
+    });
+    await withRuntime(undefined, async () => {
+      await expect(
+        apiPatch("/api/project/p1", { name: "x" }, '"abc"'),
+      ).rejects.toMatchObject({
+        name: "ApiError",
+        status: 428,
+      });
+    });
+    restore();
+  });
+
+  test("404 throws ApiError with status 404", async () => {
+    const { restore } = stubFetchWithHeaders(404, {
+      error: { code: "not_found" },
+    });
+    await withRuntime(undefined, async () => {
+      await expect(
+        apiPatch("/api/project/p1", { name: "x" }, '"abc"'),
+      ).rejects.toMatchObject({
+        name: "ApiError",
+        status: 404,
+      });
+    });
+    restore();
+  });
+});
+
+describe("apiPostCreated", () => {
+  test("201 with location returns data and location", async () => {
+    const { restore } = stubFetchWithHeaders(
+      201,
+      { data: { id: "i1" } },
+      { location: "/api/initiative/i1" },
+    );
+    await withRuntime(undefined, async () => {
+      const result = await apiPostCreated<{ id: string }>(
+        "/api/project/p1/initiative",
+        { name: "test" },
+      );
+      expect(result).toEqual({
+        data: { id: "i1" },
+        location: "/api/initiative/i1",
+      });
+    });
+    restore();
+  });
+
+  test("201 with no Location header throws ApiError(500, missing_location)", async () => {
+    const { restore } = stubFetchWithHeaders(201, { data: { id: "i1" } });
+    await withRuntime(undefined, async () => {
+      await expect(
+        apiPostCreated("/api/project/p1/initiative", { name: "test" }),
+      ).rejects.toMatchObject({
+        name: "ApiError",
+        status: 500,
+        code: "missing_location",
+      });
+    });
+    restore();
+  });
+
+  test("200 (wrong status) throws ApiError with status 200", async () => {
+    const { restore } = stubFetchWithHeaders(200, { data: { id: "i1" } });
+    await withRuntime(undefined, async () => {
+      await expect(
+        apiPostCreated("/api/project/p1/initiative", { name: "test" }),
+      ).rejects.toMatchObject({
+        name: "ApiError",
+        status: 200,
+      });
+    });
+    restore();
+  });
+});
+
+describe("apiPostNoContent and apiDeleteNoContent", () => {
+  test("204 resolves to undefined and does not parse body", async () => {
+    const jsonSpy = vi.spyOn(Response.prototype, "json");
+    // jsdom's Response constructor rejects 204; use a manual mock
+    const calls: RecordedCall[] = [];
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(
+          (init?.headers ?? {}) as Record<string, string>,
+        )) {
+          headers[k.toLowerCase()] = v;
+        }
+        calls.push({ url: String(input), headers });
+        return {
+          status: 204,
+          ok: false,
+          headers: new Headers({ "content-type": "application/json" }),
+          json: async () => ({}),
+        } as unknown as Response;
+      });
+    await withRuntime(undefined, async () => {
+      const result = await apiPostNoContent("/api/task/t1/dependency", {
+        dependencyId: "t2",
+      });
+      expect(result).toBeUndefined();
+    });
+    // 204 path should not call response.json()
+    expect(jsonSpy).not.toHaveBeenCalled();
+    jsonSpy.mockRestore();
+    spy.mockRestore();
+  });
+
+  test("apiDeleteNoContent 204 resolves to undefined", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      return {
+        status: 204,
+        ok: false,
+        headers: new Headers({ "content-type": "application/json" }),
+        json: async () => ({}),
+      } as unknown as Response;
+    });
+    await withRuntime(undefined, async () => {
+      const result = await apiDeleteNoContent("/api/task/t1/dependency/t2");
+      expect(result).toBeUndefined();
+    });
+    spy.mockRestore();
+  });
+
+  test("apiPostNoContent on 409 throws ApiError with code from envelope", async () => {
+    const { restore } = stubFetch(409, {
+      error: {
+        code: "cycle_detected",
+        message: "That edge would close a cycle.",
+      },
+    });
+    await withRuntime(undefined, async () => {
+      await expect(
+        apiPostNoContent("/api/task/t1/dependency", { dependencyId: "t2" }),
+      ).rejects.toMatchObject({
+        name: "ApiError",
+        status: 409,
+        code: "cycle_detected",
+      });
+    });
+    restore();
+  });
+});
+
+describe("R3 — no Authorization header in write helpers", () => {
+  test("apiGetWithEtag sets only accept", async () => {
+    const { calls, restore } = stubFetchWithHeaders(
+      200,
+      { data: {} },
+      { etag: '"x"' },
+    );
+    await withRuntime(undefined, async () => {
+      await apiGetWithEtag("/api/project/p1");
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual(["accept"]);
+    restore();
+  });
+
+  test("apiPatch sets only accept, content-type, if-match", async () => {
+    const { calls, restore } = stubFetchWithHeaders(
+      200,
+      { data: {} },
+      { etag: '"x"' },
+    );
+    await withRuntime(undefined, async () => {
+      await apiPatch("/api/project/p1", { name: "x" }, '"abc"');
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual([
+      "accept",
+      "content-type",
+      "if-match",
+    ]);
+    restore();
+  });
+
+  test("apiPostCreated sets only accept, content-type", async () => {
+    const { calls, restore } = stubFetchWithHeaders(
+      201,
+      { data: {} },
+      { location: "/x" },
+    );
+    await withRuntime(undefined, async () => {
+      await apiPostCreated("/api/project", { name: "x" });
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual([
+      "accept",
+      "content-type",
+    ]);
+    restore();
+  });
+
+  test("apiPostNoContent sets only accept, content-type", async () => {
+    const calls: RecordedCall[] = [];
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(
+          (init?.headers ?? {}) as Record<string, string>,
+        )) {
+          headers[k.toLowerCase()] = v;
+        }
+        calls.push({ url: String(input), headers });
+        return {
+          status: 204,
+          ok: false,
+          headers: new Headers({ "content-type": "application/json" }),
+          json: async () => ({}),
+        } as unknown as Response;
+      });
+    await withRuntime(undefined, async () => {
+      await apiPostNoContent("/api/task/t1/dependency", { dependencyId: "t2" });
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual([
+      "accept",
+      "content-type",
+    ]);
+    spy.mockRestore();
+  });
+
+  test("apiDeleteNoContent sets only accept", async () => {
+    const calls: RecordedCall[] = [];
+    const spy = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const headers: Record<string, string> = {};
+        for (const [k, v] of Object.entries(
+          (init?.headers ?? {}) as Record<string, string>,
+        )) {
+          headers[k.toLowerCase()] = v;
+        }
+        calls.push({ url: String(input), headers });
+        return {
+          status: 204,
+          ok: false,
+          headers: new Headers({ "content-type": "application/json" }),
+          json: async () => ({}),
+        } as unknown as Response;
+      });
+    await withRuntime(undefined, async () => {
+      await apiDeleteNoContent("/api/task/t1/dependency/t2");
+    });
+    expect(Object.keys(calls[0]?.headers ?? {})).toEqual(["accept"]);
+    spy.mockRestore();
   });
 });

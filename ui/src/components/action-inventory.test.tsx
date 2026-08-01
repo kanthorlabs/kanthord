@@ -23,7 +23,7 @@ describe("ActionInventory", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  test("remove-dependency (deferred to later epic) → zero disabled-action, zero command-handoff even though command supplied", () => {
+  test("remove-dependency (026.4 S7 — UI-driven kind) → row skipped, no disabled-action renders", () => {
     renderInventory({
       kind: "remove-dependency",
       target: { type: "task", id: "t1" },
@@ -31,8 +31,10 @@ describe("ActionInventory", () => {
       requiresInput: [],
       command: "remove dependency --task t1 --dependency tB",
     });
-    expect(screen.queryAllByTestId("disabled-action")).toHaveLength(0);
-    expect(screen.queryAllByTestId("command-handoff")).toHaveLength(0);
+    // remove-dependency is in ACTION_KINDS_DRIVEN_BY_UI — the row is skipped
+    // because the UI renders its own DependencyEditor for this action.
+    expect(screen.queryByTestId("disabled-action")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("command-handoff")).not.toBeInTheDocument();
   });
 
   test("retry with command → disabled-action, button reads Retry, disabled, reason, command-handoff with exact command, zero no-command", () => {

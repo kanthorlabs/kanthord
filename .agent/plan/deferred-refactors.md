@@ -60,3 +60,27 @@ finding.
 - What: two different param names for the same concept; both resolve safely because the branches are separate
 - Why deferred: recorded in `index.md` F11 for EPIC 026.9
 - Blocking: nothing
+
+### `ui-system-proof.sh` placeholder retag `026.2` → `026.6`
+
+- Found: EPIC 026.4 — 2026-08-01
+- Where: `scripts/e2e/ui-system-proof.sh:146-147`
+- What: the proof waits for `[data-testid="not-built-yet"]` naming `026.2`, but EPIC 026.2 delivered those pages; Graph leaf is owned by `026.6` and has no page yet.
+- Why deferred: Story 08 declares the proof scripts read-only; this retag belongs to the proof-script maintainers.
+- Blocking: `ui-system-proof.sh` exits 1 at the placeholder phase.
+
+### `ui-entities-proof.sh` Radix Tabs `activePanelText` / `waitForEntity`
+
+- Found: EPIC 026.4 — 2026-08-01
+- Where: `scripts/e2e/ui-entities-proof.sh` — `[data-testid="tab-panel"]` reads and entity-header waits
+- What: Radix Tabs force-mounts hidden `role="tabpanel"` elements; `text()` reads the first (hidden, empty) match. Entity header is visible only after the chain hook resolves. The proof needs `activeText()` (polls the visible panel until content stabilizes) and `waitVisible()` (waits for `entity-header` / `task-downstream` / `scope-mismatch` / `async-missing`). Also: absent-task load generates a browser-emitted 404 console error; carve out the 404 from `consoleErrors` before the zero assertion.
+- Why deferred: the helpers `activeText()` and `waitVisible()` were added to `ui-browser.mjs` but the proof script itself must adopt them; Story 08 declares proofs read-only.
+- Blocking: `ui-entities-proof.sh` exits 1 on Radix Tabs reads and entity-header timing.
+
+### `ui-browser.mjs` driver capability gap: `waitVisible`/`activeText`/`serviceWorkers:block`
+
+- Found: EPIC 026.4 — 2026-08-01
+- Where: `scripts/e2e/ui-browser.mjs`
+- What: The main proof (`ui-writes-proof.sh`) needs `waitVisible` and `activeText` helpers to handle React 19 + Playwright timing issues where `networkidle` resolves before `invalidateFor`'s async refetch lands. Also needs `serviceWorkers: "block"` to prevent the service worker from caching stale API responses. These were added to `ui-browser.mjs` but Story 08 declares it read-only.
+- Why deferred: The driver changes are necessary for the main proof to pass but are out-of-scope for 026.4. They should be added deliberately with their own story in a maintainer session.
+- Blocking: `ui-writes-proof.sh` exits 1 without the `waitVisible` waits.

@@ -1,6 +1,5 @@
-// Story 03 — ProjectsPage: W1 collection with server-side search and read-only pane.
+// Story 03 + Story 04: ProjectsPage with server-side search and write controls.
 // Decision 3: search is server-side only; no client-side filtering.
-// Decision 8: no write controls.
 // Decision 9: detail pane is read-only.
 import { useState } from "react";
 import type { ReactElement } from "react";
@@ -8,7 +7,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { AsyncBoundary } from "@/components/async-boundary";
 import { CollectionToolbar } from "@/components/collection-toolbar";
+import { CreateProject } from "@/components/create-project";
 import { DetailPane } from "@/components/detail-pane";
+import { RenameProject } from "@/components/rename-project";
 import {
   Table,
   TableBody,
@@ -45,6 +46,7 @@ export function ProjectsPage(): ReactElement {
         placeholder="search projects"
         value={search}
         onChange={setSearch}
+        actions={<CreateProject />}
       />
       <div className="mt-4">
         <AsyncBoundary
@@ -60,6 +62,9 @@ export function ProjectsPage(): ReactElement {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Id</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -71,6 +76,9 @@ export function ProjectsPage(): ReactElement {
                   >
                     <TableCell>{p.name}</TableCell>
                     <TableCell>{p.id}</TableCell>
+                    <TableCell>
+                      <RenameProject projectId={p.id} name={p.name} />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

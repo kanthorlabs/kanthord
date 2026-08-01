@@ -1,10 +1,15 @@
 // Story 01 — EntityInitiativePage: reads params, uses chain hook, renders workspace.
 // Story 03 — three tabs: Summary, Objectives, Dependencies.
+// Story 07 — DependencyEditor on the Dependencies tab.
 import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useInitiativeChain } from "@/app/entity-chain";
+import { CreateObjective } from "@/components/create-objective";
+import { DependencyEditor } from "@/components/dependency-editor";
 import { EntityWorkspace } from "@/components/entity-workspace";
+import { RenameInitiative } from "@/components/rename-initiative";
 import { AsyncBoundary } from "@/components/async-boundary";
 import { EntityStatus } from "@/lib/status-display";
 import {
@@ -15,6 +20,9 @@ import {
   TableCell,
   TableBody,
 } from "@/components/ui/table";
+import { initiativeKeys } from "@/lib/query-keys";
+import { invalidateFor } from "@/lib/invalidation";
+import { fetchInitiatives } from "@/lib/api-client";
 
 // --- Summary panel ---
 
@@ -84,35 +92,41 @@ function InitiativeObjectives({
     );
   }
 
-  if (!objectiveRows || objectiveRows.length === 0) {
-    return <p data-testid="empty-objectives">No objectives yet.</p>;
-  }
-
   return (
-    <Table data-testid="objective-table">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Status</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {objectiveRows.map((o) => (
-          <TableRow key={o.id} data-objective-id={o.id}>
-            <TableCell>
-              <Link
-                to={`/project/${projectId}/initiative/${initiativeId}/objective/${o.id}`}
-              >
-                {o.name}
-              </Link>
-            </TableCell>
-            <TableCell>
-              <EntityStatus axis="initiative" value={o.status ?? "building"} />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      <CreateObjective projectId={projectId} initiativeId={initiativeId} />
+      {!objectiveRows || objectiveRows.length === 0 ? (
+        <p data-testid="empty-objectives">No objectives yet.</p>
+      ) : (
+        <Table data-testid="objective-table">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {objectiveRows.map((o) => (
+              <TableRow key={o.id} data-objective-id={o.id}>
+                <TableCell>
+                  <Link
+                    to={`/project/${projectId}/initiative/${initiativeId}/objective/${o.id}`}
+                  >
+                    {o.name}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <EntityStatus
+                    axis="initiative"
+                    value={o.status ?? "building"}
+                  />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </>
   );
 }
 
@@ -120,28 +134,65 @@ function InitiativeObjectives({
 
 function InitiativeDependencies({
   initiative,
+  projectId,
+  initiativeId,
 }: {
   readonly initiative: NonNullable<
     ReturnType<typeof useInitiativeChain>["initiative"]
   >;
+  readonly projectId: string;
+  readonly initiativeId: string;
 }): ReactElement {
-  if (initiative.after.length === 0 && initiative.waiting.length === 0) {
-    return <p data-testid="empty-initiative-dependencies">No dependencies.</p>;
-  }
+  const queryClient = useQueryClient();
+  const depIds = initiative.after;
+
+  const initiativesQuery = useQuery({
+    queryKey: initiativeKeys.list(projectId),
+    queryFn: ({ signal }) => fetchInitiatives(projectId, { signal }),
+    staleTime: Infinity,
+  });
+
+  const candidates =
+    initiativesQuery.data?.map((i) => ({ id: i.id, label: i.name })) ?? [];
+
+  const labelOf = (id: string): string => {
+    const found = initiativesQuery.data?.find((i) => i.id === id);
+    return found !== undefined ? found.name : id;
+  };
 
   return (
     <>
+      {depIds.length === 0 && initiative.waiting.length === 0 && (
+        <p data-testid="empty-initiative-dependencies">No dependencies.</p>
+      )}
+
       <section data-testid="initiative-after">
-        {initiative.after.length === 0 ? (
+        {depIds.length === 0 ? (
           <p data-testid="empty-after">None.</p>
         ) : (
-          initiative.after.map((id) => (
+          depIds.map((id) => (
             <code key={id} data-testid="after-id">
               {id}
             </code>
           ))
         )}
       </section>
+
+      <DependencyEditor
+        kind="initiative"
+        sourceId={initiativeId}
+        sourceLabel={initiative.name}
+        dependencies={depIds}
+        candidates={candidates}
+        labelOf={labelOf}
+        onWritten={() =>
+          invalidateFor(queryClient, "dependency.write", {
+            projectId,
+            entityKey: initiativeKeys.detail(initiativeId),
+          })
+        }
+      />
+
       <section data-testid="initiative-waiting">
         {initiative.waiting.length === 0 ? (
           <p data-testid="empty-waiting">None.</p>
@@ -199,7 +250,11 @@ export function EntityInitiativePage(): ReactElement {
       value: "dependencies",
       label: "Dependencies",
       panel: initiative ? (
-        <InitiativeDependencies initiative={initiative} />
+        <InitiativeDependencies
+          initiative={initiative}
+          projectId={projectId!}
+          initiativeId={initiativeId!}
+        />
       ) : null,
     },
   ];
@@ -212,6 +267,15 @@ export function EntityInitiativePage(): ReactElement {
       kindLabel="Initiative"
       name={initiative?.name ?? ""}
       tabs={tabs}
+      actions={
+        initiative ? (
+          <RenameInitiative
+            projectId={projectId!}
+            initiativeId={initiativeId!}
+            name={initiative.name}
+          />
+        ) : undefined
+      }
     />
   );
 }

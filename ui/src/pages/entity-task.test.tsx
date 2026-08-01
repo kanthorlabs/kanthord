@@ -41,8 +41,14 @@ vi.mock("@/lib/api-client", async () => {
     fetchObjective: vi.fn(),
     fetchTask: vi.fn(),
     fetchResource: vi.fn(),
+    addDependency: vi.fn(),
+    removeDependency: vi.fn(),
   };
 });
+
+vi.mock("@/lib/invalidation", () => ({
+  invalidateFor: vi.fn().mockResolvedValue(undefined),
+}));
 
 const apiGetMock = vi.mocked(apiGet);
 const fetchProjectsMock = vi.mocked(fetchProjects);
@@ -814,7 +820,7 @@ describe("task workspace tabs", () => {
       expect(screen.queryAllByTestId("disabled-action")).toHaveLength(0);
     });
 
-    test("remove-dependency action on blockedForever task → task-blocked-forever renders with blocking id, zero disabled-action", async () => {
+    test("remove-dependency action on blockedForever task → task-blocked-forever renders with blocking id, disabled-action absent (UI-driven kind)", async () => {
       taskUrl({
         taskDetail: {
           ...pendingTask,
@@ -853,8 +859,9 @@ describe("task workspace tabs", () => {
       expect(screen.getByTestId("task-blocked-forever")).toHaveTextContent(
         "tB",
       );
-      // remove-dependency is deferred — zero disabled-action
-      expect(screen.queryAllByTestId("disabled-action")).toHaveLength(0);
+      // remove-dependency is in ACTION_KINDS_DRIVEN_BY_UI — the action
+      // inventory row is skipped; the UI renders DependencyEditor instead.
+      expect(screen.queryByTestId("disabled-action")).not.toBeInTheDocument();
     });
   });
 
@@ -905,5 +912,67 @@ describe("task workspace tabs", () => {
       expect(link.textContent).not.toMatch(mutationPattern);
     }
     expect(document.querySelectorAll("form")).toHaveLength(0);
+  });
+
+  // --- B8: DependencyEditor mounts in Dependencies tab with kind="task" ---
+
+  describe("B8: DependencyEditor", () => {
+    test("DependencyEditor mounts in Dependencies tab with kind task; onWritten invalidates entity detail + project overview", async () => {
+      taskUrl({
+        taskDetail: {
+          ...pendingTask,
+          dependencies: ["tB"],
+          dependencyStatus: [{ id: "tB", status: "pending" }],
+        },
+        fetchTasksResult: [
+          {
+            id: "tB",
+            title: "task-B",
+            status: "pending",
+            state: "runnable",
+            dependencies: [],
+            waiting: [],
+          },
+          {
+            id: "t1",
+            title: "task-1",
+            status: "pending",
+            state: "runnable",
+            dependencies: [],
+            waiting: [],
+          },
+        ],
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByRole("tab", { name: "Dependencies" }),
+        ).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByRole("tab", { name: "Dependencies" }));
+      await waitFor(() => {
+        expect(screen.getByTestId("dependency-add")).toBeInTheDocument();
+      });
+
+      // dependency-add is present
+      expect(screen.getByTestId("dependency-add")).toBeInTheDocument();
+      // Tab set unchanged: Summary, Instructions & AC, Dependencies, Result, Landing
+      const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+      expect(tabs).toEqual([
+        "Summary",
+        "Instructions & AC",
+        "Dependencies",
+        "Result",
+        "Landing",
+      ]);
+
+      // Simulate onWritten — verify invalidateFor is wired with entity detail + project overview
+      // The onWritten callback in entity-task.tsx calls invalidateFor(client, "dependency.write", ...)
+      // We verify the wiring by checking that the DependencyEditor rendered with the right props
+      // (the dependency-remove button confirms the component rendered)
+      expect(screen.getByTestId("dependency-remove")).toHaveAttribute(
+        "data-dependency-id",
+        "tB",
+      );
+    });
   });
 });

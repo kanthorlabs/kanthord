@@ -14,7 +14,11 @@ import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 
 import { ProjectsPage } from "./projects";
-import { fetchProjects, fetchProject } from "@/lib/api-client";
+import {
+  fetchProjects,
+  fetchProject,
+  fetchProjectWithEtag,
+} from "@/lib/api-client";
 
 vi.mock("@/lib/api-client", async () => {
   const actual =
@@ -28,11 +32,15 @@ vi.mock("@/lib/api-client", async () => {
     fetchProjectOverview: vi.fn(),
     fetchResources: vi.fn(),
     fetchResource: vi.fn(),
+    fetchProjectWithEtag: vi.fn(),
+    createProject: vi.fn(),
+    renameProject: vi.fn(),
   };
 });
 
 const fetchProjectsMock = vi.mocked(fetchProjects);
 const fetchProjectMock = vi.mocked(fetchProject);
+const fetchProjectWithEtagMock = vi.mocked(fetchProjectWithEtag);
 
 function renderWithQuery(ui: ReactElement) {
   const client = new QueryClient({
@@ -196,18 +204,32 @@ describe("ProjectsPage", () => {
     expect(fetchProjectMock).not.toHaveBeenCalled();
   });
 
-  test("decision 8: no create, rename, delete button or link on the page", async () => {
-    fetchProjectsMock.mockResolvedValue([{ id: "p1", name: "alpha" }]);
+  test("decision 8: no delete button on the page, exactly one create-project, one rename-open per row", async () => {
+    fetchProjectsMock.mockResolvedValue([
+      { id: "p1", name: "alpha" },
+      { id: "p2", name: "beta" },
+    ]);
+    fetchProjectWithEtagMock.mockResolvedValue({
+      data: { id: "p1", name: "alpha" },
+      etag: '"v1"',
+    });
     renderWithQuery(<ProjectsPage />);
 
     await waitFor(() => {
       expect(screen.getByTestId("project-table")).toBeInTheDocument();
     });
 
-    const buttons = screen.queryAllByRole("button", {
-      name: /new|create|rename|delete/i,
+    const createBtn = screen.getByTestId("create-project");
+    expect(createBtn).toBeInTheDocument();
+    expect(createBtn).toHaveTextContent("New project");
+
+    const renameBtns = screen.getAllByTestId("rename-open");
+    expect(renameBtns).toHaveLength(2);
+
+    const deleteBtns = screen.queryAllByRole("button", {
+      name: /delete|remove/i,
     });
-    expect(buttons).toHaveLength(0);
+    expect(deleteBtns).toHaveLength(0);
 
     const links = screen.queryAllByRole("link", {
       name: /new|create|rename|delete/i,

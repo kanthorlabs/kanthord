@@ -1,11 +1,14 @@
 // Story 01 — EntityObjectivePage: reads params, uses chain hook, renders workspace.
 // Story 04 — three tabs: Summary, Tasks, Integration.
+// Story 07 — DependencyEditor in the Summary panel's after section.
 import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useObjectiveChain } from "@/app/entity-chain";
+import { DependencyEditor } from "@/components/dependency-editor";
 import { EntityWorkspace } from "@/components/entity-workspace";
+import { RenameObjective } from "@/components/rename-objective";
 import { AsyncBoundary } from "@/components/async-boundary";
 import { EntityStatus } from "@/lib/status-display";
 import {
@@ -17,8 +20,9 @@ import {
   TableBody,
 } from "@/components/ui/table";
 import { asyncStateOf } from "@/lib/async-state";
-import { fetchTasks, fetchResource } from "@/lib/api-client";
-import { taskKeys, resourceKeys } from "@/lib/query-keys";
+import { fetchTasks, fetchResource, fetchObjectives } from "@/lib/api-client";
+import { taskKeys, resourceKeys, objectiveKeys } from "@/lib/query-keys";
+import { invalidateFor } from "@/lib/invalidation";
 
 // --- Summary panel ---
 
@@ -87,6 +91,63 @@ function ObjectiveSummary({
   );
 }
 
+// --- Dependency editor for the summary panel's after section ---
+
+function ObjectiveAfter({
+  objective,
+  projectId,
+  initiativeId,
+}: {
+  readonly objective: NonNullable<
+    ReturnType<typeof useObjectiveChain>["objective"]
+  >;
+  readonly projectId: string;
+  readonly initiativeId: string;
+}): ReactElement {
+  const queryClient = useQueryClient();
+  const objectiveQuery = useQuery({
+    queryKey: objectiveKeys.list(initiativeId),
+    queryFn: ({ signal }) => fetchObjectives(initiativeId, { signal }),
+    staleTime: Infinity,
+  });
+  const depIds = objective.after;
+
+  const state = asyncStateOf(objectiveQuery);
+
+  if (state === "loading" || state === "error") {
+    const message =
+      objectiveQuery.error instanceof Error
+        ? objectiveQuery.error.message
+        : undefined;
+    return <AsyncBoundary state={state} what="objectives" message={message} />;
+  }
+
+  const objectives = objectiveQuery.data ?? [];
+
+  return (
+    <DependencyEditor
+      kind="objective"
+      sourceId={objective.id}
+      sourceLabel={objective.name}
+      dependencies={depIds}
+      candidates={objectives.map((o) => ({
+        id: o.id,
+        label: o.name,
+      }))}
+      labelOf={(id) => {
+        const found = objectives.find((o) => o.id === id);
+        return found !== undefined ? found.name : id;
+      }}
+      onWritten={() =>
+        invalidateFor(queryClient, "dependency.write", {
+          projectId,
+          entityKey: objectiveKeys.detail(objective.id),
+        })
+      }
+    />
+  );
+}
+
 // --- Tasks panel ---
 
 function ObjectiveTasks({
@@ -112,48 +173,65 @@ function ObjectiveTasks({
     return <AsyncBoundary state={state} what="tasks" message={message} />;
   }
 
-  if (!query.data || query.data.length === 0) {
-    return <p data-testid="empty-tasks">No tasks yet.</p>;
-  }
-
   return (
-    <Table data-testid="task-table">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Title</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>State</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {query.data.map((t) => (
-          <TableRow key={t.id} data-task-id={t.id}>
-            <TableCell>
-              <Link
-                to={
-                  "/project/" +
-                  projectId +
-                  "/initiative/" +
-                  initiativeId +
-                  "/objective/" +
-                  objectiveId +
-                  "/task/" +
-                  t.id
-                }
-              >
-                {t.title}
-              </Link>
-            </TableCell>
-            <TableCell>
-              <EntityStatus axis="task" value={t.status} />
-            </TableCell>
-            <TableCell>
-              <span data-testid="task-row-state">{t.state}</span>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <>
+      <Link
+        data-testid="create-task"
+        to={
+          "/project/" +
+          projectId +
+          "/initiative/" +
+          initiativeId +
+          "/objective/" +
+          objectiveId +
+          "/task/new"
+        }
+        className="text-sm text-primary underline-offset-4 hover:underline"
+      >
+        New task
+      </Link>
+      {!query.data || query.data.length === 0 ? (
+        <p data-testid="empty-tasks">No tasks yet.</p>
+      ) : (
+        <Table data-testid="task-table">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>State</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {query.data.map((t) => (
+              <TableRow key={t.id} data-task-id={t.id}>
+                <TableCell>
+                  <Link
+                    to={
+                      "/project/" +
+                      projectId +
+                      "/initiative/" +
+                      initiativeId +
+                      "/objective/" +
+                      objectiveId +
+                      "/task/" +
+                      t.id
+                    }
+                  >
+                    {t.title}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  <EntityStatus axis="task" value={t.status} />
+                </TableCell>
+                <TableCell>
+                  <span data-testid="task-row-state">{t.state}</span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </>
   );
 }
 
@@ -247,7 +325,16 @@ export function EntityObjectivePage(): ReactElement {
     {
       value: "summary",
       label: "Summary",
-      panel: objective ? <ObjectiveSummary objective={objective} /> : null,
+      panel: objective ? (
+        <>
+          <ObjectiveSummary objective={objective} />
+          <ObjectiveAfter
+            objective={objective}
+            projectId={projectId!}
+            initiativeId={initiativeId!}
+          />
+        </>
+      ) : null,
     },
     {
       value: "tasks",
@@ -280,6 +367,16 @@ export function EntityObjectivePage(): ReactElement {
       kindLabel="Objective"
       name={objective?.name ?? ""}
       tabs={tabs}
+      actions={
+        objective ? (
+          <RenameObjective
+            projectId={projectId!}
+            initiativeId={initiativeId!}
+            objectiveId={objectiveId!}
+            name={objective.name}
+          />
+        ) : undefined
+      }
     />
   );
 }
