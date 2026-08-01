@@ -211,7 +211,7 @@ KANTHORD_FAKE_AGENT="$PD/escalate-agent.json" \
   node src/main.ts run daemon --until-idle --poll-interval 200 >/dev/null 2>&1 || true
 eq "fixture 2: the task really escalated" "awaiting_confirmation" "$(tstatus "$TASK2")"
 eq "fixture 2: the escalation left NO candidate row" "0" \
-  "$(sql "SELECT COUNT(*) AS n FROM change_candidates WHERE task_id = ?" "$TASK2")"
+  "$(sql "SELECT COUNT(*) AS n FROM landing_candidates WHERE task_id = ?" "$TASK2")"
 start_serve
 DEC2="$(open_decision "$TASK2")"
 BLANK_CODE="$(curl -sS -o "$PD/blank.json" -w '%{http_code}' -X POST "$BASE/api/task/$TASK2/reattempt" \
