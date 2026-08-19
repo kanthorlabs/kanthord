@@ -102,7 +102,7 @@ app-up: $(RUN_DIR)
 		ps -p $$holder -o command= | cut -c1-100; \
 	fi; \
 	cd $(APP_DIR) || exit 1; \
-	nohup $(FLUTTER) run -d chrome --web-port=$(WEB_PORT) --web-hostname=localhost >$(APP_LOG) 2>&1 & \
+	nohup $(FLUTTER) run -d web-server --web-port=$(WEB_PORT) --web-hostname=localhost >$(APP_LOG) 2>&1 & \
 	echo $$! >$(APP_PID); \
 	printf "app: starting. The first web build takes about a minute"; \
 	for i in $$(seq 1 90); do \
