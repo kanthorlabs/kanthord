@@ -1,0 +1,6 @@
+[submodule "engine"]
+	path = engine
+	url = git@kanthorlabs.github.com:kanthorlabs/kanthord-engine.git
+[submodule "apps"]
+	path = apps
+	url = git@kanthorlabs.github.com:kanthorlabs/kanthord-apps.git
