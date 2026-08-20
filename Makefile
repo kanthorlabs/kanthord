@@ -148,3 +148,10 @@ status:
 	else \
 		echo "app: port $(WEB_PORT) free"; \
 	fi
+
+gitpull:
+	git submodule sync
+	git pull --recurse-submodules && git submodule update --remote --merge
+
+gitpush:
+	git submodule foreach "git push origin main" && git push
