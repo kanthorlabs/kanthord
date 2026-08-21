@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Glossary · kanthord</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="scheduler.html">Execution</a>
+      <a href="follow-a-request.html">Follow a request</a>
+      <a href="glossary.html" aria-current="page">Glossary</a>
+      <a href="documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="index.html">Overview</a> / Glossary</p>
+    <div class="layer-head">
+      <span class="num">Reference</span>
+      <h1>Glossary</h1>
+    </div>
+    <div class="purpose">
+      <em>Purpose of this page:</em> define each word the way the code defines it.
+      When a page uses a term, it means exactly this meaning and no other.
+    </div>
+
+    <section class="block">
+      <h2>Work</h2>
+      <div class="cards">
+        <div class="card" id="plan">
+          <h3>Plan · plan document</h3>
+          <p>A versioned document that imports into nodes and edges. Serialization is
+          canonical: the same document renders to the same bytes, always.</p>
+        </div>
+        <div class="card" id="node-kind">
+          <h3>Initiative · objective · task</h3>
+          <p>The three node kinds. An initiative groups objectives; an objective owns
+          one workspace clone; a task is the unit a worker executes.</p>
+        </div>
+        <div class="card" id="edge">
+          <h3>Dependency edge · waiver</h3>
+          <p>A directed edge that gates readiness. A waived edge is recorded but
+          ignored by promotion.</p>
+        </div>
+        <div class="card" id="node-state">
+          <h3>Node states</h3>
+          <p><code>pending · ready · running · blocked · awaiting_approval · done ·
+          partial · discarded</code>. Only legal transitions exist; blocked carries a
+          reason such as <code>attempt-limit</code> or <code>abandoned</code>.</p>
+        </div>
+        <div class="card" id="readiness">
+          <h3>Readiness</h3>
+          <p>A node is ready when every non-waived dependency is <code>done</code> or
+          <code>partial</code>. Promotion runs in the transaction that completed the
+          dependency. See <a href="scheduler.html">Scheduling &amp; execution</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Claims and execution</h2>
+      <div class="cards">
+        <div class="card" id="lease">
+          <h3>Lease · fence · TTL</h3>
+          <p>A time-limited claim on a subject (node or repository). The fence is a
+          generation counter that never resets; renewal keeps the fence. TTL expiry
+          makes the claim refusable but never self-heals.</p>
+        </div>
+        <div class="card" id="claim">
+          <h3>Claim</h3>
+          <p>The write command that starts execution: leases, run tree, first attempt,
+          state transition, events — one transaction. Refusals are typed:
+          <code>lease-held</code>, <code>illegal-transition</code>,
+          <code>plan-incomplete</code>, and others.</p>
+        </div>
+        <div class="card" id="heartbeat">
+          <h3>Heartbeat</h3>
+          <p>A worker's renewal call at one third of the lease TTL. It extends both the
+          task and objective leases at their existing fences.</p>
+        </div>
+        <div class="card" id="run">
+          <h3>Run</h3>
+          <p>An active-or-ended execution record for one node. An objective run has no
+          parent and schedules task runs under it. One active run per node, enforced by
+          a partial index.</p>
+        </div>
+        <div class="card" id="attempt">
+          <h3>Attempt</h3>
+          <p>One try of a task run, numbered from 1, pinning one provider registration
+          and model for its whole life. The attempt limit — 3 by default from
+          configuration — blocks the task with <code>attempt-limit</code>.</p>
+        </div>
+        <div class="card" id="worker">
+          <h3>Worker · driver</h3>
+          <p>An external process that claims, heartbeats and reports over HTTP. Runs
+          are pinned to a driver; a claim whose driver differs from the pin is refused
+          (<code>drive-mode-pinned</code>).</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>State and surroundings</h2>
+      <div class="cards">
+        <div class="card" id="home">
+          <h3>Home</h3>
+          <p>The daemon's directory: <code>kanthord.db</code>, git worktrees, journal,
+          run scratch space, keys. Guarded by a home lock; one daemon per home.</p>
+        </div>
+        <div class="card" id="workspace">
+          <h3>Workspace clone</h3>
+          <p>The git clone of an objective's repository. One per objective, shared by
+          its tasks. Profile, conventions and ambient files freeze at clone time.</p>
+        </div>
+        <div class="card" id="actor">
+          <h3>Actor</h3>
+          <p>An authenticated principal: <code>human</code> or <code>harness</code>.
+          Harness actors hold Bearer tokens; revocation fences their leases.</p>
+        </div>
+        <div class="card" id="event-log">
+          <h3>Event log</h3>
+          <p>The append-only record of every transition — <code>lease.claimed</code>,
+          <code>node.running</code>, renewals and more — written inside the same
+          transaction as the change it describes.</p>
+        </div>
+        <div class="card" id="refusal">
+          <h3>Refusal</h3>
+          <p>A typed, named reason a command declines to act. Commands throw them;
+          the server maps them to error envelopes. A refusal never mutates state.</p>
+        </div>
+        <div class="card" id="contract">
+          <h3>Operation registry · lifecycle</h3>
+          <p>The single table of operations in <code>http/contract/</code>. An entry is
+          <code>routed</code> (bound to one command or query) or <code>stubbed</code>
+          (answers 501, writes nothing). Absent means post-MVP.</p>
+        </div>
+      </div>
+    </section>
+
+    <nav class="pager">
+      <a href="index.html">↑ Overview</a>
+      <span class="spacer"></span>
+      <a href="architecture/layer-0-actors.html">Start the layer tour →</a>
+    </nav>
+  </main>
+</body>
+</html>

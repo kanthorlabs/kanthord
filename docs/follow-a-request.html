@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Follow a request · kanthord</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="scheduler.html">Execution</a>
+      <a href="follow-a-request.html" aria-current="page">Follow a request</a>
+      <a href="glossary.html">Glossary</a>
+      <a href="documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="index.html">Overview</a> / Follow a request</p>
+    <div class="layer-head">
+      <span class="num">Trace</span>
+      <h1>Follow a request through every layer</h1>
+    </div>
+    <div class="purpose">
+      <em>Purpose of this page:</em> show how the parts cooperate. It traces one real
+      call — a worker claiming a task — from the shell keypress to the SQLite commit,
+      and names the file responsible at each step.
+    </div>
+
+    <section class="block">
+      <h2>The call we trace</h2>
+      <p>A worker needs work. Its harness runs:</p>
+      <pre><code>kanthord node claim &lt;node-id&gt;</code></pre>
+
+      <div class="diagram">
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 1</span>
+            Commander parses
+            <span class="hint"><code>src/cli/node/claim.ts</code></span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">the program was built once by <code>buildProgram</code> in main.ts, with bound handlers</span>
+            <span class="chip plain">this file holds no business logic and opens no connection itself</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> options handed to the shared client</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 2</span>
+            DaemonClient renders
+            <span class="hint"><code>src/cli/client.ts</code></span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">takes the operation's typed path tuple from <code>http/contract/</code></span>
+            <span class="chip plain">substitutes <code>:id</code> parameters, builds URL and init (<code>fetch</code>)</span>
+            <span class="chip plain">attaches the Bearer token of the harness actor</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> HTTP to the daemon's bind address</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 3</span>
+            Middleware chain
+            <span class="hint"><code>src/http/server/</code></span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">envelope → origin → host → preflight</span>
+            <span class="chip plain">auth compares the token with <code>timingSafeEqual</code></span>
+            <span class="chip plain">route matches against the operation registry</span>
+            <span class="chip plain">authorize → bodyParser → idempotency → dispatch</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> one matched operation, one handler</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 4</span>
+            Handler parses
+            <span class="hint"><code>src/http/server/node/</code></span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">validates the body with the zod schema from the contract</span>
+            <span class="chip plain">invokes exactly one command: <code>claimNode</code></span>
+            <span class="chip plain">branches on no domain rule — that is a handler defect</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> the command owns everything below</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 5</span>
+            One transaction
+            <span class="hint"><code>src/commands/node/claim-node.ts</code></span>
+          </div>
+          <div class="chips">
+            <span class="chip plain"><code>storage.transact</code> opens; the clock is read once</span>
+            <span class="chip plain">expired leases swept · completeness checked on ancestors</span>
+            <span class="chip plain">lease hierarchy refuses self, parent, sibling conflicts</span>
+            <span class="chip plain">objective + task leases acquired, fenced</span>
+            <span class="chip plain">runs opened or adopted · attempt №1 recorded</span>
+            <span class="chip plain"><code>ready → running</code>, ancestors cascade</span>
+            <span class="chip plain"><code>lease.claimed</code> and <code>node.running</code> appended</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> commit, or nothing happened</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 6</span>
+            Response formats
+            <span class="hint">handler again</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">success: lease, fence, run id, attempt id, heartbeat interval (TTL ÷ 3)</span>
+            <span class="chip plain">refusal: the command threw a typed reason — <code>lease-held</code>, <code>illegal-transition</code>, … — mapped by the server to an error envelope</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> same path in reverse</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 7</span>
+            CLI prints
+            <span class="hint">worker starts its agent loop</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">exit code reflects the outcome (<code>src/cli/exit-code.ts</code>)</span>
+            <span class="chip plain">on success the worker executes in the clone and heartbeats at the returned interval</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>What differs on a read</h2>
+      <p>
+        A read such as <code>kanthord node list --state ready</code> follows steps 1–4
+        and stops: the handler invokes exactly one query, which opens no transaction
+        and writes nothing. Steps 5–7 belong to write paths only.
+      </p>
+    </section>
+
+    <section class="block">
+      <h2>Why the shape is rigid</h2>
+      <ol class="rules">
+        <li>The CLI cannot bypass HTTP, so the same API serves every client, and the contract stays honest.</li>
+        <li>The handler cannot branch on domain rules, so behaviour has exactly one home: a command or query.</li>
+        <li>The command owns one transaction, so a transition and its event are all-or-nothing.</li>
+        <li>The domain imports nothing impure, so every rule is testable without a database.</li>
+      </ol>
+    </section>
+
+    <nav class="pager">
+      <a href="index.html">↑ Overview</a>
+      <span class="spacer"></span>
+      <a href="scheduler.html">Scheduling &amp; execution →</a>
+    </nav>
+  </main>
+</body>
+</html>

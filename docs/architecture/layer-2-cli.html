@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 2 · cli/ · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 2</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> show what the CLI offers, and why it speaks HTTP
+      instead of importing application code — with one deliberate exception.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 2</span>
+      <h1>cli/ (commander)</h1>
+    </div>
+    <p class="lede">
+      The only user interface. Commander programs that reach the daemon over HTTP,
+      or run before it exists.
+    </p>
+
+    <h2>Components</h2>
+    <div class="cards">
+      <div class="card" id="serve">
+        <h3>kanthord serve</h3>
+        <p>Starts the daemon. Invokes <code>serve()</code> in main.ts, which wires every
+        dependency and binds the listener.</p>
+      </div>
+      <div class="card" id="db-migrate">
+        <h3>kanthord db migrate</h3>
+        <p>The one direct-storage command in the product. main.ts constructs the storage
+        implementation and passes the migration handler into the program, so this file still
+        imports no implementation.</p>
+      </div>
+      <div class="card" id="config-generate">
+        <h3>kanthord config generate</h3>
+        <p>Generates a local daemon configuration file.</p>
+      </div>
+      <div class="card" id="remote">
+        <h3>Remote resource commands</h3>
+        <p>project · node · plan · repository · credential · actor · event · status.
+        Each one is a typed client of an HTTP operation.</p>
+      </div>
+      <div class="card" id="daemon-client">
+        <h3>DaemonClient (cli/client.ts)</h3>
+        <p>Renders the request path from the operation registry in
+        <code>http/contract/</code>, then calls <code>fetch</code>. One client serves every remote command.</p>
+      </div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-0-actors.html#operator">operator</a></td><td>runs resource commands in a shell</td></tr>
+      <tr><td><a href="layer-1-process.html#main">main.ts</a></td><td><code>buildProgram</code>, constructs the programs with bound handlers</td></tr>
+    </table>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>serve</td><td><a href="layer-1-process.html#main">main.ts</a></td><td>invokes <code>serve()</code></td></tr>
+      <tr><td>db migrate</td><td><a href="layer-1-process.html#main">main.ts</a></td><td>invokes <code>migrate()</code></td></tr>
+      <tr><td>remote commands</td><td><a href="#daemon-client">DaemonClient</a></td><td>every remote call funnels through one client</td></tr>
+      <tr><td>DaemonClient</td><td><a href="layer-3-http-contract.html#registry">operation registry</a></td><td>renders requests from</td></tr>
+      <tr><td>DaemonClient</td><td><a href="layer-4-http-server.html#listener">listen(bind:port)</a></td><td>HTTP + Bearer token</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>The CLI imports no command and no query. It renders paths from <code>http/contract/</code> and speaks HTTP.</li>
+      <li>This layer may import domain, contract, and cli — nothing else.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-1-process.html">← Layer 1 · Process</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-3-http-contract.html">Layer 3 · http/contract/ →</a>
+    </nav>
+  </main>
+</body>
+</html>

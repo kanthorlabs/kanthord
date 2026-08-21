@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 8 · Service implementations · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 8</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> name every adapter, the vendor each one wraps,
+      and the rule that only main.ts may construct them.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 8</span>
+      <h1>services/ — implementations</h1>
+    </div>
+    <p class="lede">
+      Vendor-named adapters. Only main.ts names them; everything else sees an interface.
+    </p>
+
+    <h2>SQLite family</h2>
+    <div class="cards" id="sqlite">
+      <div class="card"><h3>SqliteStorage (+ migrations 0001–0008)</h3><p>Owns the database file, its schema migrations, and the transaction context every other store accepts.</p></div>
+      <div class="card"><h3>SqliteEventLog · SqliteLease · SqliteExecution</h3><p>Append-only events, lease hierarchy state, execution records — all inside the caller's transaction.</p></div>
+      <div class="card"><h3>SqlitePlanStore · SqliteBlobStore</h3><p>Plan documents and large payloads under canonical serialization.</p></div>
+    </div>
+
+    <h2>Git family</h2>
+    <div class="cards" id="git" style="margin-top:0.9rem">
+      <div class="card"><h3>BinaryGit</h3><p>Speaks to the git binary through runner · journal · probe · worktree · ref-update · seed · sweep, guarded against outside writers.</p></div>
+    </div>
+
+    <h2>Adapters</h2>
+    <div class="cards" id="adapters" style="margin-top:0.9rem">
+      <div class="card"><h3>GraphologyGraph · YamlDocumentReader</h3><p>Graph algorithms and YAML parsing behind their interfaces.</p></div>
+      <div class="card"><h3>NodeWriteRevision · DependencyReadiness</h3><p>Revision checks and dependency readiness evaluation.</p></div>
+      <div class="card"><h3>UlidIdGenerator · SystemClock</h3><p>Identity and time, injected so domain stays pure and tests stay deterministic.</p></div>
+      <div class="card"><h3>AesGcmCrypto · NodeCryptoSecret</h3><p>Encryption of credential material at rest.</p></div>
+      <div class="card"><h3>PiAiModelCatalog · ConvictConfig</h3><p>Model provider catalog and configuration loading.</p></div>
+      <div class="card"><h3>SqliteHomeLock + StatfsProbe</h3><p>Exclusive access to a home directory.</p></div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-7-service-interfaces.html">interfaces</a></td><td>implemented by</td></tr>
+      <tr><td><a href="layer-1-process.html#main">main.ts</a></td><td>constructs + injects each one once</td></tr>
+    </table>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>SQLite family</td><td><a href="layer-9-external-resources.html#db">home/kanthord.db</a></td><td>all persistent state</td></tr>
+      <tr><td>BinaryGit</td><td><a href="layer-9-external-resources.html#git-binary">git binary</a></td><td>spawns git processes</td></tr>
+      <tr><td>BinaryGit</td><td><a href="layer-9-external-resources.html#home">home/</a></td><td>worktrees · journal · run/</td></tr>
+      <tr><td>adapters</td><td><a href="layer-9-external-resources.html#secrets">config file · master key</a></td><td>reads secret material</td></tr>
+      <tr><td>adapters</td><td><a href="layer-9-external-resources.html#models">model-provider APIs</a></td><td>pi-ai network calls</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>An implementation imports only its own capability's interface and implementations. Another capability's implementation is out of bounds.</li>
+      <li>Vendors live here and nowhere above Layer 7.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-7-service-interfaces.html">← Layer 7 · Interfaces</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-9-external-resources.html">Layer 9 · External resources →</a>
+    </nav>
+  </main>
+</body>
+</html>

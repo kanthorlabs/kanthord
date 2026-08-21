@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 6 · domain/ · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 6</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> describe the pure core — the state machines and
+      ordering rules — and the guarantees the rest of the system leans on.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 6</span>
+      <h1>domain/ (pure)</h1>
+    </div>
+    <p class="lede">
+      Entities, state machines, and zod schemas. No file system, no network, no clock,
+      no randomness. The only runtime dependency is zod.
+    </p>
+
+    <h2>Components</h2>
+    <div class="cards" id="core">
+      <div class="card"><h3>Entities · state machines · transitions</h3><p>The legal moves of every resource. A lease hierarchy with attempt accounting.</p></div>
+      <div class="card" id="plan-format"><h3>Plan format + canonical serialization</h3><p>A plan document round-trips byte-identically. Serialization is canonical per the plan-format proposal.</p></div>
+      <div class="card"><h3>Bytewise ordering</h3><p>Document sets sort by canonical path, compared bytewise through <code>Buffer.compare</code>.</p></div>
+      <div class="card"><h3>ULID tie-break</h3><p>A topological walk breaks a tie by ULID, so task order is reproducible.</p></div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-5-application.html#commands">commands/</a></td><td>validate input and state transitions against the domain</td></tr>
+      <tr><td><a href="layer-5-application.html#queries">queries/</a></td><td>shape reads with domain schemas</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>Purity is enforced: no file system, no network, no clock, no randomness.</li>
+      <li>A ULID is minted by a service and passed in. The domain never generates one.</li>
+      <li>Determinism is a product guarantee: same input, same output, same order, same bytes.</li>
+      <li>This layer imports only itself. Its only permitted runtime dependency is zod.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-5-application.html">← Layer 5 · Application logic</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-7-service-interfaces.html">Layer 7 · Service interfaces →</a>
+    </nav>
+  </main>
+</body>
+</html>

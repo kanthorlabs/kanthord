@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 9 · External resources · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 9</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> inventory everything that outlives the process,
+      and who is allowed to touch each piece.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 9 ⌂</span>
+      <h1>External resources</h1>
+    </div>
+    <p class="lede">
+      Everything that exists after the process dies: the home directory,
+      its SQLite file, the git binary, secret material, and model-provider APIs.
+    </p>
+
+    <h2>Resources</h2>
+    <div class="cards" id="db">
+      <div class="card"><h3>home/kanthord.db</h3><p>One SQLite file holds all state. Migrations 0001–0008 bring it to the current schema.</p></div>
+      <div class="card" id="home"><h3>home/</h3><p>Git worktrees, the git operation journal, run/ scratch space, and keys.</p></div>
+      <div class="card" id="git-binary"><h3>git binary</h3><p>Spawned by BinaryGit. Probed at startup before the daemon accepts work.</p></div>
+      <div class="card" id="secrets"><h3>config file · master key</h3><p>ConvictConfig reads the config; AesGcmCrypto encrypts credentials under the master key.</p></div>
+      <div class="card" id="models"><h3>model-provider APIs (pi-ai)</h3><p>Network calls made by PiAiModelCatalog on behalf of agent capabilities.</p></div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-8-service-implementations.html#sqlite">SQLite family</a></td><td>reads and writes the database file</td></tr>
+      <tr><td><a href="layer-8-service-implementations.html#git">BinaryGit</a></td><td>spawns the git binary · manages home/</td></tr>
+      <tr><td><a href="layer-8-service-implementations.html#adapters">adapters</a></td><td>read secrets · call model APIs</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>No layer above Layer 8 touches a resource directly. Every access goes through an interface.</li>
+      <li>A test never shares a home. It creates its own mktemp directory and removes it.</li>
+      <li>The home lock makes one daemon per home at a time.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-8-service-implementations.html">← Layer 8 · Implementations</a>
+      <a href="../index.html">↑ Overview</a>
+      <span class="spacer"></span>
+    </nav>
+  </main>
+</body>
+</html>

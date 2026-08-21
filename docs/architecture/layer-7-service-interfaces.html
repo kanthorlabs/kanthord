@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 7 · Service interfaces · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 7</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> list every capability the application may ask
+      for, and the injection rule that keeps implementations swappable.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 7</span>
+      <h1>services/ — interfaces</h1>
+    </div>
+    <p class="lede">
+      A capability behind an interface. The index.ts of a capability holds the interface
+      only — no implementation, no re-export of one.
+    </p>
+
+    <h2>Persistence capabilities</h2>
+    <div class="cards" id="persistence">
+      <div class="card"><h3>storage</h3><p>Owns the transaction context. A write command opens one transaction here.</p></div>
+      <div class="card"><h3>event · lease · execution · plan · blob</h3><p>Accept the storage transaction through their signatures, so a transition and its event append share one transaction.</p></div>
+    </div>
+
+    <h2>Planning capabilities</h2>
+    <div class="cards" id="planning" style="margin-top:0.9rem">
+      <div class="card"><h3>revision · graph · document</h3><p>Plan revisions, graph queries, YAML document reading.</p></div>
+      <div class="card"><h3>readiness</h3><p>Dependency readiness for node scheduling.</p></div>
+      <div class="card"><h3>git</h3><p>Clone, fetch, worktree and ref operations against repositories.</p></div>
+    </div>
+
+    <h2>Effect capabilities</h2>
+    <div class="cards" id="effects" style="margin-top:0.9rem">
+      <div class="card"><h3>ids · clock · crypto · secret</h3><p>ULID minting, time, AES-GCM encryption, secret material. Injected so the domain stays pure.</p></div>
+      <div class="card"><h3>model-catalog · config · home-lock</h3><p>Model providers, configuration loading, exclusive access to a home.</p></div>
+    </div>
+
+    <h2>Declared, not yet implemented</h2>
+    <div class="cards" id="stubs" style="margin-top:0.9rem">
+      <div class="card"><h3>agent† · verify†</h3><p>Interfaces only. Their only implementation is <code>not-implemented</code>.</p></div>
+    </div>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>interfaces</td><td><a href="layer-8-service-implementations.html">implementations</a></td><td>implemented by, named only in main.ts</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>An interface may name another service interface in its signature — for example event and lease name the storage transaction context.</li>
+      <li>An implementation may never import another capability's implementation.</li>
+      <li>No <code>I</code> prefix on an interface, no <code>Impl</code> suffix on an implementation.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-6-domain.html">← Layer 6 · domain/</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-8-service-implementations.html">Layer 8 · Implementations →</a>
+    </nav>
+  </main>
+</body>
+</html>

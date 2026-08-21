@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>kanthord · Overview</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="index.html" aria-current="page">Overview</a>
+      <a href="scheduler.html">Execution</a>
+      <a href="follow-a-request.html">Follow a request</a>
+      <a href="glossary.html">Glossary</a>
+      <a href="documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <h1>kanthord overview</h1>
+      <p class="lede">
+        Read this page first. It says what kanthord is, names the six concepts every
+        other page builds on, and maps the rest of the documentation.
+      </p>
+    </div>
+
+    <div class="purpose">
+      <em>Purpose of this page:</em> orient you before the details. After reading it,
+      you know what the daemon does, which words matter, and where to go next.
+    </div>
+
+    <section class="block">
+      <h2>What kanthord is</h2>
+      <p>
+        kanthord is one long-running daemon on Node.js 24+. It stores a plan as a graph
+        of tasks, hands those tasks to external coding-agent workers over HTTP, and
+        records every state change in one SQLite file. An operator drives it with the
+        <code>kanthord</code> CLI; workers drive it through the same HTTP API.
+      </p>
+      <p>
+        The daemon owns state, never execution. A worker claims a task inside a fenced
+        lease, runs its agent loop in a git clone outside the daemon process, and
+        reports back. The daemon serializes conflicting work, accounts attempts, and
+        keeps an append-only event log.
+      </p>
+    </section>
+
+    <section class="block">
+      <h2>Six concepts that carry everything</h2>
+      <div class="cards">
+        <div class="card">
+          <h3><a href="glossary.html#plan">Plan graph</a></h3>
+          <p>An imported document becomes nodes in three kinds — initiative, objective,
+          task — connected by dependency edges. Waived edges are skipped.</p>
+        </div>
+        <div class="card">
+          <h3><a href="glossary.html#node-state">Node lifecycle</a></h3>
+          <p><code>pending → ready → running → done | partial | blocked</code>.
+          Only legal transitions exist, and each one appends an event.</p>
+        </div>
+        <div class="card">
+          <h3><a href="glossary.html#lease">Lease and fence</a></h3>
+          <p>A time-limited claim on a node. The fence counter never resets, so a
+          stale holder cannot write after a takeover.</p>
+        </div>
+        <div class="card">
+          <h3><a href="glossary.html#run">Run and attempt</a></h3>
+          <p>An objective run schedules task runs; a try is one attempt with a pinned
+          model registration. The attempt limit blocks a failing task.</p>
+        </div>
+        <div class="card">
+          <h3><a href="glossary.html#workspace">Workspace clone</a></h3>
+          <p>One git clone per objective, shared by its tasks. Profile and conventions
+          freeze at clone time.</p>
+        </div>
+        <div class="card">
+          <h3><a href="glossary.html#home">Home</a></h3>
+          <p>The directory holding everything that outlives the process:
+          <code>kanthord.db</code>, worktrees, journal, keys.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>The layered shape</h2>
+      <p>
+        Ten layers, one dependency direction: every arrow points down. Click any layer
+        or component to open its detail page.
+      </p>
+
+      <div class="legend">
+        <span><b>▼</b> runtime call, top layer uses the layer below</span>
+        <span><b>⇢</b> implemented by / invoked through</span>
+        <span><b>†</b> interface declared, implementation is <code>not-implemented</code></span>
+        <span><b>⌂</b> persisted resource</span>
+      </div>
+
+      <div class="diagram">
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 0</span>
+            <a href="architecture/layer-0-actors.html">Actors</a>
+            <span class="hint">humans and machines outside the daemon</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-0-actors.html#operator">Operator (shell)</a>
+            <a class="chip" href="architecture/layer-0-actors.html#worker">External worker / coding agent</a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> runs <code>kanthord …</code> · claims, heartbeats, reports over HTTP</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 1</span>
+            <a href="architecture/layer-1-process.html">Process</a>
+            <span class="hint">entry point and composition root</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-1-process.html#bin">kanthord bin (dist/main.js)</a>
+            <a class="chip" href="architecture/layer-1-process.html#main">src/main.ts · composition root<small>binds every dependency once</small></a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> buildProgram · constructs and injects every implementation</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 2</span>
+            <a href="architecture/layer-2-cli.html">cli/ (commander)</a>
+            <span class="hint">the only UI, speaks HTTP</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-2-cli.html#serve">kanthord serve</a>
+            <a class="chip" href="architecture/layer-2-cli.html#db-migrate">kanthord db migrate<small>the one direct-storage command</small></a>
+            <a class="chip" href="architecture/layer-2-cli.html#config-generate">kanthord config generate</a>
+            <a class="chip" href="architecture/layer-2-cli.html#remote">project · node · plan · repository · credential · actor · event · status</a>
+            <a class="chip" href="architecture/layer-2-cli.html#daemon-client">DaemonClient<small>renders path + calls fetch</small></a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> renders requests from the transport contract</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 3</span>
+            <a href="architecture/layer-3-http-contract.html">http/contract/</a>
+            <span class="hint">transport contract, no koa</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-3-http-contract.html#registry">operation registry<small>typed path tuples · lifecycle · zod schemas · OpenAPI emitter</small></a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> route match · parse · authorize</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 4</span>
+            <a href="architecture/layer-4-http-server.html">http/server/ (koa)</a>
+            <span class="hint">transport, nothing else</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-4-http-server.html#middleware">middleware chain<small>envelope → origin → host → preflight → auth → route → authorize → bodyParser → idempotency → dispatch</small></a>
+            <a class="chip" href="architecture/layer-4-http-server.html#handlers">~50 operation handlers<small>parse → invoke one command/query → format</small></a>
+            <a class="chip" href="architecture/layer-4-http-server.html#listener">listen(bind:port)<small>shutdown on SIGTERM/SIGINT</small></a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> dispatch, exactly one command or one query</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 5</span>
+            <a href="architecture/layer-5-application.html">Application logic</a>
+            <span class="hint">write and read paths, no vendor imports</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-5-application.html#commands">commands/<small>write paths · provider · project · repository · plan · node · outcome · actor · startup-recovery</small></a>
+            <a class="chip" href="architecture/layer-5-application.html#queries">queries/<small>read paths · system · provider · repository · project · node · edge · event · blob · plan · actor</small></a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> validates against the domain · persists through interfaces</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 6</span>
+            <a href="architecture/layer-6-domain.html">domain/</a>
+            <span class="hint">pure, only zod</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-6-domain.html#core">entities · state machines · transitions<small>lease hierarchy · attempt accounting</small></a>
+            <a class="chip" href="architecture/layer-6-domain.html#plan-format">plan format + canonical serialization<small>bytewise ordering · ULID tie-break</small></a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> declared here, implemented elsewhere</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 7</span>
+            <a href="architecture/layer-7-service-interfaces.html">services/ · interfaces</a>
+            <span class="hint">capabilities behind interfaces</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-7-service-interfaces.html#persistence">storage · event · lease · execution · plan · blob</a>
+            <a class="chip" href="architecture/layer-7-service-interfaces.html#planning">revision · graph · git · document · readiness</a>
+            <a class="chip" href="architecture/layer-7-service-interfaces.html#effects">ids · clock · crypto · secret · model-catalog · config · home-lock</a>
+            <a class="chip" href="architecture/layer-7-service-interfaces.html#stubs">agent† · verify†</a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">⇢</span> implemented by, named only in main.ts</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Layer 8</span>
+            <a href="architecture/layer-8-service-implementations.html">services/ · implementations</a>
+            <span class="hint">vendor-named adapters</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-8-service-implementations.html#sqlite">SqliteStorage (+migrations 0001–0008) · SqliteEventLog · SqliteLease · SqliteExecution · SqlitePlanStore · SqliteBlobStore</a>
+            <a class="chip" href="architecture/layer-8-service-implementations.html#git">BinaryGit<small>runner · journal · probe · worktree · ref-update · seed · sweep · outside-writer guard</small></a>
+            <a class="chip" href="architecture/layer-8-service-implementations.html#adapters">GraphologyGraph · YamlDocumentReader · NodeWriteRevision · DependencyReadiness · UlidIdGenerator · SystemClock · AesGcmCrypto · NodeCryptoSecret · PiAiModelCatalog · ConvictConfig · SqliteHomeLock + StatfsProbe</a>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> reads and writes real resources</div>
+
+        <div class="band external">
+          <div class="rail">
+            <span class="num">Layer 9 ⌂</span>
+            <a href="architecture/layer-9-external-resources.html">External resources</a>
+            <span class="hint">outside the process boundary</span>
+          </div>
+          <div class="chips">
+            <a class="chip" href="architecture/layer-9-external-resources.html#db">home/kanthord.db<small>one SQLite file, all state</small></a>
+            <a class="chip" href="architecture/layer-9-external-resources.html#home">home/<small>git worktrees · journal · run/ · keys</small></a>
+            <a class="chip" href="architecture/layer-9-external-resources.html#git-binary">git binary</a>
+            <a class="chip" href="architecture/layer-9-external-resources.html#secrets">config file · master key</a>
+            <a class="chip" href="architecture/layer-9-external-resources.html#models">model-provider APIs (pi-ai)</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>How to read these pages</h2>
+      <table class="edges">
+        <tr><th>If you want to know…</th><th>Read</th></tr>
+        <tr><td>how the layers relate and what constrains them</td><td>each layer page under Architecture, top to bottom</td></tr>
+        <tr><td>how a piece cooperates at runtime</td><td><a href="follow-a-request.html">Follow a request</a> — one claim traced end to end</td></tr>
+        <tr><td>how tasks are selected and run in parallel</td><td><a href="scheduler.html">Scheduling &amp; execution</a></td></tr>
+        <tr><td>what a word means</td><td><a href="glossary.html">Glossary</a></td></tr>
+        <tr><td>where a rule comes from</td><td><a href="viewer.html?p=architecture.md">the source diagram</a> and the proposal documents in the engine submodule</td></tr>
+      </table>
+    </section>
+
+    <section class="block">
+      <h2>Invariants worth memorizing</h2>
+      <ol class="notes">
+        <li>One transaction per write command: a state transition and its event append never sit in two transactions.</li>
+        <li>Determinism: same input, same output, same order, same bytes. Ties break by ULID, compared bytewise.</li>
+        <li>The CLI speaks HTTP only. It imports no command and no query.</li>
+        <li>Startup order: load config → acquire home lock → probe git tools → open and migrate SQLite → bootstrap actor → construct services → recover home → bind handlers → listen.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    kanthord-engine docs · static site served from <code>docs/</code> on main
+  </footer>
+</body>
+</html>

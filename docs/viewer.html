@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Viewer · kanthord</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="index.html">Architecture</a>
+      <a href="scheduler.html">Execution</a>
+      <a href="documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="documents.html">Documents</a> / <span id="crumb">…</span></p>
+    <article id="content" class="markdown-body">
+      <p class="viewer-status">Loading…</p>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    kanthord-engine docs · static site served from <code>docs/</code> on main
+  </footer>
+
+  <script defer>
+    window.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const path = params.get("p") || "architecture.md";
+      const content = document.getElementById("content");
+      const crumb = document.getElementById("crumb");
+      crumb.textContent = path;
+
+      if (path.startsWith("/") || path.includes("..") || !path.endsWith(".md")) {
+        content.innerHTML = '<p class="viewer-status">Invalid document path.</p>';
+        return;
+      }
+
+      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
+
+      marked.setOptions({ gfm: true, breaks: false });
+      mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+
+      fetch(path)
+        .then((res) => {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.text();
+        })
+        .then((text) => {
+          content.innerHTML = marked.parse(text);
+
+          content.querySelectorAll("pre > code.language-mermaid").forEach((el) => {
+            const div = document.createElement("div");
+            div.className = "mermaid";
+            div.textContent = el.textContent;
+            el.closest("pre").replaceWith(div);
+          });
+          mermaid.run({ nodes: content.querySelectorAll(".mermaid") });
+
+          content.querySelectorAll('a[href$=".md"]').forEach((a) => {
+            const href = a.getAttribute("href");
+            if (/^(https?:|mailto:|#)/.test(href)) return;
+            const resolved = new URL(href, "file:///" + dir).pathname.slice(1);
+            a.setAttribute("href", "viewer.html?p=" + encodeURI(resolved));
+          });
+        })
+        .catch((err) => {
+          content.innerHTML =
+            '<p class="viewer-status">Could not load ' + path +
+            " (" + err.message + '). Serve docs/ over HTTP — file:// does not allow fetch.</p>';
+        });
+    });
+  </script>
+</body>
+</html>

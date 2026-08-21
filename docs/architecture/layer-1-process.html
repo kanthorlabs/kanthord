@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 1 · Process · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 1</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> mark the process boundary, explain the
+      composition root, and fix the startup order.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 1</span>
+      <h1>Process</h1>
+    </div>
+    <p class="lede">
+      The process boundary. One entry point, one composition root.
+      main.ts is the only file allowed to name an implementation.
+    </p>
+
+    <h2>Components</h2>
+    <div class="cards">
+      <div class="card" id="bin">
+        <h3>kanthord bin (dist/main.js)</h3>
+        <p>The published executable. The repository ships TypeScript; npm emits
+        <code>dist/</code> through <code>tsconfig.build.json</code> and points <code>bin</code> at it.</p>
+      </div>
+      <div class="card" id="main">
+        <h3>src/main.ts · composition root</h3>
+        <p>Binds every dependency once. Constructs each service implementation,
+        injects it through its interface, builds the commander programs, and starts the server.</p>
+      </div>
+    </div>
+
+    <h2>Startup order</h2>
+    <ol class="rules">
+      <li>load config → acquire home lock → probe git tools</li>
+      <li>open and migrate SQLite → bootstrap actor</li>
+      <li>construct services → recover home → bind handlers → listen</li>
+    </ol>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>bin</td><td><a href="#main">main.ts</a></td><td>process entry</td></tr>
+      <tr><td>main.ts</td><td><a href="layer-2-cli.html">cli/</a></td><td><code>buildProgram</code>, wires commander programs</td></tr>
+      <tr><td>main.ts</td><td><a href="layer-8-service-implementations.html">implementations</a></td><td>constructs + injects every adapter</td></tr>
+      <tr><td><a href="layer-2-cli.html#serve">serve</a></td><td>main.ts</td><td>invokes <code>serve()</code></td></tr>
+      <tr><td><a href="layer-2-cli.html#db-migrate">db migrate</a></td><td>main.ts</td><td>invokes <code>migrate()</code></td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>Nothing imports <code>main.ts</code>. It sits at the top of the import matrix.</li>
+      <li>The transaction context belongs to storage. main.ts wires it, but never opens one.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-0-actors.html">← Layer 0 · Actors</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-2-cli.html">Layer 2 · cli/ →</a>
+    </nav>
+  </main>
+</body>
+</html>

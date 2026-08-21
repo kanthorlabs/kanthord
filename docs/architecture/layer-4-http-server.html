@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 4 · http/server/ · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 4</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> walk the middleware chain in order and state the
+      one job a handler is allowed to do.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 4</span>
+      <h1>http/server/ (koa)</h1>
+    </div>
+    <p class="lede">
+      Transport, nothing else. A koa server with a fixed middleware chain and about fifty
+      handlers that parse, invoke, and format.
+    </p>
+
+    <h2>Components</h2>
+    <div class="cards">
+      <div class="card" id="middleware">
+        <h3>Middleware chain</h3>
+        <p>envelope → origin → host → preflight → auth (Bearer, <code>timingSafeEqual</code>)
+        → route → authorize → bodyParser → idempotency (in-memory store) → dispatch</p>
+      </div>
+      <div class="card" id="handlers">
+        <h3>~50 operation handlers</h3>
+        <p>Each handler parses a request, invokes exactly one command or query,
+        and formats the response. A handler that branches on a domain rule is a defect.</p>
+      </div>
+      <div class="card" id="listener">
+        <h3>listen(bind:port)</h3>
+        <p>Binds the configured address and shuts down cleanly on SIGTERM or SIGINT.</p>
+      </div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-0-actors.html#worker">worker</a></td><td>claim · heartbeat · report</td></tr>
+      <tr><td><a href="layer-2-cli.html#daemon-client">DaemonClient</a></td><td>HTTP + Bearer token</td></tr>
+    </table>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>listen</td><td><a href="#middleware">middleware chain</a></td><td>every request enters here</td></tr>
+      <tr><td>middleware</td><td><a href="layer-3-http-contract.html#registry">operation registry</a></td><td>route match via</td></tr>
+      <tr><td>middleware</td><td><a href="#handlers">handlers</a></td><td>dispatch after auth and parse</td></tr>
+      <tr><td>handlers</td><td><a href="layer-5-application.html#commands">commands/</a></td><td>write paths</td></tr>
+      <tr><td>handlers</td><td><a href="layer-5-application.html#queries">queries/</a></td><td>read paths</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>A stubbed route answers 501 and writes nothing. An integration test compares database state before and after.</li>
+      <li>Route lifecycle is registry data. The handler signature admits only parse, invoke and format.</li>
+      <li>This layer may import domain, commands, queries, contract, and itself — nothing below Layer 5.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-3-http-contract.html">← Layer 3 · http/contract/</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-5-application.html">Layer 5 · Application logic →</a>
+    </nav>
+  </main>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 3 · http/contract/ · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 3</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> explain the transport contract that both the
+      server and the CLI consume, and the rules that keep it honest.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 3</span>
+      <h1>http/contract/ (transport contract)</h1>
+    </div>
+    <p class="lede">
+      The transport contract, with no koa in sight. Every operation id, method, path,
+      lifecycle status and zod schema lives here exactly once.
+    </p>
+
+    <h2>Components</h2>
+    <div class="cards">
+      <div class="card" id="registry">
+        <h3>Operation registry</h3>
+        <p>Registry data, not branches. Each declared operation appears once and carries:</p>
+        <p>· a typed path segment tuple — resource, subresource, action, system, parameter<br>
+        · a lifecycle: <code>routed</code>, <code>stubbed</code>, or absent (<code>post-mvp</code>)<br>
+        · zod schemas for request and response<br>
+        · an OpenAPI emitter that generates the published documents</p>
+      </div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-2-cli.html#daemon-client">DaemonClient</a></td><td>renders requests from the registry</td></tr>
+      <tr><td><a href="layer-4-http-server.html#middleware">middleware chain</a></td><td>matches routes via the registry</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>A <code>routed</code> entry binds to exactly one command or query. A <code>stubbed</code> entry binds to the shared 501 handler and names no command.</li>
+      <li>A path is a typed segment tuple, never a string. Every resource segment is singular.</li>
+      <li>OpenAPI documents are generated, never committed. The registry equals the proposal contract; a test in <code>npm run verify</code> enforces it.</li>
+      <li>This layer imports no koa. That is what lets the CLI consume it as a client of a remote daemon.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-2-cli.html">← Layer 2 · cli/</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-4-http-server.html">Layer 4 · http/server/ →</a>
+    </nav>
+  </main>
+</body>
+</html>

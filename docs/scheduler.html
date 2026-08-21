@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scheduling &amp; execution · kanthord</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="scheduler.html" aria-current="page">Execution</a>
+      <a href="follow-a-request.html">Follow a request</a>
+      <a href="glossary.html">Glossary</a>
+      <a href="documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="index.html">Overview</a> / Scheduling &amp; execution</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> answer the three questions every new engineer
+      asks — how a task is picked, how it runs, and what actually runs in parallel —
+      with one flowchart you can keep in your head.
+    </div>
+    <div class="layer-head">
+      <span class="num">Flow</span>
+      <h1>Scheduling &amp; execution</h1>
+    </div>
+    <p class="lede">
+      There is no scheduler component. Selection is a pull model: readiness promotes
+      tasks into a pool, and workers claim from it. This page is the one flow to know.
+    </p>
+
+    <section class="block">
+      <h2>Short answers</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>How does a task get selected?</h3>
+          <p>A task becomes <code>ready</code> when every non-waived dependency is
+          <code>done</code> or <code>partial</code>. Workers list nodes with
+          <code>state=ready</code> and claim one. Ties break by ULID, bytewise.</p>
+        </div>
+        <div class="card">
+          <h3>How does a task get executed?</h3>
+          <p>The claim opens one SQLite transaction: leases, run tree, first attempt,
+          state transition, events. The worker then executes in the objective's clone
+          and heartbeats to hold its lease.</p>
+        </div>
+        <div class="card">
+          <h3>How does parallel execution happen?</h3>
+          <p>Across objectives. Each objective owns one clone and holds one lease,
+          so its tasks run one at a time. Different objectives run on different
+          workers at the same time.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>The most important flow</h2>
+      <div class="diagram">
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 1</span>
+            <a href="architecture/layer-5-application.html#commands">Plan import</a>
+            <span class="hint">write path</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">every node starts <b>pending</b></span>
+            <span class="chip plain">objectives · tasks · dependency edges</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> a completing dependency re-evaluates its dependents</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 2</span>
+            <a href="architecture/layer-7-service-interfaces.html#planning">Readiness promotion</a>
+            <span class="hint">same transaction as the completion</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain"><code>pending → ready</code> when all deps are done/partial or waived</span>
+            <span class="chip plain"><code>ready → pending</code> demotion on regression</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> the ready pool grows</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 3</span>
+            <a href="architecture/layer-4-http-server.html#handlers">Worker polls the pool</a>
+            <span class="hint">read path over HTTP</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">list nodes filtered <code>state=ready</code></span>
+            <span class="chip plain">order: topological walk · ULID tie-break</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> the worker picks one and claims it</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 4</span>
+            <a href="architecture/layer-5-application.html#commands">Claim — one transaction</a>
+            <span class="hint">the heart of the flow</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">sweep expired leases</span>
+            <span class="chip plain">completeness check on ancestors</span>
+            <span class="chip plain">lease-hierarchy refusal: self · parent · sibling · descendant</span>
+            <span class="chip plain">acquire objective lease + task lease (fenced)</span>
+            <span class="chip plain">open or adopt objective run · open task run · attempt №1</span>
+            <span class="chip plain"><code>ready → running</code>, ancestors cascade</span>
+            <span class="chip plain">append <code>lease.claimed</code> + <code>node.running</code></span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> lease, fence, run id, attempt id return to the worker</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 5</span>
+            <a href="architecture/layer-9-external-resources.html#home">Execute in the clone</a>
+            <span class="hint">outside the daemon</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">one clone per objective, shared by its tasks</span>
+            <span class="chip plain">the worker's agent loop does the work, outside the daemon process</span>
+            <span class="chip plain">heartbeat every ttl ÷ 3 renews both leases, fence never changes</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> report · release · or failure</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 6</span>
+            <a href="architecture/layer-5-application.html#commands">Close and settle</a>
+            <span class="hint">write path</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">attempts close: released · cancelled · rejected</span>
+            <span class="chip plain"><code>running → done</code> or <code>partial</code></span>
+            <span class="chip plain">rejection loops to a new attempt, limit 3 → <code>blocked</code></span>
+            <span class="chip plain">release puts the task back to <code>ready</code></span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">▼</span> completion re-runs readiness in the same transaction</div>
+
+        <div class="band">
+          <div class="rail">
+            <span class="num">Step 7</span>
+            <a href="architecture/layer-6-domain.html#core">Readiness ripple</a>
+            <span class="hint">back to step 3</span>
+          </div>
+          <div class="chips">
+            <span class="chip plain">newly unblocked dependents promote to <code>ready</code></span>
+            <span class="chip plain">the pool refills without any central scheduler</span>
+          </div>
+        </div>
+        <div class="connector"><span class="arrow">↺</span> step 7 feeds step 3, until the graph drains</div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Where the parallelism actually is</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>Worker A</h3>
+          <p><code>objective-01</code> · clone A<br>
+          task → task → task, strictly serial.<br>
+          The objective lease is the serialization point.</p>
+        </div>
+        <div class="card">
+          <h3>Worker B</h3>
+          <p><code>objective-02</code> · clone B<br>
+          task → task → task, strictly serial.<br>
+          Runs at the same time as Worker A.</p>
+        </div>
+        <div class="card">
+          <h3>Why a sibling claim is refused</h3>
+          <p>A second claim on the same objective collides with the live
+          objective lease (<code>relation: parent</code>) or a sibling's lease.
+          Refusal names the holder, its fence, and its expiry.</p>
+        </div>
+      </div>
+      <ol class="rules" style="margin-top:0.9rem">
+        <li>One live lease per subject. The fence counter never resets, so a stale holder cannot write.</li>
+        <li>One active run per node, enforced by a partial index.</li>
+        <li>One clone per objective — the reason tasks of an objective cannot run side by side.</li>
+        <li>An expired lease does not heal itself. Recovery is explicit: status reports stale, then abandon or startup recovery acts.</li>
+      </ol>
+    </section>
+
+    <section class="block">
+      <h2>Where each step lives in the code</h2>
+      <table class="edges">
+        <tr><th>Step</th><th>Module</th></tr>
+        <tr><td>2 · promotion</td><td><code>src/domain/readiness.ts</code> · applied by <code>src/services/readiness/dependency.ts</code></td></tr>
+        <tr><td>3 · ordering</td><td><code>src/domain/task-order.ts</code> — topological walk, ULID tie-break</td></tr>
+        <tr><td>4 · claim</td><td><code>src/commands/node/claim-node.ts</code></td></tr>
+        <tr><td>4 · leases</td><td><code>src/domain/lease-hierarchy.ts</code> · <code>SqliteLease</code></td></tr>
+        <tr><td>4 · run tree</td><td><code>SqliteExecution</code> — run · attempt rows</td></tr>
+        <tr><td>5 · heartbeat</td><td><code>src/commands/node/heartbeat-node.ts</code> — renew at fence</td></tr>
+        <tr><td>6 · settle</td><td><code>src/commands/node/release-node.ts</code> · outcome commands</td></tr>
+        <tr><td>recovery</td><td>startup-recovery commands · <code>unblock</code> · <code>abandon</code></td></tr>
+      </table>
+    </section>
+
+    <nav class="pager">
+      <a href="index.html">↑ Overview</a>
+      <span class="spacer"></span>
+      <a href="follow-a-request.html">Follow a request →</a>
+    </nav>
+  </main>
+</body>
+</html>

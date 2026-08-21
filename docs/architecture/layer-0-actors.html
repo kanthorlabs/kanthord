@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 0 · Actors · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 0</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> identify who talks to the daemon and through
+      which door — the shell for the operator, HTTP for the worker.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 0</span>
+      <h1>Actors</h1>
+    </div>
+    <p class="lede">
+      Everyone outside the daemon. An operator drives the CLI from a shell.
+      A worker is a machine actor that talks to the HTTP API.
+    </p>
+
+    <h2>Components</h2>
+    <div class="cards">
+      <div class="card" id="operator">
+        <h3>Operator (shell)</h3>
+        <p>A human in a terminal. Runs <code>kanthord serve</code>, <code>kanthord db migrate</code>,
+        <code>kanthord config generate</code>, and the remote resource commands
+        (project, node, plan, repository, credential, actor, event, status).</p>
+      </div>
+      <div class="card" id="worker">
+        <h3>External worker / coding agent</h3>
+        <p>A separate process that owns execution. It claims nodes, sends heartbeats,
+        and reports outcomes over HTTP with a Bearer token. It never touches SQLite directly.</p>
+      </div>
+    </div>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>Operator</td><td><a href="layer-1-process.html#bin">kanthord bin</a></td><td>runs <code>kanthord …</code></td></tr>
+      <tr><td>Operator</td><td><a href="layer-2-cli.html#remote">remote commands</a></td><td>invokes resource subcommands</td></tr>
+      <tr><td>Worker</td><td><a href="layer-4-http-server.html#listener">listen(bind:port)</a></td><td>claim · heartbeat · report</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>An actor never reaches past Layer 4. The HTTP API is the only machine entrance.</li>
+      <li>The operator reaches storage directly once, through <code>db migrate</code>, before first serve.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="../index.html">↑ Overview</a>
+      <span class="spacer"></span>
+      <a href="layer-1-process.html">Layer 1 · Process →</a>
+    </nav>
+  </main>
+</body>
+</html>

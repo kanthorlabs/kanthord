@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layer 5 · Application logic · kanthord</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="../index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="../index.html">Overview</a>
+      <a href="../scheduler.html">Execution</a>
+      <a href="../documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="../index.html">Overview</a> / Layer 5</p>
+    <div class="purpose">
+      <em>Purpose of this page:</em> show where the business logic lives, what one
+      operation looks like, and the transaction rule that keeps writes honest.
+    </div>
+    <div class="layer-head">
+      <span class="num">Layer 5</span>
+      <h1>Application logic</h1>
+    </div>
+    <p class="lede">
+      The business logic of one operation per file. Commands write, queries read.
+      Neither imports a vendor package.
+    </p>
+
+    <h2>Commands — write paths</h2>
+    <div class="cards" id="commands">
+      <div class="card"><h3>provider · project · repository</h3><p>Registration and lifecycle of the resources a plan runs against.</p></div>
+      <div class="card"><h3>plan</h3><p>Import and revision of plan documents.</p></div>
+      <div class="card"><h3>node</h3><p>claim · heartbeat · release · report, and the rest of the node lifecycle.</p></div>
+      <div class="card"><h3>outcome</h3><p>report · close · aggregate of execution outcomes.</p></div>
+      <div class="card"><h3>actor · startup-recovery</h3><p>Actor bootstrap at startup, and recovery of an interrupted home.</p></div>
+    </div>
+
+    <h2>Queries — read paths</h2>
+    <div class="cards" id="queries">
+      <div class="card"><h3>system · provider · repository · project</h3><p>Status and configuration reads.</p></div>
+      <div class="card"><h3>node · edge</h3><p>Graph state reads, including listing and detail views.</p></div>
+      <div class="card"><h3>event · blob · plan · actor</h3><p>History, payload storage, plan documents and actor state.</p></div>
+    </div>
+
+    <h2>Inbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>Meaning</th></tr>
+      <tr><td><a href="layer-4-http-server.html#handlers">handlers</a></td><td>each handler invokes exactly one command or query</td></tr>
+    </table>
+
+    <h2>Outbound edges</h2>
+    <table class="edges">
+      <tr><th>From</th><th>To</th><th>Meaning</th></tr>
+      <tr><td>commands · queries</td><td><a href="layer-6-domain.html">domain/</a></td><td>validate against entities, state machines, schemas</td></tr>
+      <tr><td>commands · queries</td><td><a href="layer-7-service-interfaces.html">service interfaces</a></td><td>persist and reach effects through interfaces only</td></tr>
+    </table>
+
+    <h2>Rules</h2>
+    <ol class="rules">
+      <li>One operation per file, verb first. Dependencies first, input second. No class, no service locator, no module-level singleton.</li>
+      <li>A write command opens one <code>storage.transact</code>. Event, lease, execution and plan stores accept that transaction through their interfaces — a state transition and its event append never sit in two transactions.</li>
+      <li>No vendor imports in commands or queries. Vendors appear only behind Layer 7 interfaces.</li>
+    </ol>
+
+    <nav class="pager">
+      <a href="layer-4-http-server.html">← Layer 4 · http/server/</a>
+      <a href="../index.html">↑ Overview</a>
+      <a href="layer-6-domain.html">Layer 6 · domain/ →</a>
+    </nav>
+  </main>
+</body>
+</html>
