@@ -26,7 +26,8 @@ endif
 
 .PHONY: help up down restart status \
 	engine-up engine-down engine-migrate engine-logs \
-	app-up app-down app-logs
+	app-up app-down app-logs \
+	gitpull gitpush update
 
 help:
 	@echo "Kanthord local development. The daemon and the web app"
@@ -44,6 +45,10 @@ help:
 	@echo "  app-up         Start the web app on http://localhost:$(WEB_PORT)"
 	@echo "  app-down       Stop the web app"
 	@echo "  app-logs       Follow the web app log"
+	@echo ""
+	@echo "  gitpull        Pull this repository and both submodules"
+	@echo "  gitpush        Push main in both submodules, then this repository"
+	@echo "  update         Commit the new submodule commits into this repository"
 	@echo ""
 	@echo "Both targets detach, so the hot reload keys are not available."
 	@echo "For hot reload, run 'make dev' in apps/ instead. It stays in the foreground."
@@ -155,3 +160,17 @@ gitpull:
 
 gitpush:
 	git submodule foreach "git push origin main" && git push
+
+update:
+	@cd $(ROOT) && changed=""; \
+	for path in engine apps; do \
+		recorded=$$(git rev-parse --quiet --verify HEAD:$$path); \
+		current=$$(git -C $$path rev-parse HEAD); \
+		[ "$$recorded" = "$$current" ] || changed="$$changed $$path"; \
+	done; \
+	if [ -z "$$changed" ]; then echo "update: no new submodule commits"; exit 0; fi; \
+	for path in $$changed; do \
+		echo "update: $$path (new commits)"; \
+	done; \
+	git add -- $$changed; \
+	git commit -m "chore: bump $$(echo $$changed | sed 's/ /, /g')"
