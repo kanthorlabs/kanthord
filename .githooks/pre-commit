@@ -1,0 +1,33 @@
+#!/bin/sh
+set -e
+
+if [ -n "$KANTHORD_SKIP_SUBMODULE_PUSH" ]; then
+	echo "pre-commit: submodule push skipped"
+	exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+paths="engine apps"
+
+for path in $paths; do
+	dir="$root/$path"
+	branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD || true)
+	if [ "$branch" != "main" ]; then
+		echo "pre-commit: $path is not on main (${branch:-detached HEAD}). Check out main, then commit again." >&2
+		exit 1
+	fi
+	if [ -n "$(git -C "$dir" status --porcelain)" ]; then
+		echo "pre-commit: $path has uncommitted changes. They stay out of this commit."
+	fi
+done
+
+for path in $paths; do
+	echo "pre-commit: $path push origin main"
+	git -C "$root/$path" push origin main
+done
+
+for path in $paths; do
+	git -C "$root" add -- "$path"
+	echo "pre-commit: $path staged at $(git -C "$root/$path" rev-parse --short HEAD)"
+done
