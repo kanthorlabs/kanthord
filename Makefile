@@ -111,12 +111,12 @@ app-up: $(RUN_DIR)
 	echo $$! >$(APP_PID); \
 	printf "app: starting. The first web build takes about a minute"; \
 	for i in $$(seq 1 90); do \
-		grep -q "Starting application from main method" $(APP_LOG) 2>/dev/null && break; \
+		grep -q "is being served at" $(APP_LOG) 2>/dev/null && break; \
 		kill -0 $$(cat $(APP_PID)) 2>/dev/null || { \
 			echo " died"; tail -20 $(APP_LOG); rm -f $(APP_PID); exit 1; }; \
 		printf "."; sleep 2; \
 	done; \
-	if grep -q "Starting application from main method" $(APP_LOG) 2>/dev/null; then \
+	if grep -q "is being served at" $(APP_LOG) 2>/dev/null; then \
 		echo " ready on http://localhost:$(WEB_PORT)"; \
 	else \
 		echo " timeout"; tail -20 $(APP_LOG); exit 1; \
