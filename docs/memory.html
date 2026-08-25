@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory · kanthord</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html">kanthord<span>.</span></a>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="scheduler.html">Execution</a>
+      <a href="follow-a-request.html">Follow a request</a>
+      <a href="memory.html" aria-current="page">Memory</a>
+      <a href="glossary.html">Glossary</a>
+      <a href="documents.html">Documents</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="breadcrumb"><a href="index.html">Overview</a> / Memory</p>
+
+    <div class="purpose">
+      <em>Purpose of this page:</em> show the memory write path and the memory read
+      path across the same ten layers as the rest of the architecture, so you can see
+      which layer each decision belongs to and where a model is allowed to appear.
+    </div>
+
+    <div class="layer-head">
+      <h1>Memory — write path and read path</h1>
+    </div>
+
+    <p class="lede">
+      An agent starts every attempt with no experience. The attempt record already
+      holds what happened; that is evidence, and evidence is not memory. Memory is the
+      curated layer above it: a bounded taxonomy of <code>domain / topic / fact</code>
+      that a human can read in full.
+    </p>
+
+    <h2>The one rule that shapes both paths</h2>
+    <p>
+      <strong>The model decides where a candidate belongs. The rules decide what is legal.</strong>
+      The registry is closed to the model, the caps bind it, the scope rules bind it, and
+      it never writes. Every stage that touches a model is skippable: with no provider
+      registered, memory still files and still recalls.
+    </p>
+
+    <h2>Write path</h2>
+    <p>
+      Five stages, and exactly one of them calls a model. A machine capture is durable
+      before anything is derived from it, so a crash between the task transition and the
+      filing transaction loses nothing.
+    </p>
+
+    <pre class="mermaid">
+flowchart TB
+    subgraph L0["Layer 0 · Actors"]
+        agent["Coding agent<br/>finishes a task"]
+        human["Operator<br/>kanthord memory remember"]
+    end
+
+    subgraph L2["Layer 2 · cli/"]
+        cli["memory remember · resolve<br/>supersede · vocabulary"]
+    end
+
+    subgraph L3["Layer 3 · http/contract/"]
+        contract["memory.remember · memory.resolve<br/>vocabulary.declare · vocabulary.amend<br/>typed topic-path tuples"]
+    end
+
+    subgraph L4["Layer 4 · http/server/"]
+        handler["handler<br/>parse → one command → format<br/>no domain branching"]
+    end
+
+    subgraph L5["Layer 5 · commands/memory/"]
+        capture["capture<br/>writes memory_capture INSIDE<br/>the task transition transaction"]
+        stage1["1 · nominate — zero tokens"]
+        stage2["2 · classify — the only model call"]
+        stage3["3 · admit"]
+        stage4["4 · file — one transaction"]
+    end
+
+    subgraph L6["Layer 6 · domain/ (pure, zod only)"]
+        admission["memory-admission<br/>two floors · filing cap over the union<br/>exactly one primary filing"]
+        pathd["memory-path<br/>topic path tuple · one renderer"]
+        factd["memory-fact<br/>kinds · required fields<br/>canonical payload hash"]
+    end
+
+    subgraph L7["Layer 7 · services/ — interfaces"]
+        memif["MemoryStore<br/>accepts the transaction context"]
+        clsif["Classifier<br/>no tools · no workspace · no turn loop"]
+        stif["Storage — owns the transaction"]
+    end
+
+    subgraph L8["Layer 8 · services/ — implementations"]
+        sqlmem["SqliteMemoryStore<br/>FTS5 MATCH + bm25()<br/>relevance = -bm25()"]
+        piacls["PiAiClassifier<br/>call 1 domains → call 2 topics<br/>returns topic paths only"]
+    end
+
+    subgraph L9["Layer 9 · external resources"]
+        db[("kanthord.db<br/>memory_fact · memory_filing<br/>memory_journal · memory_index")]
+        provider["model provider API"]
+    end
+
+    agent -->|"task reaches done"| capture
+    human --> cli
+    cli --> contract
+    contract --> handler
+    handler --> stage1
+    capture -.->|"sweep reads the open row later"| stage1
+
+    stage1 --> stage2
+    stage2 --> stage3
+    stage3 --> stage4
+
+    stage1 -->|"relevance over descriptor + fact rows"| memif
+    stage2 --> clsif
+    stage3 -->|"pure predicate"| admission
+    stage4 --> pathd
+    stage4 --> factd
+    stage4 -->|"re-nominate and re-admit<br/>inside the transaction"| memif
+    stage4 --> stif
+
+    memif --> sqlmem
+    clsif --> piacls
+    stif --> sqlmem
+    sqlmem --> db
+    piacls -->|"one memory_inference row per call,<br/>opened BEFORE dispatch"| db
+    piacls --> provider
+
+    classDef model fill:#fde68a,stroke:#b45309,color:#7c2d12;
+    classDef pure fill:#dcfce7,stroke:#15803d,color:#14532d;
+    class stage2,clsif,piacls,provider model;
+    class admission,pathd,factd pure;
+    </pre>
+
+    <table class="edges">
+      <tr><th>Stage</th><th>Layer</th><th>Model</th><th>What it decides</th></tr>
+      <tr><td>capture</td><td>5</td><td>no</td><td>nothing. It names its evidence by blob and stops, inside the task transaction.</td></tr>
+      <tr><td>nominate</td><td>5 → 7 → 8</td><td>no</td><td>which topics share vocabulary with the candidate. Candidate generation, not membership.</td></tr>
+      <tr><td>classify</td><td>5 → 7 → 8</td><td><strong>yes</strong></td><td>where a paraphrase belongs. Two calls: domains, then topics inside them.</td></tr>
+      <tr><td>admit</td><td>6</td><td>no</td><td>what is legal: the registry, the caps, the scope rules, the single primary filing.</td></tr>
+      <tr><td>file</td><td>5 → 7 → 8 → 9</td><td>no</td><td>one transaction: dedupe, insert, reconcile filings, index, journal.</td></tr>
+    </table>
+
+    <h2>Read path</h2>
+    <p>
+      Recall is two stages, because that is how a person recalls: pick the subject, then
+      read what you know about it. A KanthorD attempt spends no model call on either
+      stage, because its recall is pinned once and every attempt renders the same bytes.
+    </p>
+
+    <pre class="mermaid">
+flowchart TB
+    subgraph L0r["Layer 0 · Readers"]
+        swe["general@1 / swe@1<br/>the implementer"]
+        rev["re@1<br/>the reviewer"]
+        foreign["Foreign harness<br/>Claude Code · Codex"]
+        opr["Operator<br/>kanthord memory recall"]
+    end
+
+    subgraph L2r["Layer 2 · cli/"]
+        clir["memory catalog · memory recall<br/>memory export"]
+    end
+
+    subgraph L3r["Layer 3 · http/contract/"]
+        contractr["memory.catalog · memory.recall<br/>memory.export"]
+    end
+
+    subgraph L4r["Layer 4 · http/server/"]
+        handlerr["handler · parse → one query → format"]
+        compiler["instruction compiler<br/>typed channels, precedence before rendering"]
+    end
+
+    subgraph L5r["Layer 5 · queries/memory/"]
+        catalog["stage 1 · catalog<br/>every domain and topic, bounded in bytes"]
+        recall["stage 2 · recall<br/>rank fact rows inside the chosen paths"]
+        pin["pin<br/>stored once, before a task's first attempt"]
+    end
+
+    subgraph L6r["Layer 6 · domain/ (pure)"]
+        order["memory-recall<br/>1 relevance desc · 2 scope tier · 3 fact ULID<br/>skip a fact that does not fit · never truncate"]
+        disp["dispute pairing<br/>both sides adjacent, or neither"]
+    end
+
+    subgraph L7r["Layer 7 · interfaces"]
+        memifr["MemoryStore"]
+        clsifr["Classifier — select: model only"]
+    end
+
+    subgraph L8r["Layer 8 · implementations"]
+        sqlr["SqliteMemoryStore<br/>bm25() over fact rows"]
+    end
+
+    subgraph L9r["Layer 9 · external"]
+        dbr[("kanthord.db<br/>memory_recall holds the rendered blob")]
+        tree[("exported tree<br/>CATALOG.md · fact/ · index/ · MANIFEST.json")]
+    end
+
+    opr --> clir
+    clir --> contractr
+    contractr --> handlerr
+    handlerr --> catalog
+    catalog --> recall
+    recall --> order
+    order --> disp
+    recall --> memifr
+    memifr --> sqlr
+    sqlr --> dbr
+
+    catalog -.->|"select: model — optional, audited"| clsifr
+
+    recall --> pin
+    pin -->|"stores the ordered ids AND the rendered bytes"| dbr
+    pin --> compiler
+    compiler -->|"channel: recalled memory<br/>below every contract channel"| swe
+    compiler -. "never receives the channel" .-> rev
+
+    clir -->|"memory export"| tree
+    tree -->|"reads files, its own model chooses"| foreign
+
+    classDef model fill:#fde68a,stroke:#b45309,color:#7c2d12;
+    classDef pure fill:#dcfce7,stroke:#15803d,color:#14532d;
+    classDef refused fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d;
+    class clsifr model;
+    class order,disp pure;
+    class rev refused;
+    </pre>
+
+    <h2>Three rules the diagrams encode</h2>
+    <ol class="rules">
+      <li>
+        <strong>The recall channel sits below every contract channel, and it is never
+        refused and never truncated.</strong> The resolver renders facts in rank order
+        and skips any whose rendered block would not fit, continuing with the next. A
+        single fact can never exceed the budget, because a body over the cap is refused
+        at write time.
+      </li>
+      <li>
+        <strong><code>re@1</code> receives no memory.</strong> A reviewer that reads what
+        the implementer read makes correlated mistakes, and the review stops being
+        independent. Every fact is implementation guidance by the definition of that
+        channel; anything that governs rather than advises belongs in the repository
+        profile.
+      </li>
+      <li>
+        <strong>A task's recall is pinned before its first attempt, and the pin stores
+        the result rather than the query.</strong> A <code>bm25()</code> relevance depends
+        on statistics over the whole index, so a fact written later would reorder an
+        older query. Storing the ordered ids and the rendered bytes is what makes an
+        attempt reproducible — and it is why an agent cannot change the instruction
+        governing its own run.
+      </li>
+    </ol>
+
+    <h2>Where a model may appear, and where it may not</h2>
+    <table class="edges">
+      <tr><th>Operation</th><th>Model</th><th>Why</th></tr>
+      <tr><td>Classify a candidate into topic paths</td><td>permitted</td><td>Placing a paraphrase is the one thing the lexical index cannot do.</td></tr>
+      <tr><td>Select paths on read (<code>select: model</code>)</td><td>permitted</td><td>Opt-in, audited identically, and never the default for an attempt.</td></tr>
+      <tr><td>Create a domain or a topic</td><td>refused</td><td>A model would consume the whole registry budget before a human read the catalog.</td></tr>
+      <tr><td>Resolve a draft into a fact</td><td>refused</td><td>A concise problem and solution pair is prose and a write. Both fail the inference-service exception.</td></tr>
+      <tr><td>Declare two facts contradictory</td><td>refused</td><td>The classifier never receives a fact body, so it has no evidence to compare.</td></tr>
+      <tr><td>Rank facts on read</td><td>refused</td><td>The ordering key is total and deterministic. A model in front of it buys variance.</td></tr>
+    </table>
+
+    <p class="lede">
+      The full specification is in the engine repository under
+      <code>docs/proposal/memory/</code>: the model and the scopes, the vocabulary and
+      its budgets, the write path, the read path, the architecture and the portable
+      format.
+    </p>
+
+    <nav class="pager">
+      <a href="follow-a-request.html">← Follow a request</a>
+      <a href="index.html">↑ Overview</a>
+      <a href="glossary.html">Glossary →</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    kanthord-engine docs · static site served from <code>docs/</code> on main
+  </footer>
+
+  <script defer>
+    window.addEventListener("DOMContentLoaded", () => {
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", flowchart: { htmlLabels: true } });
+    });
+  </script>
+</body>
+</html>
