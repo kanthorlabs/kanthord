@@ -65,6 +65,7 @@ help:
 	@echo "                 .worktreeinclude from the main checkout"
 	@echo "                 The engine worktree also gets its own kanthord.config.json"
 	@echo "                 Both need a local user section in the submodule"
+	@echo "                 Both open a shell in the new worktree. Ctrl-D returns"
 	@echo ""
 	@echo "  worktree-clean Report every worktree whose branch is merged or gone"
 	@echo "                 Pass DRY_RUN=0 to remove them"
@@ -274,7 +275,11 @@ engine-worktree app-worktree:
 		direnv allow "$$target" || exit 1; \
 	fi; \
 	(cd $(ENGINE_DIR) && $(CONFIGURE)) || exit 1; \
-	echo "$@: ready at $$target, as $$name <$$email>"
+	echo "$@: ready at $$target, as $$name <$$email>"; \
+	if [ -t 1 ]; then \
+		echo "$@: opening a shell there. Press Ctrl-D to come back"; \
+		cd "$$target" && exec $${SHELL:-/bin/sh}; \
+	fi
 
 worktree-clean:
 	@tmp=$$(mktemp); \
