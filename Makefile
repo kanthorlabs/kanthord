@@ -4,6 +4,7 @@ ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ENGINE_DIR := $(ROOT)/engine
 APP_DIR := $(ROOT)/apps
 RUN_DIR := $(ROOT)/.dev
+WORKTREE_DIR := $(ROOT)/.worktree
 
 ENGINE_PID := $(RUN_DIR)/engine.pid
 ENGINE_LOG := $(RUN_DIR)/engine.log
@@ -27,7 +28,8 @@ endif
 .PHONY: help up down restart status \
 	engine-up engine-down engine-migrate engine-logs \
 	app-up app-down app-logs \
-	gitpull gitpush update
+	gitpull gitpush \
+	engine-worktree app-worktree
 
 help:
 	@echo "Kanthord local development. The daemon and the web app"
@@ -47,8 +49,11 @@ help:
 	@echo "  app-logs       Follow the web app log"
 	@echo ""
 	@echo "  gitpull        Pull this repository and both submodules"
-	@echo "  gitpush        Push main in both submodules, then this repository"
-	@echo "  update         Commit the new submodule commits into this repository"
+	@echo "  gitpush        Commit and push both submodules, then this repository"
+	@echo "                 Pass MSG=\"...\" when a working tree is dirty"
+	@echo ""
+	@echo "  engine-worktree BRANCH=name  Add .worktree/engine/name"
+	@echo "  app-worktree    BRANCH=name  Add .worktree/apps/name"
 	@echo ""
 	@echo "Both targets detach, so the hot reload keys are not available."
 	@echo "For hot reload, run 'make dev' in apps/ instead. It stays in the foreground."
@@ -159,18 +164,60 @@ gitpull:
 	git pull --recurse-submodules && git submodule update --remote --merge
 
 gitpush:
-	git submodule foreach "git push origin main" && git push
-
-update:
-	@cd $(ROOT) && changed=""; \
+	@cd $(ROOT) && dirty=""; \
+	for path in engine apps; do \
+		[ -z "$$(git -C $$path status --porcelain)" ] || dirty="$$dirty $$path"; \
+	done; \
+	[ -z "$$(git status --porcelain --ignore-submodules=all)" ] || dirty="$$dirty ."; \
+	if [ -n "$$dirty" ] && [ -z "$(MSG)" ]; then \
+		echo "gitpush: dirty:$$dirty"; \
+		echo "gitpush: run 'make gitpush MSG=\"your message\"'"; exit 1; \
+	fi; \
+	for path in engine apps; do \
+		if [ -n "$$(git -C $$path status --porcelain)" ]; then \
+			echo "gitpush: commit $$path"; \
+			git -C $$path add -A && git -C $$path commit -m "$(MSG)" || exit 1; \
+		fi; \
+		echo "gitpush: push $$path"; \
+		git -C $$path push origin HEAD:main || exit 1; \
+	done; \
+	bumped=""; \
 	for path in engine apps; do \
 		recorded=$$(git rev-parse --quiet --verify HEAD:$$path); \
 		current=$$(git -C $$path rev-parse HEAD); \
-		[ "$$recorded" = "$$current" ] || changed="$$changed $$path"; \
+		[ "$$recorded" = "$$current" ] || bumped="$$bumped $$path"; \
 	done; \
-	if [ -z "$$changed" ]; then echo "update: no new submodule commits"; exit 0; fi; \
-	for path in $$changed; do \
-		echo "update: $$path (new commits)"; \
-	done; \
-	git add -- $$changed; \
-	git commit -m "chore: bump $$(echo $$changed | sed 's/ /, /g')"
+	if [ -n "$$bumped" ]; then \
+		git add -- $$bumped; \
+		git commit -m "chore: bump $$(echo $$bumped | sed 's/^ //;s/ /, /g')" || exit 1; \
+	fi; \
+	if [ -n "$$(git status --porcelain --ignore-submodules=all)" ]; then \
+		echo "gitpush: commit the parent repository"; \
+		git add -A && git commit -m "$(MSG)" || exit 1; \
+	fi; \
+	echo "gitpush: push the parent repository"; \
+	git push
+
+engine-worktree: BRANCH_DIR = $(WORKTREE_DIR)/engine
+engine-worktree: SUBMODULE_DIR = $(ENGINE_DIR)
+app-worktree: BRANCH_DIR = $(WORKTREE_DIR)/apps
+app-worktree: SUBMODULE_DIR = $(APP_DIR)
+
+engine-worktree app-worktree:
+	@if [ -z "$(BRANCH)" ]; then \
+		echo "$@: pass BRANCH=name"; exit 1; \
+	fi; \
+	target=$(BRANCH_DIR)/$(BRANCH); \
+	if [ -e "$$target" ]; then \
+		echo "$@: $$target already exists"; exit 1; \
+	fi; \
+	mkdir -p $$(dirname $$target); \
+	git -C $(SUBMODULE_DIR) fetch origin || exit 1; \
+	if git -C $(SUBMODULE_DIR) show-ref --verify --quiet refs/heads/$(BRANCH); then \
+		git -C $(SUBMODULE_DIR) worktree add "$$target" $(BRANCH) || exit 1; \
+	elif git -C $(SUBMODULE_DIR) show-ref --verify --quiet refs/remotes/origin/$(BRANCH); then \
+		git -C $(SUBMODULE_DIR) worktree add --track -b $(BRANCH) "$$target" origin/$(BRANCH) || exit 1; \
+	else \
+		git -C $(SUBMODULE_DIR) worktree add --no-track -b $(BRANCH) "$$target" origin/main || exit 1; \
+	fi; \
+	echo "$@: ready at $$target"
