@@ -270,6 +270,9 @@ engine-worktree app-worktree:
 			done; \
 		done < .worktreeinclude; \
 	fi; \
+	if [ -f "$$target/.envrc" ] && command -v direnv >/dev/null; then \
+		direnv allow "$$target" || exit 1; \
+	fi; \
 	(cd $(ENGINE_DIR) && $(CONFIGURE)) || exit 1; \
 	echo "$@: ready at $$target, as $$name <$$email>"
 
