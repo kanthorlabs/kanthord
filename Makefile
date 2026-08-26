@@ -6,6 +6,9 @@ APP_DIR := $(ROOT)/apps
 RUN_DIR := $(ROOT)/.dev
 WORKTREE_DIR := $(ROOT)/.worktree
 
+# worktree-clean reports only. Pass DRY_RUN=0 to remove.
+DRY_RUN ?= 1
+
 # The repository to read the commit identity from. A worktree target overrides
 # it with the submodule that owns the worktree.
 AUTHOR_PATH ?= $(ROOT)
@@ -63,7 +66,8 @@ help:
 	@echo "                 The engine worktree also gets its own kanthord.config.json"
 	@echo "                 Both need a local user section in the submodule"
 	@echo ""
-	@echo "  worktree-clean Remove every worktree whose branch is merged or gone"
+	@echo "  worktree-clean Report every worktree whose branch is merged or gone"
+	@echo "                 Pass DRY_RUN=0 to remove them"
 	@echo ""
 	@echo "  author         Report the local commit identity, or how to set it"
 	@echo "                 Pass AUTHOR_PATH=engine to check a submodule"
@@ -295,13 +299,23 @@ worktree-clean:
 			if [ -z "$$reason" ]; then \
 				echo "worktree-clean: keep   $$branch. It is not merged"; continue; \
 			fi; \
-			git -C $$path worktree remove --force "$$tree" || exit 1; \
-			git -C $$path branch -D "$$branch" >/dev/null || exit 1; \
-			echo "worktree-clean: remove $$branch. It is $$reason"; \
+			if [ "$(DRY_RUN)" = "0" ]; then \
+				git -C $$path worktree remove --force "$$tree" || exit 1; \
+				git -C $$path branch -D "$$branch" >/dev/null || exit 1; \
+				echo "worktree-clean: remove $$branch. It is $$reason"; \
+			else \
+				echo "worktree-clean: would remove $$branch. It is $$reason"; \
+			fi; \
 			echo removed >>$$tmp; \
 		done <$$tmp.list; \
-		git -C $$path worktree prune; \
+		if [ "$(DRY_RUN)" = "0" ]; then git -C $$path worktree prune; fi; \
 	done; \
-	find $(WORKTREE_DIR) -mindepth 1 -type d -empty -delete 2>/dev/null || true; \
-	[ -s $$tmp ] || echo "worktree-clean: nothing to remove"; \
+	if [ "$(DRY_RUN)" = "0" ]; then \
+		find $(WORKTREE_DIR) -mindepth 1 -type d -empty -delete 2>/dev/null || true; \
+	fi; \
+	if [ ! -s $$tmp ]; then \
+		echo "worktree-clean: nothing to remove"; \
+	elif [ "$(DRY_RUN)" != "0" ]; then \
+		echo "worktree-clean: dry run. Pass DRY_RUN=0 to apply"; \
+	fi; \
 	rm -f $$tmp $$tmp.list
