@@ -6,6 +6,10 @@ APP_DIR := $(ROOT)/apps
 RUN_DIR := $(ROOT)/.dev
 WORKTREE_DIR := $(ROOT)/.worktree
 
+# The repository to read the commit identity from. A worktree target overrides
+# it with the submodule that owns the worktree.
+AUTHOR_PATH ?= $(ROOT)
+
 ENGINE_PID := $(RUN_DIR)/engine.pid
 ENGINE_LOG := $(RUN_DIR)/engine.log
 APP_PID := $(RUN_DIR)/app.pid
@@ -29,7 +33,7 @@ endif
 	engine-up engine-down engine-migrate engine-logs \
 	app-up app-down app-logs \
 	gitpull gitpush \
-	engine-worktree app-worktree
+	author engine-worktree app-worktree worktree-clean
 
 help:
 	@echo "Kanthord local development. The daemon and the web app"
@@ -54,6 +58,15 @@ help:
 	@echo ""
 	@echo "  engine-worktree BRANCH=name  Add .worktree/engine/name"
 	@echo "  app-worktree    BRANCH=name  Add .worktree/apps/name"
+	@echo "                 Both targets copy the files listed in the submodule"
+	@echo "                 .worktreeinclude from the main checkout"
+	@echo "                 The engine worktree also gets its own kanthord.config.json"
+	@echo "                 Both need a local user section in the submodule"
+	@echo ""
+	@echo "  worktree-clean Remove every worktree whose branch is merged or gone"
+	@echo ""
+	@echo "  author         Report the local commit identity, or how to set it"
+	@echo "                 Pass AUTHOR_PATH=engine to check a submodule"
 	@echo ""
 	@echo "Both targets detach, so the hot reload keys are not available."
 	@echo "For hot reload, run 'make dev' in apps/ instead. It stays in the foreground."
@@ -198,15 +211,35 @@ gitpush:
 	echo "gitpush: push the parent repository"; \
 	git push
 
+author:
+	@name=$$(git -C $(AUTHOR_PATH) config --local user.name); \
+	email=$$(git -C $(AUTHOR_PATH) config --local user.email); \
+	if [ -n "$$name" ] && [ -n "$$email" ]; then \
+		echo "author: $(AUTHOR_PATH): $$name <$$email>"; exit 0; \
+	fi; \
+	echo "author: $(AUTHOR_PATH) has no local user section."; \
+	echo "author: set one. This machine reports:"; \
+	echo ""; \
+	echo "	git -C $(AUTHOR_PATH) config user.name \"$$(git config user.name)\""; \
+	echo "	git -C $(AUTHOR_PATH) config user.email \"$$(git config user.email)\""; \
+	echo ""; \
+	exit 1
+
 engine-worktree: BRANCH_DIR = $(WORKTREE_DIR)/engine
 engine-worktree: SUBMODULE_DIR = $(ENGINE_DIR)
+engine-worktree: CONFIGURE = node $(ENGINE_DIR)/src/main.ts config generate --home "$$target/.data/.kanthord" --output "$$target"
 app-worktree: BRANCH_DIR = $(WORKTREE_DIR)/apps
 app-worktree: SUBMODULE_DIR = $(APP_DIR)
+app-worktree: CONFIGURE = true
 
 engine-worktree app-worktree:
 	@if [ -z "$(BRANCH)" ]; then \
 		echo "$@: pass BRANCH=name"; exit 1; \
 	fi; \
+	report=$$($(MAKE) --no-print-directory author AUTHOR_PATH=$(SUBMODULE_DIR) 2>/dev/null) || { \
+		echo "$$report"; exit 1; }; \
+	name=$$(git -C $(SUBMODULE_DIR) config --local user.name); \
+	email=$$(git -C $(SUBMODULE_DIR) config --local user.email); \
 	target=$(BRANCH_DIR)/$(BRANCH); \
 	if [ -e "$$target" ]; then \
 		echo "$@: $$target already exists"; exit 1; \
@@ -220,4 +253,55 @@ engine-worktree app-worktree:
 	else \
 		git -C $(SUBMODULE_DIR) worktree add --no-track -b $(BRANCH) "$$target" origin/main || exit 1; \
 	fi; \
-	echo "$@: ready at $$target"
+	cd $(SUBMODULE_DIR); \
+	if [ -f .worktreeinclude ]; then \
+		while IFS= read -r entry; do \
+			case "$$entry" in ''|\#*|'!'*) continue ;; esac; \
+			for item in $$entry; do \
+				if [ -e "$$item" ] && git check-ignore -q -- "$$item"; then \
+					mkdir -p "$$target/$$(dirname "$$item")" || exit 1; \
+					cp -R "$$item" "$$target/$$item" || exit 1; \
+					echo "$@: copied $$item"; \
+				fi; \
+			done; \
+		done < .worktreeinclude; \
+	fi; \
+	(cd $(ENGINE_DIR) && $(CONFIGURE)) || exit 1; \
+	echo "$@: ready at $$target, as $$name <$$email>"
+
+worktree-clean:
+	@tmp=$$(mktemp); \
+	for path in $(ENGINE_DIR) $(APP_DIR); do \
+		git -C $$path fetch --prune origin >/dev/null 2>&1 || { \
+			echo "worktree-clean: fetch failed for $$path"; exit 1; }; \
+		git -C $$path worktree list --porcelain \
+			| awk '/^worktree /{tree=substr($$0,10)} /^branch /{print tree"\t"substr($$0,8)}' \
+			>$$tmp.list; \
+		while IFS="$$(printf '\t')" read -r tree ref; do \
+			case "$$tree" in "$(WORKTREE_DIR)"/*) ;; *) continue ;; esac; \
+			branch=$${ref#refs/heads/}; \
+			if [ -n "$$(git -C "$$tree" status --porcelain)" ]; then \
+				echo "worktree-clean: keep   $$branch. It has uncommitted changes"; continue; \
+			fi; \
+			reason=""; \
+			if git -C $$path merge-base --is-ancestor "$$branch" origin/main 2>/dev/null; then \
+				reason="merged into origin/main"; \
+			else \
+				upstream=$$(git -C $$path rev-parse --abbrev-ref --symbolic-full-name "$$branch@{upstream}" 2>/dev/null); \
+				if [ -n "$$upstream" ] && ! git -C $$path rev-parse --verify --quiet "$$upstream" >/dev/null; then \
+					reason="upstream $$upstream is gone"; \
+				fi; \
+			fi; \
+			if [ -z "$$reason" ]; then \
+				echo "worktree-clean: keep   $$branch. It is not merged"; continue; \
+			fi; \
+			git -C $$path worktree remove --force "$$tree" || exit 1; \
+			git -C $$path branch -D "$$branch" >/dev/null || exit 1; \
+			echo "worktree-clean: remove $$branch. It is $$reason"; \
+			echo removed >>$$tmp; \
+		done <$$tmp.list; \
+		git -C $$path worktree prune; \
+	done; \
+	find $(WORKTREE_DIR) -mindepth 1 -type d -empty -delete 2>/dev/null || true; \
+	[ -s $$tmp ] || echo "worktree-clean: nothing to remove"; \
+	rm -f $$tmp $$tmp.list
