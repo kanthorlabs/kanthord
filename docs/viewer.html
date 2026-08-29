@@ -31,50 +31,58 @@
 
   <script defer>
     window.addEventListener("DOMContentLoaded", () => {
-      const params = new URLSearchParams(window.location.search);
-      const path = params.get("p") || "architecture.md";
       const content = document.getElementById("content");
       const crumb = document.getElementById("crumb");
-      crumb.textContent = path;
-
-      if (path.startsWith("/") || path.includes("..") || !path.endsWith(".md")) {
-        content.innerHTML = '<p class="viewer-status">Invalid document path.</p>';
-        return;
-      }
-
-      const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
 
       marked.setOptions({ gfm: true, breaks: false });
       mermaid.initialize({ startOnLoad: false, theme: "neutral" });
 
-      fetch(path)
-        .then((res) => {
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          return res.text();
-        })
-        .then((text) => {
-          content.innerHTML = marked.parse(text);
+      const render = () => {
+        const params = new URLSearchParams(window.location.search);
+        const hashPath = decodeURIComponent(window.location.hash.slice(1));
+        const path = hashPath || params.get("p") || "architecture.md";
+        crumb.textContent = path;
 
-          content.querySelectorAll("pre > code.language-mermaid").forEach((el) => {
-            const div = document.createElement("div");
-            div.className = "mermaid";
-            div.textContent = el.textContent;
-            el.closest("pre").replaceWith(div);
-          });
-          mermaid.run({ nodes: content.querySelectorAll(".mermaid") });
+        if (path.startsWith("/") || path.includes("..") || !path.endsWith(".md")) {
+          content.innerHTML = '<p class="viewer-status">Invalid document path.</p>';
+          return;
+        }
 
-          content.querySelectorAll('a[href$=".md"]').forEach((a) => {
-            const href = a.getAttribute("href");
-            if (/^(https?:|mailto:|#)/.test(href)) return;
-            const resolved = new URL(href, "file:///" + dir).pathname.slice(1);
-            a.setAttribute("href", "viewer.html?p=" + encodeURI(resolved));
+        const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
+        content.innerHTML = '<p class="viewer-status">Loading…</p>';
+
+        fetch(path)
+          .then((res) => {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.text();
+          })
+          .then((text) => {
+            content.innerHTML = marked.parse(text);
+
+            content.querySelectorAll("pre > code.language-mermaid").forEach((el) => {
+              const div = document.createElement("div");
+              div.className = "mermaid";
+              div.textContent = el.textContent;
+              el.closest("pre").replaceWith(div);
+            });
+            mermaid.run({ nodes: content.querySelectorAll(".mermaid") });
+
+            content.querySelectorAll('a[href$=".md"]').forEach((a) => {
+              const href = a.getAttribute("href");
+              if (/^(https?:|mailto:|#)/.test(href)) return;
+              const resolved = new URL(href, "file:///" + dir).pathname.slice(1);
+              a.setAttribute("href", "viewer.html#" + encodeURI(resolved));
+            });
+          })
+          .catch((err) => {
+            content.innerHTML =
+              '<p class="viewer-status">Could not load ' + path +
+              " (" + err.message + '). Serve docs/ over HTTP — file:// does not allow fetch.</p>';
           });
-        })
-        .catch((err) => {
-          content.innerHTML =
-            '<p class="viewer-status">Could not load ' + path +
-            " (" + err.message + '). Serve docs/ over HTTP — file:// does not allow fetch.</p>';
-        });
+      };
+
+      window.addEventListener("hashchange", render);
+      render();
     });
   </script>
 </body>
