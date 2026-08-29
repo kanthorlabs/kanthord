@@ -6,6 +6,8 @@ These sequence diagrams describe the **planned live-mode dashboard flow** across
 
 ## Participants and invariants
 
+The sequence diagrams use a **blue band for dashboard/frontend elements** and an **amber band for engine/backend elements**. The user and vendor services sit outside both bands because they are external actors.
+
 - UI components call typed `ProviderResource` functions; they do not construct paths, headers, or raw `fetch` calls.
 - `ApiClient` is the only HTTP seam. In live mode it adds the bearer token and operation-specific idempotency key and decodes the common error envelope. In offline mode the same resource calls are dispatched to stateful fixtures instead.
 - A secret is never returned in a provider view. API keys and OAuth credentials are encrypted at rest. The UI must not put them in logs, browser storage, URL state, or telemetry.
@@ -18,16 +20,20 @@ These sequence diagrams describe the **planned live-mode dashboard flow** across
 sequenceDiagram
     autonumber
     actor U as User
-    participant P as Providers page
-    participant F as Register form
-    participant H as Registration hook
-    participant R as ProviderResource
-    participant C as ApiClient / fetch seam
-    participant A as kanthord HTTP API
-    participant Q as Catalog / inspect query
+    box rgb(232,240,254) Dashboard / frontend
+        participant P as Providers page
+        participant F as Register form
+        participant H as Registration hook
+        participant R as ProviderResource
+        participant C as ApiClient / fetch seam
+    end
+    box rgb(255,243,224) Engine / backend
+        participant A as kanthord HTTP API
+        participant Q as Catalog / inspect query
+        participant M as registerProvider command
+        participant S as Crypto + SQLite + event log
+    end
     participant V as LLM vendor endpoint
-    participant M as registerProvider command
-    participant S as Crypto + SQLite + event log
 
     U->>P: Select "Register provider"
     P->>F: Open form
@@ -98,17 +104,21 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor U as User
-    participant F as Register form
-    participant L as Subscription login page
-    participant H as useSubscriptionLogin
-    participant R as ProviderResource
-    participant C as ApiClient / fetch seam
-    participant A as kanthord HTTP API
-    participant PA as Provider-auth service / pi-ai
+    box rgb(232,240,254) Dashboard / frontend
+        participant F as Register form
+        participant L as Subscription login page
+        participant H as useSubscriptionLogin
+        participant R as ProviderResource
+        participant C as ApiClient / fetch seam
+        participant P as Providers page
+    end
+    box rgb(255,243,224) Engine / backend
+        participant A as kanthord HTTP API
+        participant PA as Provider-auth service / pi-ai
+        participant S as Encrypted provider_login + provider store
+        participant M as registerProvider command
+    end
     participant V as Vendor authorization service
-    participant S as Encrypted provider_login + provider store
-    participant M as registerProvider command
-    participant P as Providers page
 
     U->>F: Choose LLM vendor and "Subscription"
     Note over F: Subscription is offered only when catalogue.oauth is non-null.
@@ -249,14 +259,18 @@ The API has no update operation for the vendor, API key, base URL, or default mo
 sequenceDiagram
     autonumber
     actor U as User
-    participant P as Providers page
-    participant D as Provider detail panel
-    participant R as ProviderResource
-    participant C as ApiClient / fetch seam
-    participant A as kanthord HTTP API
-    participant M as Provider command/query
-    participant S as Crypto + SQLite + event log
-    participant PA as Provider-auth service / pi-ai
+    box rgb(232,240,254) Dashboard / frontend
+        participant P as Providers page
+        participant D as Provider detail panel
+        participant R as ProviderResource
+        participant C as ApiClient / fetch seam
+    end
+    box rgb(255,243,224) Engine / backend
+        participant A as kanthord HTTP API
+        participant M as Provider command/query
+        participant S as Crypto + SQLite + event log
+        participant PA as Provider-auth service / pi-ai
+    end
     participant V as LLM vendor endpoint
 
     U->>P: Open an API-key provider
@@ -333,14 +347,18 @@ A subscription registration has the same writable surface as an API-key registra
 sequenceDiagram
     autonumber
     actor U as User
-    participant P as Providers page
-    participant D as Provider detail panel
-    participant R as ProviderResource
-    participant C as ApiClient / fetch seam
-    participant A as kanthord HTTP API
-    participant M as Provider command/query
-    participant CS as Encrypted CredentialStore + SQLite
-    participant PA as Provider-auth service / pi-ai
+    box rgb(232,240,254) Dashboard / frontend
+        participant P as Providers page
+        participant D as Provider detail panel
+        participant R as ProviderResource
+        participant C as ApiClient / fetch seam
+    end
+    box rgb(255,243,224) Engine / backend
+        participant A as kanthord HTTP API
+        participant M as Provider command/query
+        participant CS as Encrypted CredentialStore + SQLite
+        participant PA as Provider-auth service / pi-ai
+    end
     participant V as Vendor authorization / LLM service
 
     U->>P: Open a subscription provider
@@ -417,15 +435,19 @@ Deleting a provider whose `setDefaultAt` is non-null is guarded **before** the d
 sequenceDiagram
     autonumber
     actor U as User
-    participant D as Provider detail panel
-    participant G as Remove-default alert dialog
-    participant H as useProviderRemoval
-    participant R as ProviderResource
-    participant C as ApiClient / fetch seam
-    participant A as kanthord HTTP API
-    participant M as setDefault/remove commands
-    participant S as SQLite + event log
-    participant P as Providers page
+    box rgb(232,240,254) Dashboard / frontend
+        participant D as Provider detail panel
+        participant G as Remove-default alert dialog
+        participant H as useProviderRemoval
+        participant R as ProviderResource
+        participant C as ApiClient / fetch seam
+        participant P as Providers page
+    end
+    box rgb(255,243,224) Engine / backend
+        participant A as kanthord HTTP API
+        participant M as setDefault/remove commands
+        participant S as SQLite + event log
+    end
 
     U->>D: Select "Remove provider"
     D->>H: requestRemoval(target, currentProviderList)
