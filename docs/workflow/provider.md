@@ -9,6 +9,7 @@ These sequence diagrams describe the **planned live-mode dashboard flow** across
 The sequence diagrams use a **blue band for dashboard/frontend elements** and an **amber band for engine/backend elements**. The user and vendor services sit outside both bands because they are external actors.
 
 - UI components call typed `ProviderResource` functions; they do not construct paths, headers, or raw `fetch` calls.
+- A catalogued `pi-ai` provider carries a fixed base URL and static models. The form renders no base-URL input for it and sends `baseUrl: null`; the engine selects the fixed endpoint by provider id. Only `openai-compatible` renders an editable, required base URL.
 - `ApiClient` is the only HTTP seam. In live mode it adds the bearer token and operation-specific idempotency key and decodes the common error envelope. In offline mode the same resource calls are dispatched to stateful fixtures instead.
 - A secret is never returned in a provider view. API keys and OAuth credentials are encrypted at rest. The UI must not put them in logs, browser storage, URL state, or telemetry.
 - Registration, rename, inspect, and verification use memory idempotency. A transport retry reuses the intent's key; a deliberate re-verification uses a new key or no key.
@@ -47,11 +48,12 @@ sequenceDiagram
     R-->>F: Populate provider select
 
     U->>F: Choose LLM + API key
-    U->>F: Enter name, vendor, API key, model, and required base URL
+    U->>F: Enter name, vendor, API key, and model
     Note over F: Vendor change clears model and stale base URL.<br/>Branch change or form close clears every secret.
 
-    opt Vendor is openai-compatible
-        F-->>U: Show "Test connection"
+    alt Vendor is openai-compatible
+        F-->>U: Show required, editable base URL and "Test connection"
+        U->>F: Enter the endpoint base URL
         U->>F: Select "Test connection"
         F->>R: inspect(provider, baseUrl, apiKey)
         R->>C: request(provider.inspect, body)
@@ -64,6 +66,9 @@ sequenceDiagram
         C-->>R: Typed models or ApiError
         R-->>F: Populate model select, count, or field/form error
         Note over F: Changing provider, URL, key, or model invalidates this result.<br/>The result is not stored as provider verification.
+    else Vendor is catalogued by pi-ai
+        F-->>U: Show static model choices with no base-URL input
+        Note over F: The catalog endpoint is fixed and cannot be overridden.<br/>Registration sends baseUrl:null.
     end
 
     U->>F: Select "Register"
@@ -96,7 +101,7 @@ sequenceDiagram
     end
 ```
 
-**Important:** ordinary API-key registration does not contact the vendor. Only the visible `openai-compatible` **Test connection** control calls `provider.inspect`. After registration, the user can run `provider.verify` from the detail panel to probe the stored default model.
+**Important:** ordinary API-key registration does not contact the vendor. A catalogued `pi-ai` provider uses its fixed endpoint and static model list; the dashboard neither renders nor submits an override. Only `openai-compatible` accepts a human-entered base URL, and only its visible **Test connection** control calls `provider.inspect`. After registration, the user can run `provider.verify` from the detail panel to probe the stored default model.
 
 ## 2. Register a new subscription provider
 
