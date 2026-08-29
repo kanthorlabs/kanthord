@@ -3,6 +3,7 @@
 ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 ENGINE_DIR := $(ROOT)/engine
 APP_DIR := $(ROOT)/apps
+CONTRACT_DIR := $(APP_DIR)/docs/api/contract
 RUN_DIR := $(ROOT)/.dev
 WORKTREE_DIR := $(ROOT)/.worktree
 
@@ -35,7 +36,7 @@ endif
 .PHONY: help up down restart status \
 	engine-up engine-down engine-migrate engine-logs \
 	app-up app-down app-logs \
-	gitpull gitpush \
+	contract-publish gitpull gitpush \
 	author engine-worktree app-worktree worktree-clean
 
 help:
@@ -54,6 +55,9 @@ help:
 	@echo "  app-up         Start the web app on http://localhost:$(WEB_PORT)"
 	@echo "  app-down       Stop the web app"
 	@echo "  app-logs       Follow the web app log"
+	@echo ""
+	@echo "  contract-publish  Publish the clean, merged engine contract into apps"
+	@echo "                    Commit it there with the carried EPICs 042-045"
 	@echo ""
 	@echo "  gitpull        Pull this repository and both submodules"
 	@echo "  gitpush        Commit and push both submodules, then this repository"
@@ -176,6 +180,57 @@ status:
 	else \
 		echo "app: port $(WEB_PORT) free"; \
 	fi
+
+contract-publish:
+	@engine_branch=$$(git -C $(ENGINE_DIR) branch --show-current); \
+	app_branch=$$(git -C $(APP_DIR) branch --show-current); \
+	if [ "$$engine_branch" != "main" ]; then \
+		echo "contract-publish: engine must be on main, not $${engine_branch:-detached}"; exit 1; \
+	fi; \
+	if [ "$$app_branch" != "main" ]; then \
+		echo "contract-publish: apps must be on main, not $${app_branch:-detached}"; exit 1; \
+	fi; \
+	if [ -n "$$(git -C $(ENGINE_DIR) status --porcelain)" ]; then \
+		echo "contract-publish: engine has uncommitted changes"; exit 1; \
+	fi; \
+	if [ -n "$$(git -C $(APP_DIR) status --porcelain)" ]; then \
+		echo "contract-publish: apps has uncommitted changes"; exit 1; \
+	fi; \
+	git -C $(ENGINE_DIR) fetch origin main || exit 1; \
+	git -C $(APP_DIR) fetch origin main || exit 1; \
+	engine_commit=$$(git -C $(ENGINE_DIR) rev-parse HEAD); \
+	if [ "$$engine_commit" != "$$(git -C $(ENGINE_DIR) rev-parse origin/main)" ]; then \
+		echo "contract-publish: engine HEAD is not the merged origin/main commit"; exit 1; \
+	fi; \
+	if [ "$$(git -C $(APP_DIR) rev-parse HEAD)" != "$$(git -C $(APP_DIR) rev-parse origin/main)" ]; then \
+		echo "contract-publish: apps HEAD is not current with origin/main"; exit 1; \
+	fi; \
+	cd $(ENGINE_DIR) && npm run contract:publish -- --unreleased $(CONTRACT_DIR) || exit 1; \
+	has_042=0; has_043=0; has_044=0; has_045=0; \
+	grep -q 'name: force' $(CONTRACT_DIR)/features/provider.yaml && has_042=1; \
+	grep -q 'requiredAccess:' $(CONTRACT_DIR)/features/repository.yaml && has_043=1; \
+	grep -q '"provider.verify"' $(CONTRACT_DIR)/manifest.json && has_044=1; \
+	if grep -q '"provider.loginStart"' $(CONTRACT_DIR)/manifest.json \
+		&& grep -q '"provider.loginComplete"' $(CONTRACT_DIR)/manifest.json \
+		&& grep -q '"provider.loginCancel"' $(CONTRACT_DIR)/manifest.json; then has_045=1; fi; \
+	case "$$has_042$$has_043$$has_044$$has_045" in \
+		1000) epics="042" ;; \
+		1100) epics="042, 043" ;; \
+		1110) epics="042, 043, 044" ;; \
+		1111) epics="042, 043, 044, 045" ;; \
+		*) echo "contract-publish: contract does not carry a contiguous EPIC 042-045 publication"; exit 1 ;; \
+	esac; \
+	if [ "$$(node -p "require('$(CONTRACT_DIR)/manifest.json').commit")" != "$$engine_commit" ]; then \
+		echo "contract-publish: manifest does not name engine HEAD"; exit 1; \
+	fi; \
+	git -C $(APP_DIR) add -A -- docs/api/contract; \
+	if git -C $(APP_DIR) diff --cached --quiet -- docs/api/contract; then \
+		echo "contract-publish: generated contract has no changes"; exit 1; \
+	fi; \
+	short_commit=$$(git -C $(ENGINE_DIR) rev-parse --short=8 HEAD); \
+	message="chore(contract): publish EPICs $$epics at engine $$short_commit"; \
+	git -C $(APP_DIR) commit -m "$$message" -- docs/api/contract || exit 1; \
+	echo "contract-publish: committed engine $$engine_commit carrying EPICs $$epics in apps"
 
 gitpull:
 	git submodule sync
