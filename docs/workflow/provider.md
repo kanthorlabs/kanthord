@@ -170,43 +170,51 @@ sequenceDiagram
         end
     end
 
-    Note over H,L: The remaining flow applies after loginStart returns a challenge.
-    alt Manual-code challenge
-        H-->>L: authUrl link, instructions, expiry, code field
-        L-->>U: Show link and code input, with submit enabled when empty
+    Note over H,L: The engine prefers device code when the vendor offers it.<br/>Otherwise it uses browser callback with a manual fallback.
+    alt Browser callback (no challenge code)
+        H-->>L: authUrl, instructions, expiry, optional fallback code field
+        L-->>U: Show "Open browser" and explain that no code is normally required
         U->>V: Open authUrl and authorize account
-        V-->>PA: Callback may complete the library-owned flow
-        U->>L: Optionally paste code, then select "Continue"
+        alt Browser can reach the pi-ai callback listener
+            V-->>U: Redirect browser to the local callback
+            U->>PA: Deliver callback to the library-owned listener
+            PA-->>PA: Resolve login without a pasted code
+            U->>L: Return and select "Continue" with code empty
+        else Remote browser cannot reach the callback listener
+            V-->>U: Show authorization code or final redirect URL
+            U->>L: Paste value into the fallback field and select "Continue"
+        end
         L->>H: complete(loginId, code?)
         H->>R: loginComplete({loginId, code?})
         R->>C: request(provider.loginComplete, body)
         C->>A: POST /v1/provider/login/complete
-        A->>PA: Supply pasted code or read callback-completed state
-        alt Manual flow is still suspended and code is absent
+        A->>PA: Read callback result or supply fallback code
+        alt Callback is still pending and fallback code is absent
             A-->>C: 400 code-required
             C-->>R: ApiError
             R-->>H: Keep challenge active
-            H-->>L: Ask for the code without discarding the login
+            H-->>L: Explain the remote-browser fallback without discarding the login
         else Login expired or daemon lost its in-process flow
             A-->>C: 400 login-expired or login-lost
             C-->>R: ApiError
             R-->>H: Distinct refusal
             H-->>L: Explain expiry/loss and require a new login
-        else Manual flow completed
+        else Callback or fallback completed
             PA->>S: Encrypt credential and exact model IDs, then mark login completed
             A-->>C: 200 {loginId, models}
             C-->>R: Typed completion
             R-->>H: Completion result
         end
-    else Device-code challenge
+    else Device-code challenge (headless or remote)
         H-->>L: userCode, verificationUri, expiresAt, pollIntervalMs
-        L-->>U: Show code, link, and countdown
-        U->>V: Open verificationUri, enter userCode, authorize
+        L-->>U: Show code, browser link, countdown, and entry instructions
+        U->>V: Open verificationUri and enter userCode in the vendor browser
+        Note over H,A: Dashboard completion polls carry loginId only, never userCode.
         loop Every pollIntervalMs until completion or expiry
             H->>R: loginComplete({loginId})
             R->>C: request(provider.loginComplete, body)
             C->>A: POST /v1/provider/login/complete
-            A->>PA: Read in-process flow state
+            A->>PA: Read library-owned vendor poll state
             alt Vendor flow is still pending
                 A-->>C: 400 login-pending
                 C-->>R: ApiError
@@ -215,7 +223,7 @@ sequenceDiagram
                 A-->>C: 400 login-expired or login-lost
                 C-->>R: ApiError
                 R-->>H: Stop polling and explain that a new login is required
-            else Vendor flow completed
+            else Vendor confirms the userCode
                 PA->>S: Encrypt credential and exact model IDs, then mark login completed
                 A-->>C: 200 {loginId, models}
                 C-->>R: Typed completion
@@ -253,6 +261,8 @@ sequenceDiagram
         H-->>L: Keep non-secret choices and explain the refusal
     end
 ```
+
+The two codes travel in opposite directions and are not interchangeable. A browser-flow fallback copies an authorization code or final redirect URL from the browser into the dashboard only when the callback cannot reach the daemon. A device flow shows `userCode` in the dashboard for the human to enter in the vendor's browser; the dashboard never sends that value to `loginComplete`.
 
 A pending or completed login is not itself a provider. The provider row exists only after `provider.register` succeeds and consumes the `loginId`.
 
