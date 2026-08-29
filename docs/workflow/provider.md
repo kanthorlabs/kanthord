@@ -559,11 +559,3 @@ sequenceDiagram
 | Remove anyway | `force=true` ignores only `default-chain`. On success, no provider is default until the user appoints one. |
 | Other blockers | `project-binding`, `repository`, and `attempt` always refuse deletion, even with `force=true`; the UI lists them and never auto-resolves them. |
 | Cancel | No HTTP request and no state change. |
-
-## Source material
-
-- `apps/.agents/plan/transport-foundation--01m13wjg35r6akr4fh41a4zj17`
-- `apps/.agents/plan/subscription-login--01m13wjg5pb5nabbtb8t2v2bxf`
-- `apps/.agents/plan/provider-crud--01m13wjg401jqj8xezaph3s633`
-- `apps/.agents/plan/provider-readiness--01m13wjg520a3qwh4a5xz8c9f0`
-- `apps/docs/api/operations.md`, `errors.md`, and `contract/features/provider.yaml`
