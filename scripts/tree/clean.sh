@@ -53,7 +53,7 @@ for repo in $SUBMODULES; do
 		else
 			upstream=$(git -C "$dir" rev-parse --abbrev-ref --symbolic-full-name "$branch@{upstream}" 2>/dev/null)
 			if [ -n "$upstream" ] && ! git -C "$dir" rev-parse --verify --quiet "$upstream" >/dev/null; then
-				reason="upstream $upstream is gone"
+				reason="abandoned. Its upstream $upstream is gone"
 			fi
 		fi
 
