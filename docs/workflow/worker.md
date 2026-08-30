@@ -9,7 +9,7 @@
 | `initiative` | One outcome that several objectives deliver. | Provider CRUD |
 | `objective` | One deliverable in one repository. | Contract types, in `kanthord-apps` |
 | `task` | One unit of behaviour. | Projection union |
-| `deliverable` | The outcome a node declares. Never a method. | `test`, `implementation`, `review`, `research`, `expansion` |
+| `deliverable` | The outcome a node declares. Never a method. | `test`, `implementation`, `review`, `expansion`; `research` is deferred |
 | pair | The `kind` and the `deliverable` together. The pair fixes the shape and the state owner. | `(objective, implementation)` |
 | parent objective | An objective that declares `expansion`. It holds children. | An objective that splits into five tasks. |
 | atomic objective | An objective that declares an execution deliverable. It holds no child. | An objective that one worker finishes alone. |
@@ -68,15 +68,17 @@ A node is the unit of work in the graph.
 
 A node declares a deliverable. A deliverable is an outcome, never a method.
 
-| `deliverable` | Purpose |
-| --- | --- |
-| `test` | A test that fails at this node's commit and names the missing behaviour. |
-| `implementation` | Code that makes the declared tests pass. |
-| `review` | A verdict against the acceptance criteria. |
-| `research` | A document that answers the node's question. |
-| `expansion` | Child nodes that satisfy the parent's acceptance criteria. |
+| `deliverable` | Purpose | Status |
+| --- | --- | --- |
+| `test` | A test that fails at this node's commit and names the missing behaviour. | ships |
+| `implementation` | Code that makes the declared tests pass. | ships |
+| `review` | A verdict against the acceptance criteria. | ships |
+| `research` | A document that answers the node's question. | **deferred** |
+| `expansion` | Child nodes that satisfy the parent's acceptance criteria. | ships |
 
 The set of deliverables grows. A deliverable never carries an agent name.
+
+**`research` is deferred.** The shipped enum holds four values: `test`, `implementation`, `review` and `expansion`. This phase does no research work, and `research@1` is the only worker that would produce a research document. Section 4 defers every internal worker, so a `research` node would be `unroutable` from the day it is created. Shipping a value no worker can claim publishes a state the product cannot leave. A later epic adds `research` to the enum together with the runner that executes it, and the pair rows below are the model that epic restores. Until then a document declaring `deliverable: research` is refused at parse.
 
 The `kind` and the `deliverable` form a pair. The pair is legal, or the daemon rejects the node. The pair fixes the shape of the node and the owner of its state.
 
@@ -84,8 +86,8 @@ The `kind` and the `deliverable` form a pair. The pair is legal, or the daemon r
 | --- | --- | --- | --- |
 | `initiative` | `expansion` | Holds children. | `aggregate` |
 | `objective` | `expansion` | Holds children. | `aggregate` |
-| `objective` | `test`, `implementation`, `review`, `research` | Holds no child. | Attestation, then a human. |
-| `task` | `test`, `implementation`, `review`, `research` | Holds no child. | Its own accepted report. |
+| `objective` | `test`, `implementation`, `review`, and `research` when it lands | Holds no child. | Attestation, then a human. |
+| `task` | `test`, `implementation`, `review`, and `research` when it lands | Holds no child. | Its own accepted report. |
 
 An objective that declares `expansion` is a parent objective. An objective that declares an execution deliverable is an atomic objective.
 
@@ -306,7 +308,7 @@ The node's `deliverable` selects the run kind. The worker's metadata does not.
 | `run.kind` | Checkpoint | Node `deliverable` |
 | --- | --- | --- |
 | `structural` | A graph patch against a graph revision. | `expansion` |
-| `execution` | An artifact candidate, qualified by repository. | `test`, `implementation`, `research` |
+| `execution` | An artifact candidate, qualified by repository. | `test`, `implementation`; `research` when it lands |
 | `review` | An attestation. | `review` |
 
 External:
@@ -360,7 +362,7 @@ The pair of section 2 selects the state owner.
 
 Initiative state and parent objective state derive from children. `aggregate` owns them: every child `done` gives `done`; every child `discarded` gives `discarded`; a mixture gives `partial`.
 
-A run never sets an initiative or a parent objective terminal state. A research worker finishes a run against an initiative. The initiative stays `pending` or `ready`. An author worker then claims the same initiative and expands it.
+A run never sets an initiative or a parent objective terminal state. An initiative declares `expansion`, so its run is `structural`. The run records its checkpoint and the initiative stays `pending` or `ready`. The initiative then moves only by aggregation over the children that run created. While `research` is deferred, no research run precedes it; when `research` lands, a research worker may finish a run against an initiative first, and that run does not move it either.
 
 Human input overrides aggregation. Aggregation overrides attestation.
 
