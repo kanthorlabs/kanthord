@@ -1,33 +1,48 @@
 #!/bin/sh
+# Validation only. It never pushes and it never stages.
+#
+# Publishing belongs to 'make sync-all', which pushes the submodules before the
+# parent and proves every gitlink is reachable. A hook that pushes first can
+# publish submodule commits for a parent commit that then fails.
 set -e
 
 if [ -n "$KANTHORD_SKIP_SUBMODULE_PUSH" ]; then
-	echo "pre-commit: submodule push skipped"
+	echo "pre-commit: submodule validation skipped"
 	exit 0
 fi
 
 root=$(git rev-parse --show-toplevel)
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 paths="engine apps"
+failed=0
 
 for path in $paths; do
 	dir="$root/$path"
+	staged=$(git -C "$root" ls-files --stage -- "$path" | awk '{print $2}')
+	[ -n "$staged" ] || continue
+
 	branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD || true)
 	if [ "$branch" != "main" ]; then
-		echo "pre-commit: $path is not on main (${branch:-detached HEAD}). Check out main, then commit again." >&2
-		exit 1
+		echo "pre-commit: $path is not on main (${branch:-detached HEAD})." >&2
+		failed=1
+		continue
 	fi
-	if [ -n "$(git -C "$dir" status --porcelain)" ]; then
-		echo "pre-commit: $path has uncommitted changes. They stay out of this commit."
+
+	recorded=$(git -C "$root" rev-parse --quiet --verify "HEAD:$path" || true)
+	[ "$staged" = "$recorded" ] && continue
+
+	git -C "$dir" fetch --quiet origin main || {
+		echo "pre-commit: $path fetch failed. Cannot verify the staged pointer." >&2
+		failed=1
+		continue
+	}
+	if ! git -C "$dir" merge-base --is-ancestor "$staged" origin/main 2>/dev/null; then
+		echo "pre-commit: $path pointer $staged is not on its origin/main." >&2
+		echo "pre-commit: this commit would name a commit nobody can fetch. Run 'make sync-all'." >&2
+		failed=1
+		continue
 	fi
+	echo "pre-commit: $path pointer $(git -C "$dir" rev-parse --short "$staged") is published"
 done
 
-for path in $paths; do
-	echo "pre-commit: $path push origin main"
-	git -C "$root/$path" push origin main
-done
-
-for path in $paths; do
-	git -C "$root" add -- "$path"
-	echo "pre-commit: $path staged at $(git -C "$root/$path" rev-parse --short HEAD)"
-done
+exit $failed
