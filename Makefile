@@ -12,6 +12,7 @@ export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
 .PHONY: help \
+	repo-bootstrap repo-attach \
 	up down restart status logs \
 	dev-up dev-down dev-restart dev-status dev-logs \
 	engine-up engine-down engine-logs engine-migrate engine-install \
@@ -22,6 +23,14 @@ export WEB_PORT ?= 27182
 
 help:
 	@echo "Kanthord. Every target runs a script under scripts/<category>/"
+	@echo ""
+	@echo "repo. A fresh clone"
+	@echo "  repo-bootstrap   Make a clone ready to work in. Run this first"
+	@echo "                   Prerequisites, submodules, branches, identity,"
+	@echo "                   dependencies, daemon configuration and database"
+	@echo "                   It is idempotent, so it also repairs a drifted checkout"
+	@echo "  repo-attach      Put both submodules back on main"
+	@echo "                   A clone leaves them detached, and sync refuses that"
 	@echo ""
 	@echo "dev. The daily loop"
 	@echo "  dev-up           Start the daemon and the dashboard"
@@ -75,6 +84,11 @@ help:
 	@echo "  git-author       Apply the root commit identity to both submodules"
 	@echo "                   Only this repository needs a local user section"
 	@echo "                   CHECK=1 reports only, and fails on a mismatch"
+
+repo-bootstrap:
+	@$(S)/repo/bootstrap.sh
+repo-attach:
+	@$(S)/repo/attach.sh
 
 up: dev-up
 down: dev-down
