@@ -4,8 +4,9 @@
 #   REPO=engine|apps BRANCH=name scripts/tree/new.sh
 #
 # A new branch always starts from the freshly fetched origin/main. The tree
-# then gets the ignored local files listed in .worktreeinclude, its own
-# dependencies, and, for the daemon, its own configuration and home.
+# then gets the ignored local files listed in .worktreeinclude, links the
+# parent repository directories it may reference, installs its own dependencies,
+# and, for the daemon, creates its own configuration and home.
 SCRIPT_NAME=tree-new
 . "$(dirname "$0")/../lib/common.sh"
 
@@ -18,6 +19,15 @@ case "$REPO" in engine | apps) ;; *) die "REPO must be engine or apps" ;; esac
 source_dir=$(repo_dir "$REPO")
 target="$WORKTREE_DIR/$REPO/$BRANCH"
 [ -e "$target" ] && die "$target already exists"
+
+# These live in the parent repository, beside the normal engine and apps
+# checkouts. A linked worktree is nested more deeply, so recreate that sibling
+# relationship beside it. Keep this list explicit as more shared directories
+# are introduced.
+PARENT_DIRS="docs"
+for directory in $PARENT_DIRS; do
+	[ -d "$ROOT/$directory" ] || die "parent directory $ROOT/$directory does not exist"
+done
 
 # The root identity is the only one to set. It is applied to both submodules.
 author_report=$("$ROOT/scripts/git/author.sh" 2>&1) || {
@@ -39,6 +49,21 @@ else
 	git -C "$source_dir" worktree add --no-track -b "$BRANCH" "$target" origin/main || die "worktree add failed"
 	log "branched $BRANCH from the fetched origin/main"
 fi
+
+# Code in either submodule can continue to resolve ../docs from its worktree.
+# Multiple branches with the same prefix share this link.
+target_parent=$(dirname "$target")
+for directory in $PARENT_DIRS; do
+	source="$ROOT/$directory"
+	link="$target_parent/$directory"
+	if [ -L "$link" ]; then
+		[ "$link" -ef "$source" ] || die "$link does not point to $source"
+		continue
+	fi
+	[ ! -e "$link" ] || die "$link exists and is not a symlink"
+	ln -s "$source" "$link" || die "could not link $link to $source"
+	log "linked parent $directory"
+done
 
 # Ignored local files the checkout cannot carry, such as .env.
 if [ -f "$source_dir/.worktreeinclude" ]; then
