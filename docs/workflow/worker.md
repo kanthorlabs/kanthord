@@ -91,7 +91,7 @@ The `kind` and the `deliverable` form a pair. The pair is legal, or the daemon r
 
 An objective that declares `expansion` is a parent objective. An objective that declares an execution deliverable is an atomic objective.
 
-The pair is fixed once the node holds an accepted checkpoint or a child. Before that, a structural patch changes it. The patch obeys the rules of section 7, like every other structural mutation. A parent objective becomes atomic only after a structural patch deletes every child, in any state.
+The pair is fixed once the node holds an accepted checkpoint or a child. Before that, a structural patch changes it. The patch obeys the rules of section 7, like every other structural mutation. The fix is permanent, and a checkpoint of any kind causes it. A parent objective therefore does not become atomic. An accepted expansion writes a structural checkpoint on the claimed node, so an expanded objective keeps its pair for its whole life.
 
 ```yaml
 # initiative.md
@@ -382,7 +382,7 @@ A worker that claims an initiative serializes that whole initiative. Structural 
 
 The completeness check does not gate a node that declares `deliverable: expansion`. That node holds no child yet, because producing its children is the work. The exemption covers that node's own missing children, and nothing else.
 
-An accepted expansion checkpoint creates at least one child. The daemon rejects an expansion patch that creates none. This bounds the exemption above.
+An accepted expansion checkpoint leaves the claimed node with at least one direct child. The daemon rejects an expansion patch whose staged graph leaves it childless. This closes the exemption above. A node that already holds children is free to restructure them, and it keeps at least one.
 
 A claim is legal only when the node kind sits in the worker's `claims`, and the node `deliverable` sits in the worker's `deliverables`. The daemon rejects a claim that fails either.
 
@@ -410,6 +410,8 @@ workspace:
 The daemon initializes the workspace on the first claim that needs the branch. The daemon initializes it inside the claim, so two first claims never race.
 
 A structural mutation is legal only when the run is active, the `fence` matches, the target sits inside the claimed subtree, and the graph revision matches. The daemon rejects a node write that fails any of these. The daemon applies the same four rules to every worker.
+
+A structural patch deletes a node only when the node is `pending`, `ready` or `blocked`. The delete also needs no durable row to name the node. A run, a checkpoint, a workspace, a candidate, a check result, a git operation and a waived edge each block it. A node that ran holds durable evidence, and the daemon keeps that evidence bound to its node.
 
 ## 8. Checkpoint
 
