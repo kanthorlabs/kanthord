@@ -19,7 +19,8 @@ export WEB_PORT ?= 27182
 	app-up app-down app-logs app-install \
 	tree-new tree-list tree-clean \
 	sync sync-all sync-status sync-engine sync-apps sync-parent \
-	contract-sync git-author
+	contract-sync git-author \
+	docs-check
 
 help:
 	@echo "Kanthord. Three scenarios. Copy a block and run it."
@@ -155,6 +156,9 @@ help-targets:
 	@echo "  git-author       Apply the root commit identity to both submodules"
 	@echo "                   Only this repository needs a local user section"
 	@echo "                   CHECK=1 reports only, and fails on a mismatch"
+	@echo ""
+	@echo "docs. Documentation integrity"
+	@echo "  docs-check       Check manifest citations, cross-links and claim coverage"
 
 repo-bootstrap:
 	@$(S)/repo/bootstrap.sh
@@ -222,3 +226,6 @@ contract-sync:
 
 git-author:
 	@$(S)/git/author.sh
+
+docs-check:
+	@$(S)/docs/check.sh

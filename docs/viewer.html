@@ -3,87 +3,336 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Viewer · kanthord</title>
+  <title>kanthord docs</title>
   <link rel="stylesheet" href="assets/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js" defer></script>
+  <style>
+    .breadcrumb {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+    .nav-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .nav-actions a {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    .nav-actions a:hover { color: var(--link); }
+    #loading {
+      padding: 3rem 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    #error {
+      padding: 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+    #content { line-height: 1.7; }
+    .ext-icon {
+      font-size: 0.75em;
+      opacity: 0.6;
+      margin-left: 0.1em;
+    }
+    .mermaid-outer {
+      margin: 1.25em 0;
+      text-align: center;
+    }
+    .mermaid-error {
+      background: var(--code-bg);
+      color: var(--text-muted);
+      padding: 1rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      border-left: 3px solid #f59e0b;
+      white-space: pre-wrap;
+    }
+    .overflow-x { overflow-x: auto; }
+  </style>
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="index.html">kanthord<span>.</span></a>
-    <nav>
-      <a href="index.html">Architecture</a>
-      <a href="scheduler.html">Execution</a>
-      <a href="documents.html">Documents</a>
-    </nav>
+    <a class="brand" href="index.html">kanthord</a>
+    <span class="breadcrumb" id="breadcrumb"></span>
+    <div class="nav-actions">
+      <a href="index.html">Index</a>
+      <a id="raw-link" href="#" hidden>View raw</a>
+    </div>
   </header>
 
   <main>
-    <p class="breadcrumb"><a href="documents.html">Documents</a> / <span id="crumb">…</span></p>
-    <article id="content" class="markdown-body">
-      <p class="viewer-status">Loading…</p>
-    </article>
+    <div id="loading">Loading&#x2026;</div>
+    <div id="error" hidden></div>
+    <article id="content" hidden></article>
   </main>
 
   <footer class="site-footer">
-    kanthord-engine docs · static site served from <code>docs/</code> on main
+    kanthord engine docs
   </footer>
 
-  <script defer>
-    window.addEventListener("DOMContentLoaded", () => {
-      const content = document.getElementById("content");
-      const crumb = document.getElementById("crumb");
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+  <script>
+(function () {
+  var loadingEl  = document.getElementById('loading');
+  var errorEl    = document.getElementById('error');
+  var contentEl  = document.getElementById('content');
+  var rawLinkEl  = document.getElementById('raw-link');
+  var breadcrumb = document.getElementById('breadcrumb');
 
-      marked.setOptions({ gfm: true, breaks: false });
-      mermaid.initialize({ startOnLoad: false, theme: "neutral" });
+  function showError(msg) {
+    loadingEl.hidden = true;
+    errorEl.hidden = false;
+    errorEl.textContent = msg;
+  }
 
-      const render = () => {
-        const params = new URLSearchParams(window.location.search);
-        const hashPath = decodeURIComponent(window.location.hash.slice(1));
-        const path = hashPath || params.get("p") || "architecture.md";
-        crumb.textContent = path;
+  function escapeAttr(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+  }
 
-        if (path.startsWith("/") || path.includes("..") || !path.endsWith(".md")) {
-          content.innerHTML = '<p class="viewer-status">Invalid document path.</p>';
-          return;
-        }
+  function decodeHtmlEntities(s) {
+    return s
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#(\d+);/gi, function (_, n) { return String.fromCharCode(parseInt(n, 10)); })
+      .replace(/&#x([\da-f]+);/gi, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
+  }
 
-        const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
-        content.innerHTML = '<p class="viewer-status">Loading…</p>';
+  function validatePath(p) {
+    if (!p || typeof p !== 'string') return null;
+    if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(p)) return null;
+    if (p.charAt(0) === '/') return null;
+    if (p.indexOf('..') !== -1) return null;
+    if (!/^[-A-Za-z0-9_.]+\.md$/.test(p)) return null;
+    return p;
+  }
 
-        fetch(path)
-          .then((res) => {
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            return res.text();
-          })
-          .then((text) => {
-            content.innerHTML = marked.parse(text);
+  function parseFrontmatter(text) {
+    var match = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/);
+    if (!match) return { meta: {}, body: text };
+    var meta = {};
+    var lines = match[1].split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var colon = lines[i].indexOf(':');
+      if (colon > 0) {
+        meta[lines[i].slice(0, colon).trim()] = lines[i].slice(colon + 1).trim();
+      }
+    }
+    return { meta: meta, body: match[2] };
+  }
 
-            content.querySelectorAll("pre > code.language-mermaid").forEach((el) => {
-              const div = document.createElement("div");
-              div.className = "mermaid";
-              div.textContent = el.textContent;
-              el.closest("pre").replaceWith(div);
-            });
-            mermaid.run({ nodes: content.querySelectorAll(".mermaid") });
+  var emittedIds = new Set ? new Set() : { _d: {}, has: function(k) { return Object.prototype.hasOwnProperty.call(this._d, k); }, add: function(k) { this._d[k] = true; } };
 
-            content.querySelectorAll('a[href$=".md"]').forEach((a) => {
-              const href = a.getAttribute("href");
-              if (/^(https?:|mailto:|#)/.test(href)) return;
-              const resolved = new URL(href, "file:///" + dir).pathname.slice(1);
-              a.setAttribute("href", "viewer.html#" + encodeURI(resolved));
-            });
-          })
-          .catch((err) => {
-            content.innerHTML =
-              '<p class="viewer-status">Could not load ' + path +
-              " (" + err.message + '). Serve docs/ over HTTP — file:// does not allow fetch.</p>';
-          });
-      };
+  function makeSlug(rawHtml) {
+    var plain = decodeHtmlEntities(rawHtml.replace(/<[^>]*>/g, ''));
+    var base = plain.toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'section';
+    var candidate = base;
+    var n = 1;
+    while (emittedIds.has(candidate)) {
+      candidate = base + '-' + n;
+      n++;
+    }
+    emittedIds.add(candidate);
+    return candidate;
+  }
 
-      window.addEventListener("hashchange", render);
-      render();
+  function scrollToAnchor() {
+    var hash = window.location.hash;
+    if (!hash) return;
+    var id;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch (e) {
+      return;
+    }
+    var el = null;
+    if (contentEl) {
+      try {
+        el = contentEl.querySelector('#' + CSS.escape(id));
+      } catch (e) {
+        el = null;
+      }
+    }
+    if (!el) el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  var params = new URLSearchParams(window.location.search);
+  var raw = params.get('p');
+  var safePath = validatePath(raw);
+
+  if (!safePath) {
+    if (!raw) {
+      showError('No document specified.\nUsage: viewer.html?p=filename.md');
+    } else {
+      showError('Rejected path: "' + String(raw).replace(/[<>"]/g, '') + '".\nOnly simple .md filenames without path separators are allowed.');
+    }
+    return;
+  }
+
+  rawLinkEl.href = safePath;
+  rawLinkEl.hidden = false;
+
+  function buildRenderer() {
+    var renderer = new marked.Renderer();
+
+    renderer.heading = function (arg1, arg2) {
+      var isObj = arg1 !== null && typeof arg1 === 'object';
+      var text  = isObj ? arg1.text  : arg1;
+      var depth = isObj ? arg1.depth : arg2;
+      var id = makeSlug(text);
+      return '<h' + depth + ' id="' + escapeAttr(id) + '">' + text + '</h' + depth + '>\n';
+    };
+
+    renderer.link = function (arg1, arg2, arg3) {
+      var isObj  = arg1 !== null && typeof arg1 === 'object';
+      var href   = isObj ? (arg1.href  || '') : (arg1  || '');
+      var title  = isObj ?  arg1.title        :  arg2;
+      var text   = isObj ?  arg1.text         :  arg3;
+      var tAttr  = title ? ' title="' + escapeAttr(title) + '"' : '';
+
+      if (/^https?:\/\//i.test(href) || /^\/\//i.test(href)) {
+        return '<a href="' + escapeAttr(href) + '"' + tAttr + ' target="_blank" rel="noopener noreferrer">' + text + ' <span class="ext-icon" aria-label="external link">&#x2197;</span></a>';
+      }
+      if (/^mailto:/i.test(href)) {
+        return '<a href="' + escapeAttr(href) + '"' + tAttr + '>' + text + '</a>';
+      }
+      if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(href)) {
+        return text;
+      }
+
+      var normalized = href;
+      if (normalized.slice(0, 2) === './') normalized = normalized.slice(2);
+      var mdMatch = normalized.match(/^([-A-Za-z0-9_.]+\.md)(#[^"]*)?$/);
+      if (mdMatch) {
+        return '<a href="viewer.html?p=' + escapeAttr(mdMatch[1]) + (mdMatch[2] || '') + '"' + tAttr + '>' + text + '</a>';
+      }
+
+      return '<a href="' + escapeAttr(href) + '"' + tAttr + '>' + text + '</a>';
+    };
+
+    return renderer;
+  }
+
+  async function run() {
+    var text;
+    try {
+      var resp = await fetch(safePath);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+      text = await resp.text();
+    } catch (e) {
+      showError('Could not load "' + safePath + '": ' + e.message);
+      return;
+    }
+
+    var fm = parseFrontmatter(text);
+    var docTitle = fm.meta.title || safePath.replace(/\.md$/, '');
+    document.title = 'kanthord · ' + docTitle;
+    breadcrumb.textContent = docTitle;
+
+    if (typeof marked === 'undefined') {
+      loadingEl.hidden = true;
+      errorEl.hidden = false;
+      errorEl.textContent = 'marked.js did not load from CDN.\n\nRaw content:\n\n' + fm.body;
+      return;
+    }
+
+    var renderer = buildRenderer();
+    marked.setOptions({ renderer: renderer });
+
+    var html;
+    try {
+      html = marked.parse(fm.body);
+    } catch (e) {
+      showError('Markdown parse failed: ' + e.message + '\n\nRaw content:\n\n' + fm.body);
+      return;
+    }
+
+    loadingEl.hidden = true;
+    contentEl.hidden = false;
+    contentEl.innerHTML = html;
+
+    var mermaidCodeEls = contentEl.querySelectorAll('pre code.language-mermaid');
+    var diagramItems = [];
+    mermaidCodeEls.forEach(function (codeEl) {
+      var src = codeEl.textContent;
+      var pre = codeEl.closest('pre') || codeEl;
+      var outer = document.createElement('div');
+      outer.className = 'mermaid-outer overflow-x';
+      var diag = document.createElement('pre');
+      diag.className = 'mermaid';
+      diag.textContent = src;
+      outer.appendChild(diag);
+      pre.replaceWith(outer);
+      diagramItems.push({ node: diag, src: src });
     });
+
+    if (diagramItems.length > 0) {
+      if (typeof mermaid === 'undefined') {
+        diagramItems.forEach(function (item) {
+          var err = document.createElement('pre');
+          err.className = 'mermaid-error';
+          err.textContent = '[mermaid.js did not load from CDN]\n\n' + item.src;
+          item.node.replaceWith(err);
+        });
+      } else {
+        var darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        mermaid.initialize({ startOnLoad: false, theme: darkMode ? 'dark' : 'default' });
+        for (var i = 0; i < diagramItems.length; i++) {
+          var item = diagramItems[i];
+          try {
+            await mermaid.run({ nodes: [item.node] });
+          } catch (e) {
+            var err2 = document.createElement('pre');
+            err2.className = 'mermaid-error';
+            err2.textContent = '[Diagram error: ' + e.message + ']\n\n' + item.src;
+            item.node.replaceWith(err2);
+          }
+        }
+      }
+    }
+
+    contentEl.querySelectorAll('table').forEach(function (t) {
+      if (t.parentNode && !t.parentNode.classList.contains('overflow-x')) {
+        var w = document.createElement('div');
+        w.className = 'overflow-x';
+        t.parentNode.insertBefore(w, t);
+        w.appendChild(t);
+      }
+    });
+
+    contentEl.querySelectorAll('pre:not(.mermaid)').forEach(function (pre) {
+      if (pre.parentNode && !pre.parentNode.classList.contains('overflow-x') && !pre.parentNode.classList.contains('mermaid-outer')) {
+        var w = document.createElement('div');
+        w.className = 'overflow-x';
+        pre.parentNode.insertBefore(w, pre);
+        w.appendChild(pre);
+      }
+    });
+
+    scrollToAnchor();
+  }
+
+  window.addEventListener('hashchange', scrollToAnchor);
+
+  run().catch(function (e) {
+    showError('Unexpected error: ' + (e && e.message ? e.message : String(e)));
+  });
+}());
   </script>
 </body>
 </html>

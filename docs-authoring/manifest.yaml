@@ -1,0 +1,460 @@
+# docs-authoring/manifest.yaml
+#
+# Cross-session spine for the kanthord documentation build.
+# This file is an index that routes a future session to content.
+# It does not store claim text — claim text lives once, in docs/overview.md.
+# This file lives outside docs/ because docs/ is served verbatim to the public.
+
+# ── Anchors ───────────────────────────────────────────────────────────────────
+anchors:
+  engine-pinned: c17e718
+  engine-pointer: c4b5256
+  drift-note: >
+    engine-pointer (c4b5256) is the commit the root repository's submodule
+    pointer records in git. engine-pinned (c17e718) is the commit every current
+    page was verified against; the engine working tree is checked out at
+    c17e718. These differ. The submodule pointer is authoritative for
+    publication: obtain it with git rev-parse HEAD:engine, which reads the
+    parent-recorded gitlink. git submodule status reports the checked-out
+    commit instead, and the two disagree exactly when this drift exists.
+    A future session must reconcile the two before publishing new pages.
+
+# ── Claims ────────────────────────────────────────────────────────────────────
+# For each claim record only the index data: owner, sources, dependency-surfaces,
+# and status. Do not copy claim text here; it lives in docs/overview.md.
+#
+# status values: active | amended:<commit> | retracted:<commit>
+claims:
+  C01:
+    owner: overview.md#C01
+    sources:
+      - engine/src/main.ts:842
+    dependency-surfaces:
+      - engine/src/main.ts
+    status: active
+
+  C02:
+    owner: overview.md#C02
+    sources:
+      - engine/src/http/server/app.ts:1
+      - engine/src/services/config/convict.ts:173
+    dependency-surfaces:
+      - engine/src/http/server/
+      - engine/src/services/config/
+    status: active
+
+  C03:
+    owner: overview.md#C03
+    sources:
+      - engine/src/services/agent/not-implemented.ts
+      - engine/src/services/verify/not-implemented.ts
+    dependency-surfaces:
+      - engine/src/services/agent/
+      - engine/src/services/verify/
+    status: active
+
+  C04:
+    owner: overview.md#C04
+    sources:
+      - engine/src/cli/client.ts
+      - engine/src/cli/program.ts
+    dependency-surfaces:
+      - engine/src/cli/
+    status: active
+
+  C05:
+    owner: overview.md#C05
+    sources:
+      - engine/src/domain/state.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C06:
+    owner: overview.md#C06
+    sources:
+      - engine/src/domain/readiness.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C07:
+    owner: overview.md#C07
+    sources:
+      - engine/src/domain/state.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C08:
+    owner: overview.md#C08
+    sources:
+      - engine/src/domain/outcome.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C09:
+    owner: overview.md#C09
+    sources:
+      - engine/src/domain/worker-registry.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C10:
+    owner: overview.md#C10
+    sources:
+      - engine/src/http/server/auth.ts:44
+      - engine/src/http/contract/actor.ts:30
+    dependency-surfaces:
+      - engine/src/http/server/
+      - engine/src/http/contract/
+    status: active
+
+  C11:
+    owner: overview.md#C11
+    absence-note: >
+      Absence claim. Verification scope: engine/src/http/contract/ and
+      engine/src/http/server/. Method: search all operation handlers for
+      outbound HTTP calls to harness addresses. Record the search command
+      and result in the verified page body.
+    sources:
+      - engine/src/http/contract/event.ts:76
+    dependency-surfaces:
+      - engine/src/http/contract/
+      - engine/src/http/server/
+    status: active
+
+  C12:
+    owner: overview.md#C12
+    sources:
+      - engine/src/domain/run-authority.ts:35
+      - engine/src/commands/run/renew-run.ts:107
+      - engine/src/commands/node/release-node.ts:96
+      - engine/src/commands/outcome/report-outcome.ts:350
+    dependency-surfaces:
+      - engine/src/domain/
+      - engine/src/commands/
+    status: active
+
+  C13:
+    owner: overview.md#C13
+    sources:
+      - engine/src/domain/attempt-accounting.ts:71
+      - engine/src/domain/state.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C14:
+    owner: overview.md#C14
+    sources:
+      - engine/src/domain/agent-contract.ts
+    dependency-surfaces:
+      - engine/src/domain/
+    status: active
+
+  C15:
+    owner: overview.md#C15
+    sources:
+      - engine/src/main.ts:270
+    dependency-surfaces:
+      - engine/src/main.ts
+    status: active
+
+  C16:
+    owner: overview.md#C16
+    sources:
+      - engine/src/commands/node/claim-node.ts:409
+      - engine/src/commands/outcome/report-outcome.ts
+    dependency-surfaces:
+      - engine/src/commands/
+    status: active
+
+# ── Destinations ──────────────────────────────────────────────────────────────
+# status values: stub | in-progress | written | verified
+# fact-readiness values: high | medium | low
+# verified-at: engine commit or null
+destinations:
+  overview.md:
+    status: written
+    fact-readiness: high
+    verified-at: c17e718
+    evidences: []
+    coverage-inventory:
+      - item: claims-register-C01-through-C16
+        disposition: documented
+    work-units: []
+
+  system-map.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C01, C02, C03, C04, C09, C11]
+    coverage-inventory:
+      - item: daemon-process-description
+        disposition: pending
+      - item: sqlite-database-location
+        disposition: pending
+      - item: server-listener-configuration
+        disposition: pending
+      - item: cli-as-network-client
+        disposition: pending
+      - item: worker-registry
+        disposition: pending
+      - item: absence-of-push-model
+        disposition: pending
+      - item: system-context-diagram
+        disposition: pending
+    work-units: []
+
+  identity-access.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C10, C12, C15]
+    coverage-inventory:
+      - item: actor-model-human-and-harness-kinds
+        disposition: pending
+      - item: bearer-token-format
+        disposition: pending
+      - item: actor-registration-and-out-of-band-token-handover
+        disposition: pending
+      - item: run-fence-mechanism
+        disposition: pending
+      - item: authority-check-sequence
+        disposition: pending
+      - item: callerRecord-defect-description-and-scope
+        disposition: pending
+    work-units: []
+
+  setup-registration.md:
+    status: stub
+    fact-readiness: medium
+    verified-at: null
+    evidences: [C01, C04, C10]
+    coverage-inventory:
+      - item: daemon-home-directory
+        disposition: pending
+      - item: database-location-in-home
+        disposition: pending
+      - item: cli-commands-for-setup-db-migrate-serve
+        disposition: pending
+      - item: actor-registration-commands
+        disposition: pending
+      - item: token-handover-procedure
+        disposition: pending
+      - item: in-process-cli-exceptions
+        disposition: pending
+    work-units: []
+
+  work-graph.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C05, C06, C07]
+    coverage-inventory:
+      - item: three-node-kinds-initiative-objective-task
+        disposition: pending
+      - item: readiness-computation-done-partial-or-waived
+        disposition: pending
+      - item: edge-waiving-semantics
+        disposition: pending
+      - item: eight-state-machine-definition
+        disposition: pending
+      - item: plan-revision-import-as-atomic-transaction
+        disposition: pending
+    work-units: []
+
+  who-does-work.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C03, C09, C11, C12, C14, C15, C16]
+    coverage-inventory:
+      - item: external-harness-model-no-agent-inside-daemon
+        disposition: pending
+      - item: worker-registry
+        disposition: pending
+      - item: run-lifecycle-claim-renew-release-report
+        disposition: pending
+      - item: role-contract-catalogue
+        disposition: pending
+      - item: callerRecord-defect-and-opencode-consequence
+        disposition: pending
+      - item: verify-service-stub
+        disposition: pending
+      - item: no-daemon-push-model
+        disposition: pending
+    work-units: []
+
+  state-completion.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C06, C07, C08, C13]
+    coverage-inventory:
+      - item: state-enumeration
+        disposition: pending
+      - item: terminal-state-semantics
+        disposition: pending
+      - item: objective-only-awaiting-approval-constraint
+        disposition: pending
+      - item: readiness-transition-rule
+        disposition: pending
+      - item: attempt-limit-and-blocked-state
+        disposition: pending
+      - item: human-unblock-requirement
+        disposition: pending
+    work-units:
+      - state-machine-overview
+      - node-kind-constraints
+      - attempt-limit-and-blocking
+
+  recovery.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C12, C13]
+    coverage-inventory:
+      - item: block-reasons-list
+        disposition: pending
+      - item: attempt-limit-exhaustion-flow
+        disposition: pending
+      - item: node-unblock-operation
+        disposition: pending
+      - item: run-expiry-behavior
+        disposition: pending
+      - item: crash-recovery-behavior
+        disposition: pending
+    work-units: []
+
+  capability-status.md:
+    status: stub
+    fact-readiness: high
+    verified-at: null
+    evidences: [C03, C15, C16]
+    coverage-inventory:
+      - item: agent-service-stub
+        disposition: pending
+      - item: verify-service-stub
+        disposition: pending
+      - item: callerRecord-defect
+        disposition: pending
+      - item: epic-051-family-scope-and-absent-verification
+        disposition: pending
+      - item: epic-050-through-057-migration-status
+        disposition: pending
+      - item: judged-oid-pin-conflict-053.1-vs-050.1
+        disposition: pending
+    work-units: []
+
+  reference.md:
+    status: stub
+    fact-readiness: low
+    verified-at: null
+    evidences: [C01, C02, C05, C07, C09, C14]
+    coverage-inventory:
+      - item: registration-tables
+        disposition: pending
+      - item: plan-graph-tables
+        disposition: pending
+      - item: execution-tables
+        disposition: pending
+      - item: journal-tables
+        disposition: pending
+      - item: http-operation-surface
+        disposition: pending
+      - item: cli-command-surface
+        disposition: pending
+    work-units:
+      - registration-tables
+      - plan-graph-tables
+      - execution-tables
+      - journal-tables
+      - http-operation-surface
+      - cli-surface
+
+# ── Open questions ────────────────────────────────────────────────────────────
+open-questions:
+  - id: OQ1
+    text: >
+      The root repository submodule pointer (c4b5256) lags the checked-out
+      engine (c17e718). Which commit is authoritative for publication, and
+      should the pointer be bumped before the next documentation session
+      publishes pages?
+    affects: [overview.md, all pages]
+    resolution: null
+
+  - id: OQ2
+    text: >
+      docs/ is served from a public repository. The engine repository is
+      private. Citation links resolve only for readers with private-repo
+      access. Is publishing engine internals — including a named code defect
+      (C15) and the external-execution trust model (C16) — acceptable on a
+      public site? Must any citation be redacted or summarised?
+    affects: [all pages]
+    resolution: null
+
+  - id: OQ3
+    text: >
+      src/main.ts around line 270 hardcodes callerRecord as
+      { worker: "claude@1", authorized: ["claude@1"] } for every request.
+      This is recorded as claim C15 and as a current limitation. Confirm
+      that this is a defect to fix, not intentional behaviour, before
+      capability-status.md characterises it.
+    affects: [capability-status.md, who-does-work.md, identity-access.md]
+    resolution: null
+
+  - id: OQ4
+    text: >
+      Epic files are not a reliable status source: all 29 files in the
+      050-057 range declare Status: draft, including epics 050, 050.1 and
+      050.2 which engine/scripts/epic-sequence-range.ts records as shipped.
+      Additionally 050.3 shipped without being appended to shippedEpics.
+      A future session must not trust either source alone when authoring
+      capability-status.md.
+    affects: [capability-status.md]
+    resolution: null
+
+  - id: OQ5
+    text: >
+      Epics 053.1 and 050.1 name different owners for the same judged_oid
+      pin. The epic text states a reader cannot tell which the code follows.
+      This is a conflicting design qualification. Resolve which owner the
+      code follows before authoring state-completion.md and
+      capability-status.md.
+    affects: [state-completion.md, capability-status.md]
+    resolution: null
+
+# ── Session protocol ──────────────────────────────────────────────────────────
+session-protocol:
+  - Run scripts/docs/check.sh and fix every reported citation error before
+    reading anything else.
+  - Read this manifest. Note the open-questions and the drift between
+    engine-pinned and engine-pointer.
+  - Pick the highest fact-readiness destination or work-unit that has status
+    stub or in-progress. Break ties by the documentation-map order in
+    docs/overview.md (system-map, identity-access, setup-registration,
+    work-graph, who-does-work, state-completion, recovery, capability-status,
+    reference).
+  - Re-verify only that destination's source citations against the current
+    submodule pointer (from git rev-parse HEAD:engine); do not re-verify the
+    whole manifest.
+  - Write the page. Keep to the legend.md conventions throughout.
+  - Check that the page renders in docs/viewer.html before committing.
+  - Update this manifest: set the destination's status to written, set
+    verified-at to the seven-character prefix of git rev-parse HEAD:engine
+    (the parent-recorded pointer, not the engine working-tree HEAD), and mark
+    each covered inventory item as documented.
+  - Commit the page and this manifest in one commit. Never split them.
+  - If the page is left unfinished, commit docs-authoring/<destination>.notes.md
+    with evidence reasoning and diagram drafts. Leave the published stub.
+    Never commit a half-written page to docs/.
+
+amendment-rule: >
+  If a session finds an overview claim false, it corrects docs/overview.md
+  and sets that claim's status in this manifest to amended:<commit> in the
+  same commit as the contradicting page. A page that contradicts a claim
+  must never be committed without amending overview.md in the same commit.
