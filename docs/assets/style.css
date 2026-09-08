@@ -103,6 +103,14 @@ main {
 /* ── overflow utility ──────────────────────────────────────── */
 .overflow-x { overflow-x: auto; }
 
+/* ── figures ───────────────────────────────────────────────── */
+#content img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 1.5rem 0;
+}
+
 /* ── stub badge ────────────────────────────────────────────── */
 .stub-badge {
   display: inline-block;

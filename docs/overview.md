@@ -56,7 +56,8 @@ It includes methods, agents, tools, memory, and prompts.
 The harness mostly uses deterministic methods and predefined processes.
 A specific agent or a human participant supplies the WHO and takes responsibility for carrying out the necessary steps.
 
-A project configures which workers are available and how many instances of each worker are available.
+A project binds each worker that it permits.
+A project configures how many instances of each worker binding are available.
 A worker instance takes an available initiative, objective or task.
 A worker instance creates a run each time it takes a level.
 A run implements the steps that achieve the WHAT of that level.
@@ -112,12 +113,16 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 ## Vocabulary
 
 - **harness**: A system that organizes execution of the WHAT through the HOW and the WHO.
-- **project**: An entity that holds the repository strategy that a run follows.
+- **project**: An entity identified by what it ships.
+  It holds the bindings that allocate the resources that it uses, and the repository strategy that a run follows.
+  The size of a project and the scope of a project are not part of its identity.
+  A project delivers coding work, and it also delivers research work, planning work and coordination work.
 - **mission**: The whole work of one project: its initiatives, objectives and tasks and the relations between them.
   A project has one mission.
 - **WHAT**: The goal, the steps to achieve it, and the validation criteria for success.
 - **initiative**: A level of WHAT with its own validation criteria and outcome.
 - **objective**: A level of WHAT that contains tasks and has its own validation criteria and outcome.
+  An objective belongs to exactly one repository of its project.
 - **task**: A level of WHAT that belongs to an objective and has its own validation criteria and outcome.
   This relation lets a run organize task execution toward the objective's goal.
 - **evidence**: What execution records about the results, and what evaluation assesses against the validation criteria.
@@ -128,13 +133,17 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
   It includes methods, agents, tools, memory, and prompts.
   A worker name has the form `<implementation>@<version>`, and the same name always identifies the same implementation.
 - **worker instance**: A background instance of one worker that takes an available initiative, objective or task.
-  A project configures how many instances of a worker are available.
+  A project configures how many instances of a worker binding are available.
 - **run**: One occurrence of a worker instance working one initiative, objective or task.
   A run implements the steps that achieve the WHAT of that level.
   Two runs of the same worker share that worker's method.
   Each run has its own execution identity.
 - **agent**: An automated participant responsible for carrying out steps as the WHO.
 - **human participant**: A person responsible for carrying out steps as the WHO.
+- **binding**: The record that allocates a resource to a project and permits an operation on that resource.
+  A project holds more than one binding of one kind.
+- **provider account**: An account at a large language model provider that a project binds.
+- **deliverable**: What a project ships.
 - **tool**: A capability that a run uses to perform an operation.
 - **memory**: Information that the HOW retains because a later step can depend on an earlier step.
 - **prompt**: Instructions that guide an agent's work.
