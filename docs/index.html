@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,16 +12,19 @@
       border-bottom: 1px solid var(--border);
       margin-bottom: 2rem;
     }
+
     .hero h1 {
       font-size: 2rem;
       margin: 0 0 0.5rem;
     }
+
     .hero p {
       color: var(--text-muted);
       font-size: 1.05rem;
       margin: 0;
       max-width: 56ch;
     }
+
     .scope-note {
       font-size: 0.85rem;
       color: var(--text-muted);
@@ -30,6 +34,7 @@
       padding: 0.6rem 1rem;
       margin-bottom: 2rem;
     }
+
     .meta-links {
       display: flex;
       gap: 1.5rem;
@@ -37,30 +42,36 @@
       flex-wrap: wrap;
       align-items: center;
     }
+
     .meta-links a {
       font-size: 0.9rem;
     }
+
     .meta-links .primary {
       font-weight: 600;
     }
+
     .meta-links .separator {
       color: var(--border);
     }
   </style>
 </head>
+
 <body>
   <header class="site-header">
     <a class="brand" href="index.html">kanthord</a>
     <nav>
       <a href="index.html" aria-current="page">Index</a>
       <a href="viewer.html?p=overview.md">Overview</a>
+      <a href="viewer.html?p=architecture.md">Architecture</a>
     </nav>
   </header>
 
   <main>
     <div class="hero">
       <h1>Engine documentation</h1>
-      <p>This site documents the <strong>kanthord engine</strong> — the daemon, its HTTP API, and its data model. The frontend application has its own documentation.</p>
+      <p>This site documents the <strong>kanthord engine</strong> — the daemon, its HTTP API, and its data model. The
+        frontend application has its own documentation.</p>
     </div>
 
     <p class="scope-note">
@@ -70,7 +81,8 @@
   </main>
 
   <footer class="site-footer">
-    kanthord engine docs · static site served from <code>docs/</code> on main
+    KanthorD · static site served from <code>docs/</code> on main
   </footer>
 </body>
+
 </html>
