@@ -97,6 +97,11 @@ The configuring actor, the upstream principal and the execution identity stay se
 An OAuth credential does not imply a person.
 An API key does not imply an organization.
 
+The diagram shows the order of one authorization.
+It shows that a refusal never reaches custody.
+
+[![Authorization diagram for the Project Service](assets/project-service-authorization.svg)](assets/project-service-authorization.svg)
+
 ## Configuration lifecycle and consistency
 
 A binding set changes when the resource requirements of a project change.
@@ -119,6 +124,11 @@ Current authorization states what an execution performs.
 A recorded revision never authorizes an operation after a disablement.
 A disablement takes effect at the next resolution.
 An operation that is in progress ends against the remote, because the remote holds the credential authority.
+
+The diagram shows the binding graph that these rules act on.
+It shows every reference that a replacement invalidates.
+
+[![Binding diagram for the Project Service](assets/project-service-bindings.svg)](assets/project-service-bindings.svg)
 
 ## Vocabulary
 

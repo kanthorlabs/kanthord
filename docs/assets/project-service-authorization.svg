@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1280" height="760" viewBox="0 0 1280 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="project-service-authorization-title project-service-authorization-desc">
+      <title id="project-service-authorization-title">Project Service authorization of one operation</title>
+      <desc id="project-service-authorization-desc">A requester, which is a run or an external harness, presents its identity and requests an operation. The protected facility resolves that identity to the project and to the level, then checks the binding of that project for the requested operation. When the binding permits the operation, the facility consults custody for the secret material and performs the authenticated operation against the remote. When the binding does not permit the operation, the facility refuses and never consults custody. The facility and custody sit inside the Project Service, and one resolution authorizes one operation.</desc>
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <rect x="320" y="32" width="576" height="588" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="332" y="36" width="112" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="388" y="48" fill="rgba(45,49,66,0.40)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">PROJECT SERVICE</text>
+
+      <line x1="152" y1="136" x2="152" y2="604" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="456" y1="136" x2="456" y2="604" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="760" y1="136" x2="760" y2="604" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="1064" y1="136" x2="1064" y2="604" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+
+      <rect x="452" y="176" width="8" height="420" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+      <rect x="756" y="400" width="8" height="36" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+      <rect x="1060" y="464" width="8" height="36" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+
+      <rect x="136" y="336" width="944" height="252" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <line x1="144" y1="520" x2="1072" y2="520" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+      <rect x="136" y="336" width="48" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text x="160" y="348" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.12em">ALT</text>
+
+      <line x1="152" y1="176" x2="448" y2="176" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <path d="M 460,208 H 508 V 232 H 464" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 460,264 H 508 V 288 H 464" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="460" y1="400" x2="752" y2="400" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="756" y1="432" x2="464" y2="432" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <line x1="460" y1="464" x2="1056" y2="464" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <line x1="1060" y1="496" x2="464" y2="496" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+      <line x1="452" y1="576" x2="156" y2="576" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <text x="304" y="164" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">IDENTITY + OP</text>
+      <text x="516" y="208" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">RESOLVE</text>
+      <text x="516" y="232" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">PROJECT/LEVEL</text>
+      <text x="516" y="268" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">CHECK BINDING</text>
+
+      <rect x="636" y="344" width="256" height="16" rx="2" fill="#ededee"/>
+      <text x="888" y="356" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.06em">EVERY OPERATION RESOLVES AGAIN.</text>
+
+      <text x="148" y="372" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">[the binding permits]</text>
+      <text x="148" y="540" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">[the binding does not permit]</text>
+
+      <text x="608" y="388" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CONSULT</text>
+      <text x="608" y="420" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SECRET</text>
+      <rect x="716" y="440" width="88" height="16" rx="2" fill="#ededee"/>
+      <text x="760" y="452" fill="#eb6c36" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">OPERATION</text>
+      <rect x="728" y="472" width="64" height="16" rx="2" fill="#ededee"/>
+      <text x="760" y="484" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RESULT</text>
+      <text x="304" y="564" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REFUSAL</text>
+
+      <rect x="40" y="64" width="224" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="40" y="64" width="224" height="72" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+      <rect x="52" y="72" width="80" height="16" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+      <text x="92" y="84" fill="rgba(122,131,153,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REQUESTER</text>
+      <text x="152" y="110" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Requester</text>
+      <text x="152" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">run or harness</text>
+
+      <rect x="344" y="64" width="224" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="344" y="64" width="224" height="72" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <rect x="356" y="72" width="72" height="16" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+      <text x="392" y="84" fill="rgba(235,108,54,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">FACILITY</text>
+      <text x="456" y="110" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Protected facility</text>
+      <text x="456" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">resolves and checks</text>
+
+      <rect x="648" y="64" width="224" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="648" y="64" width="224" height="72" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="660" y="72" width="68" height="16" rx="2" fill="transparent" stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+      <text x="694" y="84" fill="rgba(79,93,117,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CUSTODY</text>
+      <text x="760" y="110" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Custody</text>
+      <text x="760" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">secret material</text>
+
+      <rect x="952" y="64" width="224" height="72" rx="6" fill="#f5f5f5"/>
+      <rect x="952" y="64" width="224" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="964" y="72" width="72" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="1000" y="84" fill="rgba(45,49,66,0.70)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXTERNAL</text>
+      <text x="1064" y="110" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Remote</text>
+      <text x="1064" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">credential authority</text>
+
+      <line x1="40" y1="636" x2="1240" y2="636" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="658" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">No credential leaves the daemon. A run holds none, and an external harness holds none.</text>
+      <text x="40" y="678" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">A liveness token proves that a run is live, and it authorizes no operation.</text>
+
+      <line x1="40" y1="698" x2="1240" y2="698" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="726" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <line x1="136" y1="722" x2="160" y2="722" stroke="#2e5aa8" stroke-width="1.2"/>
+      <text x="168" y="726" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">API or CLI</text>
+      <line x1="304" y1="722" x2="328" y2="722" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="336" y="726" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Call</text>
+      <line x1="424" y1="722" x2="448" y2="722" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4"/>
+      <text x="456" y="726" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Return</text>
+      <line x1="560" y1="722" x2="584" y2="722" stroke="#eb6c36" stroke-width="1.2"/>
+      <text x="592" y="726" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Authenticated operation</text>
+      <rect x="840" y="714" width="8" height="16" fill="rgba(45,49,66,0.06)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="860" y="726" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Holds control</text>
+      <line x1="1016" y1="714" x2="1016" y2="730" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="3,3"/>
+      <text x="1032" y="726" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Lifeline</text>
+    </svg>

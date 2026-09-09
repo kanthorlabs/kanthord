@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1280" height="1000" viewBox="0 0 1280 1000" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="project-service-bindings-title project-service-bindings-desc">
+      <title id="project-service-bindings-title">Project Service binding model</title>
+      <desc id="project-service-bindings-desc">A project holds many bindings, and every binding allocates one resource that exists independently of the project. A binding references another binding by identity and never by revision. Repository, worker and provider account are kinds of binding. A worker binding holds one agent entry for each agent of its worker, and each entry names one provider account binding together with a model identifier. A repository binding holds one credential reference for each capability that it requires, and a provider account binding holds one credential reference; each reference names a credential store record that serves more than one project.</desc>
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        <marker id="tri-open" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><polygon points="0 0, 10 4, 0 8" fill="#f5f5f5" stroke="#4f5d75" stroke-width="1"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <path d="M 320,104 H 412 Q 420,104 420,112 V 276 Q 420,284 428,284 H 520" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 760,240 H 852 Q 860,240 860,232 V 100 Q 860,92 868,92 H 960" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 760,312 H 800 V 344 H 764" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 200,424 V 384 Q 200,376 208,376 H 552 Q 560,376 560,368 V 360" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#tri-open)"/>
+      <path d="M 640,424 V 360" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#tri-open)"/>
+      <path d="M 1080,424 V 400 Q 1080,392 1072,392 H 728 Q 720,392 720,384 V 360" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#tri-open)"/>
+      <path d="M 600,536 V 568 Q 600,576 608,576 H 808 Q 816,576 816,584 V 600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 880,600 V 476 Q 880,468 888,468 H 960" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 200,556 V 720 Q 200,728 208,728 H 552 Q 560,728 560,736 V 784" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 1080,516 V 736 Q 1080,744 1072,744 H 728 Q 720,744 720,752 V 784" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <rect x="424" y="192" width="60" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="428" y="204" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">HOLDS</text>
+      <text x="328" y="100" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">1</text>
+      <text x="508" y="280" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="end">N</text>
+
+      <rect x="864" y="160" width="96" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="868" y="172" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">ALLOCATES</text>
+      <text x="772" y="236" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">N</text>
+      <text x="948" y="88" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="end">1</text>
+
+      <rect x="804" y="296" width="108" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="808" y="308" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">REFERENCES BY</text>
+      <rect x="804" y="312" width="108" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="808" y="324" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">IDENTITY</text>
+
+      <rect x="648" y="380" width="68" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="652" y="392" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">KIND OF</text>
+
+      <rect x="668" y="544" width="80" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="708" y="556" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">PER AGENT</text>
+      <text x="612" y="528" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">1</text>
+      <text x="828" y="592" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">N</text>
+
+      <rect x="886" y="536" width="60" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="890" y="548" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.06em">NAMES</text>
+      <text x="892" y="592" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">N</text>
+      <text x="948" y="464" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="end">1</text>
+
+      <rect x="336" y="704" width="120" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="396" y="716" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CREDENTIAL REF</text>
+      <rect x="840" y="720" width="120" height="16" rx="2" fill="#f5f5f5"/>
+      <text x="900" y="732" fill="#7a8399" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">CREDENTIAL REF</text>
+
+      <rect x="80" y="48" width="240" height="112" rx="6" fill="#f5f5f5"/>
+      <rect x="80" y="48" width="240" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="92" y="56" width="48" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="116" y="68" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ENTITY</text>
+      <text x="92" y="92" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Project</text>
+      <line x1="92" y1="104" x2="308" y2="104" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="92" y="124" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace"># identity</text>
+      <text x="92" y="144" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">one mission</text>
+
+      <rect x="960" y="48" width="240" height="92" rx="6" fill="#f5f5f5"/>
+      <rect x="960" y="48" width="240" height="92" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <rect x="972" y="56" width="64" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="1004" y="68" fill="rgba(45,49,66,0.70)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXTERNAL</text>
+      <text x="972" y="92" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Resource</text>
+      <line x1="972" y1="104" x2="1188" y2="104" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="972" y="124" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">exists independently</text>
+
+      <rect x="520" y="208" width="240" height="152" rx="6" fill="#f5f5f5"/>
+      <rect x="520" y="208" width="240" height="152" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <rect x="532" y="216" width="48" height="16" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+      <text x="556" y="228" fill="rgba(235,108,54,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ENTITY</text>
+      <text x="532" y="252" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Binding</text>
+      <line x1="532" y1="264" x2="748" y2="264" stroke="rgba(235,108,54,0.30)" stroke-width="0.8"/>
+      <text x="532" y="284" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace"># identity (per project)</text>
+      <text x="532" y="304" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">kind</text>
+      <text x="532" y="324" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">configuration</text>
+      <text x="532" y="344" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">revision</text>
+
+      <rect x="80" y="424" width="240" height="132" rx="6" fill="#f5f5f5"/>
+      <rect x="80" y="424" width="240" height="132" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="92" y="432" width="84" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="134" y="444" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BINDING KIND</text>
+      <text x="92" y="468" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Repository</text>
+      <line x1="92" y1="480" x2="308" y2="480" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="92" y="500" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">strategy rule</text>
+      <text x="92" y="520" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">address transport form</text>
+      <text x="92" y="540" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">one ref per capability</text>
+
+      <rect x="520" y="424" width="240" height="112" rx="6" fill="#f5f5f5"/>
+      <rect x="520" y="424" width="240" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="532" y="432" width="84" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="574" y="444" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BINDING KIND</text>
+      <text x="532" y="468" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Worker</text>
+      <line x1="532" y1="480" x2="748" y2="480" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="532" y="500" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">worker name</text>
+      <text x="532" y="520" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">instance count</text>
+
+      <rect x="960" y="424" width="240" height="92" rx="6" fill="#f5f5f5"/>
+      <rect x="960" y="424" width="240" height="92" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="972" y="432" width="84" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="1014" y="444" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">BINDING KIND</text>
+      <text x="972" y="468" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Provider account</text>
+      <line x1="972" y1="480" x2="1188" y2="480" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="972" y="500" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">one credential ref</text>
+
+      <rect x="696" y="600" width="240" height="112" rx="6" fill="#f5f5f5"/>
+      <rect x="696" y="600" width="240" height="112" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="708" y="608" width="48" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+      <text x="732" y="620" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ENTITY</text>
+      <text x="708" y="644" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Agent entry</text>
+      <line x1="708" y1="656" x2="924" y2="656" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="708" y="676" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">agent</text>
+      <text x="708" y="696" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">model identifier</text>
+
+      <rect x="520" y="784" width="240" height="132" rx="6" fill="#f5f5f5"/>
+      <rect x="520" y="784" width="240" height="132" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="532" y="792" width="60" height="16" rx="2" fill="transparent" stroke="rgba(79,93,117,0.40)" stroke-width="0.8"/>
+      <text x="562" y="804" fill="rgba(79,93,117,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">RECORD</text>
+      <text x="532" y="828" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Credential store record</text>
+      <line x1="532" y1="840" x2="748" y2="840" stroke="rgba(45,49,66,0.12)" stroke-width="0.8"/>
+      <text x="532" y="860" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">type</text>
+      <text x="532" y="880" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">configuring actor</text>
+      <text x="532" y="900" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">upstream principal</text>
+
+      <rect x="72" y="188" width="2" height="40" fill="rgba(45,49,66,0.20)"/>
+      <text x="88" y="204" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">A mission is intrinsic to a project.</text>
+      <text x="88" y="224" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">No binding allocates it.</text>
+
+      <rect x="72" y="796" width="2" height="40" fill="rgba(45,49,66,0.20)"/>
+      <text x="88" y="812" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">One record serves more than one project.</text>
+      <text x="88" y="832" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Each project holds its own binding.</text>
+
+      <line x1="40" y1="940" x2="1240" y2="940" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="968" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <rect x="136" y="958" width="16" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.8"/>
+      <text x="160" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Entity</text>
+      <rect x="248" y="958" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="0.8"/>
+      <text x="272" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Binding</text>
+      <rect x="368" y="958" width="16" height="12" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+      <text x="392" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">External resource</text>
+      <rect x="560" y="958" width="16" height="12" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+      <text x="584" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Credential store</text>
+      <line x1="760" y1="964" x2="784" y2="964" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="792" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Relationship</text>
+      <line x1="920" y1="964" x2="936" y2="964" stroke="#4f5d75" stroke-width="1" marker-end="url(#tri-open)"/>
+      <text x="960" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">Kind of</text>
+      <text x="1064" y="968" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">1 / N  cardinality</text>
+    </svg>
