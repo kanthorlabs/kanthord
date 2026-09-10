@@ -58,11 +58,11 @@ A specific agent or a human participant supplies the WHO and takes responsibilit
 
 A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
-A worker instance takes an available initiative, objective or task.
+A worker instance takes an available initiative or objective.
 A worker instance creates a run each time it takes a level.
 A run implements the steps that achieve the WHAT of that level.
 
-At each level, a run is responsible for producing that level's outcome because each level has its own validation criteria and outcome.
+A run is responsible for producing the outcome of the level that it takes, and the outcome of every task of that level.
 A run ends when the current outcome is successful, when an assessment does not pass, on cancellation, on a resource limit, or when the run cannot progress.
 An assessment that does not pass ends the run and blocks the level.
 A blocked level is not available for a further run.
@@ -84,7 +84,7 @@ The shared outcome rules govern repository action failures.
 ### Worked example: `tdd@1`
 
 `tdd@1` is one example among several workers.
-On a task, a run of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
+For each task of an objective, a run of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
 
 For an objective, a run of `tdd@1` creates a branch and makes a separate commit for each task on that branch.
 These branch and commit practices apply to `tdd@1`, not to every worker.
@@ -129,12 +129,14 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 - **outcome**: An assessment from evaluation of evidence against validation criteria, or a human assertion that an override records.
   The assessment can establish that results meet or do not meet the criteria, or that available evidence cannot establish either.
   The outcome records the stopping reason separately from the assessment.
+- **landing**: The observed expected end state of every configured repository action of a level.
+  Opening a pull request is not landing; the merge of that pull request is.
 - **worker**: The HOW: a template that defines how executions happen.
   It includes methods, agents, tools, memory, and prompts.
   A worker name has the form `<implementation>@<version>`, and the same name always identifies the same implementation.
-- **worker instance**: A background instance of one worker that takes an available initiative, objective or task.
+- **worker instance**: A background instance of one worker that takes an available initiative or objective.
   A project configures how many instances of a worker binding are available.
-- **run**: One occurrence of a worker instance working one initiative, objective or task.
+- **run**: One occurrence of a worker instance working one initiative or objective.
   A run implements the steps that achieve the WHAT of that level.
   Two runs of the same worker share that worker's method.
   Each run has its own execution identity.

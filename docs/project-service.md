@@ -31,6 +31,7 @@ A binding belongs to one project, and no project shares a binding.
 
 A project binds each repository that it uses.
 The repository strategy states an explicit rule for each repository that requires one.
+A configured repository action states its expected end state on the git platform.
 A capability is one class of authenticated operation on a repository.
 A network git read, a network git write and a platform action are the capabilities.
 A commit, a branch and a merge are local, so none of them is a capability.

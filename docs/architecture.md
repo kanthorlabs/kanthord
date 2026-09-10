@@ -37,13 +37,13 @@ The Mission Service holds the mission of one project.
 It maps one to one with a project.
 It represents a mission as a graph.
 It holds the validation criteria of every level.
-It performs the evaluation of every level.
 It holds the evidence record, the assessment record and the outcome record of every level.
-It retains the evidence that a retained outcome depends on.
+It stores the content of evidence that no other system holds.
+It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every level.
 Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
-An executor requests an evaluation, and it never writes the result.
+The worker that executes a level never writes the assessment of that level.
 
 ### Scheduler Service
 
@@ -55,7 +55,7 @@ It records a run when a worker instance takes an available level.
 ### Worker Service
 
 The Worker Service supplies the workers and the agents.
-It runs the worker instances.
+It runs the worker instances that execute a level, and the worker instances that evaluate a level.
 It uses a large language model provider and a coding agent.
 
 ### Tracking Service
@@ -94,7 +94,8 @@ It shows the relations that the sections below name.
 - A run reads the repository strategy and the permitted resources from the Project Service.
 - A run uses a repository credential that the Project Service holds.
 - A run writes evidence to the Mission Service.
-- A run requests an evaluation from the Mission Service.
+- A reviewer run reads the validation criteria and the evidence from the Mission Service.
+- A reviewer run writes the assessment to the Mission Service.
 - A run acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.
 - The Worker Service uses a provider credential that the Project Service holds.
