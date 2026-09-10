@@ -55,7 +55,7 @@ One relation reads as follows.
 
 ## reviewer run
 
-A run that evaluates a level. A run that executes a level never writes the assessment of that level.
+A run that evaluates a node. A run that executes a node never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation.
 - A `reviewer@1` instance takes an available objective from the Scheduler Service.

@@ -36,26 +36,26 @@ It holds the credentials that the resources of a project require, and it authori
 The Mission Service holds the mission of one project.
 It maps one to one with a project.
 It represents a mission as a graph.
-It holds the validation criteria of every level.
-It holds the evidence record, the assessment record and the outcome record of every level.
+It holds the validation criteria of every node.
+It holds the evidence record, the assessment record and the outcome record of every node.
 It stores the content of evidence that no other system holds.
 It stores the address of evidence that a repository holds.
 No credential enters evidence.
-It records the block and the unblock of every level.
+It records the block and the unblock of every node.
 Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
-The worker that executes a level never writes the assessment of that level.
+The worker that executes a node never writes the assessment of that node.
 
 ### Scheduler Service
 
 The Scheduler Service manages runs.
-It determines which levels are available for work.
-It does not make a blocked level available.
-It records a run when a worker instance takes an available level.
+It determines which nodes are available for work.
+It does not make a blocked node available.
+It records a run when a worker instance takes an available node.
 
 ### Worker Service
 
 The Worker Service supplies the workers and the agents.
-It runs the worker instances that execute a level, and the worker instances that evaluate a level.
+It runs the worker instances that execute a node, and the worker instances that evaluate a node.
 It uses a large language model provider and a coding agent.
 
 ### Tracking Service
@@ -90,7 +90,7 @@ It shows the relations that the sections below name.
 - An external harness invokes a configured repository action through the API or the CLI, and the daemon performs that action.
 - A human reaches the Project Service and the Mission Service through the API or the CLI.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
-- A worker instance takes an available level from the Scheduler Service.
+- A worker instance takes an available node from the Scheduler Service.
 - A run reads the repository strategy and the permitted resources from the Project Service.
 - A run uses a repository credential that the Project Service holds.
 - A run writes evidence to the Mission Service.

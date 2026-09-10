@@ -131,7 +131,7 @@ Holding the repository binding does not confer custody of the key.
 The component that secret material sits behind.
 
 A run presents its execution identity and requests a platform action.
-The protected facility resolves that identity to the project and to the level of the request.
+The protected facility resolves that identity to the project and to the node of the request.
 The facility checks the binding of that project for the requested operation.
 The facility consults custody after that check, so a refusal never reaches custody.
 
@@ -175,7 +175,7 @@ The identity that a run presents.
 
 A `tdd@1` worker instance takes an objective, and it creates a run.
 That run holds its own execution identity, and it presents that identity for a network git write.
-The protected facility resolves that identity to the project and to the level of the request.
+The protected facility resolves that identity to the project and to the node of the request.
 The record of the operation names the execution identity.
 
 ## client identity

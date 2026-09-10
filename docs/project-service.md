@@ -75,7 +75,7 @@ The boundary is the authorization of an operation, and it is not the custody of 
 An agent that never reads a key still uses an authenticated tool.
 A requester presents its identity when it requests an operation.
 A run presents its execution identity, and an external harness presents its client identity.
-The protected facility resolves that identity to the project and to the level of the request.
+The protected facility resolves that identity to the project and to the node of the request.
 The facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
 No credential leaves the daemon.
