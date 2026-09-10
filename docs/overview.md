@@ -23,11 +23,11 @@ Success has three separate parts:
 - Evaluation assesses the evidence against the criteria and produces an outcome.
 
 Some criteria support machine checks; others need judgement.
-The evaluation method follows the criterion and never the level.
+The evaluation method follows the criterion and never the node.
 Completing a run does not establish success, because evaluation assesses the evidence against the WHAT.
 
 Every initiative, objective, and task must have an outcome.
-For both harnesses, every ending at each level produces an outcome.
+For both harnesses, every ending at each node produces an outcome.
 An outcome can record that evidence establishes that the results did not meet the validation criteria.
 It can also record that available evidence cannot establish whether the results met the validation criteria.
 Neither assessment establishes success.
@@ -59,14 +59,15 @@ A specific agent or a human participant supplies the WHO and takes responsibilit
 A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
 A worker instance takes an available initiative or objective.
-A worker instance creates a run each time it takes a level.
-A run implements the steps that achieve the WHAT of that level.
+A worker instance creates a run each time it takes a node.
+A run implements the steps that achieve the WHAT of that node.
 
-A run is responsible for producing the outcome of the level that it takes, and the outcome of every task of that level.
-A run ends when the current outcome is successful, when an assessment does not pass, on cancellation, on a resource limit, or when the run cannot progress.
-An assessment that does not pass ends the run and blocks the level.
-A blocked level is not available for a further run.
-Only a human unblocks a level.
+A run is responsible for producing the outcome of the node that it takes, and the outcome of every task of that node.
+A run ends when the current outcome is successful, an assessment does not pass, a human pauses the node, or a human discards the node.
+A run also ends on a resource limit or when the run cannot progress.
+An assessment that does not pass ends the run and blocks the node.
+A blocked node is not available for a further run.
+Only a human unblocks a node.
 An unblock authorizes a further run, and it asserts nothing about the results.
 The run reads the current outcome from evaluation or a human override; it does not decide success.
 A human override ends the run only when its new outcome asserts success.
@@ -120,16 +121,16 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 - **mission**: The whole work of one project: its initiatives, objectives and tasks and the relations between them.
   A project has one mission.
 - **WHAT**: The goal, the steps to achieve it, and the validation criteria for success.
-- **initiative**: A level of WHAT with its own validation criteria and outcome.
-- **objective**: A level of WHAT that contains tasks and has its own validation criteria and outcome.
+- **initiative**: A node of WHAT with its own validation criteria and outcome.
+- **objective**: A node of WHAT that contains tasks and has its own validation criteria and outcome.
   An objective belongs to exactly one repository of its project.
-- **task**: A level of WHAT that belongs to an objective and has its own validation criteria and outcome.
+- **task**: A node of WHAT that belongs to an objective and has its own validation criteria and outcome.
   This relation lets a run organize task execution toward the objective's goal.
 - **evidence**: What execution records about the results, and what evaluation assesses against the validation criteria.
-- **outcome**: An assessment from evaluation of evidence against validation criteria, or a human assertion that an override records.
+- **outcome**: An assessment from evaluation of evidence against validation criteria, or a human act that a human assertion records.
   The assessment can establish that results meet or do not meet the criteria, or that available evidence cannot establish either.
   The outcome records the stopping reason separately from the assessment.
-- **landing**: The observed expected end state of every configured repository action of a level.
+- **landing**: The observed expected end state of every configured repository action of a node.
   Opening a pull request is not landing; the merge of that pull request is.
 - **worker**: The HOW: a template that defines how executions happen.
   It includes methods, agents, tools, memory, and prompts.
@@ -137,7 +138,7 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 - **worker instance**: A background instance of one worker that takes an available initiative or objective.
   A project configures how many instances of a worker binding are available.
 - **run**: One occurrence of a worker instance working one initiative or objective.
-  A run implements the steps that achieve the WHAT of that level.
+  A run implements the steps that achieve the WHAT of that node.
   Two runs of the same worker share that worker's method.
   Each run has its own execution identity.
 - **agent**: An automated participant responsible for carrying out steps as the WHO.
