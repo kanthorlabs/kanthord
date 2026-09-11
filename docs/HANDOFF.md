@@ -915,6 +915,19 @@ Three consequences of this ruling. Each one follows from it, and none is a furth
 - The record states which human authorized which content for which attempt. Two humans who read one blocked node cannot authorize different content in silence.
 - An edit and an authorization reach the service together, so the earlier objection that one request carries two authorities is answered. One human holds both authorities, and the atomicity is what proves the pairing.
 
+Ulrich ruled S1 to S5 of the section 6 brief on 2026-09-11. These are decisions.
+
+- S1. The Mission Service records whether the external state is representable in kanthord, and it copies no external content. The system fetches that content when it needs it. The unblock carries the human guideline, and the next run reads the external conversation on the platform.
+- S2. A human alone unblocks a node, and that human carries a specific identity in the system: the account username. Every act therefore names who performed it. No execution identity and no client identity of an external harness unblocks a node. The Project Service owns how an identity is established.
+- S3. Five derivations hold. A task is never blocked, because a task holds no state. The run of the objective drives every task lifecycle. A block writes no record beyond the outcome that closes the attempt. A block changes the state of no other node. The human block from `Paused` is the only human block.
+- S4. Section 6 owns five vocabulary entries: `block condition`, `unblock record`, `human guideline`, `human block`, and `node revision` in place of `criteria revision`.
+- S5. `overview.vocabulary.md` gains an entry for `block` and an entry for `unblock`.
+
+Two consequences of these rulings. Each one follows from them, and none is a further ruling.
+
+- S1 forces the repair of `docs/mission-service.md` line 512. The approved sentence says that an unblock carries the human guideline or the content of the external conversation.
+- S3 closes two open items of this register: whether a task is blocked by its own failed assessment, and what drives the evaluation, the cancellation and the ending of a task.
+
 Edits that these rulings force on approved pages. None is applied, because section 6 is not written.
 
 - `docs/mission-service.md`, Validation criteria and authority: the four sentences that name a criteria revision name a node revision, and the revision covers the whole content of the node.
