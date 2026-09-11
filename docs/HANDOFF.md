@@ -947,6 +947,15 @@ Ulrich named the entity `external object` on 2026-09-11. This is a decision.
 - The entity is the `external object`. It represents one requested external action and the remote thing that serves it.
 - `platform object` retires. Approved section 3 names the platform object in the landing record, and that field becomes the external object.
 
+Ulrich ruled the block of a node that holds no attempt on 2026-09-11. This is a decision.
+
+- `Paused -> Blocked` closes the attempt when an attempt is open. When the attempt counter reads 0, the block takes no effect on the counter, and the counter stays 0.
+
+Two consequences of this ruling. Each one follows from it, and none is a further ruling.
+
+- The unblock of such a node clears no attempt and opens none. The counter stays 0, and the first claim of the node opens attempt 1, exactly as Validation criteria and authority already states.
+- The block writes its outcome, as the transition table states. A discard of a node that started no work already writes an outcome at the same counter, so this case needs no new rule.
+
 Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
 
 - OPEN: the policy for a node that requires two external actions, when one ends outside its expected end state and the other stays live. Aelita recommends that the failure closes the attempt and blocks the node, and that the live request becomes a remnant of the closed attempt. The approved invariant survives, because it forbids a terminal state while a request of the open attempt is unresolved, and `Blocked` is not terminal.
