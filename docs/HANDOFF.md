@@ -904,6 +904,17 @@ Four alternatives that this session rejected.
 - A relaxed import condition that admits a node holding a closed attempt is rejected. The import is snapshot reconciliation whose attribution establishes no approval, and its condition also governs retirement, a child-set change, a containment move and a dependency edit. The ruling of 2026-09-10 stands, and the command line interface reconciles a stale plan file by submitting a node API edit.
 - A pin at each claim is rejected. It contradicts the invariant that an active attempt keeps what it pinned, and it reopens the currency of a task outcome, the reuse of evidence bound to an earlier revision, the execution-end fact and an outstanding external action.
 
+Ulrich ruled the unblock transaction on 2026-09-11. This is a decision.
+
+- U1. An unblock is one atomic act. It names the attempt that it clears, it names the node revision that it expects, it carries the content change when the human changes the direction, and it carries a request key that binds to its payload.
+- U2. The act checks the authority of the human, the blocked attempt and the expected revision. It writes the revision when the human carries a change, it opens exactly one attempt, and it pins the revision to that attempt. A retry returns the accepted record.
+
+Three consequences of this ruling. Each one follows from it, and none is a further ruling.
+
+- A stale unblock and a repeated unblock authorize no attempt, because the attempt and the revision both fail the check. This closes the Mission Service counterpart of the parked Scheduler item.
+- The record states which human authorized which content for which attempt. Two humans who read one blocked node cannot authorize different content in silence.
+- An edit and an authorization reach the service together, so the earlier objection that one request carries two authorities is answered. One human holds both authorities, and the atomicity is what proves the pairing.
+
 Edits that these rulings force on approved pages. None is applied, because section 6 is not written.
 
 - `docs/mission-service.md`, Validation criteria and authority: the four sentences that name a criteria revision name a node revision, and the revision covers the whole content of the node.
@@ -913,7 +924,6 @@ Edits that these rulings force on approved pages. None is applied, because secti
 
 Open items that these rulings leave.
 
-- OPEN: the shape of the unblock transaction. Aelita recommends one atomic act that names the attempt it clears, names the revision it expects, optionally carries the content change that writes the next revision, and carries a request key that binds to its payload. Without the expected revision, two humans who read one blocked node authorize different content and no record states which content each one authorized. This is the Mission Service counterpart of the parked Scheduler item.
 - OPEN: whether a revision that changes the goal or the steps alone invalidates the currency of a current assessment. Aelita recommends that currency reads the whole revision, because a requirement that moves from a 24-hour expiry to a 15-minute expiry leaves the verification command untouched.
 - OPEN: how the design separates a persistent requirement from a satisfied historical instruction. A length policy stays in force after a run satisfies it, and a rename completes. This question exists under every content model.
 - OPEN: whether the Mission Service returns the difference between the revision that an attempt pinned and the revision that the previous attempt pinned. The useful difference is between two pinned revisions, and never between two adjacent revision numbers.
