@@ -956,6 +956,16 @@ Two consequences of this ruling. Each one follows from it, and none is a further
 - The unblock of such a node clears no attempt and opens none. The counter stays 0, and the first claim of the node opens attempt 1, exactly as Validation criteria and authority already states.
 - The block writes its outcome, as the transition table states. A discard of a node that started no work already writes an outcome at the same counter, so this case needs no new rule.
 
+Ulrich ruled the revision of a task on 2026-09-11, on the same principle. This is a decision.
+
+- A task holds no revision of its own, exactly as a task holds no state and holds no attempt. The content of a task belongs to the node revision of its objective.
+
+Three consequences of this ruling. Each one follows from it, and none is a further ruling.
+
+- An edit of a task writes a node revision of its objective.
+- The run of an objective reads its tasks from the revision that its attempt pins, so a task edit during an open attempt reaches the next attempt.
+- A task assessment names the node revision of the objective. The write control and the version unit agree, because the import condition of a task already reads the condition of its objective.
+
 Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
 
 - OPEN: the policy for a node that requires two external actions, when one ends outside its expected end state and the other stays live. Aelita recommends that the failure closes the attempt and blocks the node, and that the live request becomes a remnant of the closed attempt. The approved invariant survives, because it forbids a terminal state while a request of the open attempt is unresolved, and `Blocked` is not terminal.
