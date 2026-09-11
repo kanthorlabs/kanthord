@@ -9,7 +9,6 @@ A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabula
 A term that names a closed set lists every value of that set.
 Every other term carries a concrete example.
 This file is not a design document, and `mission-service.md` stays the single source of truth.
-Section 6 of that page is not written.
 
 ## attempt
 
@@ -112,6 +111,15 @@ The set is closed and it holds two values.
 - **assessment**
 - **human assertion**
 
+## block condition
+
+A block condition is a condition that closes an attempt and reaches `Blocked`.
+The set is closed and it holds three values.
+
+- **a current assessment that does not pass**
+- **an `External.Failed` observation**
+- **a human reason on a paused node**
+
 ## asserted result
 
 The result that an outcome asserts, separately from its stopping reason.
@@ -157,6 +165,30 @@ The initiative reaches `Waiting`.
 Both current objectives hold terminal states, and the initiative configures no external action.
 The readiness condition admits a reviewer claim.
 
+## unblock record
+
+The record of one human unblock.
+The term names no closed set.
+An unblock record names seven things.
+
+- the node
+- the attempt that it clears
+- the attempt that it opens
+- the node revision that it pins
+- the actor
+- the time
+- the human guideline, when one exists
+
+Take the history in which attempt 2 of "Add password reset" closes on a block.
+
+- node: "Add password reset"
+- attempt cleared: 2
+- attempt opened: 3
+- node revision pinned: 3
+- actor: `ulrich`
+- time: `2026-09-11T10:15:00Z`
+- human guideline: "Use the existing token helper rather than a new one"
+
 ## terminal state
 
 A state that a node never leaves and that opens no further attempt.
@@ -171,11 +203,12 @@ An edit writes the WHAT, and a correction writes a new outcome record.
 
 ## assessment
 
-The record of one evaluation of one evidence set against one criteria revision.
+The record of one evaluation of one evidence set against the criteria of one node revision.
+An assessment weighs the evidence against the criteria of the node revision that it names.
 An assessment names five things.
 
 - the evidence set that it evaluates
-- the criteria revision that it evaluates against
+- the node revision whose criteria it evaluates
 - every immutable child outcome record that it weighs
 - the method that it applies
 - the actor that performs it
@@ -189,29 +222,37 @@ That set is closed and it holds three values.
 
 Take the objective "Add password reset" above.
 A `reviewer@1` instance evaluates that objective, and it writes one assessment.
-That assessment names the evidence set of the objective, the pinned criteria revision, and the outcome record of each task.
+That assessment names the evidence set of the objective, the node revision pinned by the attempt, and the outcome record of each task.
 It names the evaluation method, and it names the reviewer instance as the actor.
 Assessments accumulate, so a second assessment of the same objective never overwrites the first.
 
-## criteria revision
+## node revision
 
-One version of the criteria of a node.
-A criteria change preserves the identity of its node and creates a criteria revision.
+One version of the whole content of a node.
+It covers the goal, the steps, the validation criteria and every structured field of the node.
+A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.
 
-Continue the objective "Add password reset".
+Take the history of "Add password reset" that reaches attempt 3.
+The Mission Service returns its revisions as a list ordered by revision descending.
 
-- An import creates the objective, with criteria revision 1.
-  The objective holds `Available`, and its attempt counter reads 0.
-- A human changes the verification command, then imports the plan again.
-  The objective still holds `Available`, and its attempt counter reads 0.
-  The import condition holds, and the import creates criteria revision 2.
-- A `tdd@1` instance claims the objective.
-  The first claim opens attempt 1, which pins criteria revision 2.
+- **revision 3**
+  - reason: add the reset email requirement
+  - actor: `ulrich`
+  - time: `2026-09-11T10:00:00Z`
+- **revision 2**
+  - reason: set reset token expiry to 24 hours
+  - actor: `ulrich`
+  - time: `2026-09-10T15:00:00Z`
+- **revision 1**
+  - reason: create the objective
+  - actor: `ulrich`
+  - time: `2026-09-09T09:00:00Z`
 
-An active attempt keeps the criteria revision that it pins.
-A new criteria revision authorizes no later attempt by itself.
-The identifier of the objective stays the same across both revisions.
+A `tdd@1` instance claims "Add password reset" under attempt 3, and attempt 3 pins revision 3.
+An active attempt keeps the node revision that it pins.
+A new node revision authorizes no later attempt by itself.
+The identifier of the objective stays the same across all three revisions.
 
 ## currency
 
@@ -273,6 +314,36 @@ Take a second objective "Add password reset email" that depends on "Add password
   Its repository actions wait for the merge of "Add password reset".
   Another dependency of that objective still makes it unavailable.
 
+## external object
+
+The representation of one requested external action and the remote thing that serves it.
+The term names no closed set.
+
+An external object takes one of many forms, and these four are examples of it.
+
+- pull request 42 that must merge
+- document "Password reset checklist" whose every item must carry a check
+- issue 117 that must close with the tag `security`
+- a reply in the "Account recovery" thread
+
+## human block
+
+The human block of a paused node.
+The term names no closed set.
+
+Take another history of "Add password reset", in which attempt 1 closes on a block.
+A human pauses the objective while attempt 2 is open.
+The human blocks the paused objective with the reason "the reset provider is unavailable".
+The human unblocks the objective into attempt 3.
+
+## human guideline
+
+An optional instruction to the HOW that an unblock carries.
+The term names no closed set.
+
+For "Add password reset", a human guideline says "Use the existing token helper rather than a new one".
+Another unblock carries no human guideline.
+
 ## landing observation
 
 The platform action that observes a landing.
@@ -288,26 +359,55 @@ Continue step 6 through step 9 of the attempt example.
 - The observation retrieves the landed commit identities and appends them to the evidence set.
 - The Mission Service writes the successful outcome, and the objective reaches `Completed`.
 
-## landing record
+## observation record
 
-The record of a landing observation.
-A landing record names six things.
+The record of one accepted observation of one external action.
+The term names no closed set.
+An observation record is one kind.
+It names eight things.
 
-- the repository action
+- the node
+- the attempt
+- the external action
 - the expected end state
-- the platform object
+- the external object
 - the observed state
 - the observation time
-- the commit identities
+- the authorized observer that writes it
 
-Take the landing observation above, under a repository strategy that requires a pull request for every change.
+A landing record is the landing case of an observation record.
+It adds the commit identities.
 
-- repository action: open a pull request
-- expected end state: the merged pull request on the git platform
-- platform object: the pull request of "Add password reset"
+Take the objective "Add password reset".
+
+Example of a landing case:
+
+- node: "Add password reset"
+- attempt: 1
+- external action: open a pull request
+- expected end state: merged pull request
+- external object: pull request 42
 - observed state: merged
-- observation time: the time of the platform action
-- commit identities: the landed commit of "Add password reset"
+- observation time: `2026-09-11T11:00:00Z`
+- authorized observer: the authorized observer of the repository binding
+- commit identities: `abc123`
+
+Example of an external failure case:
+
+- node: "Add password reset"
+- attempt: 2
+- external action: open a pull request
+- expected end state: merged pull request
+- external object: pull request 57
+- observed state: closed without merge
+- observation time: `2026-09-12T11:00:00Z`
+- authorized observer: the authorized observer of the repository binding
+
+## landing record
+
+The landing case of an observation record.
+A landing record adds the commit identities.
+The landing record above names pull request 42 and commit `abc123`.
 
 ## import
 

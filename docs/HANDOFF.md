@@ -31,7 +31,9 @@ A document is drafted in this order. A document is not closed before a review ag
 
 ## State
 
-`docs/overview.md`, `docs/architecture.md`, `docs/project-service.md` and `docs/mission-service.md` are written and reviewed. The Project Service holds no open design item. `docs/mission-service.md` holds sections 1 to 5. Section 6 is not started. A debate review ran on sections 1 to 4 on 2026-09-09 and every finding is applied.
+`docs/overview.md`, `docs/architecture.md`, `docs/project-service.md` and `docs/mission-service.md` are written and reviewed. The Project Service holds no open design item. `docs/mission-service.md` holds sections 1 to 6, and the design set is complete. A debate review ran on sections 1 to 4 on 2026-09-09 and every finding is applied.
+
+Section 6, Block and unblock, is written on 2026-09-11. It states the block, the human block, the unblock, the enforcement and the read of the blocked nodes of a mission. The rulings of that day widen the criteria revision into the node revision, which versions the whole content of a node, make the unblock one atomic act that names the attempt it clears and the revision it expects, and add the external object, which represents one requested external action and which no rule of the Mission Service reads. The register below holds every ruling, and two items of the successful-outcome rule stay open.
 
 Section 5, Outcome and completion, is written on 2026-09-10, and it holds no open design item. One forced edit stays open, and the register below names it. It states the twelve states of a node, the 48 transitions with the effect of each one on the attempt and the record that it writes, the attempt model whose counter reads 0 before the first claim, the readiness condition of a reviewer claim, the successful outcome, the outcome record with its two bases, the task-outcome obligation, the synchronisation of a node state with an external request, the resume precedence of a paused node, and the boundary of the section. Two mermaid diagrams carry the internal case and the external segment.
 
@@ -86,7 +88,7 @@ The document is `docs/mission-service.md`. Its six sections are:
 5. Outcome and completion
 6. Block and unblock
 
-Ulrich approved this structure on 2026-09-09. Sections 1 to 5 are discussed, debated, settled and written. Section 6 is not started.
+Ulrich approved this structure on 2026-09-09. Every section is discussed, debated, settled and written.
 
 ### Settled, section 1: Mission structure and nodes
 
@@ -855,7 +857,7 @@ Open questions for this section:
 - OPEN: whether cancellation is a stopping reason with its own rules, or an ordinary ending that produces an outcome with no assessment.
 - OPEN: whether the current outcome of a node can move backwards, since an override adds a new outcome and a later assessment can also add one.
 
-### Not started, section 6: Block and unblock
+### Written, section 6: Block and unblock
 
 Scope: the block on a failed assessment, the human unblock, enforcement at the API and the CLI, and propagation to a parent and a sibling.
 
@@ -864,16 +866,16 @@ Inputs that already exist:
 - An assessment that does not pass ends the run and blocks the node. A blocked node is not available for a further run. Only a human unblocks a node. An unblock authorizes a further run and asserts nothing about the results.
 - The block must be enforced at the API and the CLI, not only in the Scheduler. An external harness is an executor reaching kanthord that way, so Scheduler-only enforcement leaves a bypass.
 - A worker check before it picks up work is advisory. The claim operation checks the gate atomically when it records the claim, and both harnesses obey it. The Mission Service owns the gate and the Scheduler Service enforces it at the claim.
-- An assessment block and an import freeze stay independent conditions that eligibility combines. Releasing an import freeze never clears an assessment block. One flag that carries a reason is rejected, because the two conditions have different clearing authorities.
+- STALE. An assessment block and an import freeze stay independent conditions that eligibility combines. This input names the mission-wide import freeze that the per-node import condition of 2026-09-10 replaced. The rule that survives is that an import never unblocks a node, and `docs/mission-service.md` states it.
 - A blocked task must not fail its objective's run and must not reopen a sibling that is already terminal. Dependency propagation is a separate decision from run termination.
 - A failed objective assessment can arrive after a pull request, a merge or a push, because the repository action precedes objective success. Ending the run undoes none of it. A replacement run inspects what already happened. Unblock and rollback are different actions.
 - No dispatch window may exist between run termination and the block taking effect. This is parked for the Scheduler Service.
 
 Open questions for this section:
 
-- OPEN: whether a task is blocked by its own failed assessment, given that a task is internal to the run of its objective and that only a human clears a block.
-- OPEN: nothing drives the evaluation, the cancellation or the ending of a task, because no worker takes a task.
-- OPEN: a stale or repeated unblock request must not authorize an unintended attempt. This is parked for the Scheduler Service and it needs a Mission Service counterpart.
+- CLOSED on 2026-09-11 by S3. A task is never blocked, because a task holds no state.
+- CLOSED on 2026-09-11 by S3. The run of the objective drives every task lifecycle.
+- CLOSED on 2026-09-11 by U1 and U2. The unblock names the attempt that it clears and the revision that it expects, and its request key binds to its payload, so a stale unblock and a repeated unblock authorize no attempt. The Scheduler Service keeps its own counterpart of the rule.
 
 Ulrich ruled the node revision on 2026-09-11. These are decisions.
 
@@ -987,6 +989,8 @@ Ulrich ruled the bundling of an edit on 2026-09-11. This is a decision.
 One consequence of this ruling. It follows from the ruling, and it is not a further ruling.
 
 - A human who redirects a node that holds an open attempt pauses the node, blocks it, and unblocks it with the content change. The unblock carries the change, so the redirect costs three acts and never four.
+
+One consequence that the writing of section 6 forced, and that Ulrich reviews. The task ruling makes the content of a task part of the node revision of its objective, and the readiness condition read the current tasks of the objective. The two readings disagree when a human edits the task set during an open attempt. The readiness condition now reads every task of the revision that the open attempt pins, so the run, the readiness condition and the task assessment all read one task set.
 
 Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
 

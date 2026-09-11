@@ -82,6 +82,18 @@ A human override of the outcome of "Add password reset" produces a new outcome t
 kanthord keeps the previous outcome as a reference.
 A human discard of "Add password reset" produces an outcome whose asserted result establishes nothing.
 
+## block
+
+A block is the closure of an attempt on a condition, after which a human unblock authorizes the next attempt.
+The term names no closed set.
+An assessment that does not pass closes attempt 1 and blocks "Add password reset".
+
+## unblock
+
+An unblock is the human act that authorizes the next attempt of a blocked node.
+The term names no closed set.
+A human unblocks "Add password reset" into its next attempt.
+
 ## landing
 
 Landing is the observed expected end state of every configured repository action of a node.

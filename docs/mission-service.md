@@ -52,7 +52,7 @@ A containment edge alone forms no cycle, because containment descends from a par
 A start dependency and a reverse landing dependency between two nodes form a cycle.
 
 An unsatisfied dependency never blocks a node.
-A dependency determines availability, and an assessment determines a block.
+A start dependency determines availability, and Block and unblock owns the block.
 
 A node lands when every configured repository action in its subtree reaches its expected end state.
 A dependent releases on the observed state, and never on the completion of the local action.
@@ -116,6 +116,7 @@ The map of assigned identifiers stays retrievable.
 A retirement removes the executable work of its node.
 A retirement preserves the outcomes, the assessments, the evidence and the historical relations of that node.
 A substantive update of a terminal node returns an error.
+A node in a terminal state holds no new revision, because a terminal node is not editable.
 A no-op import of a terminal node returns no error.
 
 An import creates, updates and deletes a node, and each operation requires the import condition.
@@ -141,19 +142,52 @@ A transaction and a lock cover the condition check and the commit together.
 Work on another node never rejects an import and never delays one.
 A genuine no-op makes no modification, so it requires no condition check.
 
-A criteria change preserves the identity of its node and creates a criteria revision.
-An attempt pins the criteria revision that it claims under.
-An active attempt keeps the criteria revision that it pins.
+A change to the content of a node preserves the identity of that node and creates a node revision.
+A node revision is one version of the whole content of a node.
+It covers the goal, the steps, the validation criteria and every structured field of the node.
+A node revision changes no other counter.
+The attempt counter is independent of the revision number.
+An attempt pins the node revision that its unblock names.
+The first claim of a node pins the current revision.
+An active attempt keeps the revision that it pins.
+A revision that a human writes during an open attempt never retargets that attempt.
 An import never retargets an active attempt.
-A criteria revision never reopens a node that holds a successful outcome.
+A node revision never reopens a node that holds a successful outcome.
 That success stands under the revision that establishes it.
 An import never unblocks a node, and an import never reopens a node.
+
+The Mission Service returns the revisions of a node as a list, ordered by revision descending.
+The read of a worker resolves to the revision that its attempt pins.
+That revision is the head of the list that the Mission Service returns to it.
+The read of a human returns every revision.
+
+A node revision names its reason, its actor and its time.
+One record carries the change and its result.
+
+A dependency change is not a field write.
+The graph validation and the authority checks of the Mission Service govern it.
+
+An edit of a node carries no state change.
+It writes a node revision.
+A human changes a state through the act that owns that state change.
+An edit of a node that holds an open attempt states that its revision reaches the next attempt and not the open one.
+
+A task holds no revision of its own, exactly as a task holds no state and holds no attempt.
+The content of a task belongs to the node revision of its objective.
+An edit of a task writes a node revision of its objective.
+The run of the objective reads its tasks from the revision that its attempt pins.
+
+The read of a node names the revision that each attempt pins.
+A revision that no attempt pins is visible as such.
+On a terminal node no attempt ever pins it.
 
 An import records the actor that submits it.
 That record establishes attribution, and it establishes no authorship and no approval.
 A criterion that states human authorship records a claim and establishes no authorship.
 
-A verification command belongs to the WHAT, and an import carries it.
+The verification command is a structured field of the node content, and an import carries it.
+A human writes its value.
+No execution identity infers a command from prose.
 The files that the command reads belong to the repository, and they stay mutable.
 Attribution and a judgement criterion protect the verification.
 An exit status of zero proves that one command returned zero.
@@ -174,6 +208,26 @@ Addressed prose is evidence, and a research report and a judgement rationale qua
 An evaluation determines the strength of that evidence.
 A claim that carries no addressed content is not evidence.
 
+An external object is an entity of the Mission Service.
+It represents one requested external action and the remote thing that serves it.
+The entity is a representation.
+It is informative, and no rule of the Mission Service reads it.
+The Worker Service uses that representation under its own rules.
+The Mission Service acts on an accepted observation alone.
+An external object carries its own identity, because one binding of the Project Service serves several requests.
+An external object names the external action that it fulfils, the binding of the Project Service, the address of the remote thing and a label for display.
+The Mission Service parses no provider content.
+An observer interprets the provider, and it writes the accepted observation.
+
+An observation record is one kind.
+It names the node and the attempt, the external action, the expected end state, the external object, the observed state, the observation time and the authorized observer that wrote it.
+The observed state is the representation that the Mission Service holds of the external state.
+An observer folds the state of a provider into it, and the Mission Service folds nothing itself.
+An observation that establishes no end state leaves the request unresolved.
+A failure to inspect the provider is therefore not a failure of the request, and it costs no attempt.
+An outcome that an `External.Failed` observation closes names that observation, so the cause of the block is reachable from the outcome.
+The basis of that outcome stays the passing assessment.
+
 The Mission Service stores the content of produced evidence.
 It stores the address of repository evidence.
 Stored content stays retrievable.
@@ -187,17 +241,19 @@ An initiative points at an objective commit, and an objective commit is a landed
 
 The evidence of a node is a set of items, and it holds one item most of the time.
 An accepted landing observation appends the landed commit identities to the evidence set.
+An external action that is not a repository action adds no commit identities.
 No assessment weighs the landed snapshot.
 
-A landing record names the repository action, the expected end state and the platform object.
-It names the observed state, the observation time and the commit identities.
+A landing record is the observation record of a landing.
+A landing record names the external object.
+It adds the commit identities.
 An authorized observer writes a landing observation, because that observation happens after the run releases.
 A run submits the evidence of its own node and the evidence of the tasks of that node.
 Each submission carries a valid execution identity.
 A late submission never becomes current because it arrives last.
 
 A machine check binds its result to the snapshot that it ran against.
-It binds its result to the pinned criteria revision.
+It binds its result to the pinned node revision.
 A named snapshot does not prove that the check used it.
 That binding is an assertion of the executor, unless a clean isolated checkout establishes it.
 An executor report is attributable evidence, and it is not an independently verified check.
@@ -231,6 +287,7 @@ The executing worker never chooses the reviewer, and it never shapes the instruc
 That separation is a separation of duties, and it is not independent verification.
 The run of an objective writes the assessment of each task of that objective.
 A task assessment carries no separation of duties.
+A task assessment names the node revision of its objective, because a task holds no revision of its own.
 The independent review sits at the node whose outcome persists.
 
 The scope of an evaluation differs by node, and its method follows its criterion.
@@ -238,13 +295,17 @@ The evaluation of an objective weighs the child outcomes and the tested snapshot
 A model judgement transcript is evidence of its invocation, and it is not an assessment.
 The boundary is authority, and it is not a file format.
 
-An assessment names its evidence set and its criteria revision.
+An assessment names its evidence set and its node revision.
+An assessment weighs the evidence against the criteria of that revision.
 It names every immutable child outcome record that it weighs.
 It names the method that it applies and the actor that performs it.
 
 Currency needs three checks.
-Context asks whether an assessment matches the evidence that it names, its criteria, the structure and the selected child outcomes.
+Context asks whether an assessment matches the evidence that it names, the node revision that its attempt pins, the structure and the selected child outcomes.
 The context check reads the evidence that the assessment names, and never requires equality with the whole evidence set.
+The context check compares against the node revision that the attempt of the assessment pins.
+It never compares against the latest revision of the node.
+A revision that a human writes during an open attempt never invalidates the assessment of that attempt.
 Authority checks intervening acts: a block, an unblock, a pause, a resume, a discard, a human override and an attempt closure.
 The authority check determines whether an assessment still affects current state.
 An attempt closure never invalidates a completed record.
@@ -283,7 +344,8 @@ The set holds twelve states.
 - **Waiting**: The execution of the open attempt requires no further work.
   No claim holds the node.
 - **Evaluating**: A reviewer run holds the claim.
-- **Blocked**: The attempt closes on a condition after the evaluation, and a human unblock authorizes the next attempt.
+- **Blocked**: The attempt closes on a condition, and a human unblock authorizes the next attempt.
+  A condition follows the evaluation, except the human block of a paused node.
   No claim holds the node.
 - **Paused**: A human holds the work of the node temporarily.
   An open attempt stays open.
@@ -300,7 +362,7 @@ A terminal node is not editable.
 A human override corrects the recorded result of a terminal node, and the node keeps its terminal state.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
-Three conditions reach `Blocked`, and each follows the evaluation.
+Three conditions reach `Blocked`, and each follows the evaluation except the human block.
 They are a current assessment that does not pass, an `External.Failed` observation and a human reason on a paused node.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
@@ -319,6 +381,8 @@ It invalidates continuation, and it never invalidates a completed record.
 A closed attempt never reopens.
 An opening and an attempt closure are separate acts.
 An attempt that a human unblock opens holds no claim until a claim arrives.
+A block of a node whose attempt counter reads 0 closes no attempt, and the counter stays 0.
+The unblock of that node clears no attempt and opens none, and the first claim of the node opens attempt 1.
 A record never migrates into the next attempt.
 A human unblock therefore returns the node to `Available` or to `Pending`, and never to `Waiting`.
 
@@ -326,7 +390,7 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 
 `Waiting` means released, and it does not mean claimable.
 The readiness condition admits a reviewer claim when the child rule and the external action rule hold.
-For an objective, every current task holds a current outcome of the open attempt of that objective.
+For an objective, every task of the revision that the open attempt pins holds a current outcome of that attempt.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
 No required external action of the node is outstanding.
@@ -416,8 +480,8 @@ Otherwise the start-dependency closure sends the node to `Available` when it hol
 | `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
 | `Evaluating -> Paused` | Human holds the node; reviewer run stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `Blocked -> Available` | Human unblock; closure holds | Next attempt opens | None |
-| `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens | None |
+| `Blocked -> Available` | Human unblock; closure holds | Next attempt opens when the cleared attempt exists | Unblock record |
+| `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
 | `Blocked -> Discarded` | Human discards the node | No open attempt | Outcome |
 | `Paused -> Waiting` | Human resumes the node; resume precedence selects Waiting | Stays open | None |
@@ -426,10 +490,10 @@ Otherwise the start-dependency closure sends the node to `Available` when it hol
 | `Paused -> External.Requested` | Human resumes the node; resume precedence selects External.Requested | Stays open | None |
 | `Paused -> External.Success` | Human resumes the node; resume precedence selects External.Success | Stays open | None |
 | `Paused -> External.Failed` | Human resumes the node; resume precedence selects External.Failed | Stays open | None |
-| `Paused -> Blocked` | Human blocks the node; record carries the human reason | Closes | Outcome |
+| `Paused -> Blocked` | Human blocks the node; record carries the human reason | Closes when an attempt is open; no effect when the counter reads 0; counter stays 0 | Outcome |
 | `Paused -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Paused -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `External.Requested -> External.Success` | Accepted observation establishes the expected end state | No effect | Landing record; landed commit identities in evidence set |
+| `External.Requested -> External.Success` | Accepted observation establishes the expected end state | No effect | Observation record; a landing adds the landed commit identities to the evidence set; an external action that is not a repository action adds none |
 | `External.Requested -> External.Failed` | Accepted observation establishes another end state of the request | No effect | Observation record |
 | `External.Requested -> Paused` | Human holds the node | Stays open | None |
 | `External.Success -> Completed` | Current passing assessment stands, or human override asserts success after the observation resolves the request | Closes | Outcome |
@@ -509,14 +573,144 @@ Mission structure and nodes owns the dependency, the landing and the repository 
 Evidence owns the evidence record and its durability.
 Evaluation and assessment owns the lifecycle of an evaluation.
 Block and unblock owns the block and the unblock.
-An unblock carries the human guideline or the content of the external conversation that the next run reads.
 The Worker Service owns which entity requests a required external action and the idempotency of that request across an attempt boundary.
-The Mission Service records the platform object through the landing record.
+The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
+
+## Block and unblock
+
+### The block
+
+A block is the closure of an attempt on one of the three conditions that Outcome and completion names.
+Outcome and completion owns the block of a node that holds no attempt.
+
+A block writes no separate block record.
+The closure writes the outcome of the node and the task outcomes that Outcome and completion owes.
+The outcome names the condition through its closing event, its stopping reason and its basis.
+
+A block changes the state of no other node.
+A dependent follows the dependency rules of Mission structure and nodes.
+A parent follows the readiness condition of Outcome and completion.
+A sibling is unaffected.
+
+A block exists for an initiative and for an objective.
+A task is never blocked, because Outcome and completion states that a task holds no state.
+The run of the objective drives every task lifecycle.
+
+The transition that reaches `Blocked` closes the attempt and sets the state in one transaction.
+A claim serializes with that transaction, so the Mission Service holds no dispatch window.
+The Scheduler Service owns the enforcement at the claim.
+
+### The human block
+
+A human blocks a paused node, and that path is the only human block.
+
+The outcome carries the human reason as the human decision.
+Its asserted result is that nothing is established.
+
+The human block closes the attempt when one is open.
+A block of a node whose attempt counter reads 0 takes no effect on that counter.
+The unblock of that node clears no attempt and opens none.
+The first claim of the node opens attempt 1.
+
+The human block closes the attempt, so the next attempt executes again.
+The records of the closed attempt stay.
+The effects on a repository and on a provider stay.
+A human who keeps the attempt resumable leaves the node in `Paused`.
+
+### The unblock
+
+An unblock is one atomic act.
+It names the attempt that it clears.
+It names the node revision that it expects.
+It carries a content change when the human changes the direction.
+It carries a request key that binds to its payload.
+
+The act checks the authority of the human, the blocked attempt and the expected revision.
+An unblock that carries a content change also checks the authority that a node edit requires.
+It writes the node revision when the human carries a change.
+It opens exactly one attempt, and it pins a revision to that attempt.
+An unblock of a node whose attempt counter reads 0 opens none.
+
+The expected revision is the current revision of the node when the human submits the act.
+A content change uses that revision as its base and writes the next revision.
+The attempt pins the revision that the act leaves current.
+
+The act recognizes a repeat of an accepted request key before it checks the attempt and the revision.
+A retry of an accepted unblock returns the accepted record and costs no second attempt.
+The same key with a different payload is refused.
+
+A repeat of an accepted request key authorizes no second attempt, because the act returns the accepted record.
+A later request that names a cleared attempt or a superseded revision authorizes no attempt, because the check refuses it.
+
+An unblock writes an unblock record.
+The record names the node, the attempt that it clears, the attempt that it opens, the node revision that it pins, the actor, the time and the human guideline when one exists.
+
+The human guideline is optional.
+It is an instruction to the HOW.
+No assessment evaluates it.
+A requirement on the result enters the node revision.
+The unblock carries that change.
+
+A human who redirects a node that holds an open attempt pauses the node, blocks it and unblocks it with the content change.
+
+Outcome and completion owns the routing of the opened attempt to `Available` or to `Pending`.
+
+The next run reads the node revision that its attempt pins.
+It reads the outcome of the cleared attempt and the cause that the outcome names.
+It reads the unblock record of its attempt.
+A read of a record of a closed attempt migrates nothing.
+
+The external conversation stays with its provider.
+The Mission Service copies no external content.
+The next run fetches that content through the external object.
+
+The actor of an unblock is a human.
+That human carries an account username.
+No execution identity and no client identity of an external harness unblocks a node.
+The Project Service owns how an identity is established.
+
+The eligibility of an unblock reads the state of the node alone.
+It reads no state of the parent.
+The routing of the opened attempt still reads the start-dependency closure.
+A content change still passes the graph validation and the authority checks.
+
+The authorization that an unblock carries asserts nothing about the results.
+It changes no criterion.
+A content change that the same act carries changes the node revision.
+The human takes that responsibility.
+
+### The enforcement
+
+The claim operation refuses a claim of a blocked node, for an execution run and for a reviewer run, on both harnesses.
+
+An execution submission or an evaluation submission that names a closed attempt never becomes current because it arrives after the closure.
+Evaluation and assessment owns that rule.
+A completed record stays valid.
+An authorized human correction of a terminal node stays permitted.
+
+An execution operation that a client requests through the API requires a live claim.
+No execution operation proceeds on a blocked node.
+An authorized observation needs no claim, because an observation is not an execution operation.
+A human who acts directly on the provider is outside the API.
+The Mission Service refuses nothing there.
+The Project Service owns the authorization of each operation.
+
+An import never unblocks a node.
+Validation criteria and authority owns that rule.
+
+### The read
+
+A client reads the blocked nodes of a mission.
+For each node, the read returns the outcome of the closed attempt.
+That outcome names its closing event, so the read never infers a cause from the order of the records.
+The read returns the external object of every external action that the attempt requests, with the observed state of each one.
+A node whose attempt requests no external action returns none.
 
 ## Vocabulary
 
-- **assessment**: The record of one evaluation of one evidence set against one criteria revision.
+- **assessment**: The record of one evaluation of one evidence set against the criteria of one node revision.
+  An assessment weighs the evidence against the criteria of the node revision that it names.
 - **asserted result**: The result that an outcome asserts, separately from its stopping reason.
 - **attempt**: One try at a node across its runs, observations and evaluations.
   The first claim opens attempt 1, and a human unblock opens the next attempt.
@@ -524,13 +718,19 @@ No rule of the Mission Service reads that record to decide whether to request th
   The attempt counter reads 0 when the node starts no work.
 - **attempt closure**: The act that ends an attempt and every run and evaluation attempt in flight under it.
 - **basis**: The assessment or human assertion that an outcome names as its basis.
-- **criteria revision**: One version of the criteria of a node.
+- **block condition**: A condition that closes an attempt and reaches `Blocked`.
+- **node revision**: One version of the whole content of a node.
+  It covers the goal, the steps, the validation criteria and every structured field of the node.
 - **currency**: The property of an assessment that the context check, the authority check and the order check admit.
 - **dependency**: A graph relation that controls the availability of a node or the timing of its repository actions.
+- **external object**: The Mission Service representation of one requested external action and the remote thing that serves it.
 - **start dependency**: A dependency that makes its dependent unavailable until the node it names holds a current successful outcome.
 - **landing dependency**: A dependency that delays the repository actions of its dependent until the node it names lands.
+- **human block**: The human action that blocks a paused node.
+- **human guideline**: An optional instruction to the HOW that an unblock carries.
 - **landing observation**: The platform action that observes a landing.
-- **landing record**: The record of a landing observation.
+- **landing record**: The landing case of an observation record.
+- **observation record**: The record of an accepted observation of an external action.
 - **import**: The snapshot reconciliation that writes the structure and the criteria of a mission.
   A modification requires `Pending` or `Available` and an attempt counter that reads 0.
   A task modification reads the condition of its objective.
@@ -543,6 +743,7 @@ No rule of the Mission Service reads that record to decide whether to request th
   Each modified node requires `Pending` or `Available` and an attempt counter that reads 0.
   A task modification reads the condition of its objective.
 - **stopping reason**: The reason that an outcome records for the ending, separately from its asserted result.
+- **unblock record**: The record of one human unblock.
 - **terminal state**: A state that a node never leaves and that opens no further attempt.
   A terminal node is not editable.
   A human override corrects its recorded result through a new outcome record.
