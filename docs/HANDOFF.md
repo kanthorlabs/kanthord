@@ -930,7 +930,7 @@ Two consequences of these rulings. Each one follows from them, and none is a fur
 
 Ulrich ruled the external request on 2026-09-11. These are decisions.
 
-- E1. The Mission Service holds one entity for the external request, and that entity is a representation. It is informative, and it serves display. No rule of the Mission Service reads it.
+- E1. The Mission Service holds one entity for the external request, and its name is `external object`. That entity is a representation. It is informative, and it serves display. No rule of the Mission Service reads it.
 - E2. The Worker Service uses that representation under its own rules, for an evaluation or for anything else that it owns.
 - E3. The Mission Service acts on an accepted observation alone. The entity holds the representation, and the observation carries the fact.
 
@@ -941,6 +941,11 @@ Five consequences of these rulings. Each one follows from them, and none is a fu
 - A latch needs no rule. Approved section 5 states that an action is outstanding when the open attempt requests it and no accepted observation establishes its expected end state. The accepted observation is a record, so a later drift of the remote object changes nothing until a new observation arrives.
 - A failure to inspect the remote object is not a failure of the request. Approved section 5 states that a request is unresolved when no accepted observation establishes an end state, so an authorization error leaves the request unresolved and costs no attempt.
 - The entity carries its own identity, because one binding of the Project Service serves several requests. One repository binding serves a pull request that must merge and an issue that must close with a tag.
+
+Ulrich named the entity `external object` on 2026-09-11. This is a decision.
+
+- The entity is the `external object`. It represents one requested external action and the remote thing that serves it.
+- `platform object` retires. Approved section 3 names the platform object in the landing record, and that field becomes the external object.
 
 Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
 
