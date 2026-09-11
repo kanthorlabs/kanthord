@@ -875,6 +875,49 @@ Open questions for this section:
 - OPEN: nothing drives the evaluation, the cancellation or the ending of a task, because no worker takes a task.
 - OPEN: a stale or repeated unblock request must not authorize an unintended attempt. This is parked for the Scheduler Service and it needs a Mission Service counterpart.
 
+Ulrich ruled the node revision on 2026-09-11. These are decisions.
+
+- N1. A node revision is one version of the whole content of a node. It covers the goal, the steps, the validation criteria and every structured field of the node. It replaces `criteria revision`, which names the same concept narrowed to the criteria.
+- N2. A change to the content of a node creates a revision. A revision changes no other counter. The attempt counter is independent of the revision number.
+- N3. The Mission Service returns the revisions of a node as a list, ordered by revision descending. A human reads that list as the change history of the node.
+- N4. An attempt pins a revision, and a worker reads the pinned revision. The Mission Service returns the pinned revision at the head of the list that it hands a worker. The read of a human returns every revision, unfiltered.
+- N5. One record carries the change and its result. A node revision holds its own reason, its actor and its time. No second record of a change exists.
+
+Six consequences of these rulings. Each one follows from them, and none is a further ruling.
+
+- The rename reaches the design set. `criteria revision` widens into `node revision`, an assessment names the node revision that it evaluates, and an attempt pins a node revision.
+- The newest revision is the pinned revision in the ordinary case, because an unblock pins the revision that it authorizes and an edit during an open attempt is the exception.
+- An edit during an open attempt writes a revision and never retargets that attempt. The approved invariant stands, and a replacement run of the same attempt reads the revision that the attempt pinned.
+- A human who needs the next run to obey a change immediately pauses the node, blocks it with a human reason, writes the revision, and unblocks into that revision. The approved set already holds every edge of that path, so it needs no new mechanism.
+- The verification command is a structured field of the node content. A human writes its value, and a revision carries the new value. No execution identity infers a command from prose, so the rule that no execution identity writes a criterion stands.
+- A pinned verification command establishes no verification adequacy. The files that the command reads stay mutable, so the same command runs different tests. The evaluation weighs the actual tests and the evidence against the requirement of the pinned revision.
+
+Two limits that these rulings place on a revision.
+
+- A dependency change is not a field write. It changes availability, an inherited gate and the cycle validity of the graph, so the graph validation and the authority checks of the Mission Service govern it.
+- A revision of a node in a terminal state does not exist, because a terminal node is not editable.
+
+Four alternatives that this session rejected.
+
+- An append-only log as the execution contract is rejected. A change written as prose concatenates deterministically and resolves into a requirement only by interpretation, so either every reader interprets the fold separately or a model becomes the author of the WHAT.
+- A verification command that a worker derives from prose is rejected. Nobody can then state which command the attempt owed, and the executor chooses its own verification.
+- A relaxed import condition that admits a node holding a closed attempt is rejected. The import is snapshot reconciliation whose attribution establishes no approval, and its condition also governs retirement, a child-set change, a containment move and a dependency edit. The ruling of 2026-09-10 stands, and the command line interface reconciles a stale plan file by submitting a node API edit.
+- A pin at each claim is rejected. It contradicts the invariant that an active attempt keeps what it pinned, and it reopens the currency of a task outcome, the reuse of evidence bound to an earlier revision, the execution-end fact and an outstanding external action.
+
+Edits that these rulings force on approved pages. None is applied, because section 6 is not written.
+
+- `docs/mission-service.md`, Validation criteria and authority: the four sentences that name a criteria revision name a node revision, and the revision covers the whole content of the node.
+- `docs/mission-service.md`, Evidence: a machine check binds its result to the pinned node revision.
+- `docs/mission-service.md`, Evaluation and assessment: an assessment names its evidence set and its node revision.
+- `docs/mission-service.vocabulary.md`: the `criteria revision` entry becomes the `node revision` entry, and its example carries the revision list of "Add password reset".
+
+Open items that these rulings leave.
+
+- OPEN: the shape of the unblock transaction. Aelita recommends one atomic act that names the attempt it clears, names the revision it expects, optionally carries the content change that writes the next revision, and carries a request key that binds to its payload. Without the expected revision, two humans who read one blocked node authorize different content and no record states which content each one authorized. This is the Mission Service counterpart of the parked Scheduler item.
+- OPEN: whether a revision that changes the goal or the steps alone invalidates the currency of a current assessment. Aelita recommends that currency reads the whole revision, because a requirement that moves from a 24-hour expiry to a 15-minute expiry leaves the verification command untouched.
+- OPEN: how the design separates a persistent requirement from a satisfied historical instruction. A length policy stays in force after a run satisfies it, and a rename completes. This question exists under every content model.
+- OPEN: whether the Mission Service returns the difference between the revision that an attempt pinned and the revision that the previous attempt pinned. The useful difference is between two pinned revisions, and never between two adjacent revision numbers.
+
 ### Edits that these rulings force on approved pages
 
 Every one is applied on 2026-09-09.
