@@ -928,6 +928,25 @@ Two consequences of these rulings. Each one follows from them, and none is a fur
 - S1 forces the repair of `docs/mission-service.md` line 512. The approved sentence says that an unblock carries the human guideline or the content of the external conversation.
 - S3 closes two open items of this register: whether a task is blocked by its own failed assessment, and what drives the evaluation, the cancellation and the ending of a task.
 
+Ulrich ruled the external request on 2026-09-11. These are decisions.
+
+- E1. The Mission Service holds one entity for the external request, and that entity is a representation. It is informative, and it serves display. No rule of the Mission Service reads it.
+- E2. The Worker Service uses that representation under its own rules, for an evaluation or for anything else that it owns.
+- E3. The Mission Service acts on an accepted observation alone. The entity holds the representation, and the observation carries the fact.
+
+Five consequences of these rulings. Each one follows from them, and none is a further ruling.
+
+- The entity generalizes beyond a git platform. A pull request that must merge, a document whose every item must carry a check, an issue that must close with a tag, and a reply in a thread are four external requests of one kind.
+- The Mission Service parses no provider content, and it needs no provider knowledge. The observer interprets the provider, and it writes the accepted observation.
+- A latch needs no rule. Approved section 5 states that an action is outstanding when the open attempt requests it and no accepted observation establishes its expected end state. The accepted observation is a record, so a later drift of the remote object changes nothing until a new observation arrives.
+- A failure to inspect the remote object is not a failure of the request. Approved section 5 states that a request is unresolved when no accepted observation establishes an end state, so an authorization error leaves the request unresolved and costs no attempt.
+- The entity carries its own identity, because one binding of the Project Service serves several requests. One repository binding serves a pull request that must merge and an issue that must close with a tag.
+
+Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
+
+- OPEN: the policy for a node that requires two external actions, when one ends outside its expected end state and the other stays live. Aelita recommends that the failure closes the attempt and blocks the node, and that the live request becomes a remnant of the closed attempt. The approved invariant survives, because it forbids a terminal state while a request of the open attempt is unresolved, and `Blocked` is not terminal.
+- OPEN: what fixes the set of required external actions of a node. Aelita recommends the node revision that the attempt pins, so a successful outcome needs an accepted success for every action of that set, and never for the requests that exist at the moment of the read.
+
 Edits that these rulings force on approved pages. None is applied, because section 6 is not written.
 
 - `docs/mission-service.md`, Validation criteria and authority: the four sentences that name a criteria revision name a node revision, and the revision covers the whole content of the node.
