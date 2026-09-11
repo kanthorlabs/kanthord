@@ -978,6 +978,16 @@ Five consequences of this ruling. Each one follows from it, and none is a furthe
 - The read of a node names the revision that each attempt pins. A revision that no attempt pins is visible, and on a terminal node that fact is permanent.
 - The act that writes a revision on a node that holds an open attempt states that the revision reaches the next attempt and not the open one.
 
+Ulrich ruled the bundling of an edit on 2026-09-11. This is a decision.
+
+- An edit of a node carries no state change. It writes a node revision, and it changes no state.
+- F2 and B4 stand. A human pauses a working node, and the human blocks the paused node.
+- The unblock is the only act that carries a content change and a state change together, and U1 rules it.
+
+One consequence of this ruling. It follows from the ruling, and it is not a further ruling.
+
+- A human who redirects a node that holds an open attempt pauses the node, blocks it, and unblocks it with the content change. The unblock carries the change, so the redirect costs three acts and never four.
+
 Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
 
 - OPEN: the policy for a node that requires two external actions, when one ends outside its expected end state and the other stays live. Aelita recommends that the failure closes the attempt and blocks the node, and that the live request becomes a remnant of the closed attempt. The approved invariant survives, because it forbids a terminal state while a request of the open attempt is unresolved, and `Blocked` is not terminal.
