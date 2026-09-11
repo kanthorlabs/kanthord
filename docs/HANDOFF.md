@@ -1010,6 +1010,39 @@ Open items that these rulings leave.
 - OPEN: how the design separates a persistent requirement from a satisfied historical instruction. A length policy stays in force after a run satisfies it, and a rename completes. This question exists under every content model.
 - OPEN: whether the Mission Service returns the difference between the revision that an attempt pinned and the revision that the previous attempt pinned. The useful difference is between two pinned revisions, and never between two adjacent revision numbers.
 
+Ulrich ruled the human guideline on 2026-09-11. This is a decision, and it supersedes the guideline of the `External.Failed` ruling of 2026-09-10, of the S1 ruling of 2026-09-11 and of the S4 vocabulary list.
+
+- The term `human guideline` is removed from the design set. The unblock record carries no direction of its own.
+- Every human direction enters the node revision. A human who steers the next run edits the goal, the steps, the validation criteria or any other field of the node, and the unblock carries that change.
+
+Three consequences of this ruling. Each one follows from it, and none is a further ruling.
+
+- The unblock record names six things: the node, the attempt that it clears, the attempt that it opens, the node revision that it pins, the actor and the time.
+- No rule states that an assessment ignores a human instruction. An assessment weighs the validation criteria of the pinned revision, and the goal and the steps of that revision are not criteria. The separation is structural.
+- The parked question of persistence no longer applies to a human instruction. A node revision persists until a later revision changes it.
+
+Edits that this ruling forces on approved pages. Every one is applied on 2026-09-11.
+
+- `docs/mission-service.md`, Block and unblock: the unblock record names six things, and the three sentences about the guideline are replaced by the rule that every human direction enters the node revision.
+- `docs/mission-service.md` vocabulary list: the `human guideline` entry is removed.
+- `docs/mission-service.vocabulary.md`: the `human guideline` entry is removed, and the `unblock record` entry names six things.
+
+Ulrich ruled the basis of a failure verdict on 2026-09-11. This is a decision.
+
+- An outcome that asserts that the results do not meet the criteria names an assessment as its basis, or corrects an outcome that names one. Outcome and completion owns this rule.
+
+Two consequences of this ruling. Each one follows from it, and none is a further ruling.
+
+- The human block asserts that nothing is established. It names no assessment and it corrects no outcome, and success belongs to the override. So section 6 states the asserted result of a human block no longer, and the sentence is removed.
+- The human override that corrects a prerequisite outcome to a failure stays permitted, because it corrects an outcome that names an assessment.
+
+The ruling changes no rule of the service. Every rule that reads an asserted result branches on success against not-success. The ruling keeps the failure verdict auditable for a reader and for the Tracking Service.
+
+Edits that this ruling forces on approved pages. Every one is applied on 2026-09-11.
+
+- `docs/mission-service.md`, Outcome and completion: the outcome record rules gain the basis rule of a failure verdict.
+- `docs/mission-service.md`, Block and unblock: the asserted result of the human block is removed.
+
 ### Edits that these rulings force on approved pages
 
 Every one is applied on 2026-09-09.

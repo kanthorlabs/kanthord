@@ -169,7 +169,7 @@ The readiness condition admits a reviewer claim.
 
 The record of one human unblock.
 The term names no closed set.
-An unblock record names seven things.
+An unblock record names six things.
 
 - the node
 - the attempt that it clears
@@ -177,7 +177,6 @@ An unblock record names seven things.
 - the node revision that it pins
 - the actor
 - the time
-- the human guideline, when one exists
 
 Take the history in which attempt 2 of "Add password reset" closes on a block.
 
@@ -187,7 +186,6 @@ Take the history in which attempt 2 of "Add password reset" closes on a block.
 - node revision pinned: 3
 - actor: `ulrich`
 - time: `2026-09-11T10:15:00Z`
-- human guideline: "Use the existing token helper rather than a new one"
 
 ## terminal state
 
@@ -335,14 +333,6 @@ Take another history of "Add password reset", in which attempt 1 closes on a blo
 A human pauses the objective while attempt 2 is open.
 The human blocks the paused objective with the reason "the reset provider is unavailable".
 The human unblocks the objective into attempt 3.
-
-## human guideline
-
-An optional instruction to the HOW that an unblock carries.
-The term names no closed set.
-
-For "Add password reset", a human guideline says "Use the existing token helper rather than a new one".
-Another unblock carries no human guideline.
 
 ## landing observation
 

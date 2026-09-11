@@ -423,6 +423,7 @@ An outcome record holds these fields.
 - The previous outcome, when the outcome corrects one.
 
 An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
+An outcome that asserts that the results do not meet the criteria names an assessment as its basis, or corrects an outcome that names one.
 A human override that asserts success writes a successful outcome whose basis is a human assertion.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
 That outcome releases no start dependency.
@@ -606,7 +607,6 @@ The Scheduler Service owns the enforcement at the claim.
 A human blocks a paused node, and that path is the only human block.
 
 The outcome carries the human reason as the human decision.
-Its asserted result is that nothing is established.
 
 The human block closes the attempt when one is open.
 A block of a node whose attempt counter reads 0 takes no effect on that counter.
@@ -644,13 +644,11 @@ A repeat of an accepted request key authorizes no second attempt, because the ac
 A later request that names a cleared attempt or a superseded revision authorizes no attempt, because the check refuses it.
 
 An unblock writes an unblock record.
-The record names the node, the attempt that it clears, the attempt that it opens, the node revision that it pins, the actor, the time and the human guideline when one exists.
+The record names the node, the attempt that it clears, the attempt that it opens, the node revision that it pins, the actor and the time.
 
-The human guideline is optional.
-It is an instruction to the HOW.
-No assessment evaluates it.
-A requirement on the result enters the node revision.
+Every human direction enters the node revision.
 The unblock carries that change.
+The unblock record carries no direction of its own.
 
 A human who redirects a node that holds an open attempt pauses the node, blocks it and unblocks it with the content change.
 
@@ -727,7 +725,6 @@ A node whose attempt requests no external action returns none.
 - **start dependency**: A dependency that makes its dependent unavailable until the node it names holds a current successful outcome.
 - **landing dependency**: A dependency that delays the repository actions of its dependent until the node it names lands.
 - **human block**: The human action that blocks a paused node.
-- **human guideline**: An optional instruction to the HOW that an unblock carries.
 - **landing observation**: The platform action that observes a landing.
 - **landing record**: The landing case of an observation record.
 - **observation record**: The record of an accepted observation of an external action.
