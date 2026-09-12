@@ -33,6 +33,8 @@ A document is drafted in this order. A document is not closed before a review ag
 
 `docs/overview.md`, `docs/architecture.md`, `docs/project-service.md` and `docs/mission-service.md` are written and reviewed. The Project Service holds no open design item. `docs/mission-service.md` holds sections 1 to 6, and the design set is complete. A debate review ran on sections 1 to 4 on 2026-09-09 and every finding is applied.
 
+The Scheduler Service session of 2026-09-12 reviewed the plan `.dev/scheduler-service-plan.md`, which is gitignored, and ruled the targeted claim, the role, the count rule, W6, the priority and the work queue, the deployment scope and the lease. Every ruling sits under Parked for the Scheduler Service document with the edits that it forces on `docs/project-service.md`, `docs/mission-service.md`, `docs/architecture.md` and `docs/overview.md`. None of those edits is applied. The Project Service therefore holds forced edits from this session, and its own design items stay closed.
+
 Section 6, Block and unblock, is written on 2026-09-11. It states the block, the human block, the unblock, the enforcement and the read of the blocked nodes of a mission. The rulings of that day widen the criteria revision into the node revision, which versions the whole content of a node, make the unblock one atomic act that names the attempt it clears and the revision it expects, and add the external object, which represents one requested external action and which no rule of the Mission Service reads. The register below holds every ruling, and two items of the successful-outcome rule stay open.
 
 Section 5, Outcome and completion, is written on 2026-09-10, and it holds no open design item. One forced edit stays open, and the register below names it. It states the twelve states of a node, the 48 transitions with the effect of each one on the attempt and the record that it writes, the attempt model whose counter reads 0 before the first claim, the readiness condition of a reviewer claim, the successful outcome, the outcome record with its two bases, the task-outcome obligation, the synchronisation of a node state with an external request, the resume precedence of a paused node, and the boundary of the section. Two mermaid diagrams carry the internal case and the external segment.
@@ -826,7 +828,7 @@ Group B, an evaluation attempt does not complete.
 
 Group C, a landing observation fails.
 
-- C1 the observer is lost before it records the landing. OPEN: a durable observation obligation exists, and its recovery owner is unnamed.
+- C1 the observer is lost before it records the landing. PART RULED on 2026-09-12: the observation obligation is a Scheduler record with a lease, and the Scheduler Service is its recovery owner. OPEN: the recovery mechanics, in B9.
 - C2 the landing is recorded and the readiness publication fails. RULED: readiness is a join over accepted facts, so it needs no separate publication.
 - C3 a duplicate observation of an unchanged state. RULED by approved section 3: it creates no evidence. OPEN: the deduplication key.
 - C4 a terminal platform state that is not the expected end state. OPEN.
@@ -1070,6 +1072,19 @@ One edit stays open, and no ruling covers it yet.
 - OPEN: a no-op import cannot be decided on text, because an unchanged filename reference resolves differently when the referenced file's id changes.
 - CLOSED on 2026-09-10. A working entity is not the whole of relevant activity, and the per-node import condition answers it. The condition reads the state of the node and its attempt counter, so a pending evaluation and a pending platform observation both leave the node with an attempt and no import reaches it.
 
+### Items that the Scheduler plan places on the Mission Service, noted 2026-09-12
+
+Each item is a mechanism that `docs/mission-service.md` does not state and that the Scheduler plan requires. None is a ruling, and the Scheduler plan lists each one as a forced edit.
+
+- The Mission Service publishes a recoverable notification of an accepted change that can affect scheduling, with the affected project and node. A crash between the commit and the notification must not hide the change, and the pending change stays recoverable if an in-process call is lost.
+- The Mission Service supplies a consistent snapshot and the recoverable changes over one timeline with no gap, so the Scheduler bootstraps and repairs its work queue.
+- Ruled 2026-09-12 in the Scheduler session: the Mission Service records the priority of a node with the actor and the time of the human act, outside the node revision, and no rule of the Mission Service reads it. It admits the act while no claim holds the node and the node is not terminal, and its notifications carry the priority. The sentence “The mission holds precedence alone” gains “the priority of a node is a recorded act that orders the work queue of the Scheduler Service and is not part of the WHAT”. The Scheduler section holds the ruling.
+- The notification carries the accepted fact that a released execution waits for: a terminal state of a child, a start-dependency closure, or an accepted observation of an external object.
+- A loss declaration of a reviewer claim needs a transition out of `Evaluating`. The B9 register below holds it.
+- Ruled 2026-09-12 in the Scheduler session: the separation rule reads at the level of the requester and its role, so that it holds for an external harness. The reviewer-choice sentence is scoped to kanthord's own harness, and the limitation of the external harness is stated next to it. The Scheduler section holds the ruling.
+- Ruled 2026-09-12 in the Scheduler session: no rule change for the observer. The authorized observer is the observer of the Scheduler Service under its service identity.
+
+
 ## Parked for the Scheduler Service document
 
 Executions, availability, retry.
@@ -1083,8 +1098,76 @@ Executions, availability, retry.
 - The Scheduler Service manages concurrency for both harnesses. kanthord's own harness and an external harness both take work through it. A concurrency rule that covers only worker instances leaves an external harness unlimited.
 - A worker declares the node format that it requires, and the Scheduler matches an available node to a compatible worker binding. Ulrich stated this on 2026-09-08. Two versions of one worker implementation require different formats, so compatibility is a property of the worker name and not of the implementation family.
 - OPEN: what may retry automatically. An earlier ruling gave a configured attempt count with automatic retry; the blocking rule routes failure through a human. A resource limit can mean an impossible task rather than a transient fault, a lost instance may already have pushed a commit, and a crash can recur deterministically. State only that a failed assessment is never eligible for automatic continuation, and decide the rest separately.
-- OPEN: concurrency and capacity. Whether two executions may cover one node, and whether one instance holds one execution at a time.
+- CLOSED on 2026-09-12. Concurrency and capacity. One claim per node follows from `Executing` and `Evaluating`, which each name one claim holder, so two executions never cover one node at a time. The Scheduler counts live executions per requester against its count, so whether one instance holds one execution at a time is a hosting rule of the Worker Service.
 - OPEN: whether a parent execution can occupy the last instance while waiting for its children, which deadlocks.
+- OPEN: event-to-work contract across Scheduler, Project and Mission. A Slack question usually introduces new work, rather than updating existing work. Automatic creation of Mission nodes—including their goals and validation criteria—is not defined yet. We need to design that event-to-work contract; receiving a webhook alone must not grant planning authority.
+- Confirmed relationship: Mission feeds Scheduler's availability index. Mission publishes recoverable notifications of accepted changes that can affect scheduling, identifying the affected project/node. Scheduler consumes those notifications, reconciles affected work and updates its derived availability index. Mission owns the graph and accepted facts; Scheduler determines availability and selection order. Mission does not choose worker instances or publish execution commands. An instance initiates a work pull; Scheduler selects a compatible candidate from the index within that instance's authorized project/binding scope, rechecks authoritative conditions and accepts the claim. Updating the index may wake an outstanding pull, but never creates an execution without a pull. This is how the work-pull path receives its candidate data without polling every mission. An in-process call may notify Scheduler, but the pending change must remain recoverable if that call is lost; the relationship does not require a message broker.
+- OPEN: scalable work discovery and starvation. Ulrich raises the cost of asking 1,000 projects for eligible work. The Mission-to-Scheduler relationship is confirmed; its notification format, transport, shared durable handoff and index-consistency mechanism remain to be designed. Fair, bounded processing across projects and selection within each project must prevent busy projects or newer compatible work from indefinitely overtaking older eligible work. Discovery-lag targets, fairness policy and bootstrap/reconciliation details need review; recovery policy remains part of B9. Selection within a project is ruled on 2026-09-12: the work queue orders by priority, then by age inside one priority; the cross-project processing fairness and the discovery-lag targets stay open.
+- Ruled 2026-09-12: deployment scope. One daemon on one host is the target of this design set, with one Scheduler Service per daemon and a bounded pool of scheduling processors inside it. Multi-daemon scheduling is out of scope until a requirement arrives; a target beyond one daemon needs an architecture decision on project partitioning, routed deliveries, fenced ownership transfer and coordinated data authority. The scaling envelope of 10, 100 and 1,000 projects sizes the pool and the limits and settles no topology. Forced edit, not applied: `docs/architecture.md` states the deployment target.
+- Vocabulary, 2026-09-12. `work queue` names the Scheduler-owned ordered structure of the claimable nodes of a project, and Ulrich ruled it. It replaces `availability index` in the confirmed relationship above, because `Available` is a Mission state that `Pending -> Available` produces and membership differs: a `Waiting` node under the readiness condition is claimable and is not `Available`. `claimable` stays the adjective for membership. `instance healthcheck` replaces `readiness report` for the probe of a worker instance, because `readiness condition` is a Mission term; Ulrich ruled the term on 2026-09-12. The Scheduler page owns it as an input of the work pull, and the Worker page owns the check that produces it.
+- The targeted claim. An external harness holds no worker binding, so it cannot pull. It names a node under one of its client identities, and the claim passes the same node gate as a work pull. Ulrich describes that operation as the registration of an execution; `targeted claim` is the term, and the API operation name follows later.
+
+Ulrich ruled the targeted claim on 2026-09-12. These are decisions.
+
+- A targeted claim records an execution, the same kind of record that a work pull produces. An execution is the unit of work that the Scheduler Service records. A worker instance produces it through a work pull, and the Worker Service hosts it. An external harness produces it through a targeted claim, and the harness hosts it. The Scheduler admits both under one node gate, mints the execution identity, and records, leases and revokes both the same way. The harness never writes the execution record and never authorizes its own claim. The claim precedes every execution operation on the node, because the execution identity that those operations present is minted at the claim.
+- A requester holds one role. The method of a worker binding gives its role, and the project configures the role of each client identity that it permits, so a harness holds one client identity per role. The Scheduler admits a steps claim from an executor and an evaluation claim from a reviewer, on both harnesses, so the requester that performs the steps of a node never evaluates that node. A role parameter on one identity is rejected, because the caller would declare it.
+- Kanthord does not verify that an external harness separates its two client identities into two sub-agents. Only the orchestrator of the harness communicates with kanthord, and it chooses its sub-agents and their prompts. Every assessment names the client identity and the execution identity, and the design states this limitation next to the rule.
+- Vocabulary: the Scheduler page owns `role`, a closed set of two values, `executor` and `reviewer`. W6 above writes “a distinct role” in the plain sense of the word; read it as a distinct component.
+
+Edits that these rulings force on approved pages. None is applied.
+
+- `docs/overview.md`: `execution` and `execute` name both producers, the sentence “The execution is the Worker Service's unit of work” gains the qualification that the Worker Service hosts the executions of kanthord's own harness and the Scheduler Service records every execution, and the external harness section states that a harness registers its executions under the client identities that the project permits, one per role.
+- `docs/mission-service.md`: `Executing` reads “A worker instance or an external harness holds the claim to execute the node's steps”; the separation rule reads at the level of the requester and its role; the reviewer-choice sentence is scoped to kanthord's own harness with the limitation stated. The evidence identity rule stays as written.
+- `docs/architecture.md`: the Mission Service separation sentence reads at the level of the requester and its role, and a relation states that an external harness requests a targeted claim from the Scheduler Service.
+- `docs/project-service.md`: the project permits each client identity of an external harness and configures its role; an external harness presents its client identity and, for an execution operation, the execution identity of its claim.
+
+Ulrich ruled the count on 2026-09-12. These are decisions.
+
+- A requester holds at most as many live executions as its count. For a worker binding the count is its instance count. For a permitted client identity the count is its execution count, a configured number on the record that permits the identity, next to its role. The Scheduler admits a claim, a work pull or a targeted claim, while the live executions of the requester are fewer than the count, and it refuses otherwise. The count is required configuration with no implicit default. Two requesters never share a count.
+- For kanthord's own harness the instance count also tells the Worker Service how many instances to create. For an external harness the execution count bounds claims only, because kanthord spawns nothing for a harness. The case that it covers is one client identity that takes every claimable node of a project and holds the leases.
+- The Scheduler counts executions per requester, so how an instance hosts an execution is a hosting rule of the Worker Service.
+- Vocabulary: the Project page owns `execution count` next to `instance count`. The word `capacity` stays unused, as ruled on 2026-09-08.
+- Forced edit, not applied: `docs/project-service.md`, the record that permits a client identity carries its execution count, a required number with no implicit default.
+
+Ulrich ruled W6 on 2026-09-12. These are decisions.
+
+- The observer is a distinct component of the Scheduler Service, not a worker instance. A worker is the HOW with agents, tools and prompts, and an observation is a deterministic read of a provider followed by a fold into an observed state. A worker instance would force every project to bind an observer worker, and it would need a claim on a node in `External.Requested`, which admits no claim.
+- Nothing dispatches the observer. The processors of the Scheduler run the provider adapter on an observation obligation. The obligation is a Scheduler record with a lease and a recovery path, and it is not an execution, because it holds no claim of a node and has no requester with a role. The lease mechanics are shared, and the record kinds stay two.
+- The observer acts under a service identity, the third identity kind of the Project Service next to the execution identity and the client identity. The protected facility resolves it through the external object of the obligation to the repository binding, the project and the node. System authorization permits that identity one operation class only, the read of an external object.
+- The Project Service verifies a provider delivery against the source binding of the project as its own operation, with the secret in custody and no requester identity, because that operation acts on nothing external.
+- The intake of provider deliveries, the provider adapters, the durable inbox and the routing are components of the Scheduler Service. No sixth service exists.
+
+Edits that these rulings force on approved pages. None is applied.
+
+- `docs/project-service.md`: the service identity with its single operation class; a source binding kind for inbound provider deliveries with the verification secret behind custody; the verification as an operation of the Project Service itself.
+- `docs/architecture.md`: the Scheduler Service observes an external object on the git platform under a repository credential that the Project Service holds; it accepts provider deliveries; a Slack workspace joins the external systems when a Slack source exists.
+- `docs/mission-service.md`: no rule change. The authorized observer is the observer of the Scheduler Service under its service identity, and the example "the authorized observer of the repository binding" stays true.
+
+Ulrich ruled priority on 2026-09-12. These are decisions.
+
+- The Scheduler page owns `priority`, an integer that orders the work queue, default 0, higher first. The Scheduler orders the work queue of a project by priority, then by age inside one priority. It stores no priority of its own, so a bootstrap from a Mission snapshot restores the order.
+- The Mission Service records the priority of a node with the actor and the time of the human act that set it, outside the node revision, and no rule of the Mission Service reads it. It admits the act while no claim holds the node and the node is not terminal: admitted in `Pending`, `Available`, `Waiting`, `Blocked`, `Paused` and the three `External` states, refused in `Executing`, `Evaluating`, `Completed` and `Discarded`. Its notifications carry the priority, and an absent priority reads 0.
+- Priority orders and never admits. Inside one priority, newer work never overtakes older work; across priorities, a human who raises a stream of work accepts that priority 0 waits, and aging stays unapproved. A targeted claim ignores priority, because the harness names its node.
+- The import carries no priority. Priority is not WHAT, and the act sets it after the import; the CLI can batch the acts.
+- Vocabulary: the Scheduler page owns `work queue` and `priority`. `claimable` stays the adjective for membership.
+
+Edits that these rulings force on approved pages. None is applied.
+
+- `docs/mission-service.md`: the priority record, the act and its admission rule, the priority in the notification, and the sentence “The mission holds precedence alone” gains “the priority of a node is a recorded act that orders the work queue of the Scheduler Service and is not part of the WHAT”.
+- `docs/architecture.md`: the Scheduler sentence reads “It determines which nodes a requester can claim, and in which order”.
+
+Ulrich ruled the lease on 2026-09-12. These are decisions.
+
+- The lease is the Scheduler record of the validity of a claim: its expiry, the renewal that the execution performs, and the loss declaration, serialized as SC1 states. The Scheduler page owns `lease`.
+- An execution presents its execution identity, and a service establishes liveness by the claim state of that identity in the Scheduler. A write under the identity of a stale execution fails the comparison with the current claim of the node. The identity proves liveness only under a live claim, and it authorizes no operation.
+- The liveness token retires from the design set as a separate object.
+
+Edits that this ruling forces on approved pages. None is applied.
+
+- `docs/project-service.md`: the sentence “A liveness token proves that an execution is live, and it authorizes no operation” reads “An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation”, and the `liveness token` vocabulary entry retires.
+- Noted 2026-09-12: a pause, a discard and an override that asserts success end a live claim at the Mission transition. Scheduler revokes the claim at that moment on the same path as a loss declaration. A pause leaves the attempt open, so the stop of an execution that pins a closed attempt does not cover it.
+- Noted 2026-09-12: a release that waits names the accepted fact that it waits for, and Scheduler holds the node out of the work queue until a Mission notification carries that fact. `Available` covers both a node that never started and a node that released with further work, so a parent that waits for its children needs this wait record or it enters a claim and release loop.
+- Noted 2026-09-12: under the approved pages an ordinary claim debits no budget, because a first claim and a human unblock are the two acts that open an attempt. A node attempt budget exists only if B9 rules that something other than a human opens an attempt.
 
 
 ### Failure cases noted on 2026-09-10, DEFERRED to the B9 session
@@ -1105,7 +1188,7 @@ Workers, instances, executions.
 - The Worker Service owns which entity requests a required external action. The Mission Service records an accepted fact that the request is made, and it names no requester. See the Mission Service register for the state model that consumes that fact.
 - A worker version is a distinct implementation. It declares its own configuration and its own required node format. `tdd@1` and `tdd@2` both implement a TDD method, and their details differ.
 
-- Liveness: a lease with an expiry that the execution renews, plus a token compared on write so a stale execution cannot mutate a reassigned node. Needed because a long-lived execution makes silence normal, so silence stops being a death signal.
+- Liveness: a lease with an expiry that the execution renews, plus a token compared on write so a stale execution cannot mutate a reassigned node. Needed because a long-lived execution makes silence normal, so silence stops being a death signal. Reading note, 2026-09-12: the compared value is the execution identity, and the liveness token retires as a separate object; the Scheduler section holds the ruling.
 - Abandonment costs the workspace, never the budget.
 - Terminating an execution does not require deleting its artifacts. A new execution may reuse a retained checkout, branch or cache while the previous execution stays terminal.
 - Instance identity is three separate decisions: whether a human configures individual instances, whether instances carry runtime identity, and whether instance records persist. Only the first is rejected.
@@ -1114,6 +1197,9 @@ Workers, instances, executions.
 - A worker releases the node that it holds when that node must wait for a dependency, and it reacquires that node after the dependency resolves. Ulrich ruled this on 2026-09-09. A waiting node occupies no instance. State management and node tracking carry the resumption, so a reacquisition never leaves an inconsistent state.
 - A project holds a pool of workers that dynamically pick up an available initiative, objective or task. Ulrich stated this on 2026-09-09. No instance is pinned to a node. CHECK: the pool must reconcile with the settled Project Service rule that an instance count belongs to a worker binding.
 
+
+- Ruled 2026-09-12 in the Scheduler session: W6 is closed. The observer is a component of the Scheduler Service under a service identity, and the Worker Service hosts no observer.
+- Noted 2026-09-12 in the Scheduler session: the Scheduler counts live executions per worker binding against the instance count, so how an instance hosts an execution, one at a time by default, is a hosting rule of the Worker Service.
 
 ### Failure cases noted on 2026-09-10, DEFERRED to the B9 session
 
@@ -1124,7 +1210,7 @@ These come from the B9 discussion. The Mission Service states the record and the
 - W3 how a worker retrieves the acknowledgement of a write whose response it lost, instead of publishing again.
 - W4 what a worker does when reconciliation cannot establish what happened.
 - W5 how an executor behaves when its claim is revoked while it executes a node: it stops writing, it stops acting on the repository, and it releases capacity.
-- W6 whether an authorized observer is a worker instance or a distinct role, and how it is dispatched.
+- W6 whether an authorized observer is a worker instance or a distinct role, and how it is dispatched. CLOSED on 2026-09-12 in the Scheduler session: the observer is a distinct component of the Scheduler Service, and nothing dispatches it; the Scheduler runs the provider adapter on an observation obligation. The Scheduler section holds the ruling.
 - W7 how a reviewer resumes an incomplete evaluation and repeats no execution and no repository action.
 
 ## Parked for the Project Service document
@@ -1172,6 +1258,12 @@ Credentials and bindings.
 - `docs/architecture.md` carries this ruling. The direct relation from the external harness to the git platform is deleted, and the harness now invokes the repository action through the API or the CLI.
 - Later work adds skills and extensions that support external harness integration. That is delivery, and no design page holds it.
 
+- Ruled 2026-09-12 in the Scheduler session: the record that permits a client identity of an external harness carries its execution count, a required number with no implicit default, next to its role. A requester holds at most as many live executions as its count, and the instance count is the count of a worker binding. The Project page owns `execution count`. The Scheduler section holds the ruling.
+- Ruled 2026-09-12 in the Scheduler session: the liveness token retires as a separate object. An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation; the Project Service reads the claim state from the Scheduler Service. The Scheduler section holds the ruling.
+- Ruled 2026-09-12 in the Scheduler session: the service identity is the third identity kind. The observer of the Scheduler Service presents it. The protected facility resolves it through the external object to the repository binding, the project and the node, and system authorization permits it one operation class, the read of an external object. The verification of a provider delivery is an operation of the Project Service itself against the source binding of the project, with the secret in custody and no requester identity. The Scheduler section holds the ruling.
+- Ruled 2026-09-12 in the Scheduler session: the project permits each client identity of an external harness and configures its role, `executor` or `reviewer`. The `client identity` entry gains the role. An external harness presents its client identity and, for an execution operation, the execution identity of its claim. The Scheduler section holds the ruling.
+- OPEN, noted 2026-09-12: source configuration for inbound provider deliveries, a webhook subscription with its verification secret behind custody, and a Slack source with human identity mapping. Neither is a repository binding. The verification path is ruled above; the shape of the binding kind is Project design.
+
 ### Failure cases noted on 2026-09-10, DEFERRED to the B9 session
 
 - PR1 per-operation authorization that refuses a repository operation from an executor whose claim was revoked.
@@ -1206,6 +1298,10 @@ Three constraints that the session inherits, because each one is already establi
 - Approved section 4 grants an evaluation a durable lifecycle with a bounded retry, so no rule may charge a fresh attempt slot to restart a crashed reviewer.
 
 Two items block on this session and are named here so they are not answered early: what an exhausted budget does beyond stopping automatic recovery, and what authorizes an attempt other than a human unblock.
+
+One item that the Scheduler plan review added on 2026-09-12.
+
+- The Mission page needs the transition that a loss declaration produces for a reviewer claim. `Evaluating` exits to `Completed`, `External.Requested`, `Blocked`, `Paused` and `Discarded` only, and `Waiting -> Evaluating` is the only reviewer-claim edge, so the bounded retry of approved section 4 has no path after a loss. Candidate: `Evaluating -> Waiting`, the evaluation attempt ends, the node attempt stays open. For an executor, B12 already rules `Executing -> Available` as the crash escape.
 
 
 - The state model must distinguish "not assessed yet" from "an assessment that could not establish the result". Execution lifecycle, evaluation lifecycle, approval status and outcome history stay separate dimensions and never collapse into one status field.
