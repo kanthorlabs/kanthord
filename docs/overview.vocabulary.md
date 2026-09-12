@@ -115,18 +115,24 @@ A `tdd@1` instance claims the objective "Add password reset". Execution 1 starts
 
 ## execute
 
-The act of a worker instance carrying out work on a node of the Mission Service using its worker's method.
+The act of a worker instance or an external harness carrying out work on a node of the Mission Service.
 The term names no closed set.
 A `tdd@1` instance executes the objective "Add password reset" using its RED-GREEN-REFACTOR method.
+The external harness `claude-code` takes "Add password reset" through a targeted claim and executes its steps under its execution identity.
 
 ## execution
 
-The unit of work of the Worker Service.
-An execution is an object that represents the state of the work that one worker instance holds while it executes one initiative or objective.
+The unit of work that the Scheduler Service records.
+An execution is an object that represents the state of work on one initiative or objective.
+One worker instance or one external harness holds that work while it executes the node.
+The Worker Service hosts the executions of kanthord's own harness.
+Two executions of the same worker share that worker's method.
+Each execution has its own execution identity.
 The term names no closed set.
 A `tdd@1` instance claims the objective "Add password reset" and produces Execution 1.
 The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
 Execution 1 represents the state of that work and has its own execution identity.
+The external harness `claude-code` takes "Add password reset" through a targeted claim and produces Execution 3.
 
 ## agent
 
@@ -144,7 +150,7 @@ A human merges the pull request of "Add password reset", and an observer records
 
 A binding is the record that allocates a resource to a project and permits an operation on that resource.
 The term names no closed set.
-The [Project Service Vocabulary](viewer.html?p=project-service.vocabulary.md#binding-kind) owns the three binding kinds and their values.
+The [Project Service Vocabulary](viewer.html?p=project-service.vocabulary.md#binding-kind) owns the four binding kinds and their values.
 A project holds a repository binding for the repository that the objective "Add password reset" belongs to.
 The binding permits three capabilities.
 The approved pages name no cardinality for the binding.

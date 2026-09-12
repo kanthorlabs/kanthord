@@ -60,7 +60,8 @@ A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
 A worker instance takes an available initiative or objective and executes that node.
 The instance produces an execution object each time it takes a node.
-The execution is the Worker Service's unit of work and represents the state of the work that the instance holds.
+The execution is the unit of work that the Scheduler Service records, and it represents the state of the work that the instance holds.
+The Worker Service hosts the executions of kanthord's own harness.
 The instance executes the steps that achieve the WHAT of that node.
 
 An execution is responsible for producing the outcome of the node that it takes, and the outcome of every task of that node.
@@ -107,6 +108,8 @@ An external harness supports ongoing integration and maintenance with an existin
 
 An external harness supplies its HOW through its own orchestration skill, usually named `/work`.
 It reaches kanthord's initiative, objective, and task model through the CLI or the API.
+An external harness takes a node through a targeted claim of the Scheduler Service, under a client identity that the project permits.
+It holds one client identity for the work on the steps of a node and another for the evaluation of a node.
 Its method can adapt dynamically to the capabilities and availability of its agents.
 
 The external harness's sub-agents supply the WHO.
@@ -140,9 +143,11 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
   A worker name has the form `<implementation>@<version>`, and the same name always identifies the same implementation.
 - **worker instance**: A background instance of one worker that takes an available initiative or objective.
   A project configures how many instances of a worker binding are available.
-- **execute**: The act of a worker instance carrying out work on a node of the Mission Service using its worker's method.
-- **execution**: The unit of work of the Worker Service.
-  An execution is an object that represents the state of the work that one worker instance holds while it executes one initiative or objective.
+- **execute**: The act of a worker instance or an external harness carrying out work on a node of the Mission Service.
+- **execution**: The unit of work that the Scheduler Service records.
+  An execution is an object that represents the state of work on one initiative or objective.
+  One worker instance or one external harness holds that work while it executes the node.
+  The Worker Service hosts the executions of kanthord's own harness.
   Two executions of the same worker share that worker's method.
   Each execution has its own execution identity.
 - **agent**: An automated participant responsible for carrying out steps as the WHO.

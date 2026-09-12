@@ -72,7 +72,16 @@ The mission supplies the grouping that a repository strategy uses.
 A worker takes an initiative or an objective, and it never takes a task.
 A worker executes a model judgement and an end-to-end test.
 The mission holds precedence alone.
+The priority of a node is a recorded act that orders the work queue of the Scheduler Service.
+It is not part of the WHAT.
 The mission holds no order over the tasks of an objective.
+
+A human sets the priority of a node through the node API.
+The Mission Service records the priority with the actor and the time of the act, outside the node revision.
+No rule of the Mission Service reads the priority.
+The Mission Service admits the act while no claim holds the node and the node is not terminal.
+Its notifications carry the priority, and an absent priority reads 0.
+An import carries no priority.
 
 ## Validation criteria and authority
 
@@ -110,7 +119,7 @@ An import declares its scope.
 An import names the mission revision that it expects, and a stale snapshot fails that check.
 A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier and an identifier of another mission.
-An import request key binds to its payload, so a retry is idempotent.
+An import request identifier binds to its payload, so a retry is idempotent.
 The map of assigned identifiers stays retrievable.
 
 A retirement removes the executable work of its node.
@@ -271,19 +280,20 @@ A correction names what it corrects.
 ## Evaluation and assessment
 
 The Mission Service performs no evaluation, and it is the record authority.
-A worker performs an evaluation.
+A [requester](scheduler-service.md#vocabulary) with the reviewer role performs an evaluation.
 `reviewer@1` is a worker whose method is evaluation.
 `reviewer@1` takes an objective or an initiative, and it never takes a task.
 
 An evaluation is work that the Scheduler dispatches.
-A node that needs an evaluation reaches `Waiting`, and a reviewer worker instance claims it.
+A node that needs an evaluation reaches `Waiting`, and a reviewer claims it through the Scheduler Service.
 The readiness condition of Outcome and completion admits a reviewer claim.
 An executor requests no evaluation.
-A reviewer worker is a worker binding of its project.
+Under kanthord's own harness a reviewer is a worker binding of its project.
 
-The worker that executes a node's steps never writes the assessment of that node.
+The requester that executes a node's steps never writes the assessment of that node.
 The Mission Service supplies the criteria and the evidence.
-The executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
+Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
+Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.
 That separation is a separation of duties, and it is not independent verification.
 The execution of an objective writes the assessment of each task of that objective.
 A task assessment carries no separation of duties.
@@ -340,7 +350,7 @@ The set holds twelve states.
   No claim holds the node.
 - **Available**: Every node of that closure holds a current successful outcome, and execution requires further work.
   No claim holds the node.
-- **Executing**: A worker instance holds the claim to execute the node's steps.
+- **Executing**: A worker instance or an external harness holds the claim to execute the node's steps.
 - **Waiting**: The execution of the open attempt requires no further work.
   No claim holds the node.
 - **Evaluating**: A reviewer execution holds the claim.
@@ -577,6 +587,11 @@ Block and unblock owns the block and the unblock.
 The Worker Service owns which entity requests a required external action and the idempotency of that request across an attempt boundary.
 The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
+The Mission Service publishes a recoverable notification of every accepted fact that can affect scheduling: a state transition, an accepted observation, an outcome and a priority change.
+The notification names the project, the node and the fact.
+A crash between the commit and the notification never hides the change.
+The Mission Service supplies a consistent snapshot and the recoverable changes over one timeline with no gap.
+The Scheduler Service owns the work queue, the claim and the lease.
 
 ## Block and unblock
 
@@ -624,7 +639,7 @@ An unblock is one atomic act.
 It names the attempt that it clears.
 It names the node revision that it expects.
 It carries a content change when the human changes the direction.
-It carries a request key that binds to its payload.
+It carries a request identifier that binds to its payload.
 
 The act checks the authority of the human, the blocked attempt and the expected revision.
 An unblock that carries a content change also checks the authority that a node edit requires.
@@ -636,11 +651,11 @@ The expected revision is the current revision of the node when the human submits
 A content change uses that revision as its base and writes the next revision.
 The attempt pins the revision that the act leaves current.
 
-The act recognizes a repeat of an accepted request key before it checks the attempt and the revision.
+The act recognizes a repeat of an accepted request identifier before it checks the attempt and the revision.
 A retry of an accepted unblock returns the accepted record and costs no second attempt.
-The same key with a different payload is refused.
+The same identifier with a different payload is refused.
 
-A repeat of an accepted request key authorizes no second attempt, because the act returns the accepted record.
+A repeat of an accepted request identifier authorizes no second attempt, because the act returns the accepted record.
 A later request that names a cleared attempt or a superseded revision authorizes no attempt, because the check refuses it.
 
 An unblock writes an unblock record.
@@ -735,6 +750,8 @@ A node whose attempt requests no external action returns none.
   An omission requests a retirement under the import condition.
   Each modification requires `Pending` or `Available` and an attempt counter that reads 0.
   A task modification reads the condition of its objective.
+- **request identifier**: The identifier that a caller gives one request and that binds to the payload of that request.
+  A retry with the same identifier returns the accepted result, and the same identifier with a different payload is refused.
 - **readiness condition**: The condition over current task outcomes, current objective terminal states and outstanding external actions that admits a reviewer claim.
 - **retirement**: The removal of the executable work of a node, with its historical records preserved.
   Each modified node requires `Pending` or `Available` and an attempt counter that reads 0.

@@ -32,11 +32,12 @@ These are the capabilities that `project-service.md` names, and the page closes 
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
-`project-service.md` names three kinds, and it closes no set of kinds.
+`project-service.md` names four kinds, and it closes no set of kinds.
 
 - **repository**
 - **worker**
 - **provider account**
+- **source**
 
 The mission of a project is intrinsic to that project, so no binding allocates it.
 A repository binding of the objective "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
@@ -186,14 +187,30 @@ The identity that an external harness presents.
 The protected facility resolves that identity to the project, then it checks the binding.
 The external harness holds no credential.
 `project-service.md` names the execution identity of an execution and the client identity of an external harness.
+The project permits `claude-code` with an executor identity and a reviewer identity.
+The record that permits each one configures its role and its execution count.
 
-## liveness token
+## execution count
 
-The token that proves that an execution is live.
+The configured count of live executions that a permitted client identity holds.
 
-An execution presents a liveness token, and the token proves that the execution is live.
-The token authorizes no operation.
-The protected facility still checks the binding of the project for the requested operation.
+The executor identity of `claude-code` holds an execution count of 2, so it holds at most two live executions.
+
+## service identity
+
+The identity that the observer of the Scheduler Service presents.
+
+The observer reads pull request 42 of "Add password reset" under its service identity.
+The facility resolves that identity through the external object to the repository binding, the project and the node.
+The observer performs no operation class other than the read of an external object.
+
+## source binding
+
+The binding of a delivery source that a project accepts.
+
+The project binds the GitHub webhook source of its repository.
+The binding holds the verification secret behind custody.
+The Project Service verifies each delivery as its own operation.
 
 ## resolution
 

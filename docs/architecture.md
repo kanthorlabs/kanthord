@@ -14,6 +14,7 @@ It describes no mechanism inside a service.
 
 The container view shows the daemon and its CLI client, with the actors and external systems around them.
 The five services are logical boundaries inside the daemon, not separate containers.
+The design targets one daemon on one host.
 
 [![Container diagram for kanthord](assets/architecture-containers.svg)](assets/architecture-containers.svg)
 
@@ -43,14 +44,16 @@ It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
 Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
-The worker that executes a node's steps never writes the assessment of that node.
+The requester that executes a node's steps never writes the assessment of that node.
 
 ### Scheduler Service
 
 The Scheduler Service manages executions.
-It determines which nodes are available for work.
+It determines which nodes a requester can claim, and in which order.
 It does not make a blocked node available.
-It records an execution when a worker instance takes an available node.
+It records an execution when a requester claims a node.
+It accepts the deliveries of a git platform.
+It observes an external object on the git platform.
 
 ### Worker Service
 
@@ -82,15 +85,21 @@ It shows the relations that the sections below name.
 ## External systems
 
 - A git platform holds the repository that a project uses and accepts the configured repository action.
+  It delivers events about that repository to the daemon.
 - A large language model provider serves the models that the Worker Service uses.
 
 ## Relations
 
-- An external harness reaches the Mission Service, the Project Service and the Tracking Service through the API or the CLI.
+- An external harness reaches the Mission Service, the Project Service, the Scheduler Service and the Tracking Service through the API or the CLI.
+- An external harness requests a targeted claim from the Scheduler Service through the API or the CLI.
 - An external harness invokes a configured repository action through the API or the CLI, and the daemon performs that action.
 - A human reaches the Project Service and the Mission Service through the API or the CLI.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
-- A worker instance takes an available node from the Scheduler Service.
+- The Mission Service notifies the Scheduler Service of an accepted change that can affect scheduling.
+- The Scheduler Service reads the worker bindings, the permitted client identities and their counts from the Project Service.
+- The Project Service reads the claim state of an execution from the Scheduler Service.
+- The Scheduler Service observes an external object on the git platform, and it uses a repository credential that the Project Service holds.
+- A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
 - An execution uses a repository credential that the Project Service holds.
 - An execution writes evidence to the Mission Service.

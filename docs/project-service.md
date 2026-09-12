@@ -59,6 +59,13 @@ Two worker bindings of one worker carry different configuration.
 A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
 
+A project permits each client identity of an external harness.
+The record that permits a client identity configures its role, `executor` or `reviewer`, and its execution count.
+The execution count is required configuration with no implicit default.
+Two permitted client identities never share an execution count.
+The role of a permitted client identity never changes.
+A project never permits one client identity under two roles, so a different role needs a different client identity.
+
 ## Authorization and credential custody
 
 A project holds the authorization binding that permits an operation on a resource.
@@ -73,14 +80,20 @@ Credential authority is what the remote permits any holder.
 The Project Service enforces system authorization, and it records credential authority.
 The boundary is the authorization of an operation, and it is not the custody of bytes.
 An agent that never reads a key still uses an authenticated tool.
-A requester presents its identity when it requests an operation.
-An execution presents its execution identity, and an external harness presents its client identity.
+Every operation names the identity that requests it.
+An execution presents its execution identity.
+An external harness presents its client identity and, for an execution operation, the execution identity of its claim.
+The observer of the Scheduler Service presents its service identity.
 The protected facility resolves that identity to the project and to the node of the request.
+The facility resolves a service identity through the external object of the request.
+That resolution reaches the repository binding, the project and the node.
+The facility permits a service identity one operation class, the read of an external object.
 The facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
 No credential leaves the daemon.
 An execution holds no credential, and an external harness holds no credential.
-A liveness token proves that an execution is live, and it authorizes no operation.
+An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation.
+The Project Service reads the claim state of an execution from the Scheduler Service.
 A credential store holds one record for a secret, and a binding names that record.
 A credential store record serves more than one project.
 Each project holds its own binding that names that record.
@@ -93,10 +106,17 @@ Suitability states that the type of the referenced record performs that class of
 An SSH key does not perform a platform action.
 Suitability states no scope, because a binding does not narrow upstream authority.
 A credential record names the configuring actor and the upstream principal.
-The record of an operation names the execution identity.
+The record of an execution operation names the execution identity.
+The record of an observation names the service identity.
+The record of a delivery verification names the source binding.
 The configuring actor, the upstream principal and the execution identity stay separate.
 An OAuth credential does not imply a person.
 An API key does not imply an organization.
+
+A project binds each delivery source that it accepts.
+A source binding holds the verification secret behind custody.
+The Project Service verifies a delivery against the source binding of its project as its own operation.
+That operation names no requester identity, because it acts on nothing external.
 
 The diagram shows the order of one authorization.
 It shows that a refusal never reaches custody.

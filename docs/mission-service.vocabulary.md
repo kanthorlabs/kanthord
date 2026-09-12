@@ -457,6 +457,17 @@ Each modification requires `Pending` or `Available` and an attempt counter that 
 A task modification reads the state and the attempt counter of its objective.
 An inadmissible modification aborts the whole import with no effect.
 
+## request identifier
+
+The identifier that a caller gives one request and that binds to the payload of that request.
+The term names no closed set.
+
+The command line interface imports the plan of "Account recovery" with request identifier `import-7f3a`.
+The connection drops after the Mission Service accepts the import.
+The retry with `import-7f3a` returns the accepted result, and no second import applies.
+A retry with `import-7f3a` and a changed import set is refused.
+The unblock of "Add password reset" carries its own request identifier, and a repeated unblock with that identifier costs no second attempt.
+
 ## retirement
 
 The removal of the executable work of a node, with its historical records preserved.

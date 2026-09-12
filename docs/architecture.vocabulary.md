@@ -34,12 +34,13 @@ The container view shows the actors around the daemon. The set is closed and it 
 
 The container view shows the external systems around the daemon. The set is closed and it holds two values.
 
-- **a git platform**, which holds the repository that a project uses
+- **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the daemon
 - **a large language model provider**, which serves the models that the Worker Service uses
 
 ## daemon
 
 The daemon is one process, and it holds the five services. A client reaches it through the API or the CLI.
+The daemon runs on one host.
 
 - An external harness invokes a configured repository action through the CLI.
 - The daemon performs that action.
@@ -55,7 +56,7 @@ One relation reads as follows.
 
 ## reviewer execution
 
-An execution whose worker instance evaluates a node.
+An execution whose requester evaluates a node.
 The worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation.
@@ -76,7 +77,7 @@ An operational record of what the system did.
 
 `architecture.md` names two credentials in its relations.
 
-- **a repository credential**, which an execution uses
+- **a repository credential**, which an execution and the observer of the Scheduler Service use
 - **a provider credential**, which the Worker Service uses
 
 The type of a credential is a separate matter, and no approved page closes that set.
