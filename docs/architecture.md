@@ -43,19 +43,19 @@ It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
 Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
-The worker that executes a node never writes the assessment of that node.
+The worker that executes a node's steps never writes the assessment of that node.
 
 ### Scheduler Service
 
-The Scheduler Service manages runs.
+The Scheduler Service manages executions.
 It determines which nodes are available for work.
 It does not make a blocked node available.
-It records a run when a worker instance takes an available node.
+It records an execution when a worker instance takes an available node.
 
 ### Worker Service
 
 The Worker Service supplies the workers and the agents.
-It runs the worker instances that execute a node, and the worker instances that evaluate a node.
+It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider and a coding agent.
 
 ### Tracking Service
@@ -91,12 +91,12 @@ It shows the relations that the sections below name.
 - A human reaches the Project Service and the Mission Service through the API or the CLI.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
 - A worker instance takes an available node from the Scheduler Service.
-- A run reads the repository strategy and the permitted resources from the Project Service.
-- A run uses a repository credential that the Project Service holds.
-- A run writes evidence to the Mission Service.
-- A reviewer run reads the validation criteria and the evidence from the Mission Service.
-- A reviewer run writes the assessment to the Mission Service.
-- A run acts on the repository through the git platform.
+- An execution reads the repository strategy and the permitted resources from the Project Service.
+- An execution uses a repository credential that the Project Service holds.
+- An execution writes evidence to the Mission Service.
+- A reviewer execution reads the validation criteria and the evidence from the Mission Service.
+- A reviewer execution writes the assessment to the Mission Service.
+- An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.
 - The Worker Service uses a provider credential that the Project Service holds.
 - The Worker Service reaches a large language model provider.

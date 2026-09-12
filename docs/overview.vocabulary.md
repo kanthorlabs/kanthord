@@ -98,32 +98,41 @@ A human unblocks "Add password reset" into its next attempt.
 
 Landing is the observed expected end state of every configured repository action of a node.
 The term names no closed set.
-Run 1 opens the pull request of "Add password reset", then releases. A human merges that pull request. An observer records the landing.
+Execution 1 opens the pull request of "Add password reset", then releases. A human merges that pull request. An observer records the landing.
 
 ## worker
 
 A worker is the HOW: a template that defines how executions happen.
 The term names no closed set.
 `tdd@1` is one example among several workers.
-For each task of an objective, a run of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
+For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
 
 ## worker instance
 
 A worker instance is a background instance of one worker that takes an available initiative or objective.
 The term names no closed set.
-A `tdd@1` instance claims the objective "Add password reset". Run 1 starts.
+A `tdd@1` instance claims the objective "Add password reset". Execution 1 starts.
 
-## run
+## execute
 
-A run is one occurrence of a worker instance working one initiative or objective.
+The act of a worker instance carrying out work on a node of the Mission Service using its worker's method.
 The term names no closed set.
-Run 1 runs a RED-GREEN-REFACTOR loop for each task of the objective "Add password reset", on a branch, with one commit for each task.
+A `tdd@1` instance executes the objective "Add password reset" using its RED-GREEN-REFACTOR method.
+
+## execution
+
+The unit of work of the Worker Service.
+An execution is an object that represents the state of the work that one worker instance holds while it executes one initiative or objective.
+The term names no closed set.
+A `tdd@1` instance claims the objective "Add password reset" and produces Execution 1.
+The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
+Execution 1 represents the state of that work and has its own execution identity.
 
 ## agent
 
 An agent is an automated participant responsible for carrying out steps as the WHO.
 The term names no closed set.
-The worker supplies agents. A `tdd@1` run repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
+The worker supplies agents. A `tdd@1` execution repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
 
 ## human participant
 

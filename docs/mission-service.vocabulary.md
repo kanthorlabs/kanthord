@@ -17,20 +17,20 @@ Write `node attempt` where `evaluation attempt` appears nearby, because the two 
 Write `attempt` alone everywhere else.
 
 Take the objective "Add password reset".
-A `tdd@1` instance and a `reviewer@1` instance work it.
+A `tdd@1` instance and a `reviewer@1` instance each execute it using their worker's method.
 
 The import creates the objective with no attempt, and its attempt counter reads 0.
 
 1. A `tdd@1` instance claims the objective.
-   The first claim opens attempt 1, and Run 1 starts.
-2. Run 1 runs a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
+   The first claim opens attempt 1, and Execution 1 starts.
+2. The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
    It writes each task assessment and task outcome.
-3. Run 1 releases with its evidence, and the execution of the attempt requires no further work.
-   Run 1 ends, and the node reaches `Waiting`.
+3. The instance releases with the evidence of Execution 1, and the execution of the attempt requires no further work.
+   Execution 1 ends, and the node reaches `Waiting`.
    Attempt 1 stays open.
 4. The readiness condition holds, and a `reviewer@1` instance claims the objective.
-   Run 2 starts.
-5. Run 2 publishes a current passing assessment of the tested snapshot.
+   Execution 2 starts.
+5. Execution 2 publishes a current passing assessment of the tested snapshot.
 6. An accepted fact establishes the request for the required external action: opening a pull request.
    The node reaches `External.Requested`.
 7. A human merges the pull request.
@@ -76,12 +76,12 @@ An evaluation attempt ends while its node attempt stays open.
 
 ## attempt closure
 
-The act that ends an attempt and every run and evaluation attempt in flight under it.
+The act that ends an attempt and every execution and evaluation attempt in flight under it.
 The term names no closed set.
 
-Take "Add password reset" while Run 1 executes under attempt 1.
+Take "Add password reset" while the `tdd@1` instance executes it in Execution 1 under attempt 1.
 A human discards the objective.
-The Mission Service closes attempt 1 by force and ends Run 1.
+The Mission Service closes attempt 1 by force and ends Execution 1.
 It writes the outcome and the task outcomes that do not exist, with the closing event as the stopping reason.
 The records of attempt 1 remain records of that attempt.
 
@@ -337,7 +337,7 @@ The human unblocks the objective into attempt 3.
 ## landing observation
 
 The platform action that observes a landing.
-It happens after the run releases, so an authorized observer writes it.
+It happens after the execution releases, so an authorized observer writes it.
 It uses the credential of a repository binding.
 The term names no closed set.
 

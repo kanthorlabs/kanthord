@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="1280" height="760" viewBox="0 0 1280 760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="project-service-authorization-title project-service-authorization-desc">
       <title id="project-service-authorization-title">Project Service authorization of one operation</title>
-      <desc id="project-service-authorization-desc">A requester, which is a run or an external harness, presents its identity and requests an operation. The protected facility resolves that identity to the project and to the level, then checks the binding of that project for the requested operation. When the binding permits the operation, the facility consults custody for the secret material and performs the authenticated operation against the remote. When the binding does not permit the operation, the facility refuses and never consults custody. The facility and custody sit inside the Project Service, and one resolution authorizes one operation.</desc>
+      <desc id="project-service-authorization-desc">A requester, which is an execution or an external harness, presents its identity and requests an operation. The protected facility resolves that identity to the project and to the level, then checks the binding of that project for the requested operation. When the binding permits the operation, the facility consults custody for the secret material and performs the authenticated operation against the remote. When the binding does not permit the operation, the facility refuses and never consults custody. The facility and custody sit inside the Project Service, and one resolution authorizes one operation.</desc>
       <defs>
         <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
         <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
@@ -62,7 +62,7 @@
       <rect x="52" y="72" width="80" height="16" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
       <text x="92" y="84" fill="rgba(122,131,153,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REQUESTER</text>
       <text x="152" y="110" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Requester</text>
-      <text x="152" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">run or harness</text>
+      <text x="152" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">execution or harness</text>
 
       <rect x="344" y="64" width="224" height="72" rx="6" fill="#f5f5f5"/>
       <rect x="344" y="64" width="224" height="72" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
@@ -86,8 +86,8 @@
       <text x="1064" y="128" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" text-anchor="middle">credential authority</text>
 
       <line x1="40" y1="636" x2="1240" y2="636" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-      <text x="40" y="658" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">No credential leaves the daemon. A run holds none, and an external harness holds none.</text>
-      <text x="40" y="678" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">A liveness token proves that a run is live, and it authorizes no operation.</text>
+      <text x="40" y="658" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">No credential leaves the daemon. An execution holds none, and an external harness holds none.</text>
+      <text x="40" y="678" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace" letter-spacing="0.04em">A liveness token proves that an execution is live, and it authorizes no operation.</text>
 
       <line x1="40" y1="698" x2="1240" y2="698" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
       <text x="40" y="726" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>

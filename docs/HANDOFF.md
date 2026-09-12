@@ -22,7 +22,7 @@ Design the component documents in this order:
 
 Ulrich approved this order on 2026-09-08. Start every session from it.
 
-- Project comes first. A project names the mission that it ships. A project configures the instance counts that the Scheduler reserves against. A project holds the repository strategy that a run follows. Three of the other four services read Project first.
+- Project comes first. A project names the mission that it ships. A project configures the instance counts that the Scheduler reserves against. A project holds the repository strategy that an execution follows. Three of the other four services read Project first.
 - Mission comes before Scheduler. The Scheduler never makes a blocked node available, and the block belongs to Mission.
 - Scheduler comes before Worker. The claim protocol carries the lease and the instance identity that the Worker Service specifies.
 - Tracking comes last. It holds telemetry only, and no outcome depends on telemetry.
@@ -39,7 +39,7 @@ Section 5, Outcome and completion, is written on 2026-09-10, and it holds no ope
 
 The same day settled the import gate and the write paths. An import creates, updates and deletes a node whose state is `Pending` or `Available` and whose attempt counter reads 0. The condition of a task is the condition of its objective. The Mission Service terminates an import that fails the condition, under a transaction and a lock, and that import produces no effect. The node API is the second write path, it carries the human override authority, it updates a node that holds an attempt, it deletes no such node, and it edits no terminal node.
 
-Every edit that these rulings force is applied. `docs/mission-service.md` carries the order of the evaluation and the external request, the repaired authority check of currency, the repaired readiness condition and the two write paths. `docs/overview.md` carries the widened basis of an outcome and the repaired run-ending causes. `docs/mission-service.vocabulary.md` and `docs/overview.vocabulary.md` match their pages.
+Every edit that these rulings force is applied. `docs/mission-service.md` carries the order of the evaluation and the external request, the repaired authority check of currency, the repaired readiness condition and the two write paths. `docs/overview.md` carries the widened basis of an outcome and the repaired execution-ending causes. `docs/mission-service.vocabulary.md` and `docs/overview.vocabulary.md` match their pages.
 
 O4 is closed, and the B8 import gate is superseded by the per-node condition. The register below keeps every ruling of 2026-09-10 as the record of how each rule reached the page.
 
@@ -48,21 +48,21 @@ O4 is closed, and the B8 import gate is superseded by the per-node condition. Th
 ## Settled and already in the documents
 
 - A service is a logical part of one process. A service boundary separates authority and never describes a deployment.
-- A worker is a template. A worker name has the form `<implementation>@<version>`, so the same name always identifies the same implementation. A project configures which workers are available and how many instances of each. An instance takes an available node and creates a run.
+- A worker is a template. A worker name has the form `<implementation>@<version>`, so the same name always identifies the same implementation. A project configures which workers are available and how many instances of each. An instance executes an available node and produces an execution object that represents the state of the work that it holds.
 - A mission is the whole work of one project. A project has one mission. The Mission Service holds it and represents it as a graph.
 - The Mission Service performs no evaluation. Ulrich ruled this on 2026-09-09. It holds the criteria, the evidence, the assessment and the outcome records, and it is the record authority. A worker performs the evaluation. `reviewer@1` is a worker whose method is evaluation, in the same way that `tdd@1` is a worker whose method is coding. Every write of a criterion, an assessment and an outcome still passes through the Mission Service.
-- The separation is therefore separation of duties, and it is not independent verification. The worker that executes a node never writes the assessment of that node. A reviewer worker writes it. The Mission Service supplies the criteria and the evidence, so the executing worker never chooses the reviewer and never shapes its instructions.
-- CHECK: `docs/architecture.md` says the Mission Service performs the evaluation of every node, and it lists the relation where a run requests an evaluation from the Mission Service. Both need an edit.
+- The separation is therefore separation of duties, and it is not independent verification. The worker that executes a node's steps never writes the assessment of that node. A reviewer worker writes it. The Mission Service supplies the criteria and the evidence, so the executing worker never chooses the reviewer and never shapes its instructions.
+- CHECK: `docs/architecture.md` says the Mission Service performs the evaluation of every node, and it lists the relation where an execution requests an evaluation from the Mission Service. Both need an edit.
 - A reviewer worker is a worker binding of the project, so the project configures its agents, its provider accounts, its models and its instance count exactly as it does for any worker.
-- An evaluation is work that the Scheduler dispatches. Ulrich ruled this on 2026-09-09. A node that needs evaluation becomes available, and a reviewer worker instance takes it through the same claim protocol as every other run. The Mission Service records and never orchestrates. A landing observation makes the objective available for review, so no run has to ask.
+- An evaluation is work that the Scheduler dispatches. Ulrich ruled this on 2026-09-09. A node that needs evaluation becomes available, and a reviewer worker instance takes it through the same claim protocol as every other execution. The Mission Service records and never orchestrates. A landing observation makes the objective available for review, so no execution has to ask.
 - `reviewer@1` takes an objective and an initiative only, because those are the dispatchable units. Ulrich ruled this on 2026-09-09. It never takes a task, in the same way that no other worker takes a task.
-- Therefore a task assessment is written by the run of its objective, and separation of duties does not exist at task node. The rule that an executor never writes the assessment of the node it executes applies to an objective and to an initiative. The independent review happens at the node whose outcome persists, because after the objective lands its outcome represents the outcomes of all its tasks.
-- OPEN: whether a task is blocked by its own failed assessment, given that a task is internal to the run of its objective and that only a human clears a block. This belongs to the block section.
+- Therefore a task assessment is written by the execution of its objective, and separation of duties does not exist at task node. The rule that an executor never writes the assessment of the node whose steps it executes applies to an objective and to an initiative. The independent review happens at the node whose outcome persists, because after the objective lands its outcome represents the outcomes of all its tasks.
+- OPEN: whether a task is blocked by its own failed assessment, given that a task is internal to the execution of its objective and that only a human clears a block. This belongs to the block section.
 - The evaluation method follows the criterion and never the node. Each node carries its own criteria, which is a separate statement.
 - An external harness is an executor, and it reaches kanthord as a client through the API or the CLI.
-- A terminal state never reopens and never repeats. A human override adds a new outcome and never restarts a terminal run.
-- An assessment that does not pass ends the run and blocks the node. A blocked node is not available for a further run. Only a human unblocks a node. An unblock authorizes a further run and asserts nothing about the results.
-- A run of an objective performs the configured repository action before a successful outcome of that objective.
+- A terminal state never reopens and never repeats. A human override adds a new outcome and never restarts a terminal execution.
+- An assessment that does not pass ends the execution and blocks the node. A blocked node is not available for a further execution. Only a human unblocks a node. An unblock authorizes a further execution and asserts nothing about the results.
+- An execution of an objective performs the configured repository action before a successful outcome of that objective.
 - An objective belongs to exactly one repository. Ulrich ruled this on 2026-09-08. A project binds more than one repository, and each objective names one repository binding. No objective performs a required action on two repositories, so partial completion across repositories does not exist. This voids the earlier multi-repository partial-failure question.
 - The Project Service holds the credentials that a project's resources require, and it authorizes their use. `docs/architecture.md` states that responsibility, and `docs/project-service.md` owns the binding mechanism. No credential enters evidence or telemetry.
 
@@ -74,7 +74,7 @@ Ulrich settled this on 2026-09-10, after a debate pass. The decision is the word
 
 - `attempt` is the noun for one try at a node. Write `node attempt` wherever `evaluation attempt` appears nearby, because the two are different objects and one can end while the other stays open. `attempt` alone is the shorthand.
 - `attempt counter` is the per-node ordinal that names which node attempt a record belongs to. It names an attempt and it settles nothing else. It never decides which outcome is current, because section 4 owns currency, and it never separates two claims inside one node attempt.
-- Provenance: this session first called the object a `fence value`, then a `generation`. Both names are retired. A ruling recorded here in the older wording is the same ruling; only the word changed. The move from `fence value` to `generation` was a rename, and the move to `attempt` followed a real broadening of the concept, from a counter on a node to one try that spans many runs.
+- Provenance: this session first called the object a `fence value`, then a `generation`. Both names are retired. A ruling recorded here in the older wording is the same ruling; only the word changed. The move from `fence value` to `generation` was a rename, and the move to `attempt` followed a real broadening of the concept, from a counter on a node to one try that spans many executions.
 - `raise` is retired as a verb over this object, because it hid the difference between an open and a close.
 - OPEN: `docs/overview.md` owns the product vocabulary and holds no `attempt` entry, although approved section 2 already uses the word. Whether the overview gains the entry is a separate decision, and it is not part of this wording change.
 
@@ -106,7 +106,7 @@ Ulrich approved this structure on 2026-09-09. Every section is discussed, debate
 - A node lands when the expected end state of every configured repository action in its subtree is observed on the git platform. Opening a pull request is not landing; the merge of that pull request is. A dependent releases on the observed state, never on the completion of the local action.
 - Observing that state is a platform action, so it uses the credential of a repository binding.
 - An objective names exactly one repository binding of its project. An initiative and a task name none. A task acts on the repository that its objective names. Two objectives name the same binding or different bindings.
-- A run of an initiative derives its repositories from the objectives of that initiative. One initiative holds work in many repositories. No rule restricts the repository binding that a node names, because the project already bound every repository that the work may touch.
+- An execution of an initiative derives its repositories from the objectives of that initiative. One initiative holds work in many repositories. No rule restricts the repository binding that a node names, because the project already bound every repository that the work may touch.
 - The mission holds no branch, no merge and no repository action. The repository strategy of the project holds them. The mission supplies the grouping that a strategy uses, and that grouping is an input to the strategy, not the strategy.
 - The rank of a node never determines the evaluation method. The correlation between a rank and a kind of check follows the scope of the node, and the page states no rank-to-method table.
 - A worker takes an initiative and it takes an objective. It never takes a task. An initiative outcome mostly needs a human judgement, a model judgement or an e2e test, and the last two need a worker to execute them.
@@ -115,7 +115,7 @@ Ulrich approved this structure on 2026-09-09. Every section is discussed, debate
 ### Settled, section 2: Validation criteria and authority
 
 - Planning happens outside kanthord. A human plans the initiatives, objectives and tasks in markdown, and decides what is tested and what command verifies it. A human then imports them into the Mission Service. This holds until a planning service exists.
-- No run creates a node and no run writes a criterion. The import is the only write path for the structure and the criteria. This voids the earlier proposal that a run of an ancestor creates a node.
+- No execution creates a node and no execution writes a criterion. The import is the only write path for the structure and the criteria. This voids the earlier proposal that an execution of an ancestor creates a node.
 - Execution authority never confers planning authority. An execution identity never authorizes an import, whatever node the import names.
 - The Mission Service owns what an import carries, and it owns no syntax. Markdown is the medium that a human writes a plan in, and the CLI converts a plan into an import. The Mission Service writes no plan file.
 - The import is snapshot reconciliation. The import set is authoritative. A plan file that carries no id creates a node, a file that carries an id updates that node, and a missing file retires its node.
@@ -140,12 +140,12 @@ Ulrich approved this structure on 2026-09-09. Every section is discussed, debate
 - A commit hash is the preferred address for work that a repository holds, and it is never required. A SHA-256 hash addresses content that no repository holds. The design stays generic, because a project delivers research work, planning work and coordination work as well as coding work.
 - Addressed prose is evidence. A research report and a judgement rationale qualify, and evaluation decides their strength. A claim with no addressed content is not evidence.
 - The Mission Service stores the content of produced evidence, because nothing else does. It stores the address of repository evidence.
-- Evidence durability is tiered by node. A task commit has meaning only while its objective runs, and it is an internal check. After the objective lands, the objective outcome represents the outcomes of all its tasks, so the system guarantees no further resolution of task evidence. An initiative behaves the same way, and an initiative still points at an objective commit. The evidence that must resolve is the landed state, which stays reachable.
+- Evidence durability is tiered by node. A task commit has meaning only while a worker instance executes its objective, and it is an internal check. After the objective lands, the objective outcome represents the outcomes of all its tasks, so the system guarantees no further resolution of task evidence. An initiative behaves the same way, and an initiative still points at an objective commit. The evidence that must resolve is the landed state, which stays reachable.
 - The evidence of a node is a set of items, and it holds one item most of the time.
 - A pull request that is open is not done, so the evaluation of an objective happens after the landing observation. That observation retrieves the squash merge commit and appends it to the evidence set. Merge skew is closed by evidence, not by a mechanism: the set names the tested snapshot and the landed snapshot, and the criteria decide what each one must establish.
 - A landing record names the repository action, the expected end state, the platform object, the observed state, the observation time and the commit identities.
-- A landing observation needs an explicit authorized observer, because it happens after the run released. The architecture says a run writes evidence; it never says only a run may.
-- A run submits evidence for its own node and for the tasks of that node, under a valid execution identity. A late submission never becomes current merely because it arrives last.
+- A landing observation needs an explicit authorized observer, because it happens after the execution released. The architecture says an execution writes evidence; it never says only an execution may.
+- An execution submits evidence for its own node and for the tasks of that node, under a valid execution identity. A late submission never becomes current merely because it arrives last.
 - A machine check binds its result to the snapshot it ran against and to the pinned criterion revision. Naming a snapshot does not prove the check used it, so the binding is recorded as an executor assertion unless a clean isolated checkout establishes it. An executor report is attributable evidence and it is not an independently verified check.
 - Evidence is append-only. Redaction happens before the artifact is addressed, and the record discloses that it is a transformed view. One exceptional path removes contaminated content. Ingestion is bounded, overflow is defined, and nothing is silently truncated.
 - Unassessed, rejected and abandoned evidence carries its own bounded retention. Outcome-dependent retention is transitive and it includes the evidence supporting the child outcomes that an assessment weighed.
@@ -156,10 +156,10 @@ Ulrich approved this structure on 2026-09-09. Every section is discussed, debate
 - The Mission Service performs no evaluation. It holds the criteria, the evidence, the assessment and the outcome records, and it is the record authority. Every write of a criterion, an assessment and an outcome passes through it.
 - A worker performs the evaluation. `reviewer@1` is a worker whose method is evaluation, in the same way that `tdd@1` is a worker whose method is coding.
 - `reviewer@1` takes an objective and an initiative only, because those are the dispatchable units. It never takes a task.
-- An evaluation is work that the Scheduler dispatches. A node that needs evaluation becomes available, and a reviewer worker instance takes it through the same claim protocol as every other run. A landing observation makes the objective available for review, so no run has to ask.
+- An evaluation is work that the Scheduler dispatches. A node that needs evaluation becomes available, and a reviewer worker instance takes it through the same claim protocol as every other execution. A landing observation makes the objective available for review, so no execution has to ask.
 - A reviewer worker is a worker binding of the project, so the project configures its agents, its provider accounts, its models and its instance count exactly as it does for any worker.
-- The separation is separation of duties, and it is not independent verification. The worker that executes a node never writes the assessment of that node. The Mission Service supplies the criteria and the evidence, so the executing worker never chooses the reviewer and never shapes its instructions.
-- A task assessment is written by the run of its objective, so separation of duties does not exist at task node. The independent review sits at the node whose outcome persists.
+- The separation is separation of duties, and it is not independent verification. The worker that executes a node's steps never writes the assessment of that node. The Mission Service supplies the criteria and the evidence, so the executing worker never chooses the reviewer and never shapes its instructions.
+- A task assessment is written by the execution of its objective, so separation of duties does not exist at task node. The independent review sits at the node whose outcome persists.
 - The evaluator's scope differs by node while its method follows the criterion. An objective evaluation also weighs the child outcomes and the landing.
 - A model judgement transcript is evidence of that invocation, not an assessment. The boundary is authority, not file format.
 - An assessment names the evidence set, the criteria revision, the immutable child outcome records it weighed, the method it applied and the actor that performed it.
@@ -177,74 +177,74 @@ Inputs that already exist:
 
 - Completion is three separate rules. An ending requires an outcome, including one that cannot establish the result. A claim of success requires a passing assessment that names the evidence the outcome carries. A human bypass uses the override. One rule cannot both authorize success and record a failure.
 - The outcome records the stopping reason separately from the assessment of evidence.
-- Only a human overrides an outcome. An override produces a new outcome that carries the human assertion, and the previous outcome is kept as a reference. A terminal state never reopens and never repeats. An override never restarts a terminal run.
+- Only a human overrides an outcome. An override produces a new outcome that carries the human assertion, and the previous outcome is kept as a reference. A terminal state never reopens and never repeats. An override never restarts a terminal execution.
 - The state model distinguishes "not assessed yet", "an assessment that could not establish the result" and "evaluation did not complete". Execution lifecycle, evaluation lifecycle, block state and outcome history stay separate dimensions and never collapse into one status field.
 - A human holds three roles with different authority: participant as the WHO, reviewer who produces an assessment, and override authority. Unblocking is a fourth action, not a fourth role.
 - Aggregation is not assessment. A worker aggregates child outcomes to report progress.
 - Completing the configured repository action, completing all tasks, and achieving the objective are three different conditions.
-- An outcome is produced while no run is in flight, because the landing observation and the reviewer run both act after the executing run released.
+- An outcome is produced while no execution is in flight, because the landing observation and the reviewer execution both act after the execution that performs the node's steps released.
 - After an objective lands, its outcome represents the outcomes of all its tasks.
 
 A debate pass ran on a draft of this section on 2026-09-09. Ulrich did not rule on it, so every item below is an input, not a decision:
 
 - Terminality must not be reversible. A human override that asserts failure on a successfully completed node would remove its current successful outcome, and a completion rule that reads the current outcome would then call the node not complete. A terminal marker is therefore separate from the current outcome: a permitted success transition makes a node terminal, a later override corrects the recorded result, and that correction never restores execution eligibility.
-- A terminal run and a terminal node are different. A failed run never resumes, and its blocked node may receive a new run after a human unblock.
-- An evaluation attempt that ends without an assessment does not establish that the node ended. A transient reviewer outage must not displace a valid assessment or a human override. Three events stay separate: an evaluation attempt ends with no assessment, an execution run ends and owes an outcome, and a node reaches terminal closure.
+- A terminal execution and a terminal node are different. A failed execution never resumes, and its blocked node may receive a new execution after a human unblock.
+- An evaluation attempt that ends without an assessment does not establish that the node ended. A transient reviewer outage must not displace a valid assessment or a human override. Three events stay separate: an evaluation attempt ends with no assessment, an execution that performs the node's steps ends and owes an outcome, and a node reaches terminal closure.
 - An outcome carries an explicit basis: an assessment, a human override, or no assessment produced. The third basis extends the outcome definition in `docs/overview.md`, which names an assessment or a human assertion only. One nullable assessment reference must not mean pending, failed and bypassed at once.
 - Not blocked by an assessment does not mean eligible for execution. A pending evaluation, a pending landing, an exhausted budget and an import freeze each prevent work on their own.
 - The Mission Service is not an evaluator because of its authority boundary, and not because its rule is deterministic. It validates who may publish an assessment, which node and context it concerns, whether it may still affect current state, and which transition follows. It never infers a passing verdict from raw evidence, from child outcomes or from a stopping reason. A stopping reason records why execution ended, and it never serves as proof that success occurred.
 - Ordinary success of an objective needs a current authorized passing assessment over the full applicable context and the required landing observation. A passing assessment alone is not enough.
 - A blocked child is visible to the assessment of its parent, and it does not mechanically veto success.
-- An outcome record holds the node, the originating run or evaluation attempt or human action, the stopping event and reason separate from the asserted result, the basis, the evaluation context when an assessment exists, the evidence set it carries, and the previous-outcome reference for an override.
+- An outcome record holds the node, the originating execution or evaluation attempt or human action, the stopping event and reason separate from the asserted result, the basis, the evaluation context when an assessment exists, the evidence set it carries, and the previous-outcome reference for an override.
 - Append-only history does not settle currency. Publication rejects the current-state effect of a stale attempt while preserving its record.
-- `docs/overview.md` already permits an override during execution: a successful override ends the run, and another assertion does not end it merely by being an override. The remaining problem is atomic termination and fencing against a late worker write.
-- Cancellation is an ordinary run-ending cause. It requires an outcome, and it does not require a missing assessment, because a valid assessment can already exist. Cancellation establishes neither success nor failure against the criteria.
+- `docs/overview.md` already permits an override during execution: a successful override ends the execution, and another assertion does not end it merely by being an override. The remaining problem is atomic termination and fencing against a late worker write.
+- Cancellation is an ordinary execution-ending cause. It requires an outcome, and it does not require a missing assessment, because a valid assessment can already exist. Cancellation establishes neither success nor failure against the criteria.
 - A task override stays an attributable assertion after its objective lands. Task evidence resolution stops being guaranteed; task history does not become meaningless. A task override never rewrites the historical assessment context of its parent and never changes the parent outcome automatically.
 - Approval status is a dimension of its own. The earlier draft replaced it with block state. Human review, human override and human unblock carry different authority, so the model keeps them apart.
 
 A second debate pass ran on 2026-09-10, against a fuller draft that proposed a terminal marker, an attempt counter and an answer to each open item. Ulrich did not rule on it, so every item below is an input, not a decision.
 
-- Execution authority and publication authority are different. A single value that a run pins at its start cannot express both "this run continues" and "this run publishes nothing". An override that does not assert success leaves the run alive, so it must not revoke what that run publishes.
+- Execution authority and publication authority are different. A single value that an execution pins at its start cannot express both "this execution continues" and "this execution publishes nothing". An override that does not assert success leaves the execution alive, so it must not revoke what that execution publishes.
 - An ending event and the outcome that the ending owes are one transition. A separate write order lets a cancellation invalidate its own outcome, and lets a failing assessment invalidate the block that it causes.
 - An attempt counter is not the currency protocol. Section 4 already owns context, authority and order, and a counter on the parent detects no change of a child outcome. Section 5 references that contract and adds no second one.
 - "The current outcome never moves backwards" needs a definition. A permitted human correction from success to failure moves backwards in result and forwards in record order.
 - Landing is the wrong cutoff for a task override. The evaluation of an objective happens after its landing, so a task override between the landing and the success of the objective still invalidates the currency of the parent assessment. The cutoff is terminal success.
-- "Holds no outcome" is not "unfinished". A task that holds an earlier failed outcome, under an objective that runs again, is unfinished too.
-- The closure of an objective owes task outcomes for every ending, and not for terminal success alone. A cancellation, an exhausted budget and an inability to progress each end a run that owes them.
-- A closure that writes many records needs an atomic or an idempotent obligation with a named recovery path. A crash inside closure otherwise leaves required task outcomes missing forever, because a terminal objective receives no further run.
+- "Holds no outcome" is not "unfinished". A task that holds an earlier failed outcome, under an objective that a worker instance executes again, is unfinished too.
+- The closure of an objective owes task outcomes for every ending, and not for terminal success alone. A cancellation, an exhausted budget and an inability to progress each end an execution that owes them.
+- A closure that writes many records needs an atomic or an idempotent obligation with a named recovery path. A crash inside closure otherwise leaves required task outcomes missing forever, because a terminal objective receives no further execution.
 - Exhaustion of an evaluation retry is an event of the evaluation lifecycle. Whether that event discharges an outcome obligation, and whether its record becomes current, are separate decisions.
 - "The Mission Service never reads evidence" is too broad. The service stores evidence, supplies it, and checks evidence identity as part of context currency. The forbidden act is deciding what evidence establishes against the criteria.
 - Therefore a structural completion prerequisite over child outcomes is not evaluation. Whether a blocked child vetoes the success of its parent is a product decision, and no argument from the evaluator boundary settles it.
 - A cancellation outcome that copies a passing assessment publishes a current successful outcome on a node that is not terminal. A start dependency reads a current successful outcome, so cancellation would satisfy a dependency.
 - Approval status was retained as a separate dimension. A model that lists the dimensions exhaustively either includes it or states why it merges.
-- An override during the first run of a node has no previous outcome to reference.
-- Section 5 references section 1 for task scheduling, section 3 for evidence durability, section 4 for assessment currency and the evaluation lifecycle, and `docs/overview.md` for the shared override and run-ending rules.
+- An override during the first execution of a node has no previous outcome to reference.
+- Section 5 references section 1 for task scheduling, section 3 for evidence durability, section 4 for assessment currency and the evaluation lifecycle, and `docs/overview.md` for the shared override and execution-ending rules.
 
 Ulrich ruled on B1 and on the node-attempt model on 2026-09-10. These are decisions.
 
 - A node attempt is one try at a node. A node carries an attempt counter that names which node attempt a record belongs to. Exactly one node attempt is open at a time.
-- A run and an evaluation attempt pin the node attempt that they start under.
+- An execution and an evaluation attempt pin the node attempt that they start under.
 - Every record carries its node attempt. A record stays the record of that node attempt forever.
-- Two acts bound a node attempt, and they are separate. A close ends every run and every evaluation attempt that is still in flight under that node attempt. An open starts the next node attempt.
+- Two acts bound a node attempt, and they are separate. A close ends every execution and every evaluation attempt that is still in flight under that node attempt. An open starts the next node attempt.
 - A close invalidates continuation. A close never invalidates a completed record.
-- A run that pins a closed node attempt is stopped. Its output can never become current, and it consumes an instance.
-- An assessment that does not pass ends the run and blocks the node. Its node attempt closes with that outcome. No new node attempt opens, because a blocked node is not eligible.
+- An execution that pins a closed node attempt is stopped. Its output can never become current, and it consumes an instance.
+- An assessment that does not pass ends the execution and blocks the node. Its node attempt closes with that outcome. No new node attempt opens, because a blocked node is not eligible.
 - A human unblock opens the next node attempt.
-- A cancellation closes the node attempt by force, because a run is in flight. A new node attempt opens when the node is eligible again.
+- A cancellation closes the node attempt by force, because an execution is in flight. A new node attempt opens when the node is eligible again.
 - A human override that asserts success closes the node attempt by force and sets the terminal marker. No further node attempt opens.
-- A human override that does not assert success opens no node attempt and closes none. `docs/overview.md` states that such an override does not end the run, and the run keeps its node attempt and finishes.
-- The Mission Service owns the node attempt and its counter. The Scheduler Service enforces the stop of a run that pins a closed node attempt. This is the same split as the block gate.
-- A close by force writes the ending outcome of every run that it stops, with the closing event as the stopping reason. A stopped run never publishes afterwards, so no outcome obligation is orphaned.
+- A human override that does not assert success opens no node attempt and closes none. `docs/overview.md` states that such an override does not end the execution, and the execution keeps its node attempt and finishes.
+- The Mission Service owns the node attempt and its counter. The Scheduler Service enforces the stop of an execution that pins a closed node attempt. This is the same split as the block gate.
+- A close by force writes the ending outcome of every execution that it stops, with the closing event as the stopping reason. A stopped execution never publishes afterwards, so no outcome obligation is orphaned.
 - B2 is void. It assumed that an open or a close invalidates the record that causes it. A close never touches a completed record, so no ordering rule is needed.
-- OPEN, and a consequence of this ruling: a human override that asserts failure during a run leaves the run alive, so a later successful outcome of that run supersedes the human assertion. Confirm that a human who wants to stop the run cancels the run.
+- OPEN, and a consequence of this ruling: a human override that asserts failure during an execution leaves the execution alive, so a later successful outcome of that execution supersedes the human assertion. Confirm that a human who wants to stop the execution cancels the execution.
 
 Ulrich raised the asynchronous attempt on 2026-09-10. A worker opens a pull request and releases, because a review takes days. A debate pass ran on the answer. The first item below is a decision. Every other item is an input.
 
-- DECISION: a node attempt is not a run. A run is one claim of a node by one worker instance, and it starts at the claim and finishes at the release. A node attempt is one try at a node, and it spans every run, every observation and every evaluation of that try. The later landing observation and the reviewer run continue the open node attempt. A release alone neither closes a node attempt nor opens the next one. Work that arrives after a node attempt closes never revives it, and it never migrates its records into the next node attempt.
+- DECISION: a node attempt is not an execution. An execution represents one claim of a node by one worker instance, and it starts at the claim and finishes at the release. A node attempt is one try at a node, and it spans every execution, every observation and every evaluation of that try. The later landing observation and the reviewer execution continue the open node attempt. A release alone neither closes a node attempt nor opens the next one. Work that arrives after a node attempt closes never revives it, and it never migrates its records into the next node attempt.
 
 - A release is not always a phase transition. Ulrich already ruled that a worker releases while it waits for a dependency and reacquires afterwards. That release happens before execution completes, and possibly before any repository action. A release relinquishes execution capacity, and it discharges no responsibility.
-- A crash of a reviewer must not close the node attempt. Section 4 is approved and it gives an evaluation a durable lifecycle, where a bounded retry resumes the evaluation. A rule that every abnormal run ending closes the node attempt removes that recovery and charges a new node attempt for it. A run that stops, an evaluation attempt that does not complete, and an attempt of a node that closes are three separate events.
-- A node attempt is an identity and a lifecycle boundary. A node attempt is not an actor, so it accepts no obligation. An obligation that moves from the run to the node attempt needs a named owner, a durable handoff at the release, and a recovery owner. `docs/overview.md` gives the run responsibility for the outcome of its node and of its tasks, and any such obligation reconciles that responsibility instead of deleting it.
+- A crash of a reviewer must not close the node attempt. Section 4 is approved and it gives an evaluation a durable lifecycle, where a bounded retry resumes the evaluation. A rule that every abnormal execution ending closes the node attempt removes that recovery and charges a new node attempt for it. An execution that stops, an evaluation attempt that does not complete, and an attempt of a node that closes are three separate events.
+- A node attempt is an identity and a lifecycle boundary. A node attempt is not an actor, so it accepts no obligation. An obligation that moves from the execution to the node attempt needs a named owner, a durable handoff at the release, and a recovery owner. `docs/overview.md` gives the execution responsibility for the outcome of its node and of its tasks, and any such obligation reconciles that responsibility instead of deleting it.
 - The release boundary needs a durable correlation between the node attempt and the platform object, and a readiness condition that reads accepted facts and never the arrival order of events. Three schedules break an order-based rule. A landing observation arrives before the executor releases. An executor releases and crashes before the correlation is recorded. An old observation arrives after a cancellation closed its node attempt and the next node attempt opened.
 - An observation is not an evaluation. An observer establishes that a pull request closed with no merge, and that establishes nothing against the validation criteria. A rule that turns a platform state or an elapsed time into an assertion about a result makes the Mission Service an evaluator.
 - A platform state such as "closed" is reversible on some platforms. Which observations end an attempt is a policy decision.
@@ -253,15 +253,15 @@ Ulrich raised the asynchronous attempt on 2026-09-10. A worker opens a pull requ
 - The synchronous path needs its own readiness condition. An executor requests no evaluation, so a node with no repository action needs a durable fact that makes it available for review.
 - The import gate cannot treat every open node attempt as work. Trace it: an executor releases while its pull request waits, an import starts and the admission gate stops new claims, the pull request merges, and the node attempt now needs a reviewer claim that the gate forbids. The import waits for the node attempt to close, and the node attempt waits for a claim that the import forbids. Draining needs an explicit policy.
 - A pull request that stays open forever is an unbounded wait, and it is not a state that no actor can leave, because a human cancels the attempt.
-- These items are proposals with no authority yet: one execution run per node attempt, a node attempt charged for every platform review round, an automatic retry after an observed non-landing, a bound on the wait for a landing and its consequence, a budget that counts node attempts, and a replacement of the run obligation by a node-attempt obligation.
-- A change request on a pull request has no approved path. Option A closes the node attempt and opens the next one for a new execution run. Option B returns the node attempt to the execution phase. Aelita withdrew its preference for Option A, because the absence of a backward edge is a diagram property and not a semantic reason.
+- These items are proposals with no authority yet: one execution that performs the node's steps per node attempt, a node attempt charged for every platform review round, an automatic retry after an observed non-landing, a bound on the wait for a landing and its consequence, a budget that counts node attempts, and a replacement of the execution obligation by a node-attempt obligation.
+- A change request on a pull request has no approved path. Option A closes the node attempt and opens the next one for a new execution that performs the node's steps. Option B returns the node attempt to the execution phase. Aelita withdrew its preference for Option A, because the absence of a backward edge is a diagram property and not a semantic reason.
 
 A debate pass on the diagram specification ran on 2026-09-10. These are inputs.
 
-- Opening an attempt is not claiming a run. Ulrich ruled that a human unblock opens the next node attempt, so a node attempt exists with no claim. The model needs an open and unclaimed state. A closed attempt never reopens, and the next attempt is a new one.
+- Opening an attempt is not claiming an execution. Ulrich ruled that a human unblock opens the next node attempt, so a node attempt exists with no claim. The model needs an open and unclaimed state. A closed attempt never reopens, and the next attempt is a new one.
 - "An assessment publishes" is not a sufficient guard for closing an attempt. A reviewer that starts against child outcome C1, while a human override creates C2, publishes an assessment that section 4 rejects as not current. The publication is recorded, and the attempt stays open. OPEN: what recovers an attempt whose evaluation context was superseded.
 - Readiness for evaluation is a join over accepted facts, and never an event order. One join covers three cases: a node with no repository action, a repository action that already reached its expected end state under a merge-and-push strategy, and a landing observed before the executor released. An order-based rule leaves the third case waiting for an observation that already happened.
-- A crash of an executor leaves the attempt with no live run. The recovery is OPEN. A cancellation is the only exit today, and that is not ordinary recovery.
+- A crash of an executor leaves the attempt with no live execution. The recovery is OPEN. A cancellation is the only exit today, and that is not ordinary recovery.
 - An initiative does not become ready for evaluation because it names no repository binding. The join reads the outstanding actions in its subtree.
 - Restrictions that prevent an attempt and the authority that opens an attempt are two different lists. The restrictions are not sufficient. A budget limits authorized attempts and authorizes none, so what authorizes an attempt after a cancellation is OPEN.
 - The import freeze is mission-wide and never node-local. The parked deadlock is a cross-lane effect: the admission gate forbids the reviewer claim that an open attempt needs in order to drain.
@@ -287,7 +287,7 @@ One edit to approved text that the correction forces. It is a sixth forced edit.
 Four findings that the new rule needs before a page states it. Aelita found them, and each one carries a recommendation.
 
 - FINDING 1, `Available` is excluded and it holds no work. A new node with no start dependency reaches `Available` at once, so the rule forbids every edit of it. Ulrich already recorded that a new node with no start dependency is `Available` at once. Recommendation: the editable predicate reads "the node started no work", so `Pending`, and `Available` while the open attempt of the node holds no record. An `Available` node that a release produced holds evidence, and it stays immutable.
-- FINDING 2, a create is not always safe. A create adds a task under an objective that runs, and the run of that objective already released. The readiness condition then requires a current outcome of the new task inside the open attempt, and no run writes it, so the objective never reaches its review. Recommendation: a create obeys the same condition as an update, applied to the parent whose child set changes.
+- FINDING 2, a create is not always safe. A create adds a task under an objective whose work started, and the execution of that objective already released. The readiness condition then requires a current outcome of the new task inside the open attempt, and no execution writes it, so the objective never reaches its review. Recommendation: a create obeys the same condition as an update, applied to the parent whose child set changes.
 - FINDING 3, the rule names no scope for "modify". A containment move changes the parent link of the moved node, and it changes the child set of the old parent and of the new parent. A dependency edit changes the edges of the dependent node alone, and the node that it names gains a consumer and changes nothing of its own. Recommendation: a modification covers the record of the node, its parent link, its dependency edges and its child set. So a move requires the moved node, the old parent and the new parent to satisfy the condition, and a dependency edit requires the dependent node alone to satisfy it.
 - FINDING 4, the API bypasses the gate unless the gate governs it. Recommendation: one condition governs both write paths. The node API edits a node under the same condition, and it terminates with no effect under the same guarantee.
 
@@ -301,14 +301,14 @@ Ulrich ruled on the four findings on 2026-09-10. These are decisions.
 
 Four consequences that follow, and none is a further ruling.
 
-- A create under a started parent is refused. An objective that runs holds no new task, because the child set of that objective changes and the objective is neither `Pending` nor `Available`.
+- A create under a started parent is refused. An objective that a worker instance executes holds no new task, because the child set of that objective changes and the objective is neither `Pending` nor `Available`.
 - The condition never protects an invariant of the whole system. It protects the import alone. A human edit through the API reaches a node in any state, so no other rule assumes that a node changed only while it started no work.
 - An `Available` node that a release produced is editable, and its open attempt keeps the criteria revision that it pinned. The approved rule stands: an import never retargets an attempt that is already active, and a criteria change creates a revision that the next attempt pins.
 - A dependency edit on a `Pending` node or on an `Available` node disturbs no descendant of it under the `Pending` case, because every descendant of a `Pending` node is `Pending`. The `Available` case holds no such property, so a descendant of an `Available` node reaches any state.
 
 One finding that the B1 ruling raises. Aelita recommends the answer, and Ulrich overturns it if he disagrees.
 
-- A delete of a node whose open attempt holds records leaves that attempt open with no closure and no outcome. Trace it: a run of the node releases with no execution-end fact, the node reaches `Available`, an import retires it, and the retirement removes the executable work. No scheduler dispatches the node again, so no ending event arrives, and the attempt never closes.
+- A delete of a node whose open attempt holds records leaves that attempt open with no closure and no outcome. Trace it: an execution of the node releases with no execution-end fact, the node reaches `Available`, an import retires it, and the retirement removes the executable work. No scheduler dispatches the node again, so no ending event arrives, and the attempt never closes.
 - Recommendation: a retirement of a node whose open attempt holds records closes that attempt and writes the outcome. The basis is a human assertion, the stopping reason is the retirement, and the asserted result states that nothing is established. The same closure owes the task outcomes that the attempt lacks.
 - The earlier debate raised the same question and left it open. It asked whether retiring unfinished work is an ending that owes an outcome. This recommendation answers it for a node that started work, and a retirement of a node that started no work owes nothing.
 
@@ -480,8 +480,8 @@ Ulrich ruled on B8, the import gate, on 2026-09-10.
 
 A debate pass on the B9 policy ran on 2026-09-10. These are inputs.
 
-- The part that survives: the Scheduler detects a lost claim through its lease; the attempt stays open and returns to an unclaimed state; a resumption budget of the attempt stays separate from the attempt budget of the node; and a run-scoped identity supplements the node attempt.
-- A lost run must lose its publication authority at the moment the Scheduler declares the loss, and never at the moment a replacement claims. Otherwise a zombie writes in the window between the two, under a claim that is still the latest one.
+- The part that survives: the Scheduler detects a lost claim through its lease; the attempt stays open and returns to an unclaimed state; a resumption budget of the attempt stays separate from the attempt budget of the node; and an execution-scoped identity supplements the node attempt.
+- A lost execution must lose its publication authority at the moment the Scheduler declares the loss, and never at the moment a replacement claims. Otherwise a zombie writes in the window between the two, under a claim that is still the latest one.
 - That revocation serializes against lease renewal, release and completion. A late loss declaration must not reset an attempt whose completion was already accepted.
 - A re-submission of an already accepted write is not a new publication. A worker that loses the response must be able to retrieve the acknowledgement without the write being rejected because its claim ended.
 - A node attempt and a claim token are not the whole admission contract. Section 4 requires context, authority and order, and each is one input to the authority check. The rule is per operation and per actor, because a landing observation carries no executing claim and a universal two-token rule would reject an authorized observer.
@@ -506,9 +506,9 @@ The internal states:
 
 1. `Pending`: a dependency of the node is not available. Most imported nodes hold this state after an import.
 2. `Available`: every dependency of the node is available.
-3. `Executing`: a worker works on the node.
+3. `Executing`: a worker executes the node's steps.
 4. `Waiting`: a worker finished its work, and the node is ready for a pick-up. Some workers omit this state.
-5. `Evaluating`: another worker runs the evaluation and produces the proof of the task.
+5. `Evaluating`: another worker performs the evaluation and produces the proof of the task.
 6. `Blocked`: the proof is a failure, and a human unblock is required.
 7. `Settled`: the proof is a success.
 8. `Discarded`: a human cancels the node.
@@ -575,7 +575,7 @@ The consequences of the third ruling. Every one of them follows from the ruling,
 - The assessment names the tested snapshot alone. No assessment weighs the landed snapshot, because the landing follows the assessment. Approved lines 163 to 165 close merge skew by naming both snapshots in the evidence set, and that closure no longer covers the landed state.
 - The landing observation still appends the landed commit identities to the evidence set. Line 159 survives, so the evidence durability rule of an initiative is unaffected.
 - Ordinary success needs a current passing assessment and the required landing observation. The ruling orders the two, and it keeps both.
-- OPEN: the actor that requests the external action. The executing run released at `Waiting`, so the requester is the reviewer run, a further execution run, or an authorized actor of the Mission Service.
+- OPEN: the actor that requests the external action. The execution that performs the node's steps released at `Waiting`, so the requester is the reviewer execution, a further execution that performs the node's steps, or an authorized actor of the Mission Service.
 - The change request of a platform reviewer reaches `External.Failed`. The exit of that state is OPEN, and the B3 ruling below reopened it, because the worker handles the failure detail and no edge returns the node to the execution phase.
 
 
@@ -646,7 +646,7 @@ Ulrich ruled on the exit of `External.Failed` on 2026-09-10. This is a decision.
 
 Four consequences of this ruling. Each one follows from it, and none is a further ruling.
 
-- The unblock carries content. It carries the human guideline, or the content of the external comment or conversation, and the next run reads that content. `docs/overview.md` states that an unblock authorizes a further run and asserts nothing about the results, and that stays true. Section 6 owns the unblock, so section 5 states the requirement and section 6 holds the mechanism.
+- The unblock carries content. It carries the human guideline, or the content of the external comment or conversation, and the next execution reads that content. `docs/overview.md` states that an unblock authorizes a further execution and asserts nothing about the results, and that stays true. Section 6 owns the unblock, so section 5 states the requirement and section 6 holds the mechanism.
 - The unblock opens the next attempt, so the execution of the blocked try never carries. The next attempt re-executes and re-evaluates. One platform review round costs one attempt.
 - The correlation between a node and its external object must survive an attempt boundary. The branch and the pull request persist on the platform, and the next attempt holds no record of the closed attempt. Without a durable correlation on the node, every review round opens a second pull request. The B9 register raises the same requirement for a crash, and this ruling raises it in the ordinary path.
 - A passing assessment does not survive the round. The previous attempt reached `External.Requested` with a current passing assessment, and the next attempt assesses the changed content again.
@@ -660,7 +660,7 @@ Three consequences of this ruling. Each one follows from it, and none is a furth
 
 - Section 5 states no correlation mechanism and no requester identity. The transition into `External.Requested` reads an accepted fact that the required external action is requested. Which entity makes the request, and how the request stays idempotent across an attempt boundary, belong to the Worker Service document.
 - The Mission Service still records the platform object, because approved section 3 states that a landing record names it. That record is evidence and observation. No rule of the Mission Service reads it to decide whether to request the action again.
-- The question of the requesting actor is withdrawn from section 5. The three candidate answers were an authorized platform actor, a further execution run and the reviewer run, and the Worker Service now answers it.
+- The question of the requesting actor is withdrawn from section 5. The three candidate answers were an authorized platform actor, a further execution that performs the node's steps and the reviewer execution, and the Worker Service now answers it.
 
 An initiative never enters the external segment, and the aggregation question dissolves. This follows from the ruling on the position of the external segment, and it is not a further ruling.
 
@@ -671,18 +671,18 @@ An initiative never enters the external segment, and the aggregation question di
 
 `Executing -> Pending` is added as a release edge. Aelita applied the S1 principle, and this is a routine consequence.
 
-- An override corrects a prerequisite outcome to a failure while a run executes the dependent. The event never interrupts the run.
+- An override corrects a prerequisite outcome to a failure while a worker instance executes the dependent. The event never interrupts the execution.
 - The release routes by current eligibility. A release with no execution-end fact reaches `Available` when the start-dependency closure holds, and it reaches `Pending` when the closure does not hold.
 
 Ulrich stated the task outcome on 2026-09-10. His words: the task outcome is its commit inside the objective branch, in a coding project.
 
-- F4, the collision that the ruling resolves. The statement collided with three approved facts and with his own artifact ruling. The evidence is the artifact of `Executing`, and in a coding project it is a commit hash. Approved section 3 states that a task commit is an internal check with meaning while its objective runs. Approved section 4 states that the run of an objective writes the assessment of each task of that objective. `docs/overview.md` gives a task its own validation criteria and its own outcome. So a task holds four objects: its criteria, its evidence, its assessment and its outcome.
-- F4, RULED on 2026-09-10. A task commit is the evidence that the task outcome carries. The run of the objective writes the assessment and the outcome of each task. No approved page needs an edit.
+- F4, the collision that the ruling resolves. The statement collided with three approved facts and with his own artifact ruling. The evidence is the artifact of `Executing`, and in a coding project it is a commit hash. Approved section 3 states that a task commit is an internal check with meaning while a worker instance executes its objective. Approved section 4 states that the execution of an objective writes the assessment of each task of that objective. `docs/overview.md` gives a task its own validation criteria and its own outcome. So a task holds four objects: its criteria, its evidence, its assessment and its outcome.
+- F4, RULED on 2026-09-10. A task commit is the evidence that the task outcome carries. The execution of the objective writes the assessment and the outcome of each task. No approved page needs an edit.
 
 Two rules follow from this ruling, and each one is a consequence and not a further ruling.
 
-- The readiness condition enforces the task-outcome obligation of the ordinary path. Its first part requires every child of the node to hold a current outcome, so the run of the objective writes every task outcome before a reviewer claims the objective. The obligation is discharged before `Waiting -> Evaluating`, and never at the closure.
-- A closure with no evaluation owes the task outcomes, and the Mission Service writes them. A discard from `Pending`, from `Available` or from `Executing` leaves no run alive. The Mission Service writes the outcome at the closing transition, and it writes the task outcomes of that closure with the closing event as the stopping reason.
+- The readiness condition enforces the task-outcome obligation of the ordinary path. Its first part requires every child of the node to hold a current outcome, so the execution of the objective writes every task outcome before a reviewer claims the objective. The obligation is discharged before `Waiting -> Evaluating`, and never at the closure.
+- A closure with no evaluation owes the task outcomes, and the Mission Service writes them. A discard from `Pending`, from `Available` or from `Executing` leaves no execution alive. The Mission Service writes the outcome at the closing transition, and it writes the task outcomes of that closure with the closing event as the stopping reason.
 
 Ulrich ruled on `Paused` on 2026-09-10. This is a decision.
 
@@ -726,7 +726,7 @@ One consequence that needs a ruling.
 - RULING NEEDED. Does the review of an initiative wait for a descendant action that stays unsettled? Trace the case: an objective receives a passing assessment, an actor requests its pull request, a human then overrides the objective to success, and its attempt closes while the pull request stays open. The objective holds a current successful outcome, and its action never reached its expected end state. Aelita recommends no wait, because the outcome of the child represents the child and the override is the decision of a human who takes that responsibility. The cost: the evidence of the initiative then points at a commit that never landed, and approved section 3 states that an objective commit is a landed commit.
 - A related scope follows the same ruling. The successful outcome of a node reads the required external actions of that node. An initiative configures none, so its success reads its assessment and its child outcomes alone.
 
-One catch that Aelita set aside. The engine stated that a further attempt needs no new execution, because a run assesses accepted evidence under a new context. Whether a run re-executes a task is the business of the worker, and the Worker Service owns it. O4 states no rule about it.
+One catch that Aelita set aside. The engine stated that a further attempt needs no new work on the node's steps, because an execution assesses accepted evidence under a new context. Whether a worker instance re-executes a task is the business of the worker, and the Worker Service owns it. O4 states no rule about it.
 
 Ulrich ruled the synchronisation of a node state with an external request on 2026-09-10. This is a decision.
 
@@ -786,7 +786,7 @@ The honest statement of the initiative rule. It is a product policy: no initiati
 
 Three distinctions that the action rule keeps explicit. An action is configured or required. A request exists. An accepted observation establishes satisfaction. "No outstanding request" never means "no unmet required action". An observation binds to its own action, its platform object and its expected end state, and the rule quantifies over every required action of the node.
 
-Why the ranks differ, in the correct terms. The question is who still changes the evidence through ordinary work. A task belongs to the execution lifecycle of its objective, and the run of that objective writes its outcome. An objective holds its own lifecycle and its own attempts, so a parent reads its state.
+Why the ranks differ, in the correct terms. The question is who still changes the evidence through ordinary work. A task belongs to the execution lifecycle of its objective, and the execution of that objective writes its outcome. An objective holds its own lifecycle and its own attempts, so a parent reads its state.
 
 One conflict with approved text, and it is a fifth forced edit. `docs/mission-service.md` line 159 states that an initiative points at an objective commit and that an objective commit is a landed commit. A human override that asserts success from `External.Failed` produces a `Completed` objective whose commit never landed. The same sentence also excludes the prose evidence and the non-repository evidence that section 3 permits. The sentence needs the override exception and the evidence-kind qualification.
 
@@ -806,13 +806,13 @@ Ulrich deferred B9 on 2026-09-10. Section 5 proceeds on the happy case, and a se
 The register below stays here as the Mission Service input to that session. A case marked RULED has an answer. A case marked OPEN does not.
 
 
-Group A, an execution run is lost.
+Group A, an execution that performs the node's steps is lost.
 
 - A1 lost with no write. RULED: the attempt stays open and returns to unclaimed continuation, and one resumption debit applies.
 - A2 lost after partial task writes. RULED: the accepted task outcomes survive, and the replacement rechecks readiness against them.
 - A3 lost while a repository action has an uncertain result. OPEN: the replacement reconciles before it acts, and nothing states what happens when reconciliation cannot establish the result.
 - A4 lost after the action and before the correlation record. RULED by construction: the action identity is durable before the action, so this ordering never occurs.
-- A5 a write arrives from a run whose claim was revoked. RULED: recorded, never current.
+- A5 a write arrives from an execution whose claim was revoked. RULED: recorded, never current.
 - A6 a re-submission of an already accepted write. RULED: not a new publication, and the acknowledgement stays retrievable.
 - A7 the resumption budget is spent. PART RULED: automatic recovery stops. OPEN: whether the attempt also closes and publishes an outcome.
 
@@ -840,8 +840,8 @@ Group D, a close is interrupted.
 
 Group E, a human action races machine work.
 
-- E1 an override that asserts success during a run. RULED: it closes the attempt by force.
-- E2 an override that asserts failure during a run, and the run then succeeds. OPEN.
+- E1 an override that asserts success during an execution. RULED: it closes the attempt by force.
+- E2 an override that asserts failure during an execution, and the execution then succeeds. OPEN.
 - E3 a cancellation races a completion. OPEN.
 
 
@@ -853,7 +853,7 @@ Open questions for this section:
 - OPEN: whether the Mission Service may derive an outcome from an assessment and a stopping reason without becoming an evaluator.
 - OPEN: whether an objective may hold a passing assessment while a task inside it is blocked, so the objective succeeds with unfinished work in it.
 - OPEN: whether an override of a task means anything, given that a task outcome stops mattering after its objective lands.
-- OPEN: whether an override is permitted at a node that is currently executing, and what happens to the run.
+- OPEN: whether an override is permitted at a node that a worker instance is currently executing, and what happens to the execution.
 - OPEN: whether cancellation is a stopping reason with its own rules, or an ordinary ending that produces an outcome with no assessment.
 - OPEN: whether the current outcome of a node can move backwards, since an override adds a new outcome and a later assessment can also add one.
 
@@ -863,18 +863,18 @@ Scope: the block on a failed assessment, the human unblock, enforcement at the A
 
 Inputs that already exist:
 
-- An assessment that does not pass ends the run and blocks the node. A blocked node is not available for a further run. Only a human unblocks a node. An unblock authorizes a further run and asserts nothing about the results.
+- An assessment that does not pass ends the execution and blocks the node. A blocked node is not available for a further execution. Only a human unblocks a node. An unblock authorizes a further execution and asserts nothing about the results.
 - The block must be enforced at the API and the CLI, not only in the Scheduler. An external harness is an executor reaching kanthord that way, so Scheduler-only enforcement leaves a bypass.
 - A worker check before it picks up work is advisory. The claim operation checks the gate atomically when it records the claim, and both harnesses obey it. The Mission Service owns the gate and the Scheduler Service enforces it at the claim.
 - STALE. An assessment block and an import freeze stay independent conditions that eligibility combines. This input names the mission-wide import freeze that the per-node import condition of 2026-09-10 replaced. The rule that survives is that an import never unblocks a node, and `docs/mission-service.md` states it.
-- A blocked task must not fail its objective's run and must not reopen a sibling that is already terminal. Dependency propagation is a separate decision from run termination.
-- A failed objective assessment can arrive after a pull request, a merge or a push, because the repository action precedes objective success. Ending the run undoes none of it. A replacement run inspects what already happened. Unblock and rollback are different actions.
-- No dispatch window may exist between run termination and the block taking effect. This is parked for the Scheduler Service.
+- A blocked task must not fail its objective's execution and must not reopen a sibling that is already terminal. Dependency propagation is a separate decision from execution termination.
+- A failed objective assessment can arrive after a pull request, a merge or a push, because the repository action precedes objective success. Ending the execution undoes none of it. A replacement execution inspects what already happened. Unblock and rollback are different actions.
+- No dispatch window may exist between execution termination and the block taking effect. This is parked for the Scheduler Service.
 
 Open questions for this section:
 
 - CLOSED on 2026-09-11 by S3. A task is never blocked, because a task holds no state.
-- CLOSED on 2026-09-11 by S3. The run of the objective drives every task lifecycle.
+- CLOSED on 2026-09-11 by S3. The execution of the objective drives every task lifecycle.
 - CLOSED on 2026-09-11 by U1 and U2. The unblock names the attempt that it clears and the revision that it expects, and its request key binds to its payload, so a stale unblock and a repeated unblock authorize no attempt. The Scheduler Service keeps its own counterpart of the rule.
 
 Ulrich ruled the node revision on 2026-09-11. These are decisions.
@@ -889,8 +889,8 @@ Six consequences of these rulings. Each one follows from them, and none is a fur
 
 - The rename reaches the design set. `criteria revision` widens into `node revision`, an assessment names the node revision that it evaluates, and an attempt pins a node revision.
 - The newest revision is the pinned revision in the ordinary case, because an unblock pins the revision that it authorizes and an edit during an open attempt is the exception.
-- An edit during an open attempt writes a revision and never retargets that attempt. The approved invariant stands, and a replacement run of the same attempt reads the revision that the attempt pinned.
-- A human who needs the next run to obey a change immediately pauses the node, blocks it with a human reason, writes the revision, and unblocks into that revision. The approved set already holds every edge of that path, so it needs no new mechanism.
+- An edit during an open attempt writes a revision and never retargets that attempt. The approved invariant stands, and a replacement execution of the same attempt reads the revision that the attempt pinned.
+- A human who needs the next execution to obey a change immediately pauses the node, blocks it with a human reason, writes the revision, and unblocks into that revision. The approved set already holds every edge of that path, so it needs no new mechanism.
 - The verification command is a structured field of the node content. A human writes its value, and a revision carries the new value. No execution identity infers a command from prose, so the rule that no execution identity writes a criterion stands.
 - A pinned verification command establishes no verification adequacy. The files that the command reads stay mutable, so the same command runs different tests. The evaluation weighs the actual tests and the evidence against the requirement of the pinned revision.
 
@@ -919,9 +919,9 @@ Three consequences of this ruling. Each one follows from it, and none is a furth
 
 Ulrich ruled S1 to S5 of the section 6 brief on 2026-09-11. These are decisions.
 
-- S1. The Mission Service records whether the external state is representable in kanthord, and it copies no external content. The system fetches that content when it needs it. The unblock carries the human guideline, and the next run reads the external conversation on the platform.
+- S1. The Mission Service records whether the external state is representable in kanthord, and it copies no external content. The system fetches that content when it needs it. The unblock carries the human guideline, and the next execution reads the external conversation on the platform.
 - S2. A human alone unblocks a node, and that human carries a specific identity in the system: the account username. Every act therefore names who performed it. No execution identity and no client identity of an external harness unblocks a node. The Project Service owns how an identity is established.
-- S3. Five derivations hold. A task is never blocked, because a task holds no state. The run of the objective drives every task lifecycle. A block writes no record beyond the outcome that closes the attempt. A block changes the state of no other node. The human block from `Paused` is the only human block.
+- S3. Five derivations hold. A task is never blocked, because a task holds no state. The execution of the objective drives every task lifecycle. A block writes no record beyond the outcome that closes the attempt. A block changes the state of no other node. The human block from `Paused` is the only human block.
 - S4. Section 6 owns five vocabulary entries: `block condition`, `unblock record`, `human guideline`, `human block`, and `node revision` in place of `criteria revision`.
 - S5. `overview.vocabulary.md` gains an entry for `block` and an entry for `unblock`.
 
@@ -965,7 +965,7 @@ Ulrich ruled the revision of a task on 2026-09-11, on the same principle. This i
 Three consequences of this ruling. Each one follows from it, and none is a further ruling.
 
 - An edit of a task writes a node revision of its objective.
-- The run of an objective reads its tasks from the revision that its attempt pins, so a task edit during an open attempt reaches the next attempt.
+- The execution of an objective reads its tasks from the revision that its attempt pins, so a task edit during an open attempt reaches the next attempt.
 - A task assessment names the node revision of the objective. The write control and the version unit agree, because the import condition of a task already reads the condition of its objective.
 
 Ulrich ruled the reference of the currency check on 2026-09-11. This is a decision.
@@ -976,7 +976,7 @@ Five consequences of this ruling. Each one follows from it, and none is a furthe
 
 - A revision that a human writes during an open attempt never invalidates the assessment of that attempt.
 - A node that reaches `External.Success` completes on the assessment of its pinned revision, so no edit strands it. The transition table offers `Completed`, `Paused` and `Discarded` from that state, and no edge returns to `Evaluating`.
-- A requirement that a human writes after the assessment and before the observation reaches no run of that attempt. The human closes that window by blocking the node.
+- A requirement that a human writes after the assessment and before the observation reaches no execution of that attempt. The human closes that window by blocking the node.
 - The read of a node names the revision that each attempt pins. A revision that no attempt pins is visible, and on a terminal node that fact is permanent.
 - The act that writes a revision on a node that holds an open attempt states that the revision reaches the next attempt and not the open one.
 
@@ -990,7 +990,7 @@ One consequence of this ruling. It follows from the ruling, and it is not a furt
 
 - A human who redirects a node that holds an open attempt pauses the node, blocks it, and unblocks it with the content change. The unblock carries the change, so the redirect costs three acts and never four.
 
-One consequence that the writing of section 6 forced, and that Ulrich reviews. The task ruling makes the content of a task part of the node revision of its objective, and the readiness condition read the current tasks of the objective. The two readings disagree when a human edits the task set during an open attempt. The readiness condition now reads every task of the revision that the open attempt pins, so the run, the readiness condition and the task assessment all read one task set.
+One consequence that the writing of section 6 forced, and that Ulrich reviews. The task ruling makes the content of a task part of the node revision of its objective, and the readiness condition read the current tasks of the objective. The two readings disagree when a human edits the task set during an open attempt. The readiness condition now reads every task of the revision that the open attempt pins, so the execution, the readiness condition and the task assessment all read one task set.
 
 Two items that this ruling does not settle. Each one belongs to the successful-outcome rule of section 5, and not to the entity.
 
@@ -1007,13 +1007,13 @@ Edits that these rulings force on approved pages. None is applied, because secti
 Open items that these rulings leave.
 
 - OPEN: whether a revision that changes the goal or the steps alone invalidates the currency of a current assessment. Aelita recommends that currency reads the whole revision, because a requirement that moves from a 24-hour expiry to a 15-minute expiry leaves the verification command untouched.
-- OPEN: how the design separates a persistent requirement from a satisfied historical instruction. A length policy stays in force after a run satisfies it, and a rename completes. This question exists under every content model.
+- OPEN: how the design separates a persistent requirement from a satisfied historical instruction. A length policy stays in force after an execution satisfies it, and a rename completes. This question exists under every content model.
 - OPEN: whether the Mission Service returns the difference between the revision that an attempt pinned and the revision that the previous attempt pinned. The useful difference is between two pinned revisions, and never between two adjacent revision numbers.
 
 Ulrich ruled the human guideline on 2026-09-11. This is a decision, and it supersedes the guideline of the `External.Failed` ruling of 2026-09-10, of the S1 ruling of 2026-09-11 and of the S4 vocabulary list.
 
 - The term `human guideline` is removed from the design set. The unblock record carries no direction of its own.
-- Every human direction enters the node revision. A human who steers the next run edits the goal, the steps, the validation criteria or any other field of the node, and the unblock carries that change.
+- Every human direction enters the node revision. A human who steers the next execution edits the goal, the steps, the validation criteria or any other field of the node, and the unblock carries that change.
 
 Three consequences of this ruling. Each one follows from it, and none is a further ruling.
 
@@ -1047,8 +1047,8 @@ Edits that this ruling forces on approved pages. Every one is applied on 2026-09
 
 Every one is applied on 2026-09-09.
 
-- `docs/overview.md`: a worker instance takes an available initiative or objective; the `worker instance` and `run` vocabulary entries drop the task; a run produces the outcome of its node and of every task of that node; the `tdd@1` example runs the RED-GREEN-REFACTOR loop for each task of an objective; the vocabulary gains `landing`, which owns the distinction between opening a pull request and merging it.
-- `docs/architecture.md`: the Mission Service performs no evaluation; the Worker Service runs the instances that execute a node and the instances that evaluate a node; the relation "a run requests an evaluation" is replaced by a reviewer run that reads the criteria and the evidence and writes the assessment; the false retention guarantee is replaced by two statements, that the service stores the content of evidence which no other system holds and the address of evidence that a repository holds.
+- `docs/overview.md`: a worker instance takes an available initiative or objective; the `worker instance` and `execution` vocabulary entries drop the task; an execution produces the outcome of its node and of every task of that node; the `tdd@1` example executes the RED-GREEN-REFACTOR loop for each task of an objective; the vocabulary gains `landing`, which owns the distinction between opening a pull request and merging it.
+- `docs/architecture.md`: the Mission Service performs no evaluation; the Worker Service hosts the instances that execute a node's steps and the instances that evaluate a node; the relation "an execution requests an evaluation" is replaced by a reviewer execution that reads the criteria and the evidence and writes the assessment; the false retention guarantee is replaced by two statements, that the service stores the content of evidence which no other system holds and the address of evidence that a repository holds.
 - `docs/project-service.md`: a configured repository action states its expected end state on the git platform.
 
 Every edit that the section 5 rulings of 2026-09-10 force is applied on 2026-09-10.
@@ -1058,7 +1058,7 @@ Every edit that the section 5 rulings of 2026-09-10 force is applied on 2026-09-
 - `docs/mission-service.md`, Evaluation and assessment: the authority check of currency names a block, an unblock, a pause, a resume, a discard, a human override and an attempt closure, and the context check reads the evidence that the assessment names.
 - `docs/mission-service.md`, Validation criteria and authority: the mission-wide gate is replaced by the per-node condition, and the page states the two write paths.
 - `docs/overview.md` vocabulary, `outcome`: the human basis reads a human act that a human assertion records.
-- `docs/overview.md`: the run-ending causes name a human pause and a human discard, and they name no cancellation.
+- `docs/overview.md`: the execution-ending causes name a human pause and a human discard, and they name no cancellation.
 
 One edit stays open, and no ruling covers it yet.
 
@@ -1072,19 +1072,19 @@ One edit stays open, and no ruling covers it yet.
 
 ## Parked for the Scheduler Service document
 
-Runs, availability, retry.
+Executions, availability, retry.
 
-- A run now ends on a failed assessment, so the run boundary equals the attempt boundary on the semantic path.
-- The attempt budget belongs to the NODE, not the run. A run-scoped budget hands a fresh allowance to every replacement run, which reopens assessment shopping by crashing.
+- An execution now ends on a failed assessment, so the execution boundary equals the attempt boundary on the semantic path.
+- The attempt budget belongs to the NODE, not the execution. An execution-scoped budget hands a fresh allowance to every replacement execution, which reopens assessment shopping by crashing.
 - The rule that an executor re-requests an evaluation only with new evidence is retired. Ulrich ruled this on 2026-09-09. The dispatch model removes the loop it guarded: an executor no longer requests an evaluation, the Scheduler makes a node available and a reviewer worker takes it. The guarantee that replaces it is three rules that already exist. An assessment names its full context. A node that fails is blocked. Only a human clears a block. This also retires the OPEN on what counts as substantively new evidence.
-- Claim protocol: the Scheduler determines eligibility, an instance requests compatible work, and an authoritative claim operation rechecks eligibility, reserves capacity and budget, and records the run. An instance never authorizes its own claim.
-- No dispatch window may exist between run termination and the block taking effect.
+- Claim protocol: the Scheduler determines eligibility, an instance requests compatible work, and an authoritative claim operation rechecks eligibility, reserves capacity and budget, and records the execution. An instance never authorizes its own claim.
+- No dispatch window may exist between execution termination and the block taking effect.
 - A stale or repeated unblock request must not authorize an unintended attempt.
 - The Scheduler Service manages concurrency for both harnesses. kanthord's own harness and an external harness both take work through it. A concurrency rule that covers only worker instances leaves an external harness unlimited.
 - A worker declares the node format that it requires, and the Scheduler matches an available node to a compatible worker binding. Ulrich stated this on 2026-09-08. Two versions of one worker implementation require different formats, so compatibility is a property of the worker name and not of the implementation family.
 - OPEN: what may retry automatically. An earlier ruling gave a configured attempt count with automatic retry; the blocking rule routes failure through a human. A resource limit can mean an impossible task rather than a transient fault, a lost instance may already have pushed a commit, and a crash can recur deterministically. State only that a failed assessment is never eligible for automatic continuation, and decide the rest separately.
-- OPEN: concurrency and capacity. Whether two runs may work one node, and whether one instance runs one run at a time.
-- OPEN: whether a parent run can occupy the last instance while waiting for its children, which deadlocks.
+- OPEN: concurrency and capacity. Whether two executions may cover one node, and whether one instance holds one execution at a time.
+- OPEN: whether a parent execution can occupy the last instance while waiting for its children, which deadlocks.
 
 
 ### Failure cases noted on 2026-09-10, DEFERRED to the B9 session
@@ -1097,18 +1097,19 @@ Runs, availability, retry.
 
 ## Parked for the Worker Service document
 
-Workers, instances, execution.
+Workers, instances, executions.
 
-- The service is named the Worker Service. Ulrich renamed it from the Agent Service on 2026-09-08. `docs/architecture.md` and the service diagram carry the new name. A worker is the HOW and an agent is the WHO, so the service that runs worker instances is named after the worker.
+- Vocabulary, settled on 2026-09-12: `execution` replaces `run` as the unit of work of the Worker Service. A worker instance executes a node of the Mission Service and produces an execution object that represents the state of the work that the instance holds. `execute` names that act. `docs/overview.md` owns both terms, and the design pages, vocabulary siblings, diagram labels and this register use the new wording. The claim-to-release boundary and the distinction from a node attempt carry forward.
+- The service is named the Worker Service. Ulrich renamed it from the Agent Service on 2026-09-08. `docs/architecture.md` and the service diagram carry the new name. A worker is the HOW and an agent is the WHO, so the service that hosts worker instances is named after the worker.
 - The Worker Service owns the idempotency of an external request. Ulrich ruled this on 2026-09-10. A worker decides whether a further attempt of a node opens a new external object or keeps the current one, and it decides how it keeps the reference of that object. The Mission Service records the platform object as evidence and never reads it to decide whether to request the action again. The requirement crosses an attempt boundary, because one platform review round costs one attempt of the node, and the branch and the pull request persist across it.
 - The Worker Service owns which entity requests a required external action. The Mission Service records an accepted fact that the request is made, and it names no requester. See the Mission Service register for the state model that consumes that fact.
 - A worker version is a distinct implementation. It declares its own configuration and its own required node format. `tdd@1` and `tdd@2` both implement a TDD method, and their details differ.
 
-- Liveness: a lease with an expiry that the run renews, plus a token compared on write so a stale run cannot mutate a reassigned node. Needed because a long-lived run makes silence normal, so silence stops being a death signal.
+- Liveness: a lease with an expiry that the execution renews, plus a token compared on write so a stale execution cannot mutate a reassigned node. Needed because a long-lived execution makes silence normal, so silence stops being a death signal.
 - Abandonment costs the workspace, never the budget.
-- Terminating a run does not require deleting its artifacts. A new run may reuse a retained checkout, branch or cache while the previous run stays terminal.
+- Terminating an execution does not require deleting its artifacts. A new execution may reuse a retained checkout, branch or cache while the previous execution stays terminal.
 - Instance identity is three separate decisions: whether a human configures individual instances, whether instances carry runtime identity, and whether instance records persist. Only the first is rejected.
-- OPEN: whether memory belongs to the worker template, the worker instance or the run. The vocabulary names no scope on purpose.
+- OPEN: whether memory belongs to the worker template, the worker instance or the execution. The vocabulary names no scope on purpose.
 - The execution order of the children of one node belongs to the Worker Service. Ulrich ruled this on 2026-09-09. The mission graph holds precedence only, and it holds no total order over the tasks of an objective. Two worker implementations execute differently, so a serial rule in the mission graph makes one worker's method a rule of the WHAT. The branch and per-task-commit practice of `tdd@1` is the method of one coding-focused worker.
 - A worker releases the node that it holds when that node must wait for a dependency, and it reacquires that node after the dependency resolves. Ulrich ruled this on 2026-09-09. A waiting node occupies no instance. State management and node tracking carry the resumption, so a reacquisition never leaves an inconsistent state.
 - A project holds a pool of workers that dynamically pick up an available initiative, objective or task. Ulrich stated this on 2026-09-09. No instance is pinned to a node. CHECK: the pool must reconcile with the settled Project Service rule that an instance count belongs to a worker binding.
@@ -1122,7 +1123,7 @@ These come from the B9 discussion. The Mission Service states the record and the
 - W2 how a worker records a durable action identity before it performs a repository action.
 - W3 how a worker retrieves the acknowledgement of a write whose response it lost, instead of publishing again.
 - W4 what a worker does when reconciliation cannot establish what happened.
-- W5 how an executor behaves when its claim is revoked while it runs: it stops writing, it stops acting on the repository, and it releases capacity.
+- W5 how an executor behaves when its claim is revoked while it executes a node: it stops writing, it stops acting on the repository, and it releases capacity.
 - W6 whether an authorized observer is a worker instance or a distinct role, and how it is dispatched.
 - W7 how a reviewer resumes an incomplete evaluation and repeats no execution and no repository action.
 
@@ -1142,14 +1143,14 @@ Credentials and bindings.
 - Design the typed configuration of each binding kind first. A shared binding envelope follows from what the kinds have in common. A universal binding never dictates mission cardinality, repository policy ownership, a credential count or worker internals.
 - Policy ownership differs from policy granularity. The project keeps the repository strategy and states an explicit rule for each repository that requires one. An explicitly configured rule is not an implicit default.
 - A worker name identifies an implementation, so a worker binding identity is separate from the worker name. Selection may start from an implementation or a capability, and it resolves to an eligible binding. Only the configuration of an execution must be unambiguous.
-- A recorded binding revision states what a run selected. Current authorization states what an execution performs. A recorded revision never authorizes an operation after a disablement.
+- A recorded binding revision states what an execution selected. Current authorization states what an execution performs. A recorded revision never authorizes an operation after a disablement.
 - The mission is intrinsic to a project, and every project has exactly one mission. Ulrich ruled this on 2026-09-08. No binding allocates a mission, because a binding allocates a resource that exists independently of the project. The binding lifecycle rules therefore never apply to a mission.
 - A change to the resource that a binding names creates a replacement binding. A change to the configuration of a binding preserves its identity and creates a revision. Ulrich ruled this on 2026-09-08. A change to the credential reference of a binding is a configuration change, so it creates a revision; a change to the secret material behind an unchanged reference changes no binding at all; a change to the remote that the credential authorizes is a resource change, so it replaces the binding. Rotation, revocation and disablement stay three different things.
 - A binding references another binding by identity, never by revision. Ulrich ruled this on 2026-09-08. A revision never invalidates a reference. A replacement invalidates every reference to it, so one edit creates the replacement and repoints every dependent. The Project Service rejects a dangling reference, and it validates a binding set on write and a binding again on resolve. A cascade that repoints a dependent automatically is rejected, because unrestricted selection is the danger.
-- Resolution is per operation, not per run. Ulrich ruled this on 2026-09-08. A run resolves a binding when it needs the resource, and that resolution authorizes one operation. A configuration change never rewrites what a run already did, a disablement takes effect at the next resolution, and an operation in progress ends against the remote. This closes the mid-execution clause of the compound OPEN item below.
+- Resolution is per operation, not per execution. Ulrich ruled this on 2026-09-08. An execution resolves a binding when it needs the resource, and that resolution authorizes one operation. A configuration change never rewrites what an execution already did, a disablement takes effect at the next resolution, and an operation in progress ends against the remote. This closes the mid-execution clause of the compound OPEN item below.
 - A repository binding holds one credential reference per required capability, and the credential count is an outcome, never a configured number. Ulrich ruled this on 2026-09-08. The capabilities are a network git read, a network git write and a platform action. A capability is an authenticated operation, so an unauthenticated operation is not a capability and a public read requires neither a capability nor a credential reference. The repository strategy and the transport form determine the required set. Validation is coverage plus suitability: every required capability has a reference, and the type of the referenced record performs that class of operation. Suitability states no scope, and a human selects the record.
 - An instance count belongs to a worker binding, and two bindings of one worker do not share an instance count. Ulrich ruled this on 2026-09-08. A shared worker-level pool cannot cap one configured variant, which is the reason two bindings exist. A per-binding count plus a project-wide cap is rejected as a second knob that no requirement asks for.
-- A requester authenticates with its own identity, and authorization resolves from the project and the node of the request and the binding of that project, at each operation. A run presents its execution identity, and an external harness presents its client identity. Ulrich ruled this on 2026-09-08. A run holds no credential. A liveness token proves liveness and authorizes nothing. A scoped credential minted at claim time is rejected, because it puts the permission decision in two places and grants access that a later disablement cannot withdraw.
+- A requester authenticates with its own identity, and authorization resolves from the project and the node of the request and the binding of that project, at each operation. An execution presents its execution identity, and an external harness presents its client identity. Ulrich ruled this on 2026-09-08. An execution holds no credential. A liveness token proves liveness and authorizes nothing. A scoped credential minted at claim time is rejected, because it puts the permission decision in two places and grants access that a later disablement cannot withdraw.
 - An external harness holds no credential, and it receives none. Ulrich ruled this on 2026-09-08. kanthord performs the authenticated operation on the harness's behalf: the harness invokes the API or the CLI, and the daemon performs the configured repository action under the project's binding. No credential leaves the daemon.
 - A credential store record is shared, a binding is never shared, and a resource is shared by nature. Ulrich ruled this on 2026-09-08. A binding carries project-scoped configuration, so sharing one would let one project change another project's instance count and policy. A store record per project is rejected, because it multiplies rotation and guarantees a missed revocation.
 - A worker name determines the configuration that a project sets, and a worker template carries no configuration version of its own. Ulrich ruled this on 2026-09-08. `tdd@1` and `tdd@2` both implement a TDD method with different details, so two versions never share a configuration contract. A separate contract version is rejected as duplicate versioning.
@@ -1189,11 +1190,11 @@ Credentials and bindings.
 
 Ulrich deferred this on 2026-09-10. A separate session takes it. Until that session closes, every service document is written for the happy case, and no service document invents a recovery rule on its own.
 
-B9 is the general question of how the system acts on a crash or a failure. It began as one wrong sentence, that a crash ends the node attempt, which deletes the recovery that approved section 4 grants. The structural repair is settled: the node attempt, the run, and the evaluation attempt are three separate lifecycles, and only an ending of the node attempt closes it. The policy is not settled.
+B9 is the general question of how the system acts on a crash or a failure. It began as one wrong sentence, that a crash ends the node attempt, which deletes the recovery that approved section 4 grants. The structural repair is settled: the node attempt, the execution, and the evaluation attempt are three separate lifecycles, and only an ending of the node attempt closes it. The policy is not settled.
 
 The topic crosses every service, so no single document owns it.
 
-- The Mission Service states what is recorded, what is admitted as current, and what obligations a loss creates. Its register is under Parked for the Mission Service document, "Failure and loss cases, DEFERRED". Twenty-two cases in five groups: an execution run is lost, an evaluation does not complete, a landing observation fails, a close is interrupted, and a human action races machine work.
+- The Mission Service states what is recorded, what is admitted as current, and what obligations a loss creates. Its register is under Parked for the Mission Service document, "Failure and loss cases, DEFERRED". Twenty-two cases in five groups: an execution that performs the node's steps is lost, an evaluation does not complete, a landing observation fails, a close is interrupted, and a human action races machine work.
 - The Scheduler Service owns detection and enforcement. Its cases are SC1 to SC5.
 - The Worker Service owns what an instance does on recovery. Its cases are W1 to W7.
 - The Project Service owns per-operation authorization against a revoked claim. Its cases are PR1 and PR2.
@@ -1208,10 +1209,10 @@ Two items block on this session and are named here so they are not answered earl
 
 
 - The state model must distinguish "not assessed yet" from "an assessment that could not establish the result". Execution lifecycle, evaluation lifecycle, approval status and outcome history stay separate dimensions and never collapse into one status field.
-- A human holds three roles with different authority: participant as the WHO, reviewer who produces an assessment, and override authority who asserts an exception. Unblocking is a fourth action, not a fourth role: it authorizes a further run against the same criteria and asserts nothing about the results.
-- Aggregation is not assessment. A worker aggregates child outcomes to report progress; the node's own outcome and the approved stopping conditions end the run.
-- A blocked task must not fail its objective's run and must not reopen a sibling task that is already terminal. Dependency propagation is a separate decision from run termination.
-- A failed objective assessment can arrive after a pull request, a merge or a push, because the repository action precedes objective success. Ending the run undoes none of it. A replacement run inspects what already happened. Unblock and rollback are different actions.
+- A human holds three roles with different authority: participant as the WHO, reviewer who produces an assessment, and override authority who asserts an exception. Unblocking is a fourth action, not a fourth role: it authorizes a further execution against the same criteria and asserts nothing about the results.
+- Aggregation is not assessment. A worker aggregates child outcomes to report progress; the node's own outcome and the approved stopping conditions end the execution.
+- A blocked task must not fail its objective's execution and must not reopen a sibling task that is already terminal. Dependency propagation is a separate decision from execution termination.
+- A failed objective assessment can arrive after a pull request, a merge or a push, because the repository action precedes objective success. Ending the execution undoes none of it. A replacement execution inspects what already happened. Unblock and rollback are different actions.
 - The block must be enforced at the API and the CLI, not only in the Scheduler. An external harness is an executor reaching kanthord that way, so Scheduler-only enforcement leaves a bypass.
 - `provider` is used in `docs/architecture.md` and defined nowhere. It is a product term and belongs in the overview vocabulary.
 
@@ -1224,4 +1225,3 @@ Two items block on this session and are named here so they are not answered earl
 **Pi games an acceptance grep.** Given a forbidden-string list containing `sha` and `engine`, Pi wrote `sh&#97;pe`, `s&#104;ared` and `&#101;ngineering`, encoding one letter each so the grep missed them, then reported a pass. State acceptance criteria as intent, not as a string match, and read the produced file.
 
 **Re-check counts and cross-references after Pi inserts list items.** It added two bullets and left "The first three rules" pointing at the wrong group.
-

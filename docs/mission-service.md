@@ -13,7 +13,7 @@ It describes no mechanism of another service.
 
 ## Mission structure and nodes
 
-The [overview](overview.md#vocabulary) defines a mission, an initiative, an objective, a task, a run, a worker and landing.
+The [overview](overview.md#vocabulary) defines a mission, an initiative, an objective, a task, an execution, a worker, the act of executing a node and landing.
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Containment and dependency are the two edge kinds.
@@ -63,7 +63,7 @@ An initiative names no repository binding.
 A task names no repository binding, and a task acts on the repository that its objective names.
 Two objectives name the same binding or different bindings.
 An objective names any repository binding that its project holds.
-A run of an initiative derives its repositories from the objectives of that initiative.
+An execution of an initiative derives its repositories from the objectives of that initiative.
 One initiative holds work in many repositories.
 
 The mission holds no branch, no merge and no repository action.
@@ -80,7 +80,7 @@ Planning occurs outside kanthord.
 A human writes the initiatives, the objectives and the tasks in markdown.
 A human decides what the system tests, and which command verifies it.
 A human imports that plan into the Mission Service.
-A run creates no node, and a run writes no criterion.
+An execution creates no node, and an execution writes no criterion.
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.
 The node API deletes no node that holds an attempt.
@@ -175,7 +175,7 @@ An edit of a node that holds an open attempt states that its revision reaches th
 A task holds no revision of its own, exactly as a task holds no state and holds no attempt.
 The content of a task belongs to the node revision of its objective.
 An edit of a task writes a node revision of its objective.
-The run of the objective reads its tasks from the revision that its attempt pins.
+The execution of the objective reads its tasks from the revision that its attempt pins.
 
 The read of a node names the revision that each attempt pins.
 A revision that no attempt pins is visible as such.
@@ -234,7 +234,7 @@ Stored content stays retrievable.
 An address resolves while its repository holds the content.
 
 Evidence durability differs by node.
-A task commit is an internal check, and it has meaning while its objective runs.
+A task commit is an internal check, and it has meaning while a worker instance executes its objective.
 The outcome of an objective represents the outcomes of its tasks after that objective lands.
 The system guarantees no resolution of a task commit after that point.
 An initiative points at an objective commit, and an objective commit is a landed commit.
@@ -247,8 +247,8 @@ No assessment weighs the landed snapshot.
 A landing record is the observation record of a landing.
 A landing record names the external object.
 It adds the commit identities.
-An authorized observer writes a landing observation, because that observation happens after the run releases.
-A run submits the evidence of its own node and the evidence of the tasks of that node.
+An authorized observer writes a landing observation, because that observation happens after the execution releases.
+An execution submits the evidence of its own node and the evidence of the tasks of that node.
 Each submission carries a valid execution identity.
 A late submission never becomes current because it arrives last.
 
@@ -281,11 +281,11 @@ The readiness condition of Outcome and completion admits a reviewer claim.
 An executor requests no evaluation.
 A reviewer worker is a worker binding of its project.
 
-The worker that executes a node never writes the assessment of that node.
+The worker that executes a node's steps never writes the assessment of that node.
 The Mission Service supplies the criteria and the evidence.
 The executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 That separation is a separation of duties, and it is not independent verification.
-The run of an objective writes the assessment of each task of that objective.
+The execution of an objective writes the assessment of each task of that objective.
 A task assessment carries no separation of duties.
 A task assessment names the node revision of its objective, because a task holds no revision of its own.
 The independent review sits at the node whose outcome persists.
@@ -333,17 +333,17 @@ An attempt closure produces the outcome, and the Mission Service writes it on th
 ### State of a node
 
 The state set covers an initiative and an objective.
-A task holds no state, and the worker manages the state of a task inside its run.
+A task holds no state, and the worker instance manages the state of a task inside its execution.
 The set holds twelve states.
 
 - **Pending**: A node of the start-dependency closure of this node holds no current successful outcome.
   No claim holds the node.
 - **Available**: Every node of that closure holds a current successful outcome, and execution requires further work.
   No claim holds the node.
-- **Executing**: An execution run holds the claim.
+- **Executing**: A worker instance holds the claim to execute the node's steps.
 - **Waiting**: The execution of the open attempt requires no further work.
   No claim holds the node.
-- **Evaluating**: A reviewer run holds the claim.
+- **Evaluating**: A reviewer execution holds the claim.
 - **Blocked**: The attempt closes on a condition, and a human unblock authorizes the next attempt.
   A condition follows the evaluation, except the human block of a paused node.
   No claim holds the node.
@@ -370,13 +370,13 @@ The worker handles the detail of that state.
 
 ### Attempt
 
-An attempt is one try at a node, and it spans every run, every observation and every evaluation of that try.
+An attempt is one try at a node, and it spans every execution, every observation and every evaluation of that try.
 At most one attempt of a node is open.
 A node that starts no work holds no attempt, and its attempt counter reads 0.
 The first claim of the node opens attempt 1, and a human unblock opens the next attempt.
-A run and an evaluation attempt pin the attempt that they start under.
+An execution and an evaluation attempt pin the attempt that they start under.
 Every record names its attempt, and it stays the record of that attempt forever.
-An attempt closure ends every run and every evaluation attempt in flight under that attempt.
+An attempt closure ends every execution and every evaluation attempt in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
 A closed attempt never reopens.
 An opening and an attempt closure are separate acts.
@@ -432,7 +432,7 @@ That outcome records the stopping reason of the external action and asserts that
 
 ### Task outcomes
 
-A run of an objective writes the outcome of each task alongside the task assessment that Evaluation and assessment requires.
+An execution of an objective writes the outcome of each task alongside the task assessment that Evaluation and assessment requires.
 A task outcome carries the commit of that task inside the branch of the objective as its evidence.
 The readiness condition enforces the task-outcome obligation on the ordinary path.
 Every attempt closure owes the outcome of each task of the node.
@@ -469,7 +469,7 @@ Otherwise the start-dependency closure sends the node to `Available` when it hol
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
 | `Executing -> Available` | Release; execution requires further work; closure holds | No effect | None |
 | `Executing -> Pending` | Release; execution requires further work; closure does not hold | No effect | None |
-| `Executing -> Paused` | Human holds the node; run stops | Stays open | None |
+| `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Waiting -> Evaluating` | Reviewer claim; readiness condition holds | No effect | None |
@@ -479,7 +479,7 @@ Otherwise the start-dependency closure sends the node to `Available` when it hol
 | `Evaluating -> Completed` | Current passing assessment; node requires no external action | Closes | Outcome |
 | `Evaluating -> External.Requested` | Current passing assessment stands; accepted fact establishes the request for the required external action | No effect | Assessment |
 | `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
-| `Evaluating -> Paused` | Human holds the node; reviewer run stops | Stays open | None |
+| `Evaluating -> Paused` | Human holds the node; reviewer execution stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Blocked -> Available` | Human unblock; closure holds | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
@@ -596,7 +596,7 @@ A sibling is unaffected.
 
 A block exists for an initiative and for an objective.
 A task is never blocked, because Outcome and completion states that a task holds no state.
-The run of the objective drives every task lifecycle.
+The execution of the objective drives every task lifecycle.
 
 The transition that reaches `Blocked` closes the attempt and sets the state in one transaction.
 A claim serializes with that transaction, so the Mission Service holds no dispatch window.
@@ -613,7 +613,7 @@ A block of a node whose attempt counter reads 0 takes no effect on that counter.
 The unblock of that node clears no attempt and opens none.
 The first claim of the node opens attempt 1.
 
-The human block closes the attempt, so the next attempt executes again.
+The human block closes the attempt, so a worker instance executes the node again under the next attempt.
 The records of the closed attempt stay.
 The effects on a repository and on a provider stay.
 A human who keeps the attempt resumable leaves the node in `Paused`.
@@ -654,14 +654,14 @@ A human who redirects a node that holds an open attempt pauses the node, blocks 
 
 Outcome and completion owns the routing of the opened attempt to `Available` or to `Pending`.
 
-The next run reads the node revision that its attempt pins.
+The next execution reads the node revision that its attempt pins.
 It reads the outcome of the cleared attempt and the cause that the outcome names.
 It reads the unblock record of its attempt.
 A read of a record of a closed attempt migrates nothing.
 
 The external conversation stays with its provider.
 The Mission Service copies no external content.
-The next run fetches that content through the external object.
+The next execution fetches that content through the external object.
 
 The actor of an unblock is a human.
 That human carries an account username.
@@ -680,7 +680,7 @@ The human takes that responsibility.
 
 ### The enforcement
 
-The claim operation refuses a claim of a blocked node, for an execution run and for a reviewer run, on both harnesses.
+The claim operation refuses a claim of a blocked node, whether the claim is to execute the node's steps or to evaluate the node, on both harnesses.
 
 An execution submission or an evaluation submission that names a closed attempt never becomes current because it arrives after the closure.
 Evaluation and assessment owns that rule.
@@ -710,11 +710,11 @@ A node whose attempt requests no external action returns none.
 - **assessment**: The record of one evaluation of one evidence set against the criteria of one node revision.
   An assessment weighs the evidence against the criteria of the node revision that it names.
 - **asserted result**: The result that an outcome asserts, separately from its stopping reason.
-- **attempt**: One try at a node across its runs, observations and evaluations.
+- **attempt**: One try at a node across its executions, observations and evaluations.
   The first claim opens attempt 1, and a human unblock opens the next attempt.
 - **attempt counter**: The per-node ordinal that names the attempt of a record.
   The attempt counter reads 0 when the node starts no work.
-- **attempt closure**: The act that ends an attempt and every run and evaluation attempt in flight under it.
+- **attempt closure**: The act that ends an attempt and every execution and evaluation attempt in flight under it.
 - **basis**: The assessment or human assertion that an outcome names as its basis.
 - **block condition**: A condition that closes an attempt and reaches `Blocked`.
 - **node revision**: One version of the whole content of a node.

@@ -51,17 +51,18 @@ A relation names what one part of the architecture does with another part.
 The Relations section of [architecture.md](viewer.html?p=architecture.md) holds the relations of this design.
 One relation reads as follows.
 
-- A run writes evidence to the Mission Service.
+- An execution writes evidence to the Mission Service.
 
-## reviewer run
+## reviewer execution
 
-A run that evaluates a node. A run that executes a node never writes the assessment of that node.
+An execution whose worker instance evaluates a node.
+The worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation.
 - A `reviewer@1` instance takes an available objective from the Scheduler Service.
-- The instance creates a run, and that run is the reviewer run.
-- The reviewer run reads the validation criteria and the evidence from the Mission Service.
-- The reviewer run writes the assessment to the Mission Service.
+- The instance produces an execution, and that execution is the reviewer execution.
+- The reviewer execution reads the validation criteria and the evidence from the Mission Service.
+- The reviewer execution writes the assessment to the Mission Service.
 
 ## telemetry
 
@@ -75,7 +76,7 @@ An operational record of what the system did.
 
 `architecture.md` names two credentials in its relations.
 
-- **a repository credential**, which a run uses
+- **a repository credential**, which an execution uses
 - **a provider credential**, which the Worker Service uses
 
 The type of a credential is a separate matter, and no approved page closes that set.

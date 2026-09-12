@@ -74,13 +74,13 @@ The Project Service enforces system authorization, and it records credential aut
 The boundary is the authorization of an operation, and it is not the custody of bytes.
 An agent that never reads a key still uses an authenticated tool.
 A requester presents its identity when it requests an operation.
-A run presents its execution identity, and an external harness presents its client identity.
+An execution presents its execution identity, and an external harness presents its client identity.
 The protected facility resolves that identity to the project and to the node of the request.
 The facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
 No credential leaves the daemon.
-A run holds no credential, and an external harness holds no credential.
-A liveness token proves that a run is live, and it authorizes no operation.
+An execution holds no credential, and an external harness holds no credential.
+A liveness token proves that an execution is live, and it authorizes no operation.
 A credential store holds one record for a secret, and a binding names that record.
 A credential store record serves more than one project.
 Each project holds its own binding that names that record.
@@ -115,12 +115,12 @@ A revision never invalidates a reference to its binding.
 A replacement invalidates every reference to the binding that it replaces.
 An edit that replaces a binding repoints every dependent binding in that same edit.
 The Project Service rejects a binding set that references a binding which does not exist.
-The Project Service validates a binding set when a project writes it, and it validates a binding again when a run resolves it.
+The Project Service validates a binding set when a project writes it, and it validates a binding again when an execution resolves it.
 Local disablement, upstream revocation, rotation, expiry and OAuth refresh are five different changes.
-A run resolves a binding at the moment that it needs the resource.
+An execution resolves a binding at the moment that it needs the resource.
 A resolution authorizes one operation, and the next operation resolves the binding again.
-A run records the binding revision that it resolves.
-A recorded revision states what a run selected.
+An execution records the binding revision that it resolves.
+A recorded revision states what an execution selected.
 Current authorization states what an execution performs.
 A recorded revision never authorizes an operation after a disablement.
 A disablement takes effect at the next resolution.

@@ -48,7 +48,7 @@ The bindings that one project holds.
 A project binds two repositories, one `tdd@1` worker and two provider accounts.
 The worker binding holds one entry for each agent of `tdd@1`, and each entry names a provider account binding by identity.
 The Project Service rejects the set when it references a binding that does not exist.
-The Project Service validates the set when the project writes it, and it validates a binding again when a run resolves it.
+The Project Service validates the set when the project writes it, and it validates a binding again when an execution resolves it.
 
 ## revision
 
@@ -58,7 +58,7 @@ A worker binding holds one entry that names a provider account binding and a mod
 The project changes the model identifier.
 The identity of the binding stays, and the change creates a revision.
 Every reference to that binding stays valid, because a reference never names a revision.
-A run that resolves that revision records it.
+An execution that resolves that revision records it.
 A change to the credential reference of the binding creates a revision too.
 
 ## replacement binding
@@ -121,16 +121,16 @@ Coverage and suitability are the whole validation of a credential reference.
 The holding of secret material behind a protected facility.
 
 The credential store holds an SSH key behind the protected facility.
-A run requests a network git write.
+An execution requests a network git write.
 The facility checks the binding of the project, then it consults custody.
-No credential leaves the daemon, so the run holds no credential.
+No credential leaves the daemon, so the execution holds no credential.
 Holding the repository binding does not confer custody of the key.
 
 ## protected facility
 
 The component that secret material sits behind.
 
-A run presents its execution identity and requests a platform action.
+An execution presents its execution identity and requests a platform action.
 The protected facility resolves that identity to the project and to the node of the request.
 The facility checks the binding of that project for the requested operation.
 The facility consults custody after that check, so a refusal never reaches custody.
@@ -171,10 +171,10 @@ A record that holds an API key of a model provider names the account at that pro
 
 ## execution identity
 
-The identity that a run presents.
+The identity that an execution presents.
 
-A `tdd@1` worker instance takes an objective, and it creates a run.
-That run holds its own execution identity, and it presents that identity for a network git write.
+A `tdd@1` worker instance executes an objective and produces an execution object.
+That execution holds its own execution identity, and the instance presents that identity for a network git write.
 The protected facility resolves that identity to the project and to the node of the request.
 The record of the operation names the execution identity.
 
@@ -185,30 +185,30 @@ The identity that an external harness presents.
 `claude-code` requests a platform action through the API, and it presents its client identity.
 The protected facility resolves that identity to the project, then it checks the binding.
 The external harness holds no credential.
-`project-service.md` names the execution identity of a run and the client identity of an external harness.
+`project-service.md` names the execution identity of an execution and the client identity of an external harness.
 
 ## liveness token
 
-The token that proves that a run is live.
+The token that proves that an execution is live.
 
-A run presents a liveness token, and the token proves that the run is live.
+An execution presents a liveness token, and the token proves that the execution is live.
 The token authorizes no operation.
 The protected facility still checks the binding of the project for the requested operation.
 
 ## resolution
 
-One act of a run that resolves a binding for one operation.
+One act of an execution that resolves a binding for one operation.
 
-A run needs a network git write, and it resolves the repository binding at that moment.
+An execution needs a network git write, and it resolves the repository binding at that moment.
 That resolution authorizes one operation, and the next operation resolves the binding again.
-The run records the binding revision that it resolves.
+The execution records the binding revision that it resolves.
 A local disablement takes effect at the next resolution.
 
 ## expected end state
 
 The state that a configured repository action states on the git platform.
 
-Under a repository strategy that requires a pull request for every change, a run opens a pull request.
+Under a repository strategy that requires a pull request for every change, an execution opens a pull request.
 The expected end state of that action is the merge of that pull request.
 Under a repository strategy that requires a merge and push, the expected end state is the push to main.
 [overview.md](viewer.html?p=overview.md) owns landing, which is the observed expected end state.
