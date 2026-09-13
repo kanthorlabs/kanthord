@@ -196,7 +196,7 @@ The set is closed and it holds two values.
 - **Discarded**
 
 A terminal node is not editable.
-A human override corrects the recorded result of a terminal node, and the node keeps its terminal state.
+No human override reaches a terminal node, and follow-up work is a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
 ## assessment
@@ -281,36 +281,28 @@ The set is closed and it holds two values.
   Every objective belongs to exactly one initiative.
   An initiative is a root of the graph.
 - **dependency**: A dependency relates an initiative or an objective.
-  The dependency entry below gives its own two kinds.
 
 Containment descends from a parent to a child, so a containment edge alone forms no cycle.
-An edge kind is not a dependency kind.
-The two sets are different.
 
 ## dependency
 
-A graph relation that controls the availability of a node or the timing of its repository actions.
-A dependency carries a kind.
-The set of kinds is closed and it holds two values.
-
-- **start dependency**: A start dependency makes its dependent unavailable until the node that it names holds a current successful outcome.
-  A human override that asserts success satisfies it.
-  It establishes only what the criteria of the named node establish.
-- **landing dependency**: A landing dependency never makes its dependent unavailable.
-  It delays every repository action in the subtree of its dependent until the node that it names lands.
-  An observed landing satisfies it, and a human override never satisfies it.
-  Preparation, local validation and the successful outcome of a task proceed while it waits.
-
-Nothing else is a dependency kind.
+A graph relation that makes its dependent unavailable until the node that it names is `Completed`.
+The term names no closed set.
 A dependency relates an initiative or an objective, and a task carries no dependency edge.
-A start dependency determines availability, and a landing dependency gates an operation.
+A dependency determines availability.
 
-Take a second objective "Add password reset email" that depends on "Add password reset".
+The objective "Add password reset email" depends on "Add password reset".
+"Add password reset email" stays `Pending` until "Add password reset" is `Completed`.
+A human override of "Add password reset" to `Completed` releases it as well.
+A human adds a dependency to "Add password reset email" while no live claim holds it, and the Mission Service reroutes it at once.
+The same addition is refused while a `tdd@1` instance executes "Add password reset email", so the human pauses the node first.
 
-- Under a start dependency, "Add password reset email" stays unavailable until "Add password reset" holds a current successful outcome.
-- Under a landing dependency, "Add password reset email" stays available.
-  Its repository actions wait for the merge of "Add password reset".
-  Another dependency of that objective still makes it unavailable.
+## dependency closure
+
+The set of nodes that the dependencies of a node and of its ancestors name.
+The term names no closed set.
+The initiative "Account recovery" depends on the initiative "Onboarding", and its objective "Add password reset" depends on "Add recovery codes".
+The dependency closure of "Add password reset" holds "Add recovery codes" and "Onboarding", and it holds no node of the subtree of either.
 
 ## external object
 
@@ -449,7 +441,7 @@ A human keeps the plan of the initiative in markdown, and one import set holds t
 
 - `add-password-reset.md`, the objective
 - `add-reset-token-expiry.md`, a task of that objective
-- `add-password-reset-email.md`, an objective that names `add-password-reset.md` as a start dependency
+- `add-password-reset-email.md`, an objective that names `add-password-reset.md` as a dependency
 
 The import resolves the name `add-password-reset.md` inside this set.
 The omission of a file from this set requests a retirement of its node within the declared scope.

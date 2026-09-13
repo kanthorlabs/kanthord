@@ -98,18 +98,20 @@ A human unblocks "Add password reset" into its next attempt.
 
 Landing is the observed expected end state of every configured repository action of a node.
 The term names no closed set.
-Execution 1 opens the pull request of "Add password reset", then releases. A human merges that pull request. An observer records the landing.
+A passing assessment of "Add password reset" precedes the request of its pull request. A human merges that pull request. An observer records the landing.
 
 ## worker
 
 A worker is the HOW: a template that defines how executions happen.
+A worker declares the node states that its instances claim.
 The term names no closed set.
 `tdd@1` is one example among several workers.
-For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
+For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
+`tdd@1` declares `Available`, and `reviewer@1` declares `Waiting`.
 
 ## worker instance
 
-A worker instance is a background instance of one worker that takes an available initiative or objective.
+A worker instance is a background instance of one worker that claims an initiative or an objective in a node state that its worker declares.
 The term names no closed set.
 A `tdd@1` instance claims the objective "Add password reset". Execution 1 starts.
 
@@ -138,7 +140,8 @@ The external harness `claude-code` takes "Add password reset" through a targeted
 
 An agent is an automated participant responsible for carrying out steps as the WHO.
 The term names no closed set.
-The worker supplies agents. A `tdd@1` execution repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
+The worker supplies agents. A `tdd@1` execution repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
+A `reviewer@1` execution evaluates the node with `re@1`.
 
 ## human participant
 
@@ -153,7 +156,13 @@ The term names no closed set.
 The [Project Service Vocabulary](viewer.html?p=project-service.vocabulary.md#binding-kind) owns the four binding kinds and their values.
 A project holds a repository binding for the repository that the objective "Add password reset" belongs to.
 The binding permits three capabilities.
-The approved pages name no cardinality for the binding.
+The Project Service vocabulary holds the cardinality of each binding kind.
+
+## provider
+
+A provider is a large language model provider that serves the models that the agents of a worker use.
+The term names no closed set.
+The project of "Account recovery" binds two provider accounts at one provider, and the Worker Service reaches that provider for each model inference call.
 
 ## provider account
 
@@ -167,13 +176,20 @@ A deliverable is what a project ships.
 The term names no closed set.
 A project delivers coding work.
 
+## tool
+
+A tool is a capability that an execution uses to perform an operation.
+The term names no closed set.
+An execution of `tdd@1` uses git as a tool to create the branch of "Add password reset" and one commit for each task.
+
+## memory
+
+Memory is information that the HOW retains because a later step can depend on an earlier step.
+The term names no closed set.
+An execution of `tdd@1` retains the failing test of the RED step of a task, because the GREEN step makes that test pass.
+
 ## prompt
 
 A prompt is instructions that guide an agent's work.
 The term names no closed set.
 Each sub-agent has its own personal prompt that defines its responsibilities and contribution to the WHAT.
-
-## Terms that still need an entry
-
-- memory: no approved page gives a concrete example of information that the HOW retains because a later step can depend on it.
-- tool: no approved page names a concrete tool.

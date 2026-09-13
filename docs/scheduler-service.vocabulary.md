@@ -39,8 +39,8 @@ The set is closed and holds two values.
 - **executor**
 - **reviewer**
 
-The method of `tdd@1` gives worker binding `tdd-main` the executor role.
-The method of `reviewer@1` gives its worker binding the reviewer role.
+`tdd@1` declares `Available`, which gives worker binding `tdd-main` the executor role.
+`reviewer@1` declares `Waiting`, which gives its worker binding the reviewer role.
 
 ## scheduling processor
 
@@ -88,10 +88,6 @@ The release names the terminal state of that child set as its wait fact.
 The Scheduler writes a wait record and holds the entry out of work-pull selection.
 The notification for the last objective's terminal state satisfies the wait.
 A later work pull takes "Account recovery".
-
-A `tdd@1` instance releases "Add recovery codes" at its pull request, because a landing dependency of that objective names "Add password reset" and that objective has not landed.
-The release names the landing of every node that a landing dependency of "Add recovery codes" or of an ancestor names.
-The landing observation of pull request 42 of "Add password reset" satisfies the wait, and a later work pull takes "Add recovery codes".
 
 ## observation obligation
 

@@ -37,6 +37,8 @@ The container view shows the external systems around the daemon. The set is clos
 - **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the daemon
 - **a large language model provider**, which serves the models that the Worker Service uses
 
+[overview.md](viewer.html?p=overview.md) owns `provider`, and the overview vocabulary holds its example.
+
 ## daemon
 
 The daemon is one process, and it holds the five services. A client reaches it through the API or the CLI.
@@ -59,8 +61,8 @@ One relation reads as follows.
 An execution whose requester evaluates a node.
 The worker instance that executes a node's steps never writes the assessment of that node.
 
-- A project binds `reviewer@1`, a worker whose method is evaluation.
-- A `reviewer@1` instance takes an available objective from the Scheduler Service.
+- A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting`.
+- A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.
 - The instance produces an execution, and that execution is the reviewer execution.
 - The reviewer execution reads the validation criteria and the evidence from the Mission Service.
 - The reviewer execution writes the assessment to the Mission Service.
@@ -94,9 +96,3 @@ What the container view shows. A service is not a container.
 - The daemon is a container, and it holds the five services.
 - The CLI client of the daemon is a container.
 - A service boundary separates authority inside the daemon, so it describes no container.
-
-## Terms that still need an entry
-
-`architecture.md` uses these terms, and no approved page establishes a value or an example.
-
-- provider. The page names the providers that a project permits, and no approved page defines the word.

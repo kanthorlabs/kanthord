@@ -26,36 +26,28 @@ A dependency relates an initiative or an objective, in any combination of the tw
 A task carries no dependency edge.
 A task is a unit of execution inside a worker.
 A task is never a unit of scheduling.
-A dependency carries a kind.
-A start dependency and a landing dependency are the two kinds.
-
-A start dependency makes its dependent unavailable until the node that it names holds a current successful outcome.
-A human override that asserts success satisfies a start dependency.
-A start dependency establishes only what the criteria of the node that it names establish.
-
-A landing dependency never makes its dependent unavailable.
-A landing dependency delays every repository action in the subtree of its dependent until the node that it names lands.
-An observed landing satisfies a landing dependency.
-A human override never satisfies a landing dependency.
-Preparation, local validation and the successful outcome of a task proceed while a landing dependency waits.
-A wait on a landing dependency is never an assessment that does not pass.
-A landing dependency gates an operation.
-Each harness enforces that gate when a client requests the operation.
+A dependency makes its dependent unavailable until the node that it names is `Completed`.
+A human override that asserts success satisfies a dependency, because it makes the named node `Completed`.
+A dependency establishes only what the criteria of the node that it names establish.
 
 A node waits for the nodes that its own dependencies name.
 A node waits for the nodes that the dependencies of its ancestors name.
-A dependency propagates to both subtrees.
-Every node in the subtree of the dependent waits for every node in the subtree of the named node.
+The dependency closure of a node is the set of those nodes, and it holds no node of their subtrees.
 The Mission Service checks that closure for a cycle.
 It rejects a write that creates a cycle, at construction and at every update.
 A containment edge alone forms no cycle, because containment descends from a parent to a child.
-A start dependency and a reverse landing dependency between two nodes form a cycle.
 
 An unsatisfied dependency never blocks a node.
-A start dependency determines availability, and Block and unblock owns the block.
+A dependency determines availability, and Block and unblock owns the block.
 
-A node lands when every configured repository action in its subtree reaches its expected end state.
-A dependent releases on the observed state, and never on the completion of the local action.
+A dependency edit acts on the live graph at once.
+A dependency addition requires that no live claim holds the dependent or a node in its subtree.
+A dependency removal requires a dependent that is not terminal, because a removal never makes a closure stop holding.
+This condition applies on both write paths, and it replaces the import condition for a dependency edit.
+In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it publishes the notification.
+The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing and the resume precedence, and nowhere else.
+An addition on a node whose execution ended changes no routing of that node, because the gate gates the start.
+
 A landing observation is a platform action, and it uses the credential of a repository binding.
 
 An objective names exactly one repository binding of its project.
@@ -139,7 +131,7 @@ The import condition of a task is the condition of its objective.
 A task modification requires its objective to hold `Pending` or `Available` and its attempt counter to read 0.
 This rule covers a create, an update and a delete of a task.
 A containment move reads the condition on the moved node, the old parent and the new parent.
-A dependency edit reads the condition on the dependent node, and never on the node that the dependency names.
+A dependency edit follows the condition of Mission structure and nodes, and it never reads the node that the dependency names.
 A human who stops the work of a node discards that node.
 The discard closes the attempt, and the closure writes the outcome and the task outcomes that it owes.
 A human who also releases the dependents edits each dependent and removes the dependency.
@@ -346,9 +338,9 @@ The state set covers an initiative and an objective.
 A task holds no state, and the worker instance manages the state of a task inside its execution.
 The set holds twelve states.
 
-- **Pending**: A node of the start-dependency closure of this node holds no current successful outcome.
+- **Pending**: A node of the dependency closure of this node is not `Completed`.
   No claim holds the node.
-- **Available**: Every node of that closure holds a current successful outcome, and execution requires further work.
+- **Available**: Every node of that closure is `Completed`, and execution requires further work.
   No claim holds the node.
 - **Executing**: A worker instance or an external harness holds the claim to execute the node's steps.
 - **Waiting**: The execution of the open attempt requires no further work.
@@ -369,7 +361,8 @@ The set holds twelve states.
 `Completed` and `Discarded` are the two terminal states.
 A terminal state opens no further attempt, and nothing moves a node out of it.
 A terminal node is not editable.
-A human override corrects the recorded result of a terminal node, and the node keeps its terminal state.
+No human override reaches a terminal node, and no correction reaches its outcome.
+A human who needs further work on a completed node adds a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
 Three conditions reach `Blocked`, and each follows the evaluation except the human block.
@@ -433,10 +426,10 @@ An outcome record holds these fields.
 - The previous outcome, when the outcome corrects one.
 
 An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
-An outcome that asserts that the results do not meet the criteria names an assessment as its basis, or corrects an outcome that names one.
+An outcome that asserts that the results do not meet the criteria names an assessment as its basis.
 A human override that asserts success writes a successful outcome whose basis is a human assertion.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
-That outcome releases no start dependency.
+A discarded node satisfies no dependency.
 An `External.Failed` observation ends the attempt with an outcome whose basis names the passing assessment.
 That outcome records the stopping reason of the external action and asserts that nothing is established, because the expected end state is absent.
 
@@ -451,8 +444,8 @@ It uses the closing event as the stopping reason.
 
 ### State transitions
 
-The closure in the transition events is the start-dependency closure of the node.
-It holds when every node of that closure holds a current successful outcome.
+The closure in the transition events is the dependency closure of the node.
+It holds when every node of that closure is `Completed`.
 Each row names the event, the effect on the attempt and the record that the transition writes.
 A node reaches a terminal state only when no external request of its open attempt is unresolved.
 A request is unresolved when an actor requests it and no accepted observation establishes an end state.
@@ -462,23 +455,22 @@ A human resume reads the request of the attempt and its accepted observations fi
 A live request sends the node to `External.Requested`.
 A resolved request sends the node to `External.Success` or to `External.Failed`, according to its observed end state.
 Otherwise the execution-end fact of the attempt sends the node to `Waiting`.
-Otherwise the start-dependency closure sends the node to `Available` when it holds, or to `Pending` when it does not hold.
+Otherwise the dependency closure sends the node to `Available` when it holds, or to `Pending` when it does not hold.
 
 | Transition | Event | Attempt | Record |
 | --- | --- | --- | --- |
-| `Pending -> Available` | Last node of the closure reaches a current successful outcome | No effect | None |
+| `Pending -> Available` | The closure holds: the last named node enters `Completed`, or a dependency removal | No effect | None |
 | `Pending -> Paused` | Human holds the node | Stays open | None |
 | `Pending -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Pending -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Available -> Executing` | Execution claim | Opens the attempt when the node holds none; no effect otherwise | None |
 | `Available -> Waiting` | Accepted fact establishes that the execution of the attempt requires no further work | No effect | None |
-| `Available -> Pending` | Human override corrects a prerequisite outcome to a failure | No effect | None |
+| `Available -> Pending` | Dependency addition; the closure does not hold | No effect | None |
 | `Available -> Paused` | Human holds the node | Stays open | None |
 | `Available -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Available -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
-| `Executing -> Available` | Release; execution requires further work; closure holds | No effect | None |
-| `Executing -> Pending` | Release; execution requires further work; closure does not hold | No effect | None |
+| `Executing -> Available` | Release; execution requires further work | No effect | None |
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -519,19 +511,18 @@ The internal case holds nine states.
 
 ```mermaid
 stateDiagram-v2
-    Pending --> Available: Prerequisites hold
+    Pending --> Available: Closure holds
     Pending --> Paused: Human hold
     Pending --> Completed: Success override
     Pending --> Discarded: Human discard
     Available --> Executing: Execution claim
     Available --> Waiting: No further work
-    Available --> Pending: Prerequisite correction
+    Available --> Pending: Dependency addition
     Available --> Paused: Human hold
     Available --> Completed: Success override
     Available --> Discarded: Human discard
     Executing --> Waiting: Release, no further work
-    Executing --> Available: Release, closure holds
-    Executing --> Pending: Release, closure fails
+    Executing --> Available: Release, further work
     Executing --> Paused: Human hold
     Executing --> Completed: Success override
     Executing --> Discarded: Human discard
@@ -580,7 +571,7 @@ stateDiagram-v2
 
 ### Boundary
 
-Mission structure and nodes owns the dependency, the landing and the repository binding of a node.
+Mission structure and nodes owns the dependency and the repository binding of a node.
 Evidence owns the evidence record and its durability.
 Evaluation and assessment owns the lifecycle of an evaluation.
 Block and unblock owns the block and the unblock.
@@ -685,7 +676,7 @@ The Project Service owns how an identity is established.
 
 The eligibility of an unblock reads the state of the node alone.
 It reads no state of the parent.
-The routing of the opened attempt still reads the start-dependency closure.
+The routing of the opened attempt still reads the dependency closure.
 A content change still passes the graph validation and the authority checks.
 
 The authorization that an unblock carries asserts nothing about the results.
@@ -700,7 +691,6 @@ The claim operation refuses a claim of a blocked node, whether the claim is to e
 An execution submission or an evaluation submission that names a closed attempt never becomes current because it arrives after the closure.
 Evaluation and assessment owns that rule.
 A completed record stays valid.
-An authorized human correction of a terminal node stays permitted.
 
 An execution operation that a client requests through the API requires a live claim.
 No execution operation proceeds on a blocked node.
@@ -735,10 +725,9 @@ A node whose attempt requests no external action returns none.
 - **node revision**: One version of the whole content of a node.
   It covers the goal, the steps, the validation criteria and every structured field of the node.
 - **currency**: The property of an assessment that the context check, the authority check and the order check admit.
-- **dependency**: A graph relation that controls the availability of a node or the timing of its repository actions.
+- **dependency**: A graph relation that makes its dependent unavailable until the node that it names is `Completed`.
+- **dependency closure**: The set of nodes that the dependencies of a node and of its ancestors name.
 - **external object**: The Mission Service representation of one requested external action and the remote thing that serves it.
-- **start dependency**: A dependency that makes its dependent unavailable until the node it names holds a current successful outcome.
-- **landing dependency**: A dependency that delays the repository actions of its dependent until the node it names lands.
 - **human block**: The human action that blocks a paused node.
 - **landing observation**: The platform action that observes a landing.
 - **landing record**: The landing case of an observation record.
@@ -760,4 +749,4 @@ A node whose attempt requests no external action returns none.
 - **unblock record**: The record of one human unblock.
 - **terminal state**: A state that a node never leaves and that opens no further attempt.
   A terminal node is not editable.
-  A human override corrects its recorded result through a new outcome record.
+  No human override reaches it, and follow-up work is a new node.

@@ -173,7 +173,7 @@ That authorization starts at the first operation under the execution identity th
 The work pull requires a fresh instance healthcheck and fewer live executions of the binding than its instance count.
 The Worker Service produces the instance healthcheck and the compatibility declarations.
 The Scheduler selects the first entry of the project's work queue that the requester admits.
-The match reads the role of the binding, the exact worker name and the required node format of the worker.
+The match reads the node states that the worker declares, the exact worker name and the required node format of the worker.
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
 The [Mission Service](mission-service.md#validation-criteria-and-authority) owns that revision selection.
 The worker requests work and never authorizes its own claim.
@@ -181,7 +181,7 @@ Reviewer instances pull independently of instances that execute steps.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the restriction on the executing worker's choice of reviewer and reviewer instructions.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) restricts scheduling to initiatives and objectives, never tasks.
 
-An external harness holds no worker binding, worker name, node format declaration or worker instance, so it cannot pull.
+An external harness holds no worker binding, worker name, node state declaration, node format declaration or worker instance, so it cannot pull.
 It names a node and requests a targeted claim under one of its client identities, with an idempotent request identifier.
 The targeted claim passes the same node gate, its client identity's role and its execution count.
 A wait record does not gate a targeted claim, and the response carries the wait fact.
@@ -201,8 +201,6 @@ A disablement of the binding takes effect while a request waits.
 
 An instance healthcheck establishes no liveness, no idleness, no operation authorization and no proof of success.
 An unreachable provider creates no block condition and authorizes no model or provider substitution.
-The Scheduler holds no landing gate.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the landing dependency that gates an operation.
 
 ## Claims, roles and counts
 
@@ -230,16 +228,17 @@ The claim response returns these fields.
 Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.
 This covers evidence, task assessments, task outcomes, evaluation assessments and invoked repository actions.
 A retry after a lost response returns the original accepted result and creates no second execution or count.
-The request identifier of either acquisition path is scoped to the project and the requester, and it binds to the payload of the request.
+The [request identifier](mission-service.md#vocabulary) of either acquisition path is scoped to the project and the requester.
 The operation recognizes an accepted identifier before admission and returns the accepted result.
 An ended claim does not change that result.
-The same identifier with a different payload is refused.
 An acknowledgement of an ended claim restores no authority.
 A replayed delivery revives no claim.
 
-A requester holds one role for its lifetime.
-The method of a worker binding gives its role.
-The [Project Service](project-service.md#execution-configuration-and-instance-count) configures the role of each permitted client identity.
+The [Project Service](project-service.md#execution-configuration-and-instance-count) states that a requester holds one role for its lifetime.
+The node states that a worker declares give the role of its binding: `Available` gives the executor role, and `Waiting` gives the reviewer role.
+A worker declares the states of one role.
+The project configures the role of each permitted client identity.
+The [Mission Service](mission-service.md#state-transitions) owns the states that admit a claim, and a new worker declares its states without a change to a rule of the Scheduler.
 The [overview](overview.md#external-harness) defines the two client identities of an external harness.
 The Scheduler admits a steps claim from an executor and an evaluation claim from a reviewer.
 This enforces the requester separation that the [Mission Service](mission-service.md#evaluation-and-assessment) owns on both harnesses.
@@ -258,12 +257,10 @@ The Scheduler introduces no project-wide cap.
 A release ends the execution.
 The [Mission Service](mission-service.md#state-transitions) routes a release by its execution-end fact or further work and leaves the attempt open.
 A release that waits names the accepted fact that it waits for.
-That fact has four forms.
+That fact has two forms.
 
 - A terminal state of a named child set.
-- A start-dependency closure.
 - An observation of an external object.
-- The landing of every node that a landing dependency of the node or of an ancestor names.
 
 The Scheduler records the fact as a wait record and marks the entry as held out.
 It returns the node to the work queue when a notification carries that fact.
@@ -271,8 +268,6 @@ Writing the wait record reads the current accepted facts at the release.
 A fact that already holds satisfies the wait at once.
 The write serializes with notification processing for the project, so no intervening fact disappears.
 The Scheduler maps a child change to its parent's wait from the graph that it reads from the Mission Service.
-It evaluates a landing from the accepted landing observations that the Mission Service publishes, and never from a state or an outcome.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the landing and what satisfies a landing dependency.
 A graph change that changes the named set rechecks the wait.
 The wait record adds no Mission state and gates no admission.
 The work-pull path rechecks the wait fact at the claim.
@@ -282,7 +277,7 @@ A waiting parent holds no instance while it waits.
 The [Mission Service](mission-service.md#state-transitions) owns the human pause, discard and success override transitions that end a live claim.
 Those transitions also determine whether the attempt closes or stays open.
 Its success override from `Executing` ends a live steps claim.
-A success override of a node with a live reviewer claim requires `Evaluating -> Paused` first.
+Its human pause from `Evaluating` ends a live reviewer claim.
 The Scheduler revokes the claim at the Mission transition through the same path as a loss declaration.
 It accepts the revocation before any later operation admission reads the claim state.
 The [Project Service](project-service.md#configuration-lifecycle-and-consistency) owns completion against the remote of an operation that already holds admission.

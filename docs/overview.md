@@ -38,7 +38,7 @@ Only a human can override an outcome to make a bypass exception.
 A human override produces a new outcome that carries the human assertion.
 kanthord keeps the previous outcome as a reference.
 A terminal state never reopens and never repeats.
-A human override adds a new outcome and never restarts a terminal execution.
+A human override never reaches a terminal node, and follow-up work is a new node.
 This authority differs from the human role that carries out steps as the WHO.
 
 ## kanthord's own harness
@@ -58,7 +58,7 @@ A specific agent or a human participant supplies the WHO and takes responsibilit
 
 A project binds each worker that it permits.
 A project configures how many instances of each worker binding are available.
-A worker instance takes an available initiative or objective and executes that node.
+A worker instance claims an initiative or an objective in a node state that its worker declares, and it executes that node.
 The instance produces an execution object each time it takes a node.
 The execution is the unit of work that the Scheduler Service records, and it represents the state of the work that the instance holds.
 The Worker Service hosts the executions of kanthord's own harness.
@@ -79,7 +79,7 @@ The repository strategy belongs to the project whichever harness executes the wo
 Whichever harness executes the work follows that strategy.
 An execution follows the project's repository strategy when it acts on a repository.
 Work on a repository requires a configured repository strategy, because configuration supplies the project's policy without an implicit default.
-An execution of an objective performs the configured repository action before a successful outcome of that objective.
+An actor requests the configured repository action of an objective after a passing assessment and before a successful outcome of that objective.
 
 Completing the configured repository action, completing all tasks, and achieving the objective are three different conditions.
 The shared outcome rules govern repository action failures.
@@ -87,14 +87,15 @@ The shared outcome rules govern repository action failures.
 ### Worked example: `tdd@1`
 
 `tdd@1` is one example among several workers.
-For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1` and `te@1`.
+For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
 
 For an objective, an execution of `tdd@1` creates a branch and makes a separate commit for each task on that branch.
 These branch and commit practices apply to `tdd@1`, not to every worker.
 
-Once all tasks of the objective are complete, an execution of `tdd@1` performs the configured repository action.
-Under a repository strategy that requires a pull request for every change, an execution of `tdd@1` opens a pull request on the git platform.
-Under a repository strategy that requires a merge and push, an execution of `tdd@1` merges the branch and pushes to main.
+Once all tasks of the objective are complete, an execution of `tdd@1` releases the objective for its evaluation.
+After a passing assessment, an actor requests the configured repository action.
+Under a repository strategy that requires a pull request for every change, that action opens a pull request on the git platform.
+Under a repository strategy that requires a merge and push, that action merges the branch and pushes to main.
 
 Opening a pull request does not merge it.
 Evaluation determines whether the results meet the objective's validation criteria.
@@ -141,7 +142,8 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 - **worker**: The HOW: a template that defines how executions happen.
   It includes methods, agents, tools, memory, and prompts.
   A worker name has the form `<implementation>@<version>`, and the same name always identifies the same implementation.
-- **worker instance**: A background instance of one worker that takes an available initiative or objective.
+  A worker declares the node states that its instances claim.
+- **worker instance**: A background instance of one worker that claims an initiative or an objective in a node state that its worker declares.
   A project configures how many instances of a worker binding are available.
 - **execute**: The act of a worker instance or an external harness carrying out work on a node of the Mission Service.
 - **execution**: The unit of work that the Scheduler Service records.
@@ -154,6 +156,7 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 - **human participant**: A person responsible for carrying out steps as the WHO.
 - **binding**: The record that allocates a resource to a project and permits an operation on that resource.
   A project holds more than one binding of one kind.
+- **provider**: A large language model provider that serves the models that the agents of a worker use.
 - **provider account**: An account at a large language model provider that a project binds.
 - **deliverable**: What a project ships.
 - **tool**: A capability that an execution uses to perform an operation.

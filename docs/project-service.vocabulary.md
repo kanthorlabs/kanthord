@@ -29,6 +29,18 @@ These are the capabilities that `project-service.md` names, and the page closes 
 - A commit, a branch and a merge are local, so none of them is a capability.
 - An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
 
+## transport form
+
+The transport form of a repository address determines the credential type that its network git read and write require.
+The set is closed and it holds two values.
+
+- **SSH**: A network git read and a network git write require an SSH key.
+- **HTTPS**: A network git read and a network git write require an OAuth credential or an API key of the git platform.
+
+A platform action requires an OAuth credential or an API key under both forms.
+The address `git@github.com:kanthorlabs/kanthord.git` has the SSH form, so its repository binding names an SSH key for the git read and the git write and an OAuth credential for the platform action.
+The address `https://github.com/kanthorlabs/kanthord.git` has the HTTPS form, so one OAuth credential of the git platform satisfies all three capabilities.
+
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
@@ -41,6 +53,19 @@ The kind of a binding determines its configuration, the cardinality that a proje
 
 The mission of a project is intrinsic to that project, so no binding allocates it.
 A repository binding of the objective "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
+
+## cardinality
+
+The number of bindings of one kind that a project holds for one resource.
+The set is closed for each kind and it holds four values.
+
+- **repository**: one binding for each repository that the project uses.
+- **worker**: any number of bindings of one worker, and two bindings of one worker carry different configuration.
+- **provider account**: one binding for each account at a provider.
+- **source**: one binding for each delivery source that the project accepts.
+
+The project of "Account recovery" binds two repositories, one `tdd@1` worker as `tdd-main` and two provider accounts at one provider.
+A second binding for the repository `kanthorlabs/kanthord` is refused, and a second `tdd@1` binding `tdd-experimental` with another provider account is accepted.
 
 ## binding set
 
@@ -225,7 +250,7 @@ A local disablement takes effect at the next resolution.
 
 The state that a configured repository action states on the git platform.
 
-Under a repository strategy that requires a pull request for every change, an execution opens a pull request.
+Under a repository strategy that requires a pull request for every change, the configured repository action opens a pull request.
 The expected end state of that action is the merge of that pull request.
 Under a repository strategy that requires a merge and push, the expected end state is the push to main.
 [overview.md](viewer.html?p=overview.md) owns landing, which is the observed expected end state.
@@ -236,17 +261,9 @@ Under a repository strategy that requires a merge and push, the expected end sta
 The set is closed and it holds five values.
 
 - **local disablement**: It takes effect at the next resolution. A recorded revision never authorizes an operation after it.
-- **upstream revocation**
+- **upstream revocation**: The remote withdraws the credential. A human revokes the OAuth credential of `kanthorlabs` at GitHub. The record and every binding that names it stay unchanged, the next platform action ends against the remote, and a human rotates the record.
 - **rotation**: It changes one record, and every binding that names that record stays valid.
-- **expiry**
-- **OAuth refresh**
+- **expiry**: The credential reaches its end date at the remote. The API key of a provider account expires, the next model inference call ends against the remote, and the recorded revision that an execution resolved still states what it selected.
+- **OAuth refresh**: Custody obtains a new token behind the record. The OAuth credential of `kanthorlabs` is refreshed, the reference and every binding that names it stay unchanged, and no revision is created.
 
 A change to the secret material behind an unchanged credential reference changes no binding.
-
-## Terms that still need an entry
-
-`project-service.md` owns these terms, and each one needs a value list or an example.
-
-- transport form: no approved page names a value of a transport form, and `project-service.md` enumerates none.
-- upstream revocation, expiry and OAuth refresh: `project-service.md` names each change and works no instance of it, so no example exists yet.
-- cardinality: `project-service.md` states that the kind of a binding determines the cardinality, and it names no cardinality of any kind.

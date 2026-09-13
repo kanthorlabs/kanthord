@@ -44,7 +44,7 @@ It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
 Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
-The requester that executes a node's steps never writes the assessment of that node.
+It owns the separation between the requester that executes a node's steps and the requester that evaluates the node.
 
 ### Scheduler Service
 

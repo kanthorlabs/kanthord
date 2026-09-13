@@ -22,6 +22,7 @@ Every resource that a project uses arrives as a binding.
 A binding has an identity that is unique inside its project.
 A binding has a kind.
 The kind determines the configuration that the binding holds, the cardinality that a project permits, and the validation that the configuration satisfies.
+A project holds one binding for each repository, each provider account and each delivery source that it uses, and any number of bindings of one worker.
 A binding references another binding by identity.
 A reference never names a revision.
 A project shares a resource with another project.
@@ -37,6 +38,10 @@ A network git read, a network git write and a platform action are the capabiliti
 A commit, a branch and a merge are local, so none of them is a capability.
 An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
 The repository strategy and the transport form of the repository address determine the capabilities that a repository binding requires.
+A repository address has one of two transport forms, SSH and HTTPS.
+Under the SSH form, a network git read and a network git write require an SSH key.
+Under the HTTPS form, they require an OAuth credential or an API key of the git platform.
+A platform action requires an OAuth credential or an API key under both forms.
 A repository binding holds one credential reference for each capability that it requires.
 One credential reference satisfies more than one capability.
 
