@@ -1,113 +1,201 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="1280" height="600" viewBox="0 0 1280 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="kanthord-services-title kanthord-services-desc">
-      <title id="kanthord-services-title">kanthord service diagram</title>
-      <desc id="kanthord-services-desc">Five services inside the kanthord daemon: clients reach the Project, Mission and Tracking Services; the Scheduler Service reads the graph and outcomes from the Mission Service; the Worker Service takes an available level from the Scheduler, reads resources and credentials from the Project Service, writes evidence to the Mission Service, and reaches a git platform and a large language model provider; every service writes telemetry to the Tracking Service.</desc>
-      <defs>
-        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
-        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
-        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
-        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
-      </defs>
+<svg width="900" height="1760" viewBox="0 0 900 1760" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="kanthord-services-title kanthord-services-desc">
+  <title id="kanthord-services-title">kanthord service relations</title>
+  <desc id="kanthord-services-desc">Five logical services share one daemon process. Through the API or CLI, a human reaches Project and Mission, and an external harness reaches Project, Mission, Scheduler and Tracking. The harness requests a targeted claim from Scheduler and invokes a configured repository action that the daemon performs. Scheduler reads the graph and outcome record from Mission; Mission notifies Scheduler of accepted changes that can affect scheduling. Scheduler reads worker bindings, permitted client identities and their counts from Project, and uses a repository credential held there. Project reads execution claim state from Scheduler. Worker reads permitted workers and instance counts from Project and uses its provider credential; a worker instance claims a node from Scheduler through a work pull. Every service writes telemetry to Tracking. An execution reads repository strategy and permitted resources from Project, uses a repository credential held there, writes evidence to Mission and acts on a repository through the git platform. A reviewer execution also reads validation criteria, evidence, the required external actions of the attempt and its external objects from Mission, and writes an assessment there. Scheduler observes an external object on the git platform and accepts its deliveries. Worker reaches a large language model provider. Authenticated operations invoked by an external harness are performed by the daemon.</desc>
+  <defs>
+    <style>
+      text { font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #2d3142; }
+      .svc-title { font-size: 24px; font-weight: 600; }
+      .svc-name { font-size: 18px; font-weight: 600; }
+      .svc-label { font-size: 15px; fill: #4f5d75; }
+      .svc-tag { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 13px; fill: #4f5d75; letter-spacing: 0.04em; }
+      .svc-node { fill: #ffffff; stroke: #4f5d75; stroke-width: 1.2; }
+      .svc-actor { fill: #e9ebee; stroke: #7a8399; stroke-width: 1.2; }
+      .svc-mission { fill: #fff0e9; stroke: #eb6c36; stroke-width: 1.2; }
+      .svc-external { fill: #ededee; stroke: #7a8399; stroke-width: 1.2; }
+      .svc-edge { fill: none; stroke: #4f5d75; stroke-width: 1.5; marker-end: url(#svc-arrow); }
+      .svc-api { fill: none; stroke: #2e5aa8; stroke-width: 1.5; marker-end: url(#svc-arrow-api); }
+      .svc-telemetry { fill: none; stroke: #7a8399; stroke-width: 1.3; stroke-dasharray: 5 4; }
+      .svc-rule { stroke: #d8dbe1; stroke-width: 1; }
+    </style>
+    <marker id="svc-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0 0 L8 3 L0 6 Z" fill="#4f5d75"/></marker>
+    <marker id="svc-arrow-api" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0 0 L8 3 L0 6 Z" fill="#2e5aa8"/></marker>
+  </defs>
 
-      <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="900" height="1760" fill="#f5f5f5"/>
+  <text x="32" y="42" class="svc-title">kanthord · service relations</text>
+  <text x="32" y="70" class="svc-label">Arrows point from the actor of a relation to its target.</text>
 
-      <rect x="48" y="88" width="224" height="272" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-      <rect x="60" y="80" width="56" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="88" y="92" fill="rgba(45,49,66,0.40)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">CLIENTS</text>
-      <rect x="384" y="88" width="528" height="408" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-      <rect x="396" y="80" width="64" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="428" y="92" fill="rgba(45,49,66,0.40)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">KANTHORD</text>
-      <rect x="1024" y="88" width="208" height="272" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-      <rect x="1036" y="80" width="104" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="1088" y="92" fill="rgba(45,49,66,0.40)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">EXTERNAL SYSTEMS</text>
-      <path d="M 256,152 H 408" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-      <path d="M 256,176 H 352 Q 360,176 360,184 V 288 Q 360,296 368,296 H 408" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-      <path d="M 256,320 H 408" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-      <path d="M 200,272 V 232 Q 200,224 208,224 H 352 a 8,8 0 0,1 16,0 H 432 Q 440,224 440,216 V 208" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-      <path d="M 152,344 V 436 Q 152,444 160,444 H 408" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-      <path d="M 736,208 V 232 Q 736,240 728,240 H 656 a 8,8 0 0,0 -16,0 H 592 Q 584,240 584,248 V 272" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-      <path d="M 840,272 V 208" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-      <path d="M 688,288 H 656 Q 648,288 648,280 V 176 Q 648,168 640,168 H 608" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-      <path d="M 688,312 H 608" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-      <path d="M 888,300 H 960 Q 968,300 968,292 V 176 Q 968,168 976,168 H 1048" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-      <path d="M 888,324 H 1048" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-      <path d="M 408,360 V 368 Q 408,376 416,376 H 880 Q 888,376 888,368 V 360" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
-      <path d="M 648,376 V 416" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-      <rect x="660" y="216" width="84" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="702" y="228" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READS GRAPH</text>
-      <rect x="752" y="228" width="80" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="792" y="240" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TAKES LEVEL</text>
-      <rect x="576" y="216" width="64" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="608" y="228" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RESOURCES</text>
-      <rect x="616" y="320" width="64" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="648" y="332" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">EVIDENCE</text>
-      <rect x="892" y="276" width="68" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="926" y="288" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPO ACTIONS</text>
-      <rect x="936" y="332" width="64" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="968" y="344" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">MODELS</text>
-      <rect x="496" y="352" width="72" height="16" rx="2" fill="#f5f5f5"/>
-      <text x="532" y="364" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TELEMETRY</text>
-      <rect x="64" y="136" width="192" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="64" y="136" width="192" height="72" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
-      <rect x="76" y="144" width="48" height="16" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
-      <text x="100" y="156" fill="rgba(122,131,153,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PERSON</text>
-      <text x="160" y="188" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Human</text>
-      <rect x="64" y="272" width="192" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="64" y="272" width="192" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
-      <rect x="76" y="280" width="60" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
-      <text x="106" y="292" fill="rgba(45,49,66,0.70)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXTERNAL</text>
-      <text x="160" y="324" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">External harness</text>
-      <rect x="408" y="136" width="200" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="408" y="136" width="200" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-      <rect x="420" y="144" width="56" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-      <text x="448" y="156" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SERVICE</text>
-      <text x="508" y="188" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Project Service</text>
-      <rect x="408" y="272" width="200" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="408" y="272" width="200" height="72" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-      <rect x="420" y="280" width="56" height="16" rx="2" fill="transparent" stroke="rgba(235,108,54,0.40)" stroke-width="0.8"/>
-      <text x="448" y="292" fill="rgba(235,108,54,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SERVICE</text>
-      <text x="508" y="324" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Mission Service</text>
-      <rect x="688" y="136" width="200" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="688" y="136" width="200" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-      <rect x="700" y="144" width="56" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-      <text x="728" y="156" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SERVICE</text>
-      <text x="788" y="188" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Scheduler Service</text>
-      <rect x="688" y="272" width="200" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="688" y="272" width="200" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-      <rect x="700" y="280" width="56" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
-      <text x="728" y="292" fill="rgba(45,49,66,0.80)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SERVICE</text>
-      <text x="788" y="324" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Worker Service</text>
-      <rect x="1048" y="136" width="160" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="1048" y="136" width="160" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
-      <rect x="1060" y="144" width="60" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
-      <text x="1090" y="156" fill="rgba(45,49,66,0.70)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXTERNAL</text>
-      <text x="1128" y="188" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Git platform</text>
-      <rect x="1048" y="272" width="160" height="72" rx="6" fill="#f5f5f5"/>
-      <rect x="1048" y="272" width="160" height="72" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
-      <rect x="1060" y="280" width="60" height="16" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
-      <text x="1090" y="292" fill="rgba(45,49,66,0.70)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">EXTERNAL</text>
-      <text x="1128" y="316" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Large language</text>
-      <text x="1128" y="336" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">model provider</text>
-      <rect x="408" y="416" width="480" height="56" rx="6" fill="#f5f5f5"/>
-      <rect x="408" y="416" width="480" height="56" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
-      <rect x="424" y="436" width="56" height="16" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
-      <text x="452" y="448" fill="rgba(79,93,117,0.90)" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SERVICE</text>
-      <text x="496" y="448" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">Tracking Service</text>
-      <text x="664" y="448" fill="#4f5d75" font-size="12" font-family="'Geist Mono', monospace">from every service</text>
-      <line x1="40" y1="536" x2="1240" y2="536" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
-      <text x="40" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
-      <rect x="112" y="544" width="16" height="12" rx="2" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="0.8"/>
-      <text x="136" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">Actor</text>
-      <rect x="280" y="544" width="16" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="0.8"/>
-      <text x="304" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">Service</text>
-      <rect x="448" y="544" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="0.8"/>
-      <text x="472" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">Mission Service</text>
-      <rect x="616" y="544" width="16" height="12" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
-      <text x="640" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">External system</text>
-      <line x1="784" y1="552" x2="800" y2="552" stroke="#2e5aa8" stroke-width="1.2"/>
-      <text x="808" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">API or CLI</text>
-      <line x1="952" y1="552" x2="968" y2="552" stroke="#4f5d75" stroke-width="1.2"/>
-      <text x="976" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">Relation</text>
-      <line x1="1120" y1="552" x2="1136" y2="552" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3"/>
-      <text x="1144" y="556" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">Telemetry</text>
-    </svg>
+  <!-- Client access: each row names exactly the services that the actor reaches. -->
+  <g id="svc-human-access">
+    <rect x="32" y="100" width="194" height="64" rx="6" class="svc-actor"/>
+    <text x="48" y="125" class="svc-tag">ACTOR</text>
+    <text x="48" y="151" class="svc-name">Human</text>
+    <path d="M226 136 H446" class="svc-api"/>
+    <text x="336" y="125" text-anchor="middle" class="svc-label">API or CLI</text>
+    <rect x="446" y="100" width="422" height="64" rx="6" class="svc-node"/>
+    <text x="462" y="125" class="svc-tag">REACHES SERVICES</text>
+    <text x="462" y="151" class="svc-name">Project · Mission</text>
+  </g>
+  <g id="svc-harness-access">
+    <rect x="32" y="188" width="194" height="88" rx="6" class="svc-actor"/>
+    <text x="48" y="213" class="svc-tag">ACTOR</text>
+    <text x="48" y="239" class="svc-name">External harness</text>
+    <text x="48" y="261" class="svc-label">Executes work</text>
+    <path d="M226 232 H446" class="svc-api"/>
+    <text x="336" y="221" text-anchor="middle" class="svc-label">API or CLI</text>
+    <rect x="446" y="188" width="422" height="88" rx="6" class="svc-node"/>
+    <text x="462" y="213" class="svc-tag">REACHES SERVICES</text>
+    <text x="462" y="239" class="svc-name">Project · Mission · Scheduler · Tracking</text>
+    <text x="462" y="261" class="svc-label">Targeted claim → Scheduler Service</text>
+    <text x="32" y="307" class="svc-label">The harness invokes a configured repository action through the API or CLI; the daemon performs it.</text>
+  </g>
+
+  <!-- Logical service boundaries inside the single daemon process. -->
+  <rect x="24" y="338" width="852" height="658" rx="10" fill="#efeff1" stroke="#c9cdd5" stroke-width="1.2"/>
+  <text x="48" y="369" class="svc-tag">KANTHORD DAEMON · ONE PROCESS · FIVE LOGICAL SERVICES</text>
+
+  <!-- Mission / Scheduler: reads are directed to the record owner. -->
+  <g id="svc-scheduler-mission">
+    <path d="M580 460 H304" class="svc-edge"/>
+    <text x="442" y="427" text-anchor="middle" class="svc-label">Reads graph</text>
+    <text x="442" y="448" text-anchor="middle" class="svc-label">and outcome record</text>
+    <path d="M304 524 H580" class="svc-edge"/>
+    <text x="442" y="491" text-anchor="middle" class="svc-label">Notifies accepted changes</text>
+    <text x="442" y="512" text-anchor="middle" class="svc-label">that can affect scheduling</text>
+  </g>
+
+  <!-- Scheduler / Project: configuration and credential use; claim-state read. -->
+  <g id="svc-scheduler-project">
+    <path d="M620 548 V622 H160 V738" class="svc-edge"/>
+    <text x="384" y="571" text-anchor="middle" class="svc-label">Reads worker bindings, permitted client identities</text>
+    <text x="384" y="592" text-anchor="middle" class="svc-label">and their counts; uses a repository credential</text>
+    <text x="384" y="613" text-anchor="middle" class="svc-label">held by Project</text>
+    <path d="M260 738 V680 H660 V548" class="svc-edge"/>
+    <text x="468" y="668" text-anchor="middle" class="svc-label">Reads execution claim state</text>
+  </g>
+
+  <g id="svc-work-pull">
+    <path d="M836 738 V548" class="svc-edge"/>
+    <text x="820" y="635" text-anchor="end" class="svc-label">Worker instance</text>
+    <text x="820" y="656" text-anchor="end" class="svc-label">claims a node</text>
+    <text x="820" y="677" text-anchor="end" class="svc-label">through a work pull</text>
+  </g>
+
+  <g id="svc-worker-project">
+    <path d="M580 821 H304" class="svc-edge"/>
+    <text x="442" y="749" text-anchor="middle" class="svc-label">Reads permitted workers</text>
+    <text x="442" y="770" text-anchor="middle" class="svc-label">and instance counts;</text>
+    <text x="442" y="791" text-anchor="middle" class="svc-label">uses a provider credential</text>
+    <text x="442" y="812" text-anchor="middle" class="svc-label">held by Project</text>
+  </g>
+
+  <!-- The dashed collection includes all services; Tracking also writes telemetry. -->
+  <g id="svc-all-telemetry">
+    <path d="M48 506 H36 V890 H864 V506 H852 M48 814 H36 M852 814 H864" class="svc-telemetry"/>
+    <path d="M450 890 V920" class="svc-telemetry" marker-end="url(#svc-arrow)"/>
+    <text x="450" y="879" text-anchor="middle" class="svc-label">Every service writes telemetry, including Tracking</text>
+  </g>
+
+  <g id="svc-mission">
+    <rect x="48" y="406" width="256" height="142" rx="6" class="svc-mission"/>
+    <text x="64" y="431" class="svc-tag">SERVICE</text>
+    <text x="64" y="459" class="svc-name">Mission Service</text>
+    <text x="64" y="485" class="svc-label">Graph · validation criteria</text>
+    <text x="64" y="507" class="svc-label">Evidence · assessments</text>
+    <text x="64" y="529" class="svc-label">Outcomes · block / unblock</text>
+  </g>
+  <g id="svc-scheduler">
+    <rect x="580" y="406" width="272" height="142" rx="6" class="svc-node"/>
+    <text x="596" y="431" class="svc-tag">SERVICE</text>
+    <text x="596" y="459" class="svc-name">Scheduler Service</text>
+    <text x="596" y="485" class="svc-label">Executions · claim eligibility</text>
+    <text x="596" y="507" class="svc-label">Accepts git-platform deliveries</text>
+    <text x="596" y="529" class="svc-label">Observes external objects</text>
+  </g>
+  <g id="svc-project">
+    <rect x="48" y="738" width="256" height="108" rx="6" class="svc-node"/>
+    <text x="64" y="763" class="svc-tag">SERVICE</text>
+    <text x="64" y="791" class="svc-name">Project Service</text>
+    <text x="64" y="817" class="svc-label">Resources · repository strategy</text>
+    <text x="64" y="838" class="svc-label">Credentials · authorization</text>
+  </g>
+  <g id="svc-worker">
+    <rect x="580" y="738" width="272" height="108" rx="6" class="svc-node"/>
+    <text x="596" y="763" class="svc-tag">SERVICE</text>
+    <text x="596" y="791" class="svc-name">Worker Service</text>
+    <text x="596" y="817" class="svc-label">Hosts worker instances</text>
+    <text x="596" y="838" class="svc-label">Executes steps · evaluates nodes</text>
+  </g>
+  <g id="svc-tracking">
+    <rect x="48" y="920" width="804" height="56" rx="6" fill="#e9ebee" stroke="#4f5d75" stroke-width="1.2"/>
+    <text x="64" y="954" class="svc-name">Tracking Service</text>
+    <text x="278" y="954" class="svc-label">Telemetry only · no outcome depends on telemetry</text>
+  </g>
+
+  <!-- Execution relations apply to an execution, including one held by a harness. -->
+  <text x="32" y="1043" class="svc-name">Execution relations</text>
+  <text x="32" y="1069" class="svc-label">An execution reads resources, records its work and acts on a repository.</text>
+  <g id="svc-execution-project">
+    <path d="M226 1210 H250 V1138 H652" class="svc-edge"/>
+    <text x="444" y="1106" text-anchor="middle" class="svc-label">Reads repository strategy + permitted resources</text>
+    <text x="444" y="1127" text-anchor="middle" class="svc-label">Uses a repository credential held by Project</text>
+    <rect x="652" y="1102" width="216" height="64" rx="6" class="svc-node"/>
+    <text x="668" y="1127" class="svc-tag">SERVICE</text>
+    <text x="668" y="1153" class="svc-name">Project Service</text>
+  </g>
+  <g id="svc-execution-mission">
+    <path d="M226 1292 H652" class="svc-edge"/>
+    <text x="444" y="1195" text-anchor="middle" class="svc-label">Writes evidence</text>
+    <text x="444" y="1216" text-anchor="middle" class="svc-label">Reviewer: reads validation criteria + evidence</text>
+    <text x="444" y="1237" text-anchor="middle" class="svc-label">Reviewer: reads required external actions</text>
+    <text x="444" y="1258" text-anchor="middle" class="svc-label">of the attempt + its external objects</text>
+    <text x="444" y="1279" text-anchor="middle" class="svc-label">Reviewer: writes assessment</text>
+    <rect x="652" y="1194" width="216" height="110" rx="6" class="svc-mission"/>
+    <text x="668" y="1219" class="svc-tag">SERVICE</text>
+    <text x="668" y="1247" class="svc-name">Mission Service</text>
+  </g>
+  <g id="svc-execution-git">
+    <path d="M226 1310 H250 V1360 H652" class="svc-edge"/>
+    <text x="444" y="1327" text-anchor="middle" class="svc-label">Acts on the repository</text>
+    <text x="444" y="1348" text-anchor="middle" class="svc-label">Harness-invoked action: performed by daemon</text>
+    <rect x="652" y="1324" width="216" height="64" rx="6" class="svc-external"/>
+    <text x="668" y="1349" class="svc-tag">EXTERNAL SYSTEM</text>
+    <text x="668" y="1375" class="svc-name">Git platform</text>
+  </g>
+  <rect x="32" y="1188" width="194" height="138" rx="6" class="svc-actor"/>
+  <text x="48" y="1215" class="svc-name">Execution</text>
+  <text x="48" y="1241" class="svc-label">Executes node steps</text>
+  <text x="48" y="1263" class="svc-label">or evaluates a node</text>
+
+  <line x1="32" y1="1420" x2="868" y2="1420" class="svc-rule"/>
+  <text x="32" y="1451" class="svc-name">Services and external systems</text>
+  <g id="svc-scheduler-git">
+    <rect x="32" y="1480" width="216" height="106" rx="6" class="svc-node"/>
+    <text x="48" y="1505" class="svc-tag">SERVICE</text>
+    <text x="48" y="1533" class="svc-name">Scheduler Service</text>
+    <text x="48" y="1559" class="svc-label">Observes external objects</text>
+    <path d="M248 1528 H652" class="svc-edge"/>
+    <text x="450" y="1495" text-anchor="middle" class="svc-label">Observes an external object</text>
+    <text x="450" y="1516" text-anchor="middle" class="svc-label">Uses Project-held repository credential</text>
+    <path d="M652 1574 H248" class="svc-edge"/>
+    <text x="450" y="1562" text-anchor="middle" class="svc-label">Delivers repository events</text>
+    <rect x="652" y="1480" width="216" height="106" rx="6" class="svc-external"/>
+    <text x="668" y="1505" class="svc-tag">EXTERNAL SYSTEM</text>
+    <text x="668" y="1533" class="svc-name">Git platform</text>
+    <text x="668" y="1559" class="svc-label">Holds the repository</text>
+  </g>
+  <g id="svc-worker-provider">
+    <rect x="32" y="1614" width="216" height="82" rx="6" class="svc-node"/>
+    <text x="48" y="1639" class="svc-tag">SERVICE</text>
+    <text x="48" y="1667" class="svc-name">Worker Service</text>
+    <path d="M248 1662 H652" class="svc-edge"/>
+    <text x="450" y="1629" text-anchor="middle" class="svc-label">Uses models</text>
+    <text x="450" y="1650" text-anchor="middle" class="svc-label">Uses Project-held provider credential</text>
+    <rect x="652" y="1614" width="216" height="82" rx="6" class="svc-external"/>
+    <text x="668" y="1639" class="svc-tag">EXTERNAL SYSTEM</text>
+    <text x="668" y="1665" class="svc-name">Large language</text>
+    <text x="668" y="1687" class="svc-name">model provider</text>
+  </g>
+  <text x="32" y="1734" class="svc-label">Source: architecture.md · Actors, External systems and Relations</text>
+</svg>
