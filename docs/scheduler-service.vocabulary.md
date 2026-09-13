@@ -10,15 +10,15 @@ A term that names a closed set lists every value of that set.
 Every other term carries a concrete example.
 This file is not a design document, and `scheduler-service.md` stays the single source of truth.
 
-## requester
+## claimant
 
-The holder of a role and a count that requests a claim.
+The holder of a role and a count that claims a node.
 The term names no closed set.
 
-Worker binding `tdd-main` is a requester through each of its `tdd@1` instances, with the executor role and its instance count.
-Two `tdd@1` instances of `tdd-main` are one requester.
-The executor client identity of `claude-code` is another requester, with its role and its execution count.
-The reviewer client identity of `claude-code` is a third requester.
+Worker binding `tdd-main` is a claimant through each of its `tdd@1` instances, with the executor role and its instance count.
+Two `tdd@1` instances of `tdd-main` are one claimant.
+The executor client identity of `claude-code` is another claimant, with its role and its execution count.
+The reviewer client identity of `claude-code` is a third claimant.
 The executor client identity of `claude-code` never becomes a reviewer, and a project that needs a reviewer permits a second client identity.
 
 ## work pull
@@ -40,7 +40,7 @@ The set is closed and holds two values.
 - **reviewer**
 
 `tdd@1` declares `Available`, which gives worker binding `tdd-main` the executor role.
-`reviewer@1` declares `Waiting`, which gives its worker binding the reviewer role.
+`reviewer@1` declares `Waiting` and `External.Requested`, which give its worker binding the reviewer role.
 
 ## scheduling processor
 
@@ -88,6 +88,10 @@ The release names the terminal state of that child set as its wait fact.
 The Scheduler writes a wait record and holds the entry out of work-pull selection.
 The notification for the last objective's terminal state satisfies the wait.
 A later work pull takes "Account recovery".
+
+Execution 2 of "Add password reset" opens pull request 42 and releases with the landing observation of that pull request as its wait fact, because the notification that follows the merge is unrequested.
+The Scheduler holds the entry out until the observer records the landing.
+A later work pull of a `reviewer@1` instance takes "Add password reset" from `External.Requested`.
 
 ## observation obligation
 

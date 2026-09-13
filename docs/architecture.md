@@ -44,14 +44,14 @@ It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
 Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
-It owns the separation between the requester that executes a node's steps and the requester that evaluates the node.
+It owns the separation between the claimant that executes a node's steps and the claimant that evaluates the node.
 
 ### Scheduler Service
 
 The Scheduler Service manages executions.
-It determines which nodes a requester can claim, and in which order.
+It determines which nodes a claimant can claim, and in which order.
 It does not make a blocked node available.
-It records an execution when a requester claims a node.
+It records an execution when a claimant claims a node.
 It accepts the deliveries of a git platform.
 It observes an external object on the git platform.
 
@@ -104,6 +104,7 @@ It shows the relations that the sections below name.
 - An execution uses a repository credential that the Project Service holds.
 - An execution writes evidence to the Mission Service.
 - A reviewer execution reads the validation criteria and the evidence from the Mission Service.
+- A reviewer execution reads the required external actions of the attempt and its external objects from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.

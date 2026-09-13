@@ -58,10 +58,10 @@ One relation reads as follows.
 
 ## reviewer execution
 
-An execution whose requester evaluates a node.
+An execution whose claimant evaluates a node.
 The worker instance that executes a node's steps never writes the assessment of that node.
 
-- A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting`.
+- A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.
 - A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.
 - The instance produces an execution, and that execution is the reviewer execution.
 - The reviewer execution reads the validation criteria and the evidence from the Mission Service.

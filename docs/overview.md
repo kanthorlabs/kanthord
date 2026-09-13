@@ -79,7 +79,7 @@ The repository strategy belongs to the project whichever harness executes the wo
 Whichever harness executes the work follows that strategy.
 An execution follows the project's repository strategy when it acts on a repository.
 Work on a repository requires a configured repository strategy, because configuration supplies the project's policy without an implicit default.
-An actor requests the configured repository action of an objective after a passing assessment and before a successful outcome of that objective.
+The configured repository action of an objective follows a passing assessment and precedes a successful outcome of that objective.
 
 Completing the configured repository action, completing all tasks, and achieving the objective are three different conditions.
 The shared outcome rules govern repository action failures.
@@ -93,7 +93,7 @@ For an objective, an execution of `tdd@1` creates a branch and makes a separate 
 These branch and commit practices apply to `tdd@1`, not to every worker.
 
 Once all tasks of the objective are complete, an execution of `tdd@1` releases the objective for its evaluation.
-After a passing assessment, an actor requests the configured repository action.
+The configured repository action follows the passing assessment.
 Under a repository strategy that requires a pull request for every change, that action opens a pull request on the git platform.
 Under a repository strategy that requires a merge and push, that action merges the branch and pushes to main.
 

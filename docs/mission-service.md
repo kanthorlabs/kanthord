@@ -219,6 +219,8 @@ An external object carries its own identity, because one binding of the Project 
 An external object names the external action that it fulfils, the binding of the Project Service, the address of the remote thing and a label for display.
 The Mission Service parses no provider content.
 An observer interprets the provider, and it writes the accepted observation.
+A [fire-and-forget action](project-service.md#repository-configuration-and-policy) is resolved by its accepted request, and a request-reply action is resolved by an accepted observation.
+Every rule of this page that reads the expected end state of an action reads, for a fire-and-forget action, its accepted request.
 
 An observation record is one kind.
 It names the node and the attempt, the external action, the expected end state, the external object, the observed state, the observation time and the authorized observer that wrote it.
@@ -272,7 +274,7 @@ A correction names what it corrects.
 ## Evaluation and assessment
 
 The Mission Service performs no evaluation, and it is the record authority.
-A [requester](scheduler-service.md#vocabulary) with the reviewer role performs an evaluation.
+A [claimant](scheduler-service.md#vocabulary) with the reviewer role performs an evaluation.
 `reviewer@1` is a worker whose method is evaluation.
 `reviewer@1` takes an objective or an initiative, and it never takes a task.
 
@@ -282,7 +284,7 @@ The readiness condition of Outcome and completion admits a reviewer claim.
 An executor requests no evaluation.
 Under kanthord's own harness a reviewer is a worker binding of its project.
 
-The requester that executes a node's steps never writes the assessment of that node.
+The claimant that executes a node's steps never writes the assessment of that node.
 The Mission Service supplies the criteria and the evidence.
 Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.
@@ -354,9 +356,12 @@ The set holds twelve states.
   No claim holds the node.
 - **Completed**: The node closes with a successful outcome.
 - **Discarded**: The node closes with no successful outcome.
-- **External.Requested**: An actor requests the required external action, and the external system holds no end state of that request.
-- **External.Success**: The external system reaches the expected end state.
-- **External.Failed**: The external system reaches any other state that ends the request.
+- **External.Requested**: The open attempt requests a required external action, and not every required external action of the attempt has reached its expected end state.
+  No claim holds the node.
+- **External.Success**: Every required external action of the attempt reaches its expected end state.
+  No claim holds the node.
+- **External.Failed**: A required external action of the attempt ends in a state other than its expected end state.
+  No claim holds the node.
 
 `Completed` and `Discarded` are the two terminal states.
 A terminal state opens no further attempt, and nothing moves a node out of it.
@@ -378,6 +383,8 @@ At most one attempt of a node is open.
 A node that starts no work holds no attempt, and its attempt counter reads 0.
 The first claim of the node opens attempt 1, and a human unblock opens the next attempt.
 An execution and an evaluation attempt pin the attempt that they start under.
+An attempt fixes the required external actions of its node at its opening, from the configuration of the Project Service current at that moment, and it records them next to the node revision that it pins.
+A configuration change during an open attempt reaches the next attempt.
 Every record names its attempt, and it stays the record of that attempt forever.
 An attempt closure ends every execution and every evaluation attempt in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
@@ -396,19 +403,24 @@ The readiness condition admits a reviewer claim when the child rule and the exte
 For an objective, every task of the revision that the open attempt pins holds a current outcome of that attempt.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
-No required external action of the node is outstanding.
-An action is outstanding when the open attempt requests it and no accepted observation establishes its expected end state.
-An unrequested action is never outstanding.
+No request-reply action of the open attempt is unresolved.
 The condition reads the current children of the node, and a retirement removes a node from that set.
+
+### Continuation condition
+
+The continuation condition admits a reviewer claim from `External.Requested`.
+It holds when a required external action of the attempt is unrequested and the action that it follows has reached its expected end state.
+The Project Service owns what a configured action follows.
 
 ### Successful outcome
 
-The ordinary path needs a current passing assessment and the observed expected end state of every required external action of that node.
+The ordinary path needs a current passing assessment and the observed expected end state of every required external action of the attempt.
 Neither fact alone publishes a successful outcome.
 A node that requires no external action needs the assessment alone.
 An initiative configures no external action.
 Evaluation and assessment owns the currency of an assessment.
 The evaluation of a node precedes its external request.
+The reviewer execution requests each required external action, and an action that follows another action is requested after that action reaches its expected end state.
 The assessment names the tested snapshot.
 Evidence owns the record of the landed commit identities.
 
@@ -447,13 +459,14 @@ It uses the closing event as the stopping reason.
 The closure in the transition events is the dependency closure of the node.
 It holds when every node of that closure is `Completed`.
 Each row names the event, the effect on the attempt and the record that the transition writes.
-A node reaches a terminal state only when no external request of its open attempt is unresolved.
-A request is unresolved when an actor requests it and no accepted observation establishes an end state.
+A node reaches a terminal state only when no request-reply action of its open attempt is unresolved.
+A request-reply action is unresolved when the open attempt requests it and no accepted observation establishes an end state.
 This invariant also governs `Paused -> Completed` and `Paused -> Discarded`.
 
-A human resume reads the request of the attempt and its accepted observations first.
-A live request sends the node to `External.Requested`.
-A resolved request sends the node to `External.Success` or to `External.Failed`, according to its observed end state.
+A human resume reads the required external actions of the attempt, their requests and their accepted observations first.
+When a required action ended in a state other than its expected end state, the node goes to `External.Failed`.
+Otherwise, when a required action is requested and every required action has reached its expected end state, the node goes to `External.Success`.
+Otherwise, when a required action is requested, the node goes to `External.Requested`.
 Otherwise the execution-end fact of the attempt sends the node to `Waiting`.
 Otherwise the dependency closure sends the node to `Available` when it holds, or to `Pending` when it does not hold.
 
@@ -479,7 +492,7 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Waiting -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Waiting -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Evaluating -> Completed` | Current passing assessment; node requires no external action | Closes | Outcome |
-| `Evaluating -> External.Requested` | Current passing assessment stands; accepted fact establishes the request for the required external action | No effect | Assessment |
+| `Evaluating -> External.Requested` | Release; current passing assessment stands, and a required external action of the attempt is requested | No effect | Assessment |
 | `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
 | `Evaluating -> Paused` | Human holds the node; reviewer execution stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -496,9 +509,10 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Paused -> Blocked` | Human blocks the node; record carries the human reason | Closes when an attempt is open; no effect when the counter reads 0; counter stays 0 | Outcome |
 | `Paused -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Paused -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `External.Requested -> External.Success` | Accepted observation establishes the expected end state | No effect | Observation record; a landing adds the landed commit identities to the evidence set; an external action that is not a repository action adds none |
+| `External.Requested -> External.Success` | Accepted observation establishes the expected end state of the last unresolved required external action | No effect | Observation record; a landing adds the landed commit identities to the evidence set; an external action that is not a repository action adds none |
 | `External.Requested -> External.Failed` | Accepted observation establishes another end state of the request | No effect | Observation record |
 | `External.Requested -> Paused` | Human holds the node | Stays open | None |
+| `External.Requested -> Evaluating` | Reviewer claim; the continuation condition holds | No effect | None |
 | `External.Success -> Completed` | Current passing assessment stands, or human override asserts success after the observation resolves the request | Closes | Outcome |
 | `External.Success -> Paused` | Human holds the node | Stays open | None |
 | `External.Success -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -553,10 +567,11 @@ stateDiagram-v2
     state "External.Requested" as ext_requested
     state "External.Success" as ext_success
     state "External.Failed" as ext_failed
-    Evaluating --> ext_requested: Pass, accepted request
+    Evaluating --> ext_requested: Release after pass, request made
     ext_requested --> ext_success: Expected end state
     ext_requested --> ext_failed: Other end state
     ext_requested --> Paused: Human hold
+    ext_requested --> Evaluating: Reviewer claim, continuation condition
     Paused --> ext_requested: Resume, live request
     Paused --> ext_success: Resume, observed expected end state
     Paused --> ext_failed: Resume, observed other end state
@@ -575,7 +590,7 @@ Mission structure and nodes owns the dependency and the repository binding of a 
 Evidence owns the evidence record and its durability.
 Evaluation and assessment owns the lifecycle of an evaluation.
 Block and unblock owns the block and the unblock.
-The Worker Service owns which entity requests a required external action and the idempotency of that request across an attempt boundary.
+The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.
 The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
 The Mission Service publishes a recoverable notification of every accepted fact that can affect scheduling: a state transition, an accepted observation, an outcome and a priority change.
@@ -594,6 +609,7 @@ Outcome and completion owns the block of a node that holds no attempt.
 A block writes no separate block record.
 The closure writes the outcome of the node and the task outcomes that Outcome and completion owes.
 The outcome names the condition through its closing event, its stopping reason and its basis.
+A block cancels no live request of the closed attempt, and the next attempt reads that request through its external object.
 
 A block changes the state of no other node.
 A dependent follows the dependency rules of Mission structure and nodes.
@@ -717,6 +733,7 @@ A node whose attempt requests no external action returns none.
 - **asserted result**: The result that an outcome asserts, separately from its stopping reason.
 - **attempt**: One try at a node across its executions, observations and evaluations.
   The first claim opens attempt 1, and a human unblock opens the next attempt.
+  It fixes the required external actions of its node at its opening.
 - **attempt counter**: The per-node ordinal that names the attempt of a record.
   The attempt counter reads 0 when the node starts no work.
 - **attempt closure**: The act that ends an attempt and every execution and evaluation attempt in flight under it.
@@ -741,7 +758,8 @@ A node whose attempt requests no external action returns none.
   A task modification reads the condition of its objective.
 - **request identifier**: The identifier that a caller gives one request and that binds to the payload of that request.
   A retry with the same identifier returns the accepted result, and the same identifier with a different payload is refused.
-- **readiness condition**: The condition over current task outcomes, current objective terminal states and outstanding external actions that admits a reviewer claim.
+- **readiness condition**: The condition over current task outcomes, current objective terminal states and unresolved request-reply actions that admits a reviewer claim.
+- **continuation condition**: The condition over the required external actions of the attempt that admits a reviewer claim from `External.Requested`.
 - **retirement**: The removal of the executable work of a node, with its historical records preserved.
   Each modified node requires `Pending` or `Available` and an attempt counter that reads 0.
   A task modification reads the condition of its objective.

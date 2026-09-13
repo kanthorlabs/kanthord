@@ -23,6 +23,7 @@ The import creates the objective with no attempt, and its attempt counter reads 
 
 1. A `tdd@1` instance claims the objective.
    The first claim opens attempt 1, and Execution 1 starts.
+   Attempt 1 fixes its required external action, a pull request that must merge, from the repository strategy current at the claim.
 2. The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
    It writes each task assessment and task outcome.
 3. The instance releases with the evidence of Execution 1, and the execution of the attempt requires no further work.
@@ -31,8 +32,8 @@ The import creates the objective with no attempt, and its attempt counter reads 
 4. The readiness condition holds, and a `reviewer@1` instance claims the objective.
    Execution 2 starts.
 5. Execution 2 publishes a current passing assessment of the tested snapshot.
-6. An accepted fact establishes the request for the required external action: opening a pull request.
-   The node reaches `External.Requested`.
+6. Execution 2 requests the required external action: opening a pull request.
+   Execution 2 releases, and the node reaches `External.Requested`.
 7. A human merges the pull request.
 8. An observer establishes the expected end state and records the landing.
    The observation appends the landed commit identities to the evidence set.
@@ -142,21 +143,19 @@ Its basis names the human assertion, and its asserted result is that nothing is 
 
 ## readiness condition
 
-The condition over current task outcomes, current objective terminal states and outstanding external actions that admits a reviewer claim.
+The condition over current task outcomes, current objective terminal states and unresolved request-reply actions that admits a reviewer claim.
 The term names no closed set.
 
 For an objective, every current task holds a current outcome of the open attempt of that objective.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
 The condition reads the current children of the node, and a retirement removes a node from that set.
-No required external action of the node is outstanding.
-An action is outstanding when the open attempt requests it and no accepted observation establishes its expected end state.
-An unrequested action is never outstanding.
+No request-reply action of the open attempt is unresolved.
 
 Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
 The objective reaches `Waiting`, and both tasks hold current outcomes of its open attempt.
 The outcome of "Add reset email" states that its results do not meet its criteria.
-No required external action of the objective is outstanding.
+No request-reply action of the open attempt is unresolved.
 The readiness condition admits a reviewer claim.
 
 Take the initiative "Account recovery" with the objectives "Add password reset" and "Add recovery codes".
@@ -164,6 +163,17 @@ The initiative reaches `Waiting`.
 "Add password reset" holds `Completed`, and "Add recovery codes" holds `Discarded`.
 Both current objectives hold terminal states, and the initiative configures no external action.
 The readiness condition admits a reviewer claim.
+
+## continuation condition
+
+The condition over the required external actions of the attempt that admits a reviewer claim from `External.Requested`.
+The term names no closed set.
+
+Take the objective "Add password reset" with two required external actions: pull request 42 that must merge, and a notification with the landed commit in `#account-recovery` that follows the merge.
+Execution 2 opens pull request 42 after the passing assessment and releases, because the notification is not requestable before the merge.
+A human merges pull request 42, and the observer records the landing with commit `abc123`.
+The notification is unrequested and the action that it follows has reached its expected end state, so the continuation condition holds.
+A `reviewer@1` instance claims the objective from `External.Requested`, and Execution 3 posts the notification with commit `abc123`.
 
 ## unblock record
 
@@ -309,12 +319,13 @@ The dependency closure of "Add password reset" holds "Add recovery codes" and "O
 The representation of one requested external action and the remote thing that serves it.
 The term names no closed set.
 
-An external object takes one of many forms, and these four are examples of it.
+An external object takes one of many forms, and these five are examples of it.
 
 - pull request 42 that must merge
 - document "Password reset checklist" whose every item must carry a check
 - issue 117 that must close with the tag `security`
 - a reply in the "Account recovery" thread
+- a notification in `#account-recovery`, a fire-and-forget action with no observation record
 
 ## human block
 
@@ -335,7 +346,7 @@ The term names no closed set.
 
 Continue step 6 through step 9 of the attempt example.
 
-- A current passing assessment stands, and an accepted fact establishes the request to open the pull request of "Add password reset".
+- A current passing assessment stands, and the reviewer execution requests the pull request of "Add password reset".
 - A human merges that pull request.
 - The observer performs the platform action, and it observes the merged state.
 - The observation retrieves the landed commit identities and appends them to the evidence set.

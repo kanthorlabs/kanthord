@@ -107,7 +107,7 @@ A worker declares the node states that its instances claim.
 The term names no closed set.
 `tdd@1` is one example among several workers.
 For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
-`tdd@1` declares `Available`, and `reviewer@1` declares `Waiting`.
+`tdd@1` declares `Available`, and `reviewer@1` declares `Waiting` and `External.Requested`.
 
 ## worker instance
 

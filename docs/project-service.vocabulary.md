@@ -255,6 +255,24 @@ The expected end state of that action is the merge of that pull request.
 Under a repository strategy that requires a merge and push, the expected end state is the push to main.
 [overview.md](viewer.html?p=overview.md) owns landing, which is the observed expected end state.
 
+## fire-and-forget action
+
+An external action that its accepted request resolves, with no end state to observe.
+The kind of an external action is a closed set of two values.
+
+- **fire-and-forget action**
+- **request-reply action**
+
+Execution 2 posts a notification about "Add password reset" in `#account-recovery`.
+The Mission Service accepts the request and records the external object, and no observation follows.
+
+## request-reply action
+
+An external action that an accepted observation of its end state resolves.
+
+Execution 2 opens pull request 42 for "Add password reset" with the expected end state merged.
+The observer records the merge, and that accepted observation resolves the action.
+
 ## the five changes
 
 `project-service.md` names five different changes.

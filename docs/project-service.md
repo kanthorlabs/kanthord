@@ -33,6 +33,8 @@ A binding belongs to one project, and no project shares a binding.
 A project binds each repository that it uses.
 The repository strategy states an explicit rule for each repository that requires one.
 A configured repository action states its expected end state on the git platform.
+An external action is a fire-and-forget action or a request-reply action.
+A request-reply action states its expected end state, and a fire-and-forget action states none.
 A capability is one class of authenticated operation on a repository.
 A network git read, a network git write and a platform action are the capabilities.
 A commit, a branch and a merge are local, so none of them is a capability.
@@ -90,6 +92,7 @@ An execution presents its execution identity.
 An external harness presents its client identity and, for an execution operation, the execution identity of its claim.
 The observer of the Scheduler Service presents its service identity.
 The protected facility resolves that identity to the project and to the node of the request.
+An execution identity resolves to the node of its claim, and the facility refuses an operation that names another node.
 The facility resolves a service identity through the external object of the request.
 That resolution reaches the repository binding, the project and the node.
 The facility permits a service identity one operation class, the read of an external object.
@@ -160,3 +163,5 @@ It shows every reference that a replacement invalidates.
 
 - **capability**: One class of authenticated operation on a resource.
 - **custody**: The holding of secret material behind a protected facility.
+- **fire-and-forget action**: An external action that its accepted request resolves, with no end state to observe.
+- **request-reply action**: An external action that an accepted observation of its end state resolves.
