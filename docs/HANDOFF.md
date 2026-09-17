@@ -5,7 +5,7 @@ Read the owning design document before taking an item, and remove the item once 
 
 ## Next session
 
-- [ ] Write the Worker Service document: scope with Ulrich, then `/debate`, then `/pi`, then `/debate` review. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
+- [ ] Review `worker-service.md` and `worker-service.vocabulary.md` with `/debate`, then rule the open Worker Service items below. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
@@ -17,15 +17,37 @@ Read the owning design document before taking an item, and remove the item once 
 - [ ] Set numerical acceptance bounds for discovery lag, claim latency and inbox depth in the implementation epics, against the 1,000-project workload.
 - [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Scheduler, Project and Mission: how a delivery is classified, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort.
 - [ ] Add the skills and extensions that support external-harness integration.
+- [ ] Define the freshness of the instance healthcheck for a work pull that waits before the Scheduler serves it.
 
 ## Worker Service
 
-- [ ] Write the Worker Service document.
-- [ ] Define runtime instance identity and whether instance records persist.
-- [ ] Define how an instance hosts executions within its worker binding's instance count.
-- [ ] Decide whether memory belongs to the worker template, the worker instance or the execution.
-- [ ] Specify external-request idempotency and external-object reuse and correlation across node attempts.
-- [ ] State that a configured action takes its operands from the records of the attempt, the evidence snapshot and the external object, never from the worker.
+- [ ] Decide whether the repository strategy names the base branch of the node branch. If it does, `project-service.md` gains that field and `worker-service.md` reads it in place of the default branch. If it does not, the default-branch sentence of `worker-service.md` stands.
+- [ ] Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
+- [ ] Carry the entry shape into `project-service.md`, which today gives every entry a provider account binding and a model identifier, and which holds no reasoning effort.
+- [ ] Design the hierarchical prompt of a native agent: a generic prompt that the worker fixes for the agent, for example `re@1`, and a project-specific layer for the programming language, the development style and the coding conventions. `worker-service.md` today says that a worker fixes the prompt of its agent and that a project sets no prompt, so the design changes that rule. Decide whether a convention file in the repository, `AGENTS.md` or `CLAUDE.md`, informs the prompt. The first run uses the worker-fixed prompt and the pinned revision only, with repository context-file discovery disabled.
+- [ ] State which service performs a configured repository action that an external harness invokes through the API, and how that path reaches the operand and reuse rules of `worker-service.md`.
+- [ ] Define the disposition of an execution that cannot progress. `worker-service.md` routes only the budget end to a release with further work. An unchanged oversized revision that releases with further work is reclaimed for ever, so it is a cannot-progress case.
+- [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
+- [x] The native agent of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter. `worker-service.md` keeps its definition of a native agent and names no package.
+- [x] The daemon gives pi its own directories, disables discovery of user extensions, skills, prompt templates and themes, uses an in-memory session manager, disables the version check, the install telemetry and the provider catalog refresh, and pins the exact pi version. A pi version bump is a deliberate change to the workers that run on it. Every runtime setup call carries an abort signal with a deadline.
+- [x] One interception point carries every inference call of a native agent, including compaction and retries. It resolves the current binding entry under the execution identity, maps the model identifier and the reasoning effort, fails closed, and holds per-execution state so that no credential crosses executions. A custom pi provider that forwards to the model gateway is the candidate. Environment hygiene of the pi process belongs to the same mechanism.
+- [x] Tools: the tool table of a native agent holds three sources. The pi built-in tools: `general@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls. kanthord's own tools, which the daemon serves through an MCP server that it embeds and that pi reaches as a tool source. Other tools that a project adds, including other MCP servers. The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/. The tool register and the abstraction layer for tool instances manage the three sources. The interactive ask_question tool is excluded. A regex on a bash command is a policy and no boundary, so the first run states its minimum trust boundary around tool and verification execution: a disposable trusted host, or a container around the daemon.
+- [x] Verification and the one-commit rule: the final-commit policy is explicit, for example a provisional commit amended until the recorded assessment. An intermediate verification that fails allows revision. A recorded task assessment that does not pass ends the task work. The tested snapshot is identified immutably, and the judgement refers to it, because a verification command can modify files.
+- [x] Stop, budget and workspace reuse: the lease runs in the execution. On revocation or loss the execution aborts the pi session and dispatches nothing after. Before a later execution reuses a workspace, the execution confirms quiescence of the earlier one, because abort is not proven to kill every descendant process. The budget is turns and wall time, enforced on pi turn events and by abort, with the bash timeout below the remaining budget.
+- [x] Failure exits: a provider error, an invalid handoff, a verification timeout, a commit or push failure and an unsupported context size each have a defined exit. None becomes a success and none becomes an uncontrolled retry loop.
+- [x] Traces: the pi session entries of an execution become its transcript telemetry, with the execution identity and the attempt, redacted of secrets. pi keeps its own compaction logic, and kanthord designs nothing for it.
+- [x] The acceptance path: `general@1` loop, handoff, commit and verification, push, release, independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome. A scripted fake provider runs it deterministically, and a bounded real-provider smoke run proves the real configuration.
+
+### Next phase
+
+After the first native-agent worker runs the acceptance path.
+
+- [ ] The handoff as a worker-owned protocol: a typed handoff tool with the three assertions and the stopping reason of the agent, a state machine of working, quiescing, candidate frozen, verification, judgement, recorded, and the handling of a missing, malformed, duplicate or out-of-phase handoff. The execution owns the stopping reason on a deadline, a runtime failure or a lease loss.
+- [ ] Multi-agent workers, after the `tdd@1` reconciliation above. pi has no sub-agents.
+- [ ] Token and currency budgets and project-level accounting. pi reports usage and cost per message.
+- [ ] A clarification interface. The pi ask_question tool is the seed, and the block and unblock flow carries ambiguity until then.
+- [ ] Live streaming of a running turn, after the Tracking Service page. pi emits streaming events.
+- [ ] Containment beyond the minimum trust boundary, the quality and replay suite, provenance tags on tool results.
 
 ## Tracking Service
 
@@ -41,9 +63,11 @@ Deferred cross-service work across Mission, Scheduler, Worker and Project.
 - [ ] **SC3 / SC4:** Define resumption charging, exactly one debit per loss under repeated notices, whether a clean release avoids a charge, and budget reset authority, including whether a fresh evaluation identity resets its allowance.
 - [ ] **A7 / B3:** Decide whether exhaustion of a resumption or evaluation-retry budget closes the attempt, publishes an outcome and gives that outcome current effect.
 - [ ] Define the publisher and meaning of an outcome when an evaluation produces no assessment.
+- [ ] Bound the repetition of a release with further work on a resource budget end when the execution makes no progress.
 
 ### Mission Service
 
+- [ ] Define the task outcomes of the tasks that an execution did not execute when a recorded task assessment does not pass, their basis and evidence, and how the readiness condition treats the release. `worker-service.md` releases with no further work and writes no outcome for those tasks.
 - [ ] Specify the reviewer-loss transition out of `Evaluating` that permits a bounded retry.
 - [ ] **B2:** Define recovery and its budget when the currency check rejects a completed assessment as stale.
 - [ ] **B4 / B5:** Settle exhaustion-notice precedence after an accepted assessment and during a human override that asserts failure.
@@ -64,5 +88,5 @@ Deferred cross-service work across Mission, Scheduler, Worker and Project.
 - [ ] **A3 / W1 / W4 / PR2:** Specify reconciliation of repository actions with uncertain results, including remote effects that complete after revocation, and what happens when reconciliation cannot establish the result.
 - [ ] **W2:** Specify how a worker records a durable action identity before performing a repository action.
 - [ ] **W3:** Specify how a worker retrieves the acknowledgement of a write whose response it lost.
-- [ ] **W5:** Specify worker stop behaviour after claim revocation, including repository operations and release of runtime resources.
+- [ ] **W5:** Specify worker stop behaviour after claim revocation, including repository operations, release of runtime resources and the workspace disposition.
 - [ ] **W7:** Specify how a reviewer resumes an incomplete evaluation without repeating node execution or a repository action.
