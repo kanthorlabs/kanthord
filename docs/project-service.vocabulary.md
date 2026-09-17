@@ -214,6 +214,16 @@ The external harness holds no credential.
 `project-service.md` names the execution identity of an execution and the client identity of an external harness.
 The project permits `claude-code` with an executor identity and a reviewer identity.
 The record that permits each one configures its role and its execution count.
+The Project Service issues a client secret for each of the two identities when `ulrich` creates their records.
+
+## client secret
+
+The secret that the Project Service issues once for a permitted client identity and that an external harness presents with that identity to authenticate a request.
+
+`ulrich` creates the record that permits `claude-code-executor`, and the Project Service returns its client secret once and keeps the hash in custody.
+`claude-code` presents `claude-code-executor` and that secret on a targeted claim, and the Project Service verifies the hash before it resolves the identity.
+A request that names `claude-code-reviewer` without its secret is refused before any resolution.
+A rotation issues a new secret and keeps the identity, its role and its execution count.
 
 ## execution count
 

@@ -32,6 +32,11 @@ The external harness `claude-code` names "Add password reset" under its executor
 The Scheduler accepts the claim and returns Execution 3 with its execution identity.
 The request carries a request identifier, and a retry with that identifier returns Execution 3 again.
 
+## on-demand request
+
+The API ingress of the daemon issues an on-demand request for "Add password reset", which holds an entry behind "Add recovery codes".
+The Scheduler serves "Add password reset" to the next compatible `tdd@1` work pull ahead of the order, and the request returns with Execution 1.
+
 ## role
 
 The set is closed and holds two values.
@@ -53,6 +58,8 @@ It returns to the pool while Execution 1 executes that objective.
 The work queue holds entries for "Add password reset" and "Add recovery codes", both at priority 0.
 The entry for "Add password reset" has the older time-ordered identity.
 It comes first, even when a newer entry for "Add recovery codes" arrives.
+The Mission Service inserts the entry of "Add password reset" in the transaction that moves the objective to `Available`, and it removes the entry in the transaction that records the claim.
+A peek reads the entry of "Add password reset" and removes nothing.
 
 ## priority
 
@@ -86,7 +93,7 @@ The loss declaration revokes the authority of Execution 1 before any replacement
 A `general@1` instance releases "Account recovery" while its objectives "Add password reset" and "Add recovery codes" hold no terminal state.
 The release names the terminal state of that child set as its wait fact.
 The Scheduler writes a wait record and holds the entry out of work-pull selection.
-The notification for the last objective's terminal state satisfies the wait.
+The terminal state of the last objective satisfies the wait in the transaction that commits it.
 A later work pull takes "Account recovery".
 
 Execution 2 of "Add password reset" opens pull request 42 and releases with the landing observation of that pull request as its wait fact, because the notification that follows the merge is unrequested.

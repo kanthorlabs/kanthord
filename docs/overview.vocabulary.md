@@ -82,6 +82,12 @@ A human override of the outcome of "Add password reset" produces a new outcome t
 kanthord keeps the previous outcome as a reference.
 A human discard of "Add password reset" produces an outcome whose asserted result establishes nothing.
 
+## attempt
+
+An attempt is one try at a node across its executions, observations and evaluations.
+The term names no closed set.
+The first claim of "Add password reset" opens attempt 1, and a human unblock opens attempt 2.
+
 ## block
 
 A block is the closure of an attempt on a condition, after which a human unblock authorizes the next attempt.

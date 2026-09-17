@@ -72,6 +72,12 @@ The execution count is required configuration with no implicit default.
 Two permitted client identities never share an execution count.
 The role of a permitted client identity never changes.
 A project never permits one client identity under two roles, so a different role needs a different client identity.
+A human creates the record that permits a client identity, and the Project Service issues a client secret for that identity.
+The Project Service returns the client secret once and keeps its hash in custody.
+An external harness authenticates a request with its client identity and that client secret, and the Project Service verifies the secret before it resolves the identity.
+A rotation issues a new client secret and keeps the identity, its role and its execution count.
+The removal of the record revokes the identity.
+A client secret authenticates the harness and authorizes no operation, so it is no credential of a resource.
 
 ## Authorization and credential custody
 
@@ -162,6 +168,7 @@ It shows every reference that a replacement invalidates.
 ## Vocabulary
 
 - **capability**: One class of authenticated operation on a resource.
+- **client secret**: The secret that the Project Service issues once for a permitted client identity and that an external harness presents with that identity to authenticate a request.
 - **custody**: The holding of secret material behind a protected facility.
 - **fire-and-forget action**: An external action that its accepted request resolves, with no end state to observe.
 - **request-reply action**: An external action that an accepted observation of its end state resolves.

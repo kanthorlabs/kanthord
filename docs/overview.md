@@ -135,6 +135,7 @@ Each sub-agent has its own personal prompt that defines its responsibilities and
 - **outcome**: An assessment from evaluation of evidence against validation criteria, or a human act that a human assertion records.
   The assessment can establish that results meet or do not meet the criteria, or that available evidence cannot establish either.
   The outcome records the stopping reason separately from the assessment.
+- **attempt**: One try at a node across its executions, observations and evaluations.
 - **block**: The closure of an attempt on a condition, after which a human unblock authorizes the next attempt.
 - **unblock**: The human act that authorizes the next attempt of a blocked node.
 - **landing**: The observed expected end state of every configured repository action of a node.

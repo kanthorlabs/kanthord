@@ -12,7 +12,7 @@ This file is not a design document, and `mission-service.md` stays the single so
 
 ## attempt
 
-One try at a node.
+The overview owns the term.
 Write `node attempt` where `evaluation attempt` appears nearby, because the two are different objects.
 Write `attempt` alone everywhere else.
 
@@ -459,6 +459,7 @@ The omission of a file from this set requests a retirement of its node within th
 Each modification requires `Pending` or `Available` and an attempt counter that reads 0.
 A task modification reads the state and the attempt counter of its objective.
 An inadmissible modification aborts the whole import with no effect.
+A rewrite of `add-password-reset.md` with no identifier creates a new node, and the unchanged `add-password-reset-email.md` now names that new node, so the import modifies "Add password reset email" and reads its condition.
 
 ## request identifier
 

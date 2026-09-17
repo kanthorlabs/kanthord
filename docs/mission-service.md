@@ -44,7 +44,7 @@ A dependency edit acts on the live graph at once.
 A dependency addition requires that no live claim holds the dependent or a node in its subtree.
 A dependency removal requires a dependent that is not terminal, because a removal never makes a closure stop holding.
 This condition applies on both write paths, and it replaces the import condition for a dependency edit.
-In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it publishes the notification.
+In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it writes the work-queue entries of those nodes.
 The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing and the resume precedence, and nowhere else.
 An addition on a node whose execution ended changes no routing of that node, because the gate gates the start.
 
@@ -72,7 +72,7 @@ A human sets the priority of a node through the node API.
 The Mission Service records the priority with the actor and the time of the act, outside the node revision.
 No rule of the Mission Service reads the priority.
 The Mission Service admits the act while no claim holds the node and the node is not terminal.
-Its notifications carry the priority, and an absent priority reads 0.
+The work-queue entry that the Mission Service writes carries the priority, and an absent priority reads 0.
 An import carries no priority.
 
 ## Validation criteria and authority
@@ -142,6 +142,7 @@ The Mission Service terminates an import that fails the condition, and that impo
 A transaction and a lock cover the condition check and the commit together.
 Work on another node never rejects an import and never delays one.
 A genuine no-op makes no modification, so it requires no condition check.
+The import decides a modification on the resolved graph and never on the text of a plan file, so an unchanged plan file whose dependency resolves to another node identifier is a modification of the dependent.
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one version of the whole content of a node.
@@ -161,6 +162,7 @@ The Mission Service returns the revisions of a node as a list, ordered by revisi
 The read of a worker resolves to the revision that its attempt pins.
 That revision is the head of the list that the Mission Service returns to it.
 The read of a human returns every revision.
+The list of a worker holds the pinned revision and every older revision, and the Mission Service computes no difference between revisions, because each record carries its change.
 
 A node revision names its reason, its actor and its time.
 One record carries the change and its result.
@@ -240,10 +242,14 @@ Evidence durability differs by node.
 A task commit is an internal check, and it has meaning while a worker instance executes its objective.
 The outcome of an objective represents the outcomes of its tasks after that objective lands.
 The system guarantees no resolution of a task commit after that point.
-An initiative points at an objective commit, and an objective commit is a landed commit.
+An initiative reads the outcome of each objective and the evidence set that the outcome carries.
+A landed commit is a commit identity that a landing observation appends or that a success override carries, and it is the durable repository evidence of an objective.
+An objective that a success override completes without a landed commit identity, and an objective whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assertion or on the stored content.
 
 The evidence of a node is a set of items, and it holds one item most of the time.
 An accepted landing observation appends the landed commit identities to the evidence set.
+A success override that carries a landed commit identity appends it to the evidence set, and the Mission Service accepts it as a landed commit and performs no check against the repository.
+The evidence record of that landed commit names the human as its provenance.
 An external action that is not a repository action adds no commit identities.
 No assessment weighs the landed snapshot.
 
@@ -378,7 +384,6 @@ The worker handles the detail of that state.
 
 ### Attempt
 
-An attempt is one try at a node, and it spans every execution, every observation and every evaluation of that try.
 At most one attempt of a node is open.
 A node that starts no work holds no attempt, and its attempt counter reads 0.
 The first claim of the node opens attempt 1, and a human unblock opens the next attempt.
@@ -440,6 +445,7 @@ An outcome record holds these fields.
 An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
 An outcome that asserts that the results do not meet the criteria names an assessment as its basis.
 A human override that asserts success writes a successful outcome whose basis is a human assertion.
+A success override carries an optional landed commit identity.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
 A discarded node satisfies no dependency.
 An `External.Failed` observation ends the attempt with an outcome whose basis names the passing assessment.
@@ -593,10 +599,8 @@ Block and unblock owns the block and the unblock.
 The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.
 The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
-The Mission Service publishes a recoverable notification of every accepted fact that can affect scheduling: a state transition, an accepted observation, an outcome and a priority change.
-The notification names the project, the node and the fact.
-A crash between the commit and the notification never hides the change.
-The Mission Service supplies a consistent snapshot and the recoverable changes over one timeline with no gap.
+The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome and a priority change.
+After the commit the Mission Service wakes the Scheduler Service.
 The Scheduler Service owns the work queue, the claim and the lease.
 
 ## Block and unblock
@@ -731,7 +735,6 @@ A node whose attempt requests no external action returns none.
 - **assessment**: The record of one evaluation of one evidence set against the criteria of one node revision.
   An assessment weighs the evidence against the criteria of the node revision that it names.
 - **asserted result**: The result that an outcome asserts, separately from its stopping reason.
-- **attempt**: One try at a node across its executions, observations and evaluations.
   The first claim opens attempt 1, and a human unblock opens the next attempt.
   It fixes the required external actions of its node at its opening.
 - **attempt counter**: The per-node ordinal that names the attempt of a record.

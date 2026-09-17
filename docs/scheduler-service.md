@@ -18,18 +18,18 @@ The [architecture](architecture.md#container-diagram) defines the deployment tar
 One Scheduler Service serves every project of the daemon.
 It starts and stops with the daemon.
 It holds a bounded pool of scheduling processors.
-A scheduling processor serves a work pull or reconciles the work queue after an accepted change.
+A scheduling processor serves a work pull or handles a wakeup after an accepted change.
 It returns to the pool after that short decision.
 A waiting work pull or an instance that executes a node never occupies the processor.
 A node that waits for a model call, a human review or a pull request never occupies the processor.
 Scheduling concurrency and instance counts solve different bottlenecks.
 
-The [Mission Service](mission-service.md#boundary) owns the recoverable change notifications and the continuity between its snapshot and those changes.
-The Scheduler consumes each notification and reconciles the affected nodes, including dependency and parent effects, into the work queue.
-It coalesces wakeups and preserves distinct accepted facts.
-It records change-processing progress only after the work-queue effect or the remaining reconciliation obligation is durable.
-It tolerates duplicate notifications and never lets an older change overwrite a newer entry.
-Project configuration changes and claim changes also trigger reconciliation of the affected scope.
+The work queue is a component of the Scheduler Service with a public insert and a public delete, and the Mission Service is its caller.
+The [Mission Service](mission-service.md#boundary) inserts and removes the entries of every affected node, including dependency and parent effects, in the transaction that commits the fact.
+The work queue never holds an entry that the Mission state of its node contradicts.
+After the commit the Mission Service wakes the Scheduler, and the Scheduler coalesces wakeups.
+A peek reads the first entry of the order and removes nothing.
+Project configuration changes and claim changes also trigger a recheck of the affected scope.
 An idle project consumes no processor turn and loses no durable obligation.
 Daemon shutdown stops new claims and preserves accepted delivery and execution obligations.
 
@@ -44,8 +44,8 @@ No other state admits a claim.
 Membership is not the Mission state `Available`: a claimable `Waiting` node is not `Available`.
 An entry carries the node, its admitted kind of claim, its priority and a time-ordered identity.
 The identity carries the creation time of the entry.
-The Scheduler creates the entry when it processes the notification that makes the node claimable.
-It removes the entry when the node leaves that claimable state.
+The Mission Service inserts the entry in the transaction that makes the node claimable.
+It removes the entry in the transaction that moves the node out of that claimable state.
 A release with further work creates a new entry.
 A priority change keeps the identity, and a held-out entry keeps the identity.
 
@@ -58,23 +58,19 @@ No priority and no age makes a `Blocked`, `Paused`, `Pending` or incompatible no
 A targeted claim ignores the order, because the harness names its node.
 
 Priority is an integer with a default of 0.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, its record and its notification.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, its record and the reorder of the entry.
 That section states the value of an absent priority.
 The entry holds a copy of the recorded priority, and the Mission Service stays its source.
-A priority notification reorders the entry.
+The Mission Service reorders the entry in the transaction that records the priority.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) states that an import carries no priority.
 
-Reconciliation follows accepted changes, and selection follows work pulls.
+The queue writes follow accepted changes, and selection follows work pulls.
 Neither path scans every project.
-A large graph change affects many nodes and requires bounded processing.
-The Scheduler builds the work queue of a project in bounded batches at the first start of that project.
-Background verification also uses bounded batches.
-An incomplete work queue proves nothing about the claimable nodes of the mission.
-Catch-up for the affected scope wakes waiting work pulls.
+A large graph change affects many nodes, and the Mission Service writes their entries in its one transaction.
+A wakeup for the affected scope wakes waiting work pulls.
 A stale entry suggests a node and never authorizes it; the claim operation rechecks.
-The Scheduler bounds retries of stale entries and yields between batches.
 
-The Scheduler bounds processor time per project turn for both reconciliation and claim handling.
+The Scheduler bounds processor time per project turn for both wakeup handling and claim handling.
 One busy project cannot consume the pool.
 This bound specifies no ordering policy across projects.
 Work-pull progress requires compatible instances that pull and sufficient counts and processing time.
@@ -87,7 +83,7 @@ Coordination covers a short decision and never holds a project-wide lock during 
 The Scheduler Service supports 1,000 active projects on one daemon.
 The fairness bound survives a noisy project that competes with quiet projects.
 Three properties have bounds and measurements.
-Discovery lag measures the interval from an accepted change to its work-queue effect.
+Discovery lag measures the interval from the commit of an accepted change to the handling of its wakeup.
 Claim latency measures the interval from a work pull to a claim when work exists.
 Intake refusal is the retryable response of the intake beyond a bounded inbox depth.
 This document names no value for a bound.
@@ -190,6 +186,12 @@ Both acquisition paths use the attempt opening, revision pinning and claim endin
 The external harness hosts its own executions and never writes the execution record or authorizes its own claim.
 kanthord creates no worker instance for an external harness.
 
+The Scheduler serves a work pull in three ways.
+A wakeup from the Mission Service makes the Scheduler serve the waiting work pulls of the project by the order of the work queue.
+An idle Scheduler with entries left serves the waiting work pulls by the same order.
+An on-demand request from a service of the daemon names a node that holds an entry, and the Scheduler serves that node to the next compatible work pull ahead of the order.
+The on-demand request returns when the claim exists, it holds no claim of its own, and the Scheduler bounds its wait as it bounds a waiting work pull.
+
 When no work matches, the Scheduler returns no work or waits asynchronously for a bounded period.
 Waiting holds no lock, no processor permit and no node reservation.
 The Scheduler bounds waiting-request counts and timeouts separately from claim handling.
@@ -265,11 +267,11 @@ That fact has two forms.
 
 A reviewer release that leaves a required external action unrequested names the observation that the action follows.
 The Scheduler records the fact as a wait record and marks the entry as held out.
-It returns the node to the work queue when a notification carries that fact.
+The Mission Service releases the held-out entry in the transaction that commits that fact.
 Writing the wait record reads the current accepted facts at the release.
 A fact that already holds satisfies the wait at once.
-The write serializes with notification processing for the project, so no intervening fact disappears.
-The Scheduler maps a child change to its parent's wait from the graph that it reads from the Mission Service.
+The write serializes with the transactions of the Mission Service for the project, so no intervening fact disappears.
+The work queue maps a child change to the wait of its parent from the graph of the Mission Service.
 A graph change that changes the named set rechecks the wait.
 The wait record adds no Mission state and gates no admission.
 The work-pull path rechecks the wait fact at the claim.
@@ -323,9 +325,10 @@ This document defines no further recovery rule, retry policy or budget beyond th
   A worker binding through one of its instances, or a permitted client identity of an external harness, is a claimant.
 - **work pull**: The request of a worker instance for compatible work within its project and worker binding.
 - **targeted claim**: The request of an external harness to claim a named node under a permitted client identity.
+- **on-demand request**: The request of a service of the daemon that names a node with an entry and returns when the Scheduler serves that node to a compatible work pull.
 - **role**: The claimant's kind of work, from the closed set `executor` and `reviewer`.
-- **scheduling processor**: A pooled processor that makes a short scheduling decision or reconciles affected work.
-- **work queue**: The persistent ordered entries of claimable nodes of a project, subject to a wait record.
+- **scheduling processor**: A pooled processor that makes a short scheduling decision or handles a wakeup.
+- **work queue**: The Scheduler component that holds the persistent ordered entries of claimable nodes of a project, subject to a wait record, with a public insert and delete that the Mission Service calls.
 - **priority**: The integer that orders the work queue, with default 0 and higher values first.
 - **claim**: The exclusive authority of a claimant to execute a node's steps or evaluate the node.
 - **lease**: The record of validity, expiry, renewal and loss declaration for a claim or an observation obligation.

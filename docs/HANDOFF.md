@@ -1,32 +1,21 @@
 # Handoff
 
-Open work as of 2026-09-13.
+Open work as of 2026-09-17.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
 ## Next session
 
-- [ ] Start with the Mission item on the revision difference between attempts. Aelita asked the question on 2026-09-13 and recommends no difference: one sentence after "The read of a human returns every revision." states that the list of a worker holds the pinned revision and every older revision, and that the Mission Service computes no difference because each record carries its change.
-- [ ] Resume the [B9 failure and recovery session](#b9-failure-and-recovery).
+- [ ] Write the Worker Service document: scope with Ulrich, then `/debate`, then `/pi`, then `/debate` review. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping.
-- [ ] Clarify how the Project Service establishes a client identity.
-- [ ] Decide whether Configuration lifecycle and consistency in `docs/project-service.md` should express the change classification as a three-column table.
 - [ ] State what a configured action follows: the passing assessment, or the expected end state of another configured action of the node. State how a policy on a binding of another kind, for example a channel, decides when a node requires its configured action, the repository strategy being the first such policy. Both wait for the notification policy design, because a notification lives on a channel binding that no page defines yet.
-
-## Mission Service
-
-- [ ] Decide whether the Mission Service returns the difference between the revisions pinned by successive attempts.
-- [ ] Define semantic no-op import detection when an unchanged filename reference resolves to a different node identifier.
-- [ ] Qualify the Evidence sentence in `docs/mission-service.md` that an objective commit is a landed commit. Cover a success override from `External.Failed`, prose evidence and non-repository evidence.
-- [ ] Decide whether `docs/overview.md` needs an `attempt` vocabulary entry.
 
 ## Scheduler Service and delivery
 
-- [ ] Complete the work-discovery mechanisms across Mission and Scheduler: notification format and transport, durable handoff, work-queue consistency, bootstrap and reconciliation, and bounded processing across projects.
 - [ ] Set numerical acceptance bounds for discovery lag, claim latency and inbox depth in the implementation epics, against the 1,000-project workload.
-- [ ] Design the event-to-work contract across Scheduler, Project and Mission for new work arriving through Slack or another provider, including the authority to create nodes, goals and validation criteria.
+- [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Scheduler, Project and Mission: how a delivery is classified, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort.
 - [ ] Add the skills and extensions that support external-harness integration.
 
 ## Worker Service
@@ -41,10 +30,6 @@ Read the owning design document before taking an item, and remove the item once 
 ## Tracking Service
 
 - [ ] Write the Tracking Service document after the Worker Service document.
-
-## Documentation assets
-
-- [ ] Make the small labels in `docs/assets/architecture-containers.svg` readable in the 900px documentation column.
 
 ## B9, failure and recovery
 
