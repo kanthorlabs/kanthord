@@ -72,20 +72,46 @@ A second binding for the repository `kanthorlabs/kanthord` is refused, and a sec
 The bindings that one project holds.
 
 A project binds two repositories, one `tdd@1` worker and two provider accounts.
-The worker binding holds one entry for each agent of `tdd@1`, and each entry names a provider account binding by identity.
+The `tdd@1` binding holds no entry, so its agents run on their default configuration, and the default account of each provider serves them.
 The Project Service rejects the set when it references a binding that does not exist.
 The Project Service validates the set when the project writes it, and it validates a binding again when an execution resolves it.
+
+## entry
+
+The override of the default configuration of one agent inside a worker binding.
+The term names no closed set.
+
+The worker binding `general-frontier` of `general@1` holds an entry for its agent that names the model identifier `gpt-6-astra` and the reasoning effort `high`, and nothing else.
+Every other value of the agent comes from the default configuration that `general@1` declares.
+
+## effective configuration
+
+The configuration of one agent under one worker binding: the values that the entry names, and the default configuration for every other value.
+The term names no closed set.
+
+Under `general-main`, which holds no entry, the effective configuration of `general@1` is its default configuration, and the default account of its provider serves it.
+Under `general-frontier`, the effective configuration takes the model identifier and the reasoning effort from the entry and the provider from the default configuration.
+The Project Service rejects the binding set when `gpt-6-astra` refuses an option that the default configuration supplies.
+
+## default account
+
+The provider account binding that serves a native agent whose entry names no account, for the provider of its default configuration.
+A project holds at most one default account for each provider.
+
+Project `atlas` marks `openai-dev` as the default account of `openai`.
+A human adds `openai-review` without the mark, and `general-main` keeps `openai-dev`.
+The binding `general-frontier` names `openai-review` in its entry.
 
 ## revision
 
 One version of the configuration of a binding.
 
-A worker binding holds one entry that names a provider account binding and a model identifier.
+A worker binding holds one entry that names a model identifier.
 The project changes the model identifier.
 The identity of the binding stays, and the change creates a revision.
 Every reference to that binding stays valid, because a reference never names a revision.
 An execution that resolves that revision records it.
-A change to the credential reference of the binding creates a revision too.
+A change to the credential reference of a provider account binding creates a revision of that binding too.
 
 ## replacement binding
 
@@ -256,13 +282,21 @@ That resolution authorizes one operation, and the next operation resolves the bi
 The execution records the binding revision that it resolves.
 A local disablement takes effect at the next resolution.
 
+## base branch
+
+The branch of a repository that the repository strategy names as the origin of every node branch and as the target of the configured repository action.
+The term names no closed set.
+
+Project `atlas` names `develop` as the base branch of `kanthorlabs/kanthord` and `main` as the base branch of `kanthorlabs/apps`.
+Every node branch of an objective on `kanthorlabs/kanthord` starts from `develop`, and the pull request of the objective targets `develop`.
+
 ## expected end state
 
 The state that a configured repository action states on the git platform.
 
 Under a repository strategy that requires a pull request for every change, the configured repository action opens a pull request.
 The expected end state of that action is the merge of that pull request.
-Under a repository strategy that requires a merge and push, the expected end state is the push to main.
+Under a repository strategy that requires a merge and push, the expected end state is the push to the base branch.
 [overview.md](viewer.html?p=overview.md) owns landing, which is the observed expected end state.
 
 ## fire-and-forget action
