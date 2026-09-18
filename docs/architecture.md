@@ -111,9 +111,3 @@ It shows the relations that the sections below name.
 - The Worker Service uses a provider credential that the Project Service holds.
 - The Worker Service reaches a large language model provider.
 - Every service writes telemetry to the Tracking Service.
-
-## Vocabulary
-
-- **service**: A logical part of one process with a boundary that separates authority.
-- **telemetry**: An operational record of what the system did.
-- **credential**: What authenticates an operation on a resource that a project uses.

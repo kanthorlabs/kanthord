@@ -13,7 +13,7 @@ It describes no mechanism of another service.
 
 ## Mission structure and nodes
 
-The [overview](overview.md#vocabulary) defines a mission, an initiative, an objective, a task, an execution, a worker, the act of executing a node and landing.
+The [overview](overview.vocabulary.md) defines a mission, an initiative, an objective, a task, an execution, a worker, the act of executing a node and landing.
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Containment and dependency are the two edge kinds.
@@ -280,7 +280,7 @@ A correction names what it corrects.
 ## Evaluation and assessment
 
 The Mission Service performs no evaluation, and it is the record authority.
-A [claimant](scheduler-service.md#vocabulary) with the reviewer role performs an evaluation.
+A [claimant](scheduler-service.vocabulary.md#claimant) with the reviewer role performs an evaluation.
 `reviewer@1` is a worker whose method is evaluation.
 `reviewer@1` takes an objective or an initiative, and it never takes a task.
 

@@ -11,7 +11,7 @@ This file is not a design document, and `architecture.md` stays the single sourc
 
 ## service
 
-A logical part of one process. The set is closed and it holds five values.
+A logical part of one process with a boundary that separates authority. The set is closed and it holds five values.
 
 - **Project Service**
 - **Mission Service**
@@ -77,6 +77,7 @@ An operational record of what the system did.
 
 ## credential
 
+What authenticates an operation on a resource that a project uses.
 `architecture.md` names two credentials in its relations.
 
 - **a repository credential**, which an execution and the observer of the Scheduler Service use
