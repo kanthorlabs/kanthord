@@ -110,13 +110,19 @@ The obligation holds a lease, and the observer holds no claim on "Add password r
 
 GitHub delivers the merge of pull request 42 for "Add password reset".
 The Scheduler stores the delivery durably in its inbox before it acknowledges acceptance.
-A duplicate with the same source and provider delivery identity creates no second effect for that project's external object.
+A duplicate with the same source and platform delivery identity creates no second effect for that project's external object.
 
-## adapter
+## observer
 
-The GitHub adapter resolves the delivery about pull request 42 through the repository binding and the address of that pull request.
+The observer is a Scheduler Service component that the scheduling processors execute on an observation obligation.
+It resolves a delivery to an external object.
+It reads the state of the external object through the platform gateway of the Worker Service under its service identity.
+It folds that state into the observed state.
+
+The GitHub implementation decodes the delivery about pull request 42 into GitHub event types.
+The observer resolves that delivery through the repository binding and the address of pull request 42.
 The external object names "Add password reset" and attempt 1.
-The adapter reads the merged provider state and folds it into the observed state of the observation record.
+The observer reads the merged state through the platform gateway and folds it into the observed state of the observation record.
 
 ## instance healthcheck
 

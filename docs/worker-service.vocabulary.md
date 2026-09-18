@@ -15,10 +15,10 @@ This file is not a design document, and `worker-service.md` stays the single sou
 The overview owns the term.
 This revision of the Worker Service supplies four workers.
 
-- **general@1**: the steps method with the native agent `general@1`.
+- **general@1**: the steps method with the native agent `swe@1`.
 - **reviewer@1**: the evaluation method with the native agent `re@1`.
-- **claude@1**: the steps method with the coding agent `claude@1`, the Claude Code program.
-- **opencode@1**: the steps method with the coding agent `opencode@1`, the opencode program.
+- **claude@1**: the steps method with the coding agent `swe@1`, the Claude Code program.
+- **opencode@1**: the steps method with the coding agent `swe@1`, the opencode program.
 
 ## steps method
 
@@ -32,19 +32,22 @@ Its execution takes the three tasks of the pinned revision in the order of the r
 The evaluation method is the method of a worker whose executions evaluate a node and request its required external actions.
 `reviewer@1` holds the evaluation method.
 A `reviewer@1` instance claims "Add password reset" from `Waiting`, checks out the commit that the objective evidence names in a fresh workspace, runs the verification command, records its result as produced evidence and writes the assessment.
-A later `reviewer@1` instance claims the same objective from `External.Requested`, evaluates nothing, requests the unrequested action whose predecessor landed, and releases.
-After a change request on pull request 42 blocks the objective, the `reviewer@1` execution of attempt 2 reuses that pull request, because it is open and it fulfils the operands, and it performs the network git write only.
+A later `reviewer@1` instance claims the same objective from `External.Requested` and evaluates nothing.
+The action performer requests the unrequested action whose predecessor reaches its expected end state, and the reviewer execution releases.
+A change request on pull request 42 blocks the objective.
+For the reviewer execution of attempt 2, the action performer reuses that pull request because it stays open and fulfils the operands.
+The action performer performs the network git write only.
 
 ## native agent
 
 A native agent is an agent loop that the Worker Service runs itself.
-`general@1` and `re@1` are native agents.
-The Worker Service runs the agent loop of `general@1` and sends each model inference call through the model gateway with the provider account, the model identifier and the reasoning effort of the effective configuration of `general@1` under worker binding `general-main`.
+The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
+The Worker Service runs the agent loop of `swe@1` and sends each model inference call through the model gateway with the provider account, the model identifier and the reasoning effort of the effective configuration of the agent under worker binding `general-main`.
 
 ## coding agent
 
 A coding agent is a program that the Worker Service runs as a child process in the workspace of an execution.
-The agent of `claude@1` and the agent of `opencode@1` are coding agents.
+The agent `swe@1` of `claude@1` and the agent `swe@1` of `opencode@1` are coding agents.
 The Worker Service starts the Claude Code program in the workspace of "Add password reset" with the prompt of task "Add reset token expiry".
 The program runs under the model identifier and the reasoning effort of the effective configuration of `claude@1`, and it performs its own model inference call under the provider authentication that the operator configured, so no model gateway of the daemon takes part in the execution of a coding agent.
 The program pushes nothing itself, because the repository gateway performs the network git write after the program exits.
@@ -58,14 +61,97 @@ A change to a default configuration is a new worker version.
 
 ## gateway
 
-A gateway is a Worker Service component through which an execution performs an authenticated operation that the Project Service authorizes.
-The set is closed and it holds two values.
+A gateway is a Worker Service component through which a caller performs an authenticated operation that the Project Service authorizes.
+The set is closed and it holds three values.
 
 - **model gateway**: performs a model inference call.
-- **repository gateway**: performs a network git read, a network git write and a platform action.
+- **repository gateway**: performs a network git read and a network git write.
+- **platform gateway**: performs every operation on the API of an external platform through the platform implementation of that platform.
 
 Execution 1 of "Add password reset" asks the repository gateway to push the node branch.
 The gateway resolves the repository binding of the objective through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
+
+The action performer asks the platform gateway to open pull request 42 for the node branch of "Add password reset".
+The platform gateway selects the GitHub implementation because the repository binding of the objective names GitHub.
+The GitHub implementation resolves the binding through the Project Service under the execution identity before the call.
+
+## platform implementation
+
+A platform implementation exposes the operations of its platform under the names and the parameters of that platform.
+The set is open.
+The first version holds one value.
+
+- **GitHub implementation**
+
+The GitHub implementation exposes the operations of GitHub.
+For example, it opens a pull request, reads a pull request and lists the review comments of a pull request.
+It derives the owner `kanthorlabs` and the repository `kanthord` from the repository binding.
+A caller supplies neither resource selector.
+
+## action performer
+
+The action performer requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
+Its callers form a closed set of two values.
+
+- **evaluation method of reviewer@1**
+- **MCP tool of an external harness**
+
+The reviewer execution of `reviewer@1` evaluates "Add password reset" with agent `re@1`.
+Its evaluation method passes only the execution identity to the action performer, which opens pull request 42.
+The reviewer execution of external harness `claude-code` invokes the same action performer through its MCP tool for "Add password reset".
+It passes only its execution identity.
+The action performer derives node branch `kanthord/obj-7f3a` and base branch `main` from the records, without operands from either caller.
+A second invocation under the same claim dispatches nothing when the first dispatch remains unresolved.
+
+## return class
+
+A return class identifies one kind of item that the action performer returns.
+The set is closed and holds four values.
+
+- **submitted external objects**
+- **actions that await a prerequisite**, with the observation that each one follows
+- **actions whose request fails before any effect**, with the refusal
+- **actions whose effect or recording is uncertain**
+
+For "Add password reset", the action performer submits pull request 42 as an external object and returns that external object.
+For "Add password reset", a second action awaits the merge observation of pull request 42 and returns that observation as its wait fact.
+For "Add password reset", the platform refuses an action for authorization before any effect, and the action performer returns the refusal.
+For "Add password reset", the platform response fails to arrive after dispatch, and the action performer returns the action with an uncertain effect.
+Only the prerequisite class carries a wait fact.
+
+## result class
+
+A result class identifies the outcome that a platform call reports when it does not succeed.
+A call that succeeds returns the result of the operation and no result class.
+The set is closed and holds four values.
+
+- **confirmed failure that establishes no effect**
+- **retryable refusal that establishes no effect**
+- **final refusal**
+- **unknown outcome**
+
+A GitHub call fails before dispatch and confirms no effect.
+GitHub refuses a read of pull request 42 because of a rate limit, with no effect, and permits a retry.
+GitHub refuses a call to open pull request 42 because authorization fails, and the call returns a final refusal.
+A GitHub call to open pull request 42 loses its response after dispatch, so the implementation reports an unknown outcome.
+
+## MCP server
+
+The MCP server is the daemon component that exposes tools as one form of the API.
+The daemon runs one MCP server.
+Its client kinds form a closed set of two values.
+
+- **native agent**, under the execution identity of its hosted execution
+- **external harness**, under its client identity, client secret and the execution identity of its live claim
+
+Each tool maps to one method of a platform implementation or to the action performer.
+The MCP server exposes individually approved resource-scoped read methods and the tool of the action performer.
+It exposes the tool of the action performer to an external harness only.
+It exposes no other write.
+The external harness `claude-code` authenticates with client identity `claude-code-reviewer` and its client secret.
+It presents the execution identity of its evaluation claim on "Add password reset" and calls the tool of the action performer.
+The MCP server exposes the read of pull request 42 and the list of its review comments to that external harness.
+It exposes no direct platform write.
 
 ## runtime identity
 
@@ -101,9 +187,15 @@ The verification command is an optional field, and a method reads it when the no
 ## instance healthcheck
 
 The Scheduler Service owns the term, and the Worker Service produces the check.
-The instance of `general@1` passes: the effective configuration of `general@1` resolves under the binding set of the project with the default account of its provider, and a native agent requires no program on the host.
+The instance of `general@1` passes: the effective configuration of its agent resolves under the binding set of the project with the default account of its provider, and a native agent requires no program on the host.
 The instance of `general@1` fails when the project holds no default account for the provider of the agent and no entry names one.
 The instance of `claude@1` fails when the Claude Code program is absent from the host.
+
+## trust boundary
+
+The trust boundary is the containment that the operator provides, and the Worker Service runs the tool of an agent and the verification command of a node inside it.
+The term names no closed set.
+The verification command of "Add password reset" comes from the repository `kanthorlabs/kanthord`, so it runs inside the boundary and reaches no resource of another project.
 
 ## workspace
 
