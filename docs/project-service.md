@@ -164,11 +164,3 @@ The diagram shows the binding graph that these rules act on.
 It shows every reference that a replacement invalidates.
 
 [![Binding diagram for the Project Service](assets/project-service-bindings.svg)](assets/project-service-bindings.svg)
-
-## Vocabulary
-
-- **capability**: One class of authenticated operation on a resource.
-- **client secret**: The secret that the Project Service issues once for a permitted client identity and that an external harness presents with that identity to authenticate a request.
-- **custody**: The holding of secret material behind a protected facility.
-- **fire-and-forget action**: An external action that its accepted request resolves, with no end state to observe.
-- **request-reply action**: An external action that an accepted observation of its end state resolves.

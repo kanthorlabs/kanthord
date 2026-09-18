@@ -318,22 +318,3 @@ The Mission Service refuses current effect from a submission under a revoked cla
 The Project Service refuses an operation from a revoked claimant.
 The lease and the loss declaration are the whole liveness contract of this document.
 This document defines no further recovery rule, retry policy or budget beyond the count.
-
-## Vocabulary
-
-- **claimant**: The holder of a role and a count that claims a node.
-  A worker binding through one of its instances, or a permitted client identity of an external harness, is a claimant.
-- **work pull**: The request of a worker instance for compatible work within its project and worker binding.
-- **targeted claim**: The request of an external harness to claim a named node under a permitted client identity.
-- **on-demand request**: The request of a service of the daemon that names a node with an entry and returns when the Scheduler serves that node to a compatible work pull.
-- **role**: The claimant's kind of work, from the closed set `executor` and `reviewer`.
-- **scheduling processor**: A pooled processor that makes a short scheduling decision or handles a wakeup.
-- **work queue**: The Scheduler component that holds the persistent ordered entries of claimable nodes of a project, subject to a wait record, with a public insert and delete that the Mission Service calls.
-- **priority**: The integer that orders the work queue, with default 0 and higher values first.
-- **claim**: The exclusive authority of a claimant to execute a node's steps or evaluate the node.
-- **lease**: The record of validity, expiry, renewal and loss declaration for a claim or an observation obligation.
-- **wait record**: The record of an accepted fact that a released execution waits for, which holds its entry out of work-pull selection.
-- **observation obligation**: The Scheduler record of an observation to perform, with a lease and a recovery path, without a node claim.
-- **inbox**: The durable store of accepted provider deliveries that await processing.
-- **adapter**: The provider-specific component that resolves a delivery and folds provider state into an observed state.
-- **instance healthcheck**: The fresh check of a worker instance that a work pull requires before a claim.
