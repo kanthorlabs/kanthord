@@ -50,6 +50,8 @@ Under the HTTPS form, they require an OAuth credential or an API key of the git 
 A platform action requires an OAuth credential or an API key under both forms.
 A repository binding holds one credential reference for each capability that it requires.
 One credential reference satisfies more than one capability.
+A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
+The Project Service validates the length of the project prompt against a fixed bound.
 
 ## Execution configuration and instance count
 

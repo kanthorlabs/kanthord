@@ -22,6 +22,25 @@ It disables the version check, the install telemetry and the provider catalog re
 It pins the exact pi version, and a pi version bump is a deliberate change to the workers that run on it.
 Every runtime setup call carries an abort signal with a deadline.
 
+## Prompt composition
+
+The prompt composer resolves the global prompt from the daemon configuration, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
+It resolves the project prompt from the repository binding, then `AGENTS.md` of the workspace root, then `CLAUDE.md` of the workspace root.
+It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
+It rejects a path of the workspace that a link resolves outside the workspace.
+It follows a link of the host location, because the operator manages the dotfiles of the host.
+A deadline bounds every read.
+The repository context-file discovery of pi stays disabled, and the composer performs every load, so one loader holds the order and the provenance.
+pi receives the base prompt and the agent prompt as its system prompt, with the framing that states the layers and their precedence.
+It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
+The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
+The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
+The first version supplies one base prompt for `swe@1` and `re@1`.
+Its name and its content are an open item.
+The bound of the global prompt and the bound of the project prompt are epic decisions.
+The acceptance path proves the configured precedence, an absent source, an invalid source, a disabled layer and a link that leaves the workspace.
+It proves that a reviewer execution takes no agent file of the workspace.
+
 ## Model gateway interception
 
 One interception point carries every inference call of a native agent, including compaction and retries.

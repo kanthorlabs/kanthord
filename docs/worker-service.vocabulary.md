@@ -48,9 +48,77 @@ The Worker Service runs the agent loop of `swe@1` and sends each model inference
 
 A coding agent is a program that the Worker Service runs as a child process in the workspace of an execution.
 The agent `swe@1` of `claude@1` and the agent `swe@1` of `opencode@1` are coding agents.
-The Worker Service starts the Claude Code program in the workspace of "Add password reset" with the prompt of task "Add reset token expiry".
+The Worker Service starts the Claude Code program in the workspace of "Add password reset" with the work prompt of task "Add reset token expiry".
 The program runs under the model identifier and the reasoning effort of the effective configuration of `claude@1`, and it performs its own model inference call under the provider authentication that the operator configured, so no model gateway of the daemon takes part in the execution of a coding agent.
 The program pushes nothing itself, because the repository gateway performs the network git write after the program exits.
+
+## agent archetype
+
+An agent archetype is the class of work that an agent does.
+The set is open.
+The first version holds one value.
+
+- **coding archetype**
+
+The agents `swe@1` and `re@1` hold the coding archetype, because both work on the code of a repository.
+A later agent that writes a message on Slack holds another archetype.
+
+## prompt layer
+
+A prompt layer is one part of the prompt of a native agent, and it has one owner.
+The set is closed and it holds five values.
+
+- **global prompt**: the operator of the daemon owns it.
+- **base prompt**: the worker that declares the agent owns it, and it holds for every agent of one archetype.
+- **agent prompt**: the worker that declares the agent owns it.
+- **project prompt**: the project that binds the repository owns it.
+- **work prompt**: the node revision that the attempt pins owns it.
+
+The global prompt of the daemon states "Every answer is short. A commit message states the change and no reason."
+`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, because both agents hold the coding archetype.
+`reviewer@1` declares the agent prompt of `re@1`, which states that the agent judges evidence against criteria and changes no file of the repository.
+The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
+The work prompt of task "Add reset token expiry" states its goal, its steps and its validation criteria.
+`general@2` declares another agent prompt for `swe@1`, because a change to an agent prompt is a new worker version.
+
+## prompt source
+
+A prompt source is one origin of the text of a prompt layer.
+The global prompt and the project prompt each hold an ordered list, and the set of each list is closed.
+
+- global prompt: **the configuration of the daemon**, then **the agent file of the host**.
+- project prompt: **the repository binding**, then **the agent file of the workspace**.
+
+The base prompt and the agent prompt each take the declaration of their worker, and the work prompt takes the pinned node revision.
+The daemon holds no configured global prompt and the host holds an agent file, so the global prompt takes that file.
+The daemon holds a configured global prompt and the host holds an agent file.
+The global prompt takes the configuration, and the composer reads no file.
+The repository binding of `kanthorlabs/kanthord` holds no project prompt and the workspace holds an agent file, so the project prompt takes that file.
+The workspace holds an agent file that exceeds the bound, so that source is invalid and the project prompt is absent.
+The configuration of the global prompt holds the value that disables the layer, so the composer reads no agent file of the host.
+
+## agent file
+
+An agent file is a convention file that an agent harness reads by convention.
+The set is closed and it holds two values.
+
+- **AGENTS.md**
+- **CLAUDE.md**
+
+The host of the daemon holds both files.
+The workspace root of `kanthorlabs/kanthord` holds `AGENTS.md` only.
+
+## prompt composer
+
+The prompt composer is the Worker Service component that produces the prompt of a native agent.
+The term names no closed set.
+The composer of Execution 1 on "Add password reset" resolves five layers.
+It takes the global prompt from the agent file of the host.
+It takes the base prompt and the agent prompt from the declaration of `general@1`.
+It takes the project prompt from the repository binding of `kanthorlabs/kanthord`.
+It takes the work prompt from task "Add reset token expiry".
+It reads no agent file of the workspace, because the repository binding supplies the project prompt.
+The reviewer execution of the same objective composes the project prompt from that repository binding, and it reads no agent file of the workspace.
 
 ## default configuration
 
