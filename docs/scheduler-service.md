@@ -9,7 +9,7 @@ title: Scheduler Service
 This document describes the Scheduler Service.
 It describes the work queue and its order, the work pull and the targeted claim, the execution record and its lease.
 It describes the role and the count of a claimant.
-It describes the intake of provider deliveries and the observer.
+It describes the intake of platform deliveries and the observer.
 It describes no mechanism of another service.
 
 ## Topology and work queue
@@ -92,15 +92,15 @@ The [Tracking Service](architecture.md#tracking-service) holds these measurement
 
 ## Intake and observation
 
-The Scheduler Service accepts provider deliveries through the API ingress of the daemon into a durable inbox.
+The Scheduler Service accepts platform deliveries through the API ingress of the daemon into a durable inbox.
 A success acknowledgement follows durable acceptance, never an in-memory enqueue.
 Acceptance promises no execution.
 The intake operates when a project has no live worker instance.
 Processing occurs at least once and produces idempotent effects.
-The Scheduler recognizes a duplicate by source and provider delivery identity.
+The Scheduler recognizes a duplicate by source and platform delivery identity.
 It deduplicates effects per project and per external object, because one delivery can concern several subscribed projects.
 The Scheduler bounds payload size, queued deliveries and processing concurrency.
-It bounds intake and adapter processing separately from work-pull handling.
+It bounds intake and observer processing separately from work-pull handling.
 Beyond a bounded inbox depth, the intake refuses with a retryable response.
 It never acknowledges a delivery and drops it.
 Stored delivery content is minimal, has bounded retention and holds no credential.
@@ -115,19 +115,23 @@ The observation obligation supplies the external object for that resolution.
 
 The observer is a component of the Scheduler Service, not a worker instance.
 Nothing dispatches the observer.
-The scheduling processors execute the provider adapter on an observation obligation.
-The adapter is the observer: it reads the provider state and folds it into the observed state.
+The scheduling processors execute the observer on an observation obligation.
+The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the external object.
+It reads the state of that object through the [platform gateway](worker-service.md#platform-gateway-action-performer-and-mcp-server) of the Worker Service.
+The observer folds that state into the observed state.
 It writes the observation record to the Mission Service.
-The [Mission Service](mission-service.md#evidence) owns the external object, the observation record and its transition on the accepted observation without provider interpretation.
+The [Mission Service](mission-service.md#evidence) owns the external object and the observation record.
+It owns the transition on the accepted observation without platform interpretation.
 The observer decides the observed state and never the outcome of the node.
 The [Mission Service](mission-service.md#the-enforcement) owns observation admission without a node claim.
-The scheduling core consumes normalized adapter results and interprets no provider payload.
+The Scheduler Service calls the platform implementation of the Worker Service to decode a delivery into the event types of that platform.
+The scheduling core consumes that decoded delivery and interprets no platform payload.
 
 An observation obligation is a Scheduler record with a lease and a recovery path.
 It is not an execution: it holds no node claim and has no claimant with a role.
 Liveness defines the lease for both an observation obligation and an execution.
 
-The adapter resolves a delivery to an external object by the repository binding and the address that the object names.
+The observer resolves a delivery to an external object by the repository binding and the address that the object names.
 It then resolves the node and the attempt of that object.
 Correlation never depends on the continued existence of the originating instance.
 A repository binding alone is insufficient: projects share a repository, and one binding serves several external objects.
@@ -153,7 +157,7 @@ The Scheduler serves the node after that unblock.
 
 Receiving a delivery is inbound; requesting an external action is outbound.
 The [Mission Service boundary](mission-service.md#boundary) assigns the performance of the request of a required external action and its idempotency to the Worker Service.
-A provider signature grants no authority to write WHAT, execute a node or override an outcome.
+A platform signature grants no authority to write WHAT, execute a node or override an outcome.
 
 ## Work pulls and targeted claims
 
@@ -265,7 +269,7 @@ That fact has two forms.
 - A terminal state of a named child set.
 - An observation of an external object.
 
-A reviewer release that leaves a required external action unrequested names the observation that the action follows.
+A reviewer release for a required external action that awaits a prerequisite names the observation that the action follows.
 The Scheduler records the fact as a wait record and marks the entry as held out.
 The Mission Service releases the held-out entry in the transaction that commits that fact.
 Writing the wait record reads the current accepted facts at the release.

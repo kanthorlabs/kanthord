@@ -60,6 +60,9 @@ It observes an external object on the git platform.
 The Worker Service supplies the workers and the agents.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider and a coding agent.
+It supplies the platform gateway through which every service performs an operation on the API of an external platform.
+It supplies the MCP server through which a native agent and an external harness reach the daemon tools.
+It performs the configured repository action for both harnesses.
 
 ### Tracking Service
 
@@ -80,7 +83,7 @@ It shows the relations that the sections below name.
 
 - A human configures a project, carries out steps, reviews results and overrides an outcome.
 - An external harness executes work, and it reaches kanthord as a client through the API or the CLI.
-  It performs no authenticated operation on an external system, and it invokes that operation through kanthord.
+  It performs no authenticated operation on a resource that a project binds, and it invokes that operation through kanthord.
 
 ## External systems
 
@@ -92,19 +95,21 @@ It shows the relations that the sections below name.
 
 - An external harness reaches the Mission Service, the Project Service, the Scheduler Service and the Tracking Service through the API or the CLI.
 - An external harness requests a targeted claim from the Scheduler Service through the API or the CLI.
-- An external harness invokes a configured repository action through the API or the CLI, and the daemon performs that action.
+- An external harness invokes a configured repository action through the MCP server of the Worker Service.
+- The Worker Service performs that action.
 - A human reaches the Project Service and the Mission Service through the API or the CLI.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
 - The Mission Service notifies the Scheduler Service of an accepted change that can affect scheduling.
 - The Scheduler Service reads the worker bindings, the permitted client identities and their counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
-- The Scheduler Service observes an external object on the git platform, and it uses a repository credential that the Project Service holds.
+- The Scheduler Service observes an external object through the platform gateway of the Worker Service.
+- The Scheduler Service uses a repository credential that the Project Service holds.
 - A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
 - An execution uses a repository credential that the Project Service holds.
 - An execution writes evidence to the Mission Service.
 - A reviewer execution reads the validation criteria and the evidence from the Mission Service.
-- A reviewer execution reads the required external actions of the attempt and its external objects from the Mission Service.
+- The action performer reads the required external actions of the attempt and the external objects of the node from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.

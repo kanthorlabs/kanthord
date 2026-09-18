@@ -12,8 +12,9 @@ A ruling that names a package, a product or a version is deliberate, and a chang
 
 ## Native agent runtime
 
-The first version supplies `general@1` only, and `tdd@1` is postponed to phase 2.
-The native agent of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
+The first version supplies the workers `general@1` and `reviewer@1`.
+The workers `claude@1` and `opencode@1` follow, and `tdd@1` is postponed to phase 2.
+The native agent `swe@1` of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
 The daemon gives pi its own directories.
 It disables the discovery of user extensions, skills, prompt templates and themes.
 It uses an in-memory session manager.
@@ -31,12 +32,51 @@ Environment hygiene of the pi process belongs to the same mechanism.
 ## Tool table
 
 The tool table of a native agent holds three sources.
-The first source is the pi built-in tools: `general@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls.
-The second source is kanthord's own tools, which the daemon serves through an MCP server that it embeds and that pi reaches as a tool source.
+The first source is the pi built-in tools: `swe@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls.
+The second source is kanthord's own tools, which the daemon serves through its MCP server.
+An external harness reaches the same server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the three sources.
 The interactive ask_question tool is excluded.
+
+## Platform gateway and platform implementations
+
+The GitHub implementation calls the GitHub REST API through Octokit at a pinned version.
+A platform implementation is a TypeScript module with its own method signatures and no shared interface.
+The platform gateway is a registry keyed by the platform value of the binding.
+The registry uses static registration and loads no runtime plugin.
+The GitHub implementation decodes a GitHub webhook payload into GitHub event types.
+Every method returns a discriminated union: the success with the result of the operation, or the result class.
+A deadline bounds the retry of a read on a transport error.
+The platform implementation retries no write.
+
+## Repository gateway
+
+The git CLI performs the network git read and the network git write.
+The daemon serves a credential helper for one operation.
+The credential helper writes no credential to a file in the workspace.
+
+## Action performer
+
+One internal function implements the action performer.
+The evaluation method of `reviewer@1` and the MCP tool both call that function.
+A per-execution-identity mutex serializes invocations inside the daemon.
+The mutex establishes the no-redispatch invariant inside one daemon process only.
+A durable dispatch record that survives a daemon restart is the B9 item W2, and it is an epic decision.
+The action performer creates a fresh clone through the repository gateway for a network git write.
+It removes that checkout after the call.
+
+## MCP server
+
+The MCP v2 server in [Tool table](#tool-table) is the one MCP server of the daemon.
+An external harness connects over HTTP with its client identity and client secret.
+The first version approves two read methods of the GitHub implementation.
+
+- The read of a pull request.
+- The list of the review comments of a pull request.
+
+The tool of the action performer takes the execution identity only.
 
 ## Commit attribution
 
@@ -49,6 +89,10 @@ The lease runs in the execution.
 On revocation or loss the execution aborts the pi session and dispatches nothing after.
 Abort is not proven to kill every descendant process, so the quiescence check before workspace reuse that the page states needs a mechanism.
 The budget of a turn count and a wall time is enforced on pi turn events and by abort, with the bash timeout below the remaining budget.
+
+## Trust boundary
+
+The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the daemon.
 
 ## Traces
 

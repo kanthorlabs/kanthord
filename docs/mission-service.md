@@ -219,17 +219,17 @@ The Worker Service uses that representation under its own rules.
 The Mission Service acts on an accepted observation alone.
 An external object carries its own identity, because one binding of the Project Service serves several requests.
 An external object names the external action that it fulfils, the binding of the Project Service, the address of the remote thing and a label for display.
-The Mission Service parses no provider content.
-An observer interprets the provider, and it writes the accepted observation.
+The Mission Service parses no platform content.
+An observer interprets the platform, and it writes the accepted observation.
 A [fire-and-forget action](project-service.md#repository-configuration-and-policy) is resolved by its accepted request, and a request-reply action is resolved by an accepted observation.
 Every rule of this page that reads the expected end state of an action reads, for a fire-and-forget action, its accepted request.
 
 An observation record is one kind.
 It names the node and the attempt, the external action, the expected end state, the external object, the observed state, the observation time and the authorized observer that wrote it.
 The observed state is the representation that the Mission Service holds of the external state.
-An observer folds the state of a provider into it, and the Mission Service folds nothing itself.
+An observer folds the state of a platform into it, and the Mission Service folds nothing itself.
 An observation that establishes no end state leaves the request unresolved.
-A failure to inspect the provider is therefore not a failure of the request, and it costs no attempt.
+A failure to inspect the platform is therefore not a failure of the request, and it costs no attempt.
 An outcome that an `External.Failed` observation closes names that observation, so the cause of the block is reachable from the outcome.
 The basis of that outcome stays the passing assessment.
 
@@ -380,7 +380,7 @@ Three conditions reach `Blocked`, and each follows the evaluation except the hum
 They are a current assessment that does not pass, an `External.Failed` observation and a human reason on a paused node.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
-The worker handles the detail of that state.
+The [observer](scheduler-service.md#intake-and-observation) records the detail of that state in the observed state.
 
 ### Attempt
 
@@ -641,7 +641,7 @@ The first claim of the node opens attempt 1.
 
 The human block closes the attempt, so a worker instance executes the node again under the next attempt.
 The records of the closed attempt stay.
-The effects on a repository and on a provider stay.
+The effects on a repository and on a platform stay.
 A human who keeps the attempt resumable leaves the node in `Paused`.
 
 ### The unblock
@@ -685,7 +685,7 @@ It reads the outcome of the cleared attempt and the cause that the outcome names
 It reads the unblock record of its attempt.
 A read of a record of a closed attempt migrates nothing.
 
-The external conversation stays with its provider.
+The external conversation stays with its platform.
 The Mission Service copies no external content.
 The next execution fetches that content through the external object.
 
@@ -715,7 +715,7 @@ A completed record stays valid.
 An execution operation that a client requests through the API requires a live claim.
 No execution operation proceeds on a blocked node.
 An authorized observation needs no claim, because an observation is not an execution operation.
-A human who acts directly on the provider is outside the API.
+A human who acts directly on the platform is outside the API.
 The Mission Service refuses nothing there.
 The Project Service owns the authorization of each operation.
 

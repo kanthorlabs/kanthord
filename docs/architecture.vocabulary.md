@@ -44,9 +44,10 @@ The container view shows the external systems around the daemon. The set is clos
 The daemon is one process, and it holds the five services. A client reaches it through the API or the CLI.
 The daemon runs on one host.
 
-- An external harness invokes a configured repository action through the CLI.
-- The daemon performs that action.
-- The external harness performs no authenticated operation of its own.
+- An external harness invokes a configured repository action through the MCP server of the Worker Service.
+- The MCP server is one form of the API.
+- The Worker Service performs that action.
+- The external harness performs no authenticated operation of its own on a resource that a project binds.
 
 ## relation
 
@@ -58,7 +59,7 @@ One relation reads as follows.
 
 ## reviewer execution
 
-An execution whose claimant evaluates a node.
+An execution whose claimant holds the reviewer role.
 The worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.

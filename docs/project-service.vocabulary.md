@@ -29,6 +29,17 @@ These are the capabilities that `project-service.md` names, and the page closes 
 - A commit, a branch and a merge are local, so none of them is a capability.
 - An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
 
+## platform
+
+The platform is the external platform that a binding names.
+The set is open.
+The first version holds one value.
+
+- **GitHub**
+
+The repository binding of `kanthorlabs/kanthord` names GitHub.
+A self-hosted address reveals no platform, so the binding names it explicitly.
+
 ## transport form
 
 The transport form of a repository address determines the credential type that its network git read and write require.
@@ -89,7 +100,7 @@ Every other value of the agent comes from the default configuration that `genera
 The configuration of one agent under one worker binding: the values that the entry names, and the default configuration for every other value.
 The term names no closed set.
 
-Under `general-main`, which holds no entry, the effective configuration of `general@1` is its default configuration, and the default account of its provider serves it.
+Under `general-main`, which holds no entry, the effective configuration of the agent is its default configuration, and the default account of its provider serves it.
 Under `general-frontier`, the effective configuration takes the model identifier and the reasoning effort from the entry and the provider from the default configuration.
 The Project Service rejects the binding set when `gpt-6-astra` refuses an option that the default configuration supplies.
 

@@ -31,6 +31,9 @@ A binding belongs to one project, and no project shares a binding.
 ## Repository configuration and policy
 
 A project binds each repository that it uses.
+A binding that reaches an external platform names its [platform](project-service.vocabulary.md#platform).
+The platform of a binding is a value that the binding holds.
+No service infers it from the repository address.
 The repository strategy states an explicit rule for each repository that requires one.
 The repository strategy names the base branch of the repository: the branch from which an execution creates a [node branch](worker-service.md#executions), and into which the configured repository action merges or pushes.
 A configured repository action states its expected end state on the git platform.

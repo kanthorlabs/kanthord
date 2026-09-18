@@ -164,6 +164,12 @@ A project holds a repository binding for the repository that the objective "Add 
 The binding permits three capabilities.
 The Project Service vocabulary holds the cardinality of each binding kind.
 
+## resource
+
+A resource is what a binding allocates to a project, and it exists independently of that project.
+The term names no closed set, and the [Project Service Vocabulary](viewer.html?p=project-service.vocabulary.md#binding-kind) owns the four binding kinds.
+The project of "Account recovery" binds the repository `kanthorlabs/kanthord`, the worker `general@1`, a provider account at `openai` and a source.
+
 ## provider
 
 A provider is a large language model provider that serves the models that the agents of a worker use.

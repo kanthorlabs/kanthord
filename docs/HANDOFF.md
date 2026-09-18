@@ -5,13 +5,14 @@ Read the owning design document before taking an item, and remove the item once 
 
 ## Next session
 
-- [ ] Rule the remaining open Worker Service items one per message, the hierarchical prompt first, then the external-harness repository action. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
+- [ ] Rule the remaining open Worker Service items one per message, the hierarchical prompt first. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
 - [ ] Decide whether the sentence `Two worker bindings of one worker carry different configuration` requires unequal values or only permits them, and reword it. Two bindings of one worker with identical values are a plausible configuration.
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping.
-- [ ] State what a configured action follows: the passing assessment, or the expected end state of another configured action of the node. State how a policy on a binding of another kind, for example a channel, decides when a node requires its configured action, the repository strategy being the first such policy. Both wait for the notification policy design, because a notification lives on a channel binding that no page defines yet.
+- [ ] Added 2026-09-18 by Ulrich. Design how custody stores the credentials and the secrets that the platform-specific implementations use: the credential types of each platform, GitHub, Slack, Telegram, Jira, the storage of the secret material at rest and its key, the OAuth refresh, and how a platform-specific implementation receives the secret at the moment of the operation without the secret leaving the daemon. The Project Service owns custody, so the answer goes to `project-service.md` for the rule and to `project-service.impl.md` for the mechanism.
+- [ ] State what a configured action follows: the passing assessment, or the expected end state of another configured action of the node. State how a policy on a binding of another kind, for example a channel, decides when a node requires its configured action, the repository strategy being the first such policy. Both wait for the notification policy design, because a notification lives on a channel binding that no page defines yet. `project-service.md` states that a configured repository action states its expected end state. That holds only while every configured repository action is request-reply. Generalize it when a fire-and-forget repository action exists.
 
 ## Scheduler Service and delivery
 
@@ -22,10 +23,9 @@ Read the owning design document before taking an item, and remove the item once 
 
 ## Worker Service
 
-- [ ] POSTPONED 2026-09-18 by Ulrich to phase 2. The first version supplies `general@1` only. Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
+- [ ] POSTPONED 2026-09-18 by Ulrich to phase 2. The first version supplies the workers `general@1` and `reviewer@1`. Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
 - [ ] Design the hierarchical prompt of a native agent: a generic prompt that the worker fixes for the agent, for example `re@1`, and a project-specific layer for the programming language, the development style and the coding conventions. `worker-service.md` today says that a worker fixes the prompt of its agent and that a project sets no prompt, so the design changes that rule. Decide whether a convention file in the repository, `AGENTS.md` or `CLAUDE.md`, informs the prompt. The first run uses the worker-fixed prompt and the pinned revision only, with repository context-file discovery disabled.
 - [ ] Design the base prompt of each agent type. The first type is the coding agent. Discuss which aspects the base prompt covers in a minimalist style, and find an industry gold standard to turn into the base prompt. A communication agent for Slack and email follows later and demonstrates a second agent base type.
-- [ ] State which service performs a configured repository action that an external harness invokes through the API, and how that path reaches the operand and reuse rules of `worker-service.md`.
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 
 ### Next phase

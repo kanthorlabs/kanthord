@@ -9,6 +9,8 @@ title: Worker Service
 This document describes the Worker Service.
 It describes the workers and their agents, the worker instances and how they host an execution, the lifecycle of an execution, the performance of a required external action and the owner of memory.
 For a required external action, it describes the configured repository action only.
+It describes the platform gateway that performs an operation on the API of an external platform.
+It describes the MCP server through which a native agent and an external harness reach the daemon tools.
 It describes no mechanism of another service.
 
 ## Workers and templates
@@ -16,6 +18,8 @@ It describes no mechanism of another service.
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
 A worker declares its name, its method, its one agent, the default configuration of that agent, the node states that its instances claim and its required node format.
+An agent name names a role, and no agent name equals a worker name.
+A configuration is named through a worker binding, never through a bare agent name.
 The [Scheduler Service](scheduler-service.md#claims-roles-and-counts) reads the role of a binding from the declared node states.
 The default configuration of a native agent names its provider, its model identifier and its reasoning effort.
 The default configuration of a coding agent names its model identifier and its reasoning effort.
@@ -42,12 +46,15 @@ A worker fixes the prompt of its agent.
 The prompt renders from the node revision that the attempt pins.
 A project sets no prompt.
 
-The Worker Service supplies two gateways as the tools that perform an authenticated operation.
+The Worker Service supplies three [gateways](worker-service.vocabulary.md#gateway) as the tools that perform an authenticated operation.
 The model gateway performs a model inference call.
-The repository gateway performs a network git read, a network git write and a platform action.
-An execution and its agent reach a git platform through the repository gateway alone.
+The repository gateway performs a network git read and a network git write.
+The repository gateway performs no platform action.
+The platform gateway performs every operation on the API of an external platform.
+It uses the [platform implementation](worker-service.vocabulary.md#platform-implementation) of that platform.
+An execution and its agent reach a git platform through the repository gateway and the platform gateway alone.
 A native agent reaches a provider through the model gateway alone.
-A gateway resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the execution identity.
+A gateway resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the identity that requests the operation.
 For every model inference call of a native agent the Worker Service uses the provider account, the model identifier and the reasoning effort of the effective configuration of the agent, which the Project Service resolves for that call.
 An execution honours every value of the effective configuration of its agent.
 A coding agent performs its own model inference call.
@@ -87,7 +94,7 @@ The healthcheck passes when the effective configuration of the agent resolves un
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
 The tool of an agent and the verification command of a node run code that the repository supplies.
-The Worker Service runs them inside a trust boundary that the operator provides: a disposable host that the operator trusts, or a container around the daemon.
+The Worker Service runs them inside a trust boundary that the operator provides.
 A rule on the content of a command is a policy and no trust boundary.
 
 The sequence diagram below shows the creation of a steps instance and its first work pull, on a node with no attempt.
@@ -132,7 +139,8 @@ The renewal runs outside the agent, so a long model call renews the lease.
 A revoked or lost execution stops its agent and performs no further operation under its execution identity.
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
-After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-read) of the Mission Service require, and it fetches the external content that the external objects of the node reference through the repository gateway.
+After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-read) of the Mission Service require.
+It fetches the external content that the external objects reference through the platform gateway.
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
@@ -342,6 +350,94 @@ sequenceDiagram
     end
 ```
 
+## Platform gateway, action performer and MCP server
+
+The [platform gateway](worker-service.vocabulary.md#gateway) holds one platform implementation for each platform.
+A platform implementation exposes the operations of its own platform under the names and the parameters of that platform.
+No common operation interface exists across platform implementations.
+The set of platform implementations is open.
+A binding that reaches an external platform names its [platform](project-service.md#repository-configuration-and-policy).
+The platform gateway selects the platform implementation by that field.
+No service infers the platform from a repository address.
+A platform implementation derives the resource of a call from the binding.
+A caller supplies no resource selector.
+
+Every call of a platform implementation on the API of its platform names the identity that requests it and the binding that it acts on.
+The platform implementation resolves the binding through the Project Service for each call on the API.
+Custody follows the authorization check.
+A credential stays inside the daemon.
+The platform gateway holds no authority of its own.
+
+The [action performer](worker-service.vocabulary.md#action-performer) requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
+The evaluation method and the MCP tool of an external harness call the action performer.
+Both callers pass the execution identity and nothing else.
+The invocation names no action and supplies no operand.
+For both callers, the action performer checks that the claim of the execution identity is live.
+It checks that the claimant holds the reviewer role.
+It checks that a current passing assessment of the attempt stands.
+The action performer obtains every operand from the records and the evidence snapshot.
+When an action needs a network git write, the action performer makes its own checkout through the repository gateway.
+It depends on no workspace of a hosted execution.
+The action performer serializes the invocations of one execution identity.
+It never dispatches an action whose earlier dispatch is unresolved, across callers and invocations.
+
+The action performer returns items in four [return classes](worker-service.vocabulary.md#return-class).
+
+- Submitted external objects.
+- Actions that await a prerequisite, with the observation that each one follows.
+- Actions whose request fails before any effect, with the refusal.
+- Actions whose effect or recording is uncertain.
+
+Only an action that awaits a prerequisite carries a wait fact.
+This page states no release rule for a request failure or an uncertain effect or recording.
+Every write that fulfils a configured action belongs to the action performer, whichever gateway transports it.
+A push of the steps execution targets the node branch of its objective only.
+A merge or a push into the base branch is a configured repository action.
+
+A platform call that succeeds returns the result of the operation.
+A platform call that does not succeed reports one of four [result classes](worker-service.vocabulary.md#result-class).
+
+- A confirmed failure that establishes no effect.
+- A retryable refusal that establishes no effect.
+- A final refusal.
+- An unknown outcome.
+
+A platform implementation retries a read on a transport error.
+It never retries a write on an unknown outcome.
+
+The daemon runs one [MCP server](worker-service.vocabulary.md#mcp-server).
+The MCP server is one form of the API.
+It serves a native agent and an external harness.
+A native agent presents the execution identity of the execution that hosts it.
+An external harness authenticates with its [client identity](project-service.vocabulary.md#client-identity) and its [client secret](project-service.vocabulary.md#client-secret).
+It presents the execution identity of its claim.
+The MCP server refuses a call whose execution identity belongs to no live claim of that client identity.
+Each tool maps to one method of a platform implementation or to the action performer.
+The MCP server makes no decision of its own.
+The Project Service authenticates the client identity, the Scheduler Service establishes the live claim, and the owning component performs every operation.
+
+The MCP server exposes a list of resource-scoped read methods of the platform implementations and the tool of the action performer.
+The Worker Service permits each read method individually.
+The MCP server exposes no other write to a native agent or to an external harness.
+It exposes the tool of the action performer to an external harness only, because the evaluation method invokes the action performer for a native agent.
+The tool of the action performer takes no parameter beyond the execution identity.
+It returns the four return classes of the action performer.
+A native agent reaches the permitted read methods of the platform gateway as tools through the MCP server.
+A coding agent reaches no gateway.
+
+The platform gateway serves the [observer of the Scheduler Service](scheduler-service.md#intake-and-observation).
+The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the [external object](mission-service.md#evidence) to read its state.
+A platform implementation decodes a delivery of its platform into the event types of that platform.
+The decoding performs no operation on the API.
+The Scheduler Service calls that decoding.
+
+The platform gateway, the action performer and the MCP server are daemon components.
+The [trust boundary](worker-service.vocabulary.md#trust-boundary) of this page is their only containment.
+Another git platform requires one platform implementation, its permitted read methods, a platform value and the corresponding behaviour of the action performer.
+It changes no other rule.
+A platform with a different resource model requires its binding kind, its authorization and its action semantics.
+No page defines those rules.
+
 ## Evaluation and required external actions
 
 The evaluation method follows the criterion and never the node, as the [overview](overview.md#what) states.
@@ -359,28 +455,37 @@ The [Mission Service](mission-service.md#evaluation-and-assessment) owns the rec
 A reviewer execution that claims from `Waiting` performs the evaluation.
 A reviewer execution that claims from `External.Requested` performs no evaluation.
 When the node requires no external action, the passing assessment ends the claim, and the reviewer execution performs nothing more.
-Otherwise, on both paths, after a current passing assessment stands, the reviewer execution reads the required external actions of the attempt and the external objects of the node across every attempt.
+Otherwise, on both paths, the reviewer execution invokes the action performer after a current passing assessment stands.
+The action performer reads the required external actions of the attempt.
+It reads the external objects of the node across every attempt.
 A required action is eligible when it is unrequested in the attempt and it follows no other action.
 A required action that follows another action is eligible when it is unrequested in the attempt and its predecessor reached its expected end state.
-The reviewer execution requests each eligible action until no action is eligible.
-A request of a repository action is a platform action or a network git write through the repository gateway.
-A configured action takes its operands from the records of the attempt, the evidence snapshot and the external object, never from the worker.
-The agent supplies no operand.
+The action performer requests each eligible action for the reviewer execution until no action is eligible.
+A request of a repository action uses the platform gateway for a platform action.
+It uses the repository gateway for a network git write.
+The action performer derives every operand from the records of the attempt, the evidence snapshot and the external object.
+The agent supplies no operand, and an external harness supplies none.
 
-Before it performs a request, the reviewer execution reads the external objects of the node.
+Before it performs a request, the action performer reads the external objects of the node.
 The request reuses the remote thing of an external object of an earlier attempt when three conditions hold.
 The external object names the same external action and the same repository binding.
 The remote thing fulfils the operands of the current request.
 The remote thing is open: the platform still accepts on it the network git write that the action requires.
 An end state of the earlier action does not close the remote thing by itself.
 A reuse performs the network git write that the action requires and no platform write.
-Otherwise the execution performs the action.
-In both cases the execution submits the request to the Mission Service as the external object of the attempt, with the address that the repository gateway resolves.
+Otherwise the action performer performs the action through the platform implementation of the platform of the binding or through the repository gateway.
+In both cases the action performer submits the request to the Mission Service as the external object of the attempt.
+It uses the address that the platform implementation resolves, or the address of the external object that the request reuses.
 That submission is the accepted request of the action.
 The address correlates the external objects of one remote thing across attempts.
 
-The reviewer execution releases after its requests.
-When a required action of the attempt stays unrequested, the release names the observation that the action follows as its wait fact.
+The action performer performs these requests inside the evaluation method for a reviewer execution of kanthord's own harness.
+An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.
+Both paths run the same eligibility, operand and reuse rules.
+
+The reviewer execution releases after its requests when the return of the action performer holds only submitted external objects and actions that await a prerequisite.
+That rule holds for a reviewer execution of an external harness after the tool of the action performer returns.
+When a required action awaits a prerequisite, the release names the observation that the action follows as its wait fact.
 The [Scheduler Service](scheduler-service.md#claims-roles-and-counts) owns the wait record, and the [Mission Service](mission-service.md#continuation-condition) owns the continuation condition.
 
 The sequence diagram below shows the evaluation and the configured repository action, on an objective that requires one action.
@@ -389,9 +494,11 @@ The sequence diagram below shows the evaluation and the configured repository ac
 sequenceDiagram
     autonumber
     participant R as Reviewer instance and its execution
+    participant AP as Action performer
     participant S as Scheduler Service
     participant M as Mission Service
     participant RG as Repository gateway
+    participant PG as Platform gateway
     participant G as Git platform
 
     rect rgb(214, 234, 248)
@@ -414,18 +521,34 @@ sequenceDiagram
         M-->>R: a current passing assessment stands, the node requires an external action
     end
     rect rgb(248, 215, 218)
-        R->>M: read the required external actions of the attempt and the external objects of the node
-        Note over R,M: the action is unrequested and no earlier remote thing fulfils it, so the request performs the action
-        R->>RG: platform action: open a pull request for the node branch
+        R->>AP: request the required external actions of the attempt (execution identity only)
     end
-    rect rgb(226, 227, 229)
-        RG->>G: open the pull request
-        G-->>RG: the pull request
-        RG-->>R: the address of the pull request
+    rect rgb(214, 234, 248)
+        AP->>S: check the live claim and the reviewer role
+        S-->>AP: live claim, reviewer role
     end
     rect rgb(212, 237, 218)
-        R->>M: submit the request as the external object of the attempt: action, repository binding, address, label
-        Note over R,M: that submission is the accepted request of the action
+        AP->>M: read the current passing assessment
+        M-->>AP: a current passing assessment stands
+        AP->>M: read the required external actions of the attempt and the external objects of the node
+        M-->>AP: required external action, no external object to reuse
+    end
+    rect rgb(248, 215, 218)
+        AP->>PG: platform action: open a pull request for the node branch
+    end
+    rect rgb(226, 227, 229)
+        PG->>G: open the pull request
+        G-->>PG: the pull request
+    end
+    rect rgb(248, 215, 218)
+        PG-->>AP: the address of the pull request
+    end
+    rect rgb(212, 237, 218)
+        AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
+        M-->>AP: accepted external object
+    end
+    rect rgb(248, 215, 218)
+        AP-->>R: the submitted external object, no action unrequested
     end
     rect rgb(214, 234, 248)
         R->>S: release after the request
@@ -440,7 +563,8 @@ sequenceDiagram
     participant M as Mission Service
     participant S as Scheduler Service
     participant R as Reviewer instance and its execution
-    participant RG as Repository gateway
+    participant AP as Action performer
+    participant PG as Platform gateway
     participant G as Git platform
 
     Note over M,S: the first action reached its expected end state, and the following action is unrequested
@@ -449,18 +573,33 @@ sequenceDiagram
         S-->>R: claim response, execution identity, the attempt continues, pinned revision unchanged
     end
     rect rgb(248, 215, 218)
-        R->>M: read the required external actions of the attempt and the external objects of the node
-        Note over R,M: the current passing assessment of the attempt stands, so the continuation evaluates nothing
-        R->>RG: platform action: the following action, whose predecessor reached its expected end state
+        R->>AP: request the required external actions of the attempt (execution identity only)
     end
-    rect rgb(226, 227, 229)
-        RG->>G: perform the following action
-        G-->>RG: accepted
-        RG-->>R: the address of the remote thing of the following action
+    rect rgb(214, 234, 248)
+        AP->>S: check the live claim and the reviewer role
+        S-->>AP: live claim, reviewer role
     end
     rect rgb(212, 237, 218)
-        R->>M: submit the request as the external object of the attempt: action, repository binding, address, label
-        Note over R,M: the following action is fire-and-forget, so its accepted request resolves it
+        AP->>M: read the current passing assessment, the required external actions and the external objects
+        M-->>AP: current passing assessment, predecessor at its expected end state, following action unrequested
+    end
+    rect rgb(248, 215, 218)
+        AP->>PG: platform action: perform the following action
+    end
+    rect rgb(226, 227, 229)
+        PG->>G: perform the following action
+        G-->>PG: accepted
+    end
+    rect rgb(248, 215, 218)
+        PG-->>AP: the address of the remote thing of the following action
+    end
+    rect rgb(212, 237, 218)
+        AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
+        M-->>AP: accepted external object
+        Note over AP,M: the following action is fire-and-forget, so its accepted request resolves it
+    end
+    rect rgb(248, 215, 218)
+        AP-->>R: the submitted external object, no action unrequested
     end
     rect rgb(214, 234, 248)
         R->>S: release after the request
@@ -476,7 +615,10 @@ sequenceDiagram
     participant M as Mission Service
     participant E as Execution (steps method)
     participant RG as Repository gateway
+    participant PG as Platform gateway
     participant R as Reviewer execution
+    participant AP as Action performer
+    participant S as Scheduler Service
     participant G as Git platform
 
     rect rgb(212, 237, 218)
@@ -486,7 +628,8 @@ sequenceDiagram
     end
     rect rgb(248, 215, 218)
         E->>M: read the new revision and perform the unblock reads
-        E->>RG: fetch the change request of the pull request through the external object
+        E->>PG: fetch the change request of the pull request through the external object
+        PG-->>E: the change request
         E->>RG: reuse the workspace of the objective and its repository binding, same node branch
         loop for each task
             alt the outcome of the closed attempt asserts success, the task and the repository binding are unchanged
@@ -500,13 +643,111 @@ sequenceDiagram
         E->>M: evidence: the head commit
         Note over E: release with no further work
     end
+    rect rgb(212, 237, 218)
+        R->>M: submit the assessment of the attempt
+        M-->>R: a current passing assessment stands
+    end
     rect rgb(248, 215, 218)
-        R->>M: the assessment of the new attempt passes
-        R->>M: read the external objects of the node: the pull request of the closed attempt, open
-        Note over R,G: the pull request fulfils the operands of the request and is open, so the request reuses it: the network git write only, no platform write
-        R->>RG: network git write on the pull request
-        R->>M: submit the request as the external object of the new attempt with the address of the pull request
-        Note over R: release after the request
+        R->>AP: request the required external actions of the attempt (execution identity only)
+    end
+    rect rgb(214, 234, 248)
+        AP->>S: check the live claim and the reviewer role
+        S-->>AP: live claim, reviewer role
+    end
+    rect rgb(212, 237, 218)
+        AP->>M: read the current passing assessment, the required external actions and the external objects
+        M-->>AP: current passing assessment, required external action, external object of the closed attempt
+    end
+    rect rgb(248, 215, 218)
+        AP->>PG: read the pull request through the external object
+        PG-->>AP: pull request state, node branch and base branch
+        AP->>AP: check that the pull request is open and fulfils the operands
+        Note over AP,G: the request reuses the pull request through a network git write, with no platform write
+        AP->>RG: create an independent checkout of the evidence snapshot through a network git read
+        RG-->>AP: checkout
+        AP->>RG: network git write for the pull request
+    end
+    rect rgb(226, 227, 229)
+        RG->>G: push the node branch
+        G-->>RG: accepted
+    end
+    rect rgb(248, 215, 218)
+        RG-->>AP: network git write complete
+    end
+    rect rgb(212, 237, 218)
+        AP->>M: submit the request as the external object of the attempt with the address of the pull request
+        M-->>AP: accepted external object
+    end
+    rect rgb(248, 215, 218)
+        AP-->>R: the submitted external object, no action unrequested
+    end
+    rect rgb(214, 234, 248)
+        R->>S: release after the request
+    end
+```
+
+The sequence diagram below shows the invocation of the action performer by an external harness, on an objective that requires one action.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as External harness (claude-code)
+    participant MS as MCP server
+    participant AP as Action performer
+    participant P as Project Service
+    participant M as Mission Service
+    participant S as Scheduler Service
+    participant PG as Platform gateway
+    participant G as Git platform
+
+    rect rgb(248, 215, 218)
+        H->>MS: call the action performer tool (client identity, client secret, execution identity of the evaluation claim)
+        Note over H,AP: the harness names no action and supplies no operand
+    end
+    rect rgb(255, 243, 205)
+        MS->>P: verify the client secret of the client identity
+        P-->>MS: authenticated client identity
+    end
+    rect rgb(214, 234, 248)
+        MS->>S: verify the live claim of that client identity under the execution identity
+        S-->>MS: live claim of that client identity
+    end
+    rect rgb(248, 215, 218)
+        MS->>AP: request the required external actions (execution identity only)
+    end
+    rect rgb(214, 234, 248)
+        AP->>S: check the live claim and the reviewer role
+        S-->>AP: live claim, reviewer role
+    end
+    rect rgb(212, 237, 218)
+        AP->>M: read the current passing assessment, the required external actions and the external objects
+        M-->>AP: current passing assessment, required external action, no external object to reuse
+    end
+    rect rgb(248, 215, 218)
+        AP->>PG: platform action: open a pull request for the node branch
+    end
+    rect rgb(255, 243, 205)
+        PG->>P: resolve the repository binding under the execution identity
+        P-->>PG: authorized, custody follows the check
+    end
+    rect rgb(226, 227, 229)
+        PG->>G: open the pull request
+        G-->>PG: the pull request
+    end
+    rect rgb(248, 215, 218)
+        PG-->>AP: the address of the pull request
+    end
+    rect rgb(212, 237, 218)
+        AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
+        M-->>AP: accepted external object
+    end
+    rect rgb(248, 215, 218)
+        AP-->>MS: the submitted external object, no action unrequested
+        MS-->>H: the submitted external object, no action unrequested
+    end
+    rect rgb(214, 234, 248)
+        H->>S: release the claim
+        S-->>H: claim ends
     end
 ```
 
@@ -526,6 +767,11 @@ A later execution never depends on the retained agent context of an earlier exec
 The [Project Service](project-service.md) owns the bindings, the entry of an agent whose default configuration a project overrides, the configured counts, the authorization of each operation, custody and the repository strategy.
 The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease, the live-execution accounting and the wait record.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
-The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution, the healthcheck and the compatibility declarations, the workspace, the two gateways, the lifecycle of an execution between the claim and the release, the performance of a required external action and its idempotency across attempts, and memory.
+The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
+It owns the healthcheck, the compatibility declarations, the workspace and the three gateways.
+It owns the platform implementations, the action performer, the MCP server and the exposure of its tools.
+It owns the lifecycle of an execution between the claim and the release.
+It owns the performance of a required external action and its idempotency across attempts.
+It owns memory.
 The [Tracking Service](architecture.md#tracking-service) holds the telemetry of every execution.
 An agent transcript is telemetry, unless an execution submits it as evidence under the rules of the Mission Service.
