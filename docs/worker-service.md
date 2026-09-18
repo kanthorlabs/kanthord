@@ -72,9 +72,8 @@ The composition places the global prompt first, then the base prompt, then the a
 
 The operator configures the global prompt of the daemon.
 The global prompt states the conventions of the operator, and it holds for every native agent of the daemon.
-An agent archetype is the class of work that an agent does.
-A worker declares, for its agent, the base prompt of the archetype of that agent and the agent prompt of that agent.
-A base prompt states what holds for every agent of one archetype, and more than one agent uses one base prompt.
+A worker declares, for its agent, the base prompt that the agent uses and the agent prompt of that agent.
+A base prompt states what holds for every agent that uses it, and more than one agent uses one base prompt.
 An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
 The base prompt and the agent prompt are part of the contract of the worker name.
 A change to either one is a new worker version.

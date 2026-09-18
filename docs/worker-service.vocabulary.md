@@ -52,30 +52,19 @@ The Worker Service starts the Claude Code program in the workspace of "Add passw
 The program runs under the model identifier and the reasoning effort of the effective configuration of `claude@1`, and it performs its own model inference call under the provider authentication that the operator configured, so no model gateway of the daemon takes part in the execution of a coding agent.
 The program pushes nothing itself, because the repository gateway performs the network git write after the program exits.
 
-## agent archetype
-
-An agent archetype is the class of work that an agent does.
-The set is open.
-The first version holds one value.
-
-- **coding archetype**
-
-The agents `swe@1` and `re@1` hold the coding archetype, because both work on the code of a repository.
-A later agent that writes a message on Slack holds another archetype.
-
 ## prompt layer
 
 A prompt layer is one part of the prompt of a native agent, and it has one owner.
 The set is closed and it holds five values.
 
 - **global prompt**: the operator of the daemon owns it.
-- **base prompt**: the worker that declares the agent owns it, and it holds for every agent of one archetype.
+- **base prompt**: the worker that declares the agent owns it, and it holds for every agent that uses it.
 - **agent prompt**: the worker that declares the agent owns it.
 - **project prompt**: the project that binds the repository owns it.
 - **work prompt**: the node revision that the attempt pins owns it.
 
 The global prompt of the daemon states "Every answer is short. A commit message states the change and no reason."
-`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, because both agents hold the coding archetype.
+`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`.
 `reviewer@1` declares the agent prompt of `re@1`, which states that the agent judges evidence against criteria and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
 The work prompt of task "Add reset token expiry" states its goal, its steps and its validation criteria.
