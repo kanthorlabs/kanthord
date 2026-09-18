@@ -11,6 +11,7 @@ It describes the workers and their agents, the worker instances and how they hos
 For a required external action, it describes the configured repository action only.
 It describes the platform gateway that performs an operation on the API of an external platform.
 It describes the MCP server through which a native agent and an external harness reach the daemon tools.
+It describes the prompt of a native agent and the prompt composer that produces it.
 It describes no mechanism of another service.
 
 ## Workers and templates
@@ -42,9 +43,7 @@ The coding agent of a worker is the same program that an external harness runs.
 The Worker Service hosts it as the WHO of an execution, under a worker binding, a work pull and an execution identity.
 An external harness runs no worker of this page, and kanthord configures no agent of an external harness.
 
-A worker fixes the prompt of its agent.
-The prompt renders from the node revision that the attempt pins.
-A project sets no prompt.
+A worker declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies three [gateways](worker-service.vocabulary.md#gateway) as the tools that perform an authenticated operation.
 The model gateway performs a model inference call.
@@ -64,6 +63,73 @@ The project controls no part of that authentication.
 The kanthord extension of the coding agent verifies that configuration when the program starts.
 A local git operation runs in the workspace and passes through no gateway.
 An agent holds no repository credential.
+
+## Prompt composition
+
+The prompt of a native agent composes prompt layers.
+A prompt layer is one part of the prompt, and it has one owner.
+The composition places the global prompt first, then the base prompt, then the agent prompt, then the project prompt, then the work prompt.
+
+The operator configures the global prompt of the daemon.
+The global prompt states the conventions of the operator, and it holds for every native agent of the daemon.
+An agent archetype is the class of work that an agent does.
+A worker declares, for its agent, the base prompt of the archetype of that agent and the agent prompt of that agent.
+A base prompt states what holds for every agent of one archetype, and more than one agent uses one base prompt.
+An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
+The base prompt and the agent prompt are part of the contract of the worker name.
+A change to either one is a new worker version.
+The project prompt states the programming language, the development style and the coding conventions of the work product of one repository.
+It states no rule about the method, the tools, the repository operations, the assessment or the release.
+The work prompt renders from the node revision that the attempt pins.
+It states the goal, the steps and the validation criteria of the work that the execution takes.
+The agent prompt and the work prompt are required, and every other layer is optional.
+
+A prompt layer takes its text from one prompt source.
+The global prompt and the project prompt each declare an ordered list of prompt sources.
+The configured source precedes the agent file source in the list of each of those two layers.
+The composer takes the first source of the list that is present and valid, and it reads no further source of that layer.
+A source that is absent passes the turn to the next source of the list.
+A source that is present and invalid makes its layer absent, and the composer takes no further source of that layer.
+The configuration of a layer holds a text, or it holds the value that disables the layer.
+A disabled layer is absent, and the composer reads no source of it.
+The composition places the layers that are present.
+
+The [repository binding](project-service.md#repository-configuration-and-policy) that the pinned revision names holds the configured source of the project prompt.
+The workspace of the execution holds the agent file source of the project prompt.
+The steps method takes both sources of the project prompt.
+The evaluation method takes the configured source of the project prompt only.
+An agent file of the workspace is the work product of the candidate.
+
+The composition states the owner, the source and the precedence of every layer to the agent.
+The agent prompt holds the highest precedence, then the base prompt, then the work prompt, then the project prompt, then the global prompt.
+The base prompt and the agent prompt state the obligations of the worker, and no other layer revokes one.
+The agent prompt governs the base prompt, and a base prompt that contradicts the agent prompt that uses it is a defect of the worker.
+An execution performs no conduct that its base prompt or its agent prompt forbids, whatever another layer states.
+A global prompt and a project prompt define no validation criterion.
+An assessment follows the validation criteria of the node.
+
+A prompt layer carries instructions, and it authorizes no operation.
+It names no value of the effective configuration, it adds no tool and it changes no resource budget.
+The tool table of the agent and the effective configuration bound every operation, whatever a prompt layer states.
+
+The prompt composer is the Worker Service component that produces the prompt of a native agent.
+It resolves every layer from its sources, it validates every source that it reads, and it composes the layers.
+It is the only component that reads a prompt source for the composition.
+It reads the configured source of the project prompt through the [Project Service](project-service.md#configuration-lifecycle-and-consistency), and it authorizes no operation.
+It reads a regular file for an agent file source, and it follows no reference inside that file.
+An agent file of the workspace resolves inside the workspace, and a path that leaves the workspace is invalid.
+A text that exceeds the bound of its layer is invalid, and a text that the composer cannot decode is invalid.
+The composer decodes the text of a source, and it changes no instruction of that text.
+The composer records the selected source of every layer, the digest of its text, and every source that it read and rejected.
+That record is telemetry of the execution.
+
+The execution resolves the global prompt, the base prompt, the agent prompt and the project prompt once, when it starts.
+It holds that text until the execution ends.
+The work prompt renders for each unit of work that the method takes.
+When the composition takes the agent file source, the composer reads that file before the agent runs.
+A configuration revision and a commit change no prompt of a running execution.
+A later execution of the same attempt resolves the sources that stand when that execution starts.
+No model inference call of the execution drops a layer of its prompt.
 
 ## Instances and hosting
 
@@ -210,7 +276,7 @@ sequenceDiagram
     end
     loop for each task in the order that the method chooses
         rect rgb(248, 215, 218)
-            E->>A: prompt rendered from the task of the pinned revision
+            E->>A: the work prompt of the task of the pinned revision
             A->>MG: model inference call
         end
         rect rgb(255, 243, 205)
@@ -257,7 +323,7 @@ sequenceDiagram
 
     rect rgb(248, 215, 218)
         E->>E: prepare the workspace on the node branch
-        E->>C: start the program in the workspace, with the prompt of the task, the model identifier and the reasoning effort of the effective configuration
+        E->>C: start the program in the workspace, with the work prompt, the model identifier and the reasoning effort of the effective configuration
     end
     loop while the program runs
         rect rgb(226, 227, 229)
@@ -768,7 +834,7 @@ The [Project Service](project-service.md) owns the bindings, the entry of an age
 The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease, the live-execution accounting and the wait record.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
-It owns the healthcheck, the compatibility declarations, the workspace and the three gateways.
+It owns the healthcheck, the compatibility declarations, the workspace, the three gateways and the prompt composer.
 It owns the platform implementations, the action performer, the MCP server and the exposure of its tools.
 It owns the lifecycle of an execution between the claim and the release.
 It owns the performance of a required external action and its idempotency across attempts.

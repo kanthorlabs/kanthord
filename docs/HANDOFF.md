@@ -5,7 +5,7 @@ Read the owning design document before taking an item, and remove the item once 
 
 ## Next session
 
-- [ ] Rule the remaining open Worker Service items one per message, the hierarchical prompt first. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
+- [ ] Rule the remaining open Worker Service items one per message, the base prompt of the coding archetype first. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
@@ -24,8 +24,11 @@ Read the owning design document before taking an item, and remove the item once 
 ## Worker Service
 
 - [ ] POSTPONED 2026-09-18 by Ulrich to phase 2. The first version supplies the workers `general@1` and `reviewer@1`. Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
-- [ ] Design the hierarchical prompt of a native agent: a generic prompt that the worker fixes for the agent, for example `re@1`, and a project-specific layer for the programming language, the development style and the coding conventions. `worker-service.md` today says that a worker fixes the prompt of its agent and that a project sets no prompt, so the design changes that rule. Decide whether a convention file in the repository, `AGENTS.md` or `CLAUDE.md`, informs the prompt. The first run uses the worker-fixed prompt and the pinned revision only, with repository context-file discovery disabled.
-- [ ] Design the base prompt of each agent type. The first type is the coding agent. Discuss which aspects the base prompt covers in a minimalist style, and find an industry gold standard to turn into the base prompt. A communication agent for Slack and email follows later and demonstrates a second agent base type.
+- [ ] Design the base prompt of each agent archetype. The first archetype is the coding archetype. Discuss which aspects the base prompt covers in a minimalist style, and find an industry gold standard to turn into the base prompt. A communication archetype for Slack and email follows later.
+- [ ] Design the prompt layers of a coding agent. `worker-service.md` starts the program with the work prompt, and the program holds its own instructions and its own file discovery.
+- [ ] Added 2026-09-18 by Ulrich. Decide whether `agent archetype` also replaces the agent kind, the native agent and the coding agent of `worker-service.md`. The two axes are orthogonal: `swe@1` holds the coding archetype under `general@1` as a native agent and under `claude@1` as a coding agent.
+- [ ] Decide whether the `agent prompt` of `worker-service.md` and the `personal prompt` of `overview.vocabulary.md` name one concept. Both state the responsibility of an agent and its contribution to the WHAT. The term belongs to `overview.md` when they match.
+- [ ] Decide whether `agent archetype` is a product term of `overview.md` or stays a term of the Worker Service. It classifies an agent, and an agent is a product concept.
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 
 ### Next phase
@@ -42,6 +45,7 @@ After the first native-agent worker runs the acceptance path.
 ## Tracking Service
 
 - [ ] Write the Tracking Service document after the Worker Service document.
+- [ ] Define the retention and the access of the prompt record that the prompt composer writes. The record carries the prose of the operator and of a repository into telemetry.
 
 ## Root repository
 
