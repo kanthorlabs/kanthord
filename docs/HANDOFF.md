@@ -39,19 +39,6 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Live streaming of a running turn, after the Tracking Service page. pi emits streaming events.
 - [ ] Containment beyond the minimum trust boundary, the quality and replay suite, provenance tags on tool results.
 
-## Worker Service implementation rulings
-
-Rulings that Ulrich made for the mechanisms of the Worker Service. A design page holds no mechanism, so the implementation epics of phase 3 consume them.
-
-- The native agent of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter. `worker-service.md` keeps its definition of a native agent and names no package.
-- The daemon gives pi its own directories, disables discovery of user extensions, skills, prompt templates and themes, uses an in-memory session manager, disables the version check, the install telemetry and the provider catalog refresh, and pins the exact pi version. A pi version bump is a deliberate change to the workers that run on it. Every runtime setup call carries an abort signal with a deadline.
-- One interception point carries every inference call of a native agent, including compaction and retries. It resolves the current binding entry under the execution identity, maps the model identifier and the reasoning effort, fails closed, and holds per-execution state so that no credential crosses executions. A custom pi provider that forwards to the model gateway is the candidate. Environment hygiene of the pi process belongs to the same mechanism.
-- Tools: the tool table of a native agent holds three sources. The pi built-in tools: `general@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls. kanthord's own tools, which the daemon serves through an MCP server that it embeds and that pi reaches as a tool source. Other tools that a project adds, including other MCP servers. The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/. The tool register and the abstraction layer for tool instances manage the three sources. The interactive ask_question tool is excluded. The page states the minimum trust boundary around tool and verification execution.
-- The page requires that every commit of the execution is attributable to its task and its attempt. The carrier of that attribution is an epic decision.
-- Stop and budget: the lease runs in the execution. On revocation or loss the execution aborts the pi session and dispatches nothing after. Abort is not proven to kill every descendant process, so the quiescence check before workspace reuse that the page states needs a mechanism. The page states the budget as a turn count and a wall time, enforced on pi turn events and by abort, with the bash timeout below the remaining budget.
-- Traces: the pi session entries of an execution become its transcript telemetry, with the execution identity and the attempt, redacted of secrets. pi keeps its own compaction logic, and kanthord designs nothing for it.
-- The acceptance path: `general@1` loop, handoff, commit and verification, push, release, independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome. A scripted fake provider runs it deterministically, and a bounded real-provider smoke run proves the real configuration.
-
 ## Tracking Service
 
 - [ ] Write the Tracking Service document after the Worker Service document.
