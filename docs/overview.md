@@ -114,4 +114,4 @@ It holds one client identity for the work on the steps of a node and another for
 Its method can adapt dynamically to the capabilities and availability of its agents.
 
 The external harness's sub-agents supply the WHO.
-Each sub-agent has its own personal prompt that defines its responsibilities and contribution to the WHAT.
+Each sub-agent has its own agent prompt that defines its responsibilities and contribution to the WHAT.

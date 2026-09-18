@@ -204,4 +204,4 @@ An execution of `tdd@1` retains the failing test of the RED step of a task, beca
 
 A prompt is instructions that guide an agent's work.
 The term names no closed set.
-Each sub-agent has its own personal prompt that defines its responsibilities and contribution to the WHAT.
+Each sub-agent has its own agent prompt that defines its responsibilities and contribution to the WHAT.
