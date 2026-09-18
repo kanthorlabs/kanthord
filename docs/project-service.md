@@ -12,7 +12,7 @@ It describes no mechanism of another service.
 
 ## Project identity and ownership
 
-The [overview](overview.md#vocabulary) defines a project, its identity and a binding.
+The [overview](overview.vocabulary.md) defines a project, its identity and a binding.
 A resource exists independently of the project that binds it.
 The mission of a project is intrinsic to that project, so no binding allocates it.
 

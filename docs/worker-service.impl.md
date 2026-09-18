@@ -12,6 +12,7 @@ A ruling that names a package, a product or a version is deliberate, and a chang
 
 ## Native agent runtime
 
+The first version supplies `general@1` only, and `tdd@1` is postponed to phase 2.
 The native agent of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
 The daemon gives pi its own directories.
 It disables the discovery of user extensions, skills, prompt templates and themes.

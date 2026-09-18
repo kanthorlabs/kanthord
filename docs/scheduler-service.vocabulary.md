@@ -4,7 +4,7 @@ title: Scheduler Service Vocabulary
 
 # Scheduler Service Vocabulary
 
-This file holds the values and the examples of the terms that [scheduler-service.md](viewer.html?p=scheduler-service.md#vocabulary) owns.
+This file holds the values and the examples of the terms that [scheduler-service.md](viewer.html?p=scheduler-service.md) owns.
 A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabulary.md).
 A term that names a closed set lists every value of that set.
 Every other term carries a concrete example.

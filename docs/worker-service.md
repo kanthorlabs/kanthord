@@ -13,7 +13,7 @@ It describes no mechanism of another service.
 
 ## Workers and templates
 
-The [overview](overview.md#vocabulary) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
+The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
 A worker declares its name, its method, its one agent, the default configuration of that agent, the node states that its instances claim and its required node format.
 The [Scheduler Service](scheduler-service.md#claims-roles-and-counts) reads the role of a binding from the declared node states.
@@ -513,7 +513,7 @@ sequenceDiagram
 ## Memory
 
 The execution owns memory.
-The [memory](overview.md#vocabulary) of an execution is the context of its agent and the content of its workspace.
+The [memory](overview.vocabulary.md#memory) of an execution is the context of its agent and the content of its workspace.
 It ends with the execution.
 The workspace that the Worker Service retains for a later execution of the same objective is a host-local artifact, and its content is no memory of that later execution.
 A worker defines how its executions use memory, and it holds no memory of its own.

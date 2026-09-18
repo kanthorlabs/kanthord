@@ -157,8 +157,8 @@ A provider signature grants no authority to write WHAT, execute a node or overri
 
 ## Work pulls and targeted claims
 
-A worker instance that can take work issues a work pull with an idempotent [request identifier](mission-service.md#vocabulary).
-The [overview](overview.md#vocabulary) defines the worker instance, the execution and the act of executing a node.
+A worker instance that can take work issues a work pull with an idempotent [request identifier](mission-service.vocabulary.md#request-identifier).
+The [overview](overview.vocabulary.md) defines the worker instance, the execution and the act of executing a node.
 The pull carries its worker binding identity and the runtime identity of the instance.
 The [Project Service](project-service.md#resource-and-binding-model) owns the worker binding identity.
 The Worker Service owns the runtime identity and vouches for its association with the binding inside the daemon.
@@ -231,7 +231,7 @@ The claim response returns these fields.
 Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.
 This covers evidence, task assessments, task outcomes, evaluation assessments and invoked repository actions.
 A retry after a lost response returns the original accepted result and creates no second execution or count.
-The [request identifier](mission-service.md#vocabulary) of either acquisition path is scoped to the project and the claimant.
+The [request identifier](mission-service.vocabulary.md#request-identifier) of either acquisition path is scoped to the project and the claimant.
 The operation recognizes an accepted identifier before admission and returns the accepted result.
 An ended claim does not change that result.
 An acknowledgement of an ended claim restores no authority.
