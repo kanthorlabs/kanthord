@@ -32,6 +32,7 @@ A binding belongs to one project, and no project shares a binding.
 
 A project binds each repository that it uses.
 The repository strategy states an explicit rule for each repository that requires one.
+The repository strategy names the base branch of the repository: the branch from which an execution creates a [node branch](worker-service.md#executions), and into which the configured repository action merges or pushes.
 A configured repository action states its expected end state on the git platform.
 An external action is a fire-and-forget action or a request-reply action.
 A request-reply action states its expected end state, and a fire-and-forget action states none.
@@ -50,18 +51,26 @@ One credential reference satisfies more than one capability.
 ## Execution configuration and instance count
 
 A worker template declares its agents.
-A worker template declares the configuration that a project sets for each agent of that worker.
+A worker template declares the [default configuration](worker-service.md#workers-and-templates) of each of its agents, the options that a project can override and the constraint that a whole configuration satisfies.
 The worker name determines that declaration.
 A worker template carries no configuration version of its own.
 A worker name that differs in its version declares its own configuration.
 A worker binding names one worker.
-A worker binding holds one entry for each agent of that worker.
-An entry names a provider account binding by identity, and it names the model identifier at that account.
-An entry inherits no value, so a worker binding holds no provider account of its own.
-Two agents of one worker name different provider accounts.
+A worker binding holds the worker configuration: the instance count and the availability of the binding.
+A worker binding holds an entry for an agent of its worker only when the project overrides the default configuration of that agent.
+An entry names the values that it overrides, and every other value of the agent comes from its default configuration.
+The effective configuration of an agent is the value that its entry names where the entry names one, and the default configuration otherwise, and for a native agent it includes the provider account that resolves below.
+The Project Service validates the effective configuration as a whole against the options and the constraint that the worker declares when the project writes the binding set and when an execution resolves it, and a rejected configuration prevents use.
+A worker binding holds no provider account of its own.
 A provider account is a binding kind.
 A model inference call is the capability of a provider account.
 A provider account binding holds a credential reference for that capability.
+A provider account binding is the default account of its provider when the project marks it so, and a project holds at most one default account for each provider.
+The provider account of a [native agent](worker-service.md#workers-and-templates) is the one that its entry names; when the entry of the agent names no account, it is the default account of the provider that the default configuration names, and an effective configuration with neither is invalid.
+The provider account binding determines the effective provider, over the provider of the default configuration, so an entry that names a provider account binding of another provider also names the model identifier.
+A default account serves an agent only when its entry names no account, and a disabled or revoked selected account prevents use and authorizes no other account.
+The entry of a [coding agent](worker-service.md#workers-and-templates) names no provider account binding.
+A change to the effective configuration takes effect at the next resolution for a native agent and at the next program start for a coding agent.
 Two worker bindings of one worker carry different configuration.
 A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
@@ -71,6 +80,7 @@ The record that permits a client identity configures its role, `executor` or `re
 The execution count is required configuration with no implicit default.
 Two permitted client identities never share an execution count.
 The role of a permitted client identity never changes.
+A permitted client identity holds no agent configuration, because the external harness selects and authenticates its own inference outside the resolution of the Project Service.
 A project never permits one client identity under two roles, so a different role needs a different client identity.
 A human creates the record that permits a client identity, and the Project Service issues a client secret for that identity.
 The Project Service returns the client secret once and keeps its hash in custody.

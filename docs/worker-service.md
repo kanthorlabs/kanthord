@@ -15,10 +15,13 @@ It describes no mechanism of another service.
 
 The [overview](overview.md#vocabulary) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
-A worker declares its name, its method, its one agent, the node states that its instances claim and its required node format.
+A worker declares its name, its method, its one agent, the default configuration of that agent, the node states that its instances claim and its required node format.
 The [Scheduler Service](scheduler-service.md#claims-roles-and-counts) reads the role of a binding from the declared node states.
-A worker declares the configuration entry of its agent that the [Project Service](project-service.md#execution-configuration-and-instance-count) specifies, and no other project configuration.
-The Project Service holds the configured entry.
+The default configuration of a native agent names its provider, its model identifier and its reasoning effort.
+The default configuration of a coding agent names its model identifier and its reasoning effort.
+A worker declares, with the default configuration of its agent, the further options of the agent, the options that a project can override and the constraint that a whole configuration satisfies, and that declaration is part of the contract of the worker name.
+A worker binding of the [Project Service](project-service.md#execution-configuration-and-instance-count) overrides the default configuration through its entry, and the Project Service resolves the effective configuration of the agent.
+A worker reads no other project configuration.
 The required node format names the fields of a node that the method requires.
 Compatibility reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls-and-targeted-claims) of the Scheduler Service select.
 Every worker of this page requires the same node format.
@@ -33,6 +36,7 @@ A native agent is an agent loop that the Worker Service runs itself.
 A coding agent is a program that the Worker Service runs as a child process in the workspace of the execution.
 The coding agent of a worker is the same program that an external harness runs.
 The Worker Service hosts it as the WHO of an execution, under a worker binding, a work pull and an execution identity.
+An external harness runs no worker of this page, and kanthord configures no agent of an external harness.
 
 A worker fixes the prompt of its agent.
 The prompt renders from the node revision that the attempt pins.
@@ -44,13 +48,13 @@ The repository gateway performs a network git read, a network git write and a pl
 An execution and its agent reach a git platform through the repository gateway alone.
 A native agent reaches a provider through the model gateway alone.
 A gateway resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the execution identity.
-Every entry names the model identifier and the reasoning effort of its agent.
-For every model inference call of a native agent the Worker Service uses the provider account, the model identifier and the reasoning effort of the current binding entry of the agent.
+For every model inference call of a native agent the Worker Service uses the provider account, the model identifier and the reasoning effort of the effective configuration of the agent, which the Project Service resolves for that call.
+An execution honours every value of the effective configuration of its agent.
 A coding agent performs its own model inference call.
-The entry of a coding agent names the agent and the program, and it names no provider account binding.
-The Worker Service passes the model identifier and the reasoning effort of the entry to the program.
+The Worker Service passes the model identifier and the reasoning effort of the effective configuration to the program when it starts.
 The operator configures the provider authentication of a coding agent on the host.
-The kanthord extension of the coding agent verifies that configuration before the program connects to the daemon.
+The project controls no part of that authentication.
+The kanthord extension of the coding agent verifies that configuration when the program starts.
 A local git operation runs in the workspace and passes through no gateway.
 An agent holds no repository credential.
 
@@ -79,8 +83,12 @@ Any idle instance of the binding takes the next compatible node.
 An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls-and-targeted-claims) of the Scheduler Service.
 
 The Worker Service produces the instance healthcheck before each work pull.
-The healthcheck passes when the program of the agent is available on the host and the entry of the agent is present in the current binding set.
+The healthcheck passes when the effective configuration of the agent resolves under the current binding set and, for a coding agent, when its program is available on the host.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
+
+The tool of an agent and the verification command of a node run code that the repository supplies.
+The Worker Service runs them inside a trust boundary that the operator provides: a disposable host that the operator trusts, or a container around the daemon.
+A rule on the content of a command is a policy and no trust boundary.
 
 The sequence diagram below shows the creation of a steps instance and its first work pull, on a node with no attempt.
 In every sequence diagram of this page, a colored block names the service that owns its steps: yellow the Project Service, blue the Scheduler Service, green the Mission Service, red the Worker Service, grey an external system.
@@ -102,7 +110,7 @@ sequenceDiagram
     rect rgb(248, 215, 218)
         W->>I: create the instance, mint the runtime identity
         Note over W,I: one instance for each unit of the instance count, no record persists
-        W->>I: instance healthcheck (agent program available, entry present in the binding set)
+        W->>I: instance healthcheck (effective configuration resolves, agent program available)
     end
     rect rgb(214, 234, 248)
         I->>S: work pull (request identifier, worker binding, runtime identity, compatibility declarations)
@@ -125,13 +133,13 @@ A revoked or lost execution stops its agent and performs no further operation un
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-read) of the Mission Service require, and it fetches the external content that the external objects of the node reference through the repository gateway.
-Each execution starts with a fresh agent context, whichever instance hosts it.
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
 The workspace of the steps method on an objective is a checkout of the repository that the pinned revision names, on the node branch.
 The Worker Service keys that workspace by the objective and the repository binding of the pinned revision.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
+Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch at the repository through the repository gateway.
 The Worker Service removes it after a bounded retention since the last execution of that objective ended.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
 The workspace of the steps method on an initiative holds no checkout.
@@ -139,19 +147,22 @@ The workspace of the steps method on an initiative holds no checkout.
 The rules of the four paragraphs below hold for the steps method on an objective.
 The steps method uses one node branch for each objective and repository binding, and it continues that branch across attempts.
 The node branch takes its name from the node identity.
-The first execution on that branch creates it from the default branch of the repository.
-The steps method makes one commit for each task, the task commit.
+The first execution on that branch creates it from the base branch that the [repository strategy](project-service.md#repository-configuration-and-policy) names.
+The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
+Every commit that the execution makes is attributable to its task and its attempt.
 The execution pushes the node branch through the repository gateway before every release.
 
 The steps method chooses the order of the tasks of the pinned revision.
-For each task the agent performs the steps in the workspace, and the execution commits the result as the task commit.
-The execution runs the verification command of the task when the task carries one.
+For each task the agent performs the steps in the workspace, and the execution commits the changes of the task work.
+The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
+The execution runs the verification command of the task against the task commit when the task carries one, and it discards every change that the command made.
 The agent revises the work within the resource budget of the execution before the execution records the task assessment.
+The execution commits a revision as a new commit.
 The agent judges the result against the validation criteria of the task, with the exit status of the verification command as an input.
 The execution writes the task assessment and the task outcome.
 The task assessment names the task commit and, when the task carries a verification command, the snapshot that the command ran against.
 The task outcome carries the task commit as its evidence.
-A worker fixes the resource budget of one execution.
+A worker fixes the resource budget of one execution: a turn count and a wall time.
 
 In an attempt after the first, the execution reads the outcome of the cleared attempt for each task.
 When that outcome asserts success, the task is unchanged between the revision that the cleared attempt pinned and the revision of the attempt, and the repository binding is unchanged, the execution runs the verification command again against the head of the node branch when the task carries one, judges again, and writes a new task assessment and a new task outcome.
@@ -162,6 +173,8 @@ Before every release with no further work, the execution submits the head commit
 When every task of the revision holds a current task outcome of the attempt, the execution releases with no further work.
 A recorded task assessment that does not pass ends the task work, and the execution releases with no further work.
 When the resource budget ends before every task holds a task outcome, the execution releases with further work.
+Before that release, the execution commits the task work in progress as a checkpoint commit.
+A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
 The sequence diagram below shows the steps method on an objective with a native agent, on the path where every task assessment passes.
@@ -193,7 +206,7 @@ sequenceDiagram
             A->>MG: model inference call
         end
         rect rgb(255, 243, 205)
-            MG->>P: resolve the provider account binding of the entry, its model identifier and its reasoning effort
+            MG->>P: resolve the effective configuration of the agent: provider account, model identifier, reasoning effort
             P-->>MG: authorized
         end
         rect rgb(226, 227, 229)
@@ -202,7 +215,7 @@ sequenceDiagram
         end
         rect rgb(248, 215, 218)
             A-->>E: steps done in the workspace, revised within the resource budget
-            E->>E: task commit, run the verification command, the agent judges
+            E->>E: task commit, run the verification command against it, discard its changes, the agent judges
         end
         rect rgb(212, 237, 218)
             E->>M: task assessment (task commit and tested snapshot) and task outcome (task commit)
@@ -236,7 +249,7 @@ sequenceDiagram
 
     rect rgb(248, 215, 218)
         E->>E: prepare the workspace on the node branch
-        E->>C: start the program in the workspace, with the prompt of the task, the model identifier and the reasoning effort of the entry
+        E->>C: start the program in the workspace, with the prompt of the task, the model identifier and the reasoning effort of the effective configuration
     end
     loop while the program runs
         rect rgb(226, 227, 229)
@@ -246,9 +259,9 @@ sequenceDiagram
     end
     rect rgb(248, 215, 218)
         C-->>E: the program exits
-        E->>E: task commit, run the verification command
-        E->>C: start the program with the verification result, ask for the judgement
-        C-->>E: judgement against the validation criteria, the program exits
+        E->>E: task commit, run the verification command against it, discard its changes
+        E->>C: the verification result, ask for the judgement
+        C-->>E: judgement against the validation criteria
     end
     rect rgb(212, 237, 218)
         E->>M: task assessment and task outcome
@@ -502,6 +515,7 @@ sequenceDiagram
 The execution owns memory.
 The [memory](overview.md#vocabulary) of an execution is the context of its agent and the content of its workspace.
 It ends with the execution.
+The workspace that the Worker Service retains for a later execution of the same objective is a host-local artifact, and its content is no memory of that later execution.
 A worker defines how its executions use memory, and it holds no memory of its own.
 An instance holds no memory, and each execution starts with a fresh agent context.
 A later execution rebuilds its context from the records of the Mission Service and from the content that those records reference, as its method requires.
@@ -509,25 +523,9 @@ A later execution never depends on the retained agent context of an earlier exec
 
 ## Boundary
 
-The [Project Service](project-service.md) owns the bindings, the configuration entry of each agent, the configured counts, the authorization of each operation, custody and the repository strategy.
+The [Project Service](project-service.md) owns the bindings, the entry of an agent whose default configuration a project overrides, the configured counts, the authorization of each operation, custody and the repository strategy.
 The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease, the live-execution accounting and the wait record.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution, the healthcheck and the compatibility declarations, the workspace, the two gateways, the lifecycle of an execution between the claim and the release, the performance of a required external action and its idempotency across attempts, and memory.
 The [Tracking Service](architecture.md#tracking-service) holds the telemetry of every execution.
 An agent transcript is telemetry, unless an execution submits it as evidence under the rules of the Mission Service.
-
-## Vocabulary
-
-- **steps method**: The method of a worker whose executions carry out the steps of a node.
-- **evaluation method**: The method of a worker whose executions evaluate a node and request its required external actions.
-- **native agent**: An agent loop that the Worker Service runs itself.
-- **coding agent**: A program that the Worker Service runs as a child process in the workspace of an execution.
-- **gateway**: A Worker Service component through which an execution performs an authenticated operation that the Project Service authorizes.
-- **runtime identity**: The identity that the Worker Service mints for a worker instance and that names its worker binding.
-- **pool**: The instances of one worker binding.
-- **compatibility declarations**: The worker name, the declared node states and the required node format that an instance carries on a work pull.
-- **required node format**: The fields of a node that a method requires.
-- **workspace**: The host-local working directory of one execution.
-- **node branch**: The branch that the steps method uses for one objective in one repository across its attempts.
-- **task commit**: The one commit of a task on the node branch.
-- **resource budget**: The bound that a worker fixes on one execution.
