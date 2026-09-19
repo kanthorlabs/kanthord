@@ -280,7 +280,7 @@ A correction names what it corrects.
 ## Evaluation and assessment
 
 The Mission Service performs no evaluation, and it is the record authority.
-A [claimant](scheduler-service.vocabulary.md#claimant) with the reviewer role performs an evaluation.
+An execution under an evaluation claim performs an evaluation.
 `reviewer@1` is a worker whose method is evaluation.
 `reviewer@1` takes an objective or an initiative, and it never takes a task.
 
@@ -290,7 +290,7 @@ The readiness condition of Outcome and completion admits a reviewer claim.
 An executor requests no evaluation.
 Under kanthord's own harness a reviewer is a worker binding of its project.
 
-The claimant that executes a node's steps never writes the assessment of that node.
+Under the workers that the daemon hosts, the execution that carries out the steps of a node never writes the assessment of that node, because `general@1` declares `Available` and `reviewer@1` declares `Waiting` and `External.Requested`.
 The Mission Service supplies the criteria and the evidence.
 Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.
@@ -307,6 +307,9 @@ The boundary is authority, and it is not a file format.
 
 An assessment names its evidence set and its node revision.
 An assessment weighs the evidence against the criteria of that revision.
+The assessment of an execution whose worker declares a base prompt also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
+A worker that an external harness hosts declares no base prompt, so its assessment weighs the criteria alone.
+An assessment that finds a violation of the default standard does not pass.
 It names every immutable child outcome record that it weighs.
 It names the method that it applies and the actor that performs it.
 
@@ -350,7 +353,7 @@ The set holds twelve states.
   No claim holds the node.
 - **Available**: Every node of that closure is `Completed`, and execution requires further work.
   No claim holds the node.
-- **Executing**: A worker instance or an external harness holds the claim to execute the node's steps.
+- **Executing**: A worker instance holds the claim to execute the node's steps.
 - **Waiting**: The execution of the open attempt requires no further work.
   No claim holds the node.
 - **Evaluating**: A reviewer execution holds the claim.
@@ -435,7 +438,7 @@ An outcome record holds these fields.
 
 - The node and the attempt.
 - The closing event and the stopping reason, separately from the asserted result.
-- The asserted result: success, the results do not meet the criteria, or nothing is established.
+- The asserted result: success, the results do not meet the criteria or the default standard, or nothing is established.
 - The basis: an assessment or a human assertion.
 - The assessment and its evaluation context, when the basis is an assessment.
 - The actor and the human decision, when the basis is a human assertion.
@@ -443,7 +446,7 @@ An outcome record holds these fields.
 - The previous outcome, when the outcome corrects one.
 
 An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
-An outcome that asserts that the results do not meet the criteria names an assessment as its basis.
+An outcome that asserts that the results do not meet the criteria or the default standard names an assessment as its basis.
 A human override that asserts success writes a successful outcome whose basis is a human assertion.
 A success override carries an optional landed commit identity.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
@@ -691,7 +694,7 @@ The next execution fetches that content through the external object.
 
 The actor of an unblock is a human.
 That human carries an account username.
-No execution identity and no client identity of an external harness unblocks a node.
+No execution identity and no client identity unblocks a node.
 The Project Service owns how an identity is established.
 
 The eligibility of an unblock reads the state of the node alone.

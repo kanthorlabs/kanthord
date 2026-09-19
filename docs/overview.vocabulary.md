@@ -114,6 +114,7 @@ The term names no closed set.
 `tdd@1` is one example among several workers.
 For each task of an objective, an execution of `tdd@1` repeats a RED-GREEN-REFACTOR loop with `swe@1`, `te@1` and `re@1`.
 `tdd@1` declares `Available`, and `reviewer@1` declares `Waiting` and `External.Requested`.
+`claude@1` and `opencode@1` are workers that an external harness hosts, and they declare `Available`, `Waiting` and `External.Requested`.
 
 ## worker instance
 
@@ -123,16 +124,16 @@ A `tdd@1` instance claims the objective "Add password reset". Execution 1 starts
 
 ## execute
 
-The act of a worker instance or an external harness carrying out work on a node of the Mission Service.
+The act of a worker instance carrying out work on a node of the Mission Service.
 The term names no closed set.
 A `tdd@1` instance executes the objective "Add password reset" using its RED-GREEN-REFACTOR method.
-The external harness `claude-code` takes "Add password reset" through a targeted claim and executes its steps under its execution identity.
+An instance of worker binding `claude-main`, which the external harness `claude-code` hosts, pulls "Add password reset" and executes its steps under its execution identity.
 
 ## execution
 
 The unit of work that the Scheduler Service records.
 An execution is an object that represents the state of work on one initiative or objective.
-One worker instance or one external harness holds that work while it executes the node.
+One worker instance holds that work while it executes the node.
 The Worker Service hosts the executions of kanthord's own harness.
 Two executions of the same worker share that worker's method.
 Each execution has its own execution identity.
@@ -140,7 +141,7 @@ The term names no closed set.
 A `tdd@1` instance claims the objective "Add password reset" and produces Execution 1.
 The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
 Execution 1 represents the state of that work and has its own execution identity.
-The external harness `claude-code` takes "Add password reset" through a targeted claim and produces Execution 3.
+An instance of `claude-main`, which the external harness `claude-code` hosts, pulls "Add password reset" and produces Execution 3.
 
 ## agent
 
@@ -205,3 +206,12 @@ An execution of `tdd@1` retains the failing test of the RED step of a task, beca
 A prompt is instructions that guide an agent's work.
 The term names no closed set.
 Each sub-agent has its own agent prompt that defines its responsibilities and contribution to the WHAT.
+
+## default standard
+
+The default standard is the standard that the base prompt of a worker states as the default of the human, and an assessment weighs the evidence against it beside the validation criteria.
+The worker that declares the base prompt owns the default standard, and a change to it is a new worker version, so the worker version of the reviewer fixes the default standard that an assessment applies.
+The term names no closed set.
+The base prompt of `swe@1` and `re@1` forbids an abstraction for single-use code.
+The change of task "Add reset token expiry" meets every validation criterion of "Add password reset" and adds a helper class with one call site.
+The assessment of `reviewer@1` records that finding as a blocker and does not pass, and "Add password reset" moves to `Blocked` for the human review.

@@ -127,7 +127,7 @@ The result that an outcome asserts, separately from its stopping reason.
 The set is closed and it holds three values.
 
 - **success**
-- **the results do not meet the criteria**
+- **the results do not meet the criteria or the default standard**
 - **nothing is established**
 
 The asserted result of a discard is that nothing is established.
@@ -225,7 +225,7 @@ The [overview](viewer.html?p=overview.md) gives what an assessment establishes.
 That set is closed and it holds three values.
 
 - The results meet the validation criteria.
-- The results do not meet the validation criteria.
+- The results do not meet the validation criteria or the default standard.
 - The available evidence establishes neither.
 
 Take the objective "Add password reset" above.

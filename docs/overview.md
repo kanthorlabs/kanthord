@@ -20,7 +20,7 @@ Success has three separate parts:
 
 - The WHAT specifies validation criteria.
 - Execution produces results and evidence.
-- Evaluation assesses the evidence against the criteria and produces an outcome.
+- Evaluation assesses the evidence against the criteria, and against the [default standard](overview.vocabulary.md#default-standard) when the evaluating worker declares a base prompt, and produces an outcome.
 
 Some criteria support machine checks; others need judgement.
 The evaluation method follows the criterion and never the node.
@@ -28,7 +28,7 @@ Completing an execution does not establish success, because evaluation assesses 
 
 Every initiative, objective, and task must have an outcome.
 For both harnesses, every ending at each node produces an outcome.
-An outcome can record that evidence establishes that the results did not meet the validation criteria.
+An outcome can record that evidence establishes that the results did not meet the validation criteria or the default standard.
 It can also record that available evidence cannot establish whether the results met the validation criteria.
 Neither assessment establishes success.
 The outcome records the stopping reason separately from the assessment of evidence.
@@ -109,8 +109,9 @@ An external harness supports ongoing integration and maintenance with an existin
 
 An external harness supplies its HOW through its own orchestration skill, usually named `/work`.
 It reaches kanthord's initiative, objective, and task model through the CLI or the API.
-An external harness takes a node through a targeted claim of the Scheduler Service, under a client identity that the project permits.
-It holds one client identity for the work on the steps of a node and another for the evaluation of a node.
+An external harness is a worker that the harness hosts: a human starts its program, and the kanthord extension of that program registers a worker instance of a worker binding of the project under its client identity.
+Its instances acquire work through the work pull, like every worker instance, and its worker declares `Available`, `Waiting` and `External.Requested`, so an instance of it can carry out the steps of a node, evaluate it and request its external actions, through separate claims.
+The node content is its only input, and kanthord configures no agent, no prompt and no tool of an external harness.
 Its method can adapt dynamically to the capabilities and availability of its agents.
 
 The external harness's sub-agents supply the WHO.

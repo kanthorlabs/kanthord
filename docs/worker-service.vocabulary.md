@@ -17,13 +17,24 @@ This revision of the Worker Service supplies four workers.
 
 - **general@1**: the steps method with the native agent `swe@1`.
 - **reviewer@1**: the evaluation method with the native agent `re@1`.
-- **claude@1**: the steps method with the coding agent `swe@1`, the Claude Code program.
-- **opencode@1**: the steps method with the coding agent `swe@1`, the opencode program.
+- **claude@1**: hosted by the external harness `claude-code`, declares `Available`, `Waiting` and `External.Requested`.
+- **opencode@1**: hosted by the external harness `opencode`, declares `Available`, `Waiting` and `External.Requested`.
+
+## host
+
+The host of a worker is the system that runs the instances of the worker.
+The set is closed and it holds two values.
+
+- **the daemon**
+- **an external harness**
+
+`general@1` and `reviewer@1` have the daemon as their host.
+`claude@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
 
 ## steps method
 
 The steps method is the method of a worker whose executions carry out the steps of a node.
-`general@1`, `claude@1` and `opencode@1` hold the steps method.
+`general@1` holds the steps method.
 A `general@1` instance of worker binding `general-main` claims "Add password reset" from `Available`.
 Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
 
@@ -44,14 +55,6 @@ A native agent is an agent loop that the Worker Service runs itself.
 The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
 The Worker Service runs the agent loop of `swe@1` and sends each model inference call through the model gateway with the provider account, the model identifier and the reasoning effort of the effective configuration of the agent under worker binding `general-main`.
 
-## coding agent
-
-A coding agent is a program that the Worker Service runs as a child process in the workspace of an execution.
-The agent `swe@1` of `claude@1` and the agent `swe@1` of `opencode@1` are coding agents.
-The Worker Service starts the Claude Code program in the workspace of "Add password reset" with the work prompt of task "Add reset token expiry".
-The program runs under the model identifier and the reasoning effort of the effective configuration of `claude@1`, and it performs its own model inference call under the provider authentication that the operator configured, so no model gateway of the daemon takes part in the execution of a coding agent.
-The program pushes nothing itself, because the repository gateway performs the network git write after the program exits.
-
 ## prompt layer
 
 A prompt layer is one part of the prompt of a native agent, and it has one owner.
@@ -64,7 +67,8 @@ The set is closed and it holds five values.
 - **work prompt**: the node revision that the attempt pins owns it.
 
 The global prompt of the daemon states "Every answer is short. A commit message states the change and no reason."
-`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`.
+`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, which describes a senior software engineer, and its text is `assets/prompt/base.md`.
+`general@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
 `reviewer@1` declares the agent prompt of `re@1`, which states that the agent judges evidence against criteria and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
 The work prompt of task "Add reset token expiry" states its goal, its steps and its validation criteria.
@@ -113,7 +117,6 @@ The reviewer execution of the same objective composes the project prompt from th
 
 The default configuration is the configuration of an agent that its worker declares, with the options that a project can override and the constraint that a whole configuration satisfies, and it is part of the contract of the worker name.
 `general@1` declares for its agent the provider `openai`, a cheap model identifier and the reasoning effort `medium`.
-`claude@1` declares for its agent a model identifier and a reasoning effort, and no provider, because the operator authenticates the program on the host.
 A change to a default configuration is a new worker version.
 
 ## gateway
@@ -205,7 +208,7 @@ Each tool maps to one method of a platform implementation or to the action perfo
 The MCP server exposes individually approved resource-scoped read methods and the tool of the action performer.
 It exposes the tool of the action performer to an external harness only.
 It exposes no other write.
-The external harness `claude-code` authenticates with client identity `claude-code-reviewer` and its client secret.
+The external harness `claude-code` authenticates with client identity `claude-code-main` and its client secret.
 It presents the execution identity of its evaluation claim on "Add password reset" and calls the tool of the action performer.
 The MCP server exposes the read of pull request 42 and the list of its review comments to that external harness.
 It exposes no direct platform write.
@@ -246,7 +249,7 @@ The verification command is an optional field, and a method reads it when the no
 The Scheduler Service owns the term, and the Worker Service produces the check.
 The instance of `general@1` passes: the effective configuration of its agent resolves under the binding set of the project with the default account of its provider, and a native agent requires no program on the host.
 The instance of `general@1` fails when the project holds no default account for the provider of the agent and no entry names one.
-The instance of `claude@1` fails when the Claude Code program is absent from the host.
+The instance of `claude@1` fails when its client identity is not a client identity of its binding.
 
 ## trust boundary
 
@@ -285,7 +288,7 @@ Execution 2 continues the task from that commit, and the task holds no outcome u
 
 The resource budget is the bound that a worker fixes on one execution: a turn count and a wall time.
 `general@1` fixes a bound on the turns of its agent and the wall time of one execution, for example 200 turns and 2 hours.
-`claude@1` fixes a bound on the turns of the Claude Code program and the wall time of one execution, for example 50 turns and 2 hours.
+`claude@1` fixes no resource budget, because the external harness hosts its executions.
 The values are illustrations, and the implementation epics set the configured values.
 
 ## lease renewal interval

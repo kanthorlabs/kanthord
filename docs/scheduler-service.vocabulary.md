@@ -12,40 +12,35 @@ This file is not a design document, and `scheduler-service.md` stays the single 
 
 ## claimant
 
-The holder of a role and a count that claims a node.
+The worker binding that claims a node through its instances, with its count.
 The term names no closed set.
 
-Worker binding `tdd-main` is a claimant through each of its `tdd@1` instances, with the executor role and its instance count.
+Worker binding `tdd-main` is a claimant through each of its `tdd@1` instances, with its instance count.
 Two `tdd@1` instances of `tdd-main` are one claimant.
-The executor client identity of `claude-code` is another claimant, with its role and its execution count.
-The reviewer client identity of `claude-code` is a third claimant.
-The executor client identity of `claude-code` never becomes a reviewer, and a project that needs a reviewer permits a second client identity.
+Worker binding `claude-main` of `claude@1`, whose instances the external harness `claude-code` hosts and registers, is another claimant.
+
+## declared node states
+
+The declared node states are the node states that a worker declares its instances consume.
+The set of a worker is a subset of the closed set of states that admit a claim, and that set holds three values.
+
+- **Available**
+- **Waiting**
+- **External.Requested**
+
+`general@1` declares `Available`.
+`reviewer@1` declares `Waiting` and `External.Requested`.
+`claude@1` declares `Available`, `Waiting` and `External.Requested`, so one instance of `claude-main` obtains a steps claim on "Add password reset" and later an evaluation claim on the same objective.
 
 ## work pull
 
 A `tdd@1` instance of worker binding `tdd-main` issues a work pull for its project.
 The Scheduler selects "Add password reset", accepts the claim and returns Execution 1.
 
-## targeted claim
-
-The external harness `claude-code` names "Add password reset" under its executor client identity and requests a targeted claim.
-The Scheduler accepts the claim and returns Execution 3 with its execution identity.
-The request carries a request identifier, and a retry with that identifier returns Execution 3 again.
-
 ## on-demand request
 
 The API ingress of the daemon issues an on-demand request for "Add password reset", which holds an entry behind "Add recovery codes".
 The Scheduler serves "Add password reset" to the next compatible `tdd@1` work pull ahead of the order, and the request returns with Execution 1.
-
-## role
-
-The set is closed and holds two values.
-
-- **executor**
-- **reviewer**
-
-`tdd@1` declares `Available`, which gives worker binding `tdd-main` the executor role.
-`reviewer@1` declares `Waiting` and `External.Requested`, which give its worker binding the reviewer role.
 
 ## scheduling processor
 
@@ -73,11 +68,6 @@ The claim has two kinds.
 
 - **a steps claim**
 - **an evaluation claim**
-
-The claim has two acquisition paths.
-
-- **a work pull**
-- **a targeted claim**
 
 A `tdd@1` instance of worker binding `tdd-main` obtains a steps claim on "Add password reset" through a work pull.
 After the release and the readiness condition, a `reviewer@1` instance obtains an evaluation claim on that objective through its own work pull.

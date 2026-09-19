@@ -59,7 +59,7 @@ It observes an external object on the git platform.
 
 The Worker Service supplies the workers and the agents.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
-It uses a large language model provider and a coding agent.
+It uses a large language model provider.
 It supplies the platform gateway through which every service performs an operation on the API of an external platform.
 It supplies the MCP server through which a native agent and an external harness reach the daemon tools.
 It performs the configured repository action for both harnesses.
@@ -94,7 +94,7 @@ It shows the relations that the sections below name.
 ## Relations
 
 - An external harness reaches the Mission Service, the Project Service, the Scheduler Service and the Tracking Service through the API or the CLI.
-- An external harness requests a targeted claim from the Scheduler Service through the API or the CLI.
+- An instance that an external harness hosts registers itself with the Worker Service and pulls work from the Scheduler Service through the API or the CLI.
 - An external harness invokes a configured repository action through the MCP server of the Worker Service.
 - The Worker Service performs that action.
 - A human reaches the Project Service and the Mission Service through the API or the CLI.

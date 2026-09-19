@@ -59,8 +59,8 @@ One relation reads as follows.
 
 ## reviewer execution
 
-An execution whose claimant holds the reviewer role.
-The worker instance that executes a node's steps never writes the assessment of that node.
+An execution under an evaluation claim.
+Under the workers that the daemon hosts, the worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.
 - A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.

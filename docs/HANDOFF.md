@@ -1,11 +1,11 @@
 # Handoff
 
-Open work as of 2026-09-18.
+Open work as of 2026-09-19.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
 ## Next session
 
-- [ ] Rule the remaining open Worker Service items one per message, the base prompt that `swe@1` and `re@1` share first. Then the Tracking Service document. B9 is the last section, and only Ulrich opens it.
+- [ ] Write the Tracking Service document. The Worker Service holds only postponed items. Done on 2026-09-19 and not committed: the base prompt, the `default standard`, the three prompt texts of `docs/assets/prompt`, and the design change that makes an external harness a worker that the harness hosts, with `claude@1` and `opencode@1` as workers, the declared node states as the only admission rule, and no `role`, no targeted claim, no permitted client identity record and no coding agent. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
@@ -24,8 +24,6 @@ Read the owning design document before taking an item, and remove the item once 
 ## Worker Service
 
 - [ ] POSTPONED 2026-09-18 by Ulrich to phase 2. The first version supplies the workers `general@1` and `reviewer@1`. Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
-- [ ] Design the base prompt that `swe@1` and `re@1` share. Discuss which aspects the base prompt covers in a minimalist style, and find an industry gold standard to turn into the base prompt. A base prompt for a Slack agent and an email agent follows later.
-- [ ] Design the prompt layers of a coding agent. `worker-service.md` starts the program with the work prompt, and the program holds its own instructions and its own file discovery.
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 
 ### Next phase
