@@ -18,32 +18,31 @@ It describes no mechanism of another service.
 
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
-A worker declares its name, its method, its one agent, the default configuration of that agent, the node states that its instances claim and its required node format.
+A worker declares its name, its host, the node states that its instances claim and its required node format.
+A worker that the daemon hosts also declares its method, its one agent, the default configuration of that agent, and the base prompt and the agent prompt of that agent.
+A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 An agent name names a role, and no agent name equals a worker name.
 A configuration is named through a worker binding, never through a bare agent name.
-The [Scheduler Service](scheduler-service.md#claims-roles-and-counts) reads the role of a binding from the declared node states.
+The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
 The default configuration of a native agent names its provider, its model identifier and its reasoning effort.
-The default configuration of a coding agent names its model identifier and its reasoning effort.
 A worker declares, with the default configuration of its agent, the further options of the agent, the options that a project can override and the constraint that a whole configuration satisfies, and that declaration is part of the contract of the worker name.
 A worker binding of the [Project Service](project-service.md#execution-configuration-and-instance-count) overrides the default configuration through its entry, and the Project Service resolves the effective configuration of the agent.
 A worker reads no other project configuration.
 The required node format names the fields of a node that the method requires.
-Compatibility reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls-and-targeted-claims) of the Scheduler Service select.
+Compatibility reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
 Every worker of this page requires the same node format.
 
 A method is the worker's own.
-Two methods exist: the steps method and the evaluation method.
+Two methods of the daemon exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
 The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
+A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
 
-An agent has one of two kinds.
-A native agent is an agent loop that the Worker Service runs itself.
-A coding agent is a program that the Worker Service runs as a child process in the workspace of the execution.
-The coding agent of a worker is the same program that an external harness runs.
-The Worker Service hosts it as the WHO of an execution, under a worker binding, a work pull and an execution identity.
-An external harness runs no worker of this page, and kanthord configures no agent of an external harness.
+The agent of a worker that the daemon hosts is a native agent, an agent loop that the Worker Service runs itself.
+The Worker Service publishes the contract of `claude@1` and `opencode@1`: the name, the host, the declared node states and the required node format.
+It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
-A worker declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
+A worker that the daemon hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies three [gateways](worker-service.vocabulary.md#gateway) as the tools that perform an authenticated operation.
 The model gateway performs a model inference call.
@@ -56,11 +55,6 @@ A native agent reaches a provider through the model gateway alone.
 A gateway resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the identity that requests the operation.
 For every model inference call of a native agent the Worker Service uses the provider account, the model identifier and the reasoning effort of the effective configuration of the agent, which the Project Service resolves for that call.
 An execution honours every value of the effective configuration of its agent.
-A coding agent performs its own model inference call.
-The Worker Service passes the model identifier and the reasoning effort of the effective configuration to the program when it starts.
-The operator configures the provider authentication of a coding agent on the host.
-The project controls no part of that authentication.
-The kanthord extension of the coding agent verifies that configuration when the program starts.
 A local git operation runs in the workspace and passes through no gateway.
 An agent holds no repository credential.
 
@@ -74,6 +68,7 @@ The operator configures the global prompt of the daemon.
 The global prompt states the conventions of the operator, and it holds for every native agent of the daemon.
 A worker declares, for its agent, the base prompt that the agent uses and the agent prompt of that agent.
 A base prompt states what holds for every agent that uses it, and more than one agent uses one base prompt.
+A base prompt describes the engineer that every agent that uses it is, and it states the default standard of the work product that those agents produce and judge.
 An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
 The base prompt and the agent prompt are part of the contract of the worker name.
 A change to either one is a new worker version.
@@ -105,7 +100,7 @@ The base prompt and the agent prompt state the obligations of the worker, and no
 The agent prompt governs the base prompt, and a base prompt that contradicts the agent prompt that uses it is a defect of the worker.
 An execution performs no conduct that its base prompt or its agent prompt forbids, whatever another layer states.
 A global prompt and a project prompt define no validation criterion.
-An assessment follows the validation criteria of the node.
+An assessment follows the validation criteria of the node and the [default standard](overview.vocabulary.md#default-standard) that the base prompt states.
 
 A prompt layer carries instructions, and it authorizes no operation.
 It names no value of the effective configuration, it adds no tool and it changes no resource budget.
@@ -133,29 +128,33 @@ No model inference call of the execution drops a layer of its prompt.
 ## Instances and hosting
 
 The Worker Service reads the worker bindings and their instance counts from the [Project Service](project-service.md#execution-configuration-and-instance-count).
-It holds one instance for each unit of the instance count of a worker binding.
+For a worker that the daemon hosts, it holds one instance for each unit of the instance count of a worker binding.
 The instances of one binding form its pool.
 An instance holds a runtime identity.
 The Worker Service mints the runtime identity when it creates the instance.
 The runtime identity is unique inside the daemon, and it names the worker binding of the instance.
-The Worker Service vouches for that association on the [work pull](scheduler-service.md#work-pulls-and-targeted-claims).
+The Worker Service vouches for that association on the [work pull](scheduler-service.md#work-pulls).
+For a worker that an external harness hosts, the Worker Service accepts the registration of an instance under a client identity of its binding, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
+It accepts registrations up to the instance count of the binding, and it refuses a further one.
+A registration ends when the program deregisters, when the daemon restarts, or when its client identity leaves the binding, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 
 An instance record is runtime-only.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
 At daemon start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
 A configuration revision of the binding replaces no instance.
 A daemon restart creates new instances with new runtime identities.
-The Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-roles-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
+For a worker that the daemon hosts, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
 
 An instance hosts at most one execution at a time.
 An instance holds at most one outstanding work pull or one execution.
 It starts no work pull until its preceding pull returns no work or the execution of that pull ends.
 No instance is pinned to a node.
 Any idle instance of the binding takes the next compatible node.
-An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls-and-targeted-claims) of the Scheduler Service.
+An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service.
 
 The Worker Service produces the instance healthcheck before each work pull.
-The healthcheck passes when the effective configuration of the agent resolves under the current binding set and, for a coding agent, when its program is available on the host.
+The healthcheck of an instance that the daemon hosts passes when the effective configuration of the agent resolves under the current binding set.
+The healthcheck of an instance that an external harness hosts passes when its client identity is a client identity of its binding.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
 The tool of an agent and the verification command of a node run code that the repository supplies.
@@ -182,7 +181,7 @@ sequenceDiagram
     rect rgb(248, 215, 218)
         W->>I: create the instance, mint the runtime identity
         Note over W,I: one instance for each unit of the instance count, no record persists
-        W->>I: instance healthcheck (effective configuration resolves, agent program available)
+        W->>I: instance healthcheck (effective configuration resolves)
     end
     rect rgb(214, 234, 248)
         I->>S: work pull (request identifier, worker binding, runtime identity, compatibility declarations)
@@ -197,7 +196,7 @@ sequenceDiagram
 ## Executions
 
 An execution performs the method of its worker under the live claim that its instance obtained.
-The execution takes its execution identity, its node, its attempt and the pinned node revision from the [claim response](scheduler-service.md#work-pulls-and-targeted-claims) of the Scheduler Service.
+The execution takes its execution identity, its node, its attempt and the pinned node revision from the [claim response](scheduler-service.md#work-pulls) of the Scheduler Service.
 Every operation of the execution presents its execution identity under the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The execution renews its lease at a fixed interval shorter than the lease expiry while it runs.
 The renewal runs outside the agent, so a long model call renews the lease.
@@ -309,45 +308,6 @@ sequenceDiagram
     end
 ```
 
-The sequence diagram below shows the steps method with a coding agent, for one task.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant E as Execution (steps method)
-    participant C as Coding agent process
-    participant RG as Repository gateway
-    participant P as Project Service
-    participant M as Mission Service
-
-    rect rgb(248, 215, 218)
-        E->>E: prepare the workspace on the node branch
-        E->>C: start the program in the workspace, with the work prompt, the model identifier and the reasoning effort of the effective configuration
-    end
-    loop while the program runs
-        rect rgb(226, 227, 229)
-            C->>C: the program performs its own model inference call
-            C->>C: edit files, local commits
-        end
-    end
-    rect rgb(248, 215, 218)
-        C-->>E: the program exits
-        E->>E: task commit, run the verification command against it, discard its changes
-        E->>C: the verification result, ask for the judgement
-        C-->>E: judgement against the validation criteria
-    end
-    rect rgb(212, 237, 218)
-        E->>M: task assessment and task outcome
-    end
-    rect rgb(248, 215, 218)
-        E->>RG: push the node branch
-    end
-    rect rgb(255, 243, 205)
-        RG->>P: resolve the repository binding, network git write
-    end
-    Note over C,P: the program holds no repository credential, because the repository gateway performs every network git operation
-```
-
 For an initiative the steps method reads the current objectives of the initiative.
 When one objective holds no terminal state, the execution releases with further work and names the terminal state of that child set as its wait fact.
 When every objective holds a terminal state, the agent writes a report on the outcome of each objective, the execution submits that report as produced evidence and releases with no further work.
@@ -438,7 +398,7 @@ The evaluation method and the MCP tool of an external harness call the action pe
 Both callers pass the execution identity and nothing else.
 The invocation names no action and supplies no operand.
 For both callers, the action performer checks that the claim of the execution identity is live.
-It checks that the claimant holds the reviewer role.
+It checks that the claim is an evaluation claim.
 It checks that a current passing assessment of the attempt stands.
 The action performer obtains every operand from the records and the evidence snapshot.
 When an action needs a network git write, the action performer makes its own checkout through the repository gateway.
@@ -488,7 +448,6 @@ It exposes the tool of the action performer to an external harness only, because
 The tool of the action performer takes no parameter beyond the execution identity.
 It returns the four return classes of the action performer.
 A native agent reaches the permitted read methods of the platform gateway as tools through the MCP server.
-A coding agent reaches no gateway.
 
 The platform gateway serves the [observer of the Scheduler Service](scheduler-service.md#intake-and-observation).
 The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the [external object](mission-service.md#evidence) to read its state.
@@ -551,7 +510,7 @@ Both paths run the same eligibility, operand and reuse rules.
 The reviewer execution releases after its requests when the return of the action performer holds only submitted external objects and actions that await a prerequisite.
 That rule holds for a reviewer execution of an external harness after the tool of the action performer returns.
 When a required action awaits a prerequisite, the release names the observation that the action follows as its wait fact.
-The [Scheduler Service](scheduler-service.md#claims-roles-and-counts) owns the wait record, and the [Mission Service](mission-service.md#continuation-condition) owns the continuation condition.
+The [Scheduler Service](scheduler-service.md#claims-and-counts) owns the wait record, and the [Mission Service](mission-service.md#continuation-condition) owns the continuation condition.
 
 The sequence diagram below shows the evaluation and the configured repository action, on an objective that requires one action.
 
@@ -589,8 +548,8 @@ sequenceDiagram
         R->>AP: request the required external actions of the attempt (execution identity only)
     end
     rect rgb(214, 234, 248)
-        AP->>S: check the live claim and the reviewer role
-        S-->>AP: live claim, reviewer role
+        AP->>S: check the live claim and the evaluation claim
+        S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
         AP->>M: read the current passing assessment
@@ -641,8 +600,8 @@ sequenceDiagram
         R->>AP: request the required external actions of the attempt (execution identity only)
     end
     rect rgb(214, 234, 248)
-        AP->>S: check the live claim and the reviewer role
-        S-->>AP: live claim, reviewer role
+        AP->>S: check the live claim and the evaluation claim
+        S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
         AP->>M: read the current passing assessment, the required external actions and the external objects
@@ -716,8 +675,8 @@ sequenceDiagram
         R->>AP: request the required external actions of the attempt (execution identity only)
     end
     rect rgb(214, 234, 248)
-        AP->>S: check the live claim and the reviewer role
-        S-->>AP: live claim, reviewer role
+        AP->>S: check the live claim and the evaluation claim
+        S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
         AP->>M: read the current passing assessment, the required external actions and the external objects
@@ -781,8 +740,8 @@ sequenceDiagram
         MS->>AP: request the required external actions (execution identity only)
     end
     rect rgb(214, 234, 248)
-        AP->>S: check the live claim and the reviewer role
-        S-->>AP: live claim, reviewer role
+        AP->>S: check the live claim and the evaluation claim
+        S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
         AP->>M: read the current passing assessment, the required external actions and the external objects

@@ -74,25 +74,18 @@ A provider account binding is the default account of its provider when the proje
 The provider account of a [native agent](worker-service.md#workers-and-templates) is the one that its entry names; when the entry of the agent names no account, it is the default account of the provider that the default configuration names, and an effective configuration with neither is invalid.
 The provider account binding determines the effective provider, over the provider of the default configuration, so an entry that names a provider account binding of another provider also names the model identifier.
 A default account serves an agent only when its entry names no account, and a disabled or revoked selected account prevents use and authorizes no other account.
-The entry of a [coding agent](worker-service.md#workers-and-templates) names no provider account binding.
-A change to the effective configuration takes effect at the next resolution for a native agent and at the next program start for a coding agent.
 Two worker bindings of one worker carry different configuration.
 A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
 
-A project permits each client identity of an external harness.
-The record that permits a client identity configures its role, `executor` or `reviewer`, and its execution count.
-The execution count is required configuration with no implicit default.
-Two permitted client identities never share an execution count.
-The role of a permitted client identity never changes.
-A permitted client identity holds no agent configuration, because the external harness selects and authenticates its own inference outside the resolution of the Project Service.
-A project never permits one client identity under two roles, so a different role needs a different client identity.
-A human creates the record that permits a client identity, and the Project Service issues a client secret for that identity.
+A worker binding of a worker that an external harness hosts holds the client identities that its instances present.
+A human adds a client identity to that binding, and the Project Service issues a client secret for that identity.
 The Project Service returns the client secret once and keeps its hash in custody.
-An external harness authenticates a request with its client identity and that client secret, and the Project Service verifies the secret before it resolves the identity.
-A rotation issues a new client secret and keeps the identity, its role and its execution count.
-The removal of the record revokes the identity.
-A client secret authenticates the harness and authorizes no operation, so it is no credential of a resource.
+An instance of an external harness authenticates a request with its client identity and that client secret, and the Project Service verifies the secret before it resolves the identity.
+A rotation issues a new client secret and keeps the identity.
+The removal of a client identity from the binding revokes it.
+Such a binding holds no agent configuration, because the external harness selects and authenticates its own inference outside the resolution of the Project Service.
+A client secret authenticates the instance and authorizes no operation, so it is no credential of a resource.
 
 ## Authorization and credential custody
 
@@ -110,7 +103,7 @@ The boundary is the authorization of an operation, and it is not the custody of 
 An agent that never reads a key still uses an authenticated tool.
 Every operation names the identity that requests it.
 An execution presents its execution identity.
-An external harness presents its client identity and, for an execution operation, the execution identity of its claim.
+An instance of an external harness presents its client identity and, for an execution operation, the execution identity of its claim.
 The observer of the Scheduler Service presents its service identity.
 The protected facility resolves that identity to the project and to the node of the request.
 An execution identity resolves to the node of its claim, and the facility refuses an operation that names another node.

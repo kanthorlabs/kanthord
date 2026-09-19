@@ -13,7 +13,7 @@ A ruling that names a package, a product or a version is deliberate, and a chang
 ## Native agent runtime
 
 The first version supplies the workers `general@1` and `reviewer@1`.
-The workers `claude@1` and `opencode@1` follow, and `tdd@1` is postponed to phase 2.
+The workers `claude@1` and `opencode@1` follow with the registration of an externally hosted instance, and `tdd@1` is postponed to phase 2.
 The native agent `swe@1` of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
 The daemon gives pi its own directories.
 It disables the discovery of user extensions, skills, prompt templates and themes.
@@ -21,6 +21,11 @@ It uses an in-memory session manager.
 It disables the version check, the install telemetry and the provider catalog refresh.
 It pins the exact pi version, and a pi version bump is a deliberate change to the workers that run on it.
 Every runtime setup call carries an abort signal with a deadline.
+
+## Externally hosted worker
+
+The kanthord extension of Claude Code and the kanthord plugin of opencode register the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
+Their design, and the packaging of the `/work` orchestration skill that they carry, are epic decisions.
 
 ## Prompt composition
 
@@ -35,8 +40,9 @@ pi receives the base prompt and the agent prompt as its system prompt, with the 
 It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
-The first version supplies one base prompt for `swe@1` and `re@1`.
-Its name and its content are an open item.
+The first version supplies one base prompt for `swe@1` and `re@1`, `docs/assets/prompt/base.md`, and the agent prompts `docs/assets/prompt/swe@1.md` and `docs/assets/prompt/re@1.md`.
+The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to the base prompt, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
+The recommendation-first format of a confirmation request returns with the clarification interface.
 The bound of the global prompt and the bound of the project prompt are epic decisions.
 The acceptance path proves the configured precedence, an absent source, an invalid source, a disabled layer and a link that leaves the workspace.
 It proves that a reviewer execution takes no agent file of the workspace.

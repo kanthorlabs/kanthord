@@ -243,30 +243,23 @@ The record of the operation names the execution identity.
 
 ## client identity
 
-The identity that an external harness presents.
+The identity that an instance of an external harness presents.
 
 `claude-code` requests a platform action through the API, and it presents its client identity.
 The protected facility resolves that identity to the project, then it checks the binding.
 The external harness holds no credential.
 `project-service.md` names the execution identity of an execution and the client identity of an external harness.
-The project permits `claude-code` with an executor identity and a reviewer identity.
-The record that permits each one configures its role and its execution count.
-The Project Service issues a client secret for each of the two identities when `ulrich` creates their records.
+Worker binding `claude-main` of `claude@1` holds the client identity `claude-code-main`, which the instance that `ulrich` starts presents.
+The Project Service issues a client secret for that identity when `ulrich` adds it to the binding.
 
 ## client secret
 
-The secret that the Project Service issues once for a permitted client identity and that an external harness presents with that identity to authenticate a request.
+The secret that the Project Service issues once for a client identity of a worker binding and that an instance of an external harness presents with that identity to authenticate a request.
 
-`ulrich` creates the record that permits `claude-code-executor`, and the Project Service returns its client secret once and keeps the hash in custody.
-`claude-code` presents `claude-code-executor` and that secret on a targeted claim, and the Project Service verifies the hash before it resolves the identity.
-A request that names `claude-code-reviewer` without its secret is refused before any resolution.
-A rotation issues a new secret and keeps the identity, its role and its execution count.
-
-## execution count
-
-The configured count of live executions that a permitted client identity holds.
-
-The executor identity of `claude-code` holds an execution count of 2, so it holds at most two live executions.
+`ulrich` adds `claude-code-main` to worker binding `claude-main`, and the Project Service returns its client secret once and keeps the hash in custody.
+The instance presents `claude-code-main` and that secret on a work pull, and the Project Service verifies the hash before it resolves the identity.
+A request that names `claude-code-main` without its secret is refused before any resolution.
+A rotation issues a new secret and keeps the identity.
 
 ## service identity
 
