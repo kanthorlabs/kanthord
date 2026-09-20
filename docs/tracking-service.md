@@ -134,7 +134,7 @@ That count is telemetry, so it can be lost.
 A human issues an ingestion through the API, and no ingestion runs without a human.
 An ingestion is a finite import.
 It imports the records that the local store holds when it starts.
-It ends when every one of those records holds a terminal disposition, or when it cannot continue.
+It ends when every one of those records holds a disposition, or when it cannot continue.
 It reports its result, and the count of the records that stay retained tells the human whether to issue another ingestion.
 A record that the extension appends after an ingestion starts waits for the next ingestion.
 The Tracking Service runs no uploader, and the extension holds no scheduler.
@@ -161,10 +161,7 @@ A duplicate is `Stored`.
 `Refused` states that the record is never acceptable.
 The refusal covers a structural condition only.
 A record that names a trace other than the trace of its execution is `Refused`.
-A record whose resolved project the requester is not authorized for is `Deferred`.
-An authorization is a property of the requester and it changes, so it takes no terminal disposition.
-The extension deletes its local copy only on a terminal disposition.
-It keeps and retries a record that is not terminal.
+The extension deletes its local copy on the disposition of the record.
 
 ## Ingestion authority
 

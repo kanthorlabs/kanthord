@@ -154,6 +154,14 @@ A human participant is a person responsible for carrying out steps as the WHO.
 The term names no closed set.
 A human merges the pull request of "Add password reset", and an observer records the landing.
 
+## human identity
+
+The identity of a logged-in human account, as established by the [Gateway Service](viewer.html?p=gateway-service.md) and passed to a downstream service.
+The term names no closed set.
+
+The [Gateway Service](viewer.html?p=gateway-service.md) authenticates `ulrich` and establishes the human identity of `ulrich`.
+The Mission Service receives that identity and names it in its authorization call.
+
 ## binding
 
 A binding is the record that allocates a resource to a project and permits an operation on that resource.

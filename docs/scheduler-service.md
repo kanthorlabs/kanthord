@@ -208,7 +208,8 @@ An unreachable provider creates no block condition and authorizes no model or pr
 The claim operation is one atomic operation.
 Only a work pull invokes it.
 Selection and claim form one acquisition operation without an unprotected gap.
-The operation rechecks the Mission state, the readiness condition, the current configuration, the declared node states of the worker and the count of the claimant.
+The operation rechecks the Mission state, the readiness condition, the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
+The claim resolves no binding, and it validates no effective configuration of an agent.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
 The operation counts the execution against the claimant's count and records the execution.

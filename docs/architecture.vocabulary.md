@@ -9,15 +9,16 @@ This file is not a design document, and `architecture.md` stays the single sourc
 
 ## service
 
-A logical part of one process with a boundary that separates authority. The set is closed and it holds five values.
+A logical part of one process with a boundary that separates authority. The set is closed and it holds six values.
 
 - **Project Service**
 - **Mission Service**
 - **Scheduler Service**
 - **Worker Service**
 - **Tracking Service**
+- **Gateway Service**
 
-The daemon holds no other service. The five services are logical boundaries inside one daemon.
+The daemon holds no other service. The six services are logical boundaries inside one daemon.
 
 ## actor
 
@@ -39,7 +40,7 @@ The container view shows the external systems around the daemon. The set is clos
 
 ## daemon
 
-The daemon is one process, and it holds the five services. A client reaches it through the API or the CLI.
+The daemon is one process, and it holds the six services. A client reaches it through the API or the CLI.
 The daemon runs on one host.
 
 - An external harness invokes a configured repository action through the MCP server of the Worker Service.
@@ -93,6 +94,6 @@ The type of a credential is a separate matter, and no approved page closes that 
 
 What the container view shows. A service is not a container.
 
-- The daemon is a container, and it holds the five services.
+- The daemon is a container, and it holds the six services.
 - The CLI client of the daemon is a container.
 - A service boundary separates authority inside the daemon, so it describes no container.

@@ -692,9 +692,9 @@ The Mission Service copies no external content.
 The next execution fetches that content through the external object.
 
 The actor of an unblock is a human.
-That human carries an account username.
+That human carries a [human identity](overview.vocabulary.md#human-identity).
 No execution identity and no client identity unblocks a node.
-The Project Service owns how an identity is established.
+The Gateway Service owns how a human identity is established.
 
 The eligibility of an unblock reads the state of the node alone.
 It reads no state of the parent.
@@ -719,7 +719,7 @@ No execution operation proceeds on a blocked node.
 An authorized observation needs no claim, because an observation is not an execution operation.
 A human who acts directly on the platform is outside the API.
 The Mission Service refuses nothing there.
-The Project Service owns the authorization of each operation.
+The Project Service owns the authorization of each operation on a resource.
 
 An import never unblocks a node.
 Validation criteria and authority owns that rule.
