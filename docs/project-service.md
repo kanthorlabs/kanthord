@@ -7,7 +7,7 @@ title: Project Service
 ## Scope
 
 This document describes the Project Service.
-It describes how a project allocates a resource, and how the system authorizes an operation on that resource.
+It describes how a project allocates a resource, and how the system authorizes an operation on that resource, including an operation that a human performs.
 It describes no mechanism of another service.
 
 ## Project identity and ownership
@@ -98,7 +98,7 @@ A trusted execution consults that facility after it checks the binding.
 Holding a resource does not confer custody of its secret.
 A binding does not narrow upstream authority.
 One SSH key reaches many repositories, and one API key authorizes a whole account.
-System authorization is what kanthord permits an execution to access.
+System authorization is what kanthord permits an identity to access.
 Credential authority is what the remote permits any holder.
 The Project Service enforces system authorization, and it records credential authority.
 The boundary is the authorization of an operation, and it is not the custody of bytes.
@@ -112,7 +112,11 @@ An execution identity resolves to the node of its claim, and the facility refuse
 The facility resolves a service identity through the external object of the request.
 That resolution reaches the repository binding, the project and the node.
 The facility permits a service identity one operation class, the read of an external object.
-The facility checks the binding of that project for the requested operation.
+
+A human presents a [human identity](overview.vocabulary.md#human-identity).
+The facility recognizes every authenticated human identity as authorized for the operation, under the [human authority policy](gateway-service.md#human-authority) of the Gateway Service.
+
+For a machine identity, the facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
 No credential leaves the daemon.
 An execution holds no credential, and an external harness holds no credential.
@@ -158,6 +162,7 @@ A replacement invalidates every reference to the binding that it replaces.
 An edit that replaces a binding repoints every dependent binding in that same edit.
 The Project Service rejects a binding set that references a binding which does not exist.
 The Project Service validates a binding set when a project writes it, and it validates a binding again when an execution resolves it.
+The [claim](scheduler-service.md#claims-and-counts) is no resolution, so the first resolution of an execution is the first validation of its bindings after write time.
 Local disablement, upstream revocation, rotation, expiry and OAuth refresh are five different changes.
 An execution resolves a binding at the moment that it needs the resource.
 A resolution authorizes one operation, and the next operation resolves the binding again.

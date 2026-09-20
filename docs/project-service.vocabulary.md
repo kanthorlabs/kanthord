@@ -199,12 +199,15 @@ The facility consults custody after that check, so a refusal never reaches custo
 
 ## system authorization
 
-What kanthord permits an execution to access.
+What kanthord permits an identity to access.
 
 One API key of a git platform account authorizes every repository of that account.
 A project holds no binding for one repository of that account.
-The protected facility refuses an operation on that repository, because system authorization does not permit it.
+The protected facility refuses an execution operation on that repository, because system authorization does not permit it.
 The Project Service enforces system authorization.
+
+The Gateway Service authenticates `ulrich` and passes the human identity of `ulrich` to a downstream service.
+The Project Service authorizes that human identity for an operation on any project of the daemon.
 
 ## credential authority
 

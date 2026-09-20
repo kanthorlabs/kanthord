@@ -97,14 +97,10 @@ The transcript of external harness `claude-code` is a telemetry text.
 ## record disposition
 
 A record disposition states the result of one record in an acknowledgement.
-The set has three values.
+The set is closed and it holds two values.
 
 - **Stored**
 - **Refused**
-- **Deferred**
-
-`Stored` and `Refused` are terminal.
-`Deferred` is not terminal.
 
 ## retention
 
@@ -115,7 +111,6 @@ The daemon holds a span of project `Billing` for ninety days and a telemetry tex
 
 An acknowledgement replies to one ingestion call.
 The acknowledgement of an import of the `claude-code` log of project `Billing` reports its retained count.
-The extension keeps a record after a `Deferred` disposition.
 
 ## ingestion
 

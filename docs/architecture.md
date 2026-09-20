@@ -13,7 +13,7 @@ It describes no mechanism inside a service.
 ## Container diagram
 
 The container view shows the daemon and its CLI client, with the actors and external systems around them.
-The five services are logical boundaries inside the daemon, not separate containers.
+The six services are logical boundaries inside the daemon, not separate containers.
 The design targets one daemon on one host.
 
 ## Services
@@ -70,30 +70,39 @@ Telemetry retention differs from evidence retention.
 No outcome depends on telemetry.
 Each service that writes telemetry takes responsibility to secure its own sensitive information.
 
+### Gateway Service
+
+The Gateway Service holds the RESTful API of the daemon.
+Every request enters the daemon through it, from a human and from a machine.
+It authenticates a human and produces a [human identity](overview.vocabulary.md#human-identity).
+It authenticates no machine.
+It routes each request to the service that owns the requested operation.
+
 ## Service diagram
 
-The service view shows the five services inside the daemon.
+The service view shows the six services inside the daemon.
 It shows the relations that the sections below name.
 
 ## Actors
 
-- A human configures a project, carries out steps, reviews results and overrides an outcome.
+- A human configures a project, carries out steps, reviews results and overrides an outcome. A human reaches the daemon through the Gateway Service, which authenticates the human and passes the [human identity](overview.vocabulary.md#human-identity) with the request.
 - An external harness executes work, and it reaches kanthord as a client through the API or the CLI.
   It performs no authenticated operation on a resource that a project binds, and it invokes that operation through kanthord.
 
 ## External systems
 
 - A git platform holds the repository that a project uses and accepts the configured repository action.
-  It delivers events about that repository to the daemon.
+  It delivers events about that repository to the Gateway Service, which passes each delivery to the Scheduler Service.
 - A large language model provider serves the models that the Worker Service uses.
 
 ## Relations
 
-- An external harness reaches the Mission Service, the Project Service, the Scheduler Service and the Tracking Service through the API or the CLI.
-- An instance that an external harness hosts registers itself with the Worker Service and pulls work from the Scheduler Service through the API or the CLI.
-- An external harness invokes a configured repository action through the MCP server of the Worker Service.
+- An external harness reaches the Gateway Service through the API or the CLI.
+- An instance that an external harness hosts registers itself with the Worker Service and pulls work from the Scheduler Service through the Gateway Service.
+- An external harness reaches the MCP server of the Worker Service through the Gateway Service, and it invokes a configured repository action there.
 - The Worker Service performs that action.
-- A human reaches the Project Service and the Mission Service through the API or the CLI.
+- A human reaches the Gateway Service through the API or the CLI.
+- The Gateway Service passes the [human identity](overview.vocabulary.md#human-identity) to the target service when a human makes a request.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
 - The Mission Service notifies the Scheduler Service of an accepted change that can affect scheduling.
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
@@ -113,5 +122,5 @@ It shows the relations that the sections below name.
 - The Worker Service uses a provider credential that the Project Service holds.
 - The Worker Service reaches a large language model provider.
 - Every service writes telemetry to the Tracking Service.
-- An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the API.
-- A human reads a trace from the Tracking Service through the API or the CLI.
+- An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the Gateway Service.
+- A human reads a trace from the Tracking Service through the Gateway Service.

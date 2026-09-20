@@ -34,6 +34,9 @@ Neither assessment establishes success.
 The outcome records the stopping reason separately from the assessment of evidence.
 Stopping execution does not by itself satisfy the outcome requirement.
 
+A human reaches kanthord through the [Gateway Service](gateway-service.md), which authenticates the human and establishes a [human identity](overview.vocabulary.md#human-identity).
+Every act of a human carries that identity.
+
 Only a human can override an outcome to make a bypass exception.
 A human override produces a new outcome that carries the human assertion.
 kanthord keeps the previous outcome as a reference.

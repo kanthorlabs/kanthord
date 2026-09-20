@@ -100,6 +100,15 @@ GitHub delivers the merge of pull request 42 for "Add password reset".
 The Scheduler stores the delivery durably in its inbox before it acknowledges acceptance.
 A duplicate with the same source and platform delivery identity creates no second effect for that project's external object.
 
+## linked human identity
+
+The [human identity](viewer.html?p=overview.vocabulary.md#human-identity) that a delivery links to.
+The Scheduler Service passes it to the Mission Service when it invokes a human act on a node.
+The term names no closed set.
+
+A delivery from the GitHub webhook source links to the account `ulrich`.
+The Scheduler Service passes the linked human identity of `ulrich` with the Mission operation.
+
 ## observer
 
 The observer is a Scheduler Service component that the scheduling processors execute on an observation obligation.
