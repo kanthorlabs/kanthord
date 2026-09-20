@@ -5,8 +5,6 @@ title: Overview Vocabulary
 # Overview Vocabulary
 
 This file holds the values and the examples of the product terms that [overview.md](viewer.html?p=overview.md) owns.
-A term that names a closed set lists every value of that set.
-Every other term carries a concrete example.
 A term that another design page owns lives in that page's own vocabulary sibling.
 This file is not a design document, and `overview.md` stays the single source of truth.
 

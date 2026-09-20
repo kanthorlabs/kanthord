@@ -5,8 +5,6 @@ title: Architecture Vocabulary
 # Architecture Vocabulary
 
 This file holds the values and the examples of the terms that [architecture.md](viewer.html?p=architecture.md) owns.
-A term that names a closed set lists every value of that set.
-Every other term carries a concrete example.
 This file is not a design document, and `architecture.md` stays the single source of truth.
 
 ## service

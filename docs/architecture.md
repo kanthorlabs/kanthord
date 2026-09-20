@@ -68,7 +68,7 @@ The Tracking Service holds telemetry.
 It holds no other kind of record.
 Telemetry retention differs from evidence retention.
 No outcome depends on telemetry.
-No credential enters telemetry.
+Each service that writes telemetry takes responsibility to secure its own sensitive information.
 
 ## Service diagram
 
@@ -113,3 +113,5 @@ It shows the relations that the sections below name.
 - The Worker Service uses a provider credential that the Project Service holds.
 - The Worker Service reaches a large language model provider.
 - Every service writes telemetry to the Tracking Service.
+- An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the API.
+- A human reads a trace from the Tracking Service through the API or the CLI.

@@ -115,6 +115,7 @@ An agent file of the workspace resolves inside the workspace, and a path that le
 A text that exceeds the bound of its layer is invalid, and a text that the composer cannot decode is invalid.
 The composer decodes the text of a source, and it changes no instruction of that text.
 The composer records the selected source of every layer, the digest of its text, and every source that it read and rejected.
+The composer records no prompt text.
 That record is telemetry of the execution.
 
 The execution resolves the global prompt, the base prompt, the agent prompt and the project prompt once, when it starts.
@@ -797,5 +798,5 @@ It owns the platform implementations, the action performer, the MCP server and t
 It owns the lifecycle of an execution between the claim and the release.
 It owns the performance of a required external action and its idempotency across attempts.
 It owns memory.
-The [Tracking Service](architecture.md#tracking-service) holds the telemetry of every execution.
+The [Tracking Service](tracking-service.md#scope) holds the telemetry of every execution.
 An agent transcript is telemetry, unless an execution submits it as evidence under the rules of the Mission Service.
