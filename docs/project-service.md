@@ -145,8 +145,6 @@ That operation names no requester identity, because it acts on nothing external.
 The diagram shows the order of one authorization.
 It shows that a refusal never reaches custody.
 
-[![Authorization diagram for the Project Service](assets/project-service-authorization.svg)](assets/project-service-authorization.svg)
-
 ## Configuration lifecycle and consistency
 
 A binding set changes when the resource requirements of a project change.
@@ -172,5 +170,3 @@ An operation that is in progress ends against the remote, because the remote hol
 
 The diagram shows the binding graph that these rules act on.
 It shows every reference that a replacement invalidates.
-
-[![Binding diagram for the Project Service](assets/project-service-bindings.svg)](assets/project-service-bindings.svg)

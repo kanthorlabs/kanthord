@@ -16,8 +16,6 @@ The container view shows the daemon and its CLI client, with the actors and exte
 The five services are logical boundaries inside the daemon, not separate containers.
 The design targets one daemon on one host.
 
-[![Container diagram for kanthord](assets/architecture-containers.svg)](assets/architecture-containers.svg)
-
 ## Services
 
 A service is a logical part of one process.
@@ -76,8 +74,6 @@ No credential enters telemetry.
 
 The service view shows the five services inside the daemon.
 It shows the relations that the sections below name.
-
-[![Service diagram for kanthord](assets/architecture-services.svg)](assets/architecture-services.svg)
 
 ## Actors
 
