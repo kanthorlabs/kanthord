@@ -121,11 +121,11 @@ The operator provides the trust boundary as a disposable host that the operator 
 
 ## Traces
 
-The pi session entries of an execution become its transcript telemetry, with the execution identity and the attempt, redacted of secrets.
+The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
 
 ## Acceptance path
 
-The acceptance path is the `general@1` loop, the handoff, the commit and the verification, the push, the release, the independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome.
+The acceptance path is the `general@1` loop, the commit and the verification, the push, the release, the independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome.
 A scripted fake provider runs it deterministically.
 A bounded real-provider smoke run proves the real configuration.

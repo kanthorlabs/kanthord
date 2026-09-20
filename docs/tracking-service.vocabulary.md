@@ -36,7 +36,7 @@ The root span of the `Billing` execution has its own span identity.
 ## root span
 
 A root span has no parent span.
-The Scheduler opens the root span when it records the execution of `Add password reset`.
+The Scheduler opens the root span of the execution of `Add password reset` after it records that execution.
 
 ## span attribute
 

@@ -3,29 +3,6 @@
 Open work as of 2026-09-20.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
-## Next session
-
-- [ ] Resolve the Phase 1 items below, one at a time, with the protocol: debate then pi. The pairwise interaction review of the five service pages closed on 2026-09-20 and produced every one of them. Start with the Project Service, because two rounds found the same missing contract there. B9 is the last section, and only Ulrich opens it.
-
-## Phase 1
-
-The completion of the design set. An item here changes a design page, a vocabulary sibling or an implementation sibling at the root.
-
-The pairwise interaction review of 2026-09-20 found every item below. It reviewed the ten pairs of the five service pages in ten rounds. Each round built the interaction inventory of its pair, then a debate engine challenged the finding list. The Worker Service against the Tracking Service produced no defect. Resolve one item at a time with the protocol: debate then pi.
-
-### Mission Service
-
-- [ ] Admit the human assertion of `Available -> Waiting` only while an attempt is open. An `Available` node that no claim ever held holds no open attempt, and the readiness condition of `mission-service.md#readiness-condition` reads the open attempt, so the node reaches `Waiting` and no evaluation claim can follow. Found while the actor of that row was named on 2026-09-20.
-
-### Worker Service
-
-- [ ] State in `worker-service.md` that the execution receives the trace identity and the root span identity from the claim response, and that it tags its telemetry with them. `scheduler-service.md:228-229,231` returns both fields, and `tracking-service.md:143` requires the trace identity on every telemetry record. `worker-service.md:200` enumerates what the execution takes for its method without them, and the diagram at `worker-service.md:190` omits them. Name the trace identity at `worker-service.impl.md:123` among the fields that the transcript telemetry carries. Found by round 8.
-- [ ] Replace the handoff at `worker-service.impl.md:128` with the concrete step it stands for: the agent declares its work done, and the execution writes the task assessment and the task outcome. The handoff as a worker-owned protocol is open work of Phase 2, so the sibling describes a mechanism that no design page defines. Found by round 6.
-
-### Tracking Service
-
-- [ ] Name the service that opens and writes the root span of an execution at `tracking-service.md:53-54`, which names the daemon. The Scheduler Service page never states that it writes a root span, and `tracking-service.vocabulary.md:39` gives the Scheduler as its example. The obligation cannot join the atomic claim operation, because `tracking-service.md:107-110` states that a telemetry write is never part of the operation that it records. Found by round 9.
-
 ## Phase 2
 
 Every item below waits for the completion of the design set. Ulrich moved them here on 2026-09-20.
