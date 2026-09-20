@@ -180,7 +180,7 @@ Coverage and suitability are the whole validation of a credential reference.
 
 ## custody
 
-The holding of secret material behind a protected facility.
+The holding of the secret material of a resource credential behind a protected facility.
 
 The credential store holds an SSH key behind the protected facility.
 An execution requests a network git write.
