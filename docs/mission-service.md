@@ -221,8 +221,7 @@ An external object carries its own identity, because one binding of the Project 
 An external object names the external action that it fulfils, the binding of the Project Service, the address of the remote thing and a label for display.
 The Mission Service parses no platform content.
 An observer interprets the platform, and it writes the accepted observation.
-A [fire-and-forget action](project-service.md#repository-configuration-and-policy) is resolved by its accepted request, and a request-reply action is resolved by an accepted observation.
-Every rule of this page that reads the expected end state of an action reads, for a fire-and-forget action, its accepted request.
+An external action is resolved by an accepted observation of its expected end state.
 
 An observation record is one kind.
 It names the node and the attempt, the external action, the expected end state, the external object, the observed state, the observation time and the authorized observer that wrote it.
@@ -411,7 +410,7 @@ The readiness condition admits a reviewer claim when the child rule and the exte
 For an objective, every task of the revision that the open attempt pins holds a current outcome of that attempt.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
-No request-reply action of the open attempt is unresolved.
+No external action of the open attempt is unresolved.
 The condition reads the current children of the node, and a retirement removes a node from that set.
 
 ### Continuation condition
@@ -468,8 +467,8 @@ It uses the closing event as the stopping reason.
 The closure in the transition events is the dependency closure of the node.
 It holds when every node of that closure is `Completed`.
 Each row names the event, the effect on the attempt and the record that the transition writes.
-A node reaches a terminal state only when no request-reply action of its open attempt is unresolved.
-A request-reply action is unresolved when the open attempt requests it and no accepted observation establishes an end state.
+A node reaches a terminal state only when no external action of its open attempt is unresolved.
+An external action is unresolved when the open attempt requests it and no accepted observation establishes an end state.
 This invariant also governs `Paused -> Completed` and `Paused -> Discarded`.
 
 A human resume reads the required external actions of the attempt, their requests and their accepted observations first.

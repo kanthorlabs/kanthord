@@ -5,14 +5,13 @@ Read the owning design document before taking an item, and remove the item once 
 
 ## Next session
 
-- [ ] Write the Tracking Service document. The Worker Service holds only postponed items. Done on 2026-09-19 and not committed: the base prompt, the `default standard`, the three prompt texts of `docs/assets/prompt`, and the design change that makes an external harness a worker that the harness hosts, with `claude@1` and `opencode@1` as workers, the declared node states as the only admission rule, and no `role`, no targeted claim, no permitted client identity record and no coding agent. B9 is the last section, and only Ulrich opens it.
+- [ ] Write the Tracking Service document. The Worker Service holds only postponed items. Done on 2026-09-19: the base prompt, the `default standard`, the three prompt texts of `docs/assets/prompt`, and the design change that makes an external harness a worker that the harness hosts, with `claude@1` and `opencode@1` as workers, the declared node states as the only admission rule, and no `role`, no targeted claim, no permitted client identity record and no coding agent. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
-- [ ] Decide whether the sentence `Two worker bindings of one worker carry different configuration` requires unequal values or only permits them, and reword it. Two bindings of one worker with identical values are a plausible configuration.
+- [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping.
 - [ ] Added 2026-09-18 by Ulrich. Design how custody stores the credentials and the secrets that the platform-specific implementations use: the credential types of each platform, GitHub, Slack, Telegram, Jira, the storage of the secret material at rest and its key, the OAuth refresh, and how a platform-specific implementation receives the secret at the moment of the operation without the secret leaving the daemon. The Project Service owns custody, so the answer goes to `project-service.md` for the rule and to `project-service.impl.md` for the mechanism.
-- [ ] State what a configured action follows: the passing assessment, or the expected end state of another configured action of the node. State how a policy on a binding of another kind, for example a channel, decides when a node requires its configured action, the repository strategy being the first such policy. Both wait for the notification policy design, because a notification lives on a channel binding that no page defines yet. `project-service.md` states that a configured repository action states its expected end state. That holds only while every configured repository action is request-reply. Generalize it when a fire-and-forget repository action exists.
 
 ## Scheduler Service and delivery
 
