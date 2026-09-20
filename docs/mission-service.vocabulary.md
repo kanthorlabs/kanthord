@@ -44,8 +44,8 @@ Every record in this example names attempt 1 forever.
 ## attempt counter
 
 The per-node ordinal that names which attempt a record belongs to.
-A node that starts no work holds no attempt, and its attempt counter reads 0.
-The first claim opens attempt 1, and a human unblock opens the next attempt.
+A node whose attempt never opened holds no attempt, and its attempt counter reads 0.
+[Attempt](mission-service.md#attempt) owns the acts that open an attempt.
 The counter of the objective above reads 1 for every record in the attempt example.
 The import condition requires `Pending` or `Available` and an attempt counter that reads 0.
 A task modification reads the state and the attempt counter of its objective.
@@ -143,12 +143,7 @@ Its basis names the human assertion, and its asserted result is that nothing is 
 
 The condition over current task outcomes, current objective terminal states and unresolved external actions that admits an evaluation claim.
 The term names no closed set.
-
-For an objective, every current task holds a current outcome of the open attempt of that objective.
-The condition reads the existence of a current child outcome, and never its result.
-For an initiative, every current objective holds a terminal state.
-The condition reads the current children of the node, and a retirement removes a node from that set.
-No external action of the open attempt is unresolved.
+[Readiness condition](mission-service.md#readiness-condition) states the rule.
 
 Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
 The objective reaches `Waiting`, and both tasks hold current outcomes of its open attempt.
@@ -252,6 +247,16 @@ Its evidence names the task commit of the attempt, so the tested input of its ma
 Take the initiative "Account recovery" whose objectives all hold a terminal state.
 Its steps execution submits a report as produced evidence, and that evidence names no repository snapshot.
 The tested input of its machine check is the content address of that report.
+
+## run output
+
+The account that an execution gives of its own run.
+The term names no closed set.
+
+Execution 1 of "Add password reset" finishes "Add reset token expiry" and traces the failure of "Add reset email" to a fixture.
+Its resource budget ends before it repairs that fixture.
+Execution 1 submits a run output that names the fixture and the repair that it proposes, then it releases with further work.
+Execution 2 claims the node on another host and reads that run output before it starts its own work.
 
 ## node revision
 

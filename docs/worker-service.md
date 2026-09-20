@@ -187,7 +187,7 @@ sequenceDiagram
     rect rgb(214, 234, 248)
         I->>S: work pull (request identifier, worker binding, runtime identity, compatibility declarations)
         Note over S,M: the claim opens the attempt and pins the revision
-        S-->>I: claim response: execution identity, node, attempt, pinned revision, lease
+        S-->>I: claim response: execution identity, node, attempt, pinned revision, lease, trace identity, root span identity
     end
     rect rgb(248, 215, 218)
         I->>I: the execution starts, the instance is busy
@@ -197,7 +197,8 @@ sequenceDiagram
 ## Executions
 
 An execution performs the method of its worker under the live claim that its instance obtained.
-The execution takes its execution identity, its node, its attempt and the pinned node revision from the [claim response](scheduler-service.md#work-pulls) of the Scheduler Service.
+The execution takes its execution identity, its node, its attempt, the pinned node revision, its trace identity and its root span identity from the [claim response](scheduler-service.md#work-pulls) of the Scheduler Service.
+The [Tracking Service](tracking-service.md#producer-and-ownership) owns what a span of the execution names as its parent.
 Every operation of the execution presents its execution identity under the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The execution renews its lease at a fixed interval shorter than the lease expiry while it runs.
 The renewal runs outside the agent, so a long model call renews the lease.
@@ -205,6 +206,7 @@ A revoked or lost execution stops its agent and performs no further operation un
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
+It reads every [run output](mission-service.md#run-output) of its node.
 It fetches the external content that the external objects reference through the platform connector.
 
 A workspace is a host-local working directory of one execution.
@@ -246,6 +248,7 @@ Before every release with no further work, the execution submits the head commit
 When every task of the revision holds a current task outcome of the attempt, the execution releases with no further work.
 A recorded task assessment that does not pass ends the task work, and the execution releases with no further work.
 When the resource budget ends before every task holds a task outcome, the execution releases with further work.
+Before a release with further work that names no wait fact, the execution submits its [run output](mission-service.md#run-output).
 Before that release, the execution commits the task work in progress as a checkpoint commit.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
 The [Mission Service](mission-service.md#state-transitions) routes each release.

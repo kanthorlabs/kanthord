@@ -50,8 +50,8 @@ The late admission of an externally captured record is the whole difference betw
 ## The root of a trace
 
 A trace has exactly one root span.
-The daemon opens the root span of an execution when the [Scheduler Service](scheduler-service.md#claims-and-counts) records that execution.
-The daemon writes the root span as telemetry, so that write follows every rule of this page.
+The [Scheduler Service](scheduler-service.md#claims-and-counts) opens the root span of an execution after the operation that records that execution.
+It writes the root span as telemetry, so that write follows every rule of this page.
 The trace exists before any ingestion.
 An execution that ends before an import of its records stays readable through the spans of the daemon.
 A lost write of a root span leaves an unresolved parent, and the absence rule governs it.

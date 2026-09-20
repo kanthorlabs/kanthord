@@ -149,8 +149,8 @@ A node revision is one version of the whole content of a node.
 It covers the goal, the steps, the validation criteria and every structured field of the node.
 A node revision changes no other counter.
 The attempt counter is independent of the revision number.
-An attempt pins the node revision that its unblock names.
-The first claim of a node pins the current revision.
+An attempt that a human unblock opens pins the node revision that its unblock names.
+An attempt that no human unblock opens pins the revision current at its opening.
 An active attempt keeps the revision that it pins.
 A revision that a human writes during an open attempt never retargets that attempt.
 An import never retargets an active attempt.
@@ -276,6 +276,24 @@ The retention of outcome-dependent evidence is transitive.
 It covers the evidence that supports every child outcome that an assessment weighs.
 A correction names what it corrects.
 
+## Run output
+
+A run output is the account that an execution gives of its own run.
+It holds what the execution tried, what stopped it and what it recommends for the next run.
+A run output is no evidence, so it joins no evidence set and no assessment weighs it.
+
+A run output names its node, its attempt, the execution identity that produced it and the node revision that its attempt pins.
+An execution submits a run output before its release.
+The Mission Service holds a run output that it accepted, and it recovers no submission that failed.
+A repeated submission under one execution identity creates no second record.
+
+The run outputs of a node accumulate.
+An execution reads every run output of its node, and a closed attempt keeps its run outputs readable.
+The Mission Service retains a run output while its node holds no terminal state, and a bounded retention follows a terminal state.
+
+A run output changes no state of its node and closes no attempt.
+It carries the recommendation of an execution as history, and never as a direction that binds a later execution or a human.
+
 ## Evaluation and assessment
 
 The Mission Service performs no evaluation, and it is the record authority.
@@ -387,8 +405,13 @@ The [observer](scheduler-service.md#intake-and-observation) records the detail o
 ### Attempt
 
 At most one attempt of a node is open.
-A node that starts no work holds no attempt, and its attempt counter reads 0.
-The first claim of the node opens attempt 1, and a human unblock opens the next attempt.
+A node whose attempt never opened holds no attempt, and its attempt counter reads 0.
+Three acts open an attempt.
+
+- a claim of the node, which opens attempt 1 when the node holds no attempt
+- the human assertion that the execution requires no further work, which opens attempt 1 when the node holds no attempt
+- a human unblock, which opens the next attempt
+
 An execution and an evaluation attempt pin the attempt that they start under.
 An attempt fixes the required external actions of its node at its opening, from the configuration of the Project Service current at that moment, and it records them next to the node revision that it pins.
 A configuration change during an open attempt reaches the next attempt.
@@ -399,7 +422,7 @@ A closed attempt never reopens.
 An opening and an attempt closure are separate acts.
 An attempt that a human unblock opens holds no claim until a claim arrives.
 A block of a node whose attempt counter reads 0 closes no attempt, and the counter stays 0.
-The unblock of that node clears no attempt and opens none, and the first claim of the node opens attempt 1.
+The unblock of that node clears no attempt and opens none.
 A record never migrates into the next attempt.
 A human unblock therefore returns the node to `Available` or to `Pending`, and never to `Waiting`.
 
@@ -407,7 +430,8 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 
 `Waiting` means released, and it does not mean claimable.
 The readiness condition admits an evaluation claim when the child rule and the external action rule hold.
-For an objective, every task of the revision that the open attempt pins holds a current outcome of that attempt.
+It also admits the human assertion of `Available -> Waiting`.
+For an objective, every current task holds a current outcome of the open attempt of that objective.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
 No external action of the open attempt is unresolved.
@@ -485,13 +509,13 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Pending -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Pending -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Available -> Executing` | Steps claim | Opens the attempt when the node holds none; no effect otherwise | None |
-| `Available -> Waiting` | Human asserts that the execution of the attempt requires no further work | No effect | None |
+| `Available -> Waiting` | Human asserts that the execution of the attempt requires no further work; the readiness condition holds | Opens the attempt when the node holds none; no effect otherwise | None |
 | `Available -> Pending` | Dependency addition; the closure does not hold | No effect | None |
 | `Available -> Paused` | Human holds the node | Stays open | None |
 | `Available -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Available -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
-| `Executing -> Available` | Release; execution requires further work | No effect | None |
+| `Executing -> Available` | Release; execution requires further work | No effect | Run output |
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -538,7 +562,7 @@ stateDiagram-v2
     Pending --> Completed: Success override
     Pending --> Discarded: Human discard
     Available --> Executing: Steps claim
-    Available --> Waiting: Human asserts no further work
+    Available --> Waiting: Human asserts no further work, ready
     Available --> Pending: Dependency addition
     Available --> Paused: Human hold
     Available --> Completed: Success override
@@ -596,6 +620,7 @@ stateDiagram-v2
 
 Mission structure and nodes owns the dependency and the repository binding of a node.
 Evidence owns the evidence record and its durability.
+Run output owns the run output record and its retention.
 Evaluation and assessment owns the lifecycle of an evaluation.
 Block and unblock owns the block and the unblock.
 The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.
@@ -639,7 +664,7 @@ The outcome carries the human reason as the human decision.
 The human block closes the attempt when one is open.
 A block of a node whose attempt counter reads 0 takes no effect on that counter.
 The unblock of that node clears no attempt and opens none.
-The first claim of the node opens attempt 1.
+[Attempt](#attempt) owns the acts that open an attempt.
 
 The human block closes the attempt, so a worker instance executes the node again under the next attempt.
 The records of the closed attempt stay.
