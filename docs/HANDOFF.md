@@ -21,8 +21,9 @@ The pairwise interaction review of 2026-09-20 found every item below. It reviewe
 
 The sixth service. `gateway-service.md` and `gateway-service.vocabulary.md` hold its rules, and every ruling of 2026-09-20 is written there, on `architecture.md`, on `overview.md` or on the page that the ruling names. The rulings left this file on 2026-09-20.
 
-- [ ] Decide whether the credential custody of the Project Service covers the credentials of a human account, or whether the Gateway Service holds its own custody of them. `project-service.md:94-96` makes custody a dedicated component of the Project Service and puts secret material behind the protected facility. `gateway-service.vocabulary.md` gives the Gateway Service an account store for the accounts of humans. One page must state which component holds the credentials of a human account. Raised by the writing of 2026-09-20 and not yet ruled.
-- [ ] Write `gateway-service.impl.md`, with the other implementation siblings. It holds the mechanism of the RESTful API, of the logging and of the request validation, the mechanism by which a human authenticates from the CLI, and the mechanism of the account store. Ulrich stated on 2026-09-20 that the engine already holds Hono for the RESTful API, pino for the logging and zod for the validation.
+Ulrich ruled on 2026-09-20 that the Gateway Service holds the credentials of a human account, and that the custody of the Project Service holds the credential of a resource that a project binds. The rule is written on `gateway-service.md`, `gateway-service.vocabulary.md`, `project-service.md` and `project-service.vocabulary.md`.
+
+`gateway-service.impl.md` holds the mechanisms. Ulrich ruled Hono for the RESTful API, pino for the logging, zod for the validation, and a long-lived JWT that the Gateway Service issues after a human authenticates and from which it resolves the human identity. The section is closed.
 
 ### Mission Service
 

@@ -23,6 +23,8 @@ It describes no mechanism of another service.
 
 - The Gateway Service authenticates a human before it forwards the request.
 - It checks the credentials that a human presents against the [account store](gateway-service.vocabulary.md#account-store).
+- The Gateway Service holds the credentials of a human account in the [account store](gateway-service.vocabulary.md#account-store).
+- A credential of a human account authorizes no operation at a remote, so it is no credential of a resource.
 - A failed authentication stops the request before it reaches any other service.
 - A successful authentication establishes the [human identity](overview.vocabulary.md#human-identity) as the [logged-in account](gateway-service.vocabulary.md#logged-in-account).
 
@@ -50,8 +52,8 @@ It describes no mechanism of another service.
 
 ## Boundary
 
-- The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization and credential custody.
+- The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization, and it owns the custody of the credential of a resource that a project binds.
 - The [Mission Service](mission-service.md#validation-criteria-and-authority) owns node writes and their authority.
 - The [Scheduler Service](scheduler-service.md#work-pulls) owns claim and scheduling.
 - The [Tracking Service](tracking-service.md) owns telemetry.
-- The Gateway Service owns the RESTful API surface, [human authentication](gateway-service.vocabulary.md#human-authentication), the human identity, and the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).
+- The Gateway Service owns the RESTful API surface, [human authentication](gateway-service.vocabulary.md#human-authentication), the human identity, the credentials of a human account, and the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).

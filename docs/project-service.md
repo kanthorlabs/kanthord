@@ -93,6 +93,7 @@ A client secret authenticates the instance and authorizes no operation, so it is
 
 A project holds the authorization binding that permits an operation on a resource.
 Custody is a dedicated component of the Project Service.
+Custody holds the credential of a resource that a project binds.
 Secret material sits behind a protected facility.
 A trusted execution consults that facility after it checks the binding.
 Holding a resource does not confer custody of its secret.
