@@ -1,11 +1,11 @@
 # Handoff
 
-Open work as of 2026-09-19.
+Open work as of 2026-09-20.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
 ## Next session
 
-- [ ] Write the Tracking Service document. The Worker Service holds only postponed items. Done on 2026-09-19: the base prompt, the `default standard`, the three prompt texts of `docs/assets/prompt`, and the design change that makes an external harness a worker that the harness hosts, with `claude@1` and `opencode@1` as workers, the declared node states as the only admission rule, and no `role`, no targeted claim, no permitted client identity record and no coding agent. B9 is the last section, and only Ulrich opens it.
+- [ ] The five design pages exist. Review the design set as a whole for a fact that two pages state, for a term that two pages define, and for a page that a ruling of 2026-09-20 changed. Done on 2026-09-20: the Tracking Service page, its vocabulary sibling and its implementation sibling, the two fields of the execution record of `scheduler-service.md`, the telemetry obligation of `architecture.md`, the sentence of `worker-service.md` that the prompt composer records no prompt text, the site index that lists every design page, and the convention lines that left every vocabulary sibling and every implementation sibling. B9 is the last section, and only Ulrich opens it.
 
 ## Project Service
 
@@ -17,7 +17,7 @@ Read the owning design document before taking an item, and remove the item once 
 
 - [ ] Set numerical acceptance bounds for discovery lag, claim latency and inbox depth in the implementation epics, against the 1,000-project workload.
 - [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Scheduler, Project and Mission: how a delivery is classified, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort.
-- [ ] Add the skills and extensions that support external-harness integration.
+- [ ] Add the skills and extensions that support external-harness integration. `tracking-service.md` obliges the extension to capture, to hold its capture in a bounded local store, and to import it when a human issues an ingestion.
 - [ ] Define the freshness of the instance healthcheck for a work pull that waits before the Scheduler serves it.
 
 ## Worker Service
@@ -33,13 +33,8 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Multi-agent workers, after the `tdd@1` reconciliation above. pi has no sub-agents.
 - [ ] Token and currency budgets and project-level accounting. pi reports usage and cost per message.
 - [ ] A clarification interface. The pi ask_question tool is the seed, and the block and unblock flow carries ambiguity until then.
-- [ ] Live streaming of a running turn, after the Tracking Service page. pi emits streaming events.
+- [ ] Live streaming of a running turn. pi emits streaming events. The Tracking Service page bounds this to the harness that the daemon hosts, because an external harness reaches the Tracking Service only through an import that a human issues.
 - [ ] Containment beyond the minimum trust boundary, the quality and replay suite, provenance tags on tool results.
-
-## Tracking Service
-
-- [ ] Write the Tracking Service document after the Worker Service document.
-- [ ] Define the retention and the access of the prompt record that the prompt composer writes. The record carries the prose of the operator and of a repository into telemetry.
 
 ## Root repository
 
@@ -90,3 +85,4 @@ Folded from the Worker Service section on 2026-09-18 by Ulrich, to be designed w
 - [ ] **W3:** Specify how a worker retrieves the acknowledgement of a write whose response it lost.
 - [ ] **W5:** Specify worker stop behaviour after claim revocation, including repository operations, release of runtime resources and the workspace disposition.
 - [ ] **W7:** Specify how a reviewer resumes an incomplete evaluation without repeating node execution or a repository action.
+

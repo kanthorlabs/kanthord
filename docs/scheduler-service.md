@@ -87,7 +87,7 @@ Claim latency measures the interval from a work pull to a claim when work exists
 Intake refusal is the retryable response of the intake beyond a bounded inbox depth.
 This document names no value for a bound.
 The pool size and the limits follow the workload and the measurements.
-The [Tracking Service](architecture.md#tracking-service) holds these measurements and decides nothing.
+The [Tracking Service](tracking-service.md#writing-telemetry) holds these measurements and decides nothing.
 
 ## Intake and observation
 
@@ -225,6 +225,8 @@ The execution record holds these fields.
 - The node and its attempt.
 - The pinned node revision.
 - The lease.
+- The trace identity of the execution.
+- The root span identity of the execution.
 
 The claim response returns these fields.
 Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.

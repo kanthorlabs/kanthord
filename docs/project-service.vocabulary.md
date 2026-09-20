@@ -5,8 +5,6 @@ title: Project Service Vocabulary
 # Project Service Vocabulary
 
 This file holds the values and the examples of the terms that [project-service.md](viewer.html?p=project-service.md) owns.
-A term that names a closed set lists every value of that set.
-Every other term carries a concrete example.
 This file is not a design document, and `project-service.md` stays the single source of truth.
 
 ## capability

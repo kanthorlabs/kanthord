@@ -6,8 +6,6 @@ title: Mission Service Vocabulary
 
 This file holds the values and the examples of the terms that [mission-service.md](viewer.html?p=mission-service.md) owns.
 A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabulary.md).
-A term that names a closed set lists every value of that set.
-Every other term carries a concrete example.
 This file is not a design document, and `mission-service.md` stays the single source of truth.
 
 ## attempt

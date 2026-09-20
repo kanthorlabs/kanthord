@@ -5,9 +5,7 @@ title: Worker Service Implementation
 # Worker Service Implementation
 
 This file holds the implementation rulings for the mechanisms that realize [worker-service.md](viewer.html?p=worker-service.md).
-A design page holds no mechanism, so a mechanism lives here.
 This file is not a design document, and `worker-service.md` stays the single source of truth, so a mechanism here never overrides a rule there.
-The implementation epics of phase 3 consume this file.
 A ruling that names a package, a product or a version is deliberate, and a change to it is a change to the workers that run on it.
 
 ## Native agent runtime
