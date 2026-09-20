@@ -33,7 +33,7 @@ A separate database file separates the locking and the retention sweep of teleme
 ## Local store
 
 The local store of an external harness is an append-only log.
-The log records the trace identity and the root span identity of the claim with every capture of that execution.
+The log records the trace identity and the root span identity of the execution with every capture of that execution.
 One writer process owns each log.
 The writer writes each record with one write call, and it treats a short write as a failure.
 After a failure the writer repairs the tail before it appends again.
@@ -62,9 +62,8 @@ An ingestion fixes its endpoint at the last record that the log holds when it st
 It imports no record after that endpoint.
 A segment that the local bound discards removes records before their import.
 The ingestion reports such a record as discarded, and never as retained.
-A cursor beside the log holds the position of the last record of a contiguous run of terminal dispositions.
+A cursor beside the log holds the position of the last acknowledged record.
 The extension keeps every record after that position.
-It keeps a record with a terminal disposition that follows a record without one.
 The extension updates the cursor after the Tracking Service answers, and a crash before that update repeats a delivery.
 A batch carries a bounded record count and a bounded byte count.
 
@@ -87,4 +86,5 @@ The start of the retention of a telemetry text is an epic decision.
 The capture points are the hooks of Claude Code and the plugin interface of opencode.
 The kanthord extension of Claude Code owns the capture, the local store and the ingestion.
 The kanthord plugin of opencode owns the capture, the local store and the ingestion.
+A human authenticates the call of an ingestion, and the client identity of the extension authorizes no ingestion.
 Their packaging is an epic decision.

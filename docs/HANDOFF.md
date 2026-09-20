@@ -5,58 +5,26 @@ Read the owning design document before taking an item, and remove the item once 
 
 ## Next session
 
-- [ ] Resolve the Phase 1 items below, one at a time, with the protocol: debate, pi, debate. The pairwise interaction review of the five service pages closed on 2026-09-20 and produced every one of them. Start with the Project Service, because two rounds found the same missing contract there. B9 is the last section, and only Ulrich opens it.
+- [ ] Resolve the Phase 1 items below, one at a time, with the protocol: debate then pi. The pairwise interaction review of the five service pages closed on 2026-09-20 and produced every one of them. Start with the Project Service, because two rounds found the same missing contract there. B9 is the last section, and only Ulrich opens it.
 
 ## Phase 1
 
 The completion of the design set. An item here changes a design page, a vocabulary sibling or an implementation sibling at the root.
 
-The pairwise interaction review of 2026-09-20 found every item below. It reviewed the ten pairs of the five service pages in ten rounds. Each round built the interaction inventory of its pair, then a debate engine challenged the finding list. The Worker Service against the Tracking Service produced no defect. Resolve one item at a time with the protocol: debate, pi, debate.
-
-### Design set
-
-- [ ] Rule whether a design page with no parked mechanism needs an implementation sibling. Only `worker-service.md` and `tracking-service.md` have one today. The custody item of the Project Service already directs a mechanism to `project-service.impl.md`, which does not exist. Either create `project-service.impl.md`, `mission-service.impl.md` and `scheduler-service.impl.md`, or state that a sibling appears with its first mechanism.
-
-### Gateway Service
-
-The sixth service. `gateway-service.md` and `gateway-service.vocabulary.md` hold its rules, and every ruling of 2026-09-20 is written there, on `architecture.md`, on `overview.md` or on the page that the ruling names. The rulings left this file on 2026-09-20.
-
-Ulrich ruled on 2026-09-20 that the Gateway Service holds the credentials of a human account, and that the custody of the Project Service holds the credential of a resource that a project binds. The rule is written on `gateway-service.md`, `gateway-service.vocabulary.md`, `project-service.md` and `project-service.vocabulary.md`.
-
-`gateway-service.impl.md` holds the mechanisms. Ulrich ruled Hono for the RESTful API, pino for the logging, zod for the validation, and a long-lived JWT that the Gateway Service issues after a human authenticates and from which it resolves the human identity. The section is closed.
+The pairwise interaction review of 2026-09-20 found every item below. It reviewed the ten pairs of the five service pages in ten rounds. Each round built the interaction inventory of its pair, then a debate engine challenged the finding list. The Worker Service against the Tracking Service produced no defect. Resolve one item at a time with the protocol: debate then pi.
 
 ### Mission Service
 
-- [ ] Use the claim kinds that `scheduler-service.vocabulary.md:66-67` owns, `steps claim` and `evaluation claim`. `mission-service.md:487` says `Execution claim`, and `mission-service.md:498,523` say `Reviewer claim`. Correct the Mermaid edge labels at `mission-service.md:540,551`. The Scheduler item on `scheduler-service.md:286` is the other half. Found by round 5.
-- [ ] Qualify the verification input of `mission-service.md:194`. The sentence states without qualification that the files the command reads belong to the repository and stay mutable. `worker-service.md:473-474` states that the reviewer execution places the produced evidence in its workspace when the evidence names no repository snapshot, and the command runs there. The steps method of `worker-service.md:314` produces a report for an initiative, not a snapshot. State also what the tested snapshot names in the produced-evidence case, because `worker-service.md:475` binds the machine-check result to it and `mission-service.md:431` requires the assessment to name it. Found by round 6.
-- [ ] Name the actor or the event that supplies the accepted fact for `Available -> Waiting` at `mission-service.md:488`, or delete the row when the transition is unreachable. `mission-service.md:353` holds no claim on an `Available` node, so no live execution exists, and `scheduler-service.md:262-263` releases only from a live execution. Found by round 5.
-- [ ] Rename the evidence submission of `mission-service.md:273`, which uses the term `ingestion`. `tracking-service.vocabulary.md:120-122` defines an ingestion as one finite import that a human issues from the local store of an external harness, and `tracking-service.impl.md:59-69` uses that meaning. Ulrich rules which page keeps the term before the repair. Found by round 7.
-
-### Scheduler Service
-
-- [ ] Use `evaluation claim` at `scheduler-service.md:286`, which says `reviewer claim` against the vocabulary that the page owns at `scheduler-service.vocabulary.md:66-67`. The Mission item on the same term is the other half. Found by round 5.
-- [ ] Add a citation near `scheduler-service.md:201` that names the Project Service as the source of the availability state of a binding. `scheduler-service.md:254` cites the Project Service for the instance count, and `project-service.md:66` owns both fields together. Found by round 2.
-- [ ] Delete `with a default of 0` from `scheduler-service.md:59`, and keep the cross-reference at `scheduler-service.md:61`. `mission-service.md:75` owns the fact that an absent priority reads 0. Found by round 5.
-- [ ] Replace the restatement at `scheduler-service.md:30` with a link to `mission-service.md#boundary`, and keep the coalescing sentence. `mission-service.md:605` owns the fact that the Mission Service wakes the Scheduler Service after the commit. Found by round 5.
-- [ ] Replace the transaction language at `scheduler-service.md:28,47-48` with a link to `mission-service.md#boundary`. `mission-service.md:604` owns the fact that the Mission Service writes the queue entries in the transaction that commits the accepted claimability-changing facts. Found by round 5.
-- [ ] Replace `scheduler-service.md:250` with a link to `mission-service.md#evaluation-and-assessment`. `mission-service.md:295` owns the policy that kanthord does not verify the separation of duties inside an external harness. Found by round 5.
+- [ ] Admit the human assertion of `Available -> Waiting` only while an attempt is open. An `Available` node that no claim ever held holds no open attempt, and the readiness condition of `mission-service.md#readiness-condition` reads the open attempt, so the node reaches `Waiting` and no evaluation claim can follow. Found while the actor of that row was named on 2026-09-20.
 
 ### Worker Service
 
-- [ ] Rename the `gateway` term to `connector` across the set, as Ulrich ruled on 2026-09-20. The closed set of `worker-service.vocabulary.md:120-127` becomes the model connector, the repository connector and the platform connector. The term appears 60 times in six files: `worker-service.md` 35, `worker-service.vocabulary.md` 10, `worker-service.impl.md` 6, `architecture.md` 2, `scheduler-service.vocabulary.md` 2 and `scheduler-service.md` 1. The rename moves the heading at `worker-service.md:379`, the anchor that `scheduler-service.md:119` targets, the anchor that `worker-service.md:47,381` target, and participant labels in four Mermaid diagrams. The reason is that the Gateway Service is the inbound door and a connector is the outbound door, so one word must not name both.
 - [ ] State in `worker-service.md` that the execution receives the trace identity and the root span identity from the claim response, and that it tags its telemetry with them. `scheduler-service.md:228-229,231` returns both fields, and `tracking-service.md:143` requires the trace identity on every telemetry record. `worker-service.md:200` enumerates what the execution takes for its method without them, and the diagram at `worker-service.md:190` omits them. Name the trace identity at `worker-service.impl.md:123` among the fields that the transcript telemetry carries. Found by round 8.
-- [ ] Delete the sentence at `worker-service.md:387` that repeats the prohibition of `project-service.md:35-36`, that no service infers the platform from the repository address. Keep the gateway-selection sentence and the existing link at `worker-service.md:385`. Found by round 3.
-- [ ] Change the anchor at `worker-service.md:207` to `mission-service.md#the-unblock`. The current anchor targets `mission-service.md#the-read` at `mission-service.md:727`, which describes the client reads of a blocked node. The execution reads after an unblock are at `mission-service.md:685-692`. Found by round 6.
-- [ ] Add a navigable reference on the ownership sentence of `worker-service.vocabulary.md:246`, which repeats the heading `instance healthcheck` that `scheduler-service.vocabulary.md:115` owns. Keep the heading, because a removal breaks an inbound anchor. Found by round 8.
-- [ ] Qualify `worker-service.impl.md:31` so that the resolution of an evaluation method stops at the repository binding and reads no workspace agent file. The line resolves the project prompt from the repository binding, then `AGENTS.md`, then `CLAUDE.md` of the workspace root, with no method distinction. `worker-service.md:93-94` states that the evaluation method uses the configured source only, read through the Project Service per `project-service.md:55-56`. Found by round 3.
 - [ ] Replace the handoff at `worker-service.impl.md:128` with the concrete step it stands for: the agent declares its work done, and the execution writes the task assessment and the task outcome. The handoff as a worker-owned protocol is open work of Phase 2, so the sibling describes a mechanism that no design page defines. Found by round 6.
 
 ### Tracking Service
 
-- [ ] Repair `tracking-service.impl.md:65-67` after the removal of `Deferred`. The cursor holds the position of the last record of a contiguous run of terminal dispositions, and the extension keeps a record with a terminal disposition that follows a record without one. Every disposition is now terminal, so the run and the gap that these lines handle cannot occur. The cursor advances to the last acknowledged record. Ulrich ruled the removal of `Deferred` on 2026-09-20, and every implementation sibling comes last.
-- [ ] Replace `of its claim` with `of its execution` at `tracking-service.md:123`, then follow the repair at `tracking-service.impl.md:36`. `scheduler-service.md:228-229` places the trace identity and the root span identity on the execution record, not on the claim. Found by round 9.
 - [ ] Name the service that opens and writes the root span of an execution at `tracking-service.md:53-54`, which names the daemon. The Scheduler Service page never states that it writes a root span, and `tracking-service.vocabulary.md:39` gives the Scheduler as its example. The obligation cannot join the atomic claim operation, because `tracking-service.md:107-110` states that a telemetry write is never part of the operation that it records. Found by round 9.
-- [ ] State at `tracking-service.impl.md:87-88` that the authentication of the human applies to the ingestion call, not the client identity of the extension. The lines give the extension the ownership of the ingestion, and `tracking-service.md:134` requires a human to issue it. `project-service.md:90` states that the client secret authenticates the instance and authorizes no operation, and `project-service.md:110-116` gives the client identity no path for a non-resource operation. Found by round 4.
 
 ## Phase 2
 

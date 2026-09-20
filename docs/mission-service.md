@@ -191,7 +191,7 @@ A criterion that states human authorship records a claim and establishes no auth
 The verification command is a structured field of the node content, and an import carries it.
 A human writes its value.
 No execution identity infers a command from prose.
-The files that the command reads belong to the repository, and they stay mutable.
+The [tested input](mission-service.vocabulary.md#tested-input) names the content that the command reads, and that content stays mutable.
 Attribution and a judgement criterion protect the verification.
 An exit status of zero proves that one command returned zero.
 It proves nothing about test adequacy, about coverage or about a suppressed failure.
@@ -260,9 +260,9 @@ An execution submits the evidence of its own node and the evidence of the tasks 
 Each submission carries a valid execution identity.
 A late submission never becomes current because it arrives last.
 
-A machine check binds its result to the snapshot that it ran against.
+A machine check binds its result to the [tested input](mission-service.vocabulary.md#tested-input) that it ran against.
 It binds its result to the pinned node revision.
-A named snapshot does not prove that the check used it.
+A named tested input does not prove that the check used it.
 That binding is an assertion of the executor, unless a clean isolated checkout establishes it.
 An executor report is attributable evidence, and it is not an independently verified check.
 
@@ -270,7 +270,7 @@ Evidence is append-only.
 Redaction happens before an artifact receives its address.
 An evidence record states that redaction transformed its content.
 One exceptional path removes content that holds a credential.
-Ingestion is bounded, and it never truncates content silently.
+An evidence submission is bounded, and it never truncates content silently.
 Unassessed evidence, rejected evidence and abandoned evidence each carry a bounded retention.
 The retention of outcome-dependent evidence is transitive.
 It covers the evidence that supports every child outcome that an assessment weighs.
@@ -285,7 +285,7 @@ An execution under an evaluation claim performs an evaluation.
 
 An evaluation is work that the Scheduler dispatches.
 A node that needs an evaluation reaches `Waiting`, and a reviewer claims it through the Scheduler Service.
-The readiness condition of Outcome and completion admits a reviewer claim.
+The readiness condition of Outcome and completion admits an evaluation claim.
 An executor requests no evaluation.
 Under kanthord's own harness a reviewer is a worker binding of its project.
 
@@ -300,7 +300,7 @@ A task assessment names the node revision of its objective, because a task holds
 The independent review sits at the node whose outcome persists.
 
 The scope of an evaluation differs by node, and its method follows its criterion.
-The evaluation of an objective weighs the child outcomes and the tested snapshot.
+The evaluation of an objective weighs the child outcomes and the tested input.
 A model judgement transcript is evidence of its invocation, and it is not an assessment.
 The boundary is authority, and it is not a file format.
 
@@ -406,7 +406,7 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 ### Readiness condition
 
 `Waiting` means released, and it does not mean claimable.
-The readiness condition admits a reviewer claim when the child rule and the external action rule hold.
+The readiness condition admits an evaluation claim when the child rule and the external action rule hold.
 For an objective, every task of the revision that the open attempt pins holds a current outcome of that attempt.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
@@ -415,7 +415,7 @@ The condition reads the current children of the node, and a retirement removes a
 
 ### Continuation condition
 
-The continuation condition admits a reviewer claim from `External.Requested`.
+The continuation condition admits an evaluation claim from `External.Requested`.
 It holds when a required external action of the attempt is unrequested and the action that it follows has reached its expected end state.
 The Project Service owns what a configured action follows.
 
@@ -428,7 +428,7 @@ An initiative configures no external action.
 Evaluation and assessment owns the currency of an assessment.
 The evaluation of a node precedes its external request.
 The reviewer execution requests each required external action, and an action that follows another action is requested after that action reaches its expected end state.
-The assessment names the tested snapshot.
+The assessment names the [tested input](mission-service.vocabulary.md#tested-input) of its machine check.
 Evidence owns the record of the landed commit identities.
 
 ### Outcome record
@@ -484,8 +484,8 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Pending -> Paused` | Human holds the node | Stays open | None |
 | `Pending -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Pending -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `Available -> Executing` | Execution claim | Opens the attempt when the node holds none; no effect otherwise | None |
-| `Available -> Waiting` | Accepted fact establishes that the execution of the attempt requires no further work | No effect | None |
+| `Available -> Executing` | Steps claim | Opens the attempt when the node holds none; no effect otherwise | None |
+| `Available -> Waiting` | Human asserts that the execution of the attempt requires no further work | No effect | None |
 | `Available -> Pending` | Dependency addition; the closure does not hold | No effect | None |
 | `Available -> Paused` | Human holds the node | Stays open | None |
 | `Available -> Completed` | Human override asserts success | Closes by force | Outcome |
@@ -495,7 +495,7 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `Waiting -> Evaluating` | Reviewer claim; readiness condition holds | No effect | None |
+| `Waiting -> Evaluating` | Evaluation claim; readiness condition holds | No effect | None |
 | `Waiting -> Paused` | Human holds the node | Stays open | None |
 | `Waiting -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Waiting -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -520,7 +520,7 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `External.Requested -> External.Success` | Accepted observation establishes the expected end state of the last unresolved required external action | No effect | Observation record; a landing adds the landed commit identities to the evidence set; an external action that is not a repository action adds none |
 | `External.Requested -> External.Failed` | Accepted observation establishes another end state of the request | No effect | Observation record |
 | `External.Requested -> Paused` | Human holds the node | Stays open | None |
-| `External.Requested -> Evaluating` | Reviewer claim; the continuation condition holds | No effect | None |
+| `External.Requested -> Evaluating` | Evaluation claim; the continuation condition holds | No effect | None |
 | `External.Success -> Completed` | Current passing assessment stands, or human override asserts success after the observation resolves the request | Closes | Outcome |
 | `External.Success -> Paused` | Human holds the node | Stays open | None |
 | `External.Success -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -537,8 +537,8 @@ stateDiagram-v2
     Pending --> Paused: Human hold
     Pending --> Completed: Success override
     Pending --> Discarded: Human discard
-    Available --> Executing: Execution claim
-    Available --> Waiting: No further work
+    Available --> Executing: Steps claim
+    Available --> Waiting: Human asserts no further work
     Available --> Pending: Dependency addition
     Available --> Paused: Human hold
     Available --> Completed: Success override
@@ -548,7 +548,7 @@ stateDiagram-v2
     Executing --> Paused: Human hold
     Executing --> Completed: Success override
     Executing --> Discarded: Human discard
-    Waiting --> Evaluating: Reviewer claim, ready
+    Waiting --> Evaluating: Evaluation claim, ready
     Waiting --> Paused: Human hold
     Waiting --> Completed: Success override
     Waiting --> Discarded: Human discard
@@ -579,7 +579,7 @@ stateDiagram-v2
     ext_requested --> ext_success: Expected end state
     ext_requested --> ext_failed: Other end state
     ext_requested --> Paused: Human hold
-    ext_requested --> Evaluating: Reviewer claim, continuation condition
+    ext_requested --> Evaluating: Evaluation claim, continuation condition
     Paused --> ext_requested: Resume, live request
     Paused --> ext_success: Resume, observed expected end state
     Paused --> ext_failed: Resume, observed other end state

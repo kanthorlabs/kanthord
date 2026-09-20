@@ -25,9 +25,9 @@ A node that waits for a model call, a human review or a pull request never occup
 Scheduling concurrency and instance counts solve different bottlenecks.
 
 The work queue is a component of the Scheduler Service with a public insert and a public delete, and the Mission Service is its caller.
-The [Mission Service](mission-service.md#boundary) inserts and removes the entries of every affected node, including dependency and parent effects, in the transaction that commits the fact.
+The [Mission Service](mission-service.md#boundary) inserts and removes the entries of every affected node, including dependency and parent effects.
 The work queue never holds an entry that the Mission state of its node contradicts.
-After the commit the Mission Service wakes the Scheduler, and the Scheduler coalesces wakeups.
+The Scheduler coalesces the wakeups of the [Mission Service](mission-service.md#boundary).
 A peek reads the first entry of the order and removes nothing.
 Project configuration changes and claim changes also trigger a recheck of the affected scope.
 An idle project consumes no processor turn and loses no durable obligation.
@@ -44,8 +44,7 @@ No other state admits a claim.
 Membership is not the Mission state `Available`: a claimable `Waiting` node is not `Available`.
 An entry carries the node, its admitted kind of claim, its priority and a time-ordered identity.
 The identity carries the creation time of the entry.
-The Mission Service inserts the entry in the transaction that makes the node claimable.
-It removes the entry in the transaction that moves the node out of that claimable state.
+The [Mission Service](mission-service.md#boundary) inserts the entry when the node becomes claimable, and it removes the entry when the node leaves that claimable state.
 A release with further work creates a new entry.
 A priority change keeps the identity, and a held-out entry keeps the identity.
 
@@ -56,11 +55,10 @@ Across priorities, a human who raises the priority of a stream of work accepts t
 Priority orders and never admits.
 No priority and no age makes a `Blocked`, `Paused`, `Pending` or incompatible node claimable.
 
-Priority is an integer with a default of 0.
+Priority is an integer.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, its record and the reorder of the entry.
 That section states the value of an absent priority.
 The entry holds a copy of the recorded priority, and the Mission Service stays its source.
-The Mission Service reorders the entry in the transaction that records the priority.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) states that an import carries no priority.
 
 The queue writes follow accepted changes, and selection follows work pulls.
@@ -116,7 +114,7 @@ The observer is a component of the Scheduler Service, not a worker instance.
 Nothing dispatches the observer.
 The scheduling processors execute the observer on an observation obligation.
 The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the external object.
-It reads the state of that object through the [platform gateway](worker-service.md#platform-gateway-action-performer-and-mcp-server) of the Worker Service.
+It reads the state of that object through the [platform connector](worker-service.md#platform-connector-action-performer-and-mcp-server) of the Worker Service.
 The observer folds that state into the observed state.
 It writes the observation record to the Mission Service.
 The [Mission Service](mission-service.md#evidence) owns the external object and the observation record.
@@ -198,7 +196,7 @@ A no-work result ends the request, and a later request uses a new request identi
 An instance retries with backoff, never with tight polling.
 A Mission change, an accepted delivery or an ended execution of the binding triggers a recheck for a waiting pull.
 The Scheduler rechecks every admission condition before it satisfies that pull.
-A disablement of the binding takes effect while a request waits.
+A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
 
 An instance healthcheck establishes no liveness, no idleness, no operation authorization and no proof of success.
 An unreachable provider creates no block condition and authorizes no model or provider substitution.
@@ -248,7 +246,7 @@ The declared states come from the worker contract that the Worker Service publis
 A new worker declares its states without a change to a rule of the Scheduler.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the separation between the execution of the steps of a node and its assessment.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`, and one of its instances can perform both through the corresponding claims.
-kanthord does not verify the separation of duties inside an external harness.
+The [Mission Service](mission-service.md#evaluation-and-assessment) owns the policy on the verification of that separation inside an external harness.
 Only the orchestrator of the external harness communicates with kanthord, and it chooses its sub-agents and their prompts.
 The declared states give the capability to take a state and no continuity: the Scheduler serves a node to the first compatible pull, and no rule prefers the binding whose instance executed the steps of the node.
 
@@ -284,7 +282,7 @@ A waiting parent holds no instance while it waits.
 The [Mission Service](mission-service.md#state-transitions) owns the human pause, discard and success override transitions that end a live claim.
 Those transitions also determine whether the attempt closes or stays open.
 Its success override from `Executing` ends a live steps claim.
-Its human pause from `Evaluating` ends a live reviewer claim.
+Its human pause from `Evaluating` ends a live evaluation claim.
 The Scheduler revokes the claim at the Mission transition through the same path as a loss declaration.
 It accepts the revocation before any later operation admission reads the claim state.
 The [Project Service](project-service.md#configuration-lifecycle-and-consistency) owns completion against the remote of an operation that already holds admission.

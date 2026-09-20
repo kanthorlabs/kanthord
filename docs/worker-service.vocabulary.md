@@ -51,7 +51,7 @@ The action performer performs the network git write only.
 
 A native agent is an agent loop that the Worker Service runs itself.
 The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
-The Worker Service runs the agent loop of `swe@1` and sends each model inference call through the model gateway with the provider account, the model identifier and the reasoning effort of the effective configuration of the agent under worker binding `general-main`.
+The Worker Service runs the agent loop of `swe@1` and sends each model inference call through the model connector with the provider account, the model identifier and the reasoning effort of the effective configuration of the agent under worker binding `general-main`.
 
 ## prompt layer
 
@@ -117,20 +117,20 @@ The default configuration is the configuration of an agent that its worker decla
 `general@1` declares for its agent the provider `openai`, a cheap model identifier and the reasoning effort `medium`.
 A change to a default configuration is a new worker version.
 
-## gateway
+## connector
 
-A gateway is a Worker Service component through which a caller performs an authenticated operation that the Project Service authorizes.
+A connector is a Worker Service component through which a caller performs an authenticated operation that the Project Service authorizes.
 The set is closed and it holds three values.
 
-- **model gateway**: performs a model inference call.
-- **repository gateway**: performs a network git read and a network git write.
-- **platform gateway**: performs every operation on the API of an external platform through the platform implementation of that platform.
+- **model connector**: performs a model inference call.
+- **repository connector**: performs a network git read and a network git write.
+- **platform connector**: performs every operation on the API of an external platform through the platform implementation of that platform.
 
-Execution 1 of "Add password reset" asks the repository gateway to push the node branch.
-The gateway resolves the repository binding of the objective through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
+Execution 1 of "Add password reset" asks the repository connector to push the node branch.
+The connector resolves the repository binding of the objective through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
 
-The action performer asks the platform gateway to open pull request 42 for the node branch of "Add password reset".
-The platform gateway selects the GitHub implementation because the repository binding of the objective names GitHub.
+The action performer asks the platform connector to open pull request 42 for the node branch of "Add password reset".
+The platform connector selects the GitHub implementation because the repository binding of the objective names GitHub.
 The GitHub implementation resolves the binding through the Project Service under the execution identity before the call.
 
 ## platform implementation
@@ -244,7 +244,7 @@ The verification command is an optional field, and a method reads it when the no
 
 ## instance healthcheck
 
-The Scheduler Service owns the term, and the Worker Service produces the check.
+The [Scheduler Service](scheduler-service.vocabulary.md#instance-healthcheck) owns the term, and the Worker Service produces the check.
 The instance of `general@1` passes: the effective configuration of its agent resolves under the binding set of the project with the default account of its provider, and a native agent requires no program on the host.
 The instance of `general@1` fails when the project holds no default account for the provider of the agent and no entry names one.
 The instance of `claude@1` fails when its client identity is not a client identity of its binding.
@@ -260,7 +260,7 @@ The verification command of "Add password reset" comes from the repository `kant
 A workspace is the host-local working directory of one execution.
 The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the daemon, keyed by the objective and its repository binding.
 Execution 3 of the same objective under the same repository binding reuses it, and the Worker Service removes it after the bounded retention.
-The reviewer execution of the objective uses a fresh workspace with a clean checkout of the tested snapshot, and the Worker Service removes it at the release.
+The reviewer execution of the objective uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
 The execution of "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
 
 ## node branch
@@ -274,7 +274,7 @@ A revision of the objective that names another repository binding starts a new n
 
 The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
 Task "Add reset token expiry" of "Add password reset" ends with two commits on the node branch: the commit of the first task work and the commit of the revision after the first verification failed, and the second one is the task commit.
-That commit is the evidence of the task outcome, and the task assessment names it with the snapshot that the verification ran against.
+That commit is the evidence of the task outcome, and the task assessment names it with the tested input that the verification ran against.
 
 ## checkpoint commit
 

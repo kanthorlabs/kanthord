@@ -58,7 +58,7 @@ It observes an external object on the git platform.
 The Worker Service supplies the workers and the agents.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider.
-It supplies the platform gateway through which every service performs an operation on the API of an external platform.
+It supplies the platform connector through which every service performs an operation on the API of an external platform.
 It supplies the MCP server through which a native agent and an external harness reach the daemon tools.
 It performs the configured repository action for both harnesses.
 
@@ -108,7 +108,7 @@ It shows the relations that the sections below name.
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
 - The Scheduler Service reads the worker bindings, the permitted client identities and their counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
-- The Scheduler Service observes an external object through the platform gateway of the Worker Service.
+- The Scheduler Service observes an external object through the platform connector of the Worker Service.
 - The Scheduler Service uses a repository credential that the Project Service holds.
 - A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
