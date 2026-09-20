@@ -120,7 +120,7 @@ The capture is best effort.
 A harness that exposes less produces less telemetry.
 That changes no rule of the system.
 The extension stores its capture on its own host.
-The extension records the trace identity and the root span identity of its claim with its captures.
+The extension records the trace identity and the root span identity of its execution with its captures.
 Those identities are references that the daemon minted, and they assert nothing.
 The local store is no kanthord record.
 Only an ingested record is a kanthord record.

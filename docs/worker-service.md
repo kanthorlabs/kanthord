@@ -9,7 +9,7 @@ title: Worker Service
 This document describes the Worker Service.
 It describes the workers and their agents, the worker instances and how they host an execution, the lifecycle of an execution, the performance of a required external action and the owner of memory.
 For a required external action, it describes the configured repository action only.
-It describes the platform gateway that performs an operation on the API of an external platform.
+It describes the platform connector that performs an operation on the API of an external platform.
 It describes the MCP server through which a native agent and an external harness reach the daemon tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
 It describes no mechanism of another service.
@@ -44,18 +44,18 @@ It runs no instance of them, and the [overview](overview.md#external-harness) st
 
 A worker that the daemon hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
 
-The Worker Service supplies three [gateways](worker-service.vocabulary.md#gateway) as the tools that perform an authenticated operation.
-The model gateway performs a model inference call.
-The repository gateway performs a network git read and a network git write.
-The repository gateway performs no platform action.
-The platform gateway performs every operation on the API of an external platform.
+The Worker Service supplies three [connectors](worker-service.vocabulary.md#connector) as the tools that perform an authenticated operation.
+The model connector performs a model inference call.
+The repository connector performs a network git read and a network git write.
+The repository connector performs no platform action.
+The platform connector performs every operation on the API of an external platform.
 It uses the [platform implementation](worker-service.vocabulary.md#platform-implementation) of that platform.
-An execution and its agent reach a git platform through the repository gateway and the platform gateway alone.
-A native agent reaches a provider through the model gateway alone.
-A gateway resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the identity that requests the operation.
+An execution and its agent reach a git platform through the repository connector and the platform connector alone.
+A native agent reaches a provider through the model connector alone.
+A connector resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the identity that requests the operation.
 For every model inference call of a native agent the Worker Service uses the provider account, the model identifier and the reasoning effort of the effective configuration of the agent, which the Project Service resolves for that call.
 An execution honours every value of the effective configuration of its agent.
-A local git operation runs in the workspace and passes through no gateway.
+A local git operation runs in the workspace and passes through no connector.
 An agent holds no repository credential.
 
 ## Prompt composition
@@ -204,15 +204,15 @@ The renewal runs outside the agent, so a long model call renews the lease.
 A revoked or lost execution stops its agent and performs no further operation under its execution identity.
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
-After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-read) of the Mission Service require.
-It fetches the external content that the external objects reference through the platform gateway.
+After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
+It fetches the external content that the external objects reference through the platform connector.
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
 The workspace of the steps method on an objective is a checkout of the repository that the pinned revision names, on the node branch.
 The Worker Service keys that workspace by the objective and the repository binding of the pinned revision.
 An execution reuses that workspace when the host holds one, and it creates one through a network git read otherwise.
-Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch at the repository through the repository gateway.
+Before the reuse, the execution confirms that no earlier execution still acts in that workspace, and it brings the checkout to the head of the node branch at the repository through the repository connector.
 The Worker Service removes it after a bounded retention since the last execution of that objective ended.
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
 The workspace of the steps method on an initiative holds no checkout.
@@ -223,7 +223,7 @@ The node branch takes its name from the node identity.
 The first execution on that branch creates it from the base branch that the [repository strategy](project-service.md#repository-configuration-and-policy) names.
 The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
 Every commit that the execution makes is attributable to its task and its attempt.
-The execution pushes the node branch through the repository gateway before every release.
+The execution pushes the node branch through the repository connector before every release.
 
 The steps method chooses the order of the tasks of the pinned revision.
 For each task the agent performs the steps in the workspace, and the execution commits the changes of the task work.
@@ -233,7 +233,7 @@ The agent revises the work within the resource budget of the execution before th
 The execution commits a revision as a new commit.
 The agent judges the result against the validation criteria of the task, with the exit status of the verification command as an input.
 The execution writes the task assessment and the task outcome.
-The task assessment names the task commit and, when the task carries a verification command, the snapshot that the command ran against.
+The task assessment names the task commit and, when the task carries a verification command, the [tested input](mission-service.vocabulary.md#tested-input) that the command ran against.
 The task outcome carries the task commit as its evidence.
 A worker fixes the resource budget of one execution: a turn count and a wall time.
 
@@ -257,9 +257,9 @@ sequenceDiagram
     autonumber
     participant E as Execution (steps method)
     participant A as Native agent
-    participant MG as Model gateway
+    participant MG as Model connector
     participant Pr as Provider
-    participant RG as Repository gateway
+    participant RG as Repository connector
     participant P as Project Service
     participant M as Mission Service
     participant S as Scheduler Service
@@ -291,7 +291,7 @@ sequenceDiagram
             E->>E: task commit, run the verification command against it, discard its changes, the agent judges
         end
         rect rgb(212, 237, 218)
-            E->>M: task assessment (task commit and tested snapshot) and task outcome (task commit)
+            E->>M: task assessment (task commit and tested input) and task outcome (task commit)
         end
     end
     rect rgb(214, 234, 248)
@@ -376,15 +376,14 @@ sequenceDiagram
     end
 ```
 
-## Platform gateway, action performer and MCP server
+## Platform connector, action performer and MCP server
 
-The [platform gateway](worker-service.vocabulary.md#gateway) holds one platform implementation for each platform.
+The [platform connector](worker-service.vocabulary.md#connector) holds one platform implementation for each platform.
 A platform implementation exposes the operations of its own platform under the names and the parameters of that platform.
 No common operation interface exists across platform implementations.
 The set of platform implementations is open.
 A binding that reaches an external platform names its [platform](project-service.md#repository-configuration-and-policy).
-The platform gateway selects the platform implementation by that field.
-No service infers the platform from a repository address.
+The platform connector selects the platform implementation by that field.
 A platform implementation derives the resource of a call from the binding.
 A caller supplies no resource selector.
 
@@ -392,7 +391,7 @@ Every call of a platform implementation on the API of its platform names the ide
 The platform implementation resolves the binding through the Project Service for each call on the API.
 Custody follows the authorization check.
 A credential stays inside the daemon.
-The platform gateway holds no authority of its own.
+The platform connector holds no authority of its own.
 
 The [action performer](worker-service.vocabulary.md#action-performer) requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
 The evaluation method and the MCP tool of an external harness call the action performer.
@@ -402,7 +401,7 @@ For both callers, the action performer checks that the claim of the execution id
 It checks that the claim is an evaluation claim.
 It checks that a current passing assessment of the attempt stands.
 The action performer obtains every operand from the records and the evidence snapshot.
-When an action needs a network git write, the action performer makes its own checkout through the repository gateway.
+When an action needs a network git write, the action performer makes its own checkout through the repository connector.
 It depends on no workspace of a hosted execution.
 The action performer serializes the invocations of one execution identity.
 It never dispatches an action whose earlier dispatch is unresolved, across callers and invocations.
@@ -416,7 +415,7 @@ The action performer returns items in four [return classes](worker-service.vocab
 
 Only an action that awaits a prerequisite carries a wait fact.
 This page states no release rule for a request failure or an uncertain effect or recording.
-Every write that fulfils a configured action belongs to the action performer, whichever gateway transports it.
+Every write that fulfils a configured action belongs to the action performer, whichever connector transports it.
 A push of the steps execution targets the node branch of its objective only.
 A merge or a push into the base branch is a configured repository action.
 
@@ -448,15 +447,15 @@ The MCP server exposes no other write to a native agent or to an external harnes
 It exposes the tool of the action performer to an external harness only, because the evaluation method invokes the action performer for a native agent.
 The tool of the action performer takes no parameter beyond the execution identity.
 It returns the four return classes of the action performer.
-A native agent reaches the permitted read methods of the platform gateway as tools through the MCP server.
+A native agent reaches the permitted read methods of the platform connector as tools through the MCP server.
 
-The platform gateway serves the [observer of the Scheduler Service](scheduler-service.md#intake-and-observation).
+The platform connector serves the [observer of the Scheduler Service](scheduler-service.md#intake-and-observation).
 The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the [external object](mission-service.md#evidence) to read its state.
 A platform implementation decodes a delivery of its platform into the event types of that platform.
 The decoding performs no operation on the API.
 The Scheduler Service calls that decoding.
 
-The platform gateway, the action performer and the MCP server are daemon components.
+The platform connector, the action performer and the MCP server are daemon components.
 The [trust boundary](worker-service.vocabulary.md#trust-boundary) of this page is their only containment.
 Another git platform requires one platform implementation, its permitted read methods, a platform value and the corresponding behaviour of the action performer.
 It changes no other rule.
@@ -468,11 +467,11 @@ No page defines those rules.
 The evaluation method follows the criterion and never the node, as the [overview](overview.md#what) states.
 The reviewer execution reads the validation criteria of the pinned revision, the evidence set of the attempt and the current child outcomes.
 The child outcomes of an objective are its task outcomes, and the child outcomes of an initiative are its objective outcomes.
-When the evidence names a repository snapshot, the reviewer execution makes a clean isolated checkout of that snapshot in its workspace through the repository gateway.
+When the evidence names a repository snapshot, the reviewer execution makes a clean isolated checkout of that snapshot in its workspace through the repository connector.
 It runs the verification command of the pinned revision when the revision carries one, whatever the node kind.
 The command runs in the workspace of the reviewer execution: in the checkout when the evidence names a repository snapshot.
 When the evidence names no repository snapshot, the reviewer execution places the produced evidence of the attempt in its workspace, and the command runs there.
-The execution records the result of that machine check as produced evidence bound to the tested snapshot and the pinned revision, and the assessment names it in its evidence set.
+The execution records the result of that machine check as produced evidence bound to the tested input and the pinned revision, and the assessment names it in its evidence set.
 The agent judges the evidence against the criteria.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the record and its currency.
@@ -486,8 +485,8 @@ It reads the external objects of the node across every attempt.
 A required action is eligible when it is unrequested in the attempt and it follows no other action.
 A required action that follows another action is eligible when it is unrequested in the attempt and its predecessor reached its expected end state.
 The action performer requests each eligible action for the reviewer execution until no action is eligible.
-A request of a repository action uses the platform gateway for a platform action.
-It uses the repository gateway for a network git write.
+A request of a repository action uses the platform connector for a platform action.
+It uses the repository connector for a network git write.
 The action performer derives every operand from the records of the attempt, the evidence snapshot and the external object.
 The agent supplies no operand, and an external harness supplies none.
 
@@ -498,7 +497,7 @@ The remote thing fulfils the operands of the current request.
 The remote thing is open: the platform still accepts on it the network git write that the action requires.
 An end state of the earlier action does not close the remote thing by itself.
 A reuse performs the network git write that the action requires and no platform write.
-Otherwise the action performer performs the action through the platform implementation of the platform of the binding or through the repository gateway.
+Otherwise the action performer performs the action through the platform implementation of the platform of the binding or through the repository connector.
 In both cases the action performer submits the request to the Mission Service as the external object of the attempt.
 It uses the address that the platform implementation resolves, or the address of the external object that the request reuses.
 That submission is the accepted request of the action.
@@ -522,8 +521,8 @@ sequenceDiagram
     participant AP as Action performer
     participant S as Scheduler Service
     participant M as Mission Service
-    participant RG as Repository gateway
-    participant PG as Platform gateway
+    participant RG as Repository connector
+    participant PG as Platform connector
     participant G as Git platform
 
     rect rgb(214, 234, 248)
@@ -532,11 +531,11 @@ sequenceDiagram
     end
     rect rgb(248, 215, 218)
         R->>M: read the criteria of the pinned revision, the evidence set, the task outcomes of the attempt
-        R->>RG: clean isolated checkout of the tested snapshot in a fresh workspace
+        R->>RG: clean isolated checkout of the repository snapshot in a fresh workspace
         R->>R: run the verification command of the pinned revision
     end
     rect rgb(212, 237, 218)
-        R->>M: produced evidence: the machine-check result bound to the tested snapshot and the pinned revision
+        R->>M: produced evidence: the machine-check result bound to the tested input and the pinned revision
     end
     rect rgb(248, 215, 218)
         R->>R: the agent judges the evidence against the criteria
@@ -589,7 +588,7 @@ sequenceDiagram
     participant S as Scheduler Service
     participant R as Reviewer instance and its execution
     participant AP as Action performer
-    participant PG as Platform gateway
+    participant PG as Platform connector
     participant G as Git platform
 
     Note over M,S: the first action reached its expected end state, and the following action is unrequested
@@ -639,8 +638,8 @@ sequenceDiagram
     participant H as Human
     participant M as Mission Service
     participant E as Execution (steps method)
-    participant RG as Repository gateway
-    participant PG as Platform gateway
+    participant RG as Repository connector
+    participant PG as Platform connector
     participant R as Reviewer execution
     participant AP as Action performer
     participant S as Scheduler Service
@@ -722,7 +721,7 @@ sequenceDiagram
     participant P as Project Service
     participant M as Mission Service
     participant S as Scheduler Service
-    participant PG as Platform gateway
+    participant PG as Platform connector
     participant G as Git platform
 
     rect rgb(248, 215, 218)
@@ -793,7 +792,7 @@ The [Project Service](project-service.md) owns the bindings, the entry of an age
 The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease, the live-execution accounting and the wait record.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
-It owns the healthcheck, the compatibility declarations, the workspace, the three gateways and the prompt composer.
+It owns the healthcheck, the compatibility declarations, the workspace, the three connectors and the prompt composer.
 It owns the platform implementations, the action performer, the MCP server and the exposure of its tools.
 It owns the lifecycle of an execution between the claim and the release.
 It owns the performance of a required external action and its idempotency across attempts.

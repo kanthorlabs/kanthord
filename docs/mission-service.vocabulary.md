@@ -29,7 +29,7 @@ The import creates the objective with no attempt, and its attempt counter reads 
    Attempt 1 stays open.
 4. The readiness condition holds, and a `reviewer@1` instance claims the objective.
    Execution 2 starts.
-5. Execution 2 publishes a current passing assessment of the tested snapshot.
+5. Execution 2 publishes a current passing assessment of the tested input.
 6. Execution 2 requests the required external action: opening a pull request.
    Execution 2 releases, and the node reaches `External.Requested`.
 7. A human merges the pull request.
@@ -58,7 +58,7 @@ Attempt identity establishes no currency by itself.
 One try at the evaluation of a node.
 An evaluation has a durable lifecycle, and one evaluation attempt is one try inside that lifecycle.
 
-Take the reviewer claim in step 4 of the attempt example.
+Take the evaluation claim in step 4 of the attempt example.
 
 1. A `reviewer@1` instance claims the objective.
    Evaluation attempt 1 starts.
@@ -141,7 +141,7 @@ Its basis names the human assertion, and its asserted result is that nothing is 
 
 ## readiness condition
 
-The condition over current task outcomes, current objective terminal states and unresolved external actions that admits a reviewer claim.
+The condition over current task outcomes, current objective terminal states and unresolved external actions that admits an evaluation claim.
 The term names no closed set.
 
 For an objective, every current task holds a current outcome of the open attempt of that objective.
@@ -154,17 +154,17 @@ Take the objective "Add password reset" with the tasks "Add reset token expiry" 
 The objective reaches `Waiting`, and both tasks hold current outcomes of its open attempt.
 The outcome of "Add reset email" states that its results do not meet its criteria.
 No external action of the open attempt is unresolved.
-The readiness condition admits a reviewer claim.
+The readiness condition admits an evaluation claim.
 
 Take the initiative "Account recovery" with the objectives "Add password reset" and "Add recovery codes".
 The initiative reaches `Waiting`.
 "Add password reset" holds `Completed`, and "Add recovery codes" holds `Discarded`.
 Both current objectives hold terminal states, and the initiative configures no external action.
-The readiness condition admits a reviewer claim.
+The readiness condition admits an evaluation claim.
 
 ## continuation condition
 
-The condition over the required external actions of the attempt that admits a reviewer claim from `External.Requested`.
+The condition over the required external actions of the attempt that admits an evaluation claim from `External.Requested`.
 The term names no closed set.
 
 Take the objective "Add password reset" with two required external actions: pull request 42 that must merge, and a notification with the landed commit in `#account-recovery` that follows the merge.
@@ -211,13 +211,14 @@ An edit writes the WHAT, and a correction writes a new outcome record.
 
 The record of one evaluation of one evidence set against the criteria of one node revision.
 An assessment weighs the evidence against the criteria of the node revision that it names.
-An assessment names five things.
+An assessment names six things.
 
 - the evidence set that it evaluates
 - the node revision whose criteria it evaluates
 - every immutable child outcome record that it weighs
 - the method that it applies
 - the actor that performs it
+- the tested input of its machine check, when the pinned node revision carries a verification command
 
 The [overview](viewer.html?p=overview.md) gives what an assessment establishes.
 That set is closed and it holds three values.
@@ -230,7 +231,27 @@ Take the objective "Add password reset" above.
 A `reviewer@1` instance evaluates that objective, and it writes one assessment.
 That assessment names the evidence set of the objective, the node revision pinned by the attempt, and the outcome record of each task.
 It names the evaluation method, and it names the reviewer instance as the actor.
+The revision carries a verification command, so the assessment names the tested input of its machine check.
 Assessments accumulate, so a second assessment of the same objective never overwrites the first.
+
+## tested input
+
+What one machine check ran against, named by the assessment that weighs the result of that check.
+The term names a closed set of two forms.
+
+- **a repository snapshot**, when the evidence that the check reads names one
+- **the content address of the produced evidence that the check reads**, when that evidence names no repository snapshot
+
+The tested input names the content that the check reads.
+It never names the produced evidence that records the result of the check.
+An assessment names the tested input of one check, so a later addition to the append-only evidence set of the attempt changes no earlier tested input.
+
+Take the objective "Add password reset" above.
+Its evidence names the task commit of the attempt, so the tested input of its machine check is that repository snapshot.
+
+Take the initiative "Account recovery" whose objectives all hold a terminal state.
+Its steps execution submits a report as produced evidence, and that evidence names no repository snapshot.
+The tested input of its machine check is the content address of that report.
 
 ## node revision
 

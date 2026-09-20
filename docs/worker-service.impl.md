@@ -29,6 +29,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 The prompt composer resolves the global prompt from the daemon configuration, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
 It resolves the project prompt from the repository binding, then `AGENTS.md` of the workspace root, then `CLAUDE.md` of the workspace root.
+For an evaluation method that resolution stops at the repository binding, and the composer reads no agent file of the workspace.
 It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
 It rejects a path of the workspace that a link resolves outside the workspace.
 It follows a link of the host location, because the operator manages the dotfiles of the host.
@@ -45,11 +46,11 @@ The bound of the global prompt and the bound of the project prompt are epic deci
 The acceptance path proves the configured precedence, an absent source, an invalid source, a disabled layer and a link that leaves the workspace.
 It proves that a reviewer execution takes no agent file of the workspace.
 
-## Model gateway interception
+## Model connector interception
 
 One interception point carries every inference call of a native agent, including compaction and retries.
 It resolves the effective configuration of the agent under the execution identity, maps the model identifier and the reasoning effort, fails closed, and holds per-execution state so that no credential crosses executions.
-A custom pi provider that forwards to the model gateway is the candidate.
+A custom pi provider that forwards to the model connector is the candidate.
 Environment hygiene of the pi process belongs to the same mechanism.
 
 ## Tool table
@@ -62,11 +63,11 @@ The third source is the other tools that a project adds, including other MCP ser
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the three sources.
 
-## Platform gateway and platform implementations
+## Platform connector and platform implementations
 
 The GitHub implementation calls the GitHub REST API through Octokit at a pinned version.
 A platform implementation is a TypeScript module with its own method signatures and no shared interface.
-The platform gateway is a registry keyed by the platform value of the binding.
+The platform connector is a registry keyed by the platform value of the binding.
 The registry uses static registration and loads no runtime plugin.
 The GitHub implementation decodes a GitHub webhook payload into GitHub event types.
 Every method returns a discriminated union: the success with the result of the operation, or the result class.
@@ -75,7 +76,7 @@ The platform implementation retries no write.
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
 An epic decides that form for each platform.
 
-## Repository gateway
+## Repository connector
 
 The git CLI performs the network git read and the network git write.
 The daemon serves a credential helper for one operation.
@@ -88,7 +89,7 @@ The evaluation method of `reviewer@1` and the MCP tool both call that function.
 A per-execution-identity mutex serializes invocations inside the daemon.
 The mutex establishes the no-redispatch invariant inside one daemon process only.
 A durable dispatch record that survives a daemon restart is the B9 item W2, and it is an epic decision.
-The action performer creates a fresh clone through the repository gateway for a network git write.
+The action performer creates a fresh clone through the repository connector for a network git write.
 It removes that checkout after the call.
 
 ## MCP server
