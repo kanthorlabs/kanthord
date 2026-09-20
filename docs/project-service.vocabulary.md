@@ -71,12 +71,13 @@ The number of bindings of one kind that a project holds for one resource.
 The set is closed for each kind and it holds four values.
 
 - **repository**: one binding for each repository that the project uses.
-- **worker**: any number of bindings of one worker, and two bindings of one worker carry different configuration.
+- **worker**: any number of bindings of one worker, each with its own configuration.
 - **provider account**: one binding for each account at a provider.
 - **source**: one binding for each delivery source that the project accepts.
 
 The project of "Account recovery" binds two repositories, one `tdd@1` worker as `tdd-main` and two provider accounts at one provider.
 A second binding for the repository `kanthorlabs/kanthord` is refused, and a second `tdd@1` binding `tdd-experimental` with another provider account is accepted.
+A third `tdd@1` binding with the values of `tdd-main` is accepted.
 
 ## binding set
 
@@ -286,6 +287,15 @@ That resolution authorizes one operation, and the next operation resolves the bi
 The execution records the binding revision that it resolves.
 A local disablement takes effect at the next resolution.
 
+## policy
+
+The rule on a binding that configures an external action for the nodes of the project and states what that action follows.
+The term names no closed set.
+
+The repository strategy of `kanthorlabs/kanthord` requires a pull request for every change.
+Its configured repository action opens a pull request that follows the passing assessment of "Add password reset".
+"Add password reset" names the binding of `kanthorlabs/kanthord`, so it requires that action.
+
 ## base branch
 
 The branch of a repository that the repository strategy names as the origin of every node branch and as the target of the configured repository action.
@@ -296,30 +306,12 @@ Every node branch of an objective on `kanthorlabs/kanthord` starts from `develop
 
 ## expected end state
 
-The state that a configured repository action states on the git platform.
+The state on its platform that an external action states.
 
 Under a repository strategy that requires a pull request for every change, the configured repository action opens a pull request.
 The expected end state of that action is the merge of that pull request.
 Under a repository strategy that requires a merge and push, the expected end state is the push to the base branch.
 [overview.md](viewer.html?p=overview.md) owns landing, which is the observed expected end state.
-
-## fire-and-forget action
-
-An external action that its accepted request resolves, with no end state to observe.
-The kind of an external action is a closed set of two values.
-
-- **fire-and-forget action**
-- **request-reply action**
-
-Execution 2 posts a notification about "Add password reset" in `#account-recovery`.
-The Mission Service accepts the request and records the external object, and no observation follows.
-
-## request-reply action
-
-An external action that an accepted observation of its end state resolves.
-
-Execution 2 opens pull request 42 for "Add password reset" with the expected end state merged.
-The observer records the merge, and that accepted observation resolves the action.
 
 ## the five changes
 

@@ -36,9 +36,11 @@ The platform of a binding is a value that the binding holds.
 No service infers it from the repository address.
 The repository strategy states an explicit rule for each repository that requires one.
 The repository strategy names the base branch of the repository: the branch from which an execution creates a [node branch](worker-service.md#executions), and into which the configured repository action merges or pushes.
-A configured repository action states its expected end state on the git platform.
-An external action is a fire-and-forget action or a request-reply action.
-A request-reply action states its expected end state, and a fire-and-forget action states none.
+A [policy](project-service.vocabulary.md#policy) on a binding configures an external action for the nodes of the project.
+A policy states what its action follows: the passing assessment of the node, or the expected end state of another configured action of the same node.
+The repository strategy is the policy of the repository binding.
+A node requires the action of a policy when the node names the binding that holds the policy.
+An external action states its expected end state on its platform.
 A capability is one class of authenticated operation on a repository.
 A network git read, a network git write and a platform action are the capabilities.
 A commit, a branch and a merge are local, so none of them is a capability.
@@ -74,7 +76,7 @@ A provider account binding is the default account of its provider when the proje
 The provider account of a [native agent](worker-service.md#workers-and-templates) is the one that its entry names; when the entry of the agent names no account, it is the default account of the provider that the default configuration names, and an effective configuration with neither is invalid.
 The provider account binding determines the effective provider, over the provider of the default configuration, so an entry that names a provider account binding of another provider also names the model identifier.
 A default account serves an agent only when its entry names no account, and a disabled or revoked selected account prevents use and authorizes no other account.
-Two worker bindings of one worker carry different configuration.
+Each worker binding of one worker holds its own configuration, and two bindings of one worker with equal values are valid.
 A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
 

@@ -143,19 +143,19 @@ Its basis names the human assertion, and its asserted result is that nothing is 
 
 ## readiness condition
 
-The condition over current task outcomes, current objective terminal states and unresolved request-reply actions that admits a reviewer claim.
+The condition over current task outcomes, current objective terminal states and unresolved external actions that admits a reviewer claim.
 The term names no closed set.
 
 For an objective, every current task holds a current outcome of the open attempt of that objective.
 The condition reads the existence of a current child outcome, and never its result.
 For an initiative, every current objective holds a terminal state.
 The condition reads the current children of the node, and a retirement removes a node from that set.
-No request-reply action of the open attempt is unresolved.
+No external action of the open attempt is unresolved.
 
 Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
 The objective reaches `Waiting`, and both tasks hold current outcomes of its open attempt.
 The outcome of "Add reset email" states that its results do not meet its criteria.
-No request-reply action of the open attempt is unresolved.
+No external action of the open attempt is unresolved.
 The readiness condition admits a reviewer claim.
 
 Take the initiative "Account recovery" with the objectives "Add password reset" and "Add recovery codes".
@@ -325,7 +325,7 @@ An external object takes one of many forms, and these five are examples of it.
 - document "Password reset checklist" whose every item must carry a check
 - issue 117 that must close with the tag `security`
 - a reply in the "Account recovery" thread
-- a notification in `#account-recovery`, a fire-and-forget action with no observation record
+- a notification in `#account-recovery` that must be posted
 
 ## human block
 

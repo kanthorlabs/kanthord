@@ -100,6 +100,7 @@ It shows the relations that the sections below name.
 - A human reaches the Project Service and the Mission Service through the API or the CLI.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
 - The Mission Service notifies the Scheduler Service of an accepted change that can affect scheduling.
+- The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
 - The Scheduler Service reads the worker bindings, the permitted client identities and their counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
 - The Scheduler Service observes an external object through the platform gateway of the Worker Service.

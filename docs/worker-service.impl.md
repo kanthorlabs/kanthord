@@ -63,7 +63,6 @@ An external harness reaches the same server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the three sources.
-The interactive ask_question tool is excluded.
 
 ## Platform gateway and platform implementations
 
@@ -75,6 +74,8 @@ The GitHub implementation decodes a GitHub webhook payload into GitHub event typ
 Every method returns a discriminated union: the success with the result of the operation, or the result class.
 A deadline bounds the retry of a read on a transport error.
 The platform implementation retries no write.
+The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
+An epic decides that form for each platform.
 
 ## Repository gateway
 

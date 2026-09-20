@@ -579,7 +579,7 @@ sequenceDiagram
     end
 ```
 
-The sequence diagram below shows the continuation claim from `External.Requested`, on an objective that requires two actions, where the following action is fire-and-forget.
+The sequence diagram below shows the continuation claim from `External.Requested`, on an objective that requires two actions, where the following action follows the first.
 
 ```mermaid
 sequenceDiagram
@@ -620,7 +620,7 @@ sequenceDiagram
     rect rgb(212, 237, 218)
         AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
         M-->>AP: accepted external object
-        Note over AP,M: the following action is fire-and-forget, so its accepted request resolves it
+        Note over AP,M: the following action awaits its observation
     end
     rect rgb(248, 215, 218)
         AP-->>R: the submitted external object, no action unrequested
