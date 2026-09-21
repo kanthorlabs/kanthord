@@ -134,11 +134,11 @@ Coverage states that every required capability has a credential reference.
 Suitability states that the type of the referenced record performs that class of operation.
 An SSH key does not perform a platform action.
 Suitability states no scope, because a binding does not narrow upstream authority.
-A credential record names the configuring actor and the upstream principal.
+A credential record names the remote identity.
 The record of an execution operation names the execution identity.
 The record of an observation names the service identity.
 The record of a delivery verification names the source binding.
-The configuring actor, the upstream principal and the execution identity stay separate.
+The remote identity and the execution identity stay separate.
 An OAuth credential does not imply a person.
 An API key does not imply an organization.
 

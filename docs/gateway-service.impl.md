@@ -58,10 +58,9 @@ An increment of `token_version` invalidates every earlier token of the account, 
 
 ## The signing key
 
-The signing key is the field `gateway.jwtSigningKey` of the configuration file of the daemon.
-The field holds 32 bytes encoded in base64, and it carries `sensitive: true` and no default.
-[overview.impl.md](viewer.html?p=overview.impl.md) holds the specification of that file.
-The Gateway Service reads the key at startup, and it writes no secret material to the account store.
+The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v1")`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
+[overview.impl.md](viewer.html?p=overview.impl.md) holds the field `masterKey` of the configuration file and the rule that a service derives its keys from it.
+The Gateway Service derives the key at startup, and it writes no secret material to the account store.
 The configuration directory holds mode 0700, and the configuration file holds mode 0600.
 The data directory holds mode 0700, and the database file with its `-wal` and `-shm` files hold mode 0600.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
@@ -170,9 +169,11 @@ A repeat of a key that holds the state in progress returns 409.
 A repeat of a completed key returns the recorded status and the recorded body, and the handler runs never.
 A repeat of a key with another route or another fingerprint returns 409.
 The middleware records the status and the body after the handler completes.
+A handler that writes the operational database records the status and the body inside the transaction of its own write, so one commit holds the change and its recorded answer.
+A route that returns a secret records a redacted body, and a repeat of its key returns 409 and no secret.
 A timeout leaves the key in progress, so a retry of the client receives 409 until the operation completes.
 The daemon runs as one process, so a record that holds the state in progress after a restart names a dead operation.
-A sweep at startup deletes such a record.
+A sweep at startup deletes such a record, and the operation of that record never committed, because a commit records its answer.
 
 ## Tests
 

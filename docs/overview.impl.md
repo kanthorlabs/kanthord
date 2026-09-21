@@ -53,9 +53,27 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
+- A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
+- The table `credential(id, type, remote_identity, nonce, ciphertext, created_at, updated_at)` is such a table. The Project Service owns it through custody, and the section below rules its envelope.
 - The table `migration(service, version, applied_at)` records each migration that ran.
 - The migrations run at startup, in a fixed order of the services.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
+
+## The credential table
+
+- `credential` holds one record for one secret, and it holds no project identity, because a record serves more than one project.
+- The column `type` is an opaque string at this level. The service that registers a type owns its meaning, and [project-service.impl.md](viewer.html?p=project-service.impl.md) names the types of the Project Service.
+- The column `remote_identity` records the identity that the secret acts as at its remote. The daemon enforces nothing from it, so it sits outside the authenticated data below.
+- `crypto.createCipheriv` encrypts the material with AES-256-GCM, a 12-byte nonce from `crypto.randomBytes` and a 16-byte tag.
+- The plaintext is the JSON of the material of the type, so one record holds several fields under one ciphertext.
+- The column `nonce` holds the nonce as 12 bytes, and the column `ciphertext` holds the ciphertext followed by the 16-byte tag. A read that meets another length fails the record.
+- The additional authenticated data is the concatenation of two length-prefixed fields, the record identity and the type, so the encoding admits no second reading.
+- `createDecipheriv` verifies the tag before any caller reads the plaintext.
+- The cipher key is `HKDF(masterKey, info = "custody/aes-256-gcm/v1")`. The daemon derives it at startup and holds it for the life of the process.
+- A nonce is random for each write of a record, and the count of the writes of this daemon stays far below the birthday bound of a 12-byte nonce.
+- AES-256-GCM detects a modified record and a record moved to another identity. It detects no restoration of an older valid record under the same identity, so the daemon claims no freshness.
+- The record carries no version of the cipher and no version of the key, because one key and one envelope serve every record. A change of either one re-wraps every row in one transaction at the first start of the new binary, and a tag failure identifies a row that the change did not reach.
+- A backup of the operational database is useless without the configuration file of the same daemon. The encryption protects a copy of the database that carries no configuration file, and it protects nothing against a party that holds both files or that controls the host of the daemon.
 
 ## The path of the configuration file
 
@@ -112,6 +130,14 @@ The shared sections hold the fields below.
 - `http.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `http.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
 - `log.level` holds the level of the `pino` logger, as one of `trace`, `debug`, `info`, `warn`, `error` and `fatal`, and it defaults to `info`.
+- `masterKey` holds 32 bytes encoded in base64, it carries `sensitive: true`, it holds no default, and the format rejects a value that decodes to another length.
+
+`masterKey` is the one secret of the daemon.
+
+- A service derives every key that it needs from `masterKey`, and it uses `masterKey` directly for nothing.
+- The derivation is `crypto.hkdfSync` with SHA-256, an empty salt and one label for each purpose.
+- A label is unique across the daemon, and the implementation sibling of a service names the labels of that service.
+- The Gateway Service derives its JWT signing key, and the Project Service derives its record cipher key and every webhook secret.
 
 ## Secret material and the diagnostic contract
 
@@ -122,7 +148,7 @@ The shared sections hold the fields below.
 - The review display of `config init` is the one exception, because a human reads the content before the write.
 - The CLI holds no rotation command, and the daemon rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the daemon.
-- A rotation of `gateway.jwtSigningKey` invalidates every issued JWT, so a human authenticates again.
+- A rotation of `masterKey` invalidates every issued JWT, so a human authenticates again. It makes every credential store record of the Project Service unreadable, and it makes every derived webhook secret stale.
 
 ## Scope
 
@@ -132,7 +158,7 @@ The shared sections hold the fields below.
 ## The CLI writes after a human review
 
 - `kanthord config init` builds the document in memory with every default and every generated secret.
-- It generates `gateway.jwtSigningKey` from 32 bytes of `crypto.randomBytes`, encoded in base64.
+- It generates `masterKey` from 32 bytes of `crypto.randomBytes`, encoded in base64.
 - It validates the document before it displays it.
 - It prints the resolved destination and the complete document, and it reads a confirmation through `node:readline/promises`.
 - It requires a terminal on the standard input and on the standard output, because a human reviews the content before the write.
@@ -154,3 +180,5 @@ The shared sections hold the fields below.
 - A test covers a failed write, and it asserts that no partial file remains.
 - A test covers a parse error on a line that holds a secret, and it asserts that the diagnostic prints no value.
 - A test asserts that the start of the daemon and the `config validate` command create no file.
+- A test covers the AES-256-GCM round trip of a `credential` record, a ciphertext moved between two records, and a truncated ciphertext.
+- A test covers the derivation of the cipher key, and it asserts that two labels produce two different keys.
