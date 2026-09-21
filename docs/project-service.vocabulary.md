@@ -114,7 +114,7 @@ The binding `general-frontier` names `openai-review` in its entry.
 
 ## revision
 
-One version of the configuration of a binding.
+One version of the configuration of a binding, or one version of a credential store record.
 
 A worker binding holds one entry that names a model identifier.
 The project changes the model identifier.
@@ -122,6 +122,7 @@ The identity of the binding stays, and the change creates a revision.
 Every reference to that binding stays valid, because a reference never names a revision.
 An execution that resolves that revision records it.
 A change to the credential reference of a provider account binding creates a revision of that binding too.
+A credential store record keeps its identity across a rotation and an OAuth refresh, and each of those changes creates a revision of that record.
 
 ## replacement binding
 
@@ -156,7 +157,7 @@ Unrestricted selection of a record is the danger, and central storage is not.
 
 One record of the credential store.
 
-A record holds one SSH key, and it names the configuring actor and the upstream principal.
+A record holds one SSH key, and it names the remote identity.
 A human selects the record that satisfies a capability.
 The type of the record decides the class of operation that the record performs.
 The record serves more than one project.
@@ -217,22 +218,20 @@ The remote permits any holder of the API key to act on the whole account.
 The Project Service records that authority, and no binding narrows it.
 An operation that is in progress ends against the remote, because the remote holds the credential authority.
 
-## configuring actor
+## remote identity
 
-The actor that a credential store record names as the actor that configures it.
+The identity at the remote that a credential store record acts as.
+The value is one string in three colon-separated parts, `<platform>:<identity kind>:<identifier>`.
+The term names no closed set, because a new platform adds its own identity kinds.
 
-A human configures the record that holds the OAuth credential of the git platform.
-The record names that human as its configuring actor.
-Another human selects that record for a repository binding, and the configuring actor stays the first human.
-The configuring actor, the upstream principal and the execution identity stay separate.
+- `github:user:ulrich` for a user SSH key or a classic personal access token of that account.
+- `github:repository:kanthorlabs/kanthord` for a deploy key of that repository.
+- `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
+- `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
 
-## upstream principal
-
-The principal that a credential store record names at the remote.
-
-A record holds an OAuth credential of a git platform, and it names the account `kanthorlabs` as its upstream principal.
-An OAuth credential does not imply a person, so the record states that principal.
-A record that holds an API key of a model provider names the account at that provider as its upstream principal.
+An OAuth credential does not imply a person, so the record states that identity.
+The remote identity and the execution identity stay separate.
+kanthord records the remote identity and it asks no remote to confirm it.
 
 ## execution identity
 
