@@ -7,6 +7,15 @@ Read the owning design document before taking an item, and remove the item once 
 
 Every item below waits for the completion of the design set. Ulrich moved them here on 2026-09-20.
 
+### Overview
+
+- [ ] Added 2026-09-21 by Ulrich. Provide a rotation mechanism for a secret that the configuration file holds. Ulrich ruled no rotation for the first version, so a rotation stays a hand edit of the file and a restart of the daemon.
+
+### Gateway Service
+
+- [ ] Added 2026-09-21 by Ulrich. Provide user management after the system runs live. The daemon seeds one human account at the first start and prints its username and its password once, and it holds no second human account. Recovery of a lost credential deletes the account row and restarts the daemon, which seeds the account again. The design of user management decides the account routes, the authority to create an account, the password change and the revocation of the session of another account.
+- [ ] Added 2026-09-21. Decide how the build of `apps` obtains the OpenAPI document. The daemon serves it at `GET /openapi.json`, so a client generation needs a running daemon or a stored copy. The apps epic owns the answer.
+
 ### Project Service
 
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
