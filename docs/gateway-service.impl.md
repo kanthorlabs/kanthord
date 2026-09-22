@@ -172,6 +172,7 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 Every mutation route requires the `Idempotency-Key` header, which holds a ULID that the client generates.
 `ulid` generates that value, and that identity is no identity that the server generates for an entity of its own.
 The operation registry declares a route as a mutation, so the middleware runs on that route alone.
+The direct entry adapter of [architecture.impl.md](viewer.html?p=architecture.impl.md) enters this chain too, so a caller inside the server reserves the same key, meets the same 409 and replays the same recorded answer.
 The Gateway Service owns the table `gateway_idempotency(key, route, fingerprint, status, response, created_at)`.
 The fingerprint is the digest of the canonical JSON of one envelope, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules that form and that digest.
 The envelope names the operation of the registry, the path parameters, the query and the body, each one after its validation, and it states the treatment of an absent field, of a default and of a repeated query value.
@@ -211,7 +212,10 @@ The server holds no rule per address, because every caller reaches it at the loo
 An external platform reaches no loopback listener, so a delivery arrives through a tunnel or a reverse proxy.
 The server serves one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
-The ingress forwards the path group `/hooks/*`, and it forwards no other path.
+The ingress forwards the path group `/hooks/*` for a delivery, and it forwards `/worker/*` and `/mcp/*` for an instance that runs outside the host of the server.
+It forwards no other path.
+A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
+An instance presents a client secret on every request, so the ingress provides confidentiality for `/worker/*` and `/mcp/*`.
 The server distinguishes no request of the ingress from a local request.
 The path restriction therefore lives in the configuration of the ingress.
 The ingress is an untrusted transport.
