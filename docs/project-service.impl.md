@@ -11,34 +11,34 @@ A change to it changes the binding store, the protected facility or custody.
 
 The implementation adds no package.
 Node.js 24.15.0 and the installed set satisfy every requirement.
-The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `createPrivateKey`, `createPublicKey`, `sign`, `randomBytes` and `timingSafeEqual`, and `zod` at 4.4.3 and `ulid` at 3.0.2.
+The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `createPrivateKey`, `createPublicKey`, `sign`, `randomBytes` and `timingSafeEqual`, and `zod` at 4.4.3 and `ulid`.
 The first version holds one platform entry, GitHub.
 Slack, Telegram and Jira hold no platform entry until their design lands, and a credential type is no platform, because an SSH key and an API key span platforms.
 
 ## The binding store
 
-The Project Service owns its tables in the operational database, and [overview.impl.md](viewer.html?p=overview.impl.md) rules that file and its driver.
+The Project Service owns its tables in the operational database, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules that file and its driver.
 It reads no table of another service.
 The tables are below.
 
 - `project_project(id, name, binding_set_version, created_at)` holds the identity of a project and the version of its binding set.
 - `project_binding(id, project_id, kind, resource_identity, current_revision, created_at, removed_at, replaced_by)` holds the identity of a binding.
-- `project_binding_revision(id, project_id, binding_id, revision, config, created_at)` holds one immutable row for each revision, and `config` holds the configuration as canonical JSON.
+- `project_binding_revision(id, project_id, binding_id, revision, config, created_at)` holds one immutable row for each revision, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules.
 - `project_client_identity(id, project_id, binding_id, secret_hash, created_at, rotated_at)` holds the client identity of a worker binding that an external harness hosts.
 
 Every table above holds `id` as its first column and `project_id` as its second column.
-The credential store sits in the shared table `credential`, which [overview.impl.md](viewer.html?p=overview.impl.md) rules with its envelope and its cipher key.
+The credential store sits in the shared table `credential`, which [architecture.impl.md](viewer.html?p=architecture.impl.md) rules with its envelope and its cipher key.
 The Project Service owns that table through custody, and a binding names one of its records with a credential reference.
 
 The constraints are below.
 
-- The primary key of `project_binding` is `id`, a ULID, so a binding identity is unique across the daemon and satisfies the rule of `project-service.md` that it is unique inside its project.
+- The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules, so a binding identity is unique across the daemon and satisfies the rule of `project-service.md` that it is unique inside its project.
 - `project_binding.current_revision` carries a composite foreign key to `project_binding_revision`, whose own real key is the pair of the binding and the revision under a unique index.
 - `project_binding.resource_identity` names the resource that the binding allocates, and a unique index over `project_id` and `resource_identity` enforces the cardinality of the kind. The section below gives its form. A worker binding holds no resource identity, because a project holds any number of bindings of one worker, and SQLite treats two absent values as distinct. `kind` stays a plain column that the validation reads.
 - The primary key of `project_client_identity` is `id`, which is the client identity itself. That identity is unique across the daemon, because the Gateway Service parses a Basic credential that carries no project.
 - A credential reference and a reference to another binding sit inside `config`, and the write validates each one against `project_binding`. SQLite enforces no foreign key inside JSON.
 
-A binding identity and a project identity are ULIDs that `ulid` at 3.0.2 generates.
+A binding identity and a project identity follow the identity convention of [architecture.impl.md](viewer.html?p=architecture.impl.md).
 
 ## The resource identity
 
@@ -150,7 +150,7 @@ The record names no such actor itself, so that log is the whole attribution.
 
 ## The keys of the Project Service
 
-[overview.impl.md](viewer.html?p=overview.impl.md) holds the field `masterKey` of the configuration file, the rule that a service derives its keys from it and never uses it directly, and the cipher key of the `credential` table.
+[architecture.impl.md](viewer.html?p=architecture.impl.md) holds the field `masterKey` of the configuration file, the rule that a service derives its keys from it and never uses it directly, and the cipher key of the `credential` table.
 The Project Service derives one key of its own with `crypto.hkdfSync`, SHA-256 and an empty salt.
 
 - `HKDF(masterKey, info = "webhook/<binding id>/<rotation>")` is the verification secret of one source binding.
@@ -205,7 +205,7 @@ The helper prints the token for the password prompt and the account name for the
 The helper writes no file and it reaches no socket.
 
 Under the SSH transport form, custody serves the ssh-agent protocol on a unix socket.
-The socket sits in the state directory of [overview.impl.md](viewer.html?p=overview.impl.md), under a per-operation subdirectory of mode 0700, and the socket holds mode 0600.
+The socket sits in the state directory of [architecture.impl.md](viewer.html?p=architecture.impl.md), under a per-operation subdirectory of mode 0700, and the socket holds mode 0600.
 Custody removes the subdirectory when the operation ends.
 The first version supports the Ed25519 algorithm alone, so the agent needs no RSA SHA-2 selection and no ECDSA signature encoding.
 The agent implements the length-prefixed framing of the protocol, the identity list, the public-key blob `ssh-ed25519`, the signature blob, and a bounded reply to every other request type.

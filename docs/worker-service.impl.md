@@ -35,6 +35,7 @@ It rejects a path of the workspace that a link resolves outside the workspace.
 It follows a link of the host location, because the operator manages the dotfiles of the host.
 A deadline bounds every read.
 The repository context-file discovery of pi stays disabled, and the composer performs every load, so one loader holds the order and the provenance.
+A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules the algorithm and the rendering.
 pi receives the base prompt and the agent prompt as its system prompt, with the framing that states the layers and their precedence.
 It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.

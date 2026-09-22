@@ -24,7 +24,11 @@ A kanthord identity takes the `kanthord.` prefix.
 ## Primary store
 
 The primary store is a SQLite database.
-It uses its own database file, and it never reuses the database file of the system.
+It uses its own database file, `tracking.db` of the data directory that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules, and it never reuses the operational database.
+`node:sqlite` `DatabaseSync` opens that file in WAL mode, and the file holds its own migration record.
+The file appears with the working implementation of the tracer, so the no-op phase creates no file and runs no migration.
+Its migration record follows the runner contract of [architecture.impl.md](viewer.html?p=architecture.impl.md).
+The no-op phase opens no telemetry file, so it validates no history, and a telemetry file that a working-tracer release left stays untouched.
 The schema holds the span and the telemetry text.
 A bulk import runs in bounded transactions, so a concurrent write of the daemon never waits for a whole import.
 The retention sweep deletes in bounded batches for the same reason.
