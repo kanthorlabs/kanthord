@@ -12,9 +12,10 @@ It describes no mechanism inside a service.
 
 ## Container diagram
 
-The container view shows the daemon and its CLI client, with the actors and external systems around them.
-The six services are logical boundaries inside the daemon, not separate containers.
-The design targets one daemon on one host.
+The container view shows the two [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
+The `server` application runs the six services, and the `cli` application operates the system on a terminal.
+The six services are logical boundaries inside the server, not separate containers.
+The design targets one server on one host.
 
 ## Services
 
@@ -59,7 +60,7 @@ The Worker Service supplies the workers and the agents.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider.
 It supplies the platform connector through which every service performs an operation on the API of an external platform.
-It supplies the MCP server through which a native agent and an external harness reach the daemon tools.
+It supplies the MCP server through which a native agent and an external harness reach the server tools.
 It performs the configured repository action for both harnesses.
 
 ### Tracking Service
@@ -72,20 +73,20 @@ Each service that writes telemetry takes responsibility to secure its own sensit
 
 ### Gateway Service
 
-The Gateway Service holds the RESTful API of the daemon.
-Every request enters the daemon through it, from a human and from a machine.
+The Gateway Service holds the RESTful API of the server.
+Every request enters the server through it, from a human and from a machine.
 It authenticates a human and produces a [human identity](overview.vocabulary.md#human-identity).
 It authenticates no machine.
 It routes each request to the service that owns the requested operation.
 
 ## Service diagram
 
-The service view shows the six services inside the daemon.
+The service view shows the six services inside the server.
 It shows the relations that the sections below name.
 
 ## Actors
 
-- A human configures a project, carries out steps, reviews results and overrides an outcome. A human reaches the daemon through the Gateway Service, which authenticates the human and passes the [human identity](overview.vocabulary.md#human-identity) with the request.
+- A human configures a project, carries out steps, reviews results and overrides an outcome. A human reaches the server through the Gateway Service, which authenticates the human and passes the [human identity](overview.vocabulary.md#human-identity) with the request.
 - An external harness executes work, and it reaches kanthord as a client through the API or the CLI.
   It performs no authenticated operation on a resource that a project binds, and it invokes that operation through kanthord.
 

@@ -6,7 +6,7 @@ title: Tracking Service
 
 ## Scope
 
-The Tracking Service holds the telemetry of the daemon.
+The Tracking Service holds the telemetry of the server.
 It holds no evidence, assessment, outcome, validation criterion, configuration or claim.
 It decides nothing, and no record it holds has current effect.
 No service reads telemetry to make a decision.
@@ -22,7 +22,7 @@ A span names one operation.
 It holds a start time, an end time, or both.
 It holds attributes, events, a status and a parent.
 It holds the identity of its parent or it is a root span.
-A [trace](tracking-service.vocabulary.md#trace) groups the spans of one operation of the daemon.
+A [trace](tracking-service.vocabulary.md#trace) groups the spans of one operation of the server.
 A span holds a [span link](tracking-service.vocabulary.md#span-link).
 The [span status](tracking-service.vocabulary.md#span-status) and its values live in the vocabulary sibling.
 The [attribute value kinds](tracking-service.vocabulary.md#span-attribute) live in the vocabulary sibling.
@@ -30,7 +30,7 @@ The [attribute value kinds](tracking-service.vocabulary.md#span-attribute) live 
 ## The trace and the project
 
 A trace belongs to exactly one project or to no project.
-A daemon operation that concerns several projects opens one root span per project.
+A server operation that concerns several projects opens one root span per project.
 Those root spans link to each other.
 A link identity names no project.
 Access does not distinguish the two kinds of trace.
@@ -38,13 +38,13 @@ Access does not distinguish the two kinds of trace.
 ## The store and the two paths
 
 The Tracking Service holds every record in one primary store.
-A record of the harness that the daemon hosts and an imported record follow the same rules of this page.
-An execution that the daemon hosts writes to the primary store.
+A record of the harness that the server hosts and an imported record follow the same rules of this page.
+An execution that the server hosts writes to the primary store.
 No local store and no import stand between that execution and the Tracking Service.
 An external harness holds its capture on its own host until an import.
 The Tracking Service holds its records apart from the records of every other service.
 A retention sweep of telemetry touches no record of another service.
-An observation of the daemon never waits for an import.
+An observation of the server never waits for an import.
 The late admission of an externally captured record is the whole difference between the two paths.
 
 ## The root of a trace
@@ -53,7 +53,7 @@ A trace has exactly one root span.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) opens the root span of an execution after the operation that records that execution.
 It writes the root span as telemetry, so that write follows every rule of this page.
 The trace exists before any ingestion.
-An execution that ends before an import of its records stays readable through the spans of the daemon.
+An execution that ends before an import of its records stays readable through the spans of the server.
 A lost write of a root span leaves an unresolved parent, and the absence rule governs it.
 
 ## Identity attributes
@@ -67,7 +67,7 @@ The [identity attribute](tracking-service.vocabulary.md#identity-attribute) voca
 
 Every span carries its producer.
 The Tracking Service derives the producer of a record, and it reads no producer from a record.
-The producer of a record that a component of the daemon writes is that component.
+The producer of a record that a component of the server writes is that component.
 The producer of an imported record is the claimant of the execution that the trace resolves to.
 A human who issues an import produces no record.
 An authorization states that an import proceeds, and a producer states who made a span.
@@ -85,7 +85,7 @@ An unresolved parent is a fact that a reader sees and never an error.
 A record can arrive before its parent.
 A start with no end is an unfinished span.
 An end with no start creates the span with no start time.
-A reader distinguishes a span that the daemon observed from a span that an external harness asserted.
+A reader distinguishes a span that the server observed from a span that an external harness asserted.
 
 ## The telemetry text
 
@@ -121,7 +121,7 @@ A harness that exposes less produces less telemetry.
 That changes no rule of the system.
 The extension stores its capture on its own host.
 The extension records the trace identity and the root span identity of its execution with its captures.
-Those identities are references that the daemon minted, and they assert nothing.
+Those identities are references that the server minted, and they assert nothing.
 The local store is no kanthord record.
 Only an ingested record is a kanthord record.
 The local store is bounded.
@@ -180,7 +180,7 @@ A reference to an expired telemetry text resolves to expired and never to missin
 The trace is the unit of deletion.
 A deletion of a trace deletes every span and every telemetry text of that trace.
 A deletion of a span deletes no telemetry text.
-The operator configures retention once for the daemon, and never per project.
+The operator configures retention once for the server, and never per project.
 The [architecture](architecture.md#tracking-service) owns the difference between telemetry retention and evidence retention.
 A deletion of a telemetry record changes no outcome, removes no evidence and changes no state of a node.
 
@@ -192,7 +192,7 @@ The absence of a span proves nothing.
 It never establishes that an operation did not happen, that an execution made no progress or that a node failed.
 A reader assembles a trace from the records that the Tracking Service holds.
 The Tracking Service promises no reader a complete trace.
-An expiry is different from an absence because the daemon knows that the expiry happened.
+An expiry is different from an absence because the server knows that the expiry happened.
 
 ## Reading
 

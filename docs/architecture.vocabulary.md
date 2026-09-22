@@ -18,11 +18,11 @@ A logical part of one process with a boundary that separates authority. The set 
 - **Tracking Service**
 - **Gateway Service**
 
-The daemon holds no other service. The six services are logical boundaries inside one daemon.
+The server holds no other service. The six services are logical boundaries inside one server.
 
 ## actor
 
-The container view shows the actors around the daemon. The set is closed and it holds two values.
+The container view shows the actors around the server. The set is closed and it holds two values.
 
 - **a human**
 - **an external harness**
@@ -31,17 +31,26 @@ The container view shows the actors around the daemon. The set is closed and it 
 
 ## external system
 
-The container view shows the external systems around the daemon. The set is closed and it holds two values.
+The container view shows the external systems around the server. The set is closed and it holds two values.
 
-- **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the daemon
+- **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the server
 - **a large language model provider**, which serves the models that the Worker Service uses
 
 [overview.md](viewer.html?p=overview.md) owns `provider`, and the overview vocabulary holds its example.
 
-## daemon
+## app
 
-The daemon is one process, and it holds the six services. A client reaches it through the API or the CLI.
-The daemon runs on one host.
+An application of kanthord that a user runs. The set is closed and it holds two values.
+
+- **`cli`**, which operates the system on a terminal
+- **`server`**, which holds every service in one running process and serves the RESTful API
+
+`app` is the short form of `application`, and the two words name one term.
+
+## server
+
+The server is one process, and it holds the six services. A client reaches it through the API or the CLI.
+The server runs on one host.
 
 - An external harness invokes a configured repository action through the MCP server of the Worker Service.
 - The MCP server is one form of the API.
@@ -59,7 +68,7 @@ One relation reads as follows.
 ## reviewer execution
 
 An execution under an evaluation claim.
-Under the workers that the daemon hosts, the worker instance that executes a node's steps never writes the assessment of that node.
+Under the workers that the server hosts, the worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.
 - A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.
@@ -94,6 +103,6 @@ The type of a credential is a separate matter, and no approved page closes that 
 
 What the container view shows. A service is not a container.
 
-- The daemon is a container, and it holds the six services.
-- The CLI client of the daemon is a container.
-- A service boundary separates authority inside the daemon, so it describes no container.
+- The `server` application is a container, and it holds the six services.
+- The `cli` application is a container.
+- A service boundary separates authority inside the server, so it describes no container.

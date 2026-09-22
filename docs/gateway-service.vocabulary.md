@@ -22,10 +22,10 @@ The Gateway Service checks them against the account store and establishes the hu
 
 ## account store
 
-The store that holds the accounts of the humans that the daemon serves, and the credentials of those accounts.
+The store that holds the accounts of the humans that the server serves, and the credentials of those accounts.
 
 The Gateway Service checks the account store and finds the account of `ulrich` with its credential.
-The account of `ulrich` names no project, because every authenticated human carries the same authority over every project of the daemon.
+The account of `ulrich` names no project, because every authenticated human carries the same authority over every project of the server.
 
 ## forwarding contract
 

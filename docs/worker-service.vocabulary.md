@@ -23,10 +23,10 @@ This revision of the Worker Service supplies four workers.
 The host of a worker is the system that runs the instances of the worker.
 The set is closed and it holds two values.
 
-- **the daemon**
+- **the server**
 - **an external harness**
 
-`general@1` and `reviewer@1` have the daemon as their host.
+`general@1` and `reviewer@1` have the server as their host.
 `claude@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
 
 ## steps method
@@ -58,13 +58,13 @@ The Worker Service runs the agent loop of `swe@1` and sends each model inference
 A prompt layer is one part of the prompt of a native agent, and it has one owner.
 The set is closed and it holds five values.
 
-- **global prompt**: the operator of the daemon owns it.
+- **global prompt**: the operator of the server owns it.
 - **base prompt**: the worker that declares the agent owns it, and it holds for every agent that uses it.
 - **agent prompt**: the worker that declares the agent owns it.
 - **project prompt**: the project that binds the repository owns it.
 - **work prompt**: the node revision that the attempt pins owns it.
 
-The global prompt of the daemon states "Every answer is short. A commit message states the change and no reason."
+The global prompt of the server states "Every answer is short. A commit message states the change and no reason."
 `general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, which describes a senior software engineer, and its text is `assets/prompt/base.md`.
 `general@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
 `reviewer@1` declares the agent prompt of `re@1`, which states that the agent judges evidence against criteria and changes no file of the repository.
@@ -77,12 +77,12 @@ The work prompt of task "Add reset token expiry" states its goal, its steps and 
 A prompt source is one origin of the text of a prompt layer.
 The global prompt and the project prompt each hold an ordered list, and the set of each list is closed.
 
-- global prompt: **the configuration of the daemon**, then **the agent file of the host**.
+- global prompt: **the configuration of the server**, then **the agent file of the host**.
 - project prompt: **the repository binding**, then **the agent file of the workspace**.
 
 The base prompt and the agent prompt each take the declaration of their worker, and the work prompt takes the pinned node revision.
-The daemon holds no configured global prompt and the host holds an agent file, so the global prompt takes that file.
-The daemon holds a configured global prompt and the host holds an agent file.
+The server holds no configured global prompt and the host holds an agent file, so the global prompt takes that file.
+The server holds a configured global prompt and the host holds an agent file.
 The global prompt takes the configuration, and the composer reads no file.
 The repository binding of `kanthorlabs/kanthord` holds no project prompt and the workspace holds an agent file, so the project prompt takes that file.
 The workspace holds an agent file that exceeds the bound, so that source is invalid and the project prompt is absent.
@@ -96,7 +96,7 @@ The set is closed and it holds two values.
 - **AGENTS.md**
 - **CLAUDE.md**
 
-The host of the daemon holds both files.
+The host of the server holds both files.
 The workspace root of `kanthorlabs/kanthord` holds `AGENTS.md` only.
 
 ## prompt composer
@@ -195,8 +195,8 @@ A GitHub call to open pull request 42 loses its response after dispatch, so the 
 
 ## MCP server
 
-The MCP server is the daemon component that exposes tools as one form of the API.
-The daemon runs one MCP server.
+The MCP server is the server component that exposes tools as one form of the API.
+The server runs one MCP server.
 Its client kinds form a closed set of two values.
 
 - **native agent**, under the execution identity of its hosted execution
@@ -215,7 +215,7 @@ It exposes no direct platform write.
 
 The runtime identity is the identity that the Worker Service mints for a worker instance and that names its worker binding.
 The Worker Service creates two instances for worker binding `general-main`, whose instance count is 2, and mints a runtime identity for each one.
-A daemon restart creates two new instances with two new runtime identities.
+A server restart creates two new instances with two new runtime identities.
 A revision of `general-main` that changes the model identifier of its entry replaces no instance.
 
 ## pool
@@ -258,7 +258,7 @@ The verification command of "Add password reset" comes from the repository `kant
 ## workspace
 
 A workspace is the host-local working directory of one execution.
-The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the daemon, keyed by the objective and its repository binding.
+The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the server, keyed by the objective and its repository binding.
 Execution 3 of the same objective under the same repository binding reuses it, and the Worker Service removes it after the bounded retention.
 The reviewer execution of the objective uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
 The execution of "Account recovery" uses a workspace with no checkout, and its agent writes the report there.

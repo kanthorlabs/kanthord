@@ -15,8 +15,8 @@ It describes no mechanism of another service.
 ## Topology and work queue
 
 The [architecture](architecture.md#container-diagram) defines the deployment target.
-One Scheduler Service serves every project of the daemon.
-It starts and stops with the daemon.
+One Scheduler Service serves every project of the server.
+It starts and stops with the server.
 It holds a bounded pool of scheduling processors.
 A scheduling processor serves a work pull or handles a wakeup after an accepted change.
 It returns to the pool after that short decision.
@@ -31,9 +31,9 @@ The Scheduler coalesces the wakeups of the [Mission Service](mission-service.md#
 A peek reads the first entry of the order and removes nothing.
 Project configuration changes and claim changes also trigger a recheck of the affected scope.
 An idle project consumes no processor turn and loses no durable obligation.
-Daemon shutdown stops new claims and preserves accepted delivery and execution obligations.
+Server shutdown stops new claims and preserves accepted delivery and execution obligations.
 
-The Scheduler persists the work queue in the storage of the daemon, so its order survives a restart.
+The Scheduler persists the work queue in the storage of the server, so its order survives a restart.
 The work queue holds, per project, one entry for each claimable node, subject to the wait record in Claims and counts.
 A node is claimable when its Mission state and the readiness condition admit a claim.
 The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
@@ -77,7 +77,7 @@ Two processors that select the same node compete through the single claim operat
 Only one obtains the claim.
 Coordination covers a short decision and never holds a project-wide lock during an execution.
 
-The Scheduler Service supports 1,000 active projects on one daemon.
+The Scheduler Service supports 1,000 active projects on one server.
 The fairness bound survives a noisy project that competes with quiet projects.
 Three properties have bounds and measurements.
 Discovery lag measures the interval from the commit of an accepted change to the handling of its wakeup.
@@ -89,7 +89,7 @@ The [Tracking Service](tracking-service.md#writing-telemetry) holds these measur
 
 ## Intake and observation
 
-The Scheduler Service accepts platform deliveries through the API ingress of the daemon into a durable inbox.
+The Scheduler Service accepts platform deliveries through the API ingress of the server into a durable inbox.
 A success acknowledgement follows durable acceptance, never an in-memory enqueue.
 Acceptance promises no execution.
 The intake operates when a project has no live worker instance.
@@ -162,7 +162,7 @@ A worker instance that can take work issues a work pull with an idempotent [requ
 The [overview](overview.vocabulary.md) defines the worker instance, the execution and the act of executing a node.
 The pull carries its worker binding identity and the runtime identity of the instance.
 The [Project Service](project-service.md#resource-and-binding-model) owns the worker binding identity.
-The Worker Service owns the runtime identity and vouches for its association with the binding inside the daemon.
+The Worker Service owns the runtime identity and vouches for its association with the binding inside the server.
 The Scheduler checks the binding against the [binding set](project-service.md#configuration-lifecycle-and-consistency) of its project.
 A caller cannot widen that scope with another project's identifier.
 The [Project Service](project-service.md#authorization-and-credential-custody) authorizes resource operations, and a work pull is no resource operation.
@@ -175,7 +175,7 @@ The match reads the node states that the worker declares, the exact worker name 
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
 The [Mission Service](mission-service.md#validation-criteria-and-authority) owns that revision selection.
 The worker requests work and never authorizes its own claim.
-Under the workers that the daemon hosts, reviewer instances pull independently of instances that execute steps.
+Under the workers that the server hosts, reviewer instances pull independently of instances that execute steps.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the restriction on the executing worker's choice of reviewer and reviewer instructions.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) restricts scheduling to initiatives and objectives, never tasks.
 
@@ -185,7 +185,7 @@ The external harness hosts its own executions, and it never writes the execution
 The Scheduler serves a work pull in three ways.
 A wakeup from the Mission Service makes the Scheduler serve the waiting work pulls of the project by the order of the work queue.
 An idle Scheduler with entries left serves the waiting work pulls by the same order.
-An on-demand request from a service of the daemon names a node that holds an entry, and the Scheduler serves that node to the next compatible work pull ahead of the order.
+An on-demand request from a service of the server names a node that holds an entry, and the Scheduler serves that node to the next compatible work pull ahead of the order.
 The on-demand request returns when the claim exists, it holds no claim of its own, and the Scheduler bounds its wait as it bounds a waiting work pull.
 
 When no work matches, the Scheduler returns no work or waits asynchronously for a bounded period.

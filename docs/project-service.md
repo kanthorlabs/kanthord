@@ -119,7 +119,7 @@ The facility recognizes every authenticated human identity as authorized for the
 
 For a machine identity, the facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
-No credential leaves the daemon.
+No credential leaves the server.
 An execution holds no credential, and an external harness holds no credential.
 An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation.
 The Project Service reads the claim state of an execution from the Scheduler Service.

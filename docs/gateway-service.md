@@ -7,12 +7,12 @@ title: Gateway Service
 ## Scope
 
 This document describes the Gateway Service.
-It describes the RESTful API of the daemon, the authentication of a human, and the [human identity](overview.vocabulary.md#human-identity) that the system passes to a service when a human makes a request.
+It describes the RESTful API of the server, the authentication of a human, and the [human identity](overview.vocabulary.md#human-identity) that the system passes to a service when a human makes a request.
 It describes no mechanism of another service.
 
 ## The RESTful API
 
-- Every request enters the daemon through the Gateway Service.
+- Every request enters the server through the Gateway Service.
 - The request source is a human or a machine.
 - The Gateway Service routes each request to the service that owns the requested operation.
 - The CLI is a client of the same RESTful API. No separate entry path exists.
@@ -47,7 +47,7 @@ It describes no mechanism of another service.
 
 ## Human authority
 
-- Every authenticated human carries the same authority over every project of the daemon.
+- Every authenticated human carries the same authority over every project of the server.
 - The human identity serves attribution and the human-only restriction of the [unblock](mission-service.md#the-unblock).
 - No per-project role binding governs a human operation.
 

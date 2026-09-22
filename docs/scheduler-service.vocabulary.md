@@ -37,7 +37,7 @@ The Scheduler selects "Add password reset", accepts the claim and returns Execut
 
 ## on-demand request
 
-The API ingress of the daemon issues an on-demand request for "Add password reset", which holds an entry behind "Add recovery codes".
+The API ingress of the server issues an on-demand request for "Add password reset", which holds an entry behind "Add recovery codes".
 The Scheduler serves "Add password reset" to the next compatible `tdd@1` work pull ahead of the order, and the request returns with Execution 1.
 
 ## scheduling processor
