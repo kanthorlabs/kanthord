@@ -168,9 +168,13 @@ It registers response status codes and schemas, error responses and its security
 The server emits an OpenAPI 3.1 document from the registry with `z.toJSONSchema()` of `zod` at 4.4.3.
 A test validates the document with `@apidevtools/swagger-parser` at 12.1.0.
 It asserts a real response against its declared schema.
-The server emits the document once at startup and holds it in memory, because the registry is fixed at startup.
-It serves the document at `GET /openapi.json`, which declares the public access policy and answers with `application/json`.
-A client of the server generates its own client code from that route.
+`kanthord gateway openapi` emits the document from the registry, writes it as YAML to `static/openapi.yaml` of the `engine` repository, and prints that path.
+`yaml` at 2.9.0 serializes the document, and [architecture.impl.md](viewer.html?p=architecture.impl.md) already names that package for the configuration file, so this command adds none.
+It starts no server, and it reaches none.
+A human runs that command after a change of a route, and the repository holds the emitted file.
+The server emits no document at its start, so the start of [architecture.impl.md](viewer.html?p=architecture.impl.md) holds no emission step.
+The server serves the `static` directory of its own package with `hono/serve-static`, so `GET /openapi.yaml` answers with that file under the public access policy and the `application/yaml` content type.
+A client generates its own client code from that file, and a build of a client copies the file instead of calling a running server.
 
 ## Host and origin
 
@@ -231,6 +235,7 @@ It covers a repeat of the registration key under the same client identity, and i
 It covers a repeat of a completed key under another caller, and it asserts that the handler runs and that no recorded answer is returned.
 It covers an expired token, a banned `jti` and a token whose registration ended, and it asserts 401 for each one.
 It covers the sweep of the denylist at a start, and it asserts that an entry beyond its `expires_at` is gone.
+It emits the document from the registry and compares it with the committed file, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
 The implementation epic assesses their removal.
 
@@ -262,20 +267,22 @@ The operator adds the public hostname of the ingress to the host allowlist.
 The work pull and the registration of a worker instance are registered routes.
 The MCP server of the Worker Service occupies its own path prefix, and [worker-service.impl.md](viewer.html?p=worker-service.impl.md) owns it.
 A platform delivery enters through a registered route whose handler passes it to the Scheduler Service.
-The prefixes are `/auth/*`, `/healthz` and `/openapi.json` with the public policy, and `/api/*` with the human policy.
+The prefixes are `/auth/*`, `/healthz` and `/openapi.yaml` with the public policy, and `/api/*` with the human policy.
 They are `/worker/*` and `/mcp/*` with the client policy, and `/hooks/*` with the delivery policy.
 
 ## The command group `gateway`
 
 [architecture.impl.md](viewer.html?p=architecture.impl.md) rules the command surface and the client configuration.
 This sibling declares the command table of the group `gateway`.
-A row names the command, the operation that it calls, and the access policy of that route.
+A row names the command, then the operation that it calls with the access policy of that route, or the statement that the command runs locally.
 
 - `login` calls the login route of `/auth/*`, which carries the public policy.
-- `logout` calls no route.
+- `logout` runs locally and calls no route.
+- `openapi` runs locally and calls no route.
 
 `kanthord gateway login` reads the username and the password on the terminal, and it requires a terminal on the standard input.
 It calls the login route, and it writes the endpoint and the issued JWT into the client configuration file.
+`kanthord gateway openapi` writes the OpenAPI file, which the operation registry section rules.
 `kanthord gateway logout` removes the client configuration file.
 It calls no route and it revokes no token, because a revocation increments the `token_version` of the account row and no route performs that increment today.
 
@@ -296,6 +303,7 @@ A client sends the `Host` header of its endpoint, so an endpoint outside `gatewa
 ## Repository layout, build, test and release
 
 The Gateway Service source sits under `src/gateway/` of the `engine` repository.
+`static/openapi.yaml` of that repository holds the emitted OpenAPI document, and the released package ships the `static` directory.
 A test file sits beside its source as `*.test.ts`.
 `node --test` runs the tests.
 `tsc -p tsconfig.build.json` builds into `dist/`.

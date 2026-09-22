@@ -274,17 +274,15 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Run the migrations, in a fixed order of the services.
-- Sweep the dead idempotency records, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
+- Sweep the dead idempotency records and the expired entries of the session denylist, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
 - Register the routes of every service, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
-- Emit the OpenAPI document from the operation registry, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
 - Open the listener.
 - Seed the one human account, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
 
 The barriers of the start are below.
 
 - The migrations complete before a service reads a table.
-- Every registration completes before the emission of the document.
-- The emission completes before the server admits a request.
+- Every registration completes before the server admits a request.
 - The listener binds before the seed prints a credential, so a printed credential implies a running server.
 
 A failed start exits as below.
@@ -347,8 +345,8 @@ A fatal error runs as below.
 - The second set holds one group for each service of [architecture.md](viewer.html?p=architecture.md), named by that service in lower case, and it holds `project`, `mission`, `scheduler`, `worker`, `tracking` and `gateway`.
 - The two sets are disjoint, so the group of a service collides with no global command. A top-level name outside the two sets is a defect.
 - This sibling declares the two sets and the shape of the surface. The implementation sibling of a service declares the command table of its own group, and it declares no top-level name.
-- A command table holds one row for each command of the group. A row names the command, the operation of the RESTful API that it calls, and the access policy of that route.
-- A command of a group that no route of the emitted OpenAPI document serves is a defect.
+- A command table holds one row for each command of the group. A row names the command, then the operation of the RESTful API that it calls with the access policy of that route, or the statement that the command runs locally and calls no route.
+- A command that names an operation which no route of the published contract serves is a defect.
 - `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.
 - `kanthord serve server` starts the server, and it is the one supported start of the server.
 - `kanthord serve worker` starts a `worker` application.
@@ -358,9 +356,10 @@ A fatal error runs as below.
 - An application name is an operand and no top-level name, so an application collides with the group of a service never.
 - A later application joins the operand set of `serve`. A later application that needs a process of its own contradicts the one-process rule of [architecture.md](viewer.html?p=architecture.md), so it is a change of that page and no ruling of this sibling.
 - The `config` group is read only. It holds `init`, `validate` and `show`, which the section below rules, and it holds no command that changes the configuration file.
-- The `config` group and `serve` need no running server.
-- Every command of the group of a service reaches the server through the RESTful API, which [gateway-service.md](viewer.html?p=gateway-service.md) rules.
+- The `config` group, `serve` and a local command of the group of a service need no running server.
+- A command of the group of a service that names an operation reaches the server through the RESTful API, which [gateway-service.md](viewer.html?p=gateway-service.md) rules.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
+- A local command of such a group opens no database either, and it reads the module of its own program alone.
 - The help of a command and the validation of its arguments need no running server.
 - `--config` belongs to `config` and to `serve`. The group of a service rejects that option, because it reaches the server through the API.
 - `kanthord --help` lists the two global commands and the six groups, and it names nothing else. The help of a group lists the commands of that group alone.
@@ -449,7 +448,7 @@ A fatal error runs as below.
 - Each of those cases asserts a non-zero status, no raw secret in the output, no invocation of the stop and no invocation of the release.
 - A subprocess test runs the launcher under a version outside the range, and it asserts a non-zero status, one line on standard error, no application module loaded and no database opened.
 - A test covers a second start against the same data directory, and it asserts a non-zero status and no change to either database file.
-- A test compares the route set of the operation registry with the path set of the emitted OpenAPI document, and it fails when the two differ.
+- A test compares the route set of the operation registry with the path set of the committed OpenAPI file, and it fails when the two differ.
 - A test covers a database file that the server cannot lock at a later step of the start, and it asserts the release of every earlier resource.
 - A test covers a listener that cannot bind, and it asserts that no credential reaches standard output.
 - A test covers a signal that arrives during the start.
