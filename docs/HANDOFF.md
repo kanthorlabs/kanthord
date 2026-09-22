@@ -14,7 +14,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Gateway Service
 
 - [ ] Added 2026-09-21 by Ulrich. Provide user management after the system runs live. The server seeds one human account at the first start and prints its username and its password once, and it holds no second human account. Recovery of a lost credential deletes the account row and restarts the server, which seeds the account again. The design of user management decides the account routes, the authority to create an account, the password change, the revocation of the session of another account, and the route that bans one session through the denylist of `gateway-service.impl.md`.
-- [ ] Added 2026-09-21. Decide how the build of `apps` obtains the OpenAPI document. The server serves it at `GET /openapi.json`, so a client generation needs a running server or a stored copy. The apps epic owns the answer.
 
 ### Project Service
 
@@ -55,7 +54,7 @@ After the first native-agent worker runs the acceptance path.
 ### Root repository
 
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
-- [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`.
+- [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies `static/openapi.yaml` of `engine` into `apps`, which the build of `apps` reads.
 
 ### B9, failure and recovery
 
