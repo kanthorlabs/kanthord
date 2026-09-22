@@ -10,7 +10,7 @@ This document describes the Worker Service.
 It describes the workers and their agents, the worker instances and how they host an execution, the lifecycle of an execution, the performance of a required external action and the owner of memory.
 For a required external action, it describes the configured repository action only.
 It describes the platform connector that performs an operation on the API of an external platform.
-It describes the MCP server through which a native agent and an external harness reach the daemon tools.
+It describes the MCP server through which a native agent and an external harness reach the server tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
 It describes no mechanism of another service.
 
@@ -19,7 +19,7 @@ It describes no mechanism of another service.
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
 A worker declares its name, its host, the node states that its instances claim and its required node format.
-A worker that the daemon hosts also declares its method, its one agent, the default configuration of that agent, and the base prompt and the agent prompt of that agent.
+A worker that the server hosts also declares its method, its one agent, the default configuration of that agent, and the base prompt and the agent prompt of that agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 An agent name names a role, and no agent name equals a worker name.
 A configuration is named through a worker binding, never through a bare agent name.
@@ -33,16 +33,16 @@ Compatibility reads the node revision that the [work-pull rules](scheduler-servi
 Every worker of this page requires the same node format.
 
 A method is the worker's own.
-Two methods of the daemon exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
+Two methods of the server exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
 The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
 
-The agent of a worker that the daemon hosts is a native agent, an agent loop that the Worker Service runs itself.
+The agent of a worker that the server hosts is a native agent, an agent loop that the Worker Service runs itself.
 The Worker Service publishes the contract of `claude@1` and `opencode@1`: the name, the host, the declared node states and the required node format.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
-A worker that the daemon hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
+A worker that the server hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies three [connectors](worker-service.vocabulary.md#connector) as the tools that perform an authenticated operation.
 The model connector performs a model inference call.
@@ -64,8 +64,8 @@ The prompt of a native agent composes prompt layers.
 A prompt layer is one part of the prompt, and it has one owner.
 The composition places the global prompt first, then the base prompt, then the agent prompt, then the project prompt, then the work prompt.
 
-The operator configures the global prompt of the daemon.
-The global prompt states the conventions of the operator, and it holds for every native agent of the daemon.
+The operator configures the global prompt of the server.
+The global prompt states the conventions of the operator, and it holds for every native agent of the server.
 A worker declares, for its agent, the base prompt that the agent uses and the agent prompt of that agent.
 A base prompt states what holds for every agent that uses it, and more than one agent uses one base prompt.
 A base prompt describes the engineer that every agent that uses it is, and it states the default standard of the work product that those agents produce and judge.
@@ -129,22 +129,22 @@ No model inference call of the execution drops a layer of its prompt.
 ## Instances and hosting
 
 The Worker Service reads the worker bindings and their instance counts from the [Project Service](project-service.md#execution-configuration-and-instance-count).
-For a worker that the daemon hosts, it holds one instance for each unit of the instance count of a worker binding.
+For a worker that the server hosts, it holds one instance for each unit of the instance count of a worker binding.
 The instances of one binding form its pool.
 An instance holds a runtime identity.
 The Worker Service mints the runtime identity when it creates the instance.
-The runtime identity is unique inside the daemon, and it names the worker binding of the instance.
+The runtime identity is unique inside the server, and it names the worker binding of the instance.
 The Worker Service vouches for that association on the [work pull](scheduler-service.md#work-pulls).
 For a worker that an external harness hosts, the Worker Service accepts the registration of an instance under a client identity of its binding, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
-A registration ends when the program deregisters, when the daemon restarts, or when its client identity leaves the binding, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
+A registration ends when the program deregisters, when the server restarts, or when its client identity leaves the binding, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 
 An instance record is runtime-only.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
-At daemon start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
+At server start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
 A configuration revision of the binding replaces no instance.
-A daemon restart creates new instances with new runtime identities.
-For a worker that the daemon hosts, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
+A server restart creates new instances with new runtime identities.
+For a worker that the server hosts, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
 
 An instance hosts at most one execution at a time.
 An instance holds at most one outstanding work pull or one execution.
@@ -154,7 +154,7 @@ Any idle instance of the binding takes the next compatible node.
 An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service.
 
 The Worker Service produces the instance healthcheck before each work pull.
-The healthcheck of an instance that the daemon hosts passes when the effective configuration of the agent resolves under the current binding set.
+The healthcheck of an instance that the server hosts passes when the effective configuration of the agent resolves under the current binding set.
 The healthcheck of an instance that an external harness hosts passes when its client identity is a client identity of its binding.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
@@ -393,7 +393,7 @@ A caller supplies no resource selector.
 Every call of a platform implementation on the API of its platform names the identity that requests it and the binding that it acts on.
 The platform implementation resolves the binding through the Project Service for each call on the API.
 Custody follows the authorization check.
-A credential stays inside the daemon.
+A credential stays inside the server.
 The platform connector holds no authority of its own.
 
 The [action performer](worker-service.vocabulary.md#action-performer) requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
@@ -433,7 +433,7 @@ A platform call that does not succeed reports one of four [result classes](worke
 A platform implementation retries a read on a transport error.
 It never retries a write on an unknown outcome.
 
-The daemon runs one [MCP server](worker-service.vocabulary.md#mcp-server).
+The server runs one [MCP server](worker-service.vocabulary.md#mcp-server).
 The MCP server is one form of the API.
 It serves a native agent and an external harness.
 A native agent presents the execution identity of the execution that hosts it.
@@ -458,7 +458,7 @@ A platform implementation decodes a delivery of its platform into the event type
 The decoding performs no operation on the API.
 The Scheduler Service calls that decoding.
 
-The platform connector, the action performer and the MCP server are daemon components.
+The platform connector, the action performer and the MCP server are server components.
 The [trust boundary](worker-service.vocabulary.md#trust-boundary) of this page is their only containment.
 Another git platform requires one platform implementation, its permitted read methods, a platform value and the corresponding behaviour of the action performer.
 It changes no other rule.

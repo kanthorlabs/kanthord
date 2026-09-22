@@ -32,10 +32,10 @@ The Project Service owns that table through custody, and a binding names one of 
 
 The constraints are below.
 
-- The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules, so a binding identity is unique across the daemon and satisfies the rule of `project-service.md` that it is unique inside its project.
+- The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules, so a binding identity is unique across the server and satisfies the rule of `project-service.md` that it is unique inside its project.
 - `project_binding.current_revision` carries a composite foreign key to `project_binding_revision`, whose own real key is the pair of the binding and the revision under a unique index.
 - `project_binding.resource_identity` names the resource that the binding allocates, and a unique index over `project_id` and `resource_identity` enforces the cardinality of the kind. The section below gives its form. A worker binding holds no resource identity, because a project holds any number of bindings of one worker, and SQLite treats two absent values as distinct. `kind` stays a plain column that the validation reads.
-- The primary key of `project_client_identity` is `id`, which is the client identity itself. That identity is unique across the daemon, because the Gateway Service parses a Basic credential that carries no project.
+- The primary key of `project_client_identity` is `id`, which is the client identity itself. That identity is unique across the server, because the Gateway Service parses a Basic credential that carries no project.
 - A credential reference and a reference to another binding sit inside `config`, and the write validates each one against `project_binding`. SQLite enforces no foreign key inside JSON.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](viewer.html?p=architecture.impl.md).
@@ -100,7 +100,7 @@ A rejected configuration prevents use, so a resolution that fails validation ref
 
 ## The worker template registry
 
-A worker template is a static module of the daemon.
+A worker template is a static module of the server.
 The registry maps a worker name to its template, and it loads no runtime plugin.
 A template declares its agents, the default configuration of each agent, the options that a project overrides and the constraint of a whole configuration.
 The template expresses the options as a `zod` schema and the constraint as a `superRefine` of that schema.
@@ -137,7 +137,7 @@ The two functions are the whole validation of a credential reference, and neithe
 `remote_identity` holds one string in three colon-separated parts, `<platform>:<identity kind>:<identifier>`.
 The identifier is the login, the slug or the path that the remote displays, and no numeric identity.
 The identity kind holds `user`, `organization` and `repository` in the first version, and a new platform adds its own values.
-The daemon never asks the remote to confirm the value, so the field records an intent that a human wrote and that a human reads when selecting a record.
+The server never asks the remote to confirm the value, so the field records an intent that a human wrote and that a human reads when selecting a record.
 The values of the first version are below.
 
 - `github:user:ulrich` for a user key or a classic personal access token of that account.
@@ -185,13 +185,13 @@ Custody exposes `use(grant, request)`.
 The request names the operation and its parameters, and it names no destination.
 Custody derives the destination from the binding that the grant checked, so a caller reaches no remote of its own choice.
 Custody performs the operation, and it returns the result of the operation and no material.
-The material never leaves the daemon.
-A child process that the daemon spawns, configures and reaps is part of the daemon, so the material that reaches `git` stays inside the daemon.
+The material never leaves the server.
+A child process that the server spawns, configures and reaps is part of the server, so the material that reaches `git` stays inside the server.
 The material enters no log record, no workspace file, no transcript, no tool result and no error body.
 `pino` redacts the paths of the material, and a test asserts each path.
 Custody fills its plaintext buffer with zeroes when the operation returns.
 That cleanup is best effort, because a parsed string, a `KeyObject` and a cached token outlive the buffer in this runtime.
-The trust boundary of the host, which [worker-service.impl.md](viewer.html?p=worker-service.impl.md) owns, is a disposable host of the operator or a container around the daemon.
+The trust boundary of the host, which [worker-service.impl.md](viewer.html?p=worker-service.impl.md) owns, is a disposable host of the operator or a container around the server.
 Custody defends the material against a record of the system, and it defends nothing against a party that controls that host.
 
 ## The network git operations
@@ -200,7 +200,7 @@ Custody performs a network git read and a network git write through the reposito
 Custody requires git 2.40 or later and OpenSSH 9.0 or later on the host, and it stops the start when the host holds neither.
 It passes no secret on the command line of a child, because the command line of a process is readable by every user of the host.
 
-Under the HTTPS transport form, custody sets `GIT_ASKPASS` in the environment of the git child to a helper of the daemon, and it passes the token in that environment.
+Under the HTTPS transport form, custody sets `GIT_ASKPASS` in the environment of the git child to a helper of the server, and it passes the token in that environment.
 The helper prints the token for the password prompt and the account name for the username prompt.
 The helper writes no file and it reaches no socket.
 
@@ -213,8 +213,8 @@ It bounds the size of a packet and the lifetime of the socket, and it accepts ev
 It signs with `crypto.sign` over the key that `crypto.createPrivateKey` loads from the PKCS#8 plaintext.
 Custody stores PKCS#8 and accepts no OpenSSH private-key file, so the entry of a key converts the file before the store holds it.
 Custody writes the public key of the record to the per-operation subdirectory, and it sets `IdentityFile` to that file beside `IdentitiesOnly=yes`, because `IdentitiesOnly=yes` alone excludes a key of the agent.
-It sets `UserKnownHostsFile` to a file of the data directory that the daemon owns, and it sets `StrictHostKeyChecking=accept-new`.
-The private key therefore never reaches a file, so no key sits in the workspace and no key sits in the home directory of the daemon.
+It sets `UserKnownHostsFile` to a file of the data directory that the server owns, and it sets `StrictHostKeyChecking=accept-new`.
+The private key therefore never reaches a file, so no key sits in the workspace and no key sits in the home directory of the server.
 
 ## The platform action
 
@@ -247,7 +247,7 @@ The Project Service therefore returns a client secret once, which `project-servi
 ## The verification of a delivery
 
 The delivery route is `/hooks/<binding id>`, inside the path group that [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) reserves.
-The path names the binding, because a signature does not say which source sent the delivery, and a binding identity is unique across the daemon.
+The path names the binding, because a signature does not say which source sent the delivery, and a binding identity is unique across the server.
 The path holds no secret.
 
 Custody exposes `verifyDelivery(sourceBindingId, bytes, headers)`.

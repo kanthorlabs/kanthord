@@ -186,7 +186,7 @@ The holding of the secret material of a resource credential behind a protected f
 The credential store holds an SSH key behind the protected facility.
 An execution requests a network git write.
 The facility checks the binding of the project, then it consults custody.
-No credential leaves the daemon, so the execution holds no credential.
+No credential leaves the server, so the execution holds no credential.
 Holding the repository binding does not confer custody of the key.
 
 ## protected facility
@@ -208,7 +208,7 @@ The protected facility refuses an execution operation on that repository, becaus
 The Project Service enforces system authorization.
 
 The Gateway Service authenticates `ulrich` and passes the human identity of `ulrich` to a downstream service.
-The Project Service authorizes that human identity for an operation on any project of the daemon.
+The Project Service authorizes that human identity for an operation on any project of the server.
 
 ## credential authority
 

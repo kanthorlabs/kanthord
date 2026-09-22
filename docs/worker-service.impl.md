@@ -13,7 +13,7 @@ A ruling that names a package, a product or a version is deliberate, and a chang
 The first version supplies the workers `general@1` and `reviewer@1`.
 The workers `claude@1` and `opencode@1` follow with the registration of an externally hosted instance, and `tdd@1` is postponed to phase 2.
 The native agent `swe@1` of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
-The daemon gives pi its own directories.
+The server gives pi its own directories.
 It disables the discovery of user extensions, skills, prompt templates and themes.
 It uses an in-memory session manager.
 It disables the version check, the install telemetry and the provider catalog refresh.
@@ -27,7 +27,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 ## Prompt composition
 
-The prompt composer resolves the global prompt from the daemon configuration, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
+The prompt composer resolves the global prompt from the server configuration, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
 It resolves the project prompt from the repository binding, then `AGENTS.md` of the workspace root, then `CLAUDE.md` of the workspace root.
 For an evaluation method that resolution stops at the repository binding, and the composer reads no agent file of the workspace.
 It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
@@ -58,8 +58,8 @@ Environment hygiene of the pi process belongs to the same mechanism.
 
 The tool table of a native agent holds three sources.
 The first source is the pi built-in tools: `swe@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls.
-The second source is kanthord's own tools, which the daemon serves through its MCP server.
-An external harness reaches the same server, and pi reaches it as a tool source.
+The second source is kanthord's own tools, which the server serves through its MCP server.
+An external harness reaches the same MCP server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the three sources.
@@ -80,22 +80,22 @@ An epic decides that form for each platform.
 ## Repository connector
 
 The git CLI performs the network git read and the network git write.
-The daemon serves a credential helper for one operation.
+The server serves a credential helper for one operation.
 The credential helper writes no credential to a file in the workspace.
 
 ## Action performer
 
 One internal function implements the action performer.
 The evaluation method of `reviewer@1` and the MCP tool both call that function.
-A per-execution-identity mutex serializes invocations inside the daemon.
-The mutex establishes the no-redispatch invariant inside one daemon process only.
-A durable dispatch record that survives a daemon restart is the B9 item W2, and it is an epic decision.
+A per-execution-identity mutex serializes invocations inside the server.
+The mutex establishes the no-redispatch invariant inside one server process only.
+A durable dispatch record that survives a server restart is the B9 item W2, and it is an epic decision.
 The action performer creates a fresh clone through the repository connector for a network git write.
 It removes that checkout after the call.
 
 ## MCP server
 
-The MCP v2 server in [Tool table](#tool-table) is the one MCP server of the daemon.
+The MCP v2 server in [Tool table](#tool-table) is the one MCP server of the server.
 An external harness connects over HTTP with its client identity and client secret.
 The first version approves two read methods of the GitHub implementation.
 
@@ -118,7 +118,7 @@ The budget of a turn count and a wall time is enforced on pi turn events and by 
 
 ## Trust boundary
 
-The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the daemon.
+The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the server.
 
 ## Traces
 

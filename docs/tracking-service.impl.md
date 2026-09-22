@@ -30,7 +30,7 @@ The file appears with the working implementation of the tracer, so the no-op pha
 Its migration record follows the runner contract of [architecture.impl.md](viewer.html?p=architecture.impl.md).
 The no-op phase opens no telemetry file, so it validates no history, and a telemetry file that a working-tracer release left stays untouched.
 The schema holds the span and the telemetry text.
-A bulk import runs in bounded transactions, so a concurrent write of the daemon never waits for a whole import.
+A bulk import runs in bounded transactions, so a concurrent write of the server never waits for a whole import.
 The retention sweep deletes in bounded batches for the same reason.
 A separate database file separates the locking and the retention sweep of telemetry, and it separates no processor, no memory and no disk bandwidth.
 
@@ -74,7 +74,7 @@ A batch carries a bounded record count and a bounded byte count.
 ## Span persistence
 
 A root span of an execution stays open for hours.
-The implementation persists the root span when the daemon opens it, before a child span exists.
+The implementation persists the root span when the server opens it, before a child span exists.
 It persists the start of a span when the start arrives, and the end of a span when the end arrives.
 A reader reads a span that holds a start and no end.
 No reader waits for the root span.

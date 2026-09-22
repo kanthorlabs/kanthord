@@ -307,7 +307,7 @@ The readiness condition of Outcome and completion admits an evaluation claim.
 An executor requests no evaluation.
 Under kanthord's own harness a reviewer is a worker binding of its project.
 
-Under the workers that the daemon hosts, the execution that carries out the steps of a node never writes the assessment of that node, because `general@1` declares `Available` and `reviewer@1` declares `Waiting` and `External.Requested`.
+Under the workers that the server hosts, the execution that carries out the steps of a node never writes the assessment of that node, because `general@1` declares `Available` and `reviewer@1` declares `Waiting` and `External.Requested`.
 The Mission Service supplies the criteria and the evidence.
 Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.

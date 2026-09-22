@@ -10,7 +10,7 @@ This file is not a design document, and `tracking-service.md` stays the single s
 
 ## telemetry
 
-Telemetry records what the daemon observes about its operations, and what an external harness asserts about its own.
+Telemetry records what the server observes about its operations, and what an external harness asserts about its own.
 Telemetry for project `Billing` contains the trace of an execution.
 
 ## trace
@@ -105,7 +105,7 @@ The set is closed and it holds two values.
 ## retention
 
 Retention is the period for which the Tracking Service holds a record form.
-The daemon holds a span of project `Billing` for ninety days and a telemetry text of the same trace for seven days.
+The server holds a span of project `Billing` for ninety days and a telemetry text of the same trace for seven days.
 
 ## acknowledgement
 
