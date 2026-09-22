@@ -1,16 +1,26 @@
 ---
-title: Overview Implementation
+title: Architecture Implementation
 ---
 
-# Overview Implementation
+# Architecture Implementation
 
-This file holds the implementation rulings for the mechanisms that realize [overview.md](viewer.html?p=overview.md).
-This file is not a design document, and `overview.md` stays the single source of truth, so a mechanism here never overrides a rule there.
+This file holds the implementation rulings for the mechanisms that realize [architecture.md](viewer.html?p=architecture.md).
+This file is not a design document, and `architecture.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
 A change to it changes the startup of the daemon.
 
 The implementation adds no package.
 Node.js 24.15.0 and the installed set satisfy every requirement.
+
+## The runtime
+
+- The supported range of Node.js is `>=24.15.0 <25`. The floor is the version that the installed set needs, and the ceiling excludes a major that no human tested.
+- A later major enters the range by a deliberate edit after a test.
+- `engines` of `package.json` carries the same range. Its enforcement depends on the package manager and its settings, so it is a declaration and no gate.
+- The gate is the launcher of the `kanthord` bin. It compares `process.versions.node` with the range, it prints one line to standard error for a version outside it, and it exits with a non-zero status.
+- The launcher imports the real entry with a dynamic import, because a static import loads a module before the comparison runs.
+- The launcher uses only syntax that a runtime below the floor parses, so a rejection reaches a human instead of a syntax error.
+- Every supported launch route passes through the launcher. A route that runs a source entry directly is a development convenience and no supported route.
 
 ## The configuration file
 
@@ -42,14 +52,28 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - A database uses the data directory, and the account store of the Gateway Service is such a database.
 - A log, a history and a session record use the state directory.
 - A rebuildable artifact uses the cache directory, because the deletion of that directory costs nothing.
-- The daemon writes no file in the state directory and no file in the cache directory today.
+- The state directory holds the per-operation socket directory of custody, which [project-service.impl.md](viewer.html?p=project-service.impl.md) rules, and it holds the log file under the `file` destination.
+- The daemon writes no file in the cache directory today.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
+
+## The file index
+
+- Every file that the daemon owns appears below with the sibling that holds its declaration. A row gives no mode, no schema and no retention, because the permissions section, the log section and the custody section hold those.
+- A row is a default expansion, an effective path or a path template. A variable of the specification moves a default expansion, the resolution rule of the configuration file selects an effective path, and a runtime identity completes a path template.
+- `kanthord.yaml` of the configuration directory, an effective path that this sibling declares. Its default expansion is `$XDG_CONFIG_HOME/kanthord/kanthord.yaml`, and the default of that variable makes it `~/.config/kanthord/kanthord.yaml`.
+- `kanthord.db` of the data directory with its `-wal` and `-shm` files, a default expansion of `$XDG_DATA_HOME/kanthord/kanthord.db` that this sibling declares.
+- `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](viewer.html?p=tracking-service.impl.md) declares.
+- The known-hosts file of the daemon, of the data directory, a default expansion that [project-service.impl.md](viewer.html?p=project-service.impl.md) declares.
+- `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
+- The per-operation directory of custody and the public key inside it, of the state directory, a path template that the identity of the operation completes and that [project-service.impl.md](viewer.html?p=project-service.impl.md) declares.
+- The index holds no row for the workspace root of an execution, because no page places it.
+- The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the daemon.
 
 ## The operational database
 
 - The daemon holds one operational database, the file `kanthord.db` of the data directory.
 - The Gateway Service, the Project Service, the Mission Service and the Scheduler Service use that database.
-- The Tracking Service uses its own file, and [tracking-service.impl.md](viewer.html?p=tracking-service.impl.md) rules that file.
+- The Tracking Service uses its own file, and [tracking-service.impl.md](viewer.html?p=tracking-service.impl.md) rules that file, its migration record and the phase in which it appears.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
@@ -59,9 +83,69 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The migrations run at startup, in a fixed order of the services.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
 
+## The connection and the transaction
+
+- The daemon opens each database file with `locking_mode=EXCLUSIVE`, and it sets that pragma before the first read of the file, because SQLite fixes the mode at that point.
+- It takes the write lock of each file before the migrations run.
+- A start that meets `SQLITE_BUSY` stops with a non-zero status and prints the path of the file, so one daemon owns the data directory and a second start fails instead of sharing it.
+- No external tool reads a database file while the daemon runs, so an inspection stops the daemon first.
+- The pragma set holds no `busy_timeout`, and the daemon retries no statement, because one process holds one connection to each file.
+- `foreign_keys` is `ON`.
+- `synchronous` is `FULL`, so a commit survives a crash of the operating system. The write volume of the daemon makes the cost of the added `fsync` irrelevant.
+- `journal_size_limit` is 64 MiB, so a large transaction leaves no large write-ahead log behind it.
+- Every write runs inside a `BEGIN IMMEDIATE` transaction.
+- `DatabaseSync` performs synchronous input and output, so a transaction runs inside one synchronous function and it awaits nothing.
+- One transaction holds one owner, the handler of the operation. A service function that participates in that transaction receives it as an explicit caller argument, and it opens no transaction of its own and commits none.
+- SQLite commits no remote effect together with its local transaction. One commit holds a change and its recorded answer inside the operational database alone, and it holds that answer only where the owning operation writes both inside one transaction.
+- A remote effect that succeeded before a crash needs a reconciliation that the sibling of the owning service states. This sibling settles no such recovery.
+
+## The migration
+
+- Each service holds an ordered list of migrations, numbered from 1 with no gap. A migration is a function that receives the open connection and runs its statements.
+- A published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
+- The runner validates the whole recorded history of every participating database before it applies any migration. It rejects a service that the binary does not know, a duplicate version, a gap in the recorded versions, and a recorded version above the highest version that the binary holds.
+- The uniqueness of a record is the pair of the service and the version.
+- The runner owns the transaction and the insert of the `migration` row, so one commit holds a migration and its record.
+- A migration changes its own database alone. It performs no filesystem write, no network call and no write through a second connection, because a rollback of SQLite undoes none of those.
+- A migration of one service reads no migration state of another service, so the runner needs no dependency resolution.
+- The migration is forward only, and the daemon holds no reverse migration. A committed migration stays committed after a later failure, so the next start resumes from that prefix.
+- A downgrade needs a consistent backup that a human took before the upgrade.
+- That backup captures the effective configuration file and the whole data directory, with the daemon stopped, and neither source changes during the capture.
+- A clean close checkpoints the write-ahead log and can remove the sidecar files, and `-shm` is reconstructible. A sequential copy of three live files is not consistent, so the contract names the stopped daemon and no list of files.
+- The function form serves a data migration that runs cryptography, for example an upgrade of the envelope or of a label under an unchanged `masterKey`, where the old key stays derivable. It implies no rotation of a secret.
+
+## The identity and the time
+
+- A timestamp that the daemon defines holds a SQLite `INTEGER` of Unix milliseconds in UTC, and its field of the RESTful API holds a JSON integer.
+- The value fits `Number.MAX_SAFE_INTEGER`, so no field of the daemon uses a `BigInt`.
+- No service overrides that representation.
+- One shared scalar carries the rule, and a schema that a service owns composes that scalar. The emitted description of the scalar names the epoch and the unit, because an integer alone does not distinguish a second from a millisecond.
+- Neither a timestamp nor an identity establishes a causal order. A millisecond reduces a tie and removes none, a correction of the wall clock reverses an order, and a ULID promises no order inside one millisecond.
+- An operation that needs a causal order uses the revision or the ordering contract of the service that owns the record.
+- A duration uses a monotonic clock, and never the difference of two wall-clock timestamps.
+- An identity that the daemon generates for an entity of its own is a ULID in its canonical 26-character uppercase form, stored as text, and `ulid` at 3.0.2 generates it.
+- That convention covers an opaque entity identity alone. It excludes a protocol-defined identity, a natural key and a composite key.
+- A protocol-defined representation stays with its protocol, and the sibling of the service that speaks that protocol names the representation.
+- A remote identity follows the normalization of [project-service.impl.md](viewer.html?p=project-service.impl.md), which derives it from the binding configuration on every write.
+
+## The canonical form and the digest
+
+- Canonical JSON is [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
+- The daemon sorts the member names of an object by UTF-16 code unit and emits the members itself. It writes the opening brace, then the quoted name, the colon, the canonical value of the member and the separating comma, then the closing brace.
+- The daemon never rebuilds an object and calls `JSON.stringify` on it, because JavaScript enumerates an array-index name numerically, so a member name of `10` reaches the output after a member name of `2` and the bytes stop conforming.
+- It uses `JSON.stringify` for a string and for a finite number, because that function already produces the form that the specification requires.
+- The accepted domain is JSON data. It admits an object, an array, a string, a finite number, a boolean and `null`.
+- It rejects `NaN`, `Infinity`, `undefined`, a lone surrogate in a string or in a member name, a sparse array, and an object that carries `toJSON`.
+- The function accepts a validated JSON value and no JSON text, because `JSON.parse` discards a duplicate member name before a check can see it. The ingress validation of a route owns the text.
+- A digest reads exact bytes. Canonical JSON reaches it as UTF-8, with no byte-order mark and no trailing newline.
+- The algorithm is SHA-256 through `crypto.createHash`, and the text rendering of a digest is lower-case hexadecimal.
+- This convention replaces no binary credential hash of [project-service.impl.md](viewer.html?p=project-service.impl.md) and no protocol-defined representation.
+- [mission-service.md](viewer.html?p=mission-service.md) stays authoritative for the content address of evidence, and this section states no second algorithm for it.
+
 ## The credential table
 
 - `credential` holds one record for one secret, and it holds no project identity, because a record serves more than one project.
+- Several services use a credential, and each one reaches a record through the Project Service, so the envelope of this table is a daemon-wide mechanism and no mechanism of one service. The Project Service authorizes the use of a record.
 - The column `type` is an opaque string at this level. The service that registers a type owns its meaning, and [project-service.impl.md](viewer.html?p=project-service.impl.md) names the types of the Project Service.
 - The column `remote_identity` records the identity that the secret acts as at its remote. The daemon enforces nothing from it, so it sits outside the authenticated data below.
 - `crypto.createCipheriv` encrypts the material with AES-256-GCM, a 12-byte nonce from `crypto.randomBytes` and a 16-byte tag.
@@ -82,13 +166,15 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 ## Precedence
 
-- A non-secret value resolves in this order: the command-line option, the environment variable, the file, then the default of the schema.
-- The CLI parses the command line with `commander` at 15.0.0 and applies an override with `convict.set()`, so one parser reads the command line.
+- A value resolves from the file, then from the default of the schema.
+- No environment variable and no command-line option sets a value. The environment locates the file and its directories, and the file configures the daemon.
+- The CLI parses the command line with `commander` at 15.0.0, and `--config` is its one option that reaches the configuration.
+- `KANTHORD_CONFIG` and the four variables of the specification keep their role, because each one locates a path and sets no value.
 
 ## One source for a secret
 
-- A secret field declares no environment binding, no command-line override and no usable default.
-- The file is the only source of a secret of the daemon.
+- A secret field declares no usable default, so no default supplies a secret.
+- The file is the only source of a value, so it is the only source of a secret.
 - An absent secret field stops the start, so no other source supplies a secret silently.
 
 ## The daemon writes no configuration file
@@ -103,12 +189,22 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 ## Permissions and the opened file
 
-- The configuration file holds mode `0600`, the configuration directory holds mode `0700`, and the data directory holds mode `0700`.
-- The daemon opens the file with the `O_NOFOLLOW` flag, checks the mode with `fstat` on that descriptor, and reads the same descriptor.
-- No replacement of the file happens between the check and the read.
-- The daemon requires a regular file that the running user owns.
-- A wider mode stops the start.
-- The checks apply on a POSIX filesystem, and the daemon states that assumption.
+- A regular file that the daemon owns holds mode `0600`, a directory holds mode `0700`, and a socket holds mode `0600`.
+- The owner of every such object is the running user, and a setuid bit, a setgid bit and a sticky bit are rejected.
+- The mode is exact, so a mode wider than the stated mode and a mode narrower than it both stop the start.
+- The audit set names each target with its expected type. It holds the configuration file, the configuration directory, the data directory, the state directory, and every file that the expansion of a row of the file index gives, including the `-wal` and the `-shm` file of a database.
+- The daemon infers the expected type from nothing that it finds, so a directory at the path of a database stops the start even when that directory holds a valid directory mode.
+- The audit uses `lstat`, so a symlink at an audited path stops the start.
+- Absence is accepted only where the owning mechanism permits a creation or a nonexistence. The configuration file must exist.
+- An operation reuses no existing per-operation directory, so a directory that a crash left behind authorizes no reuse and blocks no start.
+- The daemon establishes umask `077` before it creates any owned object and before it launches any child, and it changes that umask never during an operation.
+- A call that receives a mode is still masked, so `open` with `0600` and `mkdir` with `0700` both survive that mask.
+- Where a call takes a mode, the daemon passes it. Where a call takes no mode, the daemon names the barrier: it validates an existing database file before it opens the database, and it checks the created file and each sidecar at the point where that file first appears.
+- The daemon opens the configuration file with the `O_NOFOLLOW` flag, checks the mode with `fstat` on that descriptor, and reads the same descriptor, so no replacement of that file happens between the check and the read.
+- The logger receives the same descriptor that passed its validation, opened for append and without truncation, so the logger opens no pathname of its own.
+- A failed validation of a reopen of the log starts the stop, and the daemon changes no configured destination of its own.
+- The daemon repairs no owned object, so it changes no mode and no owner of an object that it did not create in that step.
+- The daemon checks an audited object and not the ancestry of its path. An untrusted ancestor, and a concurrent replacement of a directory of that path, sit outside the supported configuration. The checks apply on a POSIX filesystem, and the daemon states that assumption.
 
 ## Reload
 
@@ -117,27 +213,109 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 ## The sections of the file
 
-- The file holds the shared sections `http` and `log`, and one section for each service.
+- The file holds the shared section `log` and the field `masterKey`, and one section for each service, named by that service.
 - The schema holds no directory field, because the specification and its variables carry that override.
-- This sibling names the fields of the shared sections, and the implementation sibling of a service names the fields of the section of that service.
+- This sibling names the fields of the shared section, and the implementation sibling of a service names the fields of the section of that service.
+- This sibling indexes every field of every section, and the owning sibling holds the format and the default of each field that it declares.
 - This is the configuration of the daemon process.
   It is not the project configuration that `overview.md` describes.
 
-The shared sections hold the fields below.
+This sibling declares the fields below.
 
-- `http.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts a loopback address only.
-- `http.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
-- `http.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
-- `http.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
 - `log.level` holds the level of the `pino` logger, as one of `trace`, `debug`, `info`, `warn`, `error` and `fatal`, and it defaults to `info`.
+- `log.destination` holds the destination of the log, as one of `stderr` and `file`, and it defaults to `stderr`.
 - `masterKey` holds 32 bytes encoded in base64, it carries `sensitive: true`, it holds no default, and the format rejects a value that decodes to another length.
 
 `masterKey` is the one secret of the daemon.
 
 - A service derives every key that it needs from `masterKey`, and it uses `masterKey` directly for nothing.
 - The derivation is `crypto.hkdfSync` with SHA-256, an empty salt and one label for each purpose.
-- A label is unique across the daemon, and the implementation sibling of a service names the labels of that service.
-- The Gateway Service derives its JWT signing key, and the Project Service derives its record cipher key and every webhook secret.
+- A label is unique across the daemon.
+- The implementation sibling of a service names a label of that service, and this sibling names a label of a daemon-wide mechanism.
+- The Gateway Service derives its JWT signing key, and the Project Service derives every webhook secret of a source binding.
+- The daemon derives the record cipher key of the `credential` table, because the envelope of that table is a daemon-wide mechanism.
+
+## The field index
+
+- Every field of the configuration file appears below with the sibling that owns it. A row gives no format and no default.
+- A dotted path determines the nesting of the document, so the index determines the shape of the file.
+- `kanthord config init` prints the whole document with every default, so this sibling holds no example.
+- `masterKey`, which this sibling declares.
+- `log.level`, which this sibling declares.
+- `log.destination`, which this sibling declares.
+- `gateway.bind`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
+- `gateway.port`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
+- `gateway.allowedHosts`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
+- `gateway.allowedOrigins`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
+- A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
+
+## The log
+
+- `pino` at 10.3.1 writes one JSON record for each line. The daemon installs no pretty printer, and a human pipes the output through a printer of their own.
+- Under the `stderr` destination the daemon writes every record to standard error.
+- Standard output carries one-time human text alone, so no record of the log shares a stream with it.
+- Under the `file` destination the daemon appends every record to `kanthord.log` of the state directory through `pino.destination`, and that file holds mode `0600`.
+- The schema holds no path field for the log, because the state directory of the specification carries that override.
+- A destination that the daemon cannot open stops the start, and the start prints the resolved path.
+- `SIGHUP` makes the daemon reopen the destination. The reopen opens the path with `O_NOFOLLOW`, `O_CREAT`, append and mode `0600`, and the permissions section rules the validation of that descriptor.
+- The daemon rotates no file, it deletes no file and it states no retention. The operator owns the rotation and the retention of the log.
+- The log is operational, and telemetry is the product data of the [Tracking Service](tracking-service.md). No record of the log is telemetry, and no telemetry record reaches the log.
+
+## The start and the stop
+
+The start runs the steps below in this order. Each step names the sibling that owns its mechanism, and this sibling owns the order alone.
+
+- Resolve the path of the configuration file, then read that file.
+- Validate the document with `validate({allowed: "strict"})`.
+- Derive the key of each purpose from `masterKey`, where the sibling of a service owns the labels of that service.
+- Open the destination of the log.
+- Take the write lock of each database file.
+- Run the migrations, in a fixed order of the services.
+- Sweep the dead idempotency records, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
+- Register the routes of every service, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
+- Emit the OpenAPI document from the operation registry, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
+- Open the listener.
+- Seed the one human account, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
+
+The barriers of the start are below.
+
+- The migrations complete before a service reads a table.
+- Every registration completes before the emission of the document.
+- The emission completes before the daemon admits a request.
+- The listener binds before the seed prints a credential, so a printed credential implies a running daemon.
+
+A failed start exits as below.
+
+- A step that fails stops the start. The daemon prints one diagnostic, and the process exits with a non-zero status.
+- The daemon releases every resource that it acquired, in the reverse order of the acquisition. The close of a database file releases its exclusive lock.
+- A failure of one release does not skip the remaining releases.
+- A signal that arrives during the start enters this path.
+- The cleanup is no rollback. It undoes no committed transaction, so a committed seed stays, and the recovery of a lost credential stays the delete of the account row.
+
+The stop runs as below.
+
+- `SIGINT` and `SIGTERM` start the stop, and the deadline of 10 s starts with it.
+- The daemon stops the admission of a request, and that step waits for no connection to drain.
+- It cancels every waiting work pull and every MCP stream.
+- It joins the handlers in flight inside the remaining deadline.
+- The store module that owns a connection closes that connection after the join.
+- An expired deadline exits the process and closes nothing, and the exit releases every lock.
+- The stop satisfies the rule of [scheduler-service.md](viewer.html?p=scheduler-service.md), because it stops every new claim and it preserves every accepted obligation.
+
+A fatal error runs as below.
+
+- An `uncaughtException` and an `unhandledRejection` are fatal. The termination is mandatory and the diagnostic is best effort.
+- The one-process rule of [architecture.md](viewer.html?p=architecture.md) already ends every service with the process, so this states a mechanism and no new design rule.
+- The daemon installs the two hooks before it reads the configuration file and before any service initializes. A failure before the hooks exist reaches the default behaviour of Node.js.
+- The fatal path runs no stop and no failed-start release, because the state of the process is unknown.
+- An expected failure of a start step keeps the reverse-order release. An uncaught failure during the start, during that release, or during the stop takes the fatal path instead.
+- The fatal record holds fixed fields: the kind of the fatal event, the constructor name of the error, and the stack frames with the message line removed. It serializes no rejection reason, and a reason that is no `Error` contributes its type alone.
+- The record holds no request identity, because a failure of a background step has none.
+- The fatal writer uses the destination that the log already opened, with a synchronous write. A failure before that destination opened writes to standard error, which is the one exception to the destination rule.
+- A synchronous write can fail, it can write fewer bytes and it can block, and its completion is no durability. The exit follows the attempt in every case, and this sibling claims no bound on the wall-clock time of the exit.
+- The exit closes every descriptor, so it releases the exclusive lock of each database file. It rolls back no interrupted operation, because a transaction runs inside one synchronous function, so a committed write of that operation stays committed.
+- The recovery of the remaining work belongs to the owning service. [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) sweeps an in-progress idempotency record at the next start, and a route that returns a secret replays 409 and never the lost answer.
+- The daemon restarts nothing, and the process manager of the operator owns a restart.
 
 ## Secret material and the diagnostic contract
 
@@ -145,7 +323,9 @@ The shared sections hold the fields below.
 - Every secret field carries `sensitive: true`, so `convict.toString()` masks it.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
-- The review display of `config init` is the one exception, because a human reads the content before the write.
+- A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
+- Two displays hold that exception. The first is the review display of `config init`, because a human reads the content before the write. The second is the bootstrap display of [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md), because a human reads the credential of the one human account once.
+- The exception covers those two displays alone, so no diagnostic and no log record holds a secret value.
 - The CLI holds no rotation command, and the daemon rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the daemon.
 - A rotation of `masterKey` invalidates every issued JWT, so a human authenticates again. It makes every credential store record of the Project Service unreadable, and it makes every derived webhook secret stale.
@@ -174,11 +354,38 @@ The shared sections hold the fields below.
 
 ## Tests
 
-- A test covers an absent secret field, and an attempted environment override of a secret.
+- A test covers an absent secret field, and an attempted environment override of any field.
 - A test covers a mode wider than `0600`, and a symlink at the path of the file.
+- A test covers a data directory at `0755` and a database file at `0644`, and each one stops the start.
+- A test covers a directory at the path of a database, and it stops the start.
+- A test covers a symlink at an audited path of the file index, and it stops the start.
+- A test covers a reopen whose replacement holds `0644`, and it asserts the stop and no record in that file.
+- A test asserts that the logger writes through the descriptor that passed its validation.
 - A test covers a redirected review output, a declined confirmation and an existing destination.
 - A test covers a failed write, and it asserts that no partial file remains.
 - A test covers a parse error on a line that holds a secret, and it asserts that the diagnostic prints no value.
-- A test asserts that the start of the daemon and the `config validate` command create no file.
+- A test covers a `file` destination that the daemon cannot open, and it asserts a non-zero status.
+- A test covers the `stderr` destination, and it asserts that standard output receives no record of the log.
+- A test asserts that the start of the daemon and the `config validate` command create no configuration file.
+- A test asserts that a start creates no file outside the file index.
+- A subprocess test covers both fatal events, a reason that is no `Error`, a reason that holds a secret, a failure before the logger exists, a failure during the start, a failure during the stop, and a diagnostic write that fails.
+- Each of those cases asserts a non-zero status, no raw secret in the output, no invocation of the stop and no invocation of the release.
+- A subprocess test runs the launcher under a version outside the range, and it asserts a non-zero status, one line on standard error, no application module loaded and no database opened.
+- A test covers a second start against the same data directory, and it asserts a non-zero status and no change to either database file.
+- A test compares the route set of the operation registry with the path set of the emitted OpenAPI document, and it fails when the two differ.
+- A test covers a database file that the daemon cannot lock at a later step of the start, and it asserts the release of every earlier resource.
+- A test covers a listener that cannot bind, and it asserts that no credential reaches standard output.
+- A test covers a signal that arrives during the start.
+- A test covers a stop with an active MCP stream, and it asserts that the stop of the admission waits for no connection.
+- A test covers a start with an existing account and a redirected standard output, and it asserts a successful start and no credential in that output.
+- A test covers a start with an empty account table and a redirected standard output, and it asserts a non-zero status, an unchanged account table and the release of every resource.
+- A test covers an empty account table that a deleted row produced, and not only a first start.
+- A test asserts that every timestamp field of the emitted OpenAPI document composes the shared scalar.
+- A conformance set covers the canonical form of a numeric-looking member name, a nested object, the order of an array, an invalid Unicode sequence and the serialization of a number.
+- An integration test covers a binding submission that changes no configuration, and a completed idempotent replay.
+- A test upgrades a preserved fixture of an earlier release that holds rows.
+- A test restarts after a migration sequence that committed two services and failed on the third.
+- A test covers a migration that fails in its second statement, and it asserts no row of its own and no partial schema.
+- A test covers a recorded history that holds a gap, and one that holds a version above the binary.
 - A test covers the AES-256-GCM round trip of a `credential` record, a ciphertext moved between two records, and a truncated ciphertext.
 - A test covers the derivation of the cipher key, and it asserts that two labels produce two different keys.

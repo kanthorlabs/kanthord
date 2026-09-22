@@ -23,6 +23,16 @@ Every service is a module of one process.
 The Hono router dispatches each request to the handler of the service that owns the requested operation.
 The handler is a module-level function, and each service registers its routes on the application at startup.
 
+## Configuration
+
+[architecture.impl.md](viewer.html?p=architecture.impl.md) holds the configuration file, its field index, and the rule that the file is the only source of a value.
+The Gateway Service owns the section `gateway`, and it declares the fields below.
+
+- `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts a loopback address only.
+- `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
+- `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
+- `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
+
 ## Access policy
 
 Every registered route declares one access policy value: `human`, `client`, `public` or `delivery`.
@@ -59,10 +69,9 @@ An increment of `token_version` invalidates every earlier token of the account, 
 ## The signing key
 
 The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v1")`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
-[overview.impl.md](viewer.html?p=overview.impl.md) holds the field `masterKey` of the configuration file and the rule that a service derives its keys from it.
+[architecture.impl.md](viewer.html?p=architecture.impl.md) holds the field `masterKey` of the configuration file and the rule that a service derives its keys from it.
 The Gateway Service derives the key at startup, and it writes no secret material to the account store.
-The configuration directory holds mode 0700, and the configuration file holds mode 0600.
-The data directory holds mode 0700, and the database file with its `-wal` and `-shm` files hold mode 0600.
+[architecture.impl.md](viewer.html?p=architecture.impl.md) rules the mode of the configuration file, of its directory, of the data directory and of every database file.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
 
 ## Password hashing
@@ -74,7 +83,7 @@ The check compares with `timingSafeEqual`.
 
 ## The account store
 
-The account store sits in the operational database, and [overview.impl.md](viewer.html?p=overview.impl.md) rules that file and its driver.
+The account store sits in the operational database, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules that file and its driver.
 The Gateway Service owns one table, `gateway_account(id, username, credential, token_version, created_at)`.
 It reads no table of another service.
 `DatabaseSync` performs synchronous input and output, so the check of each authenticated request is one lookup by primary key.
@@ -84,8 +93,11 @@ This sibling states no latency figure.
 
 At each start the daemon reads the `gateway_account` table in one `BEGIN IMMEDIATE` transaction.
 When the table is empty, the daemon creates exactly one human account.
+It first applies the terminal check of [architecture.impl.md](viewer.html?p=architecture.impl.md), because the seed displays a secret value.
+A failed check stops the start, and the seed generates no password and inserts no row.
 It generates the password with `crypto.randomBytes` and stores the argon2id record.
 It prints the username and password once to standard output.
+The seed reads no input, so it requires no terminal on standard input.
 The daemon prints the password at no later start.
 The daemon exposes no registration route and no account management route, and it holds exactly one human account.
 A human who loses the password deletes the account row and restarts the daemon, which seeds the account again.
@@ -120,7 +132,7 @@ One `respondError()` function produces every failure body, in the shape `{"error
 `app.onError`, `app.notFound`, the authentication middleware, the host check, the body limit, the validation middleware and the timeout return through it.
 `app.onError` covers no middleware that returns its own response.
 `hono/request-id` assigns the request identity.
-`pino` at 10.3.1 binds a child logger to the request identity, the method and the route.
+`pino` binds a child logger to the request identity, the method and the route.
 It logs one record at entry and one at exit with the status and the latency.
 `pino` redacts an enumerated list of paths, and a test asserts each path.
 
@@ -142,7 +154,7 @@ It does so because a browser page resolves a hostname to the loopback address.
 `hono/cors` permits the configured origins, and it uses no credentialed mode.
 The daemon adds no CSRF middleware, because no cookie authenticates a request.
 
-## Cancellation and shutdown
+## Cancellation
 
 The Gateway Service builds one `AbortSignal` for each request.
 It derives the signal from the client disconnect and the process shutdown controller.
@@ -153,17 +165,17 @@ The default timeout is 30 s, and a route of `/auth/*` takes 10 s.
 The work pull route takes 120 s, and its wait window is 90 s, so the handler answers before the timeout.
 A route of the MCP prefix takes 900 s, because a call of the MCP server runs a tool of the Worker Service.
 `hono/timeout` returns 504 and cancels no work, so a mutation route is idempotent or it completes.
-At SIGINT or SIGTERM, the daemon stops the listener.
-It aborts every waiting work pull and every MCP stream.
-It joins the handlers in flight and closes the databases after the join.
-The drain window is 10 s, and the process exits without closing the databases when a handler does not join inside it.
+[architecture.impl.md](viewer.html?p=architecture.impl.md) holds the stop of the daemon, which cancels every waiting work pull and every MCP stream through the process shutdown controller.
 
 ## Idempotency of a mutation
 
 Every mutation route requires the `Idempotency-Key` header, which holds a ULID that the client generates.
-`ulid` at 3.0.2 generates that value.
+`ulid` generates that value, and that identity is no identity that the daemon generates for an entity of its own.
 The operation registry declares a route as a mutation, so the middleware runs on that route alone.
 The Gateway Service owns the table `gateway_idempotency(key, route, fingerprint, status, response, created_at)`.
+The fingerprint is the digest of the canonical JSON of one envelope, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules that form and that digest.
+The envelope names the operation of the registry, the path parameters, the query and the body, each one after its validation, and it states the treatment of an absent field, of a default and of a repeated query value.
+It holds exactly the validated data that determines the operation, so an input that changes the effect sits inside the envelope or the contract of that route is forbidden.
 The middleware inserts the key with the state in progress before the handler runs.
 A repeat of a key that holds the state in progress returns 409.
 A repeat of a completed key returns the recorded status and the recorded body, and the handler runs never.
@@ -172,7 +184,7 @@ The middleware records the status and the body after the handler completes.
 A handler that writes the operational database records the status and the body inside the transaction of its own write, so one commit holds the change and its recorded answer.
 A route that returns a secret records a redacted body, and a repeat of its key returns 409 and no secret.
 A timeout leaves the key in progress, so a retry of the client receives 409 until the operation completes.
-The daemon runs as one process, so a record that holds the state in progress after a restart names a dead operation.
+The daemon runs as one process, which [architecture.impl.md](viewer.html?p=architecture.impl.md) enforces with the exclusive locking mode of each database file, so a record that holds the state in progress after a restart names a dead operation.
 A sweep at startup deletes such a record, and the operation of that record never committed, because a commit records its answer.
 
 ## Tests

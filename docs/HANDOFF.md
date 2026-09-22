@@ -1,15 +1,15 @@
 # Handoff
 
-Open work as of 2026-09-20.
+Open work as of 2026-09-22.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
 ## Phase 2
 
 Every item below waits for the completion of the design set. Ulrich moved them here on 2026-09-20.
 
-### Overview
+### Architecture
 
-- [ ] Added 2026-09-21 by Ulrich. Provide a rotation mechanism for a secret that the configuration file holds. Ulrich ruled no rotation for the first version, so a rotation stays a hand edit of the file and a restart of the daemon.
+- [ ] Added 2026-09-22. Rule the command surface of the `kanthord` binary. The pages establish the binary and the `config` group, and they establish no `kanthord serve`. An explicit `serve`, a default invocation and both are live options, and the division of a global command name from a service-owned group needs a rule. `architecture.impl.md` rules the `config` group and the launcher, and the sibling of a service rules its own group. The debate of 2026-09-22 found this decision inside a batch that Aelita proposed to write without a ruling.
 
 ### Gateway Service
 
@@ -18,6 +18,9 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Project Service
 
+- [ ] Added 2026-09-22. **Defect.** `project-service.impl.md` states that the per-operation socket holds mode `0600`. A Unix socket that Node.js creates under umask `077` holds `0700`, which a check confirmed, because `listen` takes no mode argument. The sibling needs the whole custody creation sequence: it creates and validates a fresh operation directory, creates and validates the public key, binds the socket and sets and verifies its mode before it publishes the path, and establishes and validates the known-hosts file before it launches `ssh`, and it states whether `ssh` may recreate that file. `architecture.impl.md` rules the per-kind mode and the barrier, and this sequence is the custody instance of it. Ruled 2026-09-22 by Ulrich: the first version supports both the SSH and the HTTPS transport form, so the `ssh key` credential type, the ssh-agent implementation and the socket all stay, and this defect needs its fix. Aelita proposed dropping the type to delete the agent, the socket, the per-operation directory, the public-key file and the known-hosts file, and Ulrich rejected that.
+- [ ] Added 2026-09-22. Decide who removes an orphaned per-operation directory of custody. `project-service.impl.md` removes it when the operation ends, and a fatal exit of the daemon ends no operation, so the directory and the public key inside it stay in the state directory. This item stands, because Ulrich ruled on 2026-09-22 that both transport forms stay.
+- [ ] Added 2026-09-22. Declare the basenames that custody needs: the known-hosts file of the data directory, the per-operation directory of the state directory, the socket inside it and the public-key file inside it. `project-service.impl.md` names none of them, and the file index of `architecture.impl.md` references them.
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping.
 - [ ] Added 2026-09-18 by Ulrich. Design how custody stores the credentials and the secrets that the platform-specific implementations use: the credential types of each platform, GitHub, Slack, Telegram, Jira, the storage of the secret material at rest and its key, the OAuth refresh, and how a platform-specific implementation receives the secret at the moment of the operation without the secret leaving the daemon. The Project Service owns custody, so the answer goes to `project-service.md` for the rule and to `project-service.impl.md` for the mechanism. Ruled 2026-09-21 by Ulrich: `project-service.impl.md` rules custody for GitHub alone. It rules the platform-independent mechanism, the record shape, the storage of the secret material at rest with its key, the OAuth refresh, and the delivery of a secret to one operation. Slack, Telegram and Jira stay open, and each one registers its platform entry when its design lands. Ruled 2026-09-21 by Ulrich: a child process that the daemon spawns is part of the daemon, so custody passes a platform token to the `git` child and the rule that no credential leaves the daemon holds.
@@ -31,6 +34,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Worker Service
 
+- [ ] Added 2026-09-22. Place the workspace root of an execution. No page states its directory, so the file index of `architecture.impl.md` holds no row for it. The earlier candidate, the cache directory, rests on the claim that a deletion costs nothing, which an uncommitted change or locally held evidence can contradict.
+- [ ] Added 2026-09-22. Declare the configuration field of the global prompt. `worker-service.impl.md` states that the prompt composer resolves the global prompt from the daemon configuration, and it declares no field. The field index of `architecture.impl.md` exposed the gap. The name, the format and the default are a Worker Service decision.
 - [ ] POSTPONED 2026-09-18 by Ulrich to phase 2. The first version supplies the workers `general@1` and `reviewer@1`. Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 
