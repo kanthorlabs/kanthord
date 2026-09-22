@@ -7,7 +7,7 @@ title: Gateway Service
 ## Scope
 
 This document describes the Gateway Service.
-It describes the RESTful API of the server, the authentication of a human, and the [human identity](overview.vocabulary.md#human-identity) that the system passes to a service when a human makes a request.
+It describes the RESTful API of the server, the authentication of a human and of a machine, and the identity that the system passes to a service when a caller makes a request.
 It describes no mechanism of another service.
 
 ## The RESTful API
@@ -28,6 +28,8 @@ It describes no mechanism of another service.
 - A credential of a human account authorizes no operation at a remote, so it is no credential of a resource.
 - A failed authentication stops the request before it reaches any other service.
 - A successful authentication establishes the [human identity](overview.vocabulary.md#human-identity) as the [logged-in account](gateway-service.vocabulary.md#logged-in-account).
+- A human obtains a credential at a login, and that credential expires.
+- A login establishes no registration record.
 
 ## Human identity
 
@@ -41,9 +43,13 @@ It describes no mechanism of another service.
 
 ## Machine identities
 
-- The Gateway Service authenticates no machine.
-- It carries the [client identity](project-service.vocabulary.md#client-identity) of an instance of an external harness inward, unchanged.
-- The [Project Service](project-service.md#authorization-and-credential-custody) verifies the client secret when it resolves the worker binding.
+- The Gateway Service authenticates a machine.
+- A machine registers itself before it works, and it presents the client secret of its [client identity](project-service.vocabulary.md#client-identity) at that registration.
+- The [Project Service](project-service.md#authorization-and-credential-custody) owns the client identity, and it verifies that secret.
+- A registration of a machine establishes a registration record, and it returns a credential that expires.
+- The machine presents that credential on every later request, and the client secret appears at no later request.
+- The Gateway Service establishes the [machine identity](gateway-service.vocabulary.md#machine-identity) from that credential, and it passes the machine identity to the service that the request targets.
+- This transfer satisfies the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract), a downstream service confirms that the Gateway Service established the identity, and no caller nominates itself as a machine.
 
 ## Human authority
 

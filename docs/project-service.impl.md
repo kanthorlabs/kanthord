@@ -35,7 +35,7 @@ The constraints are below.
 - The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules, so a binding identity is unique across the server and satisfies the rule of `project-service.md` that it is unique inside its project.
 - `project_binding.current_revision` carries a composite foreign key to `project_binding_revision`, whose own real key is the pair of the binding and the revision under a unique index.
 - `project_binding.resource_identity` names the resource that the binding allocates, and a unique index over `project_id` and `resource_identity` enforces the cardinality of the kind. The section below gives its form. A worker binding holds no resource identity, because a project holds any number of bindings of one worker, and SQLite treats two absent values as distinct. `kind` stays a plain column that the validation reads.
-- The primary key of `project_client_identity` is `id`, which is the client identity itself. That identity is unique across the server, because the Gateway Service parses a Basic credential that carries no project.
+- The primary key of `project_client_identity` is `id`, which is the client identity itself. That identity is unique across the server, because a registration presents a client identity that carries no project.
 - A credential reference and a reference to another binding sit inside `config`, and the write validates each one against `project_binding`. SQLite enforces no foreign key inside JSON.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](viewer.html?p=architecture.impl.md).
@@ -170,12 +170,12 @@ A disablement therefore reaches every later operation, because a consumed grant 
 The facility resolves each identity as below.
 
 - A human identity passes `isHumanIdentity` of [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md), and the facility authorizes it for the operation.
-- A client identity presents its client secret, and the facility verifies that secret before it resolves the identity. The resolution reaches the worker binding and the project.
+- A machine identity passes `isMachineIdentity` of [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md), and it names the client identity that its registration resolved. The resolution reaches the worker binding and the project.
 - An execution identity resolves to the node of its claim through a call into the Scheduler Service module, and the facility refuses an operation that names another node.
 - A service identity is a frozen value of the Scheduler Service that its own `WeakSet` records, and the facility permits it the read of an external object alone. The facility resolves the external object through its own store to the repository binding, the project and the node, and it takes no association from the caller.
 
-An operation of an execution that an external harness hosts presents the client identity and the execution identity together.
-The facility proves the whole chain: the client secret authenticates the client identity, the client identity names its worker binding, the claim of the execution names that worker binding, the claim is live, and the node of the claim is the node of the operation.
+An operation of an execution that an external harness hosts presents the machine identity and the execution identity together.
+The facility proves the whole chain: the registration authenticated the client identity, the client identity names its worker binding, the claim of the execution names that worker binding, the claim is live, and the node of the claim is the node of the operation.
 A break at any link refuses the operation.
 The facility consults custody after the check, so a refusal reads no ciphertext.
 
@@ -235,10 +235,13 @@ The Project Service generates a client secret from 32 bytes of `crypto.randomByt
 It returns the secret once, and it stores the 32 bytes of `sha256` of the encoded secret in `project_client_identity`.
 The verification rejects a presented secret of another length before it hashes, hashes the presented value, and compares two 32-byte digests with `timingSafeEqual`.
 The secret holds 256 bits of entropy, so a fast hash resists an offline search and the verification needs no argon2id.
-Every request that presents the client identity verifies the secret, and the cost of that verification stays at one hash.
+A registration verifies the secret, and the cost of that verification stays at one hash.
+A later request of that machine presents no secret, so it needs no hash.
 The client identity set of a worker binding is a field of the binding configuration, so an addition and a removal create a revision.
 The hash is no field of the configuration, so a rotation creates no revision.
 A rotation writes a new hash and keeps the client identity.
+A rotation invalidates no issued token, because a token verifies against its registration and never against the secret.
+An operator that ends the live sessions of a client identity removes that identity from the binding, or it bans the session.
 A removal deletes the row, and the deletion revokes the identity.
 The route that issues a client secret and the route that rotates one return that secret in their response body.
 [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) records the response body of a mutation, so those two routes record a redacted body and answer a replay with 409.
