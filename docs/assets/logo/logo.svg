@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="currentColor" color="#2563EB" role="img" aria-labelledby="kanthord-logo-title kanthord-logo-desc">
+  <title id="kanthord-logo-title">kanthord — the always-on daemon</title>
+  <desc id="kanthord-logo-desc">A horned daemon silhouette with a power symbol cut out of its face, representing an agentic service that works in the background.</desc>
+  <path fill-rule="evenodd" d="
+    M112 48
+    C108 98 127 140 161 156
+    C190 141 222 132 256 132
+    C290 132 322 141 351 156
+    C385 140 404 98 400 48
+    C457 101 474 183 417 235
+    C422 253 424 270 424 288
+    C424 381 349 456 256 456
+    C163 456 88 381 88 288
+    C88 270 90 253 95 235
+    C38 183 55 101 112 48 Z
+
+    M337.915 234.642
+    A100 100 0 1 1 174.085 234.642
+    A20 20 0 0 1 206.851 257.585
+    A60 60 0 1 0 305.149 257.585
+    A20 20 0 0 1 337.915 234.642 Z
+
+    M256 172
+    A20 20 0 0 1 276 192
+    V280 A20 20 0 0 1 236 280
+    V192 A20 20 0 0 1 256 172 Z
+  "/>
+</svg>
