@@ -40,10 +40,11 @@ The container view shows the external systems around the server. The set is clos
 
 ## app
 
-An application of kanthord that a user runs. The set is closed and it holds two values.
+An application of kanthord that a user runs. The set is closed and it holds three values.
 
 - **`cli`**, which operates the system on a terminal
 - **`server`**, which holds every service in one running process and serves the RESTful API
+- **`worker`**, which runs worker instances and holds no service
 
 `app` is the short form of `application`, and the two words name one term.
 
@@ -68,7 +69,7 @@ One relation reads as follows.
 ## reviewer execution
 
 An execution under an evaluation claim.
-Under the workers that the server hosts, the worker instance that executes a node's steps never writes the assessment of that node.
+Under the workers that kanthord hosts, the worker instance that executes a node's steps never writes the assessment of that node.
 
 - A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.
 - A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.
@@ -105,4 +106,5 @@ What the container view shows. A service is not a container.
 
 - The `server` application is a container, and it holds the six services.
 - The `cli` application is a container.
+- The `worker` application is a container, and it holds worker instances.
 - A service boundary separates authority inside the server, so it describes no container.

@@ -175,7 +175,7 @@ The match reads the node states that the worker declares, the exact worker name 
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
 The [Mission Service](mission-service.md#validation-criteria-and-authority) owns that revision selection.
 The worker requests work and never authorizes its own claim.
-Under the workers that the server hosts, reviewer instances pull independently of instances that execute steps.
+Under the workers that kanthord hosts, reviewer instances pull independently of instances that execute steps.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the restriction on the executing worker's choice of reviewer and reviewer instructions.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) restricts scheduling to initiatives and objectives, never tasks.
 

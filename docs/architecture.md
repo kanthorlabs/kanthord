@@ -12,10 +12,11 @@ It describes no mechanism inside a service.
 
 ## Container diagram
 
-The container view shows the two [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
-The `server` application runs the six services, and the `cli` application operates the system on a terminal.
+The container view shows the three [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
+The `server` application runs the six services, the `cli` application operates the system on a terminal, and the `worker` application runs worker instances.
 The six services are logical boundaries inside the server, not separate containers.
 The design targets one server on one host.
+A `worker` application runs on the host of the server or on another host.
 
 ## Services
 
@@ -84,6 +85,16 @@ It routes each request to the service that owns the requested operation.
 The service view shows the six services inside the server.
 It shows the relations that the sections below name.
 
+## Invocation
+
+An application other than the server reaches a service through the public RESTful API of the server.
+A caller inside the server reaches a service through the same operation that the API publishes.
+An operation names the authority that establishes the identity of its caller, and the service that owns the operation authorizes that caller.
+An internal collaboration between two services is no operation, and no caller outside the server reaches it.
+One operation commits its own work, and a caller composes no atomic unit across two operations.
+An operation states its result when its answer is lost, so a caller distinguishes a completed result, a declared failure and an indeterminate result.
+A waiting operation states what a cancellation of its caller stops.
+
 ## Actors
 
 - A human configures a project, carries out steps, reviews results and overrides an outcome. A human reaches the server through the Gateway Service, which authenticates the human and passes the [human identity](overview.vocabulary.md#human-identity) with the request.
@@ -100,6 +111,7 @@ It shows the relations that the sections below name.
 
 - An external harness reaches the Gateway Service through the API or the CLI.
 - An instance that an external harness hosts registers itself with the Worker Service and pulls work from the Scheduler Service through the Gateway Service.
+- An instance that a `worker` application runs registers itself with the Worker Service and pulls work from the Scheduler Service through the Gateway Service.
 - An external harness reaches the MCP server of the Worker Service through the Gateway Service, and it invokes a configured repository action there.
 - The Worker Service performs that action.
 - A human reaches the Gateway Service through the API or the CLI.

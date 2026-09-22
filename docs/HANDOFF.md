@@ -9,11 +9,11 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Architecture
 
-- [ ] Added 2026-09-22 by Ulrich. Design the `worker` application, which runs on a process of its own. It gives the system one `server` application and many `worker` applications on other processes or other machines, and it is the scalable form of the product. It changes `architecture.md`, which states one server on one host and a service as a logical part of one process, so it is a design change with a review across the set. The exclusive lock of the operational database, the seed of the human account, the claim path and the trust boundary each assume one process.
 - [ ] Added 2026-09-22. Declare the command table of the group of each service. `architecture.impl.md` rules that the implementation sibling of a service declares the table of its own group, and `gateway-service.impl.md` declares the one table that exists. The groups `project`, `mission`, `scheduler`, `worker` and `tracking` hold no table, so the surface names six groups and serves one. Each table needs the commands of its service, the operation of the RESTful API of each command, and the access policy of that route.
 
 ### Gateway Service
 
+- [ ] Added 2026-09-22. **Defect.** The idempotency middleware of `gateway-service.impl.md` replays a recorded answer before the handler runs, so no handler authorizes that replay. Decide who may retrieve the recorded answer of a key, and state the check that the middleware performs before it replays.
 - [ ] Added 2026-09-21 by Ulrich. Provide user management after the system runs live. The server seeds one human account at the first start and prints its username and its password once, and it holds no second human account. Recovery of a lost credential deletes the account row and restarts the server, which seeds the account again. The design of user management decides the account routes, the authority to create an account, the password change and the revocation of the session of another account.
 - [ ] Added 2026-09-21. Decide how the build of `apps` obtains the OpenAPI document. The server serves it at `GET /openapi.json`, so a client generation needs a running server or a stored copy. The apps epic owns the answer.
 
@@ -35,6 +35,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Worker Service
 
+- [ ] Added 2026-09-22. Rule the remote runtime of an instance at the `worker` placement: the access to a provider, the repository operation, the resolution of the effective configuration of the agent, and the trust boundary of the tool and of the verification command. Each facility sits inside the server process today, and the `worker` application holds no service and reaches the server through the public API alone.
+- [ ] Added 2026-09-22. Rule the end of a registration when a `worker` application dies. `worker-service.md` ends a registration on a deregistration of the program, on a restart of the server and on the loss of the client identity, so a dead `worker` application holds its registrations and a replacement meets a binding at its instance count.
 - [ ] Added 2026-09-22. Place the workspace root of an execution. No page states its directory, so the file index of `architecture.impl.md` holds no row for it. The earlier candidate, the cache directory, rests on the claim that a deletion costs nothing, which an uncommitted change or locally held evidence can contradict.
 - [ ] Added 2026-09-22. Declare the configuration field of the global prompt. `worker-service.impl.md` states that the prompt composer resolves the global prompt from the server configuration, and it declares no field. The field index of `architecture.impl.md` exposed the gap. The name, the format and the default are a Worker Service decision.
 - [ ] POSTPONED 2026-09-18 by Ulrich to phase 2. The first version supplies the workers `general@1` and `reviewer@1`. Reconcile the one-agent rule of `worker-service.md` with the `tdd@1` worked example of `overview.md`, whose execution runs `swe@1`, `te@1` and `re@1`, and decide whether the Worker Service supplies `tdd@1`.
@@ -48,7 +50,7 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Multi-agent workers, after the `tdd@1` reconciliation above. pi has no sub-agents.
 - [ ] Token and currency budgets and project-level accounting. pi reports usage and cost per message.
 - [ ] A clarification interface. The pi ask_question tool is the seed, and the block and unblock flow carries ambiguity until then.
-- [ ] Live streaming of a running turn. pi emits streaming events. The Tracking Service page bounds this to the harness that the server hosts, because an external harness reaches the Tracking Service only through an import that a human issues.
+- [ ] Live streaming of a running turn. pi emits streaming events. The Tracking Service page bounds this to the harness that kanthord hosts, because an external harness reaches the Tracking Service only through an import that a human issues.
 - [ ] Containment beyond the minimum trust boundary, the quality and replay suite, provenance tags on tool results.
 
 ### Root repository

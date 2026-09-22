@@ -38,8 +38,8 @@ Access does not distinguish the two kinds of trace.
 ## The store and the two paths
 
 The Tracking Service holds every record in one primary store.
-A record of the harness that the server hosts and an imported record follow the same rules of this page.
-An execution that the server hosts writes to the primary store.
+A record of the harness that kanthord hosts and an imported record follow the same rules of this page.
+An execution that kanthord hosts writes to the primary store.
 No local store and no import stand between that execution and the Tracking Service.
 An external harness holds its capture on its own host until an import.
 The Tracking Service holds its records apart from the records of every other service.

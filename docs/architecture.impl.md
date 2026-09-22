@@ -348,8 +348,9 @@ A fatal error runs as below.
 - This sibling declares the two sets and the shape of the surface. The implementation sibling of a service declares the command table of its own group, and it declares no top-level name.
 - A command table holds one row for each command of the group. A row names the command, the operation of the RESTful API that it calls, and the access policy of that route.
 - A command of a group that no route of the emitted OpenAPI document serves is a defect.
-- `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and `server` is the one value today.
-- `kanthord serve server` starts the server, and it is the one supported start.
+- `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.
+- `kanthord serve server` starts the server, and it is the one supported start of the server.
+- `kanthord serve worker` starts a `worker` application.
 - `kanthord` with no command prints the help and exits with a non-zero status, so no invocation starts an application by default.
 - `serve` with no operand prints the help and exits with a non-zero status, because no application is the default.
 - The `cli` application is no operand of `serve`, because it holds every command that is no `serve`.
@@ -377,6 +378,24 @@ A fatal error runs as below.
 - The CLI checks the mode of the file with `lstat` before it reads the file, and a wider mode and a symlink each stop the command.
 - An absent file is no failure, because the option, the environment and the default remain.
 - The audit set of the start holds no client configuration file, because the server reads that file never.
+- A `worker` application resolves its endpoint and its client identity through the same order, and [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares those values.
+
+## The operation and its two entry adapters
+
+- An operation is the unit that a caller outside the process invokes, and [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) holds the registry that declares each one with its schema, its access policy, its timeout and its mutation flag.
+- The owning service declares its operations, and the Gateway Service projects each one into a route and into the emitted OpenAPI document.
+- An internal collaboration between two services is no operation. It stays a function of the owning service, and it takes the transaction of the operation as an explicit argument, which the transaction section rules.
+- The registry gives one typed client interface for each service. A caller depends on that interface, and it imports no module of the target service.
+- Two entry adapters implement that interface. The direct adapter runs inside the `server` application, and the HTTP adapter runs inside another application and calls the published route.
+- Both adapters enter one invocation chain of the server, which holds the validation, the idempotency middleware, the access policy and then the handler. The direct adapter invokes no handler of its own.
+- The composition root of an application builds every client once. `kanthord serve server` builds the direct adapter, and `kanthord serve worker` builds the HTTP adapter with one endpoint. No service and no worker instance selects a transport.
+- The direct adapter parses its input with the schema of the operation, and it returns a value that the output schema admits, so no value crosses one adapter that the other adapter refuses.
+- The contract holds three interaction forms: the unary form of an operation, the exact bytes of a platform delivery, and the long-lived stream of the MCP server. The schema rule covers the unary form.
+- An operation names the authority that established the identity of its caller. The Gateway Service mints a human identity, the Project Service verifies a client secret, and the Worker Service vouches for a runtime identity. A value that no authority minted authorizes nothing on either adapter.
+- A client interface returns a completed result, a declared failure of the operation, or an indeterminate result. An indeterminate result appears on either adapter, because one caller implementation runs in every application.
+- A mutation carries an idempotency key on both adapters, and one logical invocation keeps its key across its retries.
+- A waiting operation declares what a cancellation stops, and both adapters carry that cancellation.
+- Both adapters carry the trace identity and the parent span of the caller.
 
 ## The CLI writes after a human review
 
@@ -417,6 +436,9 @@ A fatal error runs as below.
 - A test covers the help of the `config` group with an absent configuration file, and it asserts the resolved absolute path in the output.
 - A test covers a client configuration file at `0644`, and it asserts that the command stops.
 - A test covers a second `gateway login`, and it asserts one file, the new token and no partial file.
+- A test runs one operation through the direct adapter and through the HTTP adapter, and it asserts the same result, the same failure value and the same idempotent replay.
+- A test covers a mutation whose answer the caller loses, and it asserts the indeterminate result.
+- A test covers a caller that supplies an identity value that no authority minted, and it asserts the refusal.
 - A test covers a parse error on a line that holds a secret, and it asserts that the diagnostic prints no value.
 - A test covers a `file` destination that the server cannot open, and it asserts a non-zero status.
 - A test covers the `stderr` destination, and it asserts that standard output receives no record of the log.

@@ -19,7 +19,7 @@ It describes no mechanism of another service.
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
 A worker declares its name, its host, the node states that its instances claim and its required node format.
-A worker that the server hosts also declares its method, its one agent, the default configuration of that agent, and the base prompt and the agent prompt of that agent.
+A worker that kanthord hosts also declares its method, its one agent, the default configuration of that agent, and the base prompt and the agent prompt of that agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 An agent name names a role, and no agent name equals a worker name.
 A configuration is named through a worker binding, never through a bare agent name.
@@ -33,16 +33,16 @@ Compatibility reads the node revision that the [work-pull rules](scheduler-servi
 Every worker of this page requires the same node format.
 
 A method is the worker's own.
-Two methods of the server exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
+Two methods of kanthord exist: the steps method and the evaluation method, and the method of a worker that an external harness hosts is the orchestration skill of the harness.
 The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
 
-The agent of a worker that the server hosts is a native agent, an agent loop that the Worker Service runs itself.
+The agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
 The Worker Service publishes the contract of `claude@1` and `opencode@1`: the name, the host, the declared node states and the required node format.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
-A worker that the server hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
+A worker that kanthord hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies three [connectors](worker-service.vocabulary.md#connector) as the tools that perform an authenticated operation.
 The model connector performs a model inference call.
@@ -129,13 +129,14 @@ No model inference call of the execution drops a layer of its prompt.
 ## Instances and hosting
 
 The Worker Service reads the worker bindings and their instance counts from the [Project Service](project-service.md#execution-configuration-and-instance-count).
-For a worker that the server hosts, it holds one instance for each unit of the instance count of a worker binding.
+For a worker that kanthord hosts at the `server` placement, it holds one instance for each unit of the instance count of a worker binding.
 The instances of one binding form its pool.
 An instance holds a runtime identity.
 The Worker Service mints the runtime identity when it creates the instance.
 The runtime identity is unique inside the server, and it names the worker binding of the instance.
 The Worker Service vouches for that association on the [work pull](scheduler-service.md#work-pulls).
-For a worker that an external harness hosts, the Worker Service accepts the registration of an instance under a client identity of its binding, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
+For an instance that registers, the Worker Service accepts the registration under a client identity of its binding, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
+An instance of a worker that an external harness hosts registers, and an instance at the `worker` placement registers.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
 A registration ends when the program deregisters, when the server restarts, or when its client identity leaves the binding, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 
@@ -144,7 +145,7 @@ The [Scheduler Service](scheduler-service.md#liveness) governs the execution rec
 At server start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
 A configuration revision of the binding replaces no instance.
 A server restart creates new instances with new runtime identities.
-For a worker that the server hosts, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
+For a worker that kanthord hosts at the `server` placement, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
 
 An instance hosts at most one execution at a time.
 An instance holds at most one outstanding work pull or one execution.
@@ -154,7 +155,8 @@ Any idle instance of the binding takes the next compatible node.
 An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service.
 
 The Worker Service produces the instance healthcheck before each work pull.
-The healthcheck of an instance that the server hosts passes when the effective configuration of the agent resolves under the current binding set.
+The healthcheck of an instance at the `server` placement passes when the effective configuration of the agent resolves under the current binding set.
+The healthcheck of an instance at the `worker` placement passes when that configuration resolves and its client identity is a client identity of its binding.
 The healthcheck of an instance that an external harness hosts passes when its client identity is a client identity of its binding.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 

@@ -23,11 +23,23 @@ This revision of the Worker Service supplies four workers.
 The host of a worker is the system that runs the instances of the worker.
 The set is closed and it holds two values.
 
-- **the server**
+- **kanthord**
 - **an external harness**
 
-`general@1` and `reviewer@1` have the server as their host.
+`general@1` and `reviewer@1` have kanthord as their host.
 `claude@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
+
+## placement
+
+The placement of an instance is the application of kanthord that runs it.
+The set is closed and it holds two values.
+
+- **`server`**, which runs the instance inside the `server` application
+- **`worker`**, which runs the instance inside a `worker` application
+
+An instance of `general@1` inside the `server` application holds the `server` placement.
+An instance of `general@1` inside a `worker` application holds the `worker` placement.
+An instance that an external harness hosts holds no placement, because kanthord runs it never.
 
 ## steps method
 
