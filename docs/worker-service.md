@@ -138,6 +138,7 @@ The Worker Service vouches for that association on the [work pull](scheduler-ser
 For an instance that registers, the Worker Service accepts the registration under a client identity of its binding, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
 An instance of a worker that an external harness hosts registers, and an instance at the `worker` placement registers.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
+The registration returns the credential that the instance presents on every later request, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
 A registration ends when the program deregisters, when the server restarts, or when its client identity leaves the binding, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 
 An instance record is runtime-only.

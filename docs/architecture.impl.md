@@ -249,6 +249,7 @@ This sibling declares the fields below.
 - `gateway.port`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
 - `gateway.allowedHosts`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
 - `gateway.allowedOrigins`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
+- `gateway.tokenLifetime`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log

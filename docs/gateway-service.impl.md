@@ -32,6 +32,7 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
 - `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
+- `gateway.tokenLifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
 
 ## Access policy
 
@@ -42,11 +43,10 @@ The policy value lives in the operation registry, so one declaration drives the 
 
 ## Identity on the wire
 
-One `Authorization` header carries two schemes.
-`Bearer` carries the JWT of a human.
-`Basic` carries the client identity as `base64(clientId:clientSecret)`.
-The Gateway Service parses the Basic credentials and verifies none of them.
-The Project Service verifies the client secret when it resolves the worker binding.
+One `Authorization` header carries one scheme.
+`Bearer` carries the JWT of a human and the JWT of a machine, and the `kind` claim of the token states which one.
+A bootstrap credential travels in the body of the login route and of the registration route, so no `Authorization` header carries a password and no header carries a client secret.
+The Project Service verifies the client secret at the registration, and no later request presents it.
 
 ## Human authentication
 
@@ -56,15 +56,38 @@ A successful check produces the JWT that the Gateway Service issues to the calle
 The CLI and every other client present that JWT as a bearer token on a later request.
 A request that carries a missing or an invalid credential on a route that requires one returns 401 before the handler runs.
 
+## Machine registration
+
+A machine presents its client identity and its client secret in the body of the registration route under `/auth/*`.
+That route declares the public access policy, and it verifies its own credential, as the login route does.
+The Gateway Service asks the Project Service to verify the secret, and the Project Service resolves the client identity, its worker binding and its project.
+The request nominates no binding, no subject and no kind, and the server derives all three from the verified secret.
+The Worker Service creates the registration and checks the instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
+The route answers with one JWT whose `kind` is `client`, whose `sub` is the client identity and whose `reg` claim names the registration.
+A repeat of the idempotency key of that route under the same verified client identity runs the handler again, which re-issues a token for the same registration and consumes no second instance slot.
+Without that rule a lost answer leaves a registration that holds a slot, holds no credential and deregisters never.
+A repeat under another client identity answers 409 and no token.
+
 ## The JWT
 
 `hono/jwt` signs and verifies with HS256, and the algorithm is pinned explicitly.
-The claims are `sub`, `kind`, `iat`, `jti` and `ver`.
-The token carries no `exp`, because one local human account reuses one token from the CLI.
-Verification checks the signature and `kind` equal to `human`.
-It checks the existence of the account named by `sub`.
-It checks `ver` equal to the `token_version` of that account row.
+The claims are `sub`, `kind`, `iat`, `exp` and `jti`. A human token also carries `ver`, and a machine token also carries `reg`.
+`gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
+Verification checks the signature, then `exp`, then `kind`, which holds `human` or `client`.
+For `human` it checks the existence of the account named by `sub`, and `ver` equal to the `token_version` of that account row.
+For `client` it checks that the registration named by `reg` is live, which the Worker Service holds in memory.
+Verification then checks that `jti` sits outside the denylist.
 An increment of `token_version` invalidates every earlier token of the account, and it cancels no request that already passed verification.
+An expired token returns 401, and the caller logs in again or registers again.
+
+## The session denylist
+
+The Gateway Service owns the table `gateway_token_denylist(jti, expires_at, banned_at)` of the operational database.
+A banned session fails its verification, whatever the kind of its token.
+The process holds the whole table in memory, because one process owns that database, and it writes the row and the memory inside one transaction.
+An entry is kept until the `expires_at` of its token, and a sweep at each start removes every expired entry.
+A ban cancels no request that already passed verification.
+The route that bans a session and the authority to issue it belong to the user management that the handoff holds.
 
 ## The signing key
 
@@ -99,7 +122,7 @@ It generates the password with `crypto.randomBytes` and stores the argon2id reco
 It prints the username and password once to standard output.
 The seed reads no input, so it requires no terminal on standard input.
 The server prints the password at no later start.
-The server exposes no registration route and no account management route, and it holds exactly one human account.
+The server exposes no account creation route and no account management route, and it holds exactly one human account.
 A human who loses the password deletes the account row and restarts the server, which seeds the account again.
 
 ## Request validation
@@ -123,6 +146,8 @@ The length check runs before any hashing.
 A factory inside one Gateway Service module creates the frozen human identity value, and the module exports that factory to nobody.
 The module records each value in a module-private `WeakSet` and exports `isHumanIdentity(value)` alone.
 A downstream service calls `isHumanIdentity` and rejects a value that it does not recognize.
+A second factory of the same module creates the frozen machine identity value, under its own `WeakSet`, and the module exports `isMachineIdentity(value)` alone.
+The machine identity names the client identity, its worker binding and its project, which the registration resolved.
 The route handler passes the identity to the service function as an explicit caller argument, so a service module imports no Hono symbol.
 The JWT never leaves the Gateway Service module.
 
@@ -173,7 +198,10 @@ Every mutation route requires the `Idempotency-Key` header, which holds a ULID t
 `ulid` generates that value, and that identity is no identity that the server generates for an entity of its own.
 The operation registry declares a route as a mutation, so the middleware runs on that route alone.
 The direct entry adapter of [architecture.impl.md](viewer.html?p=architecture.impl.md) enters this chain too, so a caller inside the server reserves the same key, meets the same 409 and replays the same recorded answer.
-The Gateway Service owns the table `gateway_idempotency(key, route, fingerprint, status, response, created_at)`.
+The Gateway Service owns the table `gateway_idempotency(key, route, fingerprint, caller, status, response, created_at)`.
+The `caller` column holds the account of a human and the client identity of a machine.
+The middleware compares the verified caller with that column before it replays, and a repeat under another caller reserves its own record and runs the handler.
+The registration route holds the one exception to the replay, which the machine registration section states.
 The fingerprint is the digest of the canonical JSON of one envelope, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules that form and that digest.
 The envelope names the operation of the registry, the path parameters, the query and the body, each one after its validation, and it states the treatment of an absent field, of a default and of a repeated query value.
 It holds exactly the validated data that determines the operation, so an input that changes the effect sits inside the envelope or the contract of that route is forbidden.
@@ -197,6 +225,12 @@ It covers a timeout against a mutation that completes and a client disconnect.
 It covers the shutdown drain and the exact bytes of a delivery.
 It covers the single-row property of the seed under two concurrent starts.
 It covers the work bound of the login.
+It covers a registration with a wrong client secret, and it asserts 401 and no registration.
+It covers two concurrent registrations against a binding of one instance, and it asserts one registration and one refusal.
+It covers a repeat of the registration key under the same client identity, and it asserts a new token, one registration and no second slot.
+It covers a repeat of a completed key under another caller, and it asserts that the handler runs and that no recorded answer is returned.
+It covers an expired token, a banned `jti` and a token whose registration ended, and it asserts 401 for each one.
+It covers the sweep of the denylist at a start, and it asserts that an entry beyond its `expires_at` is gone.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
 The implementation epic assesses their removal.
 

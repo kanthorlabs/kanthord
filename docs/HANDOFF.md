@@ -13,8 +13,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Gateway Service
 
-- [ ] Added 2026-09-22. **Defect.** The idempotency middleware of `gateway-service.impl.md` replays a recorded answer before the handler runs, so no handler authorizes that replay. Decide who may retrieve the recorded answer of a key, and state the check that the middleware performs before it replays.
-- [ ] Added 2026-09-21 by Ulrich. Provide user management after the system runs live. The server seeds one human account at the first start and prints its username and its password once, and it holds no second human account. Recovery of a lost credential deletes the account row and restarts the server, which seeds the account again. The design of user management decides the account routes, the authority to create an account, the password change and the revocation of the session of another account.
+- [ ] Added 2026-09-21 by Ulrich. Provide user management after the system runs live. The server seeds one human account at the first start and prints its username and its password once, and it holds no second human account. Recovery of a lost credential deletes the account row and restarts the server, which seeds the account again. The design of user management decides the account routes, the authority to create an account, the password change, the revocation of the session of another account, and the route that bans one session through the denylist of `gateway-service.impl.md`.
 - [ ] Added 2026-09-21. Decide how the build of `apps` obtains the OpenAPI document. The server serves it at `GET /openapi.json`, so a client generation needs a running server or a stored copy. The apps epic owns the answer.
 
 ### Project Service
