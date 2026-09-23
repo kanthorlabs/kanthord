@@ -75,7 +75,7 @@ A removal differs from a replacement.
 A removal names no successor, and a replacement names one in `replaced_by`.
 Validation refuses a set that references a removed binding, a replaced binding or a binding that does not exist.
 The submitted set therefore carries the repointing of every dependent binding, which `project-service.md` requires in one edit.
-The transaction writes the idempotency record of the Gateway Service, so one commit holds the edit and its recorded answer.
+The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
 ## Revision, disablement and the change of a remote
 

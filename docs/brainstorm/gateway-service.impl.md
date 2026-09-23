@@ -33,6 +33,7 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
 - `gateway.tokenLifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
+- `gateway.idempotencyTtl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
 
 ## Access policy
 
@@ -69,8 +70,11 @@ The request nominates no binding, no subject and no kind, and the server takes a
 The Worker Service creates the registration and checks the instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
 A client identity holds at most one live registration, and a registration of a client identity that holds one answers 409.
 The route answers with the runtime identity of the new instance and no token.
-A repeat of the idempotency key of that route under the same client identity replays the recorded answer while that registration is live.
-After the registration ends, the repeat answers 409 with the code of a stale registration, and the caller registers with a new key.
+
+- A repeat of the idempotency key under the same client identity replays the recorded answer within one process and the TTL.
+- The registration must remain live for that replay.
+- Within the TTL, a repeat after the registration ends answers 409 with the stale-registration code.
+- The caller registers with a new key.
 
 ## The JWT
 
@@ -117,7 +121,10 @@ It opens no database, so it does not check that the worker binding exists. A tok
 It prints the JWT followed by a newline only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
 It prompts for nothing, requires no terminal on standard input, calls no route and saves no client configuration.
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
-The Gateway Service owns no human account table and no client identity table. Its operational tables hold the session denylist and idempotency records only.
+
+- The Gateway Service owns no human account table and no client identity table.
+- Its operational table holds the session denylist alone.
+- The invocation chain holds idempotency records in memory.
 
 ## Request validation
 
@@ -135,10 +142,12 @@ The `hono/body-limit` middleware permits 40 KiB on the worker registration opera
 
 ## The forwarding contract
 
-A factory inside one Gateway Service module creates the frozen human identity value, and the module exports that factory to nobody.
-The module records each value in a module-private `WeakSet` and exports `isHumanIdentity(value)` alone.
-A downstream service calls `isHumanIdentity` and rejects a value that it does not recognize.
-A second factory of the same module creates the frozen machine identity value, under its own `WeakSet`, and the module exports `isMachineIdentity(value)` alone.
+- The factories in `src/kernel/caller-mint.ts` create frozen human and machine identity values.
+- Only the Gateway imports that file.
+- `src/kernel/caller.ts` holds the identity types and the predicates `isHumanIdentity` and `isMachineIdentity`.
+- It records each identity value in the corresponding module-private `WeakSet`.
+- A downstream service calls `isHumanIdentity` and rejects a value that it does not recognize.
+
 The machine identity names the client identity, its worker binding and its project, which the verification resolved, and the runtime identity of its live registration when one exists.
 A direct call that supplies a machine identity passes the denylist, the worker-binding check and the live-registration check again before the handler runs, so a ban or a removal reaches the direct adapter as it reaches the HTTP adapter.
 The route handler passes the identity to the service function as an explicit caller argument, so a service module imports no Hono symbol.
@@ -157,12 +166,20 @@ It logs one record at entry and one at exit with the status and the latency.
 
 ## The operation registry
 
+- The registry class lives in `src/kernel/operation.ts` and performs structural validation.
+- The owning service declares its operations in its `contract.ts`.
+- The Gateway emitter validates the OpenAPI scope of every entry when it projects the registry.
+
 Each route registers its method, path, access policy, timeout, parameter locations, request content type and whether it is a mutation.
 It registers response status codes and schemas, error responses and its security scheme.
 The server emits an OpenAPI 3.1 document from the registry with `z.toJSONSchema()` of `zod` at 4.4.3.
 A test validates the document with `@apidevtools/swagger-parser` at 12.1.0.
 It asserts a real response against its declared schema.
 `kanthord gateway openapi` emits the document from the registry, writes it as YAML to `static/openapi.yaml` of the `engine` repository, and prints that path.
+
+- The command also emits the scoped documents from each `contract.ts` under `static/openapi/<service>/`.
+- The root document indexes those scoped documents.
+
 `yaml` at 2.9.0 serializes the document, and [architecture.impl.md](architecture.impl.md) already names that package for the configuration file, so this command adds none.
 It starts no server, and it reaches none.
 A human runs that command after a change of a route, and the repository holds the emitted file.
@@ -179,6 +196,15 @@ The server adds no CSRF middleware, because no cookie authenticates a request.
 
 ## Cancellation
 
+[architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) defines the lifetime of an operation.
+
+- `unary` carries one request and one answer.
+- `wait` ends on cancellation without ending an accepted obligation.
+- `stream` carries one-way server-sent events in one open HTTP response, with every client message in a separate request.
+- The Gateway owns the connection.
+- The owning service owns the session under a stream.
+- A close of the connection is no domain cancellation.
+
 The Gateway Service builds one `CancellationContext` for each request under its shutdown context, following [architecture.impl.md](architecture.impl.md#the-service-lifecycle-and-context).
 It cancels that context on a client disconnect or process shutdown and releases it when the response ends.
 It passes the `Context` interface in the caller context and through direct clients, authentication and component collaborators. Native request signals remain at the HTTP boundary.
@@ -188,13 +214,19 @@ The default timeout is 30 s. Human verification and worker registration each tak
 The work pull route takes 120 s, and its wait window is 90 s, so the handler answers before the timeout.
 A route of the MCP prefix takes 900 s, because a call of the MCP server runs a tool of the Worker Service.
 `hono/timeout` returns 504 and cancels no work, so a mutation route is idempotent or it completes.
-[architecture.impl.md](architecture.impl.md) holds graceful shutdown. The gateway stops admission, cancels its child contexts, joins handlers and streams, and releases its listener before the server closes the operational database.
+[architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the four shutdown phases.
+
+- The Gateway closes the listener and cancels waiting work pulls and MCP streams during quiescence.
+- Its handlers and dependencies stay available during the drain.
+- The invocation chain then joins handlers and streams before rejecting every new call.
+- The Gateway releases resources in the release phase.
 
 ## Component healthchecks
 
 `GET /api/healthcheck` reports the owned component maps of every service registered in the shared `HealthRegistry`, not only Gateway internals.
 The Server owns that registry and passes it to the Gateway. It registers `server`, whose component map contains `gateway`, `store` and `log`; `store` checks the SQLite database with `SELECT 1`, and `log` checks the operational log descriptor.
 The Gateway registers `gateway`, whose map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation` through the shared `Service.healthcheck()` contract. The server's `gateway` component summarizes that map.
+The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
 A standalone Gateway registers only itself unless its owner supplies other probes.
 Every additional service registers its own health probe beside its other startup wiring. Operation registration alone registers no health probe. A probe returns the current components of its owner, so an LLM provider or a worker instance belongs in that owner's map and needs no new API handler or schema.
 The current engine implements no provider or worker service health probe; the endpoint reports no fictitious healthy entry for an absent service.
@@ -212,27 +244,43 @@ The health registry owns no service lifetime and starts or stops no service.
 
 ## Idempotency of a mutation
 
-Every mutation route requires the `Idempotency-Key` header, which holds a ULID that the client generates.
-`ulid` generates that value, and that identity is no identity that the server generates for an entity of its own.
-The operation registry declares a route as a mutation, so the middleware runs on that route alone.
-The direct entry adapter of [architecture.impl.md](architecture.impl.md) enters this chain too, so a caller inside the server reserves the same key, meets the same 409 and replays the same recorded answer.
-The Gateway Service owns the table `gateway_idempotency(key, route, fingerprint, caller, status, response, created_at)`.
-The `caller` column holds the account of a human and the client identity of a machine.
-The middleware compares the verified caller with that column before it replays, and a repeat under another caller reserves its own record and runs the handler.
-The registration route replays a recorded answer only while its registration is live, which the worker-instance registration section states.
-The fingerprint is the digest of the canonical JSON of one envelope, and [architecture.impl.md](architecture.impl.md) rules that form and that digest.
-The envelope names the operation of the registry, the path parameters, the query and the body, each one after its validation, and it states the treatment of an absent field, of a default and of a repeated query value.
-It holds exactly the validated data that determines the operation, so an input that changes the effect sits inside the envelope or the contract of that route is forbidden.
-The middleware inserts the key with the state in progress before the handler runs.
-A repeat of a key that holds the state in progress returns 409.
-A repeat of a completed key returns the recorded status and the recorded body, and the handler runs never.
-A repeat of a key with another route or another fingerprint returns 409.
-The middleware records the status and the body after the handler completes.
-A handler that writes the operational database records the status and the body inside the transaction of its own write, so one commit holds the change and its recorded answer.
-A route that returns a secret records a redacted body, and a repeat of its key returns 409 and no secret.
-A timeout leaves the key in progress, so a retry of the client receives 409 until the operation completes.
-The server runs as one process, which [architecture.impl.md](architecture.impl.md) enforces with the exclusive locking mode of each database file, so a record that holds the state in progress after a restart names a dead operation.
-A sweep at startup deletes such a record, and the operation of that record never committed, because a commit records its answer.
+- Every mutation route requires the `Idempotency-Key` header, which holds a ULID that the client generates.
+- `ulid` generates that value.
+- The key is no identity that the server generates for an entity of its own.
+- The operation registry declares a route as a mutation.
+- The idempotency component runs on mutation routes alone.
+- Both entry adapters enter the same invocation chain, as [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) describes.
+- Both adapters reserve the same key, meet the same 409 and replay the same recorded answer.
+- The idempotency component runs in memory inside the invocation chain.
+- Each record carries a TTL from `gateway.idempotencyTtl`.
+- An expired record disappears.
+- The component owns no table, no migration and no sweep at the start.
+- A replay holds inside one process and inside the TTL.
+- A restart empties the component.
+- A retry after a restart runs the handler again.
+- Every mutation handler is idempotent by a natural key of its own, for example a registration by its client identity.
+- The `caller` field holds the account of a human or the client identity of a machine.
+- The component compares the verified caller with that field before it replays.
+- A repeat under another caller reserves its own record and runs the handler.
+- The registration route replays a recorded answer only while its registration is live.
+- [gateway-service.impl.md](gateway-service.impl.md#worker-instance-registration) holds that restriction.
+- The fingerprint is the digest of the canonical JSON of one envelope.
+- [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest) defines that form and digest.
+- The envelope names the registry operation, path parameters, query and body after validation.
+- It states the treatment of an absent field, a default and a repeated query value.
+- It holds exactly the validated data that determines the operation.
+- Every input that changes the effect sits inside the envelope.
+- The component inserts the key with the state in progress before the handler runs.
+- A repeat of a key that holds the state in progress returns 409.
+- A repeat of a completed key returns the recorded status and body without running the handler.
+- A repeat of a key with another route or another fingerprint returns 409.
+- `caller.commit` opens its transaction on the store that the operation declares.
+- The component completes the record in memory after the commit and handler completion.
+- It records the status and body.
+- A route that returns a secret records a redacted body.
+- A repeat of that key returns 409 and no secret within the TTL.
+- A timeout leaves the key in progress.
+- A retry receives 409 until the operation completes or the record expires.
 
 ## Tests
 
@@ -250,8 +298,11 @@ It covers the removed password-login route and its absence from OpenAPI.
 It covers a registration with a machine JWT whose worker binding is absent or unavailable, and it asserts 401 and no registration.
 It covers two concurrent registrations against a binding of one instance, and it asserts one registration and one refusal.
 It covers a second registration of a client identity that holds a live registration, and it asserts 409.
-It covers a repeat of the registration key while the registration is live, and it asserts the recorded runtime identity and no second slot.
-It covers a repeat of the registration key after a restart, and it asserts the stale-registration 409.
+
+- A test repeats the registration key within the TTL while the registration is live and asserts the recorded runtime identity without another slot.
+- A test repeats the registration key after a restart and asserts that the handler runs again with its natural key.
+- A test repeats a key after its TTL expires and asserts that the handler runs again.
+
 It covers a direct call with a machine identity after a ban of its `jti`, and it asserts the refusal.
 It covers a repeat of a completed key under another caller, and it asserts that the handler runs and that no recorded answer is returned.
 It covers an expired token and a banned `jti`, and it asserts 401 for each one.
@@ -318,6 +369,13 @@ A client sends the `Host` header of its endpoint, so an endpoint outside `gatewa
 ## Repository layout, build, test and release
 
 The Gateway Service source sits under `src/gateway/` of the `engine` repository.
+
+- The three public files are `contract.ts`, `client.ts` and `index.ts`.
+- Private files include `service.ts`, `authentication.ts`, `invocation.ts`, `idempotency.ts` and `openapi.ts`.
+- The remaining private files are `migrations.ts`, `errors.ts`, `request-id.ts`, `json.ts` and `constants.ts`.
+- `migrations.ts` holds the denylist table and no idempotency table.
+- `src/gateway/` is the one importer of `src/kernel/caller-mint.ts`.
+
 `static/openapi.yaml` of that repository holds the emitted OpenAPI document, and the released package ships the `static` directory.
 A test file sits beside its source as `*.test.ts`.
 `node --test` runs the tests.
