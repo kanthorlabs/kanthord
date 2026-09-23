@@ -32,10 +32,10 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 The submodules use these default listening ports.
 
-| Submodule | Port | Meaning |
-| --- | --- | --- |
-| `engine` | `31415` | The first five digits of π (pi), `3.1415`, with the decimal point removed. |
-| `apps` | `27182` | The first five digits of Euler's number e, `2.7182`, with the decimal point removed. |
+| Submodule | Port    | Meaning                                                                              |
+| --------- | ------- | ------------------------------------------------------------------------------------ |
+| `engine`  | `31415` | The first five digits of π (pi), `3.1415`, with the decimal point removed.           |
+| `apps`    | `27182` | The first five digits of Euler's number e, `2.7182`, with the decimal point removed. |
 
 The [Gateway Service configuration](gateway-service.impl.md#configuration) declares the engine listener settings.
 
@@ -114,7 +114,8 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - Every write runs inside a `BEGIN IMMEDIATE` transaction.
 - `DatabaseSync` performs synchronous input and output, so a transaction runs inside one synchronous function and it awaits nothing.
 - One transaction holds one owner, the handler of the operation. A service function that participates in that transaction receives it as an explicit caller argument, and it opens no transaction of its own and commits none.
-- SQLite commits no remote effect together with its local transaction. One commit holds a change and its recorded answer inside the operational database alone, and it holds that answer only where the owning operation writes both inside one transaction.
+- SQLite commits no remote effect together with its local transaction.
+- The invocation chain records an answer in memory after the operation commits on its declared store.
 - A remote effect that succeeded before a crash needs a reconciliation that the sibling of the owning service states. This sibling settles no such recovery.
 
 ## The migration
@@ -122,10 +123,22 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - Each service holds an ordered list of migrations, numbered from 1 with no gap. A migration is a function that receives the open connection and runs its statements.
 - A published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
 - The runner validates the whole recorded history of every participating database before it applies any migration. It rejects a service that the binary does not know, a duplicate version, a gap in the recorded versions, and a recorded version above the highest version that the binary holds.
-- The uniqueness of a record is the pair of the service and the version.
-- The runner owns the transaction and the insert of the `migration` row, so one commit holds a migration and its record.
+- Each store owns its runner and its own `migration` history table, keyed by service and version.
+- The operational store holds the history of the services that share it.
+- `tracking.db` holds the history of the Tracking Service alone, as [tracking-service.impl.md](tracking-service.impl.md) describes.
+- The runner owns one transaction per migration and the insert of its `migration` row.
 - A migration changes its own database alone. It performs no filesystem write, no network call and no write through a second connection, because a rollback of SQLite undoes none of those.
-- A migration of one service reads no migration state of another service, so the runner needs no dependency resolution.
+- The runner applies the migrations of one service without regard to the state of a peer.
+- The fixed service order provides determinism, not a dependency.
+- A service that owns tables exports `<service>Migrations: readonly Migration[]` from `index.ts`.
+- The `Service` contract holds no `migrate` method.
+- A naming check inspects every table in `sqlite_master` except `migration`.
+- Each table starts with the `<service>_` prefix of the service that declares it.
+- No two services share a prefix.
+- An isolation check applies the migrations of each service alone on an empty store and asserts success.
+- No foreign key, view or trigger depends on a peer table.
+- The SQL of a service names its own tables only.
+- A cross-service SQL statement in a handler is a review defect because `Transaction` exposes the raw handle.
 - The migration is forward only, and the server holds no reverse migration. A committed migration stays committed after a later failure, so the next start resumes from that prefix.
 - A downgrade needs a consistent backup that a human took before the upgrade.
 - That backup captures the effective configuration file and the whole data directory, with the server stopped, and neither source changes during the capture.
@@ -242,6 +255,15 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - This sibling indexes every field of every section, and the owning sibling holds the format and the default of each field that it declares.
 - This is the configuration of the server process.
   It is not the project configuration that `overview.md` describes.
+- The configuration module lives in `src/config/`, above the services and below the applications.
+- `src/config/global.ts` holds the schema and the type of `log` and `masterKey`.
+- Each service exports the `convict` schema fragment of its own section from its `index.ts`.
+- `src/config/index.ts` combines the global set with the fragment of every service into the whole schema.
+- The applications alone import `src/config/index.ts`.
+- A service reads no configuration itself.
+- The composition root parses the file and passes the parsed section into the constructor of the service.
+- A service that needs a global value imports `src/config/global.ts` alone.
+- The field index stays the single list of every field.
 
 This sibling declares the fields below.
 
@@ -271,6 +293,7 @@ This sibling declares the fields below.
 - `gateway.allowedHosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.allowedOrigins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log
@@ -303,19 +326,45 @@ Examples:
 
 ## The service lifecycle and Context
 
-- Every service implements `Service`: `start()` acquires resources, `run(context)` starts and joins its lifetime, `stop()` performs graceful shutdown, and `healthcheck()` reports the components it owns.
-- `start`, `stop` and `run` return `Promise<Error | null>`. Success returns `null`; failure returns an `Error` that the caller can inspect. A lifecycle failure does not reject the returned promise. A caller checks the result, and the CLI turns a failure into a non-zero exit.
+- Every service implements the kernel `Service` contract.
+- `start()` acquires resources.
+- `quiesce()` stops the producers of a service and cancels its waiting work.
+- Its handlers and dependencies stay available.
+- `quiesce()` returns when producers receive the signal, without waiting for their work to end.
+- `quiesce()` is idempotent.
+- Concurrent calls to `quiesce()` join one promise.
+- A service without producers returns `null` at once from `quiesce()`.
+- `run(context)` starts and joins the lifetime of the service.
+- `stop()` joins remaining work and releases resources.
+- `healthcheck()` reports the components that the service owns.
+- `start`, `quiesce`, `stop` and `run` return `Promise<Error | null>`.
+- Success returns `null`.
+- Failure returns an `Error` that the caller can inspect.
+- A lifecycle failure does not reject the returned promise.
+- A caller checks the result.
+- The `cli` application turns a failure into a non-zero exit.
+- The root owns every `run()` result because a lifecycle failure is a value and reaches no fatal handler by itself.
 - Concurrent calls to `start` or `stop` join the same operation. A stopped instance cannot start again.
 - `healthcheck()` returns `Promise<Record<string, number>>`, keyed by owned component name. An integer code of `200` means healthy and `503` means unavailable. An aggregate is healthy only when its nonempty component map is entirely healthy.
-- Cancellation uses the Go-inspired `Context` interface in `src/context.ts`. It exposes `deadline()` as Unix milliseconds or `null`, `done()` as a promise that resolves on cancellation, `err()` as the cancellation error or `null`, and `onCancel()` as an immediately effective, removable subscription.
+- Cancellation uses the Go-inspired `Context` interface in `src/kernel/context.ts`.
+- `deadline()` exposes Unix milliseconds or `null`.
+- `done()` exposes a promise that resolves on cancellation.
+- `err()` exposes the cancellation error or `null`.
+- `onCancel()` exposes an immediately effective, removable subscription.
 - `background` is the uncancelled root. `CancellationContext` is the concrete implementation; its owner cancels it, cancellation is idempotent, a child inherits parent cancellation and the earlier deadline, and cancelling a child leaves its parent and siblings running.
 - Service and component collaborators receive `Context`, not a native `AbortSignal`. Native signals are bridged at transport boundaries. The owner releases a context's subscriptions and deadline timer when its work finishes.
 - A cancellation listener never throws. A throw from a listener becomes an `uncaughtException` on both paths, the registration on an already-cancelled context and the cancellation itself, so the process terminates, and every other listener of that cancellation still runs first.
 - A child that inherits the deadline of its parent arms no timer of its own. The parent cancels it, so the child holds the error instance of the parent.
 - Every service and component implements graceful shutdown for the work and resources it owns. Long-running work cooperates with its context; a synchronous component completes its current operation before its owner releases it.
-- Shutdown first stops admission, then cancels waiting work and streams through child contexts, then joins in-flight work, and finally releases resources in reverse acquisition order. Cancellation requests a stop; it does not prove that work has finished and it undoes no committed effect.
+- Shutdown runs four phases: quiesce every service, drain with dependencies available, join the invocation chain, then release resources in reverse construction order.
+- [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) defines those phases.
+- Cancellation requests a stop.
+- It does not prove that work has finished.
+- It undoes no committed effect.
 - A cancelled `run(context)` joins cleanup before returning its cancellation error. Explicit `stop()` and operating-system shutdown signals return `null` after successful cleanup. A cleanup failure takes precedence over cancellation, and all remaining releases still run.
-- A service owns the stop of its components. It keeps shared resources alive until every component using them has drained; in particular, the gateway drains before the server closes the store and the log.
+- A service owns the stop of its components.
+- The root keeps shared resources available through quiescence, drain and the join of the invocation chain.
+- The root releases service resources before it closes the store, then the log.
 
 ## The start and the stop
 
@@ -327,13 +376,32 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Run the migrations, in a fixed order of the services.
-- Sweep the dead idempotency records and the expired entries of the session denylist, which [gateway-service.impl.md](gateway-service.impl.md) owns.
+- Sweep the expired entries of the session denylist, which [gateway-service.impl.md](gateway-service.impl.md#the-session-denylist) owns.
 - Register the routes of every service, which [gateway-service.impl.md](gateway-service.impl.md) owns.
 - Open the listener.
 
+The composition root constructs in this order.
+
+- Parse the configuration.
+- Construct the log.
+- Open the store.
+- Call `store.migrate([...])` once per store with the migrations of every service, in fixed service order.
+- Construct the registry.
+- Construct the invocation chain.
+- Construct the five domain services with their `Dependencies`.
+- Supply collaboration interfaces from the owner's `contract.ts` and clients through `directClient`.
+- Call `declare(registry)` for every service and for the Gateway.
+- Construct the Gateway HTTP service with the invocation chain.
+- Call `registry.seal()`.
+
 The barriers of the start are below.
 
-- The migrations complete before a service reads a table.
+- The migrations of every store complete before the root constructs any service.
+- Every domain service starts before the Gateway listener opens.
+- A `start()` calls no peer.
+- Services call peers only after every service starts.
+- A construction cycle can use a thunk `() => Peer`.
+- A cycle that a `start()` needs is a defect.
 - Every registration completes before the server admits a request.
 - The listener binds before the server admits a request. Startup issues and displays no JWT and requires no terminal.
 
@@ -345,15 +413,48 @@ A failed start exits as below.
 - A signal that arrives during the start enters this path.
 - The cleanup is no rollback. It undoes no committed transaction and revokes no JWT that already reached its recipient.
 
-The stop runs as below.
+The stop has these triggers.
 
-- `SIGINT` and `SIGTERM` start the stop, and the deadline of 10 s starts with it. The deadline holds the event loop, so an empty loop exits the process never before the deadline.
-- The server stops the admission of a request, and that step waits for no connection to drain.
-- It cancels every waiting work pull and every MCP stream through `Context`.
-- It joins the handlers in flight inside the remaining deadline.
-- The store module that owns a connection closes that connection after the join.
-- An expired deadline exits the process and closes nothing, and the exit releases every lock.
-- The stop satisfies the rule of [scheduler-service.md](scheduler-service.md), because it stops every new claim and it preserves every accepted obligation.
+- `SIGINT` or `SIGTERM` starts the stop.
+- Cancellation of the context of `Server.run` starts the stop.
+- An explicit `Server.stop()` starts the stop.
+- A `run()` of one service that returns an error starts the stop.
+
+The stop runs four phases.
+
+- Phase 1 quiesces every service at once.
+  - The root calls `quiesce()` on every service in one step.
+  - The Gateway closes the listener without waiting for a connection to drain.
+  - The Gateway cancels every waiting work pull and every MCP stream through `Context`.
+  - The Scheduler Service starts no new claim.
+  - The Worker Service starts no new execution.
+  - The Worker Service signals the instances in flight.
+  - Every service stops its timers and sweeps.
+  - No service releases a resource.
+- Phase 2 drains work with everything available.
+  - In-flight handlers continue.
+  - The root joins the work of the producers while direct calls from a draining service to a peer continue.
+  - The invocation chain accepts a direct call.
+- Phase 3 joins the invocation chain.
+  - `invocation.stop()` joins the remaining handlers and streams.
+  - The invocation chain then rejects every new call.
+- Phase 4 releases resources in reverse construction order.
+  - The root calls `stop()` of each service in that order.
+  - Each service joins its remaining work and releases its resources.
+  - The store then closes.
+  - The log then closes.
+
+The deadline and admission boundaries apply across the phases.
+
+- The deadline of 10 s starts with phase 1.
+- The deadline holds the event loop.
+- An empty event loop never exits the process before the deadline.
+- An expired deadline exits the process in whatever phase it stands.
+- The exit releases every lock.
+- The invocation chain distinguishes external admission from internal availability.
+- The listener closes external admission in phase 1.
+- Internal availability ends in phase 3.
+- The stop preserves every accepted obligation, as [scheduler-service.md](scheduler-service.md) requires.
 
 A fatal error runs as below.
 
@@ -367,7 +468,10 @@ A fatal error runs as below.
 - The fatal writer uses the destination that the log already opened, with a synchronous write. A failure before that destination opened writes to standard error, which is the one exception to the destination rule.
 - A synchronous write can fail, it can write fewer bytes and it can block, and its completion is no durability. The exit follows the attempt in every case, and this sibling claims no bound on the wall-clock time of the exit.
 - The exit closes every descriptor, so it releases the exclusive lock of each database file. It rolls back no interrupted operation, because a transaction runs inside one synchronous function, so a committed write of that operation stays committed.
-- The recovery of the remaining work belongs to the owning service. [gateway-service.impl.md](gateway-service.impl.md) sweeps an in-progress idempotency record at the next start, and a route that returns a secret replays 409 and never the lost answer.
+- The recovery of the remaining work belongs to the owning service.
+- The idempotency component holds no durable record, as [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) describes.
+- A retry after a restart runs the handler again.
+- Every mutation handler is idempotent by a natural key of its own.
 - The server restarts nothing, and the process manager of the operator owns a restart.
 
 ## Secret material and the diagnostic contract
@@ -438,20 +542,138 @@ A fatal error runs as below.
 
 ## The operation and its two entry adapters
 
-- An operation is the unit that a caller outside the process invokes, and [gateway-service.impl.md](gateway-service.impl.md) holds the registry that declares each one with its schema, its access policy, its timeout and its mutation flag.
-- The owning service declares its operations, and the Gateway Service projects each one into a route and into the emitted OpenAPI document.
-- An internal collaboration between two services is no operation. It stays a function of the owning service, and it takes the transaction of the operation as an explicit argument, which the transaction section rules.
-- The registry gives one typed client interface for each service. A caller depends on that interface, and it imports no module of the target service.
-- Two entry adapters implement that interface. The direct adapter runs inside the `server` application, and the HTTP adapter runs inside another application and calls the published route.
-- Both adapters enter one invocation chain of the server, which holds the validation, the idempotency middleware, the access policy and then the handler. The direct adapter invokes no handler of its own.
-- The composition root of an application builds every client once. `kanthord serve server` builds the direct adapter, and `kanthord serve worker` builds the HTTP adapter with one endpoint. No service and no worker instance selects a transport.
-- The direct adapter parses its input with the schema of the operation, and it returns a value that the output schema admits, so no value crosses one adapter that the other adapter refuses.
-- The contract holds three interaction forms: the unary form of an operation, the exact bytes of a platform delivery, and the long-lived stream of the MCP server. The schema rule covers the unary form.
-- An operation names the authority that established the identity of its caller. The Gateway Service mints a human identity and a machine identity from a verified JWT, and the Worker Service vouches for a runtime identity. A value that no authority minted authorizes nothing on either adapter.
-- A client interface returns a completed result, a declared failure of the operation, or an indeterminate result. An indeterminate result appears on either adapter, because one caller implementation runs in every application.
-- A mutation carries an idempotency key on both adapters, and one logical invocation keeps its key across its retries.
-- A waiting operation declares what a cancellation stops, and both adapters carry that cancellation.
+The public interfaces have three kinds.
+
+- Kind 1, an operation, is public and routable.
+- Every invocation from an outside application enters through an operation.
+- The owning service declares its operations in `contract.ts`.
+- The Gateway Service projects each operation into a route and into the emitted OpenAPI document.
+- [gateway-service.impl.md](gateway-service.impl.md#the-operation-registry) describes that projection.
+- Kind 2, a collaboration, is a synchronous function on an interface in the owner's `contract.ts`.
+- A collaboration takes the caller's `Transaction` as an explicit argument.
+- A collaboration serves only an invariant that must hold atomically across the tables of two services.
+- Its interface documents that invariant.
+- The Mission Service uses the Scheduler Service queue's public insert and delete in the transaction that commits the accepted fact.
+- This collaboration co-locates the Mission Service and the Scheduler Service.
+- A collaboration is a co-location contract of those services in one process on one database.
+- Kind 3, a client, carries every other call between services through `ServiceClient<typeof peerOperations>`.
+- Kind 3 is the default.
+- Kind 2 requires the written atomicity reason.
+- No fourth kind exists.
+- A service imports no private module of a peer.
+- A service names no table of a peer.
+- The registry gives one typed client interface for each service.
+- Two entry adapters implement that interface.
+- The direct adapter runs inside the `server` application.
+- The HTTP adapter runs inside another application and calls the published route.
+- Both adapters enter one invocation chain with validation, the idempotency component, the access policy and the handler.
+- The direct adapter invokes no handler of its own.
+- The composition root of an application builds every client once.
+- The `server` uses `directClient(invocation, peerOperations)`.
+- Another application uses `httpClient(peerOperations, endpoint, token)`.
+- `kanthord serve worker` builds the HTTP adapter with one endpoint.
+- No service and no worker instance selects a transport.
+
+An operation declares its execution contract.
+
+- Each operation declares its schema, access policy, timeout and mutation flag.
+- Each operation declares the store that `caller.commit` opens.
+- Its `interaction` declares the lifetime as `unary`, `wait` or `stream`.
+- Each operation declares what a cancellation stops.
+- Both adapters carry that cancellation.
+- A `unary` operation is one request and one answer.
+- A `wait` ends on cancellation.
+- Cancellation of a `wait` ends no accepted obligation under it.
+- A disconnected work pull releases no committed claim.
+- A `stream` is a one-way stream from the server to the client.
+- One HTTP response stays open and carries server-sent events.
+- The client sends nothing on that response.
+- Every client message is a request of its own.
+- No operation is bidirectional.
+- The Gateway owns the connection.
+- The owning service owns the session under it.
+- The close of the connection is no domain cancellation.
+- The access policy of the operation selects authentication.
+- The delivery policy mints no caller identity.
+- The acknowledgement of a delivery follows the commit of the inbox record.
+
+Caller propagation carries identity per call.
+
+- `ClientOptions` carries `identity` per call.
+- A handler that acts for its caller passes `caller.identity`.
+- The direct adapter enters the chain with that identity.
+- The peer authorizes the original caller.
+- A client built once holds no fixed identity.
+- An operation names the authority that establishes the identity of its caller.
+- The Gateway Service mints human and machine identities from verified JWTs.
+- The Worker Service vouches for a runtime identity.
+- A value that no authority mints authorizes nothing on either adapter.
 - Both adapters carry the trace identity and the parent span of the caller.
+
+A handler separates asynchronous work from its commit.
+
+- A store transaction is synchronous and spans no `await`.
+- A handler runs asynchronous work first, including every client call.
+- A handler performs one `caller.commit` at the end on the declared store.
+- A handler calls a peer mutation before its own commit.
+- Two operations compose no atomic unit.
+- The owning design page states the outcome when the peer completes and the initiating operation fails.
+- For a multi-service transition, the owning design page names the durable obligation owner, authoritative completion condition and recovery after interruption.
+- The invocation chain supplies replay, never recovery.
+- `worker.register` commits through Worker Service registrations and calls the Project instance-count collaboration inside the same transaction.
+- `worker.register` and `gateway.verify` provide the reference pattern on both adapters.
+
+The invocation chain holds idempotency in memory.
+
+- A mutation carries an idempotency key on both adapters.
+- One logical invocation keeps its key across retries.
+- The idempotency component holds each record in memory with a TTL.
+- No store holds a replay record.
+- A replay holds inside one process and inside the TTL.
+- A retry after a restart runs the handler again.
+- Every mutation handler is idempotent by a natural key of its own.
+- [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) holds the mechanism.
+- The telemetry sink uses a client of a Tracking operation with a lossy guarantee and a handler idempotent by a natural key.
+- The Tracking Service keeps `tracking.db` separate because telemetry and operational records grow fast.
+- One file couples their locking, retention and maintenance.
+
+Both adapters implement one transport-neutral value and error contract.
+
+- Inputs and outputs conform to their wire representation.
+- The direct adapter parses input with the operation schema.
+- Its output conforms to the output schema.
+- The direct adapter isolates values as HTTP does.
+- No result carries a live object, a transaction, a token or a runtime resource.
+- A client returns `Completed`, `Failure` or `Indeterminate`.
+- An indeterminate result appears on either adapter because one caller implementation runs in every application.
+
+Cross-service references retain their targets.
+
+- An owner deletes no record that a peer can reference.
+- The owner disables or retires that record.
+- A referencing service tolerates a disabled target.
+- No existence operation exists.
+
+The applications compare package versions.
+
+- The `server` and the `worker` application ship as one version.
+- The server publishes the `version` of its `package.json` through the public operation that serves the OpenAPI index.
+- The `worker` application reads its own `version` at its start.
+- It refuses to start on a difference with one diagnostic that names both versions.
+
+A process split retains these boundaries.
+
+- A client-kind interaction moves to another process by a change of the composition root alone when its operation already accepts the caller's own JWT.
+- That caller is a machine or a human.
+- A collaboration stays co-located until a design change gives the invariant one owner.
+- A forwarded identity crosses no process boundary because its provenance is process-local.
+- The JWT stays in the Gateway.
+- The Gateway stays the single front door.
+- A service that moves out remains reachable through the Gateway.
+- Each service directory is a candidate package.
+- `contract.ts` is a publishable contract.
+- The kernel is a shared package whose version is a compatibility surface.
+- The `worker` application invokes registration, work pull, evidence write, telemetry ingestion and MCP stream operations through their owners' `contract.ts` imports.
 
 ## The CLI configuration commands
 
@@ -491,7 +713,14 @@ A fatal error runs as below.
 - A test covers the help of the `config` group with an absent configuration file, and it asserts the resolved absolute path in the output.
 - A test covers a client configuration file at `0644`, and it asserts that the command stops.
 - A test covers the removed login and logout commands and asserts a non-zero exit without creating or changing client configuration.
-- A test runs one operation through the direct adapter and through the HTTP adapter, and it asserts the same result, the same failure value and the same idempotent replay.
+- A test runs one operation through the direct adapter and through the HTTP adapter.
+- It asserts the same result, failure value and replay within the TTL of the idempotency component.
+- A conformance test runs every operation through both adapters, including a malformed value and a lost answer.
+- A test asserts that the `worker` application refuses to start when its package version differs from the version the server publishes.
+- A test asserts that `quiesce()` leaves the handlers of a service available to a peer during the drain.
+- It asserts that `stop()` after the drain releases the resources of the service.
+- A lint test rejects an import of a private module of a peer.
+- It rejects an import of `caller-mint.ts` outside `src/gateway/`.
 - A test covers a mutation whose answer the caller loses, and it asserts the indeterminate result.
 - A test covers a caller that supplies an identity value that no authority minted, and it asserts the refusal.
 - A test covers a parse error on a line that holds a secret, and it asserts that the diagnostic prints no value.
@@ -517,7 +746,9 @@ A fatal error runs as below.
 - A test covers identity validation with a bare ULID, a wrong entity prefix and a noncanonical ULID portion, and it asserts their rejection.
 - A test asserts that every timestamp field of the emitted OpenAPI document composes the shared scalar.
 - A conformance set covers the canonical form of a numeric-looking member name, a nested object, the order of an array, an invalid Unicode sequence and the serialization of a number.
-- An integration test covers a binding submission that changes no configuration, and a completed idempotent replay.
+- An integration test covers a binding submission that changes no configuration and a completed replay within the TTL of the idempotency component.
+- A test enforces the migration naming check for table prefixes and their unique service owners.
+- A test enforces the migration isolation check by applying each service's migrations alone on an empty store.
 - A test upgrades a preserved fixture of an earlier release that holds rows.
 - A test restarts after a migration sequence that committed two services and failed on the third.
 - A test covers a migration that fails in its second statement, and it asserts no row of its own and no partial schema.
@@ -527,7 +758,94 @@ A fatal error runs as below.
 
 ## Application source layout
 
-- The CLI application lives in `engine/src/apps/cli/`, with its entry in `index.ts` and its client configuration alongside it.
-- The server application and its composition root live in `engine/src/apps/server/`, with its entry in `index.ts`.
-- `engine/src/main.ts` installs the process-level fatal handlers and dispatches to the CLI application. Shared services and components live outside `src/apps/` and are composed by the applications.
+Imports point downward through four layers.
+
+- `src/kernel/` holds the runtime with no domain authority.
+- `src/<service>/` holds one directory for each of the six services, as peers.
+- `src/gateway/` is one of the six services and also the transport.
+- `src/apps/` holds the composition roots of the `server`, `worker` and `cli` applications.
+
+The configuration module sits above the services and below the applications.
+
+```text
+engine/src/
+├── main.ts
+├── config/
+│   ├── global.ts          schema and type of `log` and `masterKey`   [services, kernel users]
+│   └── index.ts           whole schema = global + every service fragment   [apps only]
+├── kernel/
+│   ├── service.ts  context.ts  store.ts  health.ts  log.ts  errors.ts
+│   ├── operation.ts  caller.ts  caller-mint.ts
+│   ├── json.ts  identity.ts  values.ts  files.ts  http.ts
+│   └── test-support.ts
+├── project/  mission/  scheduler/  worker/  tracking/
+│   ├── contract.ts        operations + collaboration interface types   [peers, apps]
+│   ├── index.ts           <Name>Service, Dependencies, <service>Migrations   [apps/server]
+│   ├── service.ts         lifecycle, healthcheck, declare(registry), handlers   [private]
+│   ├── migrations.ts      <service>_* tables, present only with tables   [private]
+│   └── *.test.ts
+├── gateway/
+│   ├── contract.ts        gatewayOperations   [peers, apps]
+│   ├── client.ts          httpClient   [apps/cli, apps/worker]
+│   ├── index.ts           GatewayService, createInvocation, directClient   [apps/server]
+│   ├── service.ts  authentication.ts  invocation.ts  idempotency.ts  openapi.ts
+│   ├── migrations.ts  errors.ts  request-id.ts  json.ts  constants.ts   [private]
+│   └── *.test.ts
+└── apps/
+    ├── server/index.ts
+    ├── worker/index.ts
+    └── cli/  index.ts  constants.ts  client-config.ts  <group>.ts
+```
+
+Each service module exposes its contract and composition entry.
+
+- `contract.ts` holds client-facing operation declarations and collaboration interface types.
+- It imports the kernel and `zod` only.
+- It provides the extraction seam for a separate deployable or package.
+- `index.ts` exports the service class, `Dependencies`, migrations and the `convict` configuration fragment.
+- Only `apps/server` imports that composition entry to construct services.
+- The composition root uses plain modules and constructor injection.
+- The configuration module imports the configuration fragments as [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) describes.
+- A peer constructs no service.
+- A client application loads no server code.
+- Private `service.ts` implements `Service`, registers its health probe and exposes `declare(registry)`.
+- `declare(registry)` binds a handler to every operation in `contract.ts`.
+- A handler calls functions of its own service.
+- Private `migrations.ts` exists only when the service owns tables.
+- Every table carries the `<service>_` prefix.
+- `src/worker/contract.ts` holds `WorkerRegistrations`, `Registration` and `VerifiedClient`.
+- `src/project/contract.ts` holds `ProjectBindings`.
+- The Gateway adds public `client.ts` for `httpClient`.
+- Its `index.ts` exports `GatewayService`, `createInvocation` and `directClient`.
+- Gateway authentication holds `resolveMachine` with two injected read-only lookups.
+- Gateway authentication performs no worker registration.
+- The Worker Service binds its own operations through `declare(registry)`.
+- The Gateway owns the HTTP listener, JWT verification, identity minting, invocation chain, in-memory idempotency component, OpenAPI projection and both adapters.
+
+The kernel holds shared contracts and runtime components.
+
+- `service.ts`, `context.ts`, `store.ts`, `health.ts` and `log.ts` hold their runtime components.
+- `errors.ts` holds the failure envelope `ErrorBody` and `errorSchema`.
+- `json.ts`, `identity.ts`, `values.ts`, `files.ts`, `http.ts` and `test-support.ts` complete the shared runtime.
+- `operation.ts` holds `Operation`, `Handler`, `CallerContext`, `AccessPolicy`, `OperationInteraction` and `emptyInput`.
+- It also holds `OperationRegistry`, `ServiceClient`, `ClientOptions`, `OperationResult` and `OperationResultType`.
+- `OperationRegistry` performs structural validation only.
+- The Gateway emitter validates the OpenAPI scope of each registry entry.
+- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, module-private `WeakSet`s, `isHumanIdentity` and `isMachineIdentity`.
+- `caller-mint.ts` holds the two identity factories.
+- Only `src/gateway/` imports `src/kernel/caller-mint.ts`.
+
+The import boundaries follow the public files.
+
+- The kernel imports the kernel and `zod` only.
+- A service imports the kernel, its own directory and `contract.ts` of a peer.
+- `contract.ts` imports the kernel and `zod` only.
+- `apps/server` imports the kernel and `index.ts` plus `contract.ts` of every service.
+- `apps/cli` and `apps/worker` import the kernel, `contract.ts` of any service and `src/gateway/client.ts`.
+- Only applications import `src/config/index.ts`.
+- A service needing global configuration types imports `src/config/global.ts` alone.
+- `eslint-plugin-boundaries` enforces these imports.
+- Its element types distinguish kernel, caller mint, service contract, service composition entry, service private files, Gateway client, configuration global, configuration entry and applications.
+- `main.ts` installs the fatal handlers and dispatches to the `cli` application.
+- [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the composition root order.
 - Tests sit beside their source as `*.test.ts`.

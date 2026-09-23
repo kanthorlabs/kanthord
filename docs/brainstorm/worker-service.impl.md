@@ -114,6 +114,24 @@ It removes that checkout after the call.
 
 The MCP v2 server in [Tool table](#tool-table) is the one MCP server of the server.
 An external harness connects over HTTP with the machine JWT of its client identity, and the live registration of that client identity is required.
+
+- The MCP server uses the Streamable HTTP transport of the MCP specification.
+- One endpoint path accepts `POST`, `GET` and `DELETE`.
+- Every client JSON-RPC message is a new `POST`.
+- The server answers a request with one `application/json` body or a `text/event-stream` response that stays open.
+- The client may open a `GET` stream for server messages.
+- The server assigns `Mcp-Session-Id` at initialization.
+- Every later request carries `Mcp-Session-Id`.
+- The client resumes a broken stream with `Last-Event-ID`.
+- The specification states that a disconnection is no cancellation.
+- A client cancels with an explicit `CancelledNotification`.
+- The Worker Service owns the session.
+- The Gateway owns the connection.
+- [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) defines the lifetime of the operation.
+- The v2 TypeScript SDK ships the Streamable HTTP server transport and the Hono integration package `@modelcontextprotocol/hono`.
+- The endpoint mounts on the Gateway app without a second listener.
+- The server supports no WebSocket transport and no deprecated HTTP+SSE transport.
+
 The first version approves two read methods of the GitHub implementation.
 
 - The read of a pull request.
