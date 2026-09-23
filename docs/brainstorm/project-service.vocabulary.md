@@ -4,7 +4,7 @@ title: Project Service Vocabulary
 
 # Project Service Vocabulary
 
-This file holds the values and the examples of the terms that [project-service.md](viewer.html?p=project-service.md) owns.
+This file holds the values and the examples of the terms that [project-service.md](project-service.md) owns.
 This file is not a design document, and `project-service.md` stays the single source of truth.
 
 ## capability
@@ -244,23 +244,13 @@ The record of the operation names the execution identity.
 
 ## client identity
 
-The identity that an instance of an external harness presents.
+The identity of one worker instance, or of one program of an external harness, that registers. `kanthord jwt` generates it inside a machine JWT, and it holds no secret. It is never reused, and it never moves to another worker binding.
 
-`claude-code` requests a platform action through the API, and it presents its client identity.
-The protected facility resolves that identity to the project, then it checks the binding.
-The external harness holds no credential.
+`ulrich` generates a machine JWT for worker binding `claude-main` of `claude@1` with the name `Claude Code on ulrich-mbp`, and the command generates the client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` inside it.
+The program of `claude-code` presents that JWT, and the protected facility resolves the client identity to the worker binding `claude-main` and to its project.
+A second program of `claude-code` receives its own JWT and its own client identity, and both instances count against the instance count of `claude-main`.
+The external harness holds no credential of a resource.
 `project-service.md` names the execution identity of an execution and the client identity of an external harness.
-Worker binding `claude-main` of `claude@1` holds the client identity `claude-code-main`, which the instance that `ulrich` starts presents.
-The Project Service issues a client secret for that identity when `ulrich` adds it to the binding.
-
-## client secret
-
-The secret that the Project Service issues once for a client identity of a worker binding and that an instance of an external harness presents with that identity to authenticate a request.
-
-`ulrich` adds `claude-code-main` to worker binding `claude-main`, and the Project Service returns its client secret once and keeps the hash in custody.
-The instance presents `claude-code-main` and that secret on a work pull, and the Project Service verifies the hash before it resolves the identity.
-A request that names `claude-code-main` without its secret is refused before any resolution.
-A rotation issues a new secret and keeps the identity.
 
 ## service identity
 
@@ -311,7 +301,7 @@ The state on its platform that an external action states.
 Under a repository strategy that requires a pull request for every change, the configured repository action opens a pull request.
 The expected end state of that action is the merge of that pull request.
 Under a repository strategy that requires a merge and push, the expected end state is the push to the base branch.
-[overview.md](viewer.html?p=overview.md) owns landing, which is the observed expected end state.
+[overview.md](overview.md) owns landing, which is the observed expected end state.
 
 ## the five changes
 

@@ -98,7 +98,9 @@
 
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
-  <script>
+  <script type="module">
+    import { validatePath, resolveMarkdownLink } from './assets/navigation.mjs';
+
     (function () {
       var loadingEl = document.getElementById('loading');
       var errorEl = document.getElementById('error');
@@ -124,15 +126,6 @@
           .replace(/&quot;/gi, '"')
           .replace(/&#(\d+);/gi, function (_, n) { return String.fromCharCode(parseInt(n, 10)); })
           .replace(/&#x([\da-f]+);/gi, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
-      }
-
-      function validatePath(p) {
-        if (!p || typeof p !== 'string') return null;
-        if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(p)) return null;
-        if (p.charAt(0) === '/') return null;
-        if (p.indexOf('..') !== -1) return null;
-        if (!/^[-A-Za-z0-9_.]+\.md$/.test(p)) return null;
-        return p;
       }
 
       function parseFrontmatter(text) {
@@ -195,9 +188,9 @@
 
       if (!safePath) {
         if (!raw) {
-          showError('No document specified.\nUsage: viewer.html?p=filename.md');
+          showError('No document specified.\nUsage: viewer.html?p=reference/README.md');
         } else {
-          showError('Rejected path: "' + String(raw).replace(/[<>"]/g, '') + '".\nOnly simple .md filenames without path separators are allowed.');
+          showError('Rejected path: "' + String(raw).replace(/[<>"]/g, '') + '".\nOnly public documentation paths are allowed.');
         }
         return;
       }
@@ -233,12 +226,11 @@
             return text;
           }
 
-          var normalized = href;
-          if (normalized.slice(0, 2) === './') normalized = normalized.slice(2);
-          var mdMatch = normalized.match(/^([-A-Za-z0-9_.]+\.md)(#[^"]*)?$/);
-          if (mdMatch) {
-            return '<a href="viewer.html?p=' + escapeAttr(mdMatch[1]) + (mdMatch[2] || '') + '"' + tAttr + '>' + text + '</a>';
+          var documentLink = resolveMarkdownLink(href, safePath);
+          if (documentLink) {
+            return '<a href="' + escapeAttr(documentLink) + '"' + tAttr + '>' + text + '</a>';
           }
+          if (/\.md(?:[?#]|$)/i.test(href)) return text;
 
           return '<a href="' + escapeAttr(href) + '"' + tAttr + '>' + text + '</a>';
         };
@@ -258,7 +250,8 @@
         }
 
         var fm = parseFrontmatter(text);
-        var docTitle = fm.meta.title || safePath.replace(/\.md$/, '');
+        var heading = fm.body.match(/^# (.+)$/m);
+        var docTitle = fm.meta.title || (heading && heading[1].replace(/`/g, '')) || safePath.replace(/\.md$/, '');
         document.title = 'kanthord · ' + docTitle;
         breadcrumb.textContent = docTitle;
 

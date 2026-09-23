@@ -135,11 +135,13 @@ An instance holds a runtime identity.
 The Worker Service mints the runtime identity when it creates the instance.
 The runtime identity is unique inside the server, and it names the worker binding of the instance.
 The Worker Service vouches for that association on the [work pull](scheduler-service.md#work-pulls).
-For an instance that registers, the Worker Service accepts the registration under a client identity of its binding, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
+For an instance that registers, the Worker Service accepts the registration under the [client identity](project-service.vocabulary.md#client-identity) of its credential and the worker binding that the credential names, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
+A client identity holds at most one live registration.
 An instance of a worker that an external harness hosts registers, and an instance at the `worker` placement registers.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
-The registration returns the credential that the instance presents on every later request, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
-A registration ends when the program deregisters, when the server restarts, or when its client identity leaves the binding, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
+The instance presents its credential at the registration and on every later request, the registration returns no credential, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
+A work pull and every execution operation of a registered instance require its live registration.
+A registration ends when the program deregisters, when the server restarts, when a ban reaches its credential, or when its worker binding is removed or becomes unavailable, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 
 An instance record is runtime-only.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
@@ -157,8 +159,8 @@ An idle instance that receives no work retries under the [work-pull rules](sched
 
 The Worker Service produces the instance healthcheck before each work pull.
 The healthcheck of an instance at the `server` placement passes when the effective configuration of the agent resolves under the current binding set.
-The healthcheck of an instance at the `worker` placement passes when that configuration resolves and its client identity is a client identity of its binding.
-The healthcheck of an instance that an external harness hosts passes when its client identity is a client identity of its binding.
+The healthcheck of an instance at the `worker` placement passes when that configuration resolves and its registration is live.
+The healthcheck of an instance that an external harness hosts passes when its registration is live.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
 The tool of an agent and the verification command of a node run code that the repository supplies.
@@ -440,12 +442,12 @@ The server runs one [MCP server](worker-service.vocabulary.md#mcp-server).
 The MCP server is one form of the API.
 It serves a native agent and an external harness.
 A native agent presents the execution identity of the execution that hosts it.
-An external harness authenticates with its [client identity](project-service.vocabulary.md#client-identity) and its [client secret](project-service.vocabulary.md#client-secret).
+An external harness authenticates with the credential of its [client identity](project-service.vocabulary.md#client-identity), which the [Gateway Service](gateway-service.md#machine-identities) rules.
 It presents the execution identity of its claim.
 The MCP server refuses a call whose execution identity belongs to no live claim of that client identity.
 Each tool maps to one method of a platform implementation or to the action performer.
 The MCP server makes no decision of its own.
-The Project Service authenticates the client identity, the Scheduler Service establishes the live claim, and the owning component performs every operation.
+The Gateway Service authenticates the client identity, the Scheduler Service establishes the live claim, and the owning component performs every operation.
 
 The MCP server exposes a list of resource-scoped read methods of the platform implementations and the tool of the action performer.
 The Worker Service permits each read method individually.
@@ -722,6 +724,7 @@ The sequence diagram below shows the invocation of the action performer by an ex
 sequenceDiagram
     autonumber
     participant H as External harness (claude-code)
+    participant GW as Gateway Service
     participant MS as MCP server
     participant AP as Action performer
     participant P as Project Service
@@ -731,12 +734,12 @@ sequenceDiagram
     participant G as Git platform
 
     rect rgb(248, 215, 218)
-        H->>MS: call the action performer tool (client identity, client secret, execution identity of the evaluation claim)
+        H->>GW: call the action performer tool (credential of the client identity, execution identity of the evaluation claim)
         Note over H,AP: the harness names no action and supplies no operand
     end
     rect rgb(255, 243, 205)
-        MS->>P: verify the client secret of the client identity
-        P-->>MS: authenticated client identity
+        GW->>GW: verify the credential of the client identity
+        GW->>MS: the call with the machine identity of the client identity
     end
     rect rgb(214, 234, 248)
         MS->>S: verify the live claim of that client identity under the execution identity

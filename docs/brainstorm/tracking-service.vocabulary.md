@@ -4,8 +4,8 @@ title: Tracking Service Vocabulary
 
 # Tracking Service Vocabulary
 
-This file holds the values and the examples of the terms that [tracking-service.md](viewer.html?p=tracking-service.md) owns.
-A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabulary.md).
+This file holds the values and the examples of the terms that [tracking-service.md](tracking-service.md) owns.
+A product term lives in [overview.vocabulary.md](overview.vocabulary.md).
 This file is not a design document, and `tracking-service.md` stays the single source of truth.
 
 ## telemetry

@@ -4,7 +4,7 @@ title: Overview Vocabulary
 
 # Overview Vocabulary
 
-This file holds the values and the examples of the product terms that [overview.md](viewer.html?p=overview.md) owns.
+This file holds the values and the examples of the product terms that [overview.md](overview.md) owns.
 A term that another design page owns lives in that page's own vocabulary sibling.
 This file is not a design document, and `overview.md` stays the single source of truth.
 
@@ -75,7 +75,7 @@ The landing observation of the objective "Add password reset" appends the landed
 
 An outcome is an assessment from evaluation of evidence against validation criteria, or a human act that a human assertion records.
 The term names no closed set.
-The [Mission Service Vocabulary](viewer.html?p=mission-service.vocabulary.md#assessment) owns the three values that an assessment establishes.
+The [Mission Service Vocabulary](mission-service.vocabulary.md#assessment) owns the three values that an assessment establishes.
 A human override of the outcome of "Add password reset" produces a new outcome that carries the human assertion.
 kanthord keeps the previous outcome as a reference.
 A human discard of "Add password reset" produces an outcome whose asserted result establishes nothing.
@@ -156,17 +156,17 @@ A human merges the pull request of "Add password reset", and an observer records
 
 ## human identity
 
-The identity of a logged-in human account, as established by the [Gateway Service](viewer.html?p=gateway-service.md) and passed to a downstream service.
+The identity of a logged-in human account, as established by the [Gateway Service](gateway-service.md) and passed to a downstream service.
 The term names no closed set.
 
-The [Gateway Service](viewer.html?p=gateway-service.md) authenticates `ulrich` and establishes the human identity of `ulrich`.
+The [Gateway Service](gateway-service.md) authenticates `ulrich` and establishes the human identity of `ulrich`.
 The Mission Service receives that identity and names it in its authorization call.
 
 ## binding
 
 A binding is the record that allocates a resource to a project and permits an operation on that resource.
 The term names no closed set.
-The [Project Service Vocabulary](viewer.html?p=project-service.vocabulary.md#binding-kind) owns the four binding kinds and their values.
+The [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the four binding kinds and their values.
 A project holds a repository binding for the repository that the objective "Add password reset" belongs to.
 The binding permits three capabilities.
 The Project Service vocabulary holds the cardinality of each binding kind.
@@ -174,7 +174,7 @@ The Project Service vocabulary holds the cardinality of each binding kind.
 ## resource
 
 A resource is what a binding allocates to a project, and it exists independently of that project.
-The term names no closed set, and the [Project Service Vocabulary](viewer.html?p=project-service.vocabulary.md#binding-kind) owns the four binding kinds.
+The term names no closed set, and the [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the four binding kinds.
 The project of "Account recovery" binds the repository `kanthorlabs/kanthord`, the worker `general@1`, a provider account at `openai` and a source.
 
 ## provider

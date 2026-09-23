@@ -4,8 +4,8 @@ title: Worker Service Vocabulary
 
 # Worker Service Vocabulary
 
-This file holds the values and the examples of the terms that [worker-service.md](viewer.html?p=worker-service.md) owns.
-A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabulary.md).
+This file holds the values and the examples of the terms that [worker-service.md](worker-service.md) owns.
+A product term lives in [overview.vocabulary.md](overview.vocabulary.md).
 This file is not a design document, and `worker-service.md` stays the single source of truth.
 
 ## worker
@@ -212,13 +212,13 @@ The server runs one MCP server.
 Its client kinds form a closed set of two values.
 
 - **native agent**, under the execution identity of its hosted execution
-- **external harness**, under its client identity, client secret and the execution identity of its live claim
+- **external harness**, under the credential of its client identity and the execution identity of its live claim
 
 Each tool maps to one method of a platform implementation or to the action performer.
 The MCP server exposes individually approved resource-scoped read methods and the tool of the action performer.
 It exposes the tool of the action performer to an external harness only.
 It exposes no other write.
-The external harness `claude-code` authenticates with client identity `claude-code-main` and its client secret.
+The external harness `claude-code` authenticates with the JWT of its client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`.
 It presents the execution identity of its evaluation claim on "Add password reset" and calls the tool of the action performer.
 The MCP server exposes the read of pull request 42 and the list of its review comments to that external harness.
 It exposes no direct platform write.
@@ -259,7 +259,7 @@ The verification command is an optional field, and a method reads it when the no
 The [Scheduler Service](scheduler-service.vocabulary.md#instance-healthcheck) owns the term, and the Worker Service produces the check.
 The instance of `general@1` passes: the effective configuration of its agent resolves under the binding set of the project with the default account of its provider, and a native agent requires no program on the host.
 The instance of `general@1` fails when the project holds no default account for the provider of the agent and no entry names one.
-The instance of `claude@1` fails when its client identity is not a client identity of its binding.
+The instance of `claude@1` fails when its registration is not live.
 
 ## trust boundary
 

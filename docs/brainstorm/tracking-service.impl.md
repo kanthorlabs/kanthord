@@ -4,7 +4,7 @@ title: Tracking Service Implementation
 
 # Tracking Service Implementation
 
-This file holds the implementation rulings for the mechanisms that realize [tracking-service.md](viewer.html?p=tracking-service.md).
+This file holds the implementation rulings for the mechanisms that realize [tracking-service.md](tracking-service.md).
 This file is not a design document, and `tracking-service.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
 A change to it changes the workers that run on it.
@@ -24,10 +24,10 @@ A kanthord identity takes the `kanthord.` prefix.
 ## Primary store
 
 The primary store is a SQLite database.
-It uses its own database file, `tracking.db` of the data directory that [architecture.impl.md](viewer.html?p=architecture.impl.md) rules, and it never reuses the operational database.
+It uses its own database file, `tracking.db` of the data directory that [architecture.impl.md](architecture.impl.md) rules, and it never reuses the operational database.
 `node:sqlite` `DatabaseSync` opens that file in WAL mode, and the file holds its own migration record.
 The file appears with the working implementation of the tracer, so the no-op phase creates no file and runs no migration.
-Its migration record follows the runner contract of [architecture.impl.md](viewer.html?p=architecture.impl.md).
+Its migration record follows the runner contract of [architecture.impl.md](architecture.impl.md).
 The no-op phase opens no telemetry file, so it validates no history, and a telemetry file that a working-tracer release left stays untouched.
 The schema holds the span and the telemetry text.
 A bulk import runs in bounded transactions, so a concurrent write of the server never waits for a whole import.

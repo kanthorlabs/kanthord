@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>kanthord · Engine Documentation</title>
+  <title>kanthord · Documentation</title>
   <link rel="stylesheet" href="assets/style.css">
   <style>
     .hero {
@@ -62,33 +62,41 @@
     <a class="brand" href="index.html">kanthord</a>
     <nav>
       <a href="index.html" aria-current="page">Index</a>
-      <a href="viewer.html?p=overview.md">Overview</a>
-      <a href="viewer.html?p=architecture.md">Architecture</a>
-      <a href="viewer.html?p=project-service.md">Project Service</a>
-      <a href="viewer.html?p=mission-service.md">Mission Service</a>
-      <a href="viewer.html?p=scheduler-service.md">Scheduler Service</a>
-      <a href="viewer.html?p=worker-service.md">Worker Service</a>
-      <a href="viewer.html?p=tracking-service.md">Tracking Service</a>
-      <a href="viewer.html?p=gateway-service.md">Gateway Service</a>
+      <a href="viewer.html?p=README.md">Documentation</a>
+      <a href="viewer.html?p=reference/README.md">CLI &amp; API reference</a>
+      <a href="viewer.html?p=explanation/README.md">Explanations</a>
     </nav>
   </header>
 
   <main>
     <div class="hero">
-      <h1>Engine documentation</h1>
-      <p>This site documents the <strong>kanthord engine</strong> — the daemon, its HTTP API, and its data model. The
-        frontend application has its own documentation.</p>
+      <h1>Kanthord documentation</h1>
+      <p>Public documentation for users, operators, and API consumers: configure the daemon,
+        use the CLI, integrate with the HTTP API, and understand its behavior.</p>
     </div>
 
     <p class="scope-note">
-      Start with <a href="viewer.html?p=overview.md"><strong>Overview</strong></a> for orientation.
+      Start with the <a href="viewer.html?p=README.md"><strong>documentation guide</strong></a>
+      for the current scope and available features.
     </p>
 
+    <h2>Operate Kanthord</h2>
+    <ul>
+      <li><a href="viewer.html?p=reference/cli/config/init.md">Create server configuration</a></li>
+      <li><a href="viewer.html?p=reference/cli/serve.md">Run the server</a></li>
+      <li><a href="viewer.html?p=reference/cli/jwt.md">Generate a human token</a></li>
+    </ul>
+    <h2>Integrate and troubleshoot</h2>
+    <ul>
+      <li><a href="viewer.html?p=reference/README.md">Browse CLI commands and API endpoints</a></li>
+      <li><a href="viewer.html?p=explanation/healthchecks.md">Understand health reports</a></li>
+      <li><a href="viewer.html?p=reference/errors.md">Interpret errors</a></li>
+    </ul>
 
   </main>
 
   <footer class="site-footer">
-    KanthorD · static site served from <code>docs/</code> on main
+    Kanthord · public documentation · kanthord.kanthorlabs.com
   </footer>
 </body>
 

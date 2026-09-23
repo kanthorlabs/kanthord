@@ -80,14 +80,12 @@ Each worker binding of one worker holds its own configuration, and two bindings 
 A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
 
-A worker binding of a worker that an external harness hosts holds the client identities that its instances present.
-A human adds a client identity to that binding, and the Project Service issues a client secret for that identity.
-The Project Service returns the client secret once and keeps its hash in custody.
-An instance of an external harness authenticates a request with its client identity and that client secret, and the Project Service verifies the secret before it resolves the identity.
-A rotation issues a new client secret and keeps the identity.
-The removal of a client identity from the binding revokes it.
-Such a binding holds no agent configuration, because the external harness selects and authenticates its own inference outside the resolution of the Project Service.
-A client secret authenticates the instance and authorizes no operation, so it is no credential of a resource.
+A worker binding of a worker whose instances register groups those instances for its instance count.
+Each such instance presents the credential of its own [client identity](project-service.vocabulary.md#client-identity), and that credential names the worker binding.
+The [Gateway Service](gateway-service.md#machine-identities) authenticates that credential, and the Project Service holds no secret of a client identity and no list of the client identities of a binding.
+A client identity authenticates nothing while its worker binding is removed or unavailable.
+A worker binding of a worker that an external harness hosts holds no agent configuration, because the external harness selects and authenticates its own inference outside the resolution of the Project Service.
+The credential of a client identity authenticates the instance and authorizes no operation, so it is no credential of a resource.
 
 ## Authorization and credential custody
 
