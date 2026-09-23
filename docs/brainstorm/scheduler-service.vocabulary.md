@@ -4,8 +4,8 @@ title: Scheduler Service Vocabulary
 
 # Scheduler Service Vocabulary
 
-This file holds the values and the examples of the terms that [scheduler-service.md](viewer.html?p=scheduler-service.md) owns.
-A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabulary.md).
+This file holds the values and the examples of the terms that [scheduler-service.md](scheduler-service.md) owns.
+A product term lives in [overview.vocabulary.md](overview.vocabulary.md).
 This file is not a design document, and `scheduler-service.md` stays the single source of truth.
 
 ## claimant
@@ -102,7 +102,7 @@ A duplicate with the same source and platform delivery identity creates no secon
 
 ## linked human identity
 
-The [human identity](viewer.html?p=overview.vocabulary.md#human-identity) that a delivery links to.
+The [human identity](overview.vocabulary.md#human-identity) that a delivery links to.
 The Scheduler Service passes it to the Mission Service when it invokes a human act on a node.
 The term names no closed set.
 

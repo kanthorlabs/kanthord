@@ -4,8 +4,8 @@ title: Mission Service Vocabulary
 
 # Mission Service Vocabulary
 
-This file holds the values and the examples of the terms that [mission-service.md](viewer.html?p=mission-service.md) owns.
-A product term lives in [overview.vocabulary.md](viewer.html?p=overview.vocabulary.md).
+This file holds the values and the examples of the terms that [mission-service.md](mission-service.md) owns.
+A product term lives in [overview.vocabulary.md](overview.vocabulary.md).
 This file is not a design document, and `mission-service.md` stays the single source of truth.
 
 ## attempt
@@ -215,7 +215,7 @@ An assessment names six things.
 - the actor that performs it
 - the tested input of its machine check, when the pinned node revision carries a verification command
 
-The [overview](viewer.html?p=overview.md) gives what an assessment establishes.
+The [overview](overview.md) gives what an assessment establishes.
 That set is closed and it holds three values.
 
 - The results meet the validation criteria.

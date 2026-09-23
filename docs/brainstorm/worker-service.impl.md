@@ -4,7 +4,7 @@ title: Worker Service Implementation
 
 # Worker Service Implementation
 
-This file holds the implementation rulings for the mechanisms that realize [worker-service.md](viewer.html?p=worker-service.md).
+This file holds the implementation rulings for the mechanisms that realize [worker-service.md](worker-service.md).
 This file is not a design document, and `worker-service.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate, and a change to it is a change to the workers that run on it.
 
@@ -25,6 +25,23 @@ Every runtime setup call carries an abort signal with a deadline.
 The kanthord extension of Claude Code and the kanthord plugin of opencode register the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
 Their design, and the packaging of the `/work` orchestration skill that they carry, are epic decisions.
 
+## The command group `worker`
+
+[architecture.impl.md](architecture.impl.md) rules the command surface and client configuration.
+This sibling declares the command table of the group `worker`.
+
+- `register [--token <jwt>] [--idempotency-key <ulid>]` calls `POST /api/worker/register`, operation ID `worker.register`, with the client access policy.
+
+The command registers a worker instance under the client identity of its machine JWT. It creates no human account, client identity or worker definition.
+[gateway-service.impl.md](gateway-service.impl.md#worker-instance-registration) owns the JWT verification, the instance-count transaction and the registration replay contract.
+`--endpoint` belongs to the group and resolves through the client configuration precedence.
+`--token` overrides `KANTHORD_TOKEN` and the `token` field of the client configuration file. A missing token stops the command without prompting or sending a request.
+The request presents that token as a bearer token and carries an empty body. The command accepts no server configuration option.
+An explicit idempotency key must be a canonical ULID. The command generates a key when the option is omitted and performs no automatic retry.
+Success prints one JSON line containing the `runtimeIdentity` of the instance and the `idempotencyKey`, and exits with zero. It prints no token and saves no client configuration.
+A declared failure prints its HTTP status and idempotency key without the token and exits with a non-zero status. An indeterminate result prints the key and instructs the operator to retry the same request with that key.
+The runtime of a worker may call the route directly with its machine JWT.
+
 ## Prompt composition
 
 The prompt composer resolves the global prompt from the server configuration, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
@@ -35,12 +52,12 @@ It rejects a path of the workspace that a link resolves outside the workspace.
 It follows a link of the host location, because the operator manages the dotfiles of the host.
 A deadline bounds every read.
 The repository context-file discovery of pi stays disabled, and the composer performs every load, so one loader holds the order and the provenance.
-A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](viewer.html?p=architecture.impl.md) rules the algorithm and the rendering.
+A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
 pi receives the base prompt and the agent prompt as its system prompt, with the framing that states the layers and their precedence.
 It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
-The first version supplies one base prompt for `swe@1` and `re@1`, `docs/assets/prompt/base.md`, and the agent prompts `docs/assets/prompt/swe@1.md` and `docs/assets/prompt/re@1.md`.
+The first version supplies one base prompt for `swe@1` and `re@1`, [assets/prompt/base.md](assets/prompt/base.md), and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md).
 The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to the base prompt, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 The bound of the global prompt and the bound of the project prompt are epic decisions.
@@ -96,7 +113,7 @@ It removes that checkout after the call.
 ## MCP server
 
 The MCP v2 server in [Tool table](#tool-table) is the one MCP server of the server.
-An external harness connects over HTTP with its client identity and client secret.
+An external harness connects over HTTP with the machine JWT of its client identity, and the live registration of that client identity is required.
 The first version approves two read methods of the GitHub implementation.
 
 - The read of a pull request.

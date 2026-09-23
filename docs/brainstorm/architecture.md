@@ -77,7 +77,7 @@ Each service that writes telemetry takes responsibility to secure its own sensit
 The Gateway Service holds the RESTful API of the server.
 Every request enters the server through it, from a human and from a machine.
 It authenticates a human and produces a [human identity](overview.vocabulary.md#human-identity).
-It authenticates no machine.
+It authenticates a machine and produces a [machine identity](gateway-service.vocabulary.md#machine-identity).
 It routes each request to the service that owns the requested operation.
 
 ## Service diagram
@@ -119,7 +119,7 @@ A waiting operation states what a cancellation of its caller stops.
 - The Scheduler Service reads the graph and the outcome record from the Mission Service.
 - The Mission Service notifies the Scheduler Service of an accepted change that can affect scheduling.
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
-- The Scheduler Service reads the worker bindings, the permitted client identities and their counts from the Project Service.
+- The Scheduler Service reads the worker bindings and their instance counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
 - The Scheduler Service observes an external object through the platform connector of the Worker Service.
 - The Scheduler Service uses a repository credential that the Project Service holds.

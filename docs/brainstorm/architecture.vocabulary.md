@@ -4,7 +4,7 @@ title: Architecture Vocabulary
 
 # Architecture Vocabulary
 
-This file holds the values and the examples of the terms that [architecture.md](viewer.html?p=architecture.md) owns.
+This file holds the values and the examples of the terms that [architecture.md](architecture.md) owns.
 This file is not a design document, and `architecture.md` stays the single source of truth.
 
 ## service
@@ -27,7 +27,7 @@ The container view shows the actors around the server. The set is closed and it 
 - **a human**
 - **an external harness**
 
-[overview.md](viewer.html?p=overview.md) owns the external harness vocabulary, and it names the harnesses.
+[overview.md](overview.md) owns the external harness vocabulary, and it names the harnesses.
 
 ## external system
 
@@ -36,7 +36,7 @@ The container view shows the external systems around the server. The set is clos
 - **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the server
 - **a large language model provider**, which serves the models that the Worker Service uses
 
-[overview.md](viewer.html?p=overview.md) owns `provider`, and the overview vocabulary holds its example.
+[overview.md](overview.md) owns `provider`, and the overview vocabulary holds its example.
 
 ## app
 
@@ -61,7 +61,7 @@ The server runs on one host.
 ## relation
 
 A relation names what one part of the architecture does with another part.
-The Relations section of [architecture.md](viewer.html?p=architecture.md) holds the relations of this design.
+The Relations section of [architecture.md](architecture.md) holds the relations of this design.
 One relation reads as follows.
 
 - An execution writes evidence to the Mission Service.
@@ -94,7 +94,7 @@ What authenticates an operation on a resource that a project uses.
 - **a provider credential**, which the Worker Service uses
 
 The type of a credential is a separate matter, and no approved page closes that set.
-[project-service.md](viewer.html?p=project-service.md) names three types.
+[project-service.md](project-service.md) names three types.
 
 - an SSH key, which reaches many repositories
 - an OAuth credential, which does not imply a person

@@ -3,7 +3,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ['docs/**', '.github/workflows/pages.yml']
+    paths: ["docs/**", "scripts/docs/**", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:
@@ -22,10 +22,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Test documentation navigation
+        run: node --test scripts/docs/navigation.test.mjs
+      - name: Test publication boundary
+        run: python3 scripts/docs/build.test.py
+      - name: Build public documentation only
+        run: scripts/docs/build.sh "$RUNNER_TEMP/kanthord-public-docs"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: ${{ runner.temp }}/kanthord-public-docs
 
   deploy:
     needs: build

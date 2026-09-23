@@ -4,13 +4,19 @@ title: Architecture Implementation
 
 # Architecture Implementation
 
-This file holds the implementation rulings for the mechanisms that realize [architecture.md](viewer.html?p=architecture.md).
+This file holds the implementation rulings for the mechanisms that realize [architecture.md](architecture.md).
 This file is not a design document, and `architecture.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
 A change to it changes the startup of the server.
 
 The implementation adds no package.
 Node.js 24.15.0 and the installed set satisfy every requirement.
+
+## Named comparison values
+
+- Every comparison against a fixed string or numeric value uses an enum member or a named constant, never a bare string or number literal.
+- This rule covers equality and inequality checks, ordering and threshold checks, `switch` cases, and test assertions.
+- The name expresses the meaning of the value, not merely its text or number. The owning module declares it, and callers reuse that declaration rather than duplicate the literal or define competing constants.
 
 ## The runtime
 
@@ -21,6 +27,17 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The launcher imports the real entry with a dynamic import, because a static import loads a module before the comparison runs.
 - The launcher uses only syntax that a runtime below the floor parses, so a rejection reaches a human instead of a syntax error.
 - Every supported launch route passes through the launcher. A route that runs a source entry directly is a development convenience and no supported route.
+
+## The listening ports
+
+The submodules use these default listening ports.
+
+| Submodule | Port | Meaning |
+| --- | --- | --- |
+| `engine` | `31415` | The first five digits of π (pi), `3.1415`, with the decimal point removed. |
+| `apps` | `27182` | The first five digits of Euler's number e, `2.7182`, with the decimal point removed. |
+
+The [Gateway Service configuration](gateway-service.impl.md#configuration) declares the engine listener settings.
 
 ## The configuration file
 
@@ -49,10 +66,10 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 ## The kind of file of each directory
 
 - The configuration file uses the configuration directory.
-- A database uses the data directory, and the account store of the Gateway Service is such a database.
+- A database uses the data directory, including the operational database used by the Gateway Service.
 - A log, a history and a session record use the state directory.
 - A rebuildable artifact uses the cache directory, because the deletion of that directory costs nothing.
-- The state directory holds the per-operation socket directory of custody, which [project-service.impl.md](viewer.html?p=project-service.impl.md) rules, and it holds the log file under the `file` destination.
+- The state directory holds the per-operation socket directory of custody, which [project-service.impl.md](project-service.impl.md) rules, and it holds the log file under the `file` destination.
 - The server writes no file in the cache directory today.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
 
@@ -62,10 +79,10 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - A row is a default expansion, an effective path or a path template. A variable of the specification moves a default expansion, the resolution rule of the configuration file selects an effective path, and a runtime identity completes a path template.
 - `kanthord.yaml` of the configuration directory, an effective path that this sibling declares. Its default expansion is `$XDG_CONFIG_HOME/kanthord/kanthord.yaml`, and the default of that variable makes it `~/.config/kanthord/kanthord.yaml`.
 - `kanthord.db` of the data directory with its `-wal` and `-shm` files, a default expansion of `$XDG_DATA_HOME/kanthord/kanthord.db` that this sibling declares.
-- `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](viewer.html?p=tracking-service.impl.md) declares.
-- The known-hosts file of the server, of the data directory, a default expansion that [project-service.impl.md](viewer.html?p=project-service.impl.md) declares.
+- `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
+- The known-hosts file of the server, of the data directory, a default expansion that [project-service.impl.md](project-service.impl.md) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
-- The per-operation directory of custody and the public key inside it, of the state directory, a path template that the identity of the operation completes and that [project-service.impl.md](viewer.html?p=project-service.impl.md) declares.
+- The per-operation directory of custody and the public key inside it, of the state directory, a path template that the identity of the operation completes and that [project-service.impl.md](project-service.impl.md) declares.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
 - The index holds no row for the workspace root of an execution, because no page places it.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
@@ -74,7 +91,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 - The server holds one operational database, the file `kanthord.db` of the data directory.
 - The Gateway Service, the Project Service, the Mission Service and the Scheduler Service use that database.
-- The Tracking Service uses its own file, and [tracking-service.impl.md](viewer.html?p=tracking-service.impl.md) rules that file, its migration record and the phase in which it appears.
+- The Tracking Service uses its own file, and [tracking-service.impl.md](tracking-service.impl.md) rules that file, its migration record and the phase in which it appears.
 - `node:sqlite` `DatabaseSync` opens the operational database in WAL mode, and one store module owns that connection.
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
@@ -124,10 +141,14 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - Neither a timestamp nor an identity establishes a causal order. A millisecond reduces a tie and removes none, a correction of the wall clock reverses an order, and a ULID promises no order inside one millisecond.
 - An operation that needs a causal order uses the revision or the ordering contract of the service that owns the record.
 - A duration uses a monotonic clock, and never the difference of two wall-clock timestamps.
-- An identity that the server generates for an entity of its own is a ULID in its canonical 26-character uppercase form, stored as text, and `ulid` at 3.0.2 generates it.
+- Every opaque identity that the server generates for an entity of its own, including a request, has the form `<prefix>_<ulid>`.
+- The prefix names the entity kind in singular, lower-case words, with underscores between words. Each kind holds one stable prefix, and two kinds share no prefix, so the identity reveals what it identifies.
+- A request uses `request_<ulid>`, a project uses `project_<ulid>`, and a mission uses `mission_<ulid>`. Every other entity kind follows the same rule, and the implementation sibling of its owning service declares its prefix.
+- The `<ulid>` portion is a ULID in its canonical 26-character uppercase form, and `ulid` at 3.0.2 generates that portion.
+- The complete prefixed identity is stored as text and retained in API fields, references and logs. Validation checks both the expected entity prefix and the canonical ULID portion; a bare ULID or a prefix of another entity kind is invalid.
 - That convention covers an opaque entity identity alone. It excludes a protocol-defined identity, a natural key and a composite key.
 - A protocol-defined representation stays with its protocol, and the sibling of the service that speaks that protocol names the representation.
-- A remote identity follows the normalization of [project-service.impl.md](viewer.html?p=project-service.impl.md), which derives it from the binding configuration on every write.
+- A remote identity follows the normalization of [project-service.impl.md](project-service.impl.md), which derives it from the binding configuration on every write.
 
 ## The canonical form and the digest
 
@@ -140,14 +161,14 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The function accepts a validated JSON value and no JSON text, because `JSON.parse` discards a duplicate member name before a check can see it. The ingress validation of a route owns the text.
 - A digest reads exact bytes. Canonical JSON reaches it as UTF-8, with no byte-order mark and no trailing newline.
 - The algorithm is SHA-256 through `crypto.createHash`, and the text rendering of a digest is lower-case hexadecimal.
-- This convention replaces no binary credential hash of [project-service.impl.md](viewer.html?p=project-service.impl.md) and no protocol-defined representation.
-- [mission-service.md](viewer.html?p=mission-service.md) stays authoritative for the content address of evidence, and this section states no second algorithm for it.
+- This convention replaces no binary credential hash of [project-service.impl.md](project-service.impl.md) and no protocol-defined representation.
+- [mission-service.md](mission-service.md) stays authoritative for the content address of evidence, and this section states no second algorithm for it.
 
 ## The credential table
 
 - `credential` holds one record for one secret, and it holds no project identity, because a record serves more than one project.
 - Several services use a credential, and each one reaches a record through the Project Service, so the envelope of this table is a server-wide mechanism and no mechanism of one service. The Project Service authorizes the use of a record.
-- The column `type` is an opaque string at this level. The service that registers a type owns its meaning, and [project-service.impl.md](viewer.html?p=project-service.impl.md) names the types of the Project Service.
+- The column `type` is an opaque string at this level. The service that registers a type owns its meaning, and [project-service.impl.md](project-service.impl.md) names the types of the Project Service.
 - The column `remote_identity` records the identity that the secret acts as at its remote. The server enforces nothing from it, so it sits outside the authenticated data below.
 - `crypto.createCipheriv` encrypts the material with AES-256-GCM, a 12-byte nonce from `crypto.randomBytes` and a 16-byte tag.
 - The plaintext is the JSON of the material of the type, so one record holds several fields under one ciphertext.
@@ -187,7 +208,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - Each of those two starts exits with a non-zero status.
 - Neither the start of the server nor a command of the CLI repairs a file.
 - This rule covers the configuration file.
-  The server writes its databases, and the bootstrap seed of [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) creates the one human account.
+  The server writes its databases. JWT issuance is an explicit local command, which [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) rules.
 
 ## Permissions and the opened file
 
@@ -241,15 +262,15 @@ This sibling declares the fields below.
 
 - Every field of the configuration file appears below with the sibling that owns it. A row gives no format and no default.
 - A dotted path determines the nesting of the document, so the index determines the shape of the file.
-- `kanthord config init` prints the whole document with every default, so this sibling holds no example.
+- `kanthord config init` writes the whole document with every default, so this sibling holds no example.
 - `masterKey`, which this sibling declares.
 - `log.level`, which this sibling declares.
 - `log.destination`, which this sibling declares.
-- `gateway.bind`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
-- `gateway.port`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
-- `gateway.allowedHosts`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
-- `gateway.allowedOrigins`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
-- `gateway.tokenLifetime`, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares.
+- `gateway.bind`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.port`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.allowedHosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.allowedOrigins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log
@@ -264,6 +285,38 @@ This sibling declares the fields below.
 - The server rotates no file, it deletes no file and it states no retention. The operator owns the rotation and the retention of the log.
 - The log is operational, and telemetry is the product data of the [Tracking Service](tracking-service.md). No record of the log is telemetry, and no telemetry record reaches the log.
 
+## The error codes
+
+- Every error code that the server or its CLI defines has at least three nonempty, dot-separated parts: `<namespace>.<component>[.<component>...].<error>`.
+- The namespace is the owning service name, `system` for a server-wide mechanism, or `cli` for a CLI-local failure.
+- At least one component follows the namespace. A deeper location adds component parts from the broadest to the most specific, so the code identifies where the failure happens.
+- The final part names the failure condition, not another component.
+- Each part uses lower-case words, with underscores between words. Dots separate parts, and no part is empty.
+
+Examples:
+
+- `system.startup.unknown`
+- `system.startup.permission_denied`
+- `cli.config.not_found`
+- `gateway.database.<error>`, where `<error>` is the failure condition.
+- `project.bindings.llm.openai.quota_exceeded`
+
+## The service lifecycle and Context
+
+- Every service implements `Service`: `start()` acquires resources, `run(context)` starts and joins its lifetime, `stop()` performs graceful shutdown, and `healthcheck()` reports the components it owns.
+- `start`, `stop` and `run` return `Promise<Error | null>`. Success returns `null`; failure returns an `Error` that the caller can inspect. A lifecycle failure does not reject the returned promise. A caller checks the result, and the CLI turns a failure into a non-zero exit.
+- Concurrent calls to `start` or `stop` join the same operation. A stopped instance cannot start again.
+- `healthcheck()` returns `Promise<Record<string, number>>`, keyed by owned component name. An integer code of `200` means healthy and `503` means unavailable. An aggregate is healthy only when its nonempty component map is entirely healthy.
+- Cancellation uses the Go-inspired `Context` interface in `src/context.ts`. It exposes `deadline()` as Unix milliseconds or `null`, `done()` as a promise that resolves on cancellation, `err()` as the cancellation error or `null`, and `onCancel()` as an immediately effective, removable subscription.
+- `background` is the uncancelled root. `CancellationContext` is the concrete implementation; its owner cancels it, cancellation is idempotent, a child inherits parent cancellation and the earlier deadline, and cancelling a child leaves its parent and siblings running.
+- Service and component collaborators receive `Context`, not a native `AbortSignal`. Native signals are bridged at transport boundaries. The owner releases a context's subscriptions and deadline timer when its work finishes.
+- A cancellation listener never throws. A throw from a listener becomes an `uncaughtException` on both paths, the registration on an already-cancelled context and the cancellation itself, so the process terminates, and every other listener of that cancellation still runs first.
+- A child that inherits the deadline of its parent arms no timer of its own. The parent cancels it, so the child holds the error instance of the parent.
+- Every service and component implements graceful shutdown for the work and resources it owns. Long-running work cooperates with its context; a synchronous component completes its current operation before its owner releases it.
+- Shutdown first stops admission, then cancels waiting work and streams through child contexts, then joins in-flight work, and finally releases resources in reverse acquisition order. Cancellation requests a stop; it does not prove that work has finished and it undoes no committed effect.
+- A cancelled `run(context)` joins cleanup before returning its cancellation error. Explicit `stop()` and operating-system shutdown signals return `null` after successful cleanup. A cleanup failure takes precedence over cancellation, and all remaining releases still run.
+- A service owns the stop of its components. It keeps shared resources alive until every component using them has drained; in particular, the gateway drains before the server closes the store and the log.
+
 ## The start and the stop
 
 The start runs the steps below in this order. Each step names the sibling that owns its mechanism, and this sibling owns the order alone.
@@ -274,16 +327,15 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Run the migrations, in a fixed order of the services.
-- Sweep the dead idempotency records and the expired entries of the session denylist, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
-- Register the routes of every service, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
+- Sweep the dead idempotency records and the expired entries of the session denylist, which [gateway-service.impl.md](gateway-service.impl.md) owns.
+- Register the routes of every service, which [gateway-service.impl.md](gateway-service.impl.md) owns.
 - Open the listener.
-- Seed the one human account, which [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) owns.
 
 The barriers of the start are below.
 
 - The migrations complete before a service reads a table.
 - Every registration completes before the server admits a request.
-- The listener binds before the seed prints a credential, so a printed credential implies a running server.
+- The listener binds before the server admits a request. Startup issues and displays no JWT and requires no terminal.
 
 A failed start exits as below.
 
@@ -291,22 +343,22 @@ A failed start exits as below.
 - The server releases every resource that it acquired, in the reverse order of the acquisition. The close of a database file releases its exclusive lock.
 - A failure of one release does not skip the remaining releases.
 - A signal that arrives during the start enters this path.
-- The cleanup is no rollback. It undoes no committed transaction, so a committed seed stays, and the recovery of a lost credential stays the delete of the account row.
+- The cleanup is no rollback. It undoes no committed transaction and revokes no JWT that already reached its recipient.
 
 The stop runs as below.
 
-- `SIGINT` and `SIGTERM` start the stop, and the deadline of 10 s starts with it.
+- `SIGINT` and `SIGTERM` start the stop, and the deadline of 10 s starts with it. The deadline holds the event loop, so an empty loop exits the process never before the deadline.
 - The server stops the admission of a request, and that step waits for no connection to drain.
-- It cancels every waiting work pull and every MCP stream.
+- It cancels every waiting work pull and every MCP stream through `Context`.
 - It joins the handlers in flight inside the remaining deadline.
 - The store module that owns a connection closes that connection after the join.
 - An expired deadline exits the process and closes nothing, and the exit releases every lock.
-- The stop satisfies the rule of [scheduler-service.md](viewer.html?p=scheduler-service.md), because it stops every new claim and it preserves every accepted obligation.
+- The stop satisfies the rule of [scheduler-service.md](scheduler-service.md), because it stops every new claim and it preserves every accepted obligation.
 
 A fatal error runs as below.
 
 - An `uncaughtException` and an `unhandledRejection` are fatal. The termination is mandatory and the diagnostic is best effort.
-- The one-process rule of [architecture.md](viewer.html?p=architecture.md) already ends every service with the process, so this states a mechanism and no new design rule.
+- The one-process rule of [architecture.md](architecture.md) already ends every service with the process, so this states a mechanism and no new design rule.
 - The server installs the two hooks before it reads the configuration file and before any service initializes. A failure before the hooks exist reaches the default behaviour of Node.js.
 - The fatal path runs no stop and no failed-start release, because the state of the process is unknown.
 - An expected failure of a start step keeps the reverse-order release. An uncaught failure during the start, during that release, or during the stop takes the fatal path instead.
@@ -315,7 +367,7 @@ A fatal error runs as below.
 - The fatal writer uses the destination that the log already opened, with a synchronous write. A failure before that destination opened writes to standard error, which is the one exception to the destination rule.
 - A synchronous write can fail, it can write fewer bytes and it can block, and its completion is no durability. The exit follows the attempt in every case, and this sibling claims no bound on the wall-clock time of the exit.
 - The exit closes every descriptor, so it releases the exclusive lock of each database file. It rolls back no interrupted operation, because a transaction runs inside one synchronous function, so a committed write of that operation stays committed.
-- The recovery of the remaining work belongs to the owning service. [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) sweeps an in-progress idempotency record at the next start, and a route that returns a secret replays 409 and never the lost answer.
+- The recovery of the remaining work belongs to the owning service. [gateway-service.impl.md](gateway-service.impl.md) sweeps an in-progress idempotency record at the next start, and a route that returns a secret replays 409 and never the lost answer.
 - The server restarts nothing, and the process manager of the operator owns a restart.
 
 ## Secret material and the diagnostic contract
@@ -325,44 +377,48 @@ A fatal error runs as below.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
 - A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
-- Two displays hold that exception. The first is the review display of `config init`, because a human reads the content before the write. The second is the bootstrap display of [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md), because a human reads the credential of the one human account once.
-- The exception covers those two displays alone, so no diagnostic and no log record holds a secret value.
+- The explicit `jwt` command of [gateway-service.impl.md](gateway-service.impl.md#local-jwt-issuance) holds that exception. It prints a token only to terminal standard output and reads no terminal input.
+- The exception covers that token display alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
-- A rotation of `masterKey` invalidates every issued JWT, so a human authenticates again. It makes every credential store record of the Project Service unreadable, and it makes every derived webhook secret stale.
+- A rotation of `masterKey` invalidates every issued JWT, so a human obtains a newly generated token. It makes every credential store record of the Project Service unreadable, and it makes every derived webhook secret stale.
 
 ## Scope
 
 - This sibling specifies the configuration of the server process.
 - This sibling specifies the command surface of the `kanthord` bin, and the implementation sibling of a service specifies the command table of its own group.
-- The custody of a credential of a resource that a project binds belongs to the Project Service, and [project-service.md](viewer.html?p=project-service.md) governs it.
+- The custody of a credential of a resource that a project binds belongs to the Project Service, and [project-service.md](project-service.md) governs it.
 
 ## The command surface
 
+- Every CLI command is non-interactive. It declares its positional arguments and named options explicitly, including required values, validation and defaults in its help.
+- A command reads no prompt, confirmation, password or other input from a terminal. Missing required arguments or options and unknown arguments or options produce a diagnostic and a non-zero exit before the command performs work.
+- Documented configuration files and environment variables supply only their declared values. They never trigger an interactive fallback.
 - The `kanthord` bin exposes one program, and the launcher of the runtime section is the entry of every invocation.
 - A top-level name of that program belongs to one of two closed sets.
-- The first set holds the global commands that this sibling declares, and it holds `config` and `serve`.
-- The second set holds one group for each service of [architecture.md](viewer.html?p=architecture.md), named by that service in lower case, and it holds `project`, `mission`, `scheduler`, `worker`, `tracking` and `gateway`.
+- The first set holds the global commands that this sibling declares, and it holds `config`, `serve` and `jwt`.
+- The second set holds one group for each service of [architecture.md](architecture.md), named by that service in lower case, and it holds `project`, `mission`, `scheduler`, `worker`, `tracking` and `gateway`.
 - The two sets are disjoint, so the group of a service collides with no global command. A top-level name outside the two sets is a defect.
 - This sibling declares the two sets and the shape of the surface. The implementation sibling of a service declares the command table of its own group, and it declares no top-level name.
 - A command table holds one row for each command of the group. A row names the command, then the operation of the RESTful API that it calls with the access policy of that route, or the statement that the command runs locally and calls no route.
 - A command that names an operation which no route of the published contract serves is a defect.
 - `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.
-- `kanthord serve server` starts the server, and it is the one supported start of the server.
+- `kanthord serve` starts the server directly. `kanthord serve server` is the explicit form.
 - `kanthord serve worker` starts a `worker` application.
 - `kanthord` with no command prints the help and exits with a non-zero status, so no invocation starts an application by default.
-- `serve` with no operand prints the help and exits with a non-zero status, because no application is the default.
+- `serve` defaults its optional application operand to `server`.
 - The `cli` application is no operand of `serve`, because it holds every command that is no `serve`.
 - An application name is an operand and no top-level name, so an application collides with the group of a service never.
-- A later application joins the operand set of `serve`. A later application that needs a process of its own contradicts the one-process rule of [architecture.md](viewer.html?p=architecture.md), so it is a change of that page and no ruling of this sibling.
-- The `config` group is read only. It holds `init`, `validate` and `show`, which the section below rules, and it holds no command that changes the configuration file.
+- A later application joins the operand set of `serve`. A later application that needs a process of its own contradicts the one-process rule of [architecture.md](architecture.md), so it is a change of that page and no ruling of this sibling.
+- The `config` group holds `init`, `validate` and `show`, which the section below rules. `init` creates an absent file; no command edits an existing configuration file.
 - The `config` group, `serve` and a local command of the group of a service need no running server.
-- A command of the group of a service that names an operation reaches the server through the RESTful API, which [gateway-service.md](viewer.html?p=gateway-service.md) rules.
+- A command of the group of a service that names an operation reaches the server through the RESTful API, which [gateway-service.md](gateway-service.md) rules.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
-- A local command of such a group opens no database either, and it reads the module of its own program alone.
+- A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
+- The CLI provides `kanthord jwt [username] [--name <display>] [--binding <worker binding>] [--config <path>]` to generate a JWT. Without `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `masterKey`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password, secret or client configuration. This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
 - The help of a command and the validation of its arguments need no running server.
-- `--config` belongs to `config` and to `serve`. The group of a service rejects that option, because it reaches the server through the API.
-- `kanthord --help` lists the two global commands and the six groups, and it names nothing else. The help of a group lists the commands of that group alone.
+- `--config` belongs to `config`, `serve`, and the local `jwt` command. Service commands reject that option, because they use the client configuration. `jwt` resolves the path through the same option, environment and default order as the server.
+- `kanthord --help` lists the three global commands and the six groups, and it names nothing else. The help of a group lists the commands of that group alone.
 - `commander` at 15.0.0 produces the help.
 
 ## The client configuration
@@ -373,16 +429,16 @@ A fatal error runs as below.
 - This order governs a client value alone. The server keeps the rule of the precedence section, where the file is the only source of a value.
 - `--endpoint` is the option of the endpoint, and it belongs to the group of a service.
 - The client configuration file is `cli.yaml` of the configuration directory, and its default expansion is `$XDG_CONFIG_HOME/kanthord/cli.yaml`.
-- [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares the fields of that file, their defaults, their environment variables, and the two commands that write and remove it.
-- The file holds mode `0600`. The CLI writes a temporary file at that mode in the directory of the destination, and it renames that file onto the destination, so a second write overwrites the file and leaves no partial file.
+- [gateway-service.impl.md](gateway-service.impl.md) declares the fields of that file, their defaults and their environment variables.
+- The operator supplies the file manually at mode `0600`. The CLI reads it and provides no command that writes or removes it.
 - The CLI checks the mode of the file with `lstat` before it reads the file, and a wider mode and a symlink each stop the command.
 - An absent file is no failure, because the option, the environment and the default remain.
 - The audit set of the start holds no client configuration file, because the server reads that file never.
-- A `worker` application resolves its endpoint and its client identity through the same order, and [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) declares those values.
+- A `worker` application resolves its endpoint and its machine JWT through the same order, and [gateway-service.impl.md](gateway-service.impl.md) declares those values.
 
 ## The operation and its two entry adapters
 
-- An operation is the unit that a caller outside the process invokes, and [gateway-service.impl.md](viewer.html?p=gateway-service.impl.md) holds the registry that declares each one with its schema, its access policy, its timeout and its mutation flag.
+- An operation is the unit that a caller outside the process invokes, and [gateway-service.impl.md](gateway-service.impl.md) holds the registry that declares each one with its schema, its access policy, its timeout and its mutation flag.
 - The owning service declares its operations, and the Gateway Service projects each one into a route and into the emitted OpenAPI document.
 - An internal collaboration between two services is no operation. It stays a function of the owning service, and it takes the transaction of the operation as an explicit argument, which the transaction section rules.
 - The registry gives one typed client interface for each service. A caller depends on that interface, and it imports no module of the target service.
@@ -391,20 +447,19 @@ A fatal error runs as below.
 - The composition root of an application builds every client once. `kanthord serve server` builds the direct adapter, and `kanthord serve worker` builds the HTTP adapter with one endpoint. No service and no worker instance selects a transport.
 - The direct adapter parses its input with the schema of the operation, and it returns a value that the output schema admits, so no value crosses one adapter that the other adapter refuses.
 - The contract holds three interaction forms: the unary form of an operation, the exact bytes of a platform delivery, and the long-lived stream of the MCP server. The schema rule covers the unary form.
-- An operation names the authority that established the identity of its caller. The Gateway Service mints a human identity, the Project Service verifies a client secret, and the Worker Service vouches for a runtime identity. A value that no authority minted authorizes nothing on either adapter.
+- An operation names the authority that established the identity of its caller. The Gateway Service mints a human identity and a machine identity from a verified JWT, and the Worker Service vouches for a runtime identity. A value that no authority minted authorizes nothing on either adapter.
 - A client interface returns a completed result, a declared failure of the operation, or an indeterminate result. An indeterminate result appears on either adapter, because one caller implementation runs in every application.
 - A mutation carries an idempotency key on both adapters, and one logical invocation keeps its key across its retries.
 - A waiting operation declares what a cancellation stops, and both adapters carry that cancellation.
 - Both adapters carry the trace identity and the parent span of the caller.
 
-## The CLI writes after a human review
+## The CLI configuration commands
 
 - `kanthord config init` builds the document in memory with every default and every generated secret.
 - It generates `masterKey` from 32 bytes of `crypto.randomBytes`, encoded in base64.
-- It validates the document before it displays it.
-- It prints the resolved destination and the complete document, and it reads a confirmation through `node:readline/promises`.
-- It requires a terminal on the standard input and on the standard output, because a human reviews the content before the write.
-- It writes the exact bytes that it displayed, and it generates nothing and changes nothing between the display and the write.
+- It validates the document before it writes it.
+- The invocation authorizes the creation. It reads no confirmation and requires no terminal.
+- It writes the validated bytes and prints the resolved destination after a successful write, without displaying the configuration or its generated secrets.
 - The destination of `kanthord config init` is the path that the resolution order of the configuration file gives.
 - The command creates the configuration directory with mode `0700` when that directory is absent.
 - It writes a temporary file in the directory of the destination with mode `0600`, links that file to the destination, and unlinks the temporary file.
@@ -426,16 +481,16 @@ A fatal error runs as below.
 - A test covers a symlink at an audited path of the file index, and it stops the start.
 - A test covers a reopen whose replacement holds `0644`, and it asserts the stop and no record in that file.
 - A test asserts that the logger writes through the descriptor that passed its validation.
-- A test covers a redirected review output, a declined confirmation and an existing destination.
+- A test covers `config init` with redirected input and output, no prompt, no secret in the output, and an existing destination that remains unchanged.
 - A test covers a failed write, and it asserts that no partial file remains.
 - A test covers a top-level name outside the two sets, and it asserts a non-zero status.
 - A test covers `kanthord` with no command, and it asserts the help and a non-zero status.
-- A test covers `serve` with no operand, and it asserts the help and a non-zero status.
+- A test covers `serve` with no operand, and it asserts that it selects the server.
 - A test covers `--config` on the group of a service, and it asserts the rejection of that option.
 - A test covers the help of a group of a service with no running server, and it asserts a successful exit.
 - A test covers the help of the `config` group with an absent configuration file, and it asserts the resolved absolute path in the output.
 - A test covers a client configuration file at `0644`, and it asserts that the command stops.
-- A test covers a second `gateway login`, and it asserts one file, the new token and no partial file.
+- A test covers the removed login and logout commands and asserts a non-zero exit without creating or changing client configuration.
 - A test runs one operation through the direct adapter and through the HTTP adapter, and it asserts the same result, the same failure value and the same idempotent replay.
 - A test covers a mutation whose answer the caller loses, and it asserts the indeterminate result.
 - A test covers a caller that supplies an identity value that no authority minted, and it asserts the refusal.
@@ -452,10 +507,14 @@ A fatal error runs as below.
 - A test covers a database file that the server cannot lock at a later step of the start, and it asserts the release of every earlier resource.
 - A test covers a listener that cannot bind, and it asserts that no credential reaches standard output.
 - A test covers a signal that arrives during the start.
+- A test covers cancellation before start, during start and while running, repeated stops, returned lifecycle errors, and cleanup after a failed start.
+- A test covers parent-to-child context cancellation, an earlier deadline, and independent cancellation of a child.
 - A test covers a stop with an active MCP stream, and it asserts that the stop of the admission waits for no connection.
-- A test covers a start with an existing account and a redirected standard output, and it asserts a successful start and no credential in that output.
-- A test covers a start with an empty account table and a redirected standard output, and it asserts a non-zero status, an unchanged account table and the release of every resource.
-- A test covers an empty account table that a deleted row produced, and not only a first start.
+- A test covers a start with redirected standard output, and it asserts successful readiness, no JWT in the output and the release of every resource on shutdown.
+- A test covers consecutive starts against the same configuration and database, and it asserts no token issuance, continued validity of a locally generated human JWT, and no human account table or stored password.
+- A test covers `jwt` without a running server, its configured signing key and lifetime, an explicit username, the default subject when the argument is omitted, invalid usernames, a display name, a machine JWT with a fresh client identity for each run, a `username` argument together with `--binding`, and its refusal to print a token to redirected output.
+- A test asserts that generated identities carry the prefix of their entity kind and a canonical ULID portion, including `request_`, `project_` and `mission_`.
+- A test covers identity validation with a bare ULID, a wrong entity prefix and a noncanonical ULID portion, and it asserts their rejection.
 - A test asserts that every timestamp field of the emitted OpenAPI document composes the shared scalar.
 - A conformance set covers the canonical form of a numeric-looking member name, a nested object, the order of an array, an invalid Unicode sequence and the serialization of a number.
 - An integration test covers a binding submission that changes no configuration, and a completed idempotent replay.
@@ -465,3 +524,10 @@ A fatal error runs as below.
 - A test covers a recorded history that holds a gap, and one that holds a version above the binary.
 - A test covers the AES-256-GCM round trip of a `credential` record, a ciphertext moved between two records, and a truncated ciphertext.
 - A test covers the derivation of the cipher key, and it asserts that two labels produce two different keys.
+
+## Application source layout
+
+- The CLI application lives in `engine/src/apps/cli/`, with its entry in `index.ts` and its client configuration alongside it.
+- The server application and its composition root live in `engine/src/apps/server/`, with its entry in `index.ts`.
+- `engine/src/main.ts` installs the process-level fatal handlers and dispatches to the CLI application. Shared services and components live outside `src/apps/` and are composed by the applications.
+- Tests sit beside their source as `*.test.ts`.
