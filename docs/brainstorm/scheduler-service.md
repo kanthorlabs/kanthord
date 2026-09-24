@@ -9,7 +9,7 @@ title: Scheduler Service
 This document describes the Scheduler Service.
 It describes the work queue and its order, the work pull, the execution record and its lease.
 It describes the declared node states of a worker and the count of a claimant.
-It describes the intake of platform deliveries and the observer.
+It describes the admission of a delivery and the observer.
 It describes no mechanism of another service.
 
 ## Topology and work queue
@@ -79,35 +79,42 @@ Coordination covers a short decision and never holds a project-wide lock during 
 
 The Scheduler Service supports 1,000 active projects on one server.
 The fairness bound survives a noisy project that competes with quiet projects.
-Three properties have bounds and measurements.
+Two properties have bounds and measurements.
 Discovery lag measures the interval from the commit of an accepted change to the handling of its wakeup.
 Claim latency measures the interval from a work pull to a claim when work exists.
-Intake refusal is the retryable response of the intake beyond a bounded inbox depth.
+The [Intake Service](intake-service.md#capacity-and-retention) owns delivery capacity.
 This document names no value for a bound.
 The pool size and the limits follow the workload and the measurements.
 The [Tracking Service](tracking-service.md#writing-telemetry) holds these measurements and decides nothing.
 
-## Intake and observation
+## Delivery admission and observation
 
-The Scheduler Service accepts platform deliveries through the API ingress of the server into a durable inbox.
-A success acknowledgement follows durable acceptance, never an in-memory enqueue.
+The [delivery admission](scheduler-service.vocabulary.md#delivery-admission) operation receives one [delivery](intake-service.vocabulary.md#delivery) from the [Intake Service](intake-service.md).
+The operation has a unary lifetime: one request and one answer.
+Admission records its decision durably before it answers.
+Admission is idempotent by the delivery identity.
+A repeat with the same identity and content returns the recorded [disposition](intake-service.vocabulary.md#disposition).
+A repeat with different content receives a refusal.
+A refusal is terminal and names its reason.
+Acceptance means the Scheduler owes every effect of the delivery.
+Admission preserves every obligation whose effect lacks durable acceptance.
 Acceptance promises no execution.
-The intake operates when a project has no live worker instance.
+Admission operates when a project has no live worker instance.
 Processing occurs at least once and produces idempotent effects.
-The Scheduler recognizes a duplicate by source and platform delivery identity.
-It deduplicates effects per project and per external object, because one delivery can concern several subscribed projects.
-The Scheduler bounds payload size, queued deliveries and processing concurrency.
-It bounds intake and observer processing separately from work-pull handling.
-Beyond a bounded inbox depth, the intake refuses with a retryable response.
-It never acknowledges a delivery and drops it.
-Stored delivery content is minimal, has bounded retention and holds no credential.
-Intake completion preserves every obligation whose effect lacks durable acceptance.
-The delivery disposition names acceptance as an observation, acceptance as a human act, refusal or a duplicate.
+The Scheduler deduplicates effects per project and per [external object](mission-service.vocabulary.md#external-object) across subscription kinds and redeliveries.
+It bounds admission and observer processing separately from work-pull handling.
 The Scheduler retries no unauthorized request.
 
-Before durable acceptance, the intake requests the delivery verification that the [Project Service](project-service.md#authorization-and-credential-custody) owns.
-That section owns the source binding, the verification secret in custody and the verification operation with no requester identity.
-The observer acts under the service identity whose resolution and single permitted operation class that section defines.
+Admission resolves the project from the [source binding](project-service.vocabulary.md#source-binding) of the delivery.
+It invokes the decoding of the [platform implementation](worker-service.vocabulary.md#platform-implementation) of the [Worker Service](worker-service.md#platform-connector-action-performer-and-mcp-server).
+The scheduling core consumes that decoded delivery and interprets no platform payload.
+Admission resolves the external object, its [node](overview.vocabulary.md#node) and its [attempt](overview.vocabulary.md#attempt) within that project.
+Acceptance as an observation creates an [observation obligation](scheduler-service.vocabulary.md#observation-obligation).
+Acceptance as a human act invokes the Mission operation under the [linked human identity](scheduler-service.vocabulary.md#linked-human-identity).
+Refusal admits no effect.
+A duplicate creates no second effect.
+
+The observer acts under the [service identity](project-service.vocabulary.md#service-identity) whose authorization the [Project Service](project-service.md#authorization-and-credential-custody) defines.
 The observation obligation supplies the external object for that resolution.
 
 The observer is a component of the Scheduler Service, not a worker instance.
@@ -121,15 +128,11 @@ The [Mission Service](mission-service.md#evidence) owns the external object and 
 It owns the transition on the accepted observation without platform interpretation.
 The observer decides the observed state and never the outcome of the node.
 The [Mission Service](mission-service.md#the-enforcement) owns observation admission without a node claim.
-The Scheduler Service calls the platform implementation of the Worker Service to decode a delivery into the event types of that platform.
-The scheduling core consumes that decoded delivery and interprets no platform payload.
-
 An observation obligation is a Scheduler record with a lease and a recovery path.
 It is not an execution: it holds no node claim and has no claimant.
 Liveness defines the lease for both an observation obligation and an execution.
 
-The observer resolves a delivery to an external object by the repository binding and the address that the object names.
-It then resolves the node and the attempt of that object.
+Admission resolves a delivery to an external object by the repository binding and the address that the object names.
 Correlation never depends on the continued existence of the originating instance.
 A repository binding alone is insufficient: projects share a repository, and one binding serves several external objects.
 A remote object survives an attempt boundary.
@@ -137,18 +140,12 @@ A matching pull request identifier never attaches a delivery to the newest attem
 An ambiguous or out-of-order delivery reconciles against the external objects of the node.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns currency checks, and its [attempt](mission-service.md#attempt) rules remain authoritative.
 
-External input has three kinds.
-
-- An observation of an external object.
-- A human act on an existing node through the Mission authority path under a linked human identity.
-- A request for new WHAT, which the Scheduler accepts as no scheduling request and which creates no node.
-
-The human act is an unblock, a pause, a resume, an edit or an override.
+The [external input](scheduler-service.vocabulary.md#external-input) identifies the business effect that admission considers.
+A request for new WHAT creates no node and receives no acceptance as a scheduling request.
 The [Mission Service](mission-service.md#validation-criteria-and-authority) owns node writes and their authority.
 Its [unblock](mission-service.md#the-unblock) requires human authority.
 Delivery acceptance alone creates no claim, unblocks no node and starts no execution.
-An authorized human act that a delivery carries invokes the Mission operation under the linked human identity.
-A pull request change request produces an observation whose observed state is not the expected end state.
+A change request produces an observation whose observed state is not the expected end state.
 The [Mission Service](mission-service.md#state-transitions) owns the resulting block, and its [unblock](mission-service.md#the-unblock) opens the next attempt.
 The Scheduler serves the node after that unblock.
 

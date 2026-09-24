@@ -18,7 +18,7 @@ It describes no mechanism of another service.
 - The CLI is a client of the same RESTful API. No separate entry path exists.
 - The Gateway Service publishes a machine-readable contract of the RESTful API, and every client derives from that contract.
 - The work pull, the registration of a worker instance and the MCP server sit behind the Gateway Service.
-- A delivery of an external platform enters through the Gateway Service, which passes it to the [Scheduler Service](scheduler-service.md#intake-and-observation).
+- A webhook delivery of an external platform enters through the Gateway Service, which passes it to the [Intake Service](intake-service.md#deliveries).
 
 ## Human authentication
 

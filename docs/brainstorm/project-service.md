@@ -108,16 +108,26 @@ An instance of an external harness presents its client identity and, for an exec
 The observer of the Scheduler Service presents its service identity.
 The protected facility resolves that identity to the project and to the node of the request.
 An execution identity resolves to the node of its claim, and the facility refuses an operation that names another node.
-The facility resolves a service identity through the external object of the request.
+The facility resolves the service identity of the observer through the external object of the request.
 That resolution reaches the repository binding, the project and the node.
 The facility permits a service identity one operation class, the read of an external object.
+It permits the service identity of the Intake Service the acquisition classes on a source binding through an [acquisition grant](project-service.vocabulary.md#acquisition-grant).
+The facility resolves that acquisition request through the source binding to its project.
+
+An acquisition grant serves one session of one [subscription](intake-service.vocabulary.md#subscription).
+It ends with the session.
+It ends with a disablement of the source binding.
+It ends with a rotation of its credential record.
+It ends at its maximum lifetime.
+The Project Service revokes an open grant into the [Intake Service](intake-service.md#subscriptions).
+The Project Service records every grant with the service identity, the source binding, the kind and the time.
 
 A human presents a [human identity](overview.vocabulary.md#human-identity).
 The facility recognizes every authenticated human identity as authorized for the operation, under the [human authority policy](gateway-service.md#human-authority) of the Gateway Service.
 
 For a machine identity, the facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
-No credential leaves the server.
+No credential leaves a kanthord service, and no credential reaches an execution, an agent or an external harness.
 An execution holds no credential, and an external harness holds no credential.
 An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation.
 The Project Service reads the claim state of an execution from the Scheduler Service.
@@ -142,6 +152,7 @@ An API key does not imply an organization.
 
 A project binds each delivery source that it accepts.
 A source binding holds the verification secret behind custody.
+A source binding holds the [subscriptions](intake-service.vocabulary.md#subscription) of the [Intake Service](intake-service.md#subscriptions) that acquire its deliveries.
 The Project Service verifies a delivery against the source binding of its project as its own operation.
 That operation names no requester identity, because it acts on nothing external.
 

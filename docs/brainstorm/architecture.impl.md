@@ -389,7 +389,7 @@ The composition root constructs in this order.
 - Call `store.migrate([...])` once per store with the migrations of every service, in fixed service order.
 - Construct the registry.
 - Construct the invocation chain.
-- Construct the five domain services with their `Dependencies`.
+- Construct the six domain services with their `Dependencies`.
 - Supply collaboration interfaces from the owner's `contract.ts` and clients through `directClient`.
 - Call `declare(registry)` for every service and for the Gateway.
 - Construct the Gateway HTTP service with the invocation chain.
@@ -523,7 +523,7 @@ A fatal error runs as below.
 - The CLI provides `kanthord jwt [username] [--name <display>] [--binding <worker binding>] [--config <path>]` to generate a JWT. Without `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `masterKey`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password, secret or client configuration. This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
 - The help of a command and the validation of its arguments need no running server.
 - `--config` belongs to `config`, `serve`, and the local `jwt` command. Service commands reject that option, because they use the client configuration. `jwt` resolves the path through the same option, environment and default order as the server.
-- `kanthord --help` lists the three global commands and the six groups, and it names nothing else. The help of a group lists the commands of that group alone.
+- `kanthord --help` lists the three global commands and the seven groups, and it names nothing else. The help of a group lists the commands of that group alone.
 - `commander` at 15.0.0 produces the help.
 
 ## The client configuration
@@ -596,7 +596,7 @@ An operation declares its execution contract.
 - The close of the connection is no domain cancellation.
 - The access policy of the operation selects authentication.
 - The delivery policy mints no caller identity.
-- The acknowledgement of a delivery follows the commit of the inbox record.
+- The acknowledgement of a delivery follows the commit of the delivery record of the Intake Service.
 - An operation declares whether it requires a live execution.
 - For such an operation the invocation chain proves the execution identity of the input once, before the handler runs.
 - The chain resolves that identity through the authorization of the Project Service, which reads the claim state from the Scheduler Service.
@@ -781,8 +781,8 @@ A process split retains these boundaries.
 Imports point downward through four layers.
 
 - `src/kernel/` holds the runtime with no domain authority.
-- `src/<service>/` holds one directory for each of the six services, as peers.
-- `src/gateway/` is one of the six services and also the transport.
+- `src/<service>/` holds one directory for each of the seven services, as peers.
+- `src/gateway/` is one of the seven services and also the transport.
 - `src/apps/` holds the composition roots of the `server`, `worker` and `cli` applications.
 
 The configuration module sits above the services and below the applications.
@@ -798,7 +798,7 @@ engine/src/
 │   ├── operation.ts  caller.ts  caller-mint.ts
 │   ├── json.ts  identity.ts  values.ts  files.ts  http.ts
 │   └── test-support.ts
-├── project/  mission/  scheduler/  worker/  tracking/
+├── project/  mission/  scheduler/  intake/  worker/  tracking/
 │   ├── contract.ts        operations + collaboration interface types   [peers, apps]
 │   ├── index.ts           <Name>Service, Dependencies, <service>Migrations   [apps/server]
 │   ├── service.ts         lifecycle, healthcheck, declare(registry), handlers   [private]

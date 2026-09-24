@@ -11,10 +11,12 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 - [Project Service](project-service.md), [vocabulary](project-service.vocabulary.md), and [implementation proposals](project-service.impl.md)
 - [Mission Service](mission-service.md) and [vocabulary](mission-service.vocabulary.md)
 - [Scheduler Service](scheduler-service.md) and [vocabulary](scheduler-service.vocabulary.md)
+- [Intake Service](intake-service.md) and [vocabulary](intake-service.vocabulary.md)
 - [Worker Service](worker-service.md), [vocabulary](worker-service.vocabulary.md), and [implementation proposals](worker-service.impl.md)
 - [Tracking Service](tracking-service.md), [vocabulary](tracking-service.vocabulary.md), and [implementation proposals](tracking-service.impl.md)
 - [Gateway Service](gateway-service.md), [vocabulary](gateway-service.vocabulary.md), and [implementation proposals](gateway-service.impl.md)
 - [Open work and handoff](HANDOFF.md)
+- [Engine CLI specification](../../engine/docs/cli/README.md): proposed command contracts, with one file per service and one for remaining commands.
 - Draft prompts: [base](assets/prompt/base.md), [swe@1](assets/prompt/swe@1.md), [re@1](assets/prompt/re@1.md)
 
 ## Turning discussion into documentation

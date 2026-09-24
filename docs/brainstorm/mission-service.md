@@ -404,7 +404,7 @@ Three conditions reach `Blocked`, and each follows the evaluation except the hum
 They are a current assessment that does not pass, an `External.Failed` observation and a human reason on a paused node.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
-The [observer](scheduler-service.md#intake-and-observation) records the detail of that state in the observed state.
+The [observer](scheduler-service.vocabulary.md#observer) records the detail of that state in the observed state.
 
 ### Attempt
 
