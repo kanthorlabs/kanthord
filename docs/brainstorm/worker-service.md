@@ -168,12 +168,18 @@ An idle instance that receives no work retries under the [work-pull rules](sched
 The Worker Service produces the instance healthcheck before each work pull and once more when the Scheduler Service asks before a claim commits.
 The healthcheck of an instance at the `server` placement passes when the effective configuration of the agent resolves under the current binding set.
 The healthcheck of an instance at the `worker` placement passes when that configuration resolves and its registration is live.
+
 The healthcheck of an instance that an external harness hosts passes when its registration is live.
 The Worker Service computes the healthcheck of every placement from the state of the server alone.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
+- An execution at the `worker` placement obtains its credentials through the [credential handover](project-service.vocabulary.md#credential-handover) of the Project Service.
+- It performs its network git read, network git write and model inference calls on its own host.
+- Its platform actions run through the server like every execution.
+
 The tool of an agent and the verification command of a node run code that the repository supplies.
 The Worker Service runs them inside a trust boundary that the operator provides.
+The host of a `worker` application is inside that trust boundary.
 A rule on the content of a command is a policy and no trust boundary.
 
 The sequence diagram below shows the creation of a steps instance and its first work pull, on a node with no attempt.

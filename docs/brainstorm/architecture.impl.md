@@ -211,7 +211,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A secret field declares no usable default, so no default supplies a secret.
 - The file is the only source of a value, so it is the only source of a secret.
 - An absent secret field stops the start, so no other source supplies a secret silently.
-- One `masterKey` serves one server, and a `masterKey` that two servers share is an unsupported configuration.
+- One `masterKey` serves one installation: one server and the `worker` applications that register with it. A `masterKey` that two servers share is an unsupported configuration.
 
 ## The server writes no configuration file
 
@@ -480,6 +480,7 @@ A fatal error runs as below.
 
 - A secret of the server is a field of the configuration file and no row of a database.
 - Every secret field carries `sensitive: true`, so `convict.toString()` masks it.
+- The client configuration file of a `worker` application holds `masterKey`, and the same masking, diagnostic and display rules apply to it.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
 - A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
@@ -703,7 +704,7 @@ A process split retains these boundaries.
 - Each service directory is a candidate package.
 - `contract.ts` is a publishable contract.
 - The kernel is a shared package whose version is a compatibility surface.
-- The `worker` application invokes registration, work pull, evidence write, telemetry ingestion and MCP stream operations through their owners' `contract.ts` imports.
+- The `worker` application invokes registration, heartbeat, work pull, credential handover and credential report through their owners' `contract.ts` imports. It also invokes evidence write, telemetry ingestion and MCP stream operations through their owners' `contract.ts` imports.
 
 ## The CLI configuration commands
 

@@ -192,6 +192,22 @@ An execution requests a network git write under the HTTPS form.
 The facility checks the binding of the project, then it consults custody.
 The execution holds no credential under the [custody rule](project-service.md#authorization-and-credential-custody).
 Holding the repository binding does not confer custody of the key.
+A credential handover alone lets material leave the server for the `worker` application, which belongs to the kanthord installation and is no external harness.
+
+## credential handover
+
+Custody transfers the credentials of one execution, encrypted, to the `worker` application that hosts that execution.
+
+The execution of `Add password reset` runs at the `worker` placement on the host `build-02`.
+It resolves the provider account binding `openai-main` and the repository binding of `https://github.com/kanthorlabs/kanthord.git`.
+Custody hands over the API key of `openai-main` and the fine-grained personal access token of the organization `kanthorlabs`.
+The `worker` application on `build-02` decrypts both and connects to OpenAI and to GitHub itself.
+When the execution ends, the application discards both.
+
+The provider account binding `copilot-main` names an OAuth credential of GitHub Copilot.
+The handover carries its access token and its refresh token.
+The execution runs for nine hours and refreshes four times on `build-02`.
+The application reports each refreshed credential to custody.
 
 ## protected facility
 
