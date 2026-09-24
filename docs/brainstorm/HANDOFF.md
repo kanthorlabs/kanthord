@@ -19,7 +19,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Project Service
 
-- [ ] Added 2026-09-24. Design the login flow of an OAuth provider account. pi-ai drives a device code or a browser callback through an interactive prompt. Every CLI command is non-interactive, and the credential store sits on the server. The flow needs a server operation that starts the login and returns the URL or the code. The server observes the completion.
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.

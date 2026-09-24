@@ -137,6 +137,12 @@ The facility consults custody after that check.
 - No credential reaches an external harness, the context of an agent, a tool result, a log record or a workspace file.
 - A disablement of a binding reaches an execution at the `worker` placement at its next resolution. It recalls no handover in flight.
 
+- A human enters a credential into custody, and custody stores it behind the protected facility.
+- An OAuth credential of a provider account enters custody through a [login session](project-service.vocabulary.md#login-session) that runs on the server.
+- A login session offers the browser mode and the device code mode of its provider. It states the address and the code that the human needs.
+- The human completes the session in a browser or at the device page of the provider. The human returns a provider code to the session when needed.
+- A login session expires, and an expired or failed session stores nothing.
+
 An execution holds no credential, and an external harness holds no credential.
 An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation.
 The Project Service reads the claim state of an execution from the Scheduler Service.
