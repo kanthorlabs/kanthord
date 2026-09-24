@@ -33,6 +33,7 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
 - `gateway.tokenLifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
+- `gateway.tokenGeneration` holds the generation of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
 - `gateway.idempotencyTtl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
 
 ## Access policy
@@ -52,13 +53,13 @@ A machine presents its JWT on every request, including the registration route, a
 ## Human authentication
 
 A human presents a JWT as a bearer token. The default username is `KANTHORD_AUTH_USERNAME = "kanthorlabs"`.
-The Gateway Service verifies the signature using its key derived from `masterKey`, then checks the token claims and denylist.
+The Gateway Service verifies the signature using its key derived from `masterKey`, then checks the token claims.
 The server creates no human account row and generates, hashes and stores no human password. It exposes no password-login route.
 The local `kanthord jwt` command is the only token issuance entry point. For a human it accepts an optional username argument and defaults to the constant when it is omitted.
 Server startup issues and displays no human token. The CLI exposes no human login or logout command.
 A request that carries a missing or an invalid credential on a route that requires one returns 401 before the handler runs.
 `GET /api/auth/verify` declares the human access policy and returns the verified JWT's business properties as `{"kind":"human","sub":"<username>","name":"<display name>"}` with HTTP 200. Property names and values are preserved from the JWT; the response adds no aliases.
-It uses the same verification chain as every human-only operation, including signature, expiry, username and denylist checks. A machine token fails this route with HTTP 401.
+It uses the same verification chain as every human-only operation, including signature, expiry and username checks. A machine token fails this route with HTTP 401.
 The response contains no raw JWT, signing key or token metadata (`iat`, `exp`, `jti`) and writes no record.
 
 ## Worker-instance registration
@@ -86,7 +87,7 @@ The route answers with the runtime identity of the new instance and no token.
 - `gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
 - Each issuance generates a fresh ULID `jti`.
 - A restart or another issuance revokes no earlier JWT.
-- It remains valid until expiry, a denylist ban or replacement of `masterKey`.
+- It remains valid until expiry, an increment of `gateway.tokenGeneration` or replacement of `masterKey`.
 - For a machine, removal or unavailability of its worker binding also ends that validity.
 - An expired token returns 401.
 - A human obtains a fresh token from `kanthord jwt`.
@@ -126,7 +127,6 @@ Verification runs in this order.
 - The per-kind rules.
 - For `client`, the Project Service answers whether the worker binding exists and is available and resolves the project from it.
 - Verification reads no list of client identities because the signed token states the membership.
-- `jti` outside the denylist.
 - A machine identity names the runtime identity of the live registration of its client identity when one exists.
 - The work pull and every execution operation refuse a machine identity that names no live registration.
 
@@ -134,22 +134,15 @@ Verification runs in this order.
 The key therefore binds a token to that server.
 A `masterKey` that two servers share is an unsupported configuration, which [architecture.impl.md](architecture.impl.md#one-source-for-a-secret) states.
 
-## The session denylist
-
-The Gateway Service owns the table `gateway_token_denylist(jti, expires_at, banned_at)` of the operational database.
-A banned session fails its verification, whatever the kind of its token.
-The process holds the whole table in memory, because one process owns that database, and it writes the row and the memory inside one transaction.
-An entry is kept until the `expires_at` of its token, and a sweep at each start removes every expired entry.
-A ban cancels no request that already passed verification.
-The route that bans a session and the authority to issue it belong to the user management that the handoff holds.
-
 ## The signing key
 
-The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v1")`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
+The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v<tokenGeneration>")`, where `<tokenGeneration>` is the decimal value of `gateway.tokenGeneration`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
 [architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file and the rule that a service derives its keys from it.
 The Gateway Service derives the key at startup and persists neither the signing key nor the generated human JWT in its database.
 [architecture.impl.md](architecture.impl.md) rules the mode of the configuration file, of its directory, of the data directory and of every database file.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
+An increment of `gateway.tokenGeneration` and a restart of the server invalidate every issued JWT of both kinds. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
+A human then runs `kanthord jwt` again for each human token and each machine token.
 
 ## Local JWT issuance
 
@@ -164,7 +157,7 @@ It prompts for nothing, requires no terminal on standard input, calls no route a
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
 
 - The Gateway Service owns no human account table and no client identity table.
-- Its operational table holds the session denylist alone.
+- It owns no table of the operational database.
 - The invocation chain holds idempotency records in memory.
 
 ## Request validation
@@ -191,7 +184,7 @@ The `hono/body-limit` middleware permits 40 KiB on the worker registration opera
 - A downstream service calls `isHumanIdentity` and rejects a value that it does not recognize.
 
 The machine identity names the client identity, its worker binding and its project, which the verification resolved, and the runtime identity of its live registration when one exists.
-A direct call that supplies a machine identity passes the denylist, the worker-binding check and the live-registration check again before the handler runs, so a ban or a removal reaches the direct adapter as it reaches the HTTP adapter.
+A direct call that supplies a machine identity passes the worker-binding check and the live-registration check again before the handler runs, so a removal reaches the direct adapter as it reaches the HTTP adapter.
 The route handler passes the identity to the service function as an explicit caller argument, so a service module imports no Hono symbol.
 The JWT never leaves the Gateway Service module.
 
@@ -349,11 +342,10 @@ It covers a second registration of a client identity that holds a live registrat
 - A test repeats the registration key after a restart and asserts that the handler runs again with its natural key.
 - A test repeats a key after its TTL expires and asserts that the handler runs again.
 
-It covers a direct call with a machine identity after a ban of its `jti`, and it asserts the refusal.
 It covers a repeat of a completed key under another caller, and it asserts that the handler runs and that no recorded answer is returned.
-It covers an expired token and a banned `jti`, and it asserts 401 for each one.
+It covers an expired token and a token signed under an earlier `gateway.tokenGeneration`, and it asserts 401 for each one.
+It covers an increment of `gateway.tokenGeneration`, and it asserts that a credential store record stays readable.
 It covers a work pull of a machine identity whose registration ended, and it asserts the refusal.
-It covers the sweep of the denylist at a start, and it asserts that an entry beyond its `expires_at` is gone.
 It emits the directory from the registry and compares it with the committed directory, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
 The implementation epic assesses their removal.
@@ -392,7 +384,7 @@ Each operation declares its own access policy; a path prefix grants no policy.
 
 [architecture.impl.md](architecture.impl.md) rules the command surface and the client configuration. The engine CLI specification [gateway page](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/gateway.md) declares the command table of the group `gateway`.
 The CLI provides no login, logout or automatic credential-saving flow. An operator may supply a private client configuration file manually. Saving a token establishes no authenticated identity; the Gateway Service authenticates it on a later API request.
-The JWT and denylist sections govern revocation.
+The JWT and signing key sections govern revocation.
 
 The client configuration file holds the three fields below.
 
@@ -416,7 +408,7 @@ The Gateway Service source sits under `src/gateway/` of the `engine` repository.
 - The three public files are `contract.ts`, `client.ts` and `index.ts`.
 - Private files include `service.ts`, `authentication.ts`, `invocation.ts`, `idempotency.ts` and `openapi.ts`.
 - The remaining private files are `migrations.ts`, `errors.ts`, `request-id.ts`, `json.ts` and `constants.ts`.
-- `migrations.ts` holds the denylist table and no idempotency table.
+- `migrations.ts` holds no table.
 - `src/gateway/` is the one importer of `src/kernel/caller-mint.ts`.
 
 `static/openapi/` of that repository holds the emitted OpenAPI directory, and the released package ships the `static` directory.
