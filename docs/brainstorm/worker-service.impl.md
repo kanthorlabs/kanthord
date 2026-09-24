@@ -16,12 +16,15 @@ The first version supplies the workers `general@1` and `reviewer@1`.
 The workers `claude@1` and `opencode@1` follow with the registration of an externally hosted instance.
 The first version supplies `general@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
 `tdd@1` follows when the runtime hosts several agents in one execution.
-The native agent `swe@1` of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
-The server gives pi its own directories.
+The native agent `swe@1` of `general@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
+The adapter builds the runtime with `ModelRuntime.create({ credentials })` over the credential store of the execution and the session with `createAgentSession({ modelRuntime })`.
+The first version supports a native agent at the `worker` placement, and no proxy exists.
+The hosting application gives pi its own directories.
 It disables the discovery of user extensions, skills, prompt templates and themes.
 It uses an in-memory session manager.
 It disables the version check, the install telemetry and the provider catalog refresh.
-It pins the exact pi version, and a pi version bump is a deliberate change to the workers that run on it.
+It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` at 0.86.0.
+A pi version bump affects the workers that run on it and the credential shape of the handover.
 Every runtime setup call carries an abort signal with a deadline.
 
 ## Externally hosted worker
@@ -58,6 +61,8 @@ This sibling declares the command table of the group `worker`.
 
 - `register [--token <jwt>] [--idempotency-key <ulid>]` calls `POST /api/worker/register`, operation ID `worker.register`, with the client access policy.
 - `heartbeat [--token <jwt>]` calls `POST /api/worker/heartbeat`, operation ID `worker.heartbeat`, with the client access policy.
+- `handover [--token <jwt>]` calls `POST /api/worker/handover`, operation ID `worker.handover`, with the client access policy. It prints nothing but a status, and it never prints the envelope.
+- `credential` runs inside the `worker` application alone and is no command of the CLI.
 
 The command registers a worker instance under the client identity of its machine JWT. It creates no human account, client identity or worker definition.
 [gateway-service.impl.md](gateway-service.impl.md#worker-instance-registration) owns the JWT verification, the instance-count transaction and the registration replay contract.
@@ -100,12 +105,24 @@ The bound of the global prompt and the bound of the project prompt are epic deci
 The acceptance path proves the configured precedence, an absent source, an invalid source, a disabled layer and a link that leaves the workspace.
 It proves that a reviewer execution takes no agent file of the workspace.
 
-## Model connector interception
+## The credential store of an execution
 
-One interception point carries every inference call of a native agent, including compaction and retries.
-It resolves the effective configuration of the agent under the execution identity, maps the model identifier and the reasoning effort, fails closed, and holds per-execution state so that no credential crosses executions.
-A custom pi provider that forwards to the model connector is the candidate.
-Environment hygiene of the pi process belongs to the same mechanism.
+- Every inference call of a native agent, including compaction and retries, resolves its auth through the pi-ai credential store of the execution. [project-service.impl.md](project-service.impl.md#the-credential-store-of-an-execution) rules that store.
+- The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed.
+- The store holds the credential of one execution, so no credential crosses executions.
+- Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
+
+## The credential handover
+
+- `worker.handover` is a `client` operation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes an empty body and answers the envelope that [project-service.impl.md](project-service.impl.md#the-credential-handover) rules.
+- The `worker` application calls it once after its claim and before the first inference call.
+- It decrypts the envelope with the key that it derives from its own `masterKey`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
+- `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. The application calls it after each refresh that pi-ai performs and once at the release.
+- The application discards every credential when the execution ends, and it writes none to a file.
+- A platform action runs through the MCP tool of the server.
+- The `worker` application reads `masterKey` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-command-group-gateway) declares. It accepts no environment variable and no option for it.
+- An absent or invalid `masterKey` stops the start of `kanthord serve worker`.
+- A `masterKey` that differs from the one of the server fails every decryption. The application ends the execution as a cannot-progress condition.
 
 ## Tool table
 
@@ -135,8 +152,8 @@ An epic decides that form for each platform.
 - `simple-git` at 3.36.0 performs every git operation by spawning the `git` binary of the host.
 - Its timeout plugin bounds each operation by the remaining resource budget of the execution.
 - Its abort plugin binds to the `Context` of the execution.
-- Under the SSH transport form, the `git` child inherits the SSH environment of the user that runs the server.
-- Under the HTTPS transport form, custody supplies `GIT_ASKPASS` and the token through the environment of the child.
+- Under the SSH transport form, the `git` child inherits the SSH environment of the user that runs the hosting application.
+- Under the HTTPS transport form, the hosting application supplies `GIT_ASKPASS` and the token through the environment of the child.
 - [project-service.impl.md](project-service.impl.md) rules that supply.
 - The connector passes no credential inside a URL and no credential on a command line.
 - The credential helper writes no credential to a file in the workspace.
@@ -206,11 +223,13 @@ The budget of a turn count and a wall time is enforced on pi turn events and by 
 ## Trust boundary
 
 The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the server.
+The host of every `worker` application sits inside it because that host holds `masterKey` and the credentials of its executions.
 
 ## Traces
 
 The pi session entries of an execution become its transcript telemetry, with the execution identity, the attempt and the trace identity, redacted of secrets.
 pi keeps its own compaction logic, and kanthord designs nothing for it.
+The handover and the report enter no transcript telemetry.
 
 ## Acceptance path
 

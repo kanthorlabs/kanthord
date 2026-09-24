@@ -364,11 +364,13 @@ An external platform reaches no loopback listener, so a delivery arrives through
 The server serves one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
-It forwards `POST /api/worker/register` and `POST /api/worker/heartbeat` for a worker instance.
+It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover` and `POST /api/worker/credential` for a worker instance.
 It forwards the registered work-pull and MCP paths for an instance that runs outside the host of the server.
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
 An instance presents its long-lived JWT on every request, so the ingress provides confidentiality for registration, heartbeat, work-pull and MCP traffic.
+A credential handover uses encryption under `masterKey`.
+It needs no confidentiality of the ingress beyond that of the JWT that carries it.
 The server distinguishes no request of the ingress from a local request.
 The path restriction therefore lives in the configuration of the ingress.
 The ingress is an untrusted transport.
@@ -400,12 +402,13 @@ The top-level issuance command is declared under local JWT issuance. [worker-ser
 The CLI provides no login, logout or automatic credential-saving flow. An operator may supply a private client configuration file manually. Saving a token establishes no authenticated identity; the Gateway Service authenticates it on a later API request.
 The JWT and denylist sections govern revocation.
 
-The client configuration file holds the two fields below.
+The client configuration file holds the three fields below.
 
 - `endpoint` holds the absolute URL of the server. It defaults to `http://127.0.0.1:31415`, which the defaults of `gateway.bind` and `gateway.port` give.
 - `token` holds the JWT of a human or of a machine, and the client presents it as a bearer token.
+- `masterKey` holds the 32-byte key of the server encoded in base64, and only `kanthord serve worker` reads it. It has no environment variable and no option. A CLI command of a service group ignores it.
 
-The environment carries the same values.
+The environment carries the endpoint and token values.
 
 - `KANTHORD_ENDPOINT` carries the endpoint.
 - `KANTHORD_TOKEN` carries the JWT of a human or of a machine.

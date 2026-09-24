@@ -94,7 +94,8 @@ The local disablement of a binding is a field of the configuration, so a disable
 A resolution reads `current_revision` of the binding row, so a disablement takes effect at the next resolution and cancels no operation in flight.
 A change to the secret material behind a credential record creates no revision, because a reference names the record and never its content.
 A rotation therefore updates one `credential` row in place and creates a revision nowhere.
-No credential type of the first version obtains new material behind its record, so the OAuth refresh of `project-service.md` has no instance today.
+An `oauth` record obtains material through the refresh of pi-ai, which runs inside `modify` under the credential store lock.
+That refresh updates the row in place and creates no revision.
 A change to the remote that a record authorizes is no rotation.
 It is a change to the resource, so it creates a replacement binding in every project that names that record, and each of those projects submits that edit.
 The Project Service marks such a record and refuses a resolution that reaches it through a binding which no edit repointed.
@@ -130,10 +131,10 @@ A recorded revision authorizes nothing, so the next operation resolves the chain
 A record holds one secret of one type.
 The types are below, and each one names the class of operation that it performs.
 
-- **api key**: a personal access token of a git platform, classic or fine-grained, or a key of a model provider. For a git platform it performs a network git read and a network git write under the HTTPS transport form, and a platform action under both forms. For a provider account it performs a model inference call.
+- **api_key**: `{type:"api_key", key}` of pi-ai. For a git platform the key is a personal access token, classic or fine-grained. It performs a network git read and a network git write under the HTTPS transport form, and a platform action under both forms. For a provider account the key performs a model inference call. API key providers include `openai` and `anthropic`.
+- **oauth**: `{type:"oauth", refresh, access, expires}` of pi-ai. It performs a model inference call for a provider whose pi-ai provider carries OAuth: `anthropic`, `openai-codex`, `github-copilot` and `openrouter`.
 
-The first version registers that one type and no other.
-`project-service.md` permits an OAuth credential, and no type of the first version is one.
+The first version registers those two types and no other.
 
 Suitability is a pure function of the type, the capability and the transport form, over the table above.
 Coverage is a pure function of the required capabilities, the transport form and the credential references of the binding.
@@ -151,13 +152,13 @@ The values of the first version are below.
 - `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
 - `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
 
-Custody emits one log record on the creation of a record and on every change of its material, naming the human identity of the caller and the record identity.
+Custody logs each human creation or update of a record with the human identity of the caller and the record identity.
 The record names no such actor itself, so that log is the whole attribution.
 
 ## The keys of the Project Service
 
 [architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file, the rule that a service derives its keys from it and never uses it directly, and the cipher key of the `credential` table.
-The Project Service derives one key of its own with `crypto.hkdfSync`, SHA-256 and an empty salt.
+The Project Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt.
 
 - `HKDF(masterKey, info = "webhook/<binding id>/<rotation>")` is the verification secret of one source binding.
 
@@ -195,14 +196,36 @@ Custody exposes `use(grant, request)`.
 The request names the operation and its parameters, and it names no destination.
 Custody derives the destination from the binding that the grant checked, so a caller reaches no remote of its own choice.
 Custody performs the operation, and it returns the result of the operation and no material.
-The material never leaves the server.
+The material leaves the server only through a credential handover.
 A child process that the server spawns, configures and reaps is part of the server, so the material that reaches `git` stays inside the server.
 The material enters no log record, no workspace file, no transcript, no tool result and no error body.
 `pino` redacts the paths of the material, and a test asserts each path.
 Custody fills its plaintext buffer with zeroes when the operation returns.
 That cleanup is best effort, because a parsed string and a cached token outlive the buffer in this runtime.
-The trust boundary of the host, which [worker-service.impl.md](worker-service.impl.md) owns, is a disposable host of the operator or a container around the server.
+[worker-service.impl.md](worker-service.impl.md) owns the trust boundary of the host, including the host of every `worker` application.
 Custody defends the material against a record of the system, and it defends nothing against a party that controls that host.
+
+## The credential store of an execution
+
+- Custody implements the `CredentialStore` contract of `@earendil-works/pi-ai` at 0.86.0: `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
+- A provider account binding names its pi provider id in its configuration, from the closed set of providers that pi-ai ships. Resolution rejects an unknown id.
+- Custody builds one store view for each execution. `read(providerId)` maps the pi provider id of the agent's provider account binding to the one credential store record that the binding names. It answers `undefined` for every other id, and the store holds one credential per pi provider id.
+- `list()` returns the one non-secret pair of provider id and credential type. `modify()` serializes on the record and writes the result of pi-ai in place. The view refuses `delete()`.
+- At the `server` placement the view reads custody directly and the plaintext never leaves the process.
+- At the `worker` placement the view is the decrypted handover.
+- Custody drops the view when the execution ends.
+
+## The credential handover
+
+- The handover is the answer of `worker.handover` of the Worker Service, which [worker-service.impl.md](worker-service.impl.md#the-credential-handover) declares. This `client` operation has `unary` lifetime and requires a live execution.
+- The payload holds the canonical JSON list of the credentials that the capabilities of the execution require. Each entry holds its record identity, its pi provider id or its git platform, and its pi-ai credential.
+- The envelope uses AES-256-GCM under `HKDF(masterKey, info = "handover/aes-256-gcm/v1")`, a 12-byte random nonce and a 16-byte tag. The additional authenticated data concatenates the length-prefixed execution identity and runtime identity of the instance.
+- The `worker` application holds the same `masterKey` and derives the same key.
+- The report uses `worker.credential`, a `client` mutation that requires a live execution. Its body holds one refreshed credential under the same envelope, and its handler writes the record in place.
+- Custody marks a record as handed over while a live execution at the `worker` placement holds it. It refreshes no such record itself, and the mark ends with the execution.
+- Two executions may hold one record at once. The epic determines whether each provider rotates the refresh token on refresh and invalidates the other holder.
+- Custody emits one log record on each handover and report, naming the execution identity and the record identity and no material.
+- `pino` redacts the payload paths, and a test asserts each path.
 
 ## The network git operations
 
@@ -213,9 +236,10 @@ It passes no secret on the command line of a child, because the command line of 
 Under the HTTPS transport form, custody sets `GIT_ASKPASS` in the environment of the git child to a helper of the server, and it passes the token in that environment.
 The helper prints the token for the password prompt and the account name for the username prompt.
 The helper writes no file and it reaches no socket.
+At the `worker` placement the application runs the same helper with the token of the handover.
 
 - Under the SSH transport form, custody supplies no material.
-- The `git` child inherits the SSH environment of the user that runs the server.
+- The `git` child inherits the SSH environment of the user that runs the hosting application.
 - That environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
 - Custody sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
 - At the write of a repository binding under the SSH form, custody runs one `git ls-remote` of that repository through the repository connector.
@@ -227,14 +251,13 @@ The helper writes no file and it reaches no socket.
 
 Custody attaches the credential to the request of a platform implementation inside `use`.
 An api key of a git platform travels in the `Authorization` header of that request, and custody builds that header and returns it to no caller.
-Custody mints no token and caches no token, because no credential type of the first version issues a short-lived token.
+Custody mints no token and caches no token for a platform action, because that capability uses an API key in the first version.
 A request that the remote refuses fails the operation closed, and custody records the failure against the record.
 
 ## The model inference call
 
-Custody attaches the key of a provider account to the request of the model connector inside `use`.
-[worker-service.impl.md](worker-service.impl.md) owns the interception point of that call.
-Custody holds no per-execution state for that call, because the grant carries the execution identity.
+Custody serves the model inference call through the credential store of the execution.
+[worker-service.impl.md](worker-service.impl.md) owns the runtime that consumes it.
 
 ## The client identity
 
@@ -290,6 +313,9 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers a missing, a duplicate, a malformed and a wrong-length delivery signature, and a valid signature over the exact bytes.
 - A test covers an increment of `webhookSecretRotation`, and it asserts that a delivery signed with the previous secret fails.
 - A test asserts that no log record and no error body holds secret material.
+- A test covers the round trip of a handover envelope, a payload moved to another execution identity, and a truncated payload.
+- A test covers a store view that answers `undefined` for a provider id outside the binding of the execution. It covers a refresh through `modify` that updates the row in place and creates no revision.
+- A test covers a report of a refreshed credential for an execution that is not live, and it asserts 403.
 
 ## Open decisions of an epic
 
@@ -298,3 +324,5 @@ The `kanthord` bin of `package.json` releases it.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
 - The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
 - The support of a GitHub App installation credential, which the first version omits and which needs a short-lived token, a mint and a cache.
+- The rotation behaviour of the refresh token of each OAuth provider under two concurrent holders.
+- The login flow of an OAuth provider account. pi-ai drives a device code or a browser callback through an interactive prompt, and every CLI command is non-interactive.

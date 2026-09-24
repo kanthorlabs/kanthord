@@ -47,7 +47,7 @@ A commit, a branch and a merge are local, so none of them is a capability.
 An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
 The repository strategy and the transport form of the repository address determine the capabilities that a repository binding requires.
 A repository address has one of two transport forms, SSH and HTTPS.
-Under the SSH form, a network git read and a network git write use the SSH configuration of the host that runs the server.
+Under the SSH form, a network git read and a network git write use the SSH configuration of the hosting application.
 Neither operation requires a credential reference.
 Under the HTTPS form, they require an OAuth credential or an API key of the git platform.
 A platform action requires an OAuth credential or an API key under both forms.
@@ -130,7 +130,13 @@ The facility recognizes every authenticated human identity as authorized for the
 
 For a machine identity, the facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
-No credential leaves a kanthord service, and no credential reaches an execution, an agent or an external harness.
+
+- A credential leaves the server only through a [credential handover](project-service.vocabulary.md#credential-handover) to a `worker` application of kanthord. It leaves it in no other way.
+- For an execution at the `worker` placement, custody hands over every credential that its capabilities require. The handover lasts for the execution.
+- The `worker` application returns a refreshed credential to custody. Custody refreshes no record while a handover of it is outstanding.
+- No credential reaches an external harness, the context of an agent, a tool result, a log record or a workspace file.
+- A disablement of a binding reaches an execution at the `worker` placement at its next resolution. It recalls no handover in flight.
+
 An execution holds no credential, and an external harness holds no credential.
 An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation.
 The Project Service reads the claim state of an execution from the Scheduler Service.
