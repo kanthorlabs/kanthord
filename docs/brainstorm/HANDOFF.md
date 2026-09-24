@@ -11,9 +11,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the receiving-side authentication contract of a forwarded caller identity. The identity value is process-local and the JWT stays in the Gateway Service, so a split that forwards a caller identity to another process needs a contract that no page holds.
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the temporal validity of a cross-service precondition of a handler. A handler reads a fact of a peer through a client, awaits, then commits, and the fact can change during the wait: the Scheduler reads that a node is available and a human blocks it before the claim commits. Parked candidate: every cross-service precondition declares itself as a frozen snapshot, read before the commit and recorded with the effect, or as a commit-time condition, read through a collaboration inside the transaction while the two services are co-located, so a client read never satisfies a commit-time condition. This adds a second admissible case of a collaboration beside the atomic invariant, and it names the service pairs that no composition change alone can split. Not needed while every service runs in one process, because the complexity outweighs the benefit there.
-- [ ] Added 2026-09-22. Complete the command table of the group of each service. The page of each group in `engine/docs/cli/` holds a proposed table: the commands of its service, the operation of the RESTful API of each command, and the access policy of that route. A proposed row becomes a declared row when Ulrich approves it and no open item of its component blocks it. The `intake` group and its webhook route also wait for the subscription store, the delivery store and the handoff of `intake-service.impl.md`.
-  - Ruled 2026-09-24 by Ulrich: a submodule owns the documents that detail the implementation of its own code, and `engine/docs/cli/` is an example. The command table of each service group lives in `engine/docs/cli/<group>.md`, not in the implementation sibling.
-  - Ruled 2026-09-24 by Ulrich: the open decisions of `engine/docs/cli/` move into this file under their owning components. A CLI page holds no open-decision section, and a blocked row links its item here.
 
 ### Gateway Service
 
@@ -47,6 +44,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Intake Service
 
+- [ ] Added 2026-09-24. Declare the subscription store, the delivery store and the handoff in `intake-service.impl.md`. The webhook receipt route of the `intake` group waits for them.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription and delivery commands await their entity prefix declarations.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription commands await kind-specific input fields, validation, protocol state schemas and absent-state representations. Delivery reads and receipt await verification-result schemas, operation declarations, timeouts, response statuses and file bounds.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. `delivery get` awaits the payload inclusion, representation, size and redaction decision.
