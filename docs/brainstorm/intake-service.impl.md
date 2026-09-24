@@ -9,7 +9,7 @@ This file is not a design document, and `intake-service.md` stays the single sou
 A mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
 This sibling holds the acquisition mechanisms.
-The subscription store, the delivery store, the handoff and the command group `intake` follow with the command table item of [HANDOFF.md](HANDOFF.md).
+The subscription store, the delivery store and the handoff follow with the command table item of [HANDOFF.md](HANDOFF.md).
 
 ## The service identity
 

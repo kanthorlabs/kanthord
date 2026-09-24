@@ -493,7 +493,7 @@ A fatal error runs as below.
 ## Scope
 
 - This sibling specifies the configuration of the server process.
-- This sibling specifies the command surface of the `kanthord` bin, and the implementation sibling of a service specifies the command table of its own group.
+- This sibling specifies the command surface of the `kanthord` bin. The CLI specification of the engine specifies the command table of each group.
 - The custody of a credential of a resource that a project binds belongs to the Project Service, and [project-service.md](project-service.md) governs it.
 
 ## The command surface
@@ -504,9 +504,11 @@ A fatal error runs as below.
 - The `kanthord` bin exposes one program, and the launcher of the runtime section is the entry of every invocation.
 - A top-level name of that program belongs to one of two closed sets.
 - The first set holds the global commands that this sibling declares, and it holds `config`, `serve` and `jwt`.
-- The second set holds one group for each service of [architecture.md](architecture.md), named by that service in lower case, and it holds `project`, `mission`, `scheduler`, `worker`, `tracking` and `gateway`.
+- The second set holds one group for each service of [architecture.md](architecture.md), named by that service in lower case.
+- It holds `project`, `mission`, `scheduler`, `intake`, `worker`, `tracking` and `gateway`.
 - The two sets are disjoint, so the group of a service collides with no global command. A top-level name outside the two sets is a defect.
-- This sibling declares the two sets and the shape of the surface. The implementation sibling of a service declares the command table of its own group, and it declares no top-level name.
+- This sibling declares the two sets and the shape of the surface.
+- Each group page in the engine [CLI specification](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/README.md) declares its command table. It declares no top-level name.
 - A command table holds one row for each command of the group. A row names the command, then the operation of the RESTful API that it calls with the access policy of that route, or the statement that the command runs locally and calls no route.
 - A command that names an operation which no route of the published contract serves is a defect.
 - `serve` takes one [application](architecture.vocabulary.md#app) as its operand, and it accepts `server` and `worker`.

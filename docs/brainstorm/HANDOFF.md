@@ -11,7 +11,9 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the receiving-side authentication contract of a forwarded caller identity. The identity value is process-local and the JWT stays in the Gateway Service, so a split that forwards a caller identity to another process needs a contract that no page holds.
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the temporal validity of a cross-service precondition of a handler. A handler reads a fact of a peer through a client, awaits, then commits, and the fact can change during the wait: the Scheduler reads that a node is available and a human blocks it before the claim commits. Parked candidate: every cross-service precondition declares itself as a frozen snapshot, read before the commit and recorded with the effect, or as a commit-time condition, read through a collaboration inside the transaction while the two services are co-located, so a client read never satisfies a commit-time condition. This adds a second admissible case of a collaboration beside the atomic invariant, and it names the service pairs that no composition change alone can split. Not needed while every service runs in one process, because the complexity outweighs the benefit there.
-- [ ] Added 2026-09-22. Complete the command table of the group of each service. `architecture.impl.md` rules that the implementation sibling of a service declares the table of its own group. `gateway-service.impl.md` declares the Gateway table, and `worker-service.impl.md` declares worker registration. The groups `project`, `mission`, `scheduler`, `intake` and `tracking` hold no table, and the remaining Worker commands are undeclared. The `intake` group and its webhook route wait for the subscription store, the delivery store and the handoff of `intake-service.impl.md`. That sibling holds the acquisition mechanisms alone, and `engine/docs/cli/README.md` still names six service groups. Each table needs the commands of its service, the operation of the RESTful API of each command, and the access policy of that route.
+- [ ] Added 2026-09-22. Complete the command table of the group of each service. The page of each group in `engine/docs/cli/` holds a proposed table: the commands of its service, the operation of the RESTful API of each command, and the access policy of that route. A proposed row becomes a declared row when Ulrich approves it and no open item of its component blocks it. The `intake` group and its webhook route also wait for the subscription store, the delivery store and the handoff of `intake-service.impl.md`.
+  - Ruled 2026-09-24 by Ulrich: a submodule owns the documents that detail the implementation of its own code, and `engine/docs/cli/` is an example. The command table of each service group lives in `engine/docs/cli/<group>.md`, not in the implementation sibling.
+  - Ruled 2026-09-24 by Ulrich: the open decisions of `engine/docs/cli/` move into this file under their owning components. A CLI page holds no open-decision section, and a blocked row links its item here.
 
 ### Gateway Service
 
@@ -20,18 +22,45 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Project Service
 
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
-- [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping.
+- [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping. The `source secret get` command also awaits its display, redaction and cache contract.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.
+
+- [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Binding commands await version bounds, local-key allocation, replacement input and peer-reference treatment. The contract also classifies a worker-name change and declares error schemas, body bounds, timeouts and cursor rules.
+- [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Project creation and rename await name constraints, Mission creation ownership, concurrency and replay reconciliation. Binding history and credential rotation await retention and concurrency contracts.
+- [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. `binding apply` and agent reads await repository action schemas, policy validation, prompt and instance-count bounds, and template option schemas. Provider and model catalogs also need contract declarations.
+- [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Credential commands await the remote-change input, quarantine lifecycle and cross-project progress contract. GitHub App custody remains outside the first version and needs its credential mechanism.
+
+### Mission Service
+
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Mission commands await node and record prefixes, graph change records, revision initialization and increment rules, and cursor consistency. Operation contracts also need error schemas, timeouts and response limits.
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Import and node writes await Markdown grammar, scope, boundary references, minimum criteria, verification-command form, create admission and retirement confirmation. Import and unblock also await durable request-map retention.
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await priority bounds, task applicability, method values, evidence bounds and retention, content encoding and exceptional credential removal. External-action publication, observer state schemas, evaluation context, criterion aggregation and repository evidence formats also await contracts.
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Human controls await the no-attempt outcome and task-outcome schemas. `node mark-ready` awaits the counter-zero readiness contract.
 
 ### Scheduler Service and delivery
 
-- [ ] Set numerical acceptance bounds for discovery lag, claim latency and the count of unresolved deliveries of the Intake Service in the implementation epics, against the 1,000-project workload.
-- [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Intake, Scheduler, Project and Mission: how the delivery admission of the Scheduler classifies a delivery that the Intake Service hands over, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort. The server-owner ruling of 2026-09-20 gives every authenticated human the same authority, so a person that a delivery maps to a human identity gains that authority, and this effort revisits it.
-- [ ] Add the skills and extensions that support external-harness integration. `tracking-service.md` obliges the extension to capture, to hold its capture in a bounded local store, and to import it when a human issues an ingestion.
+- [ ] Set numerical acceptance bounds for discovery lag, claim latency and the count of unresolved deliveries of the Intake Service in the implementation epics, against the 1,000-project workload. Intake operations also await handoff attempt and backoff bounds, acquisition deadlines, resolved-delivery retention and bounded read sizes.
+- [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Intake, Scheduler, Project and Mission: how the delivery admission of the Scheduler classifies a delivery that the Intake Service hands over, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort. The server-owner ruling of 2026-09-20 gives every authenticated human the same authority, so a person that a delivery maps to a human identity gains that authority, and this effort revisits it. A Scheduler read of admission dispositions per project also awaits a decision.
+- [ ] Add the skills and extensions that support external-harness integration. `tracking-service.md` obliges the extension to capture, to hold its capture in a bounded local store, and to import it when a human issues an ingestion. The contract also covers snapshot export, acknowledgement handoff, cursor persistence, retry deadlines and retained or discarded summaries.
+
+- [ ] Added 2026-09-24 from `engine/docs/cli/scheduler.md`. Scheduler commands await entity prefixes, request and response schemas, durable-request mapping, lease duration, renewal cadence and route timeouts. Observation-obligation reads also await the lease start contract; lists await cursor consistency and retention.
+
+### Intake Service
+
+- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription and delivery commands await their entity prefix declarations.
+- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription commands await kind-specific input fields, validation, protocol state schemas and absent-state representations. Delivery reads and receipt await verification-result schemas, operation declarations, timeouts, response statuses and file bounds.
+- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. `delivery get` awaits the payload inclusion, representation, size and redaction decision.
+- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. A human action on a parked delivery awaits authority, idempotency and state-change rules. No `delivery retry` command exists before that decision.
+- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription mutations await incompatible-create handling, desired-state omission, disabled-source admission and retirement semantics. Candidate: omitted desired state selects `disabled`; disabled-source admission returns validation failure with HTTP 400. Lists await order and cursor validity.
 
 ### Worker Service
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
+
+- [ ] Added 2026-09-24 from `engine/docs/cli/worker.md`. Catalog, agent and tool commands await exact defaults, budgets, configuration constraints, platform outputs and action-result record schemas. Execution identity validation awaits the Scheduler contract.
+- [ ] Added 2026-09-24 from `engine/docs/cli/worker.md`. Agent inspection and prompt composition await global-prompt bounds. Provider-account checks remain with B9.
+- [ ] Added 2026-09-24 from `engine/docs/cli/worker.md`. Human inspection, self-deregistration replay and the REST-to-MCP projection await approval. MCP commands also await endpoint declarations and assessment-state filtering of the tool list.
+- [ ] Added 2026-09-24 from `engine/docs/cli/other.md`. `serve worker` awaits its option declarations, readiness output and shutdown contract. Failure recovery stays with B9.
 
 #### Next phase
 
@@ -41,8 +70,16 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Multi-agent workers, `tdd@1` first. pi has no sub-agents.
 - [ ] Token and currency budgets and project-level accounting. pi reports usage and cost per message.
 - [ ] A clarification interface. The pi ask_question tool is the seed, and the block and unblock flow carries ambiguity until then.
-- [ ] Live streaming of a running turn. pi emits streaming events. The Tracking Service page bounds this to the harness that kanthord hosts, because an external harness reaches the Tracking Service only through an import that a human issues.
+- [ ] Live streaming of a running turn. pi emits streaming events. The Tracking Service page bounds this to the harness that kanthord hosts, because an external harness reaches the Tracking Service only through an import that a human issues. A Tracking command awaits event schemas, start position, order, resume and loss behavior, limits, timeout, access and cancellation.
 - [ ] Containment beyond the minimum trust boundary, the quality and replay suite, provenance tags on tool results.
+
+### Tracking Service
+
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await trace, span, text and record identity contracts, OpenTelemetry mapping and the canonical identity-attribute registry. Execution identity validation awaits the Scheduler contract.
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion and reads await byte and count limits, execution bounds, local-log and segment bounds, and `fsync` bounds. Large transcript and chunk contracts also remain open.
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Read and query commands await projections, order, cursor validity, concurrent arrival and expiry behavior, and unresolved-reference representation.
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Trace and text reads await retention fields and durations, text retention start, trace-expiry resolution and tombstone lifetime.
 
 ### Root repository
 
