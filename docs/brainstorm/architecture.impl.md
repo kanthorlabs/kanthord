@@ -67,9 +67,9 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 - The configuration file uses the configuration directory.
 - A database uses the data directory, including the operational database used by the Gateway Service.
-- A log, a history and a session record use the state directory.
+- A log, a history, a session record and the workspace of an execution use the state directory.
 - A rebuildable artifact uses the cache directory, because the deletion of that directory costs nothing.
-- The state directory holds the per-operation socket directory of custody, which [project-service.impl.md](project-service.impl.md) rules, and it holds the log file under the `file` destination.
+- The state directory holds the log file under the `file` destination.
 - The server writes no file in the cache directory today.
 - A later mechanism places each of its files by this rule, and it adds no directory of its own.
 
@@ -80,11 +80,10 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `kanthord.yaml` of the configuration directory, an effective path that this sibling declares. Its default expansion is `$XDG_CONFIG_HOME/kanthord/kanthord.yaml`, and the default of that variable makes it `~/.config/kanthord/kanthord.yaml`.
 - `kanthord.db` of the data directory with its `-wal` and `-shm` files, a default expansion of `$XDG_DATA_HOME/kanthord/kanthord.db` that this sibling declares.
 - `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
-- The known-hosts file of the server, of the data directory, a default expansion that [project-service.impl.md](project-service.impl.md) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
-- The per-operation directory of custody and the public key inside it, of the state directory, a path template that the identity of the operation completes and that [project-service.impl.md](project-service.impl.md) declares.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
-- The index holds no row for the workspace root of an execution, because no page places it.
+- `workspaces/<objective identity>/<repository binding identity>/` of the state directory, the workspace of a steps execution, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 
 ## The operational database
@@ -212,6 +211,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A secret field declares no usable default, so no default supplies a secret.
 - The file is the only source of a value, so it is the only source of a secret.
 - An absent secret field stops the start, so no other source supplies a secret silently.
+- One `masterKey` serves one server, and a `masterKey` that two servers share is an unsupported configuration.
 
 ## The server writes no configuration file
 
@@ -225,14 +225,13 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## Permissions and the opened file
 
-- A regular file that the server owns holds mode `0600`, a directory holds mode `0700`, and a socket holds mode `0600`.
+- A regular file that the server owns holds mode `0600`, and a directory holds mode `0700`.
 - The owner of every such object is the running user, and a setuid bit, a setgid bit and a sticky bit are rejected.
 - The mode is exact, so a mode wider than the stated mode and a mode narrower than it both stop the start.
 - The audit set names each target with its expected type. It holds the configuration file, the configuration directory, the data directory, the state directory, and every file that the expansion of a row of the file index gives, including the `-wal` and the `-shm` file of a database.
 - The server infers the expected type from nothing that it finds, so a directory at the path of a database stops the start even when that directory holds a valid directory mode.
 - The audit uses `lstat`, so a symlink at an audited path stops the start.
 - Absence is accepted only where the owning mechanism permits a creation or a nonexistence. The configuration file must exist.
-- An operation reuses no existing per-operation directory, so a directory that a crash left behind authorizes no reuse and blocks no start.
 - The server establishes umask `077` before it creates any owned object and before it launches any child, and it changes that umask never during an operation.
 - A call that receives a mode is still masked, so `open` with `0600` and `mkdir` with `0700` both survive that mask.
 - Where a call takes a mode, the server passes it. Where a call takes no mode, the server names the barrier: it validates an existing database file before it opens the database, and it checks the created file and each sidecar at the point where that file first appears.
@@ -294,6 +293,8 @@ This sibling declares the fields below.
 - `gateway.allowedOrigins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
+- `worker.globalPrompt`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log
@@ -607,7 +608,12 @@ An operation declares its execution contract.
 
 An operation serves one caller kind.
 
-- The `human` policy serves a human, and the `client` policy serves a machine.
+- The `human` policy serves a human, the `client` policy serves a machine, and the `service` policy serves a service identity.
+- An operation under the `service` policy is reachable through the direct adapter alone.
+- The Gateway registers no HTTP route for it, and the OpenAPI emitter excludes it.
+- The conformance test of both adapters exempts a `service` operation.
+- The delivery admission of the Scheduler Service is a `service` operation.
+- The `service` policy alone grants no operation, and the owning service authorizes the calling service by name.
 - No operation accepts both a human and a machine.
 - No handler shapes its result by the kind of the caller identity.
 - A read that a human and a machine both need is two operations over one domain query and one record schema.
@@ -627,6 +633,9 @@ Caller propagation carries identity per call.
 - An operation names the authority that establishes the identity of its caller.
 - The Gateway Service mints human and machine identities from verified JWTs.
 - The Worker Service vouches for a runtime identity.
+- The composition root of the `server` application mints one frozen service identity for each service at construction and passes it in `Dependencies`.
+- A service identity names its service and nothing else.
+- A background producer of a service calls a peer through the direct adapter with its service identity in `ClientOptions.identity`.
 - A value that no authority mints authorizes nothing on either adapter.
 - Both adapters carry the trace identity and the parent span of the caller.
 
@@ -645,6 +654,7 @@ A handler separates asynchronous work from its commit.
 
 The invocation chain holds idempotency in memory.
 
+- The `caller` field of a record holds the service name for a service identity.
 - A mutation carries an idempotency key on both adapters.
 - One logical invocation keeps its key across retries.
 - The idempotency component holds each record in memory with a TTL.
@@ -677,7 +687,7 @@ Cross-service references retain their targets.
 The applications compare package versions.
 
 - The `server` and the `worker` application ship as one version.
-- The server publishes the `version` of its `package.json` through the public operation that serves the OpenAPI index.
+- The server publishes the `version` of its `package.json` in the entry document of the OpenAPI directory.
 - The `worker` application reads its own `version` at its start.
 - It refuses to start on a difference with one diagnostic that names both versions.
 
@@ -735,12 +745,15 @@ A process split retains these boundaries.
 - A test covers the removed login and logout commands and asserts a non-zero exit without creating or changing client configuration.
 - A test runs one operation through the direct adapter and through the HTTP adapter.
 - It asserts the same result, failure value and replay within the TTL of the idempotency component.
-- A conformance test runs every operation through both adapters, including a malformed value and a lost answer.
+- A conformance test runs every operation except a `service` operation through both adapters, including a malformed value and a lost answer.
 - A test asserts that the `worker` application refuses to start when its package version differs from the version the server publishes.
 - A test asserts that `quiesce()` leaves the handlers of a service available to a peer during the drain.
 - It asserts that `stop()` after the drain releases the resources of the service.
 - A lint test rejects an import of a private module of a peer.
-- It rejects an import of `caller-mint.ts` outside `src/gateway/`.
+- It rejects an import of `caller-mint.ts` outside `src/gateway/` and an import of `service-mint.ts` outside `src/apps/server/`.
+- A test covers a `service` operation through the HTTP adapter.
+- It asserts 404 and no route in the emitted OpenAPI directory.
+- A test covers a service identity calling an operation without authorization from its owning service, and it asserts the refusal.
 - A test covers a mutation whose answer the caller loses, and it asserts the indeterminate result.
 - A test covers a caller that supplies an identity value that no authority minted, and it asserts the refusal.
 - A test covers a parse error on a line that holds a secret, and it asserts that the diagnostic prints no value.
@@ -752,7 +765,7 @@ A process split retains these boundaries.
 - Each of those cases asserts a non-zero status, no raw secret in the output, no invocation of the stop and no invocation of the release.
 - A subprocess test runs the launcher under a version outside the range, and it asserts a non-zero status, one line on standard error, no application module loaded and no database opened.
 - A test covers a second start against the same data directory, and it asserts a non-zero status and no change to either database file.
-- A test compares the route set of the operation registry with the path set of the committed OpenAPI file, and it fails when the two differ.
+- A test compares the route set of the operation registry with the path set of the committed OpenAPI directory. It fails when the two differ.
 - A test covers a database file that the server cannot lock at a later step of the start, and it asserts the release of every earlier resource.
 - A test covers a listener that cannot bind, and it asserts that no credential reaches standard output.
 - A test covers a signal that arrives during the start.
@@ -795,7 +808,7 @@ engine/src/
 │   └── index.ts           whole schema = global + every service fragment   [apps only]
 ├── kernel/
 │   ├── service.ts  context.ts  store.ts  health.ts  log.ts  errors.ts
-│   ├── operation.ts  caller.ts  caller-mint.ts
+│   ├── operation.ts  caller.ts  caller-mint.ts  service-mint.ts
 │   ├── json.ts  identity.ts  values.ts  files.ts  http.ts
 │   └── test-support.ts
 ├── project/  mission/  scheduler/  intake/  worker/  tracking/
@@ -840,7 +853,7 @@ Each service module exposes its contract and composition entry.
 - Gateway authentication holds `resolveMachine` with two injected read-only lookups.
 - Gateway authentication performs no worker registration.
 - The Worker Service binds its own operations through `declare(registry)`.
-- The Gateway owns the HTTP listener, JWT verification, identity minting, invocation chain, in-memory idempotency component, OpenAPI projection and both adapters.
+- The Gateway owns the HTTP listener, JWT verification, human and machine identity minting, invocation chain, in-memory idempotency component, OpenAPI projection and both adapters.
 
 The kernel holds shared contracts and runtime components.
 
@@ -851,12 +864,13 @@ The kernel holds shared contracts and runtime components.
 - It also holds `OperationRegistry`, `ServiceClient`, `ClientOptions`, `OperationResult` and `OperationResultType`.
 - `OperationRegistry` performs structural validation only.
 - The Gateway emitter validates the OpenAPI scope of each registry entry.
-- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, module-private `WeakSet`s, `isHumanIdentity` and `isMachineIdentity`.
-- `caller-mint.ts` holds the two identity factories.
-- Only `src/gateway/` imports `src/kernel/caller-mint.ts`.
+- `caller.ts` holds `HumanIdentity`, `MachineIdentity`, `ServiceIdentity`, module-private `WeakSet`s, `isHumanIdentity`, `isMachineIdentity` and `isServiceIdentity`.
+- `caller-mint.ts` holds the human and the machine identity factory, and `service-mint.ts` holds the service identity factory.
+- Only `src/gateway/` imports `src/kernel/caller-mint.ts`, and only `src/apps/server/` imports `src/kernel/service-mint.ts`.
 
 The import boundaries follow the public files.
 
+- `apps/server` alone imports `src/kernel/service-mint.ts`.
 - The kernel imports the kernel and `zod` only.
 - A service imports the kernel, its own directory and `contract.ts` of a peer.
 - `contract.ts` imports the kernel and `zod` only.
@@ -865,7 +879,8 @@ The import boundaries follow the public files.
 - Only applications import `src/config/index.ts`.
 - A service needing global configuration types imports `src/config/global.ts` alone.
 - `eslint-plugin-boundaries` enforces these imports.
-- Its element types distinguish kernel, caller mint, service contract, service composition entry, service private files, Gateway client, configuration global, configuration entry and applications.
+- Its element types distinguish kernel, caller mint, service mint, service contract, service composition entry and service private files.
+- They also distinguish Gateway client, configuration global, configuration entry and applications.
 - `main.ts` installs the fatal handlers and dispatches to the `cli` application.
 - [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the composition root order.
 - Tests sit beside their source as `*.test.ts`.

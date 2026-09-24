@@ -47,10 +47,13 @@ A commit, a branch and a merge are local, so none of them is a capability.
 An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
 The repository strategy and the transport form of the repository address determine the capabilities that a repository binding requires.
 A repository address has one of two transport forms, SSH and HTTPS.
-Under the SSH form, a network git read and a network git write require an SSH key.
+Under the SSH form, a network git read and a network git write use the SSH configuration of the host that runs the server.
+Neither operation requires a credential reference.
 Under the HTTPS form, they require an OAuth credential or an API key of the git platform.
 A platform action requires an OAuth credential or an API key under both forms.
-A repository binding holds one credential reference for each capability that it requires.
+At the write of a repository binding under the SSH form, the Project Service performs one network git read of that repository.
+A failed read refuses the write.
+A repository binding holds one credential reference for each required capability that requires a credential.
 One credential reference satisfies more than one capability.
 A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
 The Project Service validates the length of the project prompt against a fixed bound.
@@ -96,7 +99,7 @@ Secret material sits behind a protected facility.
 A trusted execution consults that facility after it checks the binding.
 Holding a resource does not confer custody of its secret.
 A binding does not narrow upstream authority.
-One SSH key reaches many repositories, and one API key authorizes a whole account.
+One API key authorizes a whole account.
 System authorization is what kanthord permits an identity to access.
 Credential authority is what the remote permits any holder.
 The Project Service enforces system authorization, and it records credential authority.
@@ -138,9 +141,9 @@ A rotation changes one record, and every binding that names that record stays va
 Unrestricted selection of a record is the danger, and central storage is not.
 A human selects the record that satisfies a capability.
 The Project Service validates a credential reference with two checks.
-Coverage states that every required capability has a credential reference.
+Coverage states that every required capability that requires a credential has a credential reference.
 Suitability states that the type of the referenced record performs that class of operation.
-An SSH key does not perform a platform action.
+An API key of a model provider does not perform a platform action.
 Suitability states no scope, because a binding does not narrow upstream authority.
 A credential record names the remote identity.
 The record of an execution operation names the execution identity.

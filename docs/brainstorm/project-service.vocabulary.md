@@ -40,14 +40,16 @@ A self-hosted address reveals no platform, so the binding names it explicitly.
 
 ## transport form
 
-The transport form of a repository address determines the credential type that its network git read and write require.
+The transport form of a repository address determines whether its network git read and network git write require a credential and its type.
 The set is closed and it holds two values.
 
-- **SSH**: A network git read and a network git write require an SSH key.
+- **SSH**: A network git read and a network git write use the SSH configuration of the host. They require no credential reference.
 - **HTTPS**: A network git read and a network git write require an OAuth credential or an API key of the git platform.
 
 A platform action requires an OAuth credential or an API key under both forms.
-The address `git@github.com:kanthorlabs/kanthord.git` has the SSH form, so its repository binding names an SSH key for the git read and the git write and an OAuth credential for the platform action.
+The address `git@github.com:kanthorlabs/kanthord.git` has the SSH form.
+Its repository binding names no credential for the network git read and the network git write.
+It names an API key or an OAuth credential for the platform action.
 The address `https://github.com/kanthorlabs/kanthord.git` has the HTTPS form, so one OAuth credential of the git platform satisfies all three capabilities.
 
 ## binding kind
@@ -138,7 +140,7 @@ A change to the remote that a credential authorizes is also a change to the reso
 
 What a binding holds for a capability that it requires.
 
-A repository binding requires a network git write and a platform action.
+A repository binding under the HTTPS form requires a network git write and a platform action.
 It holds one credential reference for each of the two capabilities.
 One credential reference satisfies both capabilities when the type of the referenced record performs both classes of operation.
 A credential reference names a record of the credential store.
@@ -147,7 +149,8 @@ A credential reference names a record of the credential store.
 
 The store that holds one record for a secret.
 
-The credential store holds one record for one SSH key, and two projects use that key.
+The credential store holds one record for one API key, a fine-grained personal access token of the organization `kanthorlabs`.
+Two projects use that key.
 The store holds that one record.
 Each project holds its own binding that names the record.
 A rotation changes that one record, and every binding that names the record stays valid.
@@ -157,7 +160,7 @@ Unrestricted selection of a record is the danger, and central storage is not.
 
 One record of the credential store.
 
-A record holds one SSH key, and it names the remote identity.
+A record holds one API key of the account `org-kanthorlabs` at OpenAI, and it names the remote identity.
 A human selects the record that satisfies a capability.
 The type of the record decides the class of operation that the record performs.
 The record serves more than one project.
@@ -166,7 +169,7 @@ The record serves more than one project.
 
 One of the two checks that validate a credential reference.
 
-A repository binding requires a network git write and a platform action.
+A repository binding under the HTTPS form requires a network git write and a platform action.
 It holds a credential reference for the network git write only.
 Coverage fails, because one required capability holds no credential reference.
 
@@ -174,8 +177,9 @@ Coverage fails, because one required capability holds no credential reference.
 
 The other of the two checks that validate a credential reference.
 
-A repository binding requires a platform action, and its credential reference names a record that holds an SSH key.
-Suitability fails, because an SSH key does not perform a platform action.
+A repository binding requires a platform action.
+Its credential reference names a record that holds an API key of the account `org-kanthorlabs` at OpenAI.
+Suitability fails, because an API key of a model provider does not perform a platform action.
 Suitability states no scope, because a binding does not narrow upstream authority.
 Coverage and suitability are the whole validation of a credential reference.
 
@@ -183,8 +187,8 @@ Coverage and suitability are the whole validation of a credential reference.
 
 The holding of the secret material of a resource credential behind a protected facility.
 
-The credential store holds an SSH key behind the protected facility.
-An execution requests a network git write.
+The credential store holds an API key behind the protected facility, a fine-grained personal access token of the organization `kanthorlabs`.
+An execution requests a network git write under the HTTPS form.
 The facility checks the binding of the project, then it consults custody.
 The execution holds no credential under the [custody rule](project-service.md#authorization-and-credential-custody).
 Holding the repository binding does not confer custody of the key.
@@ -224,8 +228,7 @@ The identity at the remote that a credential store record acts as.
 The value is one string in three colon-separated parts, `<platform>:<identity kind>:<identifier>`.
 The term names no closed set, because a new platform adds its own identity kinds.
 
-- `github:user:ulrich` for a user SSH key or a classic personal access token of that account.
-- `github:repository:kanthorlabs/kanthord` for a deploy key of that repository.
+- `github:user:ulrich` for a classic personal access token of that account.
 - `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
 - `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
 

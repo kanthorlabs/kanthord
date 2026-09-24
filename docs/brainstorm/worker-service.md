@@ -19,13 +19,16 @@ It describes no mechanism of another service.
 The [overview](overview.vocabulary.md) defines a worker, a worker instance, an execution, an agent, a tool, memory and a prompt.
 The Worker Service supplies the workers.
 A worker declares its name, its host, the node states that its instances claim and its required node format.
-A worker that kanthord hosts also declares its method, its one agent, the default configuration of that agent, and the base prompt and the agent prompt of that agent.
+A worker that kanthord hosts also declares its method and its agents, at least one.
+It declares the default configuration, the base prompt and the agent prompt of each agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 An agent name names a role, and no agent name equals a worker name.
 A configuration is named through a worker binding, never through a bare agent name.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
 The default configuration of a native agent names its provider, its model identifier and its reasoning effort.
-A worker declares, with the default configuration of its agent, the further options of the agent, the options that a project can override and the constraint that a whole configuration satisfies, and that declaration is part of the contract of the worker name.
+A worker declares the default configuration and further options of each agent.
+It declares the options that a project can override and the constraint that a whole configuration satisfies.
+That declaration is part of the contract of the worker name.
 A worker binding of the [Project Service](project-service.md#execution-configuration-and-instance-count) overrides the default configuration through its entry, and the Project Service resolves the effective configuration of the agent.
 A worker reads no other project configuration.
 The required node format names the fields of a node that the method requires.
@@ -38,11 +41,12 @@ The steps method declares `Available`.
 The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
 
-The agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
+Each agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
 The Worker Service publishes the contract of `claude@1` and `opencode@1`: the name, the host, the declared node states and the required node format.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
-A worker that kanthord hosts declares the base prompt and the agent prompt of its agent, and [Prompt composition](#prompt-composition) states every layer of the prompt.
+A worker that kanthord hosts declares the base prompt and the agent prompt of each of its agents.
+[Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies three [connectors](worker-service.vocabulary.md#connector) as the tools that perform an authenticated operation.
 The model connector performs a model inference call.
@@ -66,7 +70,7 @@ The composition places the global prompt first, then the base prompt, then the a
 
 The operator configures the global prompt of the server.
 The global prompt states the conventions of the operator, and it holds for every native agent of the server.
-A worker declares, for its agent, the base prompt that the agent uses and the agent prompt of that agent.
+A worker declares, for each of its agents, the base prompt that the agent uses and the agent prompt of that agent.
 A base prompt states what holds for every agent that uses it, and more than one agent uses one base prompt.
 A base prompt describes the engineer that every agent that uses it is, and it states the default standard of the work product that those agents produce and judge.
 An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
@@ -141,7 +145,11 @@ An instance of a worker that an external harness hosts registers, and an instanc
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
 The instance presents its credential at the registration and on every later request, the registration returns no credential, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
 A work pull and every execution operation of a registered instance require its live registration.
-A registration ends when the program deregisters, when the server restarts, when a ban reaches its credential, or when its worker binding is removed or becomes unavailable, and a live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
+A registered instance sends a [heartbeat](worker-service.vocabulary.md#heartbeat), and a registration ends when no heartbeat arrives inside its window.
+A registration also ends when the program deregisters, when the server restarts, or when a ban reaches its credential.
+Removal or unavailability of its worker binding also ends the registration.
+A live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
+The end of a registration proves no stop of the program.
 
 An instance record is runtime-only.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
@@ -157,10 +165,11 @@ No instance is pinned to a node.
 Any idle instance of the binding takes the next compatible node.
 An idle instance that receives no work retries under the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service.
 
-The Worker Service produces the instance healthcheck before each work pull.
+The Worker Service produces the instance healthcheck before each work pull and once more when the Scheduler Service asks before a claim commits.
 The healthcheck of an instance at the `server` placement passes when the effective configuration of the agent resolves under the current binding set.
 The healthcheck of an instance at the `worker` placement passes when that configuration resolves and its registration is live.
 The healthcheck of an instance that an external harness hosts passes when its registration is live.
+The Worker Service computes the healthcheck of every placement from the state of the server alone.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
 The tool of an agent and the verification command of a node run code that the repository supplies.

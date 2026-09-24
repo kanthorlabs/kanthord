@@ -102,9 +102,8 @@ What authenticates an operation on a resource that a project uses.
 - **a provider credential**, which the Worker Service uses
 
 The type of a credential is a separate matter, and no approved page closes that set.
-[project-service.md](project-service.md) names three types.
+[project-service.md](project-service.md) names two types.
 
-- an SSH key, which reaches many repositories
 - an OAuth credential, which does not imply a person
 - an API key, which authorizes a whole account
 

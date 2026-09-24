@@ -32,6 +32,24 @@ That JWT holds `sub` = `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`, `name` = `C
 The Gateway Service verifies that JWT and establishes the machine identity, which names the client identity, the worker binding `claude-main`, the project `Billing` and the runtime identity of its live registration.
 The Project Service receives that value, and it takes no association from the caller.
 
+## JWT claim set
+
+The closed set of claims of a kanthord JWT.
+
+A non-secret decoded human payload:
+
+```json
+{"sub":"ulrich","name":"Ulrich","kind":"human","iat":1758700000,"exp":1790236000,"jti":"01J8Z3N5K7Q2W4E6R8T0Y2V4X6"}
+```
+
+A non-secret decoded machine payload:
+
+```json
+{"sub":"client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X7","name":"Claude Code on ulrich-mbp","kind":"client","binding":"binding_01J8Z3N5K7Q2W4E6R8T0Y2V4X8","iat":1758700000,"exp":1790236000,"jti":"01J8Z3N5K7Q2W4E6R8T0Y2V4X9"}
+```
+
+A token with an `aud` claim or without `jti` fails verification.
+
 ## forwarding contract
 
 The guarantee that the identity the Gateway Service passes to a downstream service is authentic and that no caller substitutes a different identity.

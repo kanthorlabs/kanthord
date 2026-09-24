@@ -37,9 +37,10 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 
 ## Access policy
 
-Every registered route declares one access policy value: `human`, `client`, `public` or `delivery`.
-Registration throws at startup when a route declares none.
+Every registered operation declares one access policy value: `human`, `client`, `public`, `delivery` or `service`.
+Registration throws at startup when an operation declares none.
 A request that matches no route returns 404.
+A `service` operation has no route, so a request for it returns 404.
 The policy value lives in the operation registry, so one declaration drives the authentication middleware and the emitted contract.
 
 ## Identity on the wire
@@ -78,20 +79,60 @@ The route answers with the runtime identity of the new instance and no token.
 
 ## The JWT
 
-`hono/jwt` signs and verifies with HS256, and the algorithm is pinned explicitly.
-The claims are `sub`, `name`, `kind`, `iat`, `exp` and `jti`. A machine token also carries `binding`.
-`gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
-Verification checks the signature, then `exp`, then `kind`, which holds `human` or `client`.
-`name` is a nonblank display name of 1–64 characters for both kinds. It groups nothing and authorizes nothing. Issuance defaults it to the username of a human and to the client identity of a machine.
-For `human`, `sub` is a nonblank username of 1–64 characters, and `binding` is absent. Issuance and verification use the same username validation and preserve its exact value. Reissuance preserves that subject. The process-local caller identity stores it as `accountId`; this internal field is not a JWT claim or verification-response property. The response retains `sub`.
-The signing key authenticates the username in the token. Verification requires no account row or username allowlist.
-For `client`, `sub` is a client identity of the form `client_identity_<ulid>` that the issuance generates, and `binding` is the identity of a worker binding.
-Verification asks the Project Service whether that worker binding exists and is available, and it resolves the project from it. It reads no list of client identities, because the signed token states the membership.
-Verification then checks that `jti` sits outside the denylist.
-A machine identity names the runtime identity of the live registration of its client identity when one exists. The work pull and every execution operation refuse a machine identity that names no live registration.
-Each issuance generates a fresh ULID `jti`. `iat` and `exp` use JWT Unix seconds.
-A restart or another issuance revokes no earlier JWT. It remains valid until expiry, a denylist ban, the removal or the unavailability of its worker binding for a machine, or replacement of `masterKey`.
-An expired token returns 401. A human obtains a new token from `kanthord jwt`, and a worker instance receives a new token with a new client identity and registers again.
+`hono/jwt` signs and verifies with HS256, and verification pins the algorithm explicitly.
+
+- The header is exactly `alg` `HS256` and `typ` `JWT`.
+- Any other `alg`, any other `typ` and any `crit` header reject the token.
+- `gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
+- Each issuance generates a fresh ULID `jti`.
+- A restart or another issuance revokes no earlier JWT.
+- It remains valid until expiry, a denylist ban or replacement of `masterKey`.
+- For a machine, removal or unavailability of its worker binding also ends that validity.
+- An expired token returns 401.
+- A human obtains a fresh token from `kanthord jwt`.
+- A worker instance receives a fresh token with a fresh client identity and registers again.
+
+The claim set is closed, and the matrix below holds for both kinds.
+
+- Both kinds require `sub`, a string of 1 to 64 nonblank characters.
+- For `human`, `sub` is the username; for `client`, it is a client identity `client_identity_<ulid>` that issuance generates.
+- For `human`, issuance and verification use the same username validation and preserve its exact value.
+- Reissuance preserves that subject.
+- The process-local caller identity stores it as `accountId`; this internal field is not a JWT claim or verification-response property.
+- The response retains `sub`.
+- The signing key authenticates the username in the token.
+- Verification requires no account row or username allowlist.
+- Both kinds require `name`, a string of 1 to 64 nonblank characters.
+- It is a display name that groups nothing and authorizes nothing.
+- Issuance defaults it to the username of a human and to the client identity of a machine.
+- Both kinds require `kind`, with the value `human` or `client`.
+- Both kinds require `iat` and `exp`, integers of JWT Unix seconds inside the safe NumericDate range.
+- `iat` is not after the verification time, and `exp` is after it, with no clock-skew tolerance.
+- Both kinds require `jti`, a canonical ULID.
+- `client` requires `binding`, a `binding_<ulid>` identity of a worker binding; `human` forbids it.
+- Both kinds forbid `iss`, `aud` and `nbf`.
+- A claim outside this set, a claim of another type, a missing required claim and a present forbidden claim each reject the token with 401.
+- Each cause has one error code under `gateway.jwt.<cause>`.
+- The codes include `gateway.jwt.unknown_claim`, `gateway.jwt.missing_claim`, `gateway.jwt.forbidden_claim`, `gateway.jwt.invalid_type`, `gateway.jwt.expired` and `gateway.jwt.not_yet_issued`.
+- Verification accepts the absence of a claim that a later version adds as optional, so an earlier token stays valid.
+
+Verification runs in this order.
+
+- Signature.
+- Header.
+- The closed claim set.
+- `exp` and `iat`.
+- `kind`.
+- The per-kind rules.
+- For `client`, the Project Service answers whether the worker binding exists and is available and resolves the project from it.
+- Verification reads no list of client identities because the signed token states the membership.
+- `jti` outside the denylist.
+- A machine identity names the runtime identity of the live registration of its client identity when one exists.
+- The work pull and every execution operation refuse a machine identity that names no live registration.
+
+`iss` and `aud` are absent because the signing key derives from the `masterKey` of one server under one label.
+The key therefore binds a token to that server.
+A `masterKey` that two servers share is an unsupported configuration, which [architecture.impl.md](architecture.impl.md#one-source-for-a-secret) states.
 
 ## The session denylist
 
@@ -144,7 +185,8 @@ The `hono/body-limit` middleware permits 40 KiB on the worker registration opera
 
 - The factories in `src/kernel/caller-mint.ts` create frozen human and machine identity values.
 - Only the Gateway imports that file.
-- `src/kernel/caller.ts` holds the identity types and the predicates `isHumanIdentity` and `isMachineIdentity`.
+- `src/kernel/service-mint.ts` creates a frozen service identity value, and only the composition root of the `server` application imports it.
+- `src/kernel/caller.ts` holds the identity types and the predicates `isHumanIdentity`, `isMachineIdentity` and `isServiceIdentity`.
 - It records each identity value in the corresponding module-private `WeakSet`.
 - A downstream service calls `isHumanIdentity` and rejects a value that it does not recognize.
 
@@ -175,17 +217,21 @@ It registers response status codes and schemas, error responses and its security
 The server emits an OpenAPI 3.1 document from the registry with `z.toJSONSchema()` of `zod` at 4.4.3.
 A test validates the document with `@apidevtools/swagger-parser` at 12.1.0.
 It asserts a real response against its declared schema.
-`kanthord gateway openapi` emits the document from the registry, writes it as YAML to `static/openapi.yaml` of the `engine` repository, and prints that path.
 
-- The command also emits the scoped documents from each `contract.ts` under `static/openapi/<service>/`.
-- The root document indexes those scoped documents.
+- `kanthord gateway openapi` emits one scoped OpenAPI 3.1 document from the `contract.ts` of each service into `static/openapi/<service>/` of the `engine` repository.
+- It emits the entry document `static/openapi/index.yaml`, an OpenAPI 3.1 document that references every scoped document and declares no operation of its own.
+- The entry document carries the `version` of `package.json` in its `info.version`.
+- It prints the path of the directory.
 
 `yaml` at 2.9.0 serializes the document, and [architecture.impl.md](architecture.impl.md) already names that package for the configuration file, so this command adds none.
 It starts no server, and it reaches none.
-A human runs that command after a change of a route, and the repository holds the emitted file.
+A human runs that command after a change of a route, and the repository holds the emitted directory.
 The server emits no document at its start, so the start of [architecture.impl.md](architecture.impl.md) holds no emission step.
-The server serves the `static` directory of its own package with `hono/serve-static`, so `GET /openapi.yaml` answers with that file under the public access policy and the `application/yaml` content type.
-A client generates its own client code from that file, and a build of a client copies the file instead of calling a running server.
+The server serves `static/openapi/` of its own package with `hono/serve-static` under the path `/api/openapi/`.
+It uses the public access policy and the `application/yaml` content type.
+The entry document answers at `GET /api/openapi/index.yaml`, and every relative reference resolves the same on disk and over HTTP.
+A client generates its own client code from that directory.
+A build of a client copies the directory instead of calling a running server.
 
 ## Host and origin
 
@@ -308,7 +354,7 @@ It covers a repeat of a completed key under another caller, and it asserts that 
 It covers an expired token and a banned `jti`, and it asserts 401 for each one.
 It covers a work pull of a machine identity whose registration ended, and it asserts the refusal.
 It covers the sweep of the denylist at a start, and it asserts that an entry beyond its `expires_at` is gone.
-It emits the document from the registry and compares it with the committed file, and a difference fails the test.
+It emits the directory from the registry and compares it with the committed directory, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
 The implementation epic assesses their removal.
 
@@ -317,10 +363,12 @@ The implementation epic assesses their removal.
 An external platform reaches no loopback listener, so a delivery arrives through a tunnel or a reverse proxy.
 The server serves one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
-The ingress forwards the path group `/hooks/*` for a delivery, `POST /api/worker/register` for worker-instance registration, and the registered work-pull and MCP paths for an instance that runs outside the host of the server.
+The ingress forwards the path group `/hooks/*` for a delivery.
+It forwards `POST /api/worker/register` and `POST /api/worker/heartbeat` for a worker instance.
+It forwards the registered work-pull and MCP paths for an instance that runs outside the host of the server.
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
-An instance presents its long-lived JWT on every request, so the ingress provides confidentiality for registration, work-pull and MCP traffic.
+An instance presents its long-lived JWT on every request, so the ingress provides confidentiality for registration, heartbeat, work-pull and MCP traffic.
 The server distinguishes no request of the ingress from a local request.
 The path restriction therefore lives in the configuration of the ingress.
 The ingress is an untrusted transport.
@@ -376,7 +424,7 @@ The Gateway Service source sits under `src/gateway/` of the `engine` repository.
 - `migrations.ts` holds the denylist table and no idempotency table.
 - `src/gateway/` is the one importer of `src/kernel/caller-mint.ts`.
 
-`static/openapi.yaml` of that repository holds the emitted OpenAPI document, and the released package ships the `static` directory.
+`static/openapi/` of that repository holds the emitted OpenAPI directory, and the released package ships the `static` directory.
 A test file sits beside its source as `*.test.ts`.
 `node --test` runs the tests.
 `tsc -p tsconfig.build.json` builds into `dist/`.
