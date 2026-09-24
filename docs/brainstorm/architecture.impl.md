@@ -162,6 +162,17 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A protocol-defined representation stays with its protocol, and the sibling of the service that speaks that protocol names the representation.
 - A remote identity follows the normalization of [project-service.impl.md](project-service.impl.md), which derives it from the binding configuration on every write.
 
+## Pagination
+
+- A list operation orders its rows by their primary key in descending order, so the first page holds the newest rows.
+- `limit` defaults to 100 and accepts 1 to 1000.
+- The answer holds `items` and `nextCursor`. `nextCursor` is `null` on the last page.
+- The cursor is the base64url encoding of the last key of a page. A client passes it back unchanged.
+- The next page reads the rows whose key is smaller than the cursor, under the filters of the request.
+- A list takes no snapshot. A row that arrives after the first page appears on a refresh of the first page, and a row that disappears between two pages is absent.
+- A cursor does not expire. A malformed cursor returns 400.
+- The primary key of an entity is its identity. A list of revisions orders by the revision.
+
 ## The canonical form and the digest
 
 - Canonical JSON is [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).

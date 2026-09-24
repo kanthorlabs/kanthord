@@ -24,7 +24,8 @@ It reads no table of another service.
 The tables are below.
 
 - `project_project(id, name, binding_set_version, created_at)` holds the identity of a project and the version of its binding set.
-- `project_binding(id, project_id, kind, resource_identity, current_revision, created_at, removed_at, replaced_by)` holds the identity of a binding.
+- A new project holds `binding_set_version` 0.
+- `project_binding(id, project_id, name, kind, resource_identity, current_revision, created_at, removed_at)` holds the identity of a binding.
 - `project_binding_revision(id, project_id, binding_id, revision, config, created_at)` holds one immutable row for each revision, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
 
 Every table above holds `id` as its first column and `project_id` as its second column.
@@ -35,8 +36,11 @@ The constraints are below.
 
 - The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so a binding identity is unique across the server and satisfies the rule of `project-service.md` that it is unique inside its project.
 - `project_binding.current_revision` carries a composite foreign key to `project_binding_revision`, whose own real key is the pair of the binding and the revision under a unique index.
-- `project_binding.resource_identity` names the resource that the binding allocates, and a unique index over `project_id` and `resource_identity` enforces the cardinality of the kind. The section below gives its form. A worker binding holds no resource identity, because a project holds any number of bindings of one worker, and SQLite treats two absent values as distinct. `kind` stays a plain column that the validation reads.
+- A partial unique index over `project_id` and `name` where `removed_at` is absent enforces the uniqueness of a binding name among the current bindings, so a removed binding releases its name.
+- `project_binding.resource_identity` names the resource that the binding allocates, and a partial unique index over `project_id` and `resource_identity` where `removed_at` is absent enforces the cardinality of the kind, so a project binds a resource again after its removal. The section below gives its form. A worker binding holds no resource identity, because a project holds any number of bindings of one worker, and SQLite treats two absent values as distinct. `kind` stays a plain column that the validation reads.
 - A credential reference and a reference to another binding sit inside `config`, and the write validates each one against `project_binding`. SQLite enforces no foreign key inside JSON.
+- A binding name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
+- A new binding takes revision 1.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](architecture.impl.md).
 
@@ -65,26 +69,27 @@ Normalization decides a revision against a replacement. `git@github.com:kanthorl
 
 ## The write of a binding set
 
-A write submits the complete binding set of the project.
+A write submits the complete binding set of the project as one object keyed by binding name.
 The submission names the version of the binding set that the client read.
 One `BEGIN IMMEDIATE` transaction holds the read of `project_project.binding_set_version`, the comparison, the difference and every write of the edit.
 The transaction refuses a submission that names another version, so two concurrent writes never interleave.
 It increments that column on every write that it commits.
 The transaction spans no `await`, no network call and no nested transaction, because one synchronous connection serves four services.
-The current binding set is the set of the rows of `project_binding` that hold no `removed_at` and no `replaced_by`.
+The current binding set is the set of the rows of `project_binding` that hold no `removed_at`.
+A reference inside a submission names a binding name of that submission. The transaction resolves each reference to the identity that the name holds after the write, and it stores that identity in the configuration. A stored reference always holds an identity.
 The transaction compares the canonical JSON of each configuration, so a reordered property of the submission creates no revision.
-The outcomes of the comparison are below.
+The outcomes of the comparison by binding name are below.
 
-- An unchanged binding keeps its revision.
-- A binding whose configuration changed takes a new revision, and the transaction inserts one `project_binding_revision` row.
-- A binding whose named resource changed takes a new binding identity, and the transaction sets `replaced_by` on the binding that it replaces.
-- A binding that the submission omits takes `removed_at`, and the transaction keeps its rows.
+- A name with an unchanged configuration keeps its identity and its revision.
+- A name whose configuration changed and whose named resource stays keeps its identity and takes a new revision, and the transaction inserts one `project_binding_revision` row.
+- A name whose named resource changed takes a new identity, and the transaction sets `removed_at` on the binding that held the name.
+- A new name adds a binding with a generated identity at revision 1.
+- A name that the submission omits takes `removed_at`, and the transaction keeps its rows.
+- A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set increments the version and changes no binding.
 
-A removal differs from a replacement.
-A removal names no successor, and a replacement names one in `replaced_by`.
-Validation refuses a set that references a removed binding, a replaced binding or a binding that does not exist.
-The submitted set therefore carries the repointing of every dependent binding, which `project-service.md` requires in one edit.
+A dependent reference follows the name, so a new identity under a name repoints every dependent reference in the same edit and gives each dependent binding a new revision.
+Validation refuses a set that references a binding name that the submission does not hold.
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
 ## Revision, disablement and the change of a remote
@@ -106,6 +111,7 @@ One `zod` schema at 4.4.3 covers each binding kind, and a discriminated union on
 A schema validates the shape, and a `superRefine` validates the relations of the whole set.
 The validation of the whole set runs at the write, and the validation of one binding with its dependencies runs again at each resolution.
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
+The write refuses a submission that changes the worker of an existing worker binding under the same binding name.
 
 ## The worker template registry
 
@@ -121,7 +127,7 @@ An execution calls the resolution at the moment that it needs the resource.
 One read resolves the dependency chain of the binding.
 For a worker binding the chain holds the binding, its revision, the entry of the agent, the provider account binding that the entry names and the default account of the provider that the default configuration names.
 The resolution merges the entry over the default configuration, adds the provider account, and parses the result against the schema of the template.
-It checks the disablement of every binding of the chain, and a disabled or replaced member refuses the operation.
+It checks the disablement of every binding of the chain, and a disabled or removed member refuses the operation.
 The resolution records the revision of every binding of the chain, and not the revision of the worker binding alone.
 It performs no cache, because `DatabaseSync` reads the local file synchronously.
 A recorded revision authorizes nothing, so the next operation resolves the chain again.
@@ -326,7 +332,9 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers coverage and suitability against every pair of a type and a capability, under both transport forms.
 - A test covers each of the five changes, and it asserts the revision that each one creates.
 - A test covers a disablement that takes effect at the next resolution, and a consumed grant that authorizes no second operation.
-- A test covers an omitted binding, a replaced binding, a set that references either one, and a submission that repoints every dependent binding.
+- A test covers an omitted name, a name whose resource changed, a set that references a name absent from the submission, and a dependent reference that follows a new identity under its name.
+- A test covers a worker change under the same name, and it asserts that the write refuses the change.
+- A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
 - A test covers a reordered JSON property that creates no revision.
@@ -356,7 +364,7 @@ The `kanthord` bin of `package.json` releases it.
 ## Open decisions of an epic
 
 - The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
-- The retention of a removed binding, of a replaced binding and of an old revision.
+- The retention of a removed binding and of an old revision.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
 - The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
 - The support of a GitHub App installation credential, which the first version omits and which needs a short-lived token, a mint and a cache.
