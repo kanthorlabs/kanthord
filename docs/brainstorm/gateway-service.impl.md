@@ -56,9 +56,9 @@ The server creates no human account row and generates, hashes and stores no huma
 The local `kanthord jwt` command is the only token issuance entry point. For a human it accepts an optional username argument and defaults to the constant when it is omitted.
 Server startup issues and displays no human token. The CLI exposes no human login or logout command.
 A request that carries a missing or an invalid credential on a route that requires one returns 401 before the handler runs.
-`GET /api/auth/verify` declares the human access policy and returns the authenticated identity as `{"kind":"human","accountId":"<username>","name":"<display name>"}` with HTTP 200.
+`GET /api/auth/verify` declares the human access policy and returns the verified JWT's business properties as `{"kind":"human","sub":"<username>","name":"<display name>"}` with HTTP 200. Property names and values are preserved from the JWT; the response adds no aliases.
 It uses the same verification chain as every human-only operation, including signature, expiry, username and denylist checks. A machine token fails this route with HTTP 401.
-The response contains neither the JWT nor the signing key and writes no record.
+The response contains no raw JWT, signing key or token metadata (`iat`, `exp`, `jti`) and writes no record.
 
 ## Worker-instance registration
 
@@ -83,7 +83,7 @@ The claims are `sub`, `name`, `kind`, `iat`, `exp` and `jti`. A machine token al
 `gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
 Verification checks the signature, then `exp`, then `kind`, which holds `human` or `client`.
 `name` is a nonblank display name of 1–64 characters for both kinds. It groups nothing and authorizes nothing. Issuance defaults it to the username of a human and to the client identity of a machine.
-For `human`, `sub` is a nonblank username of 1–64 characters, and `binding` is absent. Issuance and verification use the same username validation and preserve its exact value. The verified human identity carries that username as its `accountId`, and reissuance preserves it.
+For `human`, `sub` is a nonblank username of 1–64 characters, and `binding` is absent. Issuance and verification use the same username validation and preserve its exact value. Reissuance preserves that subject. The process-local caller identity stores it as `accountId`; this internal field is not a JWT claim or verification-response property. The response retains `sub`.
 The signing key authenticates the username in the token. Verification requires no account row or username allowlist.
 For `client`, `sub` is a client identity of the form `client_identity_<ulid>` that the issuance generates, and `binding` is the identity of a worker binding.
 Verification asks the Project Service whether that worker binding exists and is available, and it resolves the project from it. It reads no list of client identities, because the signed token states the membership.
@@ -135,7 +135,7 @@ A route with a body requires the `application/json` content type.
 ## Delivery bytes and body limits
 
 The `/hooks/*` handler reads `arrayBuffer()`.
-It passes the exact bytes and headers to the Scheduler Service.
+It passes the exact bytes and headers to the Intake Service.
 A re-serialized body breaks the signature of the platform.
 It parses no JSON and validates no schema.
 The `hono/body-limit` middleware permits 40 KiB on the worker registration operation and on `/api/auth/*`, 50 MiB on a delivery operation, and 10 MiB on other operations.
@@ -332,7 +332,7 @@ The operator adds the public hostname of the ingress to the host allowlist.
 
 The work pull and the registration of a worker instance are registered routes.
 The MCP server of the Worker Service occupies its own path prefix, and [worker-service.impl.md](worker-service.impl.md) owns it.
-A platform delivery enters through a registered route whose handler passes it to the Scheduler Service.
+A webhook delivery enters through a registered route whose handler passes it to the [Intake Service](intake-service.md#deliveries).
 Each operation declares its own access policy; a path prefix grants no policy.
 `GET /api/healthcheck` and the OpenAPI routes declare the public policy.
 `GET /api/auth/verify` declares the human policy. `POST /api/worker/register` and the other worker operations declare the client policy, and delivery operations declare the delivery policy.

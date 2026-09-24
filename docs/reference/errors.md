@@ -16,20 +16,20 @@ Engine-defined error codes use at least three nonempty, dot-separated parts:
 
 Examples used by the implementation:
 
-| Code                                              | Meaning                                                          |
-| ------------------------------------------------- | ---------------------------------------------------------------- |
-| `system.config.not_found`                         | The server configuration file is absent.                         |
-| `system.database.migration.incompatible_history`  | The recorded migration history cannot be applied by this binary. |
-| `system.context.deadline_exceeded`                | A context's deadline expired.                                    |
-| `cli.config.invalid_endpoint`                     | Client endpoint validation failed.                               |
-| `cli.worker.register.indeterminate`               | The CLI cannot determine the registration result.                |
-| `gateway.authentication.unauthorized`             | Authentication or caller access was rejected.                    |
-| `gateway.authentication.registration.unavailable` | Registration collaborators are unavailable.                      |
-| `gateway.request.validation_failed`               | Operation input validation failed.                               |
-| `gateway.idempotency.conflict`                    | The key cannot be replayed for this request.                     |
-| `gateway.routing.not_found`                       | No route matches the request.                                    |
-| `gateway.openapi.not_found`                       | The requested OpenAPI fragment is not allowlisted.               |
-| `gateway.healthcheck.unhealthy`                   | At least one registered service is unavailable.                  |
+| Code                                             | Meaning                                                          |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `system.config.not_found`                        | The server configuration file is absent.                         |
+| `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary. |
+| `system.context.deadline_exceeded`               | A context's deadline expired.                                    |
+| `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                               |
+| `cli.worker.register.indeterminate`              | The CLI cannot determine the registration result.                |
+| `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                    |
+| `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.      |
+| `gateway.request.validation_failed`              | Operation input validation failed.                               |
+| `gateway.idempotency.conflict`                   | The key cannot be replayed for this request.                     |
+| `gateway.routing.not_found`                      | No route matches the request.                                    |
+| `gateway.openapi.not_found`                      | The requested OpenAPI fragment is not allowlisted.               |
+| `gateway.healthcheck.unhealthy`                  | At least one registered service is unavailable.                  |
 
 ## API failures
 

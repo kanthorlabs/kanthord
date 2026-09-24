@@ -398,7 +398,7 @@ A caller supplies no resource selector.
 Every call of a platform implementation on the API of its platform names the identity that requests it and the binding that it acts on.
 The platform implementation resolves the binding through the Project Service for each call on the API.
 Custody follows the authorization check.
-A credential stays inside the server.
+The [Project Service](project-service.md#authorization-and-credential-custody) owns the credential boundary.
 The platform connector holds no authority of its own.
 
 The [action performer](worker-service.vocabulary.md#action-performer) requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
@@ -457,7 +457,7 @@ The tool of the action performer takes no parameter beyond the execution identit
 It returns the four return classes of the action performer.
 A native agent reaches the permitted read methods of the platform connector as tools through the MCP server.
 
-The platform connector serves the [observer of the Scheduler Service](scheduler-service.md#intake-and-observation).
+The platform connector serves the [observer](scheduler-service.vocabulary.md#observer) of the Scheduler Service.
 The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the [external object](mission-service.md#evidence) to read its state.
 A platform implementation decodes a delivery of its platform into the event types of that platform.
 The decoding performs no operation on the API.

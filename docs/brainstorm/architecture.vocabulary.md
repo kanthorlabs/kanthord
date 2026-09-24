@@ -9,16 +9,19 @@ This file is not a design document, and `architecture.md` stays the single sourc
 
 ## service
 
-A logical part of one process with a boundary that separates authority. The set is closed and it holds six values.
+A logical part of one process with a boundary that separates authority.
+The set is closed and it holds seven values.
 
 - **Project Service**
 - **Mission Service**
 - **Scheduler Service**
+- **Intake Service**
 - **Worker Service**
 - **Tracking Service**
 - **Gateway Service**
 
-The server holds no other service. The six services are logical boundaries inside one server.
+The server holds no other service.
+The seven services are logical boundaries inside one server.
 
 ## actor
 
@@ -31,10 +34,14 @@ The container view shows the actors around the server. The set is closed and it 
 
 ## external system
 
-The container view shows the external systems around the server. The set is closed and it holds two values.
+The container view shows the external systems around the server.
+The set is closed and it holds three values.
 
 - **a git platform**, which holds the repository that a project uses, and it delivers events about that repository to the server
 - **a large language model provider**, which serves the models that the Worker Service uses
+- **a messaging platform**, which delivers updates to the Intake Service
+
+The Slack workspace `kanthorlabs` is a source on a messaging platform.
 
 [overview.md](overview.md) owns `provider`, and the overview vocabulary holds its example.
 
@@ -50,7 +57,8 @@ An application of kanthord that a user runs. The set is closed and it holds thre
 
 ## server
 
-The server is one process, and it holds the six services. A client reaches it through the API or the CLI.
+The server is one process, and it holds the seven services.
+A client reaches it through the API or the CLI.
 The server runs on one host.
 
 - An external harness invokes a configured repository action through the MCP server of the Worker Service.
@@ -104,7 +112,7 @@ The type of a credential is a separate matter, and no approved page closes that 
 
 What the container view shows. A service is not a container.
 
-- The `server` application is a container, and it holds the six services.
+- The `server` application is a container, and it holds the seven services.
 - The `cli` application is a container.
 - The `worker` application is a container, and it holds worker instances.
 - A service boundary separates authority inside the server, so it describes no container.

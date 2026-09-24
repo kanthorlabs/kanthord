@@ -122,7 +122,7 @@ The identity of the binding stays, and the change creates a revision.
 Every reference to that binding stays valid, because a reference never names a revision.
 An execution that resolves that revision records it.
 A change to the credential reference of a provider account binding creates a revision of that binding too.
-A credential store record keeps its identity across a rotation and an OAuth refresh, and each of those changes creates a revision of that record.
+A credential store record keeps its identity across a rotation, an OAuth refresh and every other change to its secret material, and none of those changes creates a revision, because a reference names the record and never its content.
 
 ## replacement binding
 
@@ -186,7 +186,7 @@ The holding of the secret material of a resource credential behind a protected f
 The credential store holds an SSH key behind the protected facility.
 An execution requests a network git write.
 The facility checks the binding of the project, then it consults custody.
-No credential leaves the server, so the execution holds no credential.
+The execution holds no credential under the [custody rule](project-service.md#authorization-and-credential-custody).
 Holding the repository binding does not confer custody of the key.
 
 ## protected facility
@@ -254,11 +254,20 @@ The external harness holds no credential of a resource.
 
 ## service identity
 
-The identity that the observer of the Scheduler Service presents.
+A service identity is the identity that a service presents for its own authorized operations.
 
 The observer reads pull request 42 of "Add password reset" under its service identity.
 The facility resolves that identity through the external object to the repository binding, the project and the node.
 The observer performs no operation class other than the read of an external object.
+The Intake Service presents its own service identity for an [acquisition grant](project-service.vocabulary.md#acquisition-grant) on the source binding of `kanthord-web`.
+
+## acquisition grant
+
+An acquisition grant authorizes one acquisition session for one subscription under the service identity of the Intake Service.
+The grant names its source binding and its kind.
+The closed set of kinds holds `webhook-register`, `poll` and `stream-open`.
+The Project Service grants `webhook-register` for the subscription of the GitHub source binding of `kanthord-web`.
+The Intake Service uses that grant to register the webhook for `kanthorlabs/kanthord`.
 
 ## source binding
 
@@ -267,6 +276,7 @@ The binding of a delivery source that a project accepts.
 The project binds the GitHub webhook source of its repository.
 The binding holds the verification secret behind custody.
 The Project Service verifies each delivery as its own operation.
+The binding holds the [subscriptions](intake-service.vocabulary.md#subscription) that the Intake Service uses to acquire its deliveries.
 
 ## resolution
 
