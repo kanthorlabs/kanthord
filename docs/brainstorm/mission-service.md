@@ -163,6 +163,10 @@ The read of a worker resolves to the revision that its attempt pins.
 That revision is the head of the list that the Mission Service returns to it.
 The read of a human returns every revision.
 The list of a worker holds the pinned revision and every older revision, and the Mission Service computes no difference between revisions, because each record carries its change.
+An execution reads no content of another node, except a current child objective of its initiative through the current outcome of that objective.
+That read resolves to the revision that the attempt of that outcome pins.
+A child objective that holds no outcome shows its identity and its state.
+An execution reads no dependency edge, no node outside its own subtree and no historical record of another node.
 
 A node revision names its reason, its actor and its time.
 One record carries the change and its result.
