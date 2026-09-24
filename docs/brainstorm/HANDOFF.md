@@ -19,6 +19,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. `binding apply` and agent reads await repository action schemas, policy validation, prompt and instance-count bounds, and template option schemas. Provider and model catalogs also need contract declarations.
+  - Pending question 2026-09-24, not ruled: the GitHub action catalog of the first version holds exactly `pull_request`, which expects the merge of its pull request, and `merge_push`, which expects the push to the base branch. Each action implies its expected end state and takes no parameter. The provider and model catalogs follow as the second ruling. The batch defaults are a 32 KiB bound on the project prompt and the global prompt, `instanceCount` from 0 to 64, a repository binding without a credential reference as a public read, and no overridable template option in `general@1` and `reviewer@1`.
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Credential commands await the remote-change input, quarantine lifecycle and cross-project progress contract. GitHub App custody remains outside the first version and needs its credential mechanism.
 
 ### Mission Service
