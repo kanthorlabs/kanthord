@@ -52,6 +52,13 @@ Its repository binding names no credential for the network git read and the netw
 It names an API key or an OAuth credential for the platform action.
 The address `https://github.com/kanthorlabs/kanthord.git` has the HTTPS form, so one OAuth credential of the git platform satisfies all three capabilities.
 
+## binding name
+
+The name that a human chooses for a binding, unique inside its project.
+The term names no closed set.
+
+Project `atlas` names its worker binding `general-main` and its provider account binding `openai-atlas`. The `swe@1` entry of `general-main` names `openai-atlas`. A second binding named `general-main` in `atlas` is refused.
+
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
@@ -129,6 +136,7 @@ A credential store record keeps its identity across a rotation, an OAuth refresh
 ## replacement binding
 
 The binding that a change to the named resource creates.
+The replacement keeps the binding name and takes a new identity.
 
 A repository binding names one repository, and the project moves the work to another repository.
 That change names another resource, so it creates a replacement binding.

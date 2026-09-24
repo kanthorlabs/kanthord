@@ -20,6 +20,8 @@ The mission of a project is intrinsic to that project, so no binding allocates i
 
 Every resource that a project uses arrives as a binding.
 A binding has an identity that is unique inside its project.
+A binding has a [binding name](project-service.vocabulary.md#binding-name) that is unique inside its project. A human chooses it.
+A change of the binding name removes the binding and adds another one.
 A binding has a kind.
 The kind determines the configuration that the binding holds, the cardinality that a project permits, and the validation that the configuration satisfies.
 A project holds one binding for each repository, each provider account and each delivery source that it uses, and any number of bindings of one worker.
@@ -66,6 +68,7 @@ The worker name determines that declaration.
 A worker template carries no configuration version of its own.
 A worker name that differs in its version declares its own configuration.
 A worker binding names one worker.
+The worker that a worker binding names never changes. A project removes the binding and adds another one instead.
 A worker binding holds the worker configuration: the instance count and the availability of the binding.
 A worker binding holds an entry for an agent of its worker only when the project overrides the default configuration of that agent.
 An entry names the values that it overrides, and every other value of the agent comes from its default configuration.

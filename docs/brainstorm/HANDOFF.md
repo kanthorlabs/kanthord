@@ -18,14 +18,13 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping. The `source secret get` command also awaits its display, redaction and cache contract.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Binding commands await version bounds, local-key allocation, replacement input and peer-reference treatment. The contract also classifies a worker-name change and declares error schemas, body bounds, timeouts and cursor rules.
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Project creation and rename await name constraints, Mission creation ownership, concurrency and replay reconciliation. Binding history and credential rotation await retention and concurrency contracts.
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. `binding apply` and agent reads await repository action schemas, policy validation, prompt and instance-count bounds, and template option schemas. Provider and model catalogs also need contract declarations.
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Credential commands await the remote-change input, quarantine lifecycle and cross-project progress contract. GitHub App custody remains outside the first version and needs its credential mechanism.
 
 ### Mission Service
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Mission commands await node and record prefixes, graph change records, revision initialization and increment rules, and cursor consistency. Operation contracts also need error schemas, timeouts and response limits.
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Mission commands await node and record prefixes, graph change records, and revision initialization and increment rules. Operation contracts also need error schemas, timeouts and response limits.
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Import and node writes await Markdown grammar, scope, boundary references, minimum criteria, verification-command form, create admission and retirement confirmation. Import and unblock also await durable request-map retention.
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await priority bounds, task applicability, method values, evidence bounds and retention, content encoding and exceptional credential removal. External-action publication, observer state schemas, evaluation context, criterion aggregation and repository evidence formats also await contracts.
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Human controls await the no-attempt outcome and task-outcome schemas. `node mark-ready` awaits the counter-zero readiness contract.
@@ -36,7 +35,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Intake, Scheduler, Project and Mission: how the delivery admission of the Scheduler classifies a delivery that the Intake Service hands over, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort. The server-owner ruling of 2026-09-20 gives every authenticated human the same authority, so a person that a delivery maps to a human identity gains that authority, and this effort revisits it. A Scheduler read of admission dispositions per project also awaits a decision.
 - [ ] Add the skills and extensions that support external-harness integration. `tracking-service.md` obliges the extension to capture, to hold its capture in a bounded local store, and to import it when a human issues an ingestion. The contract also covers snapshot export, acknowledgement handoff, cursor persistence, retry deadlines and retained or discarded summaries.
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/scheduler.md`. Scheduler commands await entity prefixes, request and response schemas, durable-request mapping, lease duration, renewal cadence and route timeouts. Observation-obligation reads also await the lease start contract; lists await cursor consistency and retention.
+- [ ] Added 2026-09-24 from `engine/docs/cli/scheduler.md`. Scheduler commands await entity prefixes, request and response schemas, durable-request mapping, lease duration, renewal cadence and route timeouts. Observation-obligation reads also await the lease start contract; lists await retention.
 
 ### Intake Service
 
@@ -45,7 +44,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription commands await kind-specific input fields, validation, protocol state schemas and absent-state representations. Delivery reads and receipt await verification-result schemas, operation declarations, timeouts, response statuses and file bounds.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. `delivery get` awaits the payload inclusion, representation, size and redaction decision.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. A human action on a parked delivery awaits authority, idempotency and state-change rules. No `delivery retry` command exists before that decision.
-- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription mutations await incompatible-create handling, desired-state omission, disabled-source admission and retirement semantics. Candidate: omitted desired state selects `disabled`; disabled-source admission returns validation failure with HTTP 400. Lists await order and cursor validity.
+- [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription mutations await incompatible-create handling, desired-state omission, disabled-source admission and retirement semantics. Candidate: omitted desired state selects `disabled`; disabled-source admission returns validation failure with HTTP 400.
 
 ### Worker Service
 
@@ -72,7 +71,7 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await trace, span, text and record identity contracts, OpenTelemetry mapping and the canonical identity-attribute registry. Execution identity validation awaits the Scheduler contract.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion and reads await byte and count limits, execution bounds, local-log and segment bounds, and `fsync` bounds. Large transcript and chunk contracts also remain open.
-- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Read and query commands await projections, order, cursor validity, concurrent arrival and expiry behavior, and unresolved-reference representation.
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Read and query commands await projections, expiry behavior, and unresolved-reference representation.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Trace and text reads await retention fields and durations, text retention start, trace-expiry resolution and tombstone lifetime.
 
 ### Root repository
