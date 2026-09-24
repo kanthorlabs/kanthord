@@ -322,6 +322,7 @@ Examples:
 - `system.startup.permission_denied`
 - `cli.config.not_found`
 - `gateway.database.<error>`, where `<error>` is the failure condition.
+- `gateway.invocation.execution_proof_failed`
 - `project.bindings.llm.openai.quota_exceeded`
 
 ## The service lifecycle and Context
@@ -596,6 +597,25 @@ An operation declares its execution contract.
 - The access policy of the operation selects authentication.
 - The delivery policy mints no caller identity.
 - The acknowledgement of a delivery follows the commit of the inbox record.
+- An operation declares whether it requires a live execution.
+- For such an operation the invocation chain proves the execution identity of the input once, before the handler runs.
+- The chain resolves that identity through the authorization of the Project Service, which reads the claim state from the Scheduler Service.
+- The proof holds when the claimant instance of the claim is the runtime identity of the live registration that the machine identity names, and the lease of the claim is live.
+- The chain passes the node, the attempt and the pinned revision of the claim to the handler, and the handler reads none of them from the input.
+- A failed proof answers 403 with the error code `gateway.invocation.execution_proof_failed` before the handler runs.
+- The proof establishes ownership and liveness, and it grants no operation authority.
+
+An operation serves one caller kind.
+
+- The `human` policy serves a human, and the `client` policy serves a machine.
+- No operation accepts both a human and a machine.
+- No handler shapes its result by the kind of the caller identity.
+- A read that a human and a machine both need is two operations over one domain query and one record schema.
+- The read of a human is a `human` operation keyed by a node, and it returns every revision.
+- The read of a worker is a `client` operation keyed by the execution identity, and the server derives the node, the attempt and the revision bound from the live claim.
+- The domain query takes a required bound that the server derives from the caller, and it rejects a missing bound.
+- A human inspection of the view of an execution is a third `human` operation keyed by the execution identity.
+- [mission-service.md](mission-service.md#mission-structure-and-nodes) rules the read of a human and the read of a worker.
 
 Caller propagation carries identity per call.
 
