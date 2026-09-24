@@ -361,7 +361,8 @@ The implementation epic assesses their removal.
 ## Ingress
 
 An external platform reaches no loopback listener, so a delivery arrives through a tunnel or a reverse proxy.
-The server serves one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
+The server serves the RESTful API on one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
+A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [project-service.impl.md](project-service.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
 It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover` and `POST /api/worker/credential` for a worker instance.

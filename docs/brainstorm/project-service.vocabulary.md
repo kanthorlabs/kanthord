@@ -209,6 +209,22 @@ The handover carries its access token and its refresh token.
 The execution runs for nine hours and refreshes four times on `build-02`.
 The application reports each refreshed credential to custody.
 
+## login session
+
+One attempt of a human to obtain an OAuth credential of a provider account on the server.
+Its states form the closed set `pending`, `completed`, `failed` and `expired`.
+Its modes form the closed set `browser` and `device`.
+
+Ulrich starts a login session for GitHub Copilot in device mode.
+The session states the address `https://github.com/login/device` and the code `ABCD-1234`.
+Ulrich enters the code in a browser.
+The session completes, and custody stores the credential of `copilot-main`.
+
+Ulrich starts a login session for OpenAI Codex in browser mode from a laptop while the server runs on `build-01`.
+The session states the authorization address.
+Ulrich opens it, and the redirect to `localhost:1455` fails on the laptop.
+Ulrich returns the redirect URL to the session, and the session completes.
+
 ## protected facility
 
 The component that secret material sits behind.

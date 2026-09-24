@@ -227,6 +227,17 @@ Custody defends the material against a record of the system, and it defends noth
 - Custody emits one log record on each handover and report, naming the execution identity and the record identity and no material.
 - `pino` redacts the payload paths, and a test asserts each path.
 
+## The OAuth login
+
+- Custody runs `models.login(providerId, "oauth", interaction)` of `@earendil-works/pi-ai` at 0.86.0 over its own credential store. The credential lands in a `credential` record through `modify` and never leaves the server.
+- A login session is a runtime record of the Project Service with identity `login_session_<ulid>`, provider id, mode and starting human identity. It holds the remote identity that the human names for the record, its state, emitted address and code, failure reason and expiry. The expiry falls 15 minutes after the start.
+- The interaction adapter answers a `select` prompt with the session mode, `browser` or `device_code`. It fails the session for an option outside those two. It records an `auth_url` notification as the address and a `device_code` notification as the code and address. It records `info` and `progress` notifications as the last message of the session. It suspends a `manual_code`, `text` or `secret` prompt until the second operation supplies the value. It fails the session when the expiry arrives first.
+- All operations use the `human` access policy. `project.credential.login` is a `unary` mutation with provider id, mode and remote identity as input. Its output holds the session identity, address, code and expiry. `project.credential.login_code` is a `unary` mutation with session identity and value as input. It answers 409 when the session awaits no value. `project.credential.login_status` is a `unary` read keyed by session identity. It returns state, last message and failure reason. A provider that offers one mode ignores the input mode.
+- In browser mode, pi-ai opens a callback listener on the server host loopback for the duration of the session. OpenAI Codex uses `127.0.0.1:1455`, and Anthropic uses port `53692`. The environment variable `PI_OAUTH_CALLBACK_HOST` changes the host. The server sets no `PI_OAUTH_CALLBACK_HOST`. The listener belongs to pi-ai and serves no kanthord operation. The Gateway registers no route for it. A browser on the server host completes the callback. A browser on another machine fails it, and the human returns the redirect URL or code through `project.credential.login_code`.
+- The device mode needs no listener. pi-ai polls the provider until success, failure or expiry.
+- Custody holds at most one pending session per provider id and human identity. A second start answers 409. A completed session writes the record and ends. The session record holds no token at any time.
+- Every operation outputs the address and code in plain text because the human needs them. It outputs no token. `pino` redacts nothing of the address and code and everything of the credential.
+
 ## The network git operations
 
 Custody performs a network git read and a network git write through the repository connector of the Worker Service, which runs the git CLI.
@@ -287,6 +298,17 @@ It authenticates no other header, it establishes no repository, and it detects n
 The GitHub implementation of [worker-service.impl.md](worker-service.impl.md) associates the payload with its repository, and the Scheduler Service owns the duplicate effect of a repeated delivery.
 This sibling states no replay window.
 
+## The command group `project`
+
+[architecture.impl.md](architecture.impl.md) rules the command surface. This sibling declares the table of the group `project` with the credential login rows. The remaining rows wait for the command table item of [HANDOFF.md](HANDOFF.md).
+
+- `credential login <provider> [--mode browser|device] --remote-identity <value>` calls `project.credential.login` with the human access policy. It prints the session identity, address to open and code, one per line, and exits with zero.
+- `credential login-code <session> <value>` calls `project.credential.login_code` with the human access policy.
+- `credential login-status <session>` calls `project.credential.login_status` with the human access policy. It prints the state, last message and failure reason as JSON.
+
+The value of `login-code` is a code or a redirect URL and no secret of the record, so it travels on the command line.
+No command reads a prompt.
+
 ## Repository layout, build, test and release
 
 The Project Service source sits under `src/project/` of the `engine` repository.
@@ -316,6 +338,11 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the round trip of a handover envelope, a payload moved to another execution identity, and a truncated payload.
 - A test covers a store view that answers `undefined` for a provider id outside the binding of the execution. It covers a refresh through `modify` that updates the row in place and creates no revision.
 - A test covers a report of a refreshed credential for an execution that is not live, and it asserts 403.
+- A test covers a login session in device mode against a scripted pi-ai provider. It asserts the output address and code, completion and stored record.
+- A test covers a browser login session whose callback never arrives. It supplies a value through the second operation and asserts completion.
+- A test covers a second start for the same provider and human, and it asserts 409.
+- A test covers an expired session, and it asserts the state `expired` and no record.
+- A test asserts that no output and no log record of a login session holds a token.
 
 ## Open decisions of an epic
 
@@ -325,4 +352,3 @@ The `kanthord` bin of `package.json` releases it.
 - The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
 - The support of a GitHub App installation credential, which the first version omits and which needs a short-lived token, a mint and a cache.
 - The rotation behaviour of the refresh token of each OAuth provider under two concurrent holders.
-- The login flow of an OAuth provider account. pi-ai drives a device code or a browser callback through an interactive prompt, and every CLI command is non-interactive.
