@@ -31,6 +31,7 @@ class PublicBuildTest(unittest.TestCase):
             self.assertFalse((artifact / "reference/api").exists())
             self.assertFalse((artifact / "reference/cli").exists())
             self.assertTrue((artifact / ".nojekyll").is_file())
+            self.assertTrue((artifact / "assets/diagrams.mjs").is_file())
             for destination in [artifact, alias / "docs/nested-output"]:
                 rejected = subprocess.run(
                     [str(build), str(destination)],

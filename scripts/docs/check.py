@@ -117,6 +117,7 @@ def main():
             "CNAME",
             ".nojekyll",
             "assets/navigation.mjs",
+            "assets/diagrams.mjs",
         }
         if any(not (site / name).is_file() for name in required):
             raise ValueError(
