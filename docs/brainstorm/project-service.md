@@ -13,6 +13,7 @@ It describes no mechanism of another service.
 ## Project identity and ownership
 
 The [overview](overview.vocabulary.md) defines a project, its identity and a binding.
+A project has a name that is unique on the server. A human chooses it.
 A resource exists independently of the project that binds it.
 The mission of a project is intrinsic to that project, so no binding allocates it.
 

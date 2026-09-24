@@ -572,6 +572,7 @@ The public interfaces have three kinds.
 - The Mission Service uses the Scheduler Service queue's public insert and delete in the transaction that commits the accepted fact.
 - This collaboration co-locates the Mission Service and the Scheduler Service.
 - A collaboration is a co-location contract of those services in one process on one database.
+- `project.create` commits through the Project Service tables and calls the Mission collaboration `createMission` inside the same transaction, so every project holds exactly one mission. This collaboration co-locates the Project Service and the Mission Service.
 - Kind 3, a client, carries every other call between services through `ServiceClient<typeof peerOperations>`.
 - Kind 3 is the default.
 - Kind 2 requires the written atomicity reason.
@@ -663,6 +664,7 @@ A handler separates asynchronous work from its commit.
 - The owning design page states the outcome when the peer completes and the initiating operation fails.
 - For a multi-service transition, the owning design page names the durable obligation owner, authoritative completion condition and recovery after interruption.
 - The invocation chain supplies replay, never recovery.
+- `project.create` commits through the Project Service tables and calls the Mission collaboration `createMission` inside the same transaction.
 - `worker.register` commits through Worker Service registrations and calls the Project instance-count collaboration inside the same transaction.
 - `worker.register` and `gateway.verify` provide the reference pattern on both adapters.
 

@@ -18,7 +18,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping. The `source secret get` command also awaits its display, redaction and cache contract.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Project creation and rename await name constraints, Mission creation ownership, concurrency and replay reconciliation. Binding history and credential rotation await retention and concurrency contracts.
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. `binding apply` and agent reads await repository action schemas, policy validation, prompt and instance-count bounds, and template option schemas. Provider and model catalogs also need contract declarations.
 - [ ] Added 2026-09-24 from `engine/docs/cli/project.md`. Credential commands await the remote-change input, quarantine lifecycle and cross-project progress contract. GitHub App custody remains outside the first version and needs its credential mechanism.
 

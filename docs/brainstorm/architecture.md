@@ -37,6 +37,7 @@ It holds the credentials that the resources of a project require, and it authori
 ### Mission Service
 
 The Mission Service holds the mission of one project.
+Every project holds exactly one mission. The creation of a project creates its mission in the same commit.
 It maps one to one with a project.
 It represents a mission as a graph.
 It holds the validation criteria of every node.

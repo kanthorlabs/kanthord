@@ -14,6 +14,7 @@ It describes no mechanism of another service.
 ## Mission structure and nodes
 
 The [overview](overview.vocabulary.md) defines a mission, an initiative, an objective, a task, an execution, a worker, the act of executing a node and landing.
+A mission comes into existence with its project, empty and at mission revision 0. No operation creates or deletes a mission.
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Containment and dependency are the two edge kinds.
