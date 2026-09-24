@@ -292,6 +292,7 @@ This sibling declares the fields below.
 - `gateway.allowedHosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.allowedOrigins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.tokenGeneration`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `worker.globalPrompt`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
@@ -378,7 +379,6 @@ The start runs the steps below in this order. Each step names the sibling that o
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Run the migrations, in a fixed order of the services.
-- Sweep the expired entries of the session denylist, which [gateway-service.impl.md](gateway-service.impl.md#the-session-denylist) owns.
 - Register the routes of every service, which [gateway-service.impl.md](gateway-service.impl.md) owns.
 - Open the listener.
 

@@ -146,7 +146,7 @@ It accepts registrations up to the instance count of the binding, and it refuses
 The instance presents its credential at the registration and on every later request, the registration returns no credential, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
 A work pull and every execution operation of a registered instance require its live registration.
 A registered instance sends a [heartbeat](worker-service.vocabulary.md#heartbeat), and a registration ends when no heartbeat arrives inside its window.
-A registration also ends when the program deregisters, when the server restarts, or when a ban reaches its credential.
+A registration also ends when the program deregisters or when the server restarts.
 Removal or unavailability of its worker binding also ends the registration.
 A live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The end of a registration proves no stop of the program.

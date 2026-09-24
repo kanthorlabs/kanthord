@@ -18,7 +18,7 @@ The Gateway Service verifies a JWT whose subject is `kanthorlabs` and establishe
 The act by which the Gateway Service verifies the credentials of a human and establishes the human identity.
 
 `kanthorlabs` presents the JWT generated from the server configuration as a bearer token.
-The Gateway Service verifies its signature, expiry, subject and denylist status and establishes the human identity of `kanthorlabs`.
+The Gateway Service verifies its signature, expiry and subject and establishes the human identity of `kanthorlabs`.
 
 `kanthord jwt` generates a token for the default username `kanthorlabs`.
 `kanthord jwt ulrich` generates a token whose subject is `ulrich`. When that token authenticates a request, the Gateway Service establishes the human identity of `ulrich`.

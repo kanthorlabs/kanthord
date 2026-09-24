@@ -29,6 +29,8 @@ It describes no mechanism of another service.
 - A failed authentication stops the request before it reaches any other service.
 - A successful authentication establishes the [human identity](overview.vocabulary.md#human-identity) as the [logged-in account](gateway-service.vocabulary.md#logged-in-account).
 - A human obtains an expiring credential only through an explicit local generation command. Server startup issues no human credential.
+- The system holds no user management. A human shares a generated credential outside the system.
+- A change of the server configuration revokes every issued credential at once. The system revokes no single credential.
 - The CLI exposes no human login or logout flow.
 - Human authentication establishes no registration record.
 
