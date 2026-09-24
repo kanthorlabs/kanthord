@@ -8,10 +8,14 @@ This file holds the implementation rulings for the mechanisms that realize [work
 This file is not a design document, and `worker-service.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate, and a change to it is a change to the workers that run on it.
 
+The implementation uses `simple-git` at 3.36.0.
+
 ## Native agent runtime
 
 The first version supplies the workers `general@1` and `reviewer@1`.
-The workers `claude@1` and `opencode@1` follow with the registration of an externally hosted instance, and `tdd@1` is postponed to phase 2.
+The workers `claude@1` and `opencode@1` follow with the registration of an externally hosted instance.
+The first version supplies `general@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
+`tdd@1` follows when the runtime hosts several agents in one execution.
 The native agent `swe@1` of `general@1` runs the pi-coding-agent SDK in-process behind a kanthord-owned adapter.
 The server gives pi its own directories.
 It disables the discovery of user extensions, skills, prompt templates and themes.
@@ -25,12 +29,35 @@ Every runtime setup call carries an abort signal with a deadline.
 The kanthord extension of Claude Code and the kanthord plugin of opencode register the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
 Their design, and the packaging of the `/work` orchestration skill that they carry, are epic decisions.
 
+## The identities of the Worker Service
+
+- A runtime identity is `worker_instance_<ulid>`.
+- The output schema of `POST /api/worker/register` returns it under `runtimeIdentity`.
+- The machine identity of [gateway-service.impl.md](gateway-service.impl.md#the-forwarding-contract) names it for a live registration.
+- It is no JWT claim.
+- [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
+
+## Registration heartbeat
+
+- Every authenticated request of the client identity of a registered instance renews its heartbeat.
+- This covers the work pull, every execution operation and every MCP request.
+- An explicit heartbeat request is `POST /api/worker/heartbeat`, operation ID `worker.heartbeat`, with the client access policy and an empty body.
+- It answers 204.
+- The Worker Service records the time of the last heartbeat with a monotonic clock.
+- A sweep every 30 s ends every registration whose last heartbeat is older than `worker.heartbeatWindow`.
+- A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
+- The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.
+- A registration that ends by expiry frees the slot of its binding.
+- The same client identity registers again with a fresh idempotency key.
+- The expiry proves no stop, and physical stop and capacity reuse are the B9 items SC5 and W5.
+
 ## The command group `worker`
 
 [architecture.impl.md](architecture.impl.md) rules the command surface and client configuration.
 This sibling declares the command table of the group `worker`.
 
 - `register [--token <jwt>] [--idempotency-key <ulid>]` calls `POST /api/worker/register`, operation ID `worker.register`, with the client access policy.
+- `heartbeat [--token <jwt>]` calls `POST /api/worker/heartbeat`, operation ID `worker.heartbeat`, with the client access policy.
 
 The command registers a worker instance under the client identity of its machine JWT. It creates no human account, client identity or worker definition.
 [gateway-service.impl.md](gateway-service.impl.md#worker-instance-registration) owns the JWT verification, the instance-count transaction and the registration replay contract.
@@ -42,9 +69,18 @@ Success prints one JSON line containing the `runtimeIdentity` of the instance an
 A declared failure prints its HTTP status and idempotency key without the token and exits with a non-zero status. An indeterminate result prints the key and instructs the operator to retry the same request with that key.
 The runtime of a worker may call the route directly with its machine JWT.
 
+## Configuration
+
+- The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
+- `worker.globalPrompt` holds the path of a Markdown file, as a string, and it defaults to an empty string.
+- An empty value means the global prompt source is absent and the composer moves to the next source.
+- A relative path resolves against the data directory.
+- The loader of the composer reads that file under the same rules as every agent file.
+- `worker.heartbeatWindow` holds the window of a registration heartbeat in seconds, as a positive safe integer, and it defaults to `300`.
+
 ## Prompt composition
 
-The prompt composer resolves the global prompt from the server configuration, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
+The prompt composer resolves the global prompt from the file that `worker.globalPrompt` names, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
 It resolves the project prompt from the repository binding, then `AGENTS.md` of the workspace root, then `CLAUDE.md` of the workspace root.
 For an evaluation method that resolution stops at the repository binding, and the composer reads no agent file of the workspace.
 It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
@@ -96,9 +132,24 @@ An epic decides that form for each platform.
 
 ## Repository connector
 
-The git CLI performs the network git read and the network git write.
-The server serves a credential helper for one operation.
-The credential helper writes no credential to a file in the workspace.
+- `simple-git` at 3.36.0 performs every git operation by spawning the `git` binary of the host.
+- Its timeout plugin bounds each operation by the remaining resource budget of the execution.
+- Its abort plugin binds to the `Context` of the execution.
+- Under the SSH transport form, the `git` child inherits the SSH environment of the user that runs the server.
+- Under the HTTPS transport form, custody supplies `GIT_ASKPASS` and the token through the environment of the child.
+- [project-service.impl.md](project-service.impl.md) rules that supply.
+- The connector passes no credential inside a URL and no credential on a command line.
+- The credential helper writes no credential to a file in the workspace.
+
+## Workspace
+
+- The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
+- The workspace of a steps execution is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
+- The workspace of an evaluation execution is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
+- A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
+- The bounded retention of [worker-service.md](worker-service.md#executions) is 7 days since the end of the last execution of the objective.
+- A sweep at the start and every hour removes an expired workspace.
+- The state directory holds the workspace because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
 
 ## Action performer
 
@@ -149,6 +200,7 @@ The carrier of that attribution is an epic decision.
 The lease runs in the execution.
 On revocation or loss the execution aborts the pi session and dispatches nothing after.
 Abort is not proven to kill every descendant process, so the quiescence check before workspace reuse that the page states needs a mechanism.
+`simple-git` kills the `git` process and not the `ssh` child of that process.
 The budget of a turn count and a wall time is enforced on pi turn events and by abort, with the bash timeout below the remaining budget.
 
 ## Trust boundary

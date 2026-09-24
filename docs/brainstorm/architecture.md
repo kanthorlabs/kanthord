@@ -99,8 +99,12 @@ It shows the relations that the sections below name.
 ## Invocation
 
 An application other than the server reaches a service through the public RESTful API of the server.
-A caller inside the server reaches a service through the same operation that the API publishes.
+A caller inside the server reaches a service through an operation, which the public API exposes only when it accepts a caller outside the server.
 An operation names the authority that establishes the identity of its caller, and the service that owns the operation authorizes that caller.
+The Gateway Service establishes the identity of a human and of a machine.
+The server establishes the [service identity](project-service.vocabulary.md#service-identity) of each of its services at its start.
+A service acts under its service identity for the work that no human and no machine requests.
+No caller outside the server presents a service identity.
 An internal collaboration between two services is no operation, and no caller outside the server reaches it.
 One operation commits its own work, and a caller composes no atomic unit across two operations.
 An operation states its result when its answer is lost, so a caller distinguishes a completed result, a declared failure and an indeterminate result.

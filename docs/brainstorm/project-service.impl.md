@@ -11,9 +11,11 @@ A change to it changes the binding store, the protected facility or custody.
 
 The implementation adds no package.
 Node.js 24.15.0 and the installed set satisfy every requirement.
-The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `createPrivateKey`, `createPublicKey`, `sign`, `randomBytes` and `timingSafeEqual`, and `zod` at 4.4.3 and `ulid`.
+The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `randomBytes` and `timingSafeEqual`.
+It also provides `zod` at 4.4.3 and `ulid`.
 The first version holds one platform entry, GitHub.
-Slack, Telegram and Jira hold no platform entry until their design lands, and a credential type is no platform, because an SSH key and an API key span platforms.
+Slack, Telegram and Jira hold no platform entry until their design lands.
+A credential type is no platform, because an API key spans platforms.
 
 ## The binding store
 
@@ -37,6 +39,14 @@ The constraints are below.
 - A credential reference and a reference to another binding sit inside `config`, and the write validates each one against `project_binding`. SQLite enforces no foreign key inside JSON.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](architecture.impl.md).
+
+## The identities of the Project Service
+
+- A binding identity is `binding_<ulid>` for every binding kind, because the entity kind is the binding and `kind` is a column.
+- A credential record identity is `credential_<ulid>`.
+- Validation of the `binding` claim of a machine JWT checks the `binding_` prefix and the canonical ULID portion.
+- [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules that JWT.
+- [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
 
 ## The resource identity
 
@@ -120,26 +130,24 @@ A recorded revision authorizes nothing, so the next operation resolves the chain
 A record holds one secret of one type.
 The types are below, and each one names the class of operation that it performs.
 
-- **ssh key**: a private key in PKCS#8. It performs a network git read and a network git write under the SSH transport form.
 - **api key**: a personal access token of a git platform, classic or fine-grained, or a key of a model provider. For a git platform it performs a network git read and a network git write under the HTTPS transport form, and a platform action under both forms. For a provider account it performs a model inference call.
 
-The first version registers those two types and no other.
+The first version registers that one type and no other.
 `project-service.md` permits an OAuth credential, and no type of the first version is one.
 
 Suitability is a pure function of the type, the capability and the transport form, over the table above.
-Coverage is a pure function of the required capabilities and the credential references of the binding.
+Coverage is a pure function of the required capabilities, the transport form and the credential references of the binding.
 The two functions are the whole validation of a credential reference, and neither one reads secret material.
 
 ## The remote identity of a record
 
 `remote_identity` holds one string in three colon-separated parts, `<platform>:<identity kind>:<identifier>`.
 The identifier is the login, the slug or the path that the remote displays, and no numeric identity.
-The identity kind holds `user`, `organization` and `repository` in the first version, and a new platform adds its own values.
+The identity kind holds `user` and `organization` in the first version, and a new platform adds its own values.
 The server never asks the remote to confirm the value, so the field records an intent that a human wrote and that a human reads when selecting a record.
 The values of the first version are below.
 
-- `github:user:ulrich` for a user key or a classic personal access token of that account.
-- `github:repository:kanthorlabs/kanthord` for a deploy key of that repository.
+- `github:user:ulrich` for a classic personal access token of that account.
 - `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
 - `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
 
@@ -170,7 +178,11 @@ The facility resolves each identity as below.
 - A human identity passes `isHumanIdentity` of [gateway-service.impl.md](gateway-service.impl.md), and the facility authorizes it for the operation.
 - A machine identity passes `isMachineIdentity` of [gateway-service.impl.md](gateway-service.impl.md), and it names the client identity, the worker binding and the project that the verification of its JWT resolved.
 - An execution identity resolves to the node of its claim through a call into the Scheduler Service module, and the facility refuses an operation that names another node.
-- A service identity is a frozen value of the Scheduler Service that its own `WeakSet` records, and the facility permits it the read of an external object alone. The facility resolves the external object through its own store to the repository binding, the project and the node, and it takes no association from the caller.
+- A service identity passes `isServiceIdentity` of the kernel, which [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) rules.
+- The facility permits each service its own classes: the Scheduler Service the read of an external object, and the Intake Service the acquisition classes.
+- The acquisition classes act on a source binding.
+- The facility resolves the external object through its own store to the repository binding, the project and the node.
+- It takes no association from the caller.
 
 An operation of an execution that an external harness hosts presents the machine identity and the execution identity together.
 The facility proves the whole chain: the JWT authenticated the client identity, the JWT names its worker binding, the machine identity names a live registration, the claim of the execution names that worker binding and that instance, the claim is live, and the node of the claim is the node of the operation.
@@ -188,7 +200,7 @@ A child process that the server spawns, configures and reaps is part of the serv
 The material enters no log record, no workspace file, no transcript, no tool result and no error body.
 `pino` redacts the paths of the material, and a test asserts each path.
 Custody fills its plaintext buffer with zeroes when the operation returns.
-That cleanup is best effort, because a parsed string, a `KeyObject` and a cached token outlive the buffer in this runtime.
+That cleanup is best effort, because a parsed string and a cached token outlive the buffer in this runtime.
 The trust boundary of the host, which [worker-service.impl.md](worker-service.impl.md) owns, is a disposable host of the operator or a container around the server.
 Custody defends the material against a record of the system, and it defends nothing against a party that controls that host.
 
@@ -202,17 +214,14 @@ Under the HTTPS transport form, custody sets `GIT_ASKPASS` in the environment of
 The helper prints the token for the password prompt and the account name for the username prompt.
 The helper writes no file and it reaches no socket.
 
-Under the SSH transport form, custody serves the ssh-agent protocol on a unix socket.
-The socket sits in the state directory of [architecture.impl.md](architecture.impl.md), under a per-operation subdirectory of mode 0700, and the socket holds mode 0600.
-Custody removes the subdirectory when the operation ends.
-The first version supports the Ed25519 algorithm alone, so the agent needs no RSA SHA-2 selection and no ECDSA signature encoding.
-The agent implements the length-prefixed framing of the protocol, the identity list, the public-key blob `ssh-ed25519`, the signature blob, and a bounded reply to every other request type.
-It bounds the size of a packet and the lifetime of the socket, and it accepts every connection of the operation, because one git operation opens several SSH sessions.
-It signs with `crypto.sign` over the key that `crypto.createPrivateKey` loads from the PKCS#8 plaintext.
-Custody stores PKCS#8 and accepts no OpenSSH private-key file, so the entry of a key converts the file before the store holds it.
-Custody writes the public key of the record to the per-operation subdirectory, and it sets `IdentityFile` to that file beside `IdentitiesOnly=yes`, because `IdentitiesOnly=yes` alone excludes a key of the agent.
-It sets `UserKnownHostsFile` to a file of the data directory that the server owns, and it sets `StrictHostKeyChecking=accept-new`.
-The private key therefore never reaches a file, so no key sits in the workspace and no key sits in the home directory of the server.
+- Under the SSH transport form, custody supplies no material.
+- The `git` child inherits the SSH environment of the user that runs the server.
+- That environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
+- Custody sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
+- At the write of a repository binding under the SSH form, custody runs one `git ls-remote` of that repository through the repository connector.
+- A deadline of 30 s bounds that read.
+- A failed or timed-out read refuses the write with the error code `project.bindings.repository.ssh_unreachable`.
+- Custody attributes a network git operation under the SSH form to no credential record.
 
 ## The platform action
 
@@ -276,7 +285,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.
 - A test covers a `masterKey` that decodes to other than 32 bytes.
 - A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose worker binding is not the worker binding of the claim.
-- A test covers the ssh-agent against the real `ssh` binary of the host, through a clone, a fetch and a push against a local repository over SSH.
+- A test covers a repository binding under the SSH form whose network git read fails. It asserts that the Project Service refuses the write with its error code.
 - A test covers a worker binding that is absent, removed or unavailable, and it asserts that the verification of a machine JWT that names it fails.
 - A test covers a missing, a duplicate, a malformed and a wrong-length delivery signature, and a valid signature over the exact bytes.
 - A test covers an increment of `webhookSecretRotation`, and it asserts that a delivery signed with the previous secret fails.
@@ -286,8 +295,6 @@ The `kanthord` bin of `package.json` releases it.
 
 - The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
 - The retention of a removed binding, of a replaced binding and of an old revision.
-- The conversion of an OpenSSH private-key file to PKCS#8 at the entry of a key.
-- The set of SSH key algorithms beyond Ed25519, and the pinned host keys that replace `accept-new`.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
 - The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
 - The support of a GitHub App installation credential, which the first version omits and which needs a short-lived token, a mint and a cache.

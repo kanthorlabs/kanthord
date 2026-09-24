@@ -70,6 +70,16 @@ The claim has two kinds.
 A `tdd@1` instance of worker binding `tdd-main` obtains a steps claim on "Add password reset" through a work pull.
 After the release and the readiness condition, a `reviewer@1` instance obtains an evaluation claim on that objective through its own work pull.
 
+## execution record
+
+The record of an execution that the Scheduler Service holds.
+For a registered instance, it preserves the client identity and the display name of its credential at the claim.
+It holds neither for an instance that the server hosts.
+Both are attribution and no authority.
+
+The `claude-code` instance of worker binding `claude-main` claims the objective "Add password reset".
+Its execution record keeps the client identity and the display name after that instance deregisters, so a trace still names the program.
+
 ## lease
 
 Execution 1 of "Add password reset" renews its lease while its `tdd@1` instance executes the steps.

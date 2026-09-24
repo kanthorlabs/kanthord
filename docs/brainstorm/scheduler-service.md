@@ -165,7 +165,7 @@ A caller cannot widen that scope with another project's identifier.
 The [Project Service](project-service.md#authorization-and-credential-custody) authorizes resource operations, and a work pull is no resource operation.
 That authorization starts at the first operation under the execution identity that the claim creates.
 
-The work pull requires a fresh instance healthcheck and fewer live executions of the binding than its instance count.
+The work pull requires an instance healthcheck taken for the claim and fewer live executions of the binding than its instance count.
 The Worker Service produces the instance healthcheck and the compatibility declarations.
 The Scheduler selects the first entry of the project's work queue that the claimant admits.
 The match reads the node states that the worker declares, the exact worker name and the required node format of the worker.
@@ -207,6 +207,8 @@ The operation rechecks the Mission state, the readiness condition, the availabil
 The claim resolves no binding, and it validates no effective configuration of an agent.
 It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
 A work pull adds the instance healthcheck and the compatibility match.
+The Scheduler takes the instance healthcheck once more immediately before the claim commits.
+A failed healthcheck at that point returns the pull empty.
 The operation counts the execution against the claimant's count and records the execution.
 The [Mission Service](mission-service.md#state-transitions) performs the node transition and owns the [attempt opening](mission-service.md#attempt) and [revision pin](mission-service.md#validation-criteria-and-authority).
 The claim operation serializes with a block, a pause, a graph or import change and a binding change.
@@ -217,6 +219,7 @@ The execution record holds these fields.
 - The execution identity that the claim mints.
 - The project.
 - The claimant: the worker binding and its instance.
+- For a registered instance, the client identity and the display name of its credential at the claim. The execution record preserves both after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
 - The kind of the claim: a steps claim or an evaluation claim.
 - The node and its attempt.
 - The pinned node revision.

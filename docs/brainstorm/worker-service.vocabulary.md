@@ -230,6 +230,21 @@ The Worker Service creates two instances for worker binding `general-main`, whos
 A server restart creates two new instances with two new runtime identities.
 A revision of `general-main` that changes the model identifier of its entry replaces no instance.
 
+## heartbeat
+
+The signal that a registered instance sends to keep its registration live.
+The set of signals that count as a heartbeat is closed.
+
+- A work pull.
+- An execution operation.
+- An MCP request.
+- An explicit heartbeat request.
+
+The `claude-code` instance of worker binding `claude-main` pulls work every 60 s while idle, so every pull is its heartbeat.
+While it runs a 20-minute MCP tool call, it sends an explicit heartbeat request.
+When the laptop of Ulrich sleeps, no heartbeat arrives inside the window, and the registration ends.
+A restart of `claude-code` therefore registers again.
+
 ## pool
 
 The pool is the instances of one worker binding.
