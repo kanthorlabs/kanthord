@@ -31,9 +31,15 @@ The tables are below.
 Every table above holds `id` as its first column and `project_id` as its second column.
 The credential store sits in the shared table `credential`, which [architecture.impl.md](architecture.impl.md) rules with its envelope and its cipher key.
 The Project Service owns that table through custody, and a binding names one of its records with a credential reference.
+A project creation inserts the `project_project` row and calls the Mission collaboration `createMission` inside the same transaction, which [architecture.impl.md](architecture.impl.md) rules.
 
 The constraints are below.
 
+- A unique index over `project_project.name` enforces the uniqueness of a project name, and the name is the natural key of the project creation.
+- A project name follows the form of a binding name.
+- A creation or a rename to a name that another project holds returns 409 with code `project.name_conflict` and the identity of that project in `error.details`.
+- A rename commits in one transaction, and the last write wins.
+- The Project Service keeps a removed binding and every revision for the life of the project, and no sweep deletes them. Only a human edit adds a row, so the tables grow with human edits alone.
 - The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so a binding identity is unique across the server and satisfies the rule of `project-service.md` that it is unique inside its project.
 - `project_binding.current_revision` carries a composite foreign key to `project_binding_revision`, whose own real key is the pair of the binding and the revision under a unique index.
 - A partial unique index over `project_id` and `name` where `removed_at` is absent enforces the uniqueness of a binding name among the current bindings, so a removed binding releases its name.
@@ -99,6 +105,7 @@ The local disablement of a binding is a field of the configuration, so a disable
 A resolution reads `current_revision` of the binding row, so a disablement takes effect at the next resolution and cancels no operation in flight.
 A change to the secret material behind a credential record creates no revision, because a reference names the record and never its content.
 A rotation therefore updates one `credential` row in place and creates a revision nowhere.
+A rotation commits in one transaction, and the last write wins.
 An `oauth` record obtains material through the refresh of pi-ai, which runs inside `modify` under the credential store lock.
 That refresh updates the row in place and creates no revision.
 A change to the remote that a record authorizes is no rotation.
@@ -329,6 +336,8 @@ The `kanthord` bin of `package.json` releases it.
 
 ## Tests
 
+- A test covers a creation and a rename to a taken project name, and it asserts 409 with the identity of the holder.
+- A test covers a project creation whose mission insert fails, and it asserts that no project row remains.
 - A test covers coverage and suitability against every pair of a type and a capability, under both transport forms.
 - A test covers each of the five changes, and it asserts the revision that each one creates.
 - A test covers a disablement that takes effect at the next resolution, and a consumed grant that authorizes no second operation.
@@ -364,7 +373,6 @@ The `kanthord` bin of `package.json` releases it.
 ## Open decisions of an epic
 
 - The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
-- The retention of a removed binding and of an old revision.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
 - The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
 - The support of a GitHub App installation credential, which the first version omits and which needs a short-lived token, a mint and a cache.

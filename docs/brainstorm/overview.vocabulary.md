@@ -19,6 +19,7 @@ The set is closed and it holds two values.
 ## project
 
 A project is an entity identified by what it ships.
+Its name is unique on the server.
 The term names no closed set.
 A project binds two repositories, one `tdd@1` worker and two provider accounts.
 
