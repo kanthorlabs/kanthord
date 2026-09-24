@@ -169,11 +169,13 @@ The same replacement invalidates every derived webhook secret, so a human pastes
 ## The protected facility
 
 The protected facility is one module of the Project Service.
-It exposes one authorization function and one use function, and it exposes no function that returns secret material.
+For an operation grant, it exposes one authorization function and one use function, and neither function returns secret material.
 The authorization function takes the identity of the requester, the binding and the requested capability, and it returns a grant or a refusal.
 The grant is a frozen value that a module-private `WeakSet` records, as [gateway-service.impl.md](gateway-service.impl.md) records a human identity, so no caller fabricates one.
 The grant serves one operation, and custody consumes it at the first use.
 A disablement therefore reaches every later operation, because a consumed grant authorizes none.
+That grant is the operation grant.
+The acquisition grant of the section below is the second grant kind, and it serves one session.
 The facility resolves each identity as below.
 
 - A human identity passes `isHumanIdentity` of [gateway-service.impl.md](gateway-service.impl.md), and the facility authorizes it for the operation.
@@ -237,6 +239,18 @@ Custody defends the material against a record of the system, and it defends noth
 - The device mode needs no listener. pi-ai polls the provider until success, failure or expiry.
 - Custody holds at most one pending session per provider id and human identity. A second start answers 409. A completed session writes the record and ends. The session record holds no token at any time.
 - Every operation outputs the address and code in plain text because the human needs them. It outputs no token. `pino` redacts nothing of the address and code and everything of the credential.
+
+## The acquisition grant
+
+- The operation is `project.acquisition_grant`, a `unary` mutation under the `service` access policy, reachable through the direct adapter alone. Its input holds the source binding identity, the kind from `webhook-register`, `poll` and `stream-open`, and the subscription identity. Its caller is the service identity of the Intake Service, and the facility refuses every other service identity for this operation.
+- The facility resolves the source binding to its project and credential record. The source binding configuration names that record for its platform. The facility checks the disablement of the binding and refuses a disabled or removed binding.
+- The answer holds the grant identity `acquisition_grant_<ulid>`, the acquisition material, the platform, the remote identity of the record and the expiry. The acquisition material is the record's pi-ai credential value or platform token. This is the one operation whose answer carries a credential value. The exception to the value contract of [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) follows [intake-service.md](intake-service.md#boundary), which requires the material in the memory of the Intake Service. For `webhook-register`, the answer also holds the current verification secret of the source binding. The log and the idempotency component redact the answer, and no HTTP route reaches the operation.
+- The table `project_acquisition_grant(id, project_id, source_binding_id, subscription_id, kind, service, credential_id, issued_at, expires_at, ended_at, end_reason)` records every grant. `end_reason` is one of `session_end`, `binding_disabled`, `binding_removed`, `credential_rotated`, `expired`. The row holds no material.
+- The code fixes the maximum lifetime at 24 hours from `issued_at`, and a sweep every minute ends an expired grant.
+- A grant ends through `project.acquisition_grant_end`, a `unary` mutation under the `service` policy. The Intake Service calls it with the grant identity when its session ends, and the facility writes `session_end`.
+- The facility revokes a grant when a binding set edit commits a disablement or removal of its source binding. It also revokes the grant when the material of its credential record changes and at its expiry. The revocation writes `ended_at` and `end_reason` in the same transaction as the cause where one exists. After the commit, the facility calls `intake.grant_revoked` of the Intake Service with the grant identity and the reason. That operation is a `unary` mutation under the `service` policy. The facility retries a lost answer with backoff until the Intake Service acknowledges, because the Intake Service closes the acquisition at once on receipt.
+- The facility refuses `use` for an acquisition grant, because the Intake Service performs its acquisition itself with the material.
+- A registration of a webhook, a poll and a stream open each consume one grant of their kind. A subscription holds at most one open grant at a time.
 
 ## The network git operations
 
@@ -343,6 +357,11 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers a second start for the same provider and human, and it asserts 409.
 - A test covers an expired session, and it asserts the state `expired` and no record.
 - A test asserts that no output and no log record of a login session holds a token.
+- A test covers an acquisition grant for a disabled source binding, and it asserts the refusal.
+- A test covers a binding set edit that disables a source binding with an open grant. It asserts the `binding_disabled` row and the revocation call.
+- A test covers a grant beyond 24 hours, and it asserts the `expired` row and the revocation call.
+- A test asserts that the answer of `project.acquisition_grant` reaches no HTTP route and appears redacted in every log record.
+- A test covers a call of `project.acquisition_grant` under the service identity of the Scheduler Service, and it asserts the refusal.
 
 ## Open decisions of an epic
 
