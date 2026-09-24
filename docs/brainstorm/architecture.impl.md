@@ -674,7 +674,8 @@ Both adapters implement one transport-neutral value and error contract.
 - The direct adapter parses input with the operation schema.
 - Its output conforms to the output schema.
 - The direct adapter isolates values as HTTP does.
-- No result carries a live object, a transaction, a token or a runtime resource.
+- No result carries a live object, a transaction or a runtime resource.
+- A result carries credential material only in two operations that [project-service.impl.md](project-service.impl.md) declares: the credential handover, encrypted under `masterKey` on either adapter, and the acquisition grant, in plain text through the direct adapter alone.
 - A client returns `Completed`, `Failure` or `Indeterminate`.
 - An indeterminate result appears on either adapter because one caller implementation runs in every application.
 
@@ -746,7 +747,7 @@ A process split retains these boundaries.
 - A test covers the removed login and logout commands and asserts a non-zero exit without creating or changing client configuration.
 - A test runs one operation through the direct adapter and through the HTTP adapter.
 - It asserts the same result, failure value and replay within the TTL of the idempotency component.
-- A conformance test runs every operation except a `service` operation through both adapters, including a malformed value and a lost answer.
+- A conformance test runs every operation except a `service` operation through both adapters, including a malformed value and a lost answer. It asserts that no answer holds credential material, and it exempts the credential handover and the acquisition grant by name.
 - A test asserts that the `worker` application refuses to start when its package version differs from the version the server publishes.
 - A test asserts that `quiesce()` leaves the handlers of a service available to a peer during the drain.
 - It asserts that `stop()` after the drain releases the resources of the service.
