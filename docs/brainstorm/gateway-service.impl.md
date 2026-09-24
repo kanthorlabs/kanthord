@@ -388,18 +388,9 @@ Each operation declares its own access policy; a path prefix grants no policy.
 `GET /api/healthcheck` and the OpenAPI routes declare the public policy.
 `GET /api/auth/verify` declares the human policy. `POST /api/worker/register` and the other worker operations declare the client policy, and delivery operations declare the delivery policy.
 
-## The command group `gateway`
+## The client configuration file
 
-[architecture.impl.md](architecture.impl.md) rules the command surface and the client configuration.
-This sibling declares the command table of the group `gateway`.
-A row names the command, then the operation that it calls with the access policy of that route, or the statement that the command runs locally.
-
-- `verify [--token <jwt>]` calls `GET /api/auth/verify` with the human access policy. It prints the verified identity as JSON and exits with zero on success; an authentication or transport failure exits with a non-zero status and prints a diagnostic without the token.
-- `openapi` runs locally and calls no route.
-
-`kanthord gateway verify` resolves the endpoint and token through the client configuration precedence. Its `--token` option overrides the environment and operator-supplied client file; `--endpoint` selects the target server. An invocation without a resolved token receives HTTP 401.
-`kanthord gateway openapi` writes the OpenAPI files for every declared service operation, including `worker.register`, which the operation registry section rules.
-The top-level issuance command is declared under local JWT issuance. [worker-service.impl.md](worker-service.impl.md#the-command-group-worker) declares `kanthord worker register`.
+[architecture.impl.md](architecture.impl.md) rules the command surface and the client configuration. The engine CLI specification [gateway page](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/gateway.md) declares the command table of the group `gateway`.
 The CLI provides no login, logout or automatic credential-saving flow. An operator may supply a private client configuration file manually. Saving a token establishes no authenticated identity; the Gateway Service authenticates it on a later API request.
 The JWT and denylist sections govern revocation.
 

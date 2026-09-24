@@ -313,17 +313,6 @@ It authenticates no other header, it establishes no repository, and it detects n
 The GitHub implementation of [worker-service.impl.md](worker-service.impl.md) associates the payload with its repository, and the Scheduler Service owns the duplicate effect of a repeated delivery.
 This sibling states no replay window.
 
-## The command group `project`
-
-[architecture.impl.md](architecture.impl.md) rules the command surface. This sibling declares the table of the group `project` with the credential login rows. The remaining rows wait for the command table item of [HANDOFF.md](HANDOFF.md).
-
-- `credential login <provider> [--mode browser|device] --remote-identity <value>` calls `project.credential.login` with the human access policy. It prints the session identity, address to open and code, one per line, and exits with zero.
-- `credential login-code <session> <value>` calls `project.credential.login_code` with the human access policy.
-- `credential login-status <session>` calls `project.credential.login_status` with the human access policy. It prints the state, last message and failure reason as JSON.
-
-The value of `login-code` is a code or a redirect URL and no secret of the record, so it travels on the command line.
-No command reads a prompt.
-
 ## Repository layout, build, test and release
 
 The Project Service source sits under `src/project/` of the `engine` repository.

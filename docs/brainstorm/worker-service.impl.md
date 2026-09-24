@@ -54,26 +54,6 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The same client identity registers again with a fresh idempotency key.
 - The expiry proves no stop, and physical stop and capacity reuse are the B9 items SC5 and W5.
 
-## The command group `worker`
-
-[architecture.impl.md](architecture.impl.md) rules the command surface and client configuration.
-This sibling declares the command table of the group `worker`.
-
-- `register [--token <jwt>] [--idempotency-key <ulid>]` calls `POST /api/worker/register`, operation ID `worker.register`, with the client access policy.
-- `heartbeat [--token <jwt>]` calls `POST /api/worker/heartbeat`, operation ID `worker.heartbeat`, with the client access policy.
-- `handover [--token <jwt>]` calls `POST /api/worker/handover`, operation ID `worker.handover`, with the client access policy. It prints nothing but a status, and it never prints the envelope.
-- `credential` runs inside the `worker` application alone and is no command of the CLI.
-
-The command registers a worker instance under the client identity of its machine JWT. It creates no human account, client identity or worker definition.
-[gateway-service.impl.md](gateway-service.impl.md#worker-instance-registration) owns the JWT verification, the instance-count transaction and the registration replay contract.
-`--endpoint` belongs to the group and resolves through the client configuration precedence.
-`--token` overrides `KANTHORD_TOKEN` and the `token` field of the client configuration file. A missing token stops the command without prompting or sending a request.
-The request presents that token as a bearer token and carries an empty body. The command accepts no server configuration option.
-An explicit idempotency key must be a canonical ULID. The command generates a key when the option is omitted and performs no automatic retry.
-Success prints one JSON line containing the `runtimeIdentity` of the instance and the `idempotencyKey`, and exits with zero. It prints no token and saves no client configuration.
-A declared failure prints its HTTP status and idempotency key without the token and exits with a non-zero status. An indeterminate result prints the key and instructs the operator to retry the same request with that key.
-The runtime of a worker may call the route directly with its machine JWT.
-
 ## Configuration
 
 - The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
@@ -120,7 +100,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. The application calls it after each refresh that pi-ai performs and once at the release.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - A platform action runs through the MCP tool of the server.
-- The `worker` application reads `masterKey` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-command-group-gateway) declares. It accepts no environment variable and no option for it.
+- The `worker` application reads `masterKey` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
 - An absent or invalid `masterKey` stops the start of `kanthord serve worker`.
 - A `masterKey` that differs from the one of the server fails every decryption. The application ends the execution as a cannot-progress condition.
 
