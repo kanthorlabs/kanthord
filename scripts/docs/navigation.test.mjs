@@ -13,8 +13,8 @@ const root = fileURLToPath(new URL("../../docs/", import.meta.url));
 test("accepts public nested Markdown paths only", () => {
   assert.equal(validatePath("README.md"), "README.md");
   assert.equal(
-    validatePath("reference/api/gateway/verify.md"),
-    "reference/api/gateway/verify.md",
+    validatePath("reference/gateway/verify.md"),
+    "reference/gateway/verify.md",
   );
   const rejected = [
     null,
@@ -40,13 +40,13 @@ test("accepts public nested Markdown paths only", () => {
 
 test("resolves sibling, parent, index and fragment links from the document directory", () => {
   assert.equal(
-    resolveMarkdownLink("verify.md", "reference/api/gateway/openapi.md"),
-    "viewer.html?p=reference%2Fapi%2Fgateway%2Fverify.md",
+    resolveMarkdownLink("verify.md", "reference/gateway/openapi.md"),
+    "viewer.html?p=reference%2Fgateway%2Fverify.md",
   );
   assert.equal(
     resolveMarkdownLink(
-      "../../errors.md#api-failures",
-      "reference/api/gateway/verify.md",
+      "../errors.md#api-failures",
+      "reference/gateway/verify.md",
     ),
     "viewer.html?p=reference%2Ferrors.md#api-failures",
   );
@@ -82,6 +82,44 @@ test("rejects escapes, private links, schemes and query tricks", () => {
     /Invalid current/,
   );
   assert.throws(() => resolveMarkdownLink(null, "README.md"), /string/);
+});
+
+test("feature pages share one response contract and API/CLI sections", () => {
+  const shared = new Set(["README.md", "errors.md", "identities.md"]);
+  const paths = readdirSync(resolve(root, "reference"), { recursive: true })
+    .filter((path) => path.endsWith(".md") && !shared.has(path))
+    .sort();
+  assert.deepEqual(
+    paths.map((path) => path.split(sep).join("/")),
+    [
+      "config/init.md",
+      "config/show.md",
+      "config/validate.md",
+      "gateway/healthcheck.md",
+      "gateway/openapi.md",
+      "gateway/verify.md",
+      "jwt.md",
+      "serve.md",
+      "worker/register.md",
+    ],
+  );
+  assert.ok(paths.length < 32);
+  for (const path of paths) {
+    const text = readFileSync(resolve(root, "reference", path), "utf8");
+    assert.deepEqual(
+      [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1]),
+      ["Function description", "Expected response", "API shape", "CLI shape"],
+      path,
+    );
+    const response = text
+      .split("## Expected response\n")[1]
+      .split("\n## API shape\n")[0];
+    assert.match(
+      response,
+      /^\| (?:Property|Output)[^\n]*Purpose[^\n]*\|$/m,
+      path,
+    );
+  }
 });
 
 test("every public relative Markdown link resolves to its actual document", () => {

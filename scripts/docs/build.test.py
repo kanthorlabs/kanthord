@@ -26,7 +26,10 @@ class PublicBuildTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((artifact / "brainstorm").exists())
             self.assertFalse((artifact / "serve.json").exists())
-            self.assertTrue((artifact / "reference/api/gateway/verify.md").is_file())
+            self.assertTrue((artifact / "reference/gateway/verify.md").is_file())
+            self.assertTrue((artifact / "reference/worker/register.md").is_file())
+            self.assertFalse((artifact / "reference/api").exists())
+            self.assertFalse((artifact / "reference/cli").exists())
             self.assertTrue((artifact / ".nojekyll").is_file())
             for destination in [artifact, alias / "docs/nested-output"]:
                 rejected = subprocess.run(

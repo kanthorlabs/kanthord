@@ -1,6 +1,6 @@
 # How healthchecks work
 
-A listening HTTP server does not prove that its database or other dependencies work. Kanthord's healthcheck collects component reports and returns a combined view. The [API reference](../reference/api/gateway/healthcheck.md) defines requests, response examples, status codes, and timeouts.
+A listening HTTP server does not prove that its database or other dependencies work. Kanthord's healthcheck collects component reports and returns a combined view. The [healthcheck reference](../reference/gateway/healthcheck.md) defines requests, response examples, status codes, and timeouts.
 
 ## Read the whole report
 
