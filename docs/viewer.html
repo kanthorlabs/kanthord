@@ -45,8 +45,18 @@
       white-space: pre-wrap;
     }
 
+    main {
+      max-width: 1800px;
+    }
+
     #content {
       line-height: 1.7;
+    }
+
+    #content > :not(.mermaid-outer):not(.mermaid-controls):not(.mermaid-hint) {
+      max-width: 852px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     .ext-icon {
@@ -55,9 +65,68 @@
       margin-left: 0.1em;
     }
 
+    .mermaid-hint {
+      margin: 1.25em 0 0.5em;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .mermaid-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .mermaid-controls button {
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+
+    .mermaid-controls button:hover {
+      border-color: var(--link);
+    }
+
+    .mermaid-controls output {
+      min-width: 4ch;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
     .mermaid-outer {
-      margin: 1.25em 0;
-      text-align: center;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0 0 1.25em;
+      overflow: auto;
+      text-align: left;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .mermaid-outer:focus-visible,
+    .mermaid-controls button:focus-visible {
+      outline: 2px solid var(--link);
+      outline-offset: 2px;
+    }
+
+    .mermaid-outer .mermaid {
+      width: var(--diagram-width, 100%);
+      margin: 0;
+      padding: 0;
+    }
+
+    .mermaid-outer svg {
+      display: block;
+      width: 100%;
+      height: auto;
     }
 
     .mermaid-error {
@@ -100,6 +169,7 @@
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
   <script type="module">
     import { validatePath, resolveMarkdownLink } from './assets/navigation.mjs';
+    import { enableDiagramZoom } from './assets/diagrams.mjs';
 
     (function () {
       var loadingEl = document.getElementById('loading');
@@ -282,13 +352,19 @@
         mermaidCodeEls.forEach(function (codeEl) {
           var src = codeEl.textContent;
           var pre = codeEl.closest('pre') || codeEl;
+          var hint = document.createElement('p');
+          hint.className = 'mermaid-hint';
+          hint.textContent = 'Fit width shows the whole diagram. Zoom in for detail; scroll horizontally when enlarged.';
           var outer = document.createElement('div');
           outer.className = 'mermaid-outer overflow-x';
+          outer.tabIndex = 0;
+          outer.setAttribute('role', 'region');
+          outer.setAttribute('aria-label', 'Scrollable Mermaid diagram');
           var diag = document.createElement('pre');
           diag.className = 'mermaid';
           diag.textContent = src;
           outer.appendChild(diag);
-          pre.replaceWith(outer);
+          pre.replaceWith(hint, outer);
           diagramItems.push({ node: diag, src: src });
         });
 
@@ -307,6 +383,7 @@
               var item = diagramItems[i];
               try {
                 await mermaid.run({ nodes: [item.node] });
+                enableDiagramZoom(item.node);
               } catch (e) {
                 var err2 = document.createElement('pre');
                 err2.className = 'mermaid-error';
