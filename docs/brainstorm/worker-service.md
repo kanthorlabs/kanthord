@@ -503,6 +503,7 @@ No page defines those rules.
 ## Evaluation and required external actions
 
 The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and the current child outcomes.
+A reviewer that reads removed content judges without it and names it in its rationale.
 The child outcomes of an objective are its task outcomes, and the child outcomes of an initiative are its objective outcomes.
 For an objective, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
 It uses the repository connector.

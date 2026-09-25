@@ -289,11 +289,24 @@ An executor report is attributable evidence, and it is not an independently veri
 Evidence is append-only.
 Redaction happens before an artifact receives its address.
 An evidence record states that redaction transformed its content.
-One exceptional path removes content that holds a credential.
 An evidence submission is bounded, and it never truncates content silently.
-Every evidence record and its content stay for the life of the mission.
-Only a human removes evidence.
 A correction names what it corrects.
+
+- Every evidence record stays for the life of the mission. Its content stays until a human removes it.
+- Only a human removes evidence content, and the Mission Service keeps the record.
+- The record names the remover and any removal reason, but no removal time.
+- A later content read reports that the content is removed.
+- A human removes evidence content only when the node of the evidence and every ancestor hold a terminal state, unless the human forces the removal with a reason.
+- A reason is optional without force.
+- Force permits immediate removal of content that holds a credential.
+- Removal does not change the effect of an outcome that names the evidence.
+- An outcome reference does not prevent content removal.
+- kanthord runs no automatic cleanup of evidence content or unpublished upload objects.
+
+A [pending upload](mission-service.vocabulary.md#pending-upload) holds no published evidence.
+The Mission Service lets a human list expired pending uploads of one mission and clean them up.
+The cleanup deletes only their objects and keeps their records with a cleanup mark.
+It never removes a published evidence record or its content.
 
 ## Run output
 
