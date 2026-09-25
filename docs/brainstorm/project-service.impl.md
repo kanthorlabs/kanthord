@@ -21,6 +21,7 @@ The GitHub action catalog holds exactly two actions.
 - `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
 - Each action implies its expected end state and takes no parameter.
 - A repository strategy holds at most one action, because a policy configures one external action.
+- The key of a configured action is `<binding name>.<action name>`, for example `kanthord-repo.pull_request`. It matches `^[a-z][a-z0-9-]{0,62}\.(pull_request|merge_push)$` and holds at most 76 bytes: 63, the separator and the longest catalog name. A new catalog action extends the alternation. The key is stable for the life of the binding, because a change of the binding name is a replacement binding under [project-service.md](project-service.md#resource-and-binding-model).
 
 ## The binding store
 
