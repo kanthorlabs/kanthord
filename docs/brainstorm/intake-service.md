@@ -42,6 +42,23 @@ One server holds one Intake Service that serves every project.
 ## Subscriptions
 
 The Intake Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a subscription.
+
+- The check reads only the state of the Intake Service. It makes no remote call, obtains no acquisition grant and uses no acquisition material.
+- A disabled desired state reports [unknown](architecture.vocabulary.md#resource-status). A failed observed state reports unhealthy.
+- An enabled subscription with observed state inactive, registering or retiring reports unknown. An active subscription reports the evidence of its subscription kind.
+- Evidence counts only for the current acquisition session.
+- This means the current acquisition grant or, for a passive webhook, the time since its desired state last changes to enabled.
+- Evidence from an earlier session never counts.
+- A poll reports healthy when its last completed request succeeds inside the [acquisition window](intake-service.vocabulary.md#acquisition-window).
+- A poll reports unhealthy when its last completed request fails at the platform.
+- A poll reports unknown with no completed request in the session or a success older than the acquisition window.
+- A stream reports healthy while the connection of its session is open. It reports unhealthy when its last connect attempt fails.
+- A stream reports unknown otherwise.
+- A registered or passive webhook reports healthy when a verified delivery arrives in its session. It reports unknown otherwise.
+- A webhook never reports unhealthy from a failed verification: any caller can post to its address.
+- The webhook resource status confirms a past receipt, not a current acquisition.
+- The [implementation](intake-service.impl.md#the-resource-healthcheck) defines the values of the check.
+
 A [subscription](intake-service.vocabulary.md#subscription) belongs to one [source binding](project-service.vocabulary.md#source-binding).
 It has one [subscription kind](intake-service.vocabulary.md#subscription-kind).
 A source binding holds at most one subscription per kind.

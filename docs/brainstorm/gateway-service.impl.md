@@ -334,9 +334,8 @@ Its `error.details` holds `{"missingInventories":["<service>"]}`, with each owne
 - Caller cancellation cancels all checks and produces no success answer.
 - Each check releases its timer and cancellation subscription on completion, failure or cancellation.
 
-The [Project Service](project-service.impl.md#the-resource-healthcheck), [custody](custody.impl.md#the-resource-healthcheck) and [Worker Service](worker-service.impl.md#agent-provider-healthcheck) own their check methods.
+The [Project Service](project-service.impl.md#the-resource-healthcheck), [custody](custody.impl.md#the-resource-healthcheck), [Intake Service](intake-service.impl.md#the-resource-healthcheck) and [Worker Service](worker-service.impl.md#agent-provider-healthcheck) own their check methods.
 [Registration heartbeat](worker-service.impl.md#registration-heartbeat) defines the registered-instance check.
-[HANDOFF.md](HANDOFF.md#architecture) holds the open check method of a subscription.
 
 ## Idempotency of a mutation
 

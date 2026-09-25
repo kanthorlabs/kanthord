@@ -8,7 +8,7 @@ This file holds the implementation rulings for the mechanisms that realize [inta
 This file is not a design document, and `intake-service.md` stays the single source of truth.
 A mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
-This sibling holds the acquisition mechanisms.
+This sibling holds the acquisition and resource healthcheck mechanisms.
 The subscription store, the delivery store and the handoff follow with the Intake Service item of [HANDOFF.md](HANDOFF.md).
 
 ## The service identity
@@ -39,8 +39,26 @@ The subscription store, the delivery store and the handoff follow with the Intak
 - The stream opens with the material of the grant and holds the connection for the session. The Intake Service writes the resume position with each stored message.
 - A close by the platform reconnects with backoff under the same grant until the grant ends. A close by revocation or by capacity ends the session.
 
+## The resource healthcheck
+
+- The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The subscription check follows them like every other check.
+- The acquisition window is 180 s, three poll intervals of 60 s.
+- The poll capability is `poll acquisition`. The stream capability is `open stream`.
+- The registered and passive webhook capability is `verified receipt since enabling`.
+- Poll and stream evidence stays in memory, keyed by the acquisition grant identity of the session. Evidence from an earlier grant never counts.
+- After a restart, the check reports `unknown` until the first answer of the new session.
+- The webhook evidence is `last_verified_receipt_at` on the subscription row. Each change of the desired state to `enabled` resets it.
+- That evidence survives the retention of resolved deliveries.
+- The evidence is acquisition state, not a check result. No store holds a check result.
+
 ## Tests
 
+- Tests cover both sides of the poll acquisition window and a failed poll request.
+- Tests cover an open stream and a failed connect attempt.
+- A test asserts that a forged post fails verification and leaves the webhook resource status unchanged.
+- A test asserts that a restart reports `unknown` until the first answer of the new session.
+- A test asserts that evidence from a replaced acquisition grant session does not count.
+- A test asserts that the check requests no acquisition grant, makes no remote call and changes no subscription state.
 - A test covers a grant revocation that arrives during an open stream. It asserts the close, the dropped material and the observed state `failed` with the reason.
 - A test covers an indeterminate webhook registration followed by a read that finds the registration, and it asserts no second registration.
 - A test covers a poll batch whose store fails, and it asserts an unchanged checkpoint.
