@@ -18,6 +18,8 @@ A mission comes into existence with its project, empty and at mission revision 1
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Every node holds a name, a requirement, a criterion, its verifications and its bindings.
+A node holds a [plan file name](mission-service.vocabulary.md#plan-file-name) that is unique in its mission.
+An export writes that name.
 The name is a title and no identity.
 A node revision covers that whole content.
 Containment and dependency are the two edge kinds.
@@ -88,7 +90,10 @@ A human imports that plan into the Mission Service.
 An execution creates no node, and an execution writes no criterion.
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.
-The node API deletes no node that holds an attempt.
+The node API retires no node.
+A human retires a node through an import that omits its plan file.
+The node API creates an initiative at any time.
+It creates an objective or a task under a parent that holds `Pending`, `Available`, `Executing`, `Blocked` or `Paused`.
 The node API edits no node in a terminal state.
 The node API reads no condition of the import when it updates a node.
 A human takes responsibility for an edit through the node API.
@@ -96,10 +101,9 @@ Execution authority never grants planning authority.
 No execution identity writes a node, and no execution identity writes a criterion.
 An execution identity authorizes no import, whatever node that import names.
 
-The Mission Service owns what an import carries, and it owns no syntax.
+The Mission Service owns the Markdown format and the JSON format of a plan.
 Markdown is the medium that a human writes a plan in.
-The command line interface converts a plan into an import.
-The Mission Service writes no plan file.
+The Mission Service exports the current nodes of a mission in both formats, and each export imports back unchanged.
 
 An import reconciles a snapshot, and the import set is authoritative.
 A plan file that carries no identifier creates a node when the import condition holds.
@@ -111,7 +115,7 @@ A file name is unique inside the import set.
 
 An import is atomic, and the Mission Service validates the resulting graph.
 One import deletes a node and removes every current inbound reference to it when the import condition holds.
-An import declares its scope.
+An import covers the whole mission.
 An import names the mission revision that it expects, and a stale snapshot fails that check.
 A write that changes the structure of a mission or the content of a node increments the mission revision once.
 No other write changes it.
@@ -119,6 +123,7 @@ A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier and an identifier of another mission.
 An import request identifier binds to its payload, so a retry is idempotent.
 The map of assigned identifiers stays retrievable.
+The Mission Service keeps every accepted import request and unblock request for the life of the mission.
 
 A retirement removes the executable work of its node.
 A retirement preserves the outcomes, the assessments, the evidence and the historical relations of that node.
@@ -128,11 +133,10 @@ A no-op import of a terminal node returns no error.
 
 An import creates, updates and deletes a node, and each operation requires the import condition.
 The condition holds when the node holds `Pending` or `Available` and its attempt counter reads 0.
-Neither write path deletes a node that holds an attempt.
-The delete condition is the same on both write paths, so the attempt counter of the node reads 0.
+An import retires no node that holds an attempt.
 An import modifies no node that holds an attempt, whatever its state.
 A release to `Pending` or `Available` leaves the node with an attempt and its records.
-A create reads the condition on the parent whose child set changes.
+An import create reads the condition on the parent whose child set changes.
 The import condition of a task is the condition of its objective.
 A task modification requires its objective to hold `Pending` or `Available` and its attempt counter to read 0.
 This rule covers a create, an update and a delete of a task.
@@ -152,7 +156,7 @@ The import decides a modification on the resolved graph and never on the text of
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one version of the whole content of a node.
-It covers the name, the requirement, the criterion, the verifications and the bindings.
+It covers the plan file name, the name, the requirement, the criterion, the verifications and the bindings.
 A node starts at node revision 1.
 A node revision changes no attempt counter.
 The attempt counter is independent of the revision number.
