@@ -21,7 +21,7 @@ The set is closed and it holds two values.
 A project is an entity identified by what it ships.
 Its name is unique on the server.
 The term names no closed set.
-A project binds two repositories, one `tdd@1` worker and two provider accounts.
+A project binds two repositories and one `tdd@1` worker.
 
 ## mission
 
@@ -186,8 +186,7 @@ The Mission Service receives that identity and names it in its authorization cal
 
 A binding is the record that allocates a resource to a project and permits an operation on that resource.
 The term names no closed set.
-The [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the five binding kinds and their values.
-They are repository, worker, provider account, source and storage.
+The [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the four binding kinds and their values.
 A project holds a repository binding for the repository that the objective "Add password reset" belongs to.
 The binding permits three capabilities.
 The Project Service vocabulary holds the cardinality of each binding kind.
@@ -195,22 +194,17 @@ The Project Service vocabulary holds the cardinality of each binding kind.
 ## resource
 
 A resource is what a binding allocates to a project, and it exists independently of that project.
-The term names no closed set, and the [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the five binding kinds.
+The term names no closed set; [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the four binding kinds.
 The project of "Account recovery" binds the repository `kanthorlabs/kanthord` and the worker `general@1`.
-It also binds a provider account at `openai`, a source and the S3-compatible bucket `atlas-evidence`.
+It also binds a source and the S3-compatible bucket `atlas-evidence`.
 Its [storage binding](project-service.vocabulary.md#storage-binding) allocates that bucket for object evidence.
 
 ## provider
 
 A provider is a large language model provider that serves the models that the agents of a worker use.
 The term names no closed set.
-The project of "Account recovery" binds two provider accounts at one provider, and the Worker Service reaches that provider for each model inference call.
-
-## provider account
-
-A provider account is an account at a large language model provider that a project binds.
-The term names no closed set.
-A provider account binding holds a credential reference for a model inference call.
+The Worker Service reaches OpenAI for each model inference call of the `swe@1` agent in "Account recovery".
+Its [agent enablement](worker-service.vocabulary.md#agent-enablement) supplies the provider selection.
 
 ## deliverable
 

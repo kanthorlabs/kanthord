@@ -332,7 +332,8 @@ Its `error.details` holds `{"missingInventories":["<service>"]}`, with each owne
 - Caller cancellation cancels all checks and produces no success answer.
 - Each check releases its timer and cancellation subscription on completion, failure or cancellation.
 
-The [Project Service](project-service.impl.md#the-resource-healthcheck) and the [Worker Service](worker-service.impl.md#registration-heartbeat) hold their check methods.
+The [Project Service](project-service.impl.md#the-resource-healthcheck), [custody](custody.impl.md#the-resource-healthcheck) and [Worker Service](worker-service.impl.md#agent-provider-healthcheck) own their check methods.
+[Registration heartbeat](worker-service.impl.md#registration-heartbeat) defines the registered-instance check.
 [HANDOFF.md](HANDOFF.md#architecture) holds the open check method of a subscription.
 
 ## Idempotency of a mutation
@@ -425,7 +426,7 @@ The implementation epic assesses their removal.
 
 An external platform reaches no loopback listener, so a delivery arrives through a tunnel or a reverse proxy.
 The server serves the RESTful API on one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
-A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [project-service.impl.md](project-service.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
+A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [custody.impl.md](custody.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
 It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover` and `POST /api/worker/credential` for a worker instance.

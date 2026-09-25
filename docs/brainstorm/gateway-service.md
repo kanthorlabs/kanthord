@@ -77,7 +77,8 @@ It describes no mechanism of another service.
 
 ## Boundary
 
-- The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization, and it owns the custody of the credential of a resource that a project binds.
+- The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization.
+- [Custody](custody.md) owns resource credentials.
 - The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
 - The [Scheduler Service](scheduler-service.md#work-pulls) owns claim and scheduling.
 - The [Tracking Service](tracking-service.md) owns telemetry.

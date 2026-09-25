@@ -7,15 +7,14 @@ title: Project Service Implementation
 This file holds the implementation rulings for the mechanisms that realize [project-service.md](project-service.md).
 This file is not a design document, and `project-service.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
-A change to it changes the binding store, the protected facility or custody.
+The binding store and authorization use these mechanisms.
 
 The implementation adds no package.
 Node.js 24.15.0 and the installed set satisfy every requirement.
 The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `randomBytes` and `timingSafeEqual`.
 It also provides `zod` at 4.4.3 and `ulid`.
-The first version holds one platform entry, GitHub.
-Slack, Telegram and Jira hold no platform entry until their design lands.
-A credential type is no platform, because an API key spans platforms.
+The repository action catalog supports GitHub.
+[Custody](custody.impl.md#platform-implementations) owns credential platforms.
 The GitHub action catalog holds exactly two actions.
 
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
@@ -36,8 +35,7 @@ The tables are below.
 - `project_binding_revision(id, project_id, binding_id, revision, config, created_at)` holds one immutable row for each revision, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
 
 Every table above holds `id` as its first column and `project_id` as its second column.
-The credential store sits in the shared table `credential`, which [architecture.impl.md](architecture.impl.md) rules with its envelope and its cipher key.
-The Project Service owns that table through custody, and a binding names one of its records with a credential reference.
+A binding references the [credential store](custody.impl.md#the-credential-store-record) through custody, never through a direct table read.
 A project creation inserts the `project_project` row and calls the Mission collaboration `createMission` inside the same transaction, which [architecture.impl.md](architecture.impl.md) rules.
 
 The constraints are below.
@@ -60,7 +58,6 @@ A binding identity and a project identity follow the identity convention of [arc
 ## The identities of the Project Service
 
 - A binding identity is `binding_<ulid>` for every binding kind, because the entity kind is the binding and `kind` is a column.
-- A credential record identity is `credential_<ulid>`.
 - Validation of the `binding` claim of a machine JWT checks the `binding_` prefix and the canonical ULID portion.
 - [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules that JWT.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
@@ -73,7 +70,6 @@ A per-kind function derives it from the binding configuration on every write, so
 The values of the first version are below.
 
 - `github:repository:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`.
-- `openai:account:org-kanthorlabs` for the provider account binding of that account.
 - `github:webhook:kanthorlabs/kanthord` for the source binding of the GitHub webhook of that repository.
 - A worker binding holds no value.
 
@@ -81,27 +77,11 @@ The middle part names the resource and not the binding kind, so a GitHub webhook
 Normalization decides a revision against a replacement.
 
 - A repository identity derives from its SSH address alone.
-- Every provider account has the resource identity `<provider>:account:<account>`.
-- For a built-in provider, the account is the trimmed `account` field. The service keeps it verbatim with no case folding, because provider account ids are case-sensitive.
-- For `openai-compatible`, the account is the lower-cased host of the base URL. It holds no scheme, no port, no path and no version.
-- The base URL `https://llm.atlas.internal/v1` gives `openai-compatible:account:llm.atlas.internal`.
-- A host change replaces the binding.
-- A change of the scheme, the port, the path or the model list creates a revision.
-- The base URL scheme is `https` or `http`. A query or a fragment refuses the write.
 
 ## The write of a binding set
 
 A write submits the complete binding set of the project as one object keyed by binding name.
 The submission names the version of the binding set that the client read.
-The write checks custom providers before the `BEGIN IMMEDIATE` transaction.
-
-- The write calls `GET <baseUrl>/models` once for each `openai-compatible` binding that the edit adds or whose configuration changes.
-- The call uses custody `use` with a 10 s deadline.
-- A connection other than `ok` refuses the write with `project.bindings.provider.unreachable`. The error names the connection value.
-- A model id absent from the answer refuses the write with `project.bindings.provider.model_unknown`. The error names the id.
-- An unchanged binding makes no call.
-- The resolution makes no network call.
-
 One `BEGIN IMMEDIATE` transaction holds the read of `project_project.binding_set_version`, the comparison, the difference and every write of the edit.
 The transaction refuses a submission that names another version, so two concurrent writes never interleave.
 It increments that column on every write that it commits.
@@ -128,12 +108,8 @@ The invocation chain records the answer of the edit in memory after the commit, 
 A revision is the unit of a configuration change.
 The local disablement of a binding is a field of the configuration, so a disablement creates a revision.
 A resolution reads `current_revision` of the binding row, so a disablement takes effect at the next resolution and cancels no operation in flight.
-A change to the secret material behind a credential record creates no revision, because a reference names the record and never its content.
-A rotation therefore updates one `credential` row in place and creates a revision nowhere.
-A rotation commits in one transaction, and the last write wins.
-An `oauth` record obtains material through the refresh of pi-ai, which runs inside `modify` under the credential store lock.
-That refresh updates the row in place and creates no revision.
-A rotation keeps the remote identity of the record. Material for another remote goes into a new record.
+[Custody](custody.impl.md#the-credential-store-record) owns credential rotation and record revisions.
+A secret change behind an unchanged reference creates no binding revision.
 
 ## Validation
 
@@ -143,23 +119,11 @@ The validation of the whole set runs at the write, and the validation of one bin
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
 The write refuses a submission that changes the worker of an existing worker binding under the same binding name.
 
-- The provider id is a member of `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0, or `openai-compatible`.
-- A model identifier is a member of `getBuiltinModels(provider)`, or of the model list of the binding for `openai-compatible`.
-- The write and the resolution check both catalogs. A pi version bump changes both catalogs.
-- Suitability requires that the record type is an auth type of the provider. `apiKey` maps to `api_key`, and `oauth` maps to `oauth`.
-- The `account` field is required for a built-in provider and forbidden for `openai-compatible`.
-- The `baseUrl` and `models` fields are required for `openai-compatible` and forbidden for every other provider.
-- Each custom model requires an `id` from the check answer at approval, a positive integer `contextWindow` and a positive integer `maxTokens`.
-- The `maxTokens` value is at most `contextWindow`.
-- The optional boolean `reasoning` defaults to `false`. The optional `input` is a subset of `text | image` and defaults to `["text"]`.
-- A custom model entry holds no cost.
-- An agent entry holds optional `reasoningEffort`; absence selects the template default.
-- Its values are `off | minimal | low | medium | high | xhigh | max`.
-- The reasoning effort of an effective configuration is a member of `getSupportedThinkingLevels` of the effective model.
-- The write and the resolution check that level. An unsupported level refuses the write with `project.bindings.worker.reasoning_effort_unsupported` and prevents resolution.
+- Worker binding validation calls [Worker configuration validation](worker-service.impl.md#agent-configuration-validation) inside the write transaction.
+- Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
 - The `instanceCount` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
-- The repository, provider account, source and storage kinds keep `available`.
+- The repository, source and storage kinds keep `available`.
 - A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
 - Every repository binding names exactly one `credential` of type `api_key` of its platform. An absent credential refuses the write.
 - An HTTPS repository address refuses the write.
@@ -178,9 +142,8 @@ The configuration holds these fields beside `available`:
 - `prefix`: required text for the object-key prefix.
 - `credential`: required reference to a custody record, never inline secret material.
 
-`credential` names a record of type `s3_access_key`.
-Suitability accepts only that type for a storage binding and refuses `api_key` and `oauth`.
-A record with a session token is invalid.
+The storage binding sends `{ credential, platform: s3 }` to [custody's use check](custody.impl.md#suitability).
+The work endpoint, bucket, region and prefix stay in the binding.
 Validation checks the field types, the endpoint URL, the custody reference and project cardinality at write and resolution.
 An absent field, invalid value or second storage binding refuses the write.
 The binding write probes no store capability or version support.
@@ -189,79 +152,33 @@ A human who disables versioning accepts that choice.
 Without a storage binding, the Mission Service accepts only inline evidence content, not object uploads.
 
 Tests reject absent fields, invalid values, an unknown custody reference and a second storage binding.
-Tests accept `s3_access_key` for a storage binding and refuse `api_key`, `oauth` and a record with a session token.
-Tests refuse `s3_access_key` for every other binding kind.
+Tests accept an `s3` credential and refuse a credential of another platform.
+Tests assert that suitability compares no endpoint, bucket or region metadata.
 Tests assert that binding writes make no capability probe and that stores without versions remain valid.
 Tests preserve the storage binding revision in each object evidence record.
 
-## The worker template registry
+## Worker binding configuration
 
-A worker template is a static module of the server.
-The registry maps a worker name to its template, and it loads no runtime plugin.
-A template declares its agents, the default configuration of each agent, the options that a project overrides and the constraint of a whole configuration.
-The template expresses the options as a `zod` schema and the constraint as a `superRefine` of that schema.
-The registry holds `general@1` and `reviewer@1`, which [worker-service.impl.md](worker-service.impl.md) names as the workers of the first version.
-
-- `general@1` and `reviewer@1` declare no further option, so their option schema is empty.
+- A worker binding holds `instanceCount`, optional `resourceBudget` and optional per-agent entries.
+- [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
+- [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
+- The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
+- It returns entries of every worker binding whose worker references that agent, including bindings with no explicit entry.
+- The write calls `validateEntry(tx, workerName, entry)` of the Worker Service for every agent of the worker.
+- The [co-location contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) holds both calls inside the write transaction.
 
 ## The resolution of a binding
 
 An execution calls the resolution at the moment that it needs the resource.
 One read resolves the dependency chain of the binding.
-For a worker binding the chain holds the binding, its revision, the entry of the agent, the provider account binding that the entry names and the default account of the provider that the default configuration names.
-The resolution merges the entry over the default configuration, adds the provider account, and parses the result against the schema of the template.
+For an agent configuration, the Project Service asks the [Worker Service](worker-service.impl.md#agent-configuration-validation).
+The Project Service merges no configuration itself.
 It checks the disablement of every binding of the chain, and a disabled or removed member refuses the operation.
 The resolution records the revision of every binding of the chain, and not the revision of the worker binding alone.
 It performs no cache, because `DatabaseSync` reads the local file synchronously.
 A recorded revision authorizes nothing, so the next operation resolves the chain again.
 
-## The credential store record
-
-A record holds one secret of one type.
-
-- A credential store record holds its credential name in `name`, with 1 to 63 characters.
-- The name starts with a lower-case letter, then uses lower-case letters, digits and hyphens.
-- A unique index holds `name`.
-- The credential name is the natural key of `credential create` and of an OAuth login.
-- A taken name answers 409 `project.credential.name_conflict` with the holder identity in `error.details`.
-- A login session takes the credential name at its start, checks it at the start and checks it again at the commit.
-- A rotation keeps the credential name and the remote identity.
-
-The types are below, and each one names the class of operation that it performs.
-
-- **api_key**: `{type:"api_key", key}` of pi-ai. For a git platform the key is a personal access token, classic or fine-grained. The key of a git platform performs a platform action only. For a provider account the key performs a model inference call. API key providers include `openai` and `anthropic`.
-- **oauth**: `{type:"oauth", refresh, access, expires}` of pi-ai. It performs a model inference call for a provider whose pi-ai provider carries OAuth: `anthropic`, `openai-codex`, `github-copilot` and `openrouter`.
-- **s3_access_key**: `{type:"s3_access_key", accessKeyId, secretAccessKey}`, with no session token. It performs an object-store operation on the bucket of a storage binding only.
-
-The first version registers those three types and no other.
-
-- Suitability is a pure function of the type, the capability and the provider, over the table above.
-- Coverage checks the required capabilities and the credential references of the binding.
-- Coverage requires one `api_key` credential reference on every repository binding.
-- Suitability accepts `s3_access_key` for a storage binding only, and refuses `api_key` and `oauth` for that binding kind.
-- The `s3_access_key` schema requires `accessKeyId` and `secretAccessKey` and refuses a session token.
-
-The two functions are the whole validation of a credential reference, and neither one reads secret material.
-
-## The remote identity of a record
-
-`remote_identity` holds one string in three colon-separated parts, `<platform>:<identity kind>:<identifier>`.
-The identifier is the login, the slug or the path that the remote displays, and no numeric identity.
-The identity kind holds `user` and `organization` in the first version, and a new platform adds its own values.
-The server never asks the remote to confirm the value, so the field records an intent that a human wrote and that a human reads when selecting a record.
-The values of the first version are below.
-
-- `github:user:ulrich` for a classic personal access token of that account.
-- `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
-- `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
-- `s3.eu-central-1.amazonaws.com:user:kanthord-evidence` for an S3 access key.
-
-The platform part of an `s3_access_key` remote identity is the lower-cased endpoint host.
-
-Custody logs each human creation or update of a record with the human identity of the caller and the record identity.
-The record names no such actor itself, so that log is the whole attribution.
-
-## The keys of the Project Service
+## The webhook key
 
 [architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file, the rule that a service derives its keys from it and never uses it directly, and the cipher key of the `credential` table.
 The Project Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt.
@@ -269,49 +186,14 @@ The Project Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empt
 - `HKDF(masterKey, info = "webhook/<binding id>/<rotation>")` is the verification secret of one source binding.
 
 It derives that secret at the moment that it needs one, so no webhook secret sits in the store.
-A hand replacement of `masterKey` makes every stored credential unreadable, so a human enters each secret again into the record that holds its identity, and every binding that names that record stays valid.
-The same replacement invalidates every derived webhook secret, so a human pastes a new value at the platform for every source binding.
+A manual replacement of `masterKey` invalidates every derived webhook secret.
+A human pastes a new value at the platform for every source binding.
 
-## The protected facility
+## Authorization integration
 
-The protected facility is one module of the Project Service.
-For an operation grant, it exposes one authorization function and one use function, and neither function returns secret material.
-The authorization function takes the identity of the requester, the binding and the requested capability, and it returns a grant or a refusal.
-The grant is a frozen value that a module-private `WeakSet` records, as [gateway-service.impl.md](gateway-service.impl.md) records a human identity, so no caller fabricates one.
-The grant serves one operation, and custody consumes it at the first use.
-A disablement therefore reaches every later operation, because a consumed grant authorizes none.
-That grant is the operation grant.
-The acquisition grant of the section below is the second grant kind, and it serves one session.
-The facility resolves each identity as below.
-
-- A human identity passes `isHumanIdentity` of [gateway-service.impl.md](gateway-service.impl.md), and the facility authorizes it for the operation.
-- A machine identity passes `isMachineIdentity` of [gateway-service.impl.md](gateway-service.impl.md), and it names the client identity, the worker binding and the project that the verification of its JWT resolved.
-- An execution identity resolves to the node of its claim through a call into the Scheduler Service module, and the facility refuses an operation that names another node.
-- A service identity passes `isServiceIdentity` of the kernel, which [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) rules.
-- The facility permits each service its own classes: the Scheduler Service the read of an external object, and the Intake Service the acquisition classes.
-- The acquisition classes act on a source binding.
-- The facility resolves the external object through its own store to the repository binding, the project and the node.
-- It takes no association from the caller.
-
-An operation of an execution that an external harness hosts presents the machine identity and the execution identity together.
-The facility proves the whole chain: the JWT authenticated the client identity, the JWT names its worker binding, the machine identity names a live registration, the claim of the execution names that worker binding and that instance, the claim is live, and the node of the claim is the node of the operation.
-A break at any link refuses the operation.
-The facility consults custody after the check, so a refusal reads no ciphertext.
-
-## The use of a secret
-
-Custody exposes `use(grant, request)`.
-The request names the operation and its parameters, and it names no destination.
-Custody derives the destination from the binding that the grant checked, so a caller reaches no remote of its own choice.
-Custody performs the operation, and it returns the result of the operation and no material.
-The material leaves the server only through a credential handover.
-A child process that the server spawns, configures and reaps is part of the server, so the material that reaches `git` stays inside the server.
-The material enters no log record, no workspace file, no transcript, no tool result and no error body.
-`pino` redacts the paths of the material, and a test asserts each path.
-Custody fills its plaintext buffer with zeroes when the operation returns.
-That cleanup is best effort, because a parsed string and a cached token outlive the buffer in this runtime.
-[worker-service.impl.md](worker-service.impl.md) owns the trust boundary of the host, including the host of every `worker` application.
-Custody defends the material against a record of the system, and it defends nothing against a party that controls that host.
+The Project Service supplies system authorization to [custody's protected facility](custody.impl.md#the-protected-facility).
+It permits the Scheduler Service to read an external object and the Intake Service to use acquisition grants.
+External-object resolution reaches the repository binding, project and node through authoritative records, never caller-supplied associations.
 
 ## Presigned storage grants
 
@@ -332,54 +214,6 @@ Tests assert authorization before custody use and derive the destination only fr
 Tests assert the 1 hour PUT expiry, optional checksum header and authorized GET for the recorded object version.
 Tests assert that no storage credential or presigned URL enters the handover, logs or agent context.
 Tests refuse grants for unauthorized readers or executions without a live claim.
-
-## The credential store of an execution
-
-- Custody implements the `CredentialStore` contract of `@earendil-works/pi-ai` at 0.86.0: `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
-- A provider account binding names its pi provider id from `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0, or the id `openai-compatible`. The write and the resolution reject an unknown id.
-- Custody builds one store view for each execution. `read(providerId)` maps the pi provider id of the agent's provider account binding to the one credential store record that the binding names. It answers `undefined` for every other id, and the store holds one credential per pi provider id.
-- `list()` returns the one non-secret pair of provider id and credential type. `modify()` serializes on the record and writes the result of pi-ai in place. The view refuses `delete()`.
-- At the `server` placement the view reads custody directly and the plaintext never leaves the process.
-- At the `worker` placement the view is the decrypted handover.
-- Custody drops the view when the execution ends.
-
-The resolution builds a custom provider from the resolved revision.
-
-- It calls `createProvider` with the id `openai-compatible`, the binding name as its name and the base URL of the binding.
-- It supplies `auth: { apiKey: envApiKeyAuth("<binding name> API key", []) }` and `api: openAIResponsesApi()`.
-- The environment variable list is empty, so the key comes only from the custody record that the provider account binding names.
-- Each model of the binding becomes a pi model with `provider: "openai-compatible"` and the base URL of the binding.
-- The model carries `api: "openai-responses"`, its `contextWindow` and its `maxTokens`.
-- Its `reasoning` defaults to `false`, its `input` defaults to `["text"]` and its cost rates are zero.
-- The model list goes to `createProvider`, and `setProvider` registers the provider.
-- The resolution builds the models rather than reuses them, because a request uses the base URL of its model.
-- Every model of `OPENAI_MODELS` carries `provider: "openai"` and `baseUrl: "https://api.openai.com/v1"`. Its reuse sends the request and the key to OpenAI.
-
-## The credential handover
-
-- The handover is the answer of `worker.handover` of the Worker Service, which [worker-service.impl.md](worker-service.impl.md#the-credential-handover) declares. This `client` operation has `unary` lifetime and requires a live execution.
-- The payload holds the canonical JSON list of the platform key and the provider credential that the execution requires.
-- Each entry holds its record identity, its pi provider id or its git platform, and its pi-ai credential.
-- The envelope uses AES-256-GCM under `HKDF(masterKey, info = "handover/aes-256-gcm/v1")`, a 12-byte random nonce and a 16-byte tag. The additional authenticated data concatenates the length-prefixed execution identity and runtime identity of the instance.
-- The value contract of [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) names the handover as one of the two operations whose answer carries credential material.
-- The `worker` application holds the same `masterKey` and derives the same key.
-- The report uses `worker.credential`, a `client` mutation that requires a live execution. Its body holds one refreshed credential under the same envelope, and its handler writes the record in place.
-- Custody marks a record as handed over while a live execution at the `worker` placement holds it. It refreshes no such record itself, and the mark ends with the execution.
-- Two executions may hold one record at once. The epic determines whether each provider rotates the refresh token on refresh and invalidates the other holder.
-- Custody emits one log record on each handover and report, naming the execution identity and the record identity and no material.
-- `pino` redacts the payload paths, and a test asserts each path.
-
-## The OAuth login
-
-- Custody runs `models.login(providerId, "oauth", interaction)` of `@earendil-works/pi-ai` at 0.86.0 over its own credential store. The credential lands in a `credential` record through `modify` and never leaves the server.
-- A login session is a runtime record of the Project Service with identity `login_session_<ulid>`, provider id, mode and the initial human identity. It holds the credential name and the remote identity that the human names for the credential store record. It also holds its state, emitted address and code, failure reason and expiry. The expiry falls 15 minutes after the start.
-- The interaction adapter answers a `select` prompt with the session mode, `browser` or `device_code`. It fails the session for an option outside those two. It records an `auth_url` notification as the address and a `device_code` notification as the code and address. It records `info` and `progress` notifications as the last message of the session. It suspends a `manual_code`, `text` or `secret` prompt until the second operation supplies the value. It fails the session when the expiry arrives first.
-- All operations use the `human` access policy. `project.credential.login` is a `unary` mutation with provider id, mode, credential name and remote identity as input. Its output holds the session identity, address, code and expiry. `project.credential.login_code` is a `unary` mutation with session identity and value as input. It answers 409 when the session awaits no value. `project.credential.login_status` is a `unary` read keyed by session identity. It returns state, last message and failure reason. A provider that offers one mode ignores the input mode.
-- The login operation checks the credential name at the start and at the commit under [the credential store record](#the-credential-store-record) rule. A taken name answers 409 `project.credential.name_conflict` with the holder identity in `error.details`.
-- In browser mode, pi-ai opens a callback listener on the server host loopback for the duration of the session. OpenAI Codex uses `127.0.0.1:1455`, and Anthropic uses port `53692`. The environment variable `PI_OAUTH_CALLBACK_HOST` changes the host. The server sets no `PI_OAUTH_CALLBACK_HOST`. The listener belongs to pi-ai and serves no kanthord operation. The Gateway registers no route for it. A browser on the server host completes the callback. A browser on another machine fails it, and the human returns the redirect URL or code through `project.credential.login_code`.
-- The device mode needs no listener. pi-ai polls the provider until success, failure or expiry.
-- Custody holds at most one pending session per provider id and human identity. A second start answers 409. A completed session writes the record and ends. The session record holds no token at any time.
-- Every operation outputs the address and code in plain text because the human needs them. It outputs no token. `pino` redacts nothing of the address and code and everything of the credential.
 
 ## The acquisition grant
 
@@ -409,57 +243,20 @@ It passes no secret on the command line of a child, because the command line of 
 - A failed or timed-out read refuses the write with the error code `project.bindings.repository.ssh_unreachable`.
 - Custody attributes a network git operation to no credential record.
 
-## The platform action
-
-Custody attaches the credential to the request of a platform implementation inside `use`.
-An api key of a git platform travels in the `Authorization` header of that request, and custody builds that header and returns it to no caller.
-Custody mints no token and caches no token for a platform action, because that capability uses an API key in the first version.
-A request that the remote refuses fails the operation closed, and custody records the failure against the record.
-
-## The provider check
-
-- `project.provider.check` is a server-wide read operation with `human` access, no project and no binding.
-- Its route is `POST /api/project/provider/check`, and its body is `{ baseUrl, credential }`.
-- The base URL scheme is `https` or `http`. A query or a fragment is invalid input.
-- Custody builds the `Authorization: Bearer` header inside `use`, caches nothing and records the call against the record.
-- The server calls `GET <baseUrl>/models` with a 10 s deadline.
-- HTTP 200 holds `connection` with one of four values.
-  - `ok`: the remote returns the OpenAI list shape.
-  - `unauthorized`: the remote returns 401 or 403.
-  - `unreachable`: a network failure or the deadline prevents the answer.
-  - `invalid_response`: the answer does not have the OpenAI list shape.
-- The answer holds `models` only with `ok`. Each model holds `id`, `ownedBy` and `created`.
-- HTTP 400 answers invalid input or a record type other than `api_key`.
-- HTTP 404 answers an unknown credential.
-- The answer holds no key material.
-- The check pre-fills model ids only. The OpenAI answer holds `id`, `object`, `created` and `owned_by`, not model limits.
-- The human enters `contextWindow` and `maxTokens` at review.
-- The human configures the base URL and the credential record, checks for `ok`, approves models and submits the binding.
-
 ## The resource healthcheck
 
 The [resource healthcheck rule](architecture.md#resource-healthcheck) governs the checks that the Project Service owns.
 The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) bounds the checks and groups their entries.
 
-- A GitHub platform API key record reads `GET /rate_limit` with its credential.
-- This call spends no rate limit and reports the capability `rate-limit read`.
-- A provider account binding reads `GET /models` of its provider with its credential.
-- It reuses the model-list call of [the provider check](project-service.impl.md#the-provider-check), not its API-key-only input contract.
-- The call spends one request and no inference token, and it reports the capability `model-list read`.
 - A repository binding runs the SSH read of [the network git operations](project-service.impl.md#the-network-git-operations).
 - That read answers `project.bindings.repository.ssh_unreachable` on failure and reports the capability `network git read`.
 - The resource healthcheck deadline replaces the binding-write deadline for this read.
 - The target rule permits one read per repository address in a request.
-- A check never refreshes an OAuth record.
-- An OAuth record whose access token is expired reports `unknown` without a remote call.
-- Custody records each credential check call against the credential store record, as in the provider check.
 - The network git operation keeps its existing attribution rule.
 - The call record holds no check result.
 
-## The model inference call
-
-Custody serves the model inference call through the credential store of the execution.
-[worker-service.impl.md](worker-service.impl.md) owns the runtime that consumes it.
+[Custody](custody.impl.md#the-resource-healthcheck) owns credential checks.
+The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns agent provider checks.
 
 ## The client identity
 
@@ -499,26 +296,13 @@ The `kanthord` bin of `package.json` releases it.
 
 ## Tests
 
-- A test covers a credential create and an OAuth login with a taken credential name. It asserts 409 `project.credential.name_conflict` and the holder identity in `error.details`. It checks the login refusal at the start and at the commit.
-- A test covers a credential create retry after a restart. It asserts one credential store record for the credential name.
-- A test covers a rotation. It asserts that the credential name and the remote identity stay unchanged.
 - A test covers a creation and a rename to a taken project name, and it asserts 409 with the identity of the holder.
 - A test covers a project creation whose mission insert fails, and it asserts that no project row remains.
-- A test covers SSH-only coverage and suitability for every type, capability and provider. It refuses an absent platform key and an HTTPS repository address.
-- A test covers the provider and model catalogs at the write and the resolution.
-- A test covers the custom provider build. It asserts the base URL on every model, zero cost rates and the empty environment variable list.
-- A test covers every provider check answer, status and model field. It asserts the deadline and the absence of key material.
-- A resource healthcheck test asserts the GitHub rate-limit read with the record credential and no other call.
-- A test asserts the provider model-list read with its credential and no inference call.
-- A test covers successful reads, remote refusals and invalid answers, and checks the resource status and capability.
+- Tests cover repository coverage and custody suitability; an absent platform key and an HTTPS repository address fail.
+- Tests assert `validateEntry` inside the write transaction and refusal when an agent lacks enabled enablement.
+- Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.
 - A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
-- A test covers an expired OAuth access token and asserts `unknown`, no remote call and no refresh.
-- A test asserts the custody call record and no stored check result.
 - A test asserts that the repository check names no credential store record in its attribution.
-- A test covers the write-time call for each added or changed custom provider before the transaction. It asserts both error codes and their details.
-- A test asserts no call for an unchanged custom provider and no network call at resolution.
-- A test covers built-in account case preservation and custom-provider host normalization. It checks replacement against revision for each base URL part.
-- A test covers the reasoning-effort check against the effective model at the write and the resolution.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
 - A test covers the project prompt bound in UTF-8 bytes and its error code.
 - A test covers both GitHub actions, their capabilities and their implied expected end states. It refuses more than one action.
@@ -539,14 +323,6 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers a missing, a duplicate, a malformed and a wrong-length delivery signature, and a valid signature over the exact bytes.
 - A test covers an increment of `webhookSecretRotation`, and it asserts that a delivery signed with the previous secret fails.
 - A test asserts that no log record and no error body holds secret material.
-- A test covers the round trip of a handover envelope, a payload moved to another execution identity, and a truncated payload.
-- A test covers a store view that answers `undefined` for a provider id outside the binding of the execution. It covers a refresh through `modify` that updates the row in place and creates no revision.
-- A test covers a report of a refreshed credential for an execution that is not live, and it asserts 403.
-- A test covers a login session in device mode against a scripted pi-ai provider. It asserts the output address and code, completion and stored record.
-- A test covers a browser login session whose callback never arrives. It supplies a value through the second operation and asserts completion.
-- A test covers a second start for the same provider and human, and it asserts 409.
-- A test covers an expired session, and it asserts the state `expired` and no record.
-- A test asserts that no output and no log record of a login session holds a token.
 - A test covers an acquisition grant for a disabled source binding, and it asserts the refusal.
 - A test covers a binding set edit that disables a source binding with an open grant. It asserts the `binding_disabled` row and the revocation call.
 - A test covers a grant beyond 24 hours, and it asserts the `expired` row and the revocation call.
@@ -557,6 +333,3 @@ The `kanthord` bin of `package.json` releases it.
 
 - The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
-- The record of the failure of a credential.
-- The model-list read of a built-in provider whose API offers no model list, or whose OAuth account rejects it.
-- The rotation behaviour of the refresh token of each OAuth provider under two concurrent holders.

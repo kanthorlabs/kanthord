@@ -20,16 +20,16 @@ The [overview](overview.vocabulary.md) defines a worker, a worker instance, an e
 The Worker Service supplies the workers.
 A worker declares its name, its host, the node states that its instances claim and its required node format.
 A worker that kanthord hosts also declares its method and its agents, at least one.
-It declares the default configuration, the base prompt and the agent prompt of each agent.
+It references the catalog declaration of each agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
 An agent name names a role, and no agent name equals a worker name.
 A configuration is named through a worker binding, never through a bare agent name.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
-The default configuration of a native agent names its provider, its model identifier and its reasoning effort.
-A worker declares the default configuration and further options of each agent.
-It declares the options that a project can override and the constraint that a whole configuration satisfies.
-That declaration is part of the contract of the worker name.
-A worker binding of the [Project Service](project-service.md#execution-configuration-and-instance-count) overrides the default configuration through its entry, and the Project Service resolves the effective configuration of the agent.
+The Worker Service owns the catalog and one declaration per agent name.
+Each declaration holds its options, whole-configuration constraint and prompts.
+Every agent of a kanthord-hosted worker is [in the catalog](worker-service.vocabulary.md#in-the-catalog).
+A catalog declaration supplies no provider, model identifier or reasoning effort default.
+A human selects those values through [agent configuration](#agent-configuration).
 A worker reads no other project configuration.
 The required node format names the fields of a node that the method requires.
 Compatibility reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
@@ -57,10 +57,47 @@ It uses the [platform implementation](worker-service.vocabulary.md#platform-impl
 An execution and its agent reach a git platform through the repository connector and the platform connector alone.
 A native agent reaches a provider through the model connector alone.
 A connector resolves the binding of the operation through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the identity that requests the operation.
-For every model inference call of a native agent the Worker Service uses the provider account, the model identifier and the reasoning effort of the effective configuration of the agent, which the Project Service resolves for that call.
+For each native model inference call, the Worker Service resolves the agent's [effective configuration](worker-service.vocabulary.md#effective-configuration).
+The model connector uses that configuration through [custody](custody.md#secret-use-and-handover).
 An execution honours every value of the effective configuration of its agent.
 A local git operation runs in the workspace and passes through no connector.
 An agent holds no repository credential.
+
+## Agent configuration
+
+- The Worker Service owns [agent enablement](worker-service.vocabulary.md#agent-enablement), [agent provider](worker-service.vocabulary.md#agent-provider) and [default configuration](worker-service.vocabulary.md#default-configuration).
+- An enablement is global to the server, belongs to no project and is keyed by agent name.
+- A human enables an agent before use.
+- An absent or disabled enablement denies use.
+- An enablement holds one or more named agent providers and the default configuration that a human selects.
+- Each agent provider pairs a provider with a credential store record.
+- Its name is unique inside the enablement, and its provider never changes.
+- Another provider requires another agent provider.
+- A credential change creates a revision.
+- A worker binding holds optional per-agent [entries](worker-service.vocabulary.md#entry).
+- An entry selects only an agent provider of that agent's enablement.
+- The Worker Service resolves the effective configuration when a worker works on a node.
+- It validates the whole configuration at enablement write, worker binding write and resolution.
+- The [validation contract](worker-service.impl.md#agent-configuration-validation) defines these checks.
+- A worker binding write is refused when any agent of its worker has no enabled agent enablement.
+- The refusal names the agent.
+- An enablement change is refused when it invalidates any dependent worker binding.
+- The refusal lists those bindings.
+- The validation of all dependent worker bindings and the enablement change are atomic.
+- Every enablement change creates a revision.
+- A tuning entry follows unchanged fields of the default configuration at its next resolution.
+- Disablement is the only stop switch.
+- An agent provider has no independent disablement.
+- Disablement refuses every later resolution, including a complete entry, so the instance healthcheck fails and no claim follows.
+- The worker binding remains, and disablement recalls no handover in flight.
+- Removal of an enablement is refused while any worker binding depends on its agent.
+- Removal of an agent provider is refused while a default configuration or entry names it.
+- A removal refusal lists its dependents.
+- The check and removal are atomic.
+- The [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) preserves the shared invariants with the Project Service.
+- An externally hosted worker declares no agent and needs no agent enablement.
+- Each agent provider has a report-only [resource healthcheck](worker-service.impl.md#agent-provider-healthcheck).
+- That check belongs to the health report, not the liveness answer or claim path.
 
 ## Prompt composition
 
@@ -175,7 +212,7 @@ The healthcheck of an instance that an external harness hosts passes when its re
 The Worker Service computes the healthcheck of every placement from the state of the server alone.
 The instance carries the compatibility declarations of its worker: the worker name, the declared node states and the required node format.
 
-- An execution at the `worker` placement obtains its credentials through the [credential handover](project-service.vocabulary.md#credential-handover) of the Project Service.
+- An execution at worker placement obtains its credentials through the [credential handover](custody.vocabulary.md#credential-handover) of custody.
 - It performs its network git read, network git write and model inference calls on its own host.
 - Its platform actions run through the server like every execution.
 
@@ -269,7 +306,7 @@ Its required rationale names that verification.
 The execution writes the task assessment and the task outcome.
 The task assessment names the task commit and the [tested input](mission-service.vocabulary.md#tested-input) of the verifications.
 The task outcome carries the task commit as its evidence.
-A worker fixes the resource budget of one execution: a turn count and a wall time.
+A worker declares the default [resource budget](worker-service.vocabulary.md#resource-budget) of one execution, and a worker binding can override it.
 
 In an attempt after the first, the execution reads the outcome of the cleared attempt for each task.
 The execution checks whether that outcome asserts success, the task content is unchanged between the pinned revisions, and the repository binding is unchanged.
@@ -296,6 +333,7 @@ sequenceDiagram
     participant E as Execution (steps method)
     participant A as Native agent
     participant MG as Model connector
+    participant W as Worker Service
     participant Pr as Provider
     participant RG as Repository connector
     participant P as Project Service
@@ -317,8 +355,8 @@ sequenceDiagram
             A->>MG: model inference call
         end
         rect rgb(255, 243, 205)
-            MG->>P: resolve the effective configuration of the agent: provider account, model identifier, reasoning effort
-            P-->>MG: authorized
+            MG->>W: resolve the effective configuration of the agent
+            W-->>MG: effective configuration
         end
         rect rgb(226, 227, 229)
             MG->>Pr: model inference call
@@ -420,7 +458,7 @@ The [platform connector](worker-service.vocabulary.md#connector) holds one platf
 A platform implementation exposes the operations of its own platform under the names and the parameters of that platform.
 No common operation interface exists across platform implementations.
 The set of platform implementations is open.
-A binding that reaches an external platform names its [platform](project-service.md#repository-configuration-and-policy).
+A binding that reaches an external platform names its [platform](custody.vocabulary.md#platform).
 The platform connector selects the platform implementation by that field.
 A platform implementation derives the resource of a call from the binding.
 A caller supplies no resource selector.
@@ -428,7 +466,7 @@ A caller supplies no resource selector.
 Every call of a platform implementation on the API of its platform names the identity that requests it and the binding that it acts on.
 The platform implementation resolves the binding through the Project Service for each call on the API.
 Custody follows the authorization check.
-The [Project Service](project-service.md#authorization-and-credential-custody) owns the credential boundary.
+[Custody](custody.md#secret-use-and-handover) owns the credential boundary.
 The platform connector holds no authority of its own.
 
 The [action performer](worker-service.vocabulary.md#action-performer) requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
@@ -837,7 +875,8 @@ A later execution never depends on the retained agent context of an earlier exec
 
 ## Boundary
 
-The [Project Service](project-service.md) owns the bindings, the entry of an agent whose default configuration a project overrides, the configured counts, the authorization of each operation, custody and the repository strategy.
+The [Project Service](project-service.md) owns bindings, their entries and configured counts, system authorization and repository strategy.
+[Custody](custody.md) owns resource credentials and suitability.
 The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease, the live-execution accounting and the wait record.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.

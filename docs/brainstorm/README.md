@@ -9,6 +9,7 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 - [Overview](overview.md) and [vocabulary](overview.vocabulary.md)
 - [Architecture](architecture.md), [vocabulary](architecture.vocabulary.md), and [implementation proposals](architecture.impl.md)
 - [Project Service](project-service.md), [vocabulary](project-service.vocabulary.md), and [implementation proposals](project-service.impl.md)
+- [Custody](custody.md), [vocabulary](custody.vocabulary.md), and [implementation proposals](custody.impl.md)
 - [Mission Service](mission-service.md) and [vocabulary](mission-service.vocabulary.md)
 - [Scheduler Service](scheduler-service.md) and [vocabulary](scheduler-service.vocabulary.md)
 - [Intake Service](intake-service.md) and [vocabulary](intake-service.vocabulary.md)

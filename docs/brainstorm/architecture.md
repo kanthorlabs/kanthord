@@ -29,10 +29,9 @@ A service boundary does not describe a deployment.
 ### Project Service
 
 The Project Service holds the resources of a project.
-A project names the mission that it ships, the repositories that it uses, and the workers, agents and providers that it permits.
-A project holds the repository strategy.
-A project configures the instances that are available for work.
-It holds the credentials that the resources of a project require, and it authorizes their use.
+The [Project Service](project-service.md#resource-and-binding-model) defines direct resource bindings.
+A project holds the repository strategy and configures its worker instances.
+The Project Service owns system authorization, not resource credentials.
 
 ### Mission Service
 
@@ -90,7 +89,12 @@ The Gateway Service holds the RESTful API of the server.
 Every request enters the server through it, from a human and from a machine.
 It authenticates a human and produces a [human identity](overview.vocabulary.md#human-identity).
 It authenticates a machine and produces a [machine identity](gateway-service.vocabulary.md#machine-identity).
-It routes each request to the service that owns the requested operation.
+It routes each request to the service or shared component that owns the requested operation.
+
+## Shared components
+
+[Custody](custody.md) is a shared component used by every service, not a service.
+Its [design](custody.md#scope) defines credential ownership and protection.
 
 ## Service diagram
 
@@ -101,7 +105,8 @@ It shows the relations that the sections below name.
 
 An application other than the server reaches a service through the public RESTful API of the server.
 A caller inside the server reaches a service through an operation, which the public API exposes only when it accepts a caller outside the server.
-An operation names the authority that establishes the identity of its caller, and the service that owns the operation authorizes that caller.
+An operation names the authority that establishes its caller's identity.
+The owning service or shared component authorizes that caller.
 The Gateway Service establishes the identity of a human and of a machine.
 The server establishes the [service identity](project-service.vocabulary.md#service-identity) of each of its services at its start.
 A service acts under its service identity for the work that no human and no machine requests.
@@ -113,13 +118,14 @@ A waiting operation states what a cancellation of its caller stops.
 
 ## Resource healthcheck
 
-Every external resource that a service registers has a [resource healthcheck](architecture.vocabulary.md#resource-healthcheck).
-The service that owns the resource owns its check.
+Every external resource that a service or shared component registers has a [resource healthcheck](architecture.vocabulary.md#resource-healthcheck).
+The service or shared component that owns the resource owns its check.
 The inventory has these owners.
 
-- [Project Service](project-service.md#resource-and-binding-model): a credential store record, a repository binding and a provider account binding.
+- [Project Service](project-service.md#resource-and-binding-model): a repository binding.
+- [Custody](custody.md#resource-healthcheck): a credential store record.
 - [Intake Service](intake-service.md#subscriptions): a subscription.
-- [Worker Service](worker-service.md#instances-and-hosting): a registered instance.
+- [Worker Service](worker-service.md#agent-configuration): an agent provider and a registered instance.
 
 The store, the log and the host toolchain are internal components, not external resources.
 
@@ -129,7 +135,8 @@ The store, the log and the host toolchain are internal components, not external 
 - A failed check changes no [instance healthcheck](scheduler-service.vocabulary.md#instance-healthcheck), no worker binding and no execution in flight.
 - The check runs under the [human identity](overview.vocabulary.md#human-identity) of the caller.
 - One request checks each target once.
-- A credential store record, a repository address and a provider account are each one target.
+- A credential store record and a repository address are each one target.
+- [Worker provider checks](worker-service.impl.md#agent-provider-healthcheck) define agent provider targets.
 - Every entry that shares a target reports its one result.
 - The checks run with bounded concurrency, and each check has a deadline.
 - The inventory comes from the owning service, not from the checks.
@@ -165,20 +172,20 @@ The store, the log and the host toolchain are internal components, not external 
 - The Scheduler Service reads the worker bindings and their instance counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
 - The Scheduler Service observes an external object through the platform connector of the Worker Service.
-- The Scheduler Service uses a repository credential that the Project Service holds.
+- The Scheduler Service uses a repository credential through custody after Project Service authorization.
 - The Intake Service obtains an [acquisition grant](project-service.vocabulary.md#acquisition-grant) from the Project Service.
 - The Intake Service submits a delivery to the [verification operation](project-service.md#authorization-and-credential-custody) of the Project Service.
 - The Intake Service [hands a delivery to the Scheduler Service](intake-service.md#handoff).
 - A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
-- An execution uses a repository credential that the Project Service holds.
+- An execution uses a repository credential through custody after Project Service authorization.
 - An execution writes evidence to the Mission Service.
 - A reviewer execution reads the criterion and the evidence from the Mission Service.
 - The action performer reads the required external actions of the attempt and the external objects of the node from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.
-- The Worker Service uses a provider credential that the Project Service holds.
+- The Worker Service resolves agent configuration and uses the selected credential through custody.
 - The Worker Service reaches a large language model provider.
 - Every service writes telemetry to the Tracking Service.
 - An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the Gateway Service.
