@@ -270,9 +270,3 @@ flowchart TB
 **No service split is implied.** All seven services target one server process. The platform connector, action performer and MCP server stay server-side. Native model/repository calls can run on a trusted worker host after the required authorization and credential handover.
 
 Read [services and build order](high-level.md) for the recommended first implementation slice and [healthchecks](healthchecks.md) for diagnostics.
-
-<!-- Sources: docs/brainstorm/architecture.md, architecture.impl.md, project-service.md,
-     mission-service.md, scheduler-service.md, intake-service.md, worker-service.md,
-     tracking-service.md, their implementation siblings and HANDOFF.md.
-     The user requested individually named components and mandatory Project–Mission containment.
-     This detailed map deliberately expands beyond the compact overview node budget. -->
