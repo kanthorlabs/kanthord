@@ -150,6 +150,8 @@ A registration also ends when the program deregisters or when the server restart
 Removal or unavailability of its worker binding also ends the registration.
 A live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The end of a registration proves no stop of the program.
+The Worker Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a registered instance.
+It reports the liveness of the registration from server state, distinct from the [instance healthcheck](scheduler-service.vocabulary.md#instance-healthcheck).
 
 An instance record is runtime-only.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.

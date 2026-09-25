@@ -20,6 +20,20 @@ It describes no mechanism of another service.
 - The work pull, the registration of a worker instance and the MCP server sit behind the Gateway Service.
 - A webhook delivery of an external platform enters through the Gateway Service, which passes it to the [Intake Service](intake-service.md#deliveries).
 
+## Health report and liveness answer
+
+- The Gateway Service answers a [health report](gateway-service.vocabulary.md#health-report) to a human.
+- The report lists every resource that the [resource healthcheck rule](architecture.md#resource-healthcheck) names.
+- It groups resources first by the owning service, then by [health scope](architecture.vocabulary.md#health-scope).
+- It lists every resource on every request and pages or drops no entry.
+- The health report answers success when every owning service returns its inventory.
+- Each resource carries its [resource status](architecture.vocabulary.md#resource-status).
+- The health report answers unavailable only when an owning service cannot supply its inventory.
+- A resource status changes no answer status.
+- The Gateway Service answers a [liveness answer](gateway-service.vocabulary.md#liveness-answer) to any caller without authentication.
+- It reports the internal components of the server and of the Gateway Service only.
+- No external resource changes it.
+
 ## Human authentication
 
 - The Gateway Service authenticates a human before it forwards the request.

@@ -111,6 +111,31 @@ One operation commits its own work, and a caller composes no atomic unit across 
 An operation states its result when its answer is lost, so a caller distinguishes a completed result, a declared failure and an indeterminate result.
 A waiting operation states what a cancellation of its caller stops.
 
+## Resource healthcheck
+
+Every external resource that a service registers has a [resource healthcheck](architecture.vocabulary.md#resource-healthcheck).
+The service that owns the resource owns its check.
+The inventory has these owners.
+
+- [Project Service](project-service.md#resource-and-binding-model): a credential store record, a repository binding and a provider account binding.
+- [Intake Service](intake-service.md#subscriptions): a subscription.
+- [Worker Service](worker-service.md#instances-and-hosting): a registered instance.
+
+The store, the log and the host toolchain are internal components, not external resources.
+
+- A check runs on demand when a human requests the [health report](gateway-service.vocabulary.md#health-report) of the Gateway Service.
+- No service stores the result of a check.
+- A check reports. A disablement is an operation, and no check disables a resource.
+- A failed check changes no [instance healthcheck](scheduler-service.vocabulary.md#instance-healthcheck), no worker binding and no execution in flight.
+- The check runs under the [human identity](overview.vocabulary.md#human-identity) of the caller.
+- One request checks each target once.
+- A credential store record, a repository address and a provider account are each one target.
+- Every entry that shares a target reports its one result.
+- The checks run with bounded concurrency, and each check has a deadline.
+- The inventory comes from the owning service, not from the checks.
+- A resource whose check exceeds its deadline reports the [resource status](architecture.vocabulary.md#resource-status) for an incomplete check.
+- Each entry names the capability that its check tests.
+
 ## Actors
 
 - A human configures a project, carries out steps, reviews results and overrides an outcome. A human reaches the server through the Gateway Service, which authenticates the human and passes the [human identity](overview.vocabulary.md#human-identity) with the request.

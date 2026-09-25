@@ -30,6 +30,7 @@ A binding references another binding by identity.
 A reference never names a revision.
 A project shares a resource with another project.
 A binding belongs to one project, and no project shares a binding.
+The Project Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a credential store record, a repository binding and a provider account binding.
 
 ## Repository configuration and policy
 

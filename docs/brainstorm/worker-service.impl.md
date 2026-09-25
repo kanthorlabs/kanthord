@@ -47,6 +47,9 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - An explicit heartbeat request is `POST /api/worker/heartbeat`, operation ID `worker.heartbeat`, with the client access policy and an empty body.
 - It answers 204.
 - The Worker Service records the time of the last heartbeat with a monotonic clock.
+- The [resource healthcheck](worker-service.md#instances-and-hosting) of an instance reports `healthy` when its last heartbeat is inside `worker.heartbeatWindow`, and `unhealthy` otherwise.
+- Its `capability` is `liveness of a registration`.
+- A test checks both sides of the heartbeat window and asserts that the resource healthcheck changes no registration or instance healthcheck.
 - A sweep every 30 s ends every registration whose last heartbeat is older than `worker.heartbeatWindow`.
 - A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
 - The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.

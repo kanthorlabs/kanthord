@@ -23,6 +23,27 @@ The set is closed and it holds seven values.
 The server holds no other service.
 The seven services are logical boundaries inside one server.
 
+## resource healthcheck
+
+The report on a resource under the [resource healthcheck rule](architecture.md#resource-healthcheck).
+
+The Project Service checks the provider account binding `openai-main` of the project `atlas`.
+
+## resource status
+
+The result that a resource healthcheck reports. The set is closed and holds three values.
+
+- **healthy**: the check confirms the capability.
+- **unhealthy**: the check confirms a failure of the capability.
+- **unknown**: the check is incomplete or cannot establish the capability.
+
+## health scope
+
+The grouping of a resource inside its owning service in the health report. The set is closed and holds two values.
+
+- **global**: a server-wide resource; a credential store record is the only kind.
+- **project**: a binding, or its subscription or registered instance, under its project.
+
 ## actor
 
 The container view shows the actors around the server. The set is closed and it holds two values.

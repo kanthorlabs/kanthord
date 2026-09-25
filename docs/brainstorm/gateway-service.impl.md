@@ -250,6 +250,7 @@ It passes the `Context` interface in the caller context and through direct clien
 Every route takes a timeout, and the value differs by route.
 The operation registry holds the timeout of a route beside its access policy, so one declaration drives both.
 The default timeout is 30 s. Human verification and worker registration each take 10 s.
+`GET /api/healthcheck` takes 120 s.
 The work pull route takes 120 s, and its wait window is 90 s, so the handler answers before the timeout.
 A route of the MCP prefix takes 900 s, because a call of the MCP server runs a tool of the Worker Service.
 `hono/timeout` returns 504 and cancels no work, so a mutation route is idempotent or it completes.
@@ -262,24 +263,77 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 
 ## Component healthchecks
 
-`GET /api/healthcheck` reports the owned component maps of every service registered in the shared `HealthRegistry`, not only Gateway internals.
-The Server owns that registry and passes it to the Gateway. It registers `server`, whose component map contains `gateway`, `store` and `log`; `store` checks the SQLite database with `SELECT 1`, and `log` checks the operational log descriptor.
-The Gateway registers `gateway`, whose map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation` through the shared `Service.healthcheck()` contract. The server's `gateway` component summarizes that map.
-The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
-A standalone Gateway registers only itself unless its owner supplies other probes.
-Every additional service registers its own health probe beside its other startup wiring. Operation registration alone registers no health probe. A probe returns the current components of its owner, so an LLM provider or a worker instance belongs in that owner's map and needs no new API handler or schema.
-The current engine implements no provider or worker service health probe; the endpoint reports no fictitious healthy entry for an absent service.
+`GET /api/liveness` carries the [liveness answer](gateway-service.md#health-report-and-liveness-answer).
+The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy.
+The server owns the shared `HealthRegistry` and passes it to the Gateway Service.
+The registry holds only the `server` and `gateway` maps.
 
-The success body is `{"status":"ok","services":{"<service>":{"<component>":200}}}`. `services` is an extensible dictionary, not a Gateway-only object, and the emitted OpenAPI contract describes it as such.
-An integer code of `200` means healthy and `503` means unavailable. Success requires at least one registered service and a nonempty, entirely healthy map for each service.
-An unavailable component produces HTTP 503 with code `UNHEALTHY` through the shared error envelope. `error.details` holds the complete service-to-component map, including healthy siblings, in the same nesting as `services` on success. This replaces the former Gateway-only failure details map.
-A throwing, rejected, empty, malformed or timed-out probe contributes `{"healthcheck":503}` under its registered name instead of disappearing or preventing other probes from reporting. This marker reports probe failure, not a guessed state of its individual components. The public response includes no exception text or credentials.
+- The `server` map contains `gateway`, `store` and `log`.
+- The `store` probe checks the SQLite database with `SELECT 1`.
+- The `log` probe checks the operational log descriptor.
+- The Gateway Service supplies `gateway` through `Service.healthcheck()`.
+- Its map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation`.
+- The `gateway` component of `server` summarizes that map.
+- The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
 
-Each request snapshots registrations and starts the probes concurrently. Later registrations appear on the next request; component maps are read anew on every request.
-Registration accepts unique names matching `[a-z][a-z0-9-]*` and at most 128 service probes. Invalid names, non-function probes, duplicate names and capacity overflow fail explicitly. Component names are nonempty public identifiers, never credentials or private endpoint URLs.
-Each probe receives a child `Context` with a deadline of five seconds, or the earlier caller deadline. That bound sits below the route's thirty-second timeout. The registry releases its timer and subscription on completion, failure or cancellation; service owners retain their resources and must honor cancellation for work they start.
-Caller cancellation cancels the collection rather than reporting success. The readiness middleware still returns `503 NOT_READY` before invoking a handler when the Gateway is not ready.
+The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200}}}`.
+A component code of `200` means healthy, and `503` means unavailable.
+HTTP 200 requires a nonempty, entirely healthy map from each owner.
+An unavailable component produces HTTP 503 with code `UNHEALTHY` through the shared error envelope.
+`error.details` holds both complete maps, including healthy components, with the same structure as `services` on success.
+A probe that throws, rejects, returns an empty or malformed map, or exceeds its deadline contributes `{"healthcheck":503}` under its name.
+This marker reports probe failure, not a state of its individual components.
+The public response includes no exception text or credentials.
+
+Each request snapshots the registry and starts the probes concurrently.
+Each probe reads the current component state.
+The registry rejects an unknown name, a duplicate name and a probe that is not a function.
+Each probe receives a child `Context` with a deadline of 5 s, or the earlier caller deadline.
+The registry releases its timer and cancellation subscription on completion, failure or cancellation.
+Each owner cancels the work that its probe starts when the caller cancels.
+Caller cancellation cancels the collection and produces no success answer.
+The readiness middleware returns `503 NOT_READY` before the handler when the Gateway Service is not ready.
 The health registry owns no service lifetime and starts or stops no service.
+
+## The resource healthcheck report
+
+`GET /api/healthcheck` carries the [health report](gateway-service.md#health-report-and-liveness-answer).
+The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy.
+HTTP 200 implements success, and HTTP 503 implements unavailable under that rule.
+
+- The 200 body holds only `services`.
+- `services` holds exactly `project`, `intake` and `worker`, one for each owner in the [inventory](architecture.md#resource-healthcheck).
+- Each service holds `global` and `projects`, including empty maps.
+- `global` maps a resource name to an entry.
+- `projects` maps a project name to a resource map.
+- Each resource map maps a resource name to an entry.
+- Each entry holds exactly `status` and `capability`.
+- `status` takes a [resource status](architecture.vocabulary.md#resource-status): `healthy`, `unhealthy` or `unknown`.
+- `capability` is a nonempty string that names the capability of the check, not a claim about other capabilities.
+- A global resource name is its credential name.
+- A project-scoped resource name of the Project Service is its binding name.
+- An Intake Service resource name is `<source binding name>/<subscription kind>`.
+- A Worker Service resource name is `<worker binding name>/<runtime identity>`.
+- Each name segment uses percent encoding, including any literal `/` or `%`, so distinct names remain distinct.
+- No entry name, capability or error detail holds secret material or a private endpoint URL with credentials.
+
+The body therefore places entries at `services.<service>.global.<resource>` or `services.<service>.projects.<project>.<resource>`.
+HTTP 503 uses the shared error envelope with code `UNHEALTHY`.
+Its `error.details` holds `{"missingInventories":["<service>"]}`, with each owner that cannot supply its inventory.
+
+- The Gateway Service collects the inventories before it starts the checks.
+- It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
+- The request runs at most 32 checks concurrently across all owners.
+- Each check receives a child `Context` with a deadline of 10 s from its start.
+- A check that exceeds its deadline reports `unknown`.
+- The [route timeout](gateway-service.impl.md#cancellation) bounds the whole request.
+- Before that timeout, the report includes `unknown` for every entry whose check has no result, including a check without a start.
+- The Gateway Service cancels the checks that have no result before it answers.
+- Caller cancellation cancels all checks and produces no success answer.
+- Each check releases its timer and cancellation subscription on completion, failure or cancellation.
+
+The [Project Service](project-service.impl.md#the-resource-healthcheck) and the [Worker Service](worker-service.impl.md#registration-heartbeat) hold their check methods.
+[HANDOFF.md](HANDOFF.md#architecture) holds the open check method of a subscription.
 
 ## Idempotency of a mutation
 
@@ -328,8 +382,25 @@ A real ephemeral loopback listener covers the `Host` and `Origin` checks with th
 It covers the body limits and a streaming body.
 It covers a timeout against a mutation that completes and a client disconnect.
 It covers the shutdown drain and the exact bytes of a delivery.
-It checks the real server health response for both `server` and `gateway`, including SQLite and log health, and checks additional provider/worker probe maps through HTTP and direct clients.
-It covers unhealthy components, a closed SQLite database, failed log health, throwing/rejected probes, empty or malformed maps, deadlines, cancellation, fresh component state, registration snapshots, duplicates and registry capacity. An unavailable probe retains every healthy sibling in the complete 503 details map.
+It checks the liveness response for both `server` and `gateway`, including SQLite and log health, through HTTP and direct clients.
+It covers unhealthy components, a closed SQLite database, failed log health, and probes that throw or reject.
+It covers empty or malformed maps, deadlines, cancellation, current component state, registry snapshots, duplicate names and unknown names.
+An unavailable probe retains every healthy component in the complete 503 details map.
+It asserts the failed-probe marker and the public access policy of the liveness route.
+It asserts that an external resource changes no liveness answer.
+
+- A test covers the resource report across every owner and health scope, including empty maps and every resource status.
+- It asserts every entry, its capability, its name encoding and the absence of pagination.
+- A test shares each target across entries and projects and asserts one check and the same result in every entry.
+- A test exceeds a check deadline and asserts `unknown` without loss of the entry.
+- A test exhausts the route time with queued checks and asserts a complete report before the timeout.
+- A test asserts the concurrency bound across owners and cancellation of all checks on a client disconnect.
+- A test asserts that an anonymous caller and a machine identity each receive 401 on the human-only health report.
+- A test covers a missing owner inventory and asserts 503 and the missing owner name.
+- A test supplies every inventory with unhealthy and unknown entries and asserts 200.
+- A test asserts no secret material or private endpoint URL with credentials in any response.
+- A test asserts that checks store no result and change no disablement, instance healthcheck, worker binding or execution.
+
 It covers concurrent starts and restarts without token issuance or display, including redirected standard output.
 It verifies that a locally generated human JWT remains valid after a restart.
 It verifies the default and explicitly supplied subjects and derived-key signature, rejects an invalid subject and another master key, and asserts that no password or account row is stored.
@@ -377,7 +448,8 @@ The work pull and the registration of a worker instance are registered routes.
 The MCP server of the Worker Service occupies its own path prefix, and [worker-service.impl.md](worker-service.impl.md) owns it.
 A webhook delivery enters through a registered route whose handler passes it to the [Intake Service](intake-service.md#deliveries).
 Each operation declares its own access policy; a path prefix grants no policy.
-`GET /api/healthcheck` and the OpenAPI routes declare the public policy.
+`GET /api/liveness` and the OpenAPI routes declare the `public` policy.
+`GET /api/healthcheck` declares the `human` policy.
 `GET /api/auth/verify` declares the human policy. `POST /api/worker/register` and the other worker operations declare the client policy, and delivery operations declare the delivery policy.
 
 ## The client configuration file
