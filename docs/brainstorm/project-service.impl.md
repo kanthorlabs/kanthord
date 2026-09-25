@@ -178,7 +178,9 @@ The configuration holds these fields beside `available`:
 - `prefix`: required text for the object-key prefix.
 - `credential`: required reference to a custody record, never inline secret material.
 
-The credential record type follows the [HANDOFF Mission item](HANDOFF.md#mission-service); this configuration declares no record type.
+`credential` names a record of type `s3_access_key`.
+Suitability accepts only that type for a storage binding and refuses `api_key` and `oauth`.
+A record with a session token is invalid.
 Validation checks the field types, the endpoint URL, the custody reference and project cardinality at write and resolution.
 An absent field, invalid value or second storage binding refuses the write.
 The binding write probes no store capability or version support.
@@ -187,6 +189,8 @@ A human who disables versioning accepts that choice.
 Without a storage binding, the Mission Service accepts only inline evidence content, not object uploads.
 
 Tests reject absent fields, invalid values, an unknown custody reference and a second storage binding.
+Tests accept `s3_access_key` for a storage binding and refuse `api_key`, `oauth` and a record with a session token.
+Tests refuse `s3_access_key` for every other binding kind.
 Tests assert that binding writes make no capability probe and that stores without versions remain valid.
 Tests preserve the storage binding revision in each object evidence record.
 
@@ -227,12 +231,15 @@ The types are below, and each one names the class of operation that it performs.
 
 - **api_key**: `{type:"api_key", key}` of pi-ai. For a git platform the key is a personal access token, classic or fine-grained. The key of a git platform performs a platform action only. For a provider account the key performs a model inference call. API key providers include `openai` and `anthropic`.
 - **oauth**: `{type:"oauth", refresh, access, expires}` of pi-ai. It performs a model inference call for a provider whose pi-ai provider carries OAuth: `anthropic`, `openai-codex`, `github-copilot` and `openrouter`.
+- **s3_access_key**: `{type:"s3_access_key", accessKeyId, secretAccessKey}`, with no session token. It performs an object-store operation on the bucket of a storage binding only.
 
-The first version registers those two types and no other.
+The first version registers those three types and no other.
 
 - Suitability is a pure function of the type, the capability and the provider, over the table above.
 - Coverage checks the required capabilities and the credential references of the binding.
 - Coverage requires one `api_key` credential reference on every repository binding.
+- Suitability accepts `s3_access_key` for a storage binding only, and refuses `api_key` and `oauth` for that binding kind.
+- The `s3_access_key` schema requires `accessKeyId` and `secretAccessKey` and refuses a session token.
 
 The two functions are the whole validation of a credential reference, and neither one reads secret material.
 
@@ -247,6 +254,9 @@ The values of the first version are below.
 - `github:user:ulrich` for a classic personal access token of that account.
 - `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
 - `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
+- `s3.eu-central-1.amazonaws.com:user:kanthord-evidence` for an S3 access key.
+
+The platform part of an `s3_access_key` remote identity is the lower-cased endpoint host.
 
 Custody logs each human creation or update of a record with the human identity of the caller and the record identity.
 The record names no such actor itself, so that log is the whole attribution.

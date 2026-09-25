@@ -88,7 +88,9 @@ The binding of one S3-compatible bucket that holds the object evidence of a proj
 A project holds at most one storage binding.
 Project `atlas` names its binding `evidence-store` and its bucket `atlas-evidence`.
 Its configuration holds `endpoint`, `bucket`, `region`, `prefix` and `credential` beside `available`.
-The credential reference names a custody record; its record type follows the [HANDOFF Mission item](HANDOFF.md#mission-service).
+The credential reference names a custody record of type `s3_access_key`.
+That record holds `accessKeyId` and `secretAccessKey`, with no session token.
+Its remote identity uses the lower-cased endpoint host, for example `s3.eu-central-1.amazonaws.com:user:kanthord-evidence`.
 The storage credential stays in server custody.
 A presigned grant reaches the kanthord component for one operation on one object, never the context of an agent.
 Without this binding, the project accepts only inline evidence content.

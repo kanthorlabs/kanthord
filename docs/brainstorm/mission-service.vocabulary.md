@@ -88,7 +88,19 @@ The record names the `atlas-evidence` bucket, its object key, size, media type a
 It records the object version when the store returns one.
 The answer gives the evidence identity and `s3://atlas-evidence/<object key>`.
 The reviewer gets a presigned GET through its kanthord component, not a storage credential.
-The video and its evidence record stay for the life of the mission unless a human removes them.
+The evidence record stays for the life of the mission.
+The video stays until a human removes its content.
+
+## pending upload
+
+An upload without a published evidence record.
+The term names no closed set.
+
+The component starts the video upload but never completes it.
+After one hour, the upload expires and cannot complete.
+A human lists the expired pending uploads of the mission and requests their cleanup.
+The cleanup deletes the video object and marks the pending upload cleaned up.
+The pending upload row stays, and published evidence stays unchanged.
 
 ## attempt
 

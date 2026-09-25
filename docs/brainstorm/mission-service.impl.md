@@ -219,6 +219,18 @@ The file path is local input, not an evidence address.
 
 A pending upload expires after 1 hour.
 An expired pending upload cannot complete.
+
+- kanthord runs no automatic sweep of unpublished upload objects.
+- `mission.evidence.pending.list` uses `GET /api/mission/:missionId/evidence/pending` with `human` access, and lists the expired pending uploads of one mission.
+- The list uses the shared page contract and descending evidence identity order.
+- Each pending row holds `evidenceId`, `missionId`, `nodeId`, `attempt`, `storageBindingId`, `storageBindingRevision`, `location`, `expiresAt` and `cleanedUp`.
+- `location` is the server-generated `s3://` object URI; `cleanedUp` starts as `false`.
+- `mission.evidence.pending.cleanup` uses `POST /api/mission/:missionId/evidence/pending/cleanup` with `human` access, and cleans up expired pending uploads of one mission.
+- Cleanup deletes each object of an expired pending upload through the storage binding of the project.
+- It marks each pending row `cleanedUp: true` after the object deletion and keeps the row.
+- Cleanup targets only expired pending uploads, never a published evidence record or a published object.
+- The answer holds `missionId` and `cleanedUpEvidenceIds`, the evidence identities of the rows that this cleanup marks.
+
 SHA-256 is optional for object evidence.
 A component supplies it when it wants; the store verifies it when both sides support it.
 kanthord enforces no object immutability.
@@ -231,16 +243,34 @@ The read targets the recorded object version when one exists.
 The presigned URL is an API answer, never part of the credential handover or the agent context.
 The storage credential stays in server custody.
 The MCP server exposes no upload write.
-Removal deletes the object and withdraws kanthord's access; it recalls no downloaded copy.
-The human cleanup mechanism remains open in [HANDOFF](HANDOFF.md#mission-service).
+Content removal deletes the object and withdraws kanthord's access; it recalls no downloaded copy.
+[Evidence retention](#evidence-retention) governs published content removal.
 
 ## Evidence retention
 
-Every evidence record and its content stay for the life of the mission.
-This lifetime applies whether an outcome depends on the evidence or not.
+Every evidence record stays for the life of the mission.
+Its content stays until a human removes it, whether an outcome names the evidence or not.
 kanthord runs no automatic evidence cleanup.
-Only a human removes evidence.
-The human cleanup mechanism remains open in [HANDOFF](HANDOFF.md#mission-service).
+
+- `mission.evidence.content.remove` uses `DELETE /api/mission/evidence/:evidenceId/content` with `human` access.
+- The input holds `force: boolean` and optional `reason: Text`; the CLI defaults `force` to `false`.
+- `Text` is nonblank text; its bounds remain open in [HANDOFF](HANDOFF.md#mission-service).
+- With `force: false`, the node of the evidence and every ancestor must hold a terminal state.
+- A live chain refuses removal with 409 `mission.evidence.remove_node_live`.
+- `force: true` skips that check and requires a reason, so a human can remove an exposed credential at once.
+- Force without a reason answers HTTP 400 with a validation issue list.
+- The reason is optional without force.
+- The service removes inline bytes or deletes the object through the storage binding of the project.
+- Object removal targets the recorded version when one exists.
+- The service keeps the evidence record and marks its content removed.
+- Every evidence record carries `removedBy: Actor | null` and `removedReason: Text | null`.
+- Both fields are null while the content exists.
+- Removal sets `removedBy` to the verified human actor and `removedReason` to the supplied reason, or null without a reason.
+- The record keeps no removal time.
+- Removal returns the evidence record; `evidence list` and `evidence get` also return both fields.
+- A later human or execution content read answers 410 `mission.evidence.content_removed`, with `evidenceId` in `details`.
+- That typed failure returns no content or presigned GET.
+- Removal admits an outcome reference and changes no effect of that outcome.
 
 ## The revisions
 
@@ -327,7 +357,19 @@ The human cleanup mechanism remains open in [HANDOFF](HANDOFF.md#mission-service
 - Tests keep URLs outside the handover and agent context, and keep storage credentials in server custody.
 - Tests expose no MCP upload write.
 - Tests assert that removal deletes the object and withdraws access without recall of downloaded copies.
-- Tests retain all evidence for the mission lifetime, with or without outcome references, and run no automatic evidence cleanup.
+- Tests retain all evidence records for the mission lifetime, with or without outcome references, and run no automatic evidence cleanup.
+- Tests run no automatic sweep of unpublished upload objects.
+- Tests require human access and one mission for pending upload list and cleanup.
+- Tests list only expired pending uploads and keep other missions outside cleanup.
+- Tests prove that cleanup never touches published evidence records or published objects.
+- Tests delete expired pending objects through the project storage binding, mark their rows cleaned up and keep those rows.
+- Tests refuse removal on a live node or ancestor with `mission.evidence.remove_node_live`.
+- Tests refuse force without a reason with a validation failure and accept force with a reason on a live chain.
+- Tests accept an optional reason without force and require human access for removal.
+- Tests remove inline bytes and object content, with the recorded object version when one exists, and keep the evidence record.
+- Tests answer `mission.evidence.content_removed` on each later human or execution content read, with no bytes or presigned GET.
+- Tests return `removedBy` and `removedReason` from list and get, null before removal and with the recorded values after removal.
+- Tests keep no removal time and preserve the effect of every outcome that names removed content.
 
 - Tests refuse each unknown front matter key and unknown H2 with `mission.import.plan_invalid` and the file name.
 - Tests refuse each absent or repeated H1, Requirement section and Criterion section with the same error and file name.

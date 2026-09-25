@@ -176,6 +176,7 @@ A test checks duplicate removal, discarded objectives, base-branch heads and one
 A test checks the evidence-placement rule when an initiative's objectives name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
+Tests require a reviewer to judge without removed content and name it in its rationale.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests assert a failed task assessment without judgement when a verification fails or remains unrun.
 Tests permit judgement only after every verification passes.
