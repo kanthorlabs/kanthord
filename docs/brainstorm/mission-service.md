@@ -91,8 +91,7 @@ A human imports that plan into the Mission Service.
 An execution creates no node, and an execution writes no criterion.
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.
-The node API retires no node.
-A human retires a node through an import that omits its plan file.
+A human retires a node through an import that omits its plan file, or through the node API.
 The node API creates an initiative at any time.
 It creates an objective or a task under a parent that holds `Pending`, `Available`, `Executing`, `Blocked` or `Paused`.
 The node API edits no node in a terminal state.
@@ -115,7 +114,7 @@ The import resolves that name inside the import set.
 A file name is unique inside the import set.
 
 An import is atomic, and the Mission Service validates the resulting graph.
-One import deletes a node and removes every current inbound reference to it when the import condition holds.
+One import retires a node and removes every current inbound reference to it when the import condition holds.
 An import covers the whole mission.
 An import names the mission revision that it expects, and a stale snapshot fails that check.
 A write that changes the structure of a mission or the content of a node increments the mission revision once.
@@ -128,11 +127,25 @@ The Mission Service keeps every accepted import request and unblock request for 
 
 A retirement removes the executable work of its node.
 A retirement preserves the outcomes, the assessments, the evidence and the historical relations of that node.
+A retirement deletes no node record.
+A retired node keeps its identity, its plan file name, its revisions and its last state.
+
+A node API retirement retires the named node and every current descendant of that node.
+It checks every retiring initiative and every retiring objective itself, and every retiring task through its objective.
+Each check requires `Pending` or `Available` and an attempt that reads 0.
+A dependency on a retiring node from a nonterminal dependent outside the [retirement set](mission-service.vocabulary.md#retirement-set) refuses the retirement.
+A human who forces the retirement removes that dependency.
+Each freed dependent moves between `Pending` and `Available` by its remaining dependencies.
+A dependency from a terminal dependent stays as a historical relation.
+A preview confirms the retirement set and the removed dependencies before the retirement applies.
+The retirement is atomic, increments the mission revision once and records one mission change.
+A retirement removes a node that never started work, with no outcome.
+
 A substantive update of a terminal node returns an error.
 A node in a terminal state holds no new revision, because a terminal node is not editable.
 A no-op import of a terminal node returns no error.
 
-An import creates, updates and deletes a node, and each operation requires the import condition.
+An import creates, updates and retires a node, and each operation requires the import condition.
 The condition holds when the node holds `Pending` or `Available` and its attempt reads 0.
 An import retires no node that holds an attempt.
 An import modifies no node that holds an attempt, whatever its state.
@@ -140,7 +153,7 @@ A release to `Pending` or `Available` leaves the node with an attempt and its re
 An import create reads the condition on the parent whose child set changes.
 The import condition of a task is the condition of its objective.
 A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
-This rule covers a create, an update and a delete of a task.
+This rule covers a create, an update and a retirement of a task.
 A containment move reads the condition on the moved node, the old parent and the new parent.
 A dependency edit follows the condition of Mission structure and nodes, and it never reads the node that the dependency names.
 A human who stops the work of a node discards that node.

@@ -574,7 +574,7 @@ A release to `Pending` or `Available` leaves the node with an attempt and its re
 A create reads the condition on the parent whose child set changes.
 The import condition of a task is the condition of its objective.
 A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
-This rule covers a create, an update and a delete of a task.
+This rule covers a create, an update and a retirement of a task.
 A modification covers the record of the node, its parent link, its dependency edges and its child set.
 A containment move reads the condition on the moved node, the old parent and the new parent.
 A dependency edit reads the condition on the dependent node, and never on the node that the dependency names.
@@ -593,7 +593,7 @@ The import set is authoritative.
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.
 
-- The node API retires no node.
+- The node API retires a node and its current descendants.
 
 The node API edits no node in a terminal state.
 The node API reads no condition of the import when it updates a node.
@@ -676,6 +676,9 @@ The unblock of "Add password reset" carries its own request identifier, and a re
 ## retirement
 
 The removal of the executable work of a node, with its historical records preserved.
+A human retires a node through an import omission or through the node API.
+A retirement deletes no node record.
+A retired node keeps its identity, its plan file name, its revisions and its last state, which is `Pending` or `Available`.
 A retirement removes one thing.
 
 - the executable work of its node
@@ -688,13 +691,13 @@ A retirement preserves four things.
 - the historical relations of that node
 
 A retirement never reaches a node that holds an attempt.
-A retirement requires the import condition on every node that the deletion modifies.
+An import retirement requires the import condition on every node that the retirement modifies.
 The condition covers the retired node and the parent whose child set changes.
 It also covers every dependent whose edges change.
 Each check requires `Pending` or `Available` and an attempt that reads 0.
 The import condition of a task is the condition of its objective.
 A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
-This rule covers a create, an update and a delete of a task.
+This rule covers a create, an update and a retirement of a task.
 One failed check aborts the whole import with no effect.
 The import that retires a node removes every current inbound reference to that node.
 A retirement removes the node from the current child set that the readiness condition reads.
@@ -704,3 +707,17 @@ Take the import set above, and drop the file `add-reset-token-expiry.md`.
 The objective of that task holds `Available`, and its attempt reads 0.
 The next import retires that task when the import condition holds.
 The assessment and the evidence of that task stay retrievable.
+
+A human retires `add-recovery-codes.md`, an objective with two tasks, through the node API.
+The retirement set holds that objective and its two tasks.
+`add-recovery-email.md` holds `Pending` and depends on `add-recovery-codes.md`, so the retirement fails until the human forces it.
+The forced retirement removes that dependency.
+`add-recovery-email.md` moves to `Available` when it has no other unmet dependency.
+
+## retirement set
+
+The nodes that one retirement retires.
+For a node API retirement, the set holds the named node and every current descendant.
+For an import, the set holds every current node that the import set omits.
+The term names no closed set.
+When a human retires `add-recovery-codes.md` through the node API, the set holds that objective and its two tasks.
