@@ -330,6 +330,18 @@ A durable dispatch record that survives a server restart is the B9 item W2, and 
 The action performer creates a fresh clone through the repository connector for a network git write.
 It removes that checkout after the call.
 
+The tool answers `{ toolName: "repository-action-request", items: ActionResultItem[] }`.
+`ActionResultItem` is discriminated on `kind`, with one value per return class.
+
+- `submitted` holds `externalObject`, the `ExternalObject` record that the Mission Service accepted, in the schema that `mission.externalObject.get` answers.
+- `awaiting-prerequisite` holds `action: { key, bindingId }`, the waiting action, and `prerequisite: { key, externalObjectId }`, the requested action it follows and its external object. The reviewer release names that `externalObjectId` in its `external-observation` wait fact.
+- `failed-before-effect` holds `action: { key, bindingId }` and `refusal: { class, code, message }`, where `class` is `confirmed_failure`, `retryable_refusal` or `final_refusal`. A final refusal declines the request before any write. `code` and `message` come from the connector that transported the request: the platform implementation for a platform action, the repository connector for a network git write.
+- `uncertain` holds `action: { key, bindingId }`, `uncertainty: "effect" | "recording" | "both"` and an optional `address`, present when the remote returned the address and the Mission submission stayed uncertain. An `unknown_outcome` result class produces `effect`.
+
+`key` is the `FrozenAction.key` of the attempt, and `bindingId` is the repository binding of the action, under [the attempt](mission-service.impl.md#the-attempt).
+The first version produces no `awaiting-prerequisite` item, because a repository strategy holds at most one action and its `follows` is null.
+The answer holds no release instruction, because [B9 items A3, W1, W4 and PR2](HANDOFF.md#worker-and-project-services) own what follows a failure or an uncertainty.
+
 ## MCP server
 
 The MCP v2 server in [Tool table](#tool-table) is the one MCP server of the server.

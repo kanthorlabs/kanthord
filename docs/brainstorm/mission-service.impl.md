@@ -25,6 +25,15 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An attempt uses its attempt number as its key within the node. Neither an attempt nor a mission change takes a prefix.
 - The Scheduler Service declares the execution identity.
 
+## The actor
+
+Every record that names an actor stores one of three forms, and the server derives each one from the verified caller.
+
+- `{ kind: "human", account, name }` from the human identity: `account` is the `sub` of the JWT and `name` its display name, under the bounds of [gateway-service.impl.md](gateway-service.impl.md#the-jwt). A human carries no ULID.
+- `{ kind: "execution", executionId, clientId, name }` from the execution record of the claim: `executionId` follows the identity that the Scheduler Service declares; `clientId` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
+- `{ kind: "service", service }` for the observer, with `service: "scheduler"`.
+- No input carries an actor, and an actor field in an input answers HTTP 400 with an issue list.
+
 ## The node content
 
 - Every node holds all five required plan content fields and a plan file name.
@@ -66,6 +75,20 @@ The service answers HTTP 400 with an issue list for a fraction, a nonnumber or a
 The act requires a nonterminal node with no live claim.
 The service records the actor and time outside the node revision.
 An import carries no priority.
+
+## The attempt
+
+The attempt row records the frozen required external actions next to the pinned revision.
+
+- A frozen action holds `key`, `bindingId`, `bindingRevision`, `action`, `expectedEndState`, `follows` and `configuration`.
+- `action` is `pull_request` or `merge_push` for a repository binding, under the action catalog of [project-service.impl.md](project-service.impl.md).
+- `expectedEndState` is `pull_request_merged` for `pull_request` and `base_branch_pushed` for `merge_push`.
+- `follows` is the key of the action that this action follows, or null when it follows the passing assessment. It is null while a strategy holds at most one action; the field stays for a later action kind.
+- `configuration` freezes the operands that the action performer takes from the strategy: `baseBranch`. Every other fact of the operation, the address, the platform and the credential, comes from the current resolution of the binding through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
+- `bindingRevision` records the binding revision that the freeze read, as attribution and no authority.
+- A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
+- An initiative freezes an empty set.
+- The frozen action holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and every external object and observation of the attempt names that key.
 
 ## The plan file grammar
 
@@ -118,6 +141,10 @@ An import carries no priority.
 - The preview lists every current node that the import set omits as a retirement.
 - The apply confirms that exact retirement set with `confirmedRetirements` and checks `previewDigest` at commit.
 - The apply also carries `requestId` for request recovery.
+- A violation holds `code`, `message`, `file`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `file` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
+- The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
+- An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
+- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.file_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
 
 ## Node API admission
 
@@ -146,9 +173,14 @@ An import carries no priority.
 
 The execution runs the verifications in list order, one by one, never in parallel.
 Each item runs through `bash -c` in the workspace root of the execution.
-The run stops at the first nonzero exit.
-The machine check records one result `{ command, exitCode }` per item that ran, in list order.
-The overall exit code is that of the failed item, or 0 when every item passes.
+The run stops at the first failed item.
+The machine check records one result `{ command, exitCode, signal, timedOut }` per item that the execution started, in list order.
+`exitCode` is the exit status or null.
+`signal` is the POSIX signal name that ended the process or null.
+`timedOut` is true when the timeout of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that timeout.
+Both `exitCode` and `signal` are null for a process that the execution started and could not observe.
+An item passes only with `exitCode: 0`; every other result fails, and an unstarted item has no result.
+The overall exit code is that of the failed item, null when the failed item ended without an exit status, or 0 when every item passes.
 No result claims that an unrun item ran.
 The start refuses a host without bash.
 No execution identity infers a verification from prose.
@@ -182,6 +214,20 @@ The Mission Service answers `mission.assessment.verification_failed` when an ass
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
 
+- At acceptance the service records `childNodeIds`, the current child set of the node at that moment, on the assessment. `evidenceIds`, `childOutcomeIds` and `childNodeIds` are duplicate-free sets, and the service refuses a child outcome whose node is outside `childNodeIds` with HTTP 400 and an issue list.
+
+## The observation record
+
+- `expectedEndState` copies the value of the frozen action of the attempt. For a repository action the set holds `pull_request_merged` and `base_branch_pushed`; a configured action of another binding kind adds its own values with its design.
+- `observedState` holds `endState` and `detail`.
+- `endState` is one of `expected`, `other` and `none`. `expected` means the accepted observation establishes the expected end state. `other` means it establishes another end state. `none` means it establishes no end state and leaves the request unresolved.
+- `detail` is nonblank `Text` that the observer writes in platform-neutral words, for example `merged` or `closed without merge`.
+- The Mission Service reads `endState` alone and never `detail`.
+- An `expected` observation of a repository action holds a nonempty `landedCommits`; every other observation holds an empty list.
+- `observer` is the `service` form of the actor and names `scheduler`.
+- The resolution of a required external action in a read is `unrequested` while the attempt holds no external object for it, `unresolved` while every accepted observation of it holds `endState: none`, `expected-end` after an accepted `expected` observation, and `other-end` after an accepted `other` observation.
+- This record decides no order of contradictory observations, no reversal of an accepted platform state and no request for which no end state arrives. The B9 Mission items of [HANDOFF.md](HANDOFF.md#mission-service-1) own the open recovery rules.
+
 ## Evidence content
 
 Inline evidence holds at most 5 MiB of decoded content.
@@ -192,6 +238,23 @@ Larger inline content answers 413 `mission.evidence.too_large`.
 The service never truncates evidence.
 Without a storage binding, the service accepts only inline evidence content.
 Repository evidence remains an address, not an upload of repository content.
+
+- A repository address holds `bindingId` and `commit`.
+- `commit` is the full git object name in lower-case hexadecimal: 40 characters for a SHA-1 repository or 64 characters for a SHA-256 repository, the two object formats of git. An abbreviation, upper-case or a ref name answers HTTP 400 with an issue list.
+- The service checks the form alone and never the repository.
+- `bindingId` names a current repository binding of the project in every context.
+- For the evidence of an objective or a task, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
+- For the tested input of an initiative, the list holds one address per distinct repository binding of its current objectives.
+- The landed commit of a success override follows the same form and binding rule.
+- `mediaType` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
+- The natural key of an evidence submission is `(execution_id, observation_key)` under a unique index over the evidence rows, pending and published alike.
+- The row stores the digest of the canonical JSON of the validated submission, target node included, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- A repeat with the same key and digest returns the stored record: the published evidence, or the pending upload with its grant while the upload is unexpired.
+- The same key with another digest answers 409 `mission.evidence.observation_key_conflict` with the stored evidence identity in `details`.
+- A repeat of `begin` for an expired pending upload answers 409 `mission.evidence.upload_expired`; it renews nothing, and a new upload uses a new key.
+- Another execution with the same key creates its own record.
+- The key and the digest are columns of the evidence row, so they stay for the life of the mission under [Evidence retention](#evidence-retention); content removal changes neither.
+- A content read of repository evidence answers 409 `mission.evidence.content_repository` with `evidenceId` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
 
 ## Object evidence
 
@@ -332,6 +395,11 @@ kanthord runs no automatic evidence cleanup.
   The readiness condition requires every current task outcome before `Waiting` admits an evaluation claim.
 - This section states no rule for a task assessment that does not pass when the execution releases without further work.
   The B9 item of the Mission Service owns that path.
+- An outcome with an assessment basis holds `evaluationContext`.
+- `evaluationContext` holds `nodeRevision`, `evidenceIds`, `childNodeIds` and `childOutcomeIds`, copied from the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
+- The closure copies and recomputes nothing, so a child change after the acceptance never enters the context.
+- Empty arrays are explicit.
+- The required-action snapshot lives on the attempt record and is not repeated.
 
 ## Node ready
 
@@ -395,6 +463,13 @@ kanthord runs no automatic evidence cleanup.
   - observation
 - One write increments once, however many nodes it touches.
 - A write with no structure or content change leaves the mission revision unchanged.
+- Every node revision holds `change`.
+- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `criterion.set` or `unblock`.
+- A move of an objective changes its parent link and no content, so it creates no node revision. A move of a task changes the content of both objectives, so each one takes a node revision with `write: node.move`.
+- `change.previousRevision` is the previous revision, or null on revision 1.
+- `change.changedFields` lists the content fields whose value differs from the previous revision: `file`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.
+- `change.tasks` is present for an objective and lists `{ id, change, changedFields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changedFields`.
+- The result of the change is the `content` of the same record.
 
 ## The mission change
 
@@ -407,6 +482,8 @@ kanthord runs no automatic evidence cleanup.
 - `change list` pages by the shared descending rule of [architecture.impl.md](architecture.impl.md#pagination).
 - `change list` and `change get` use the `human` access policy.
 - The `NodeChange` answer of a graph write is the stored result of its mission change.
+- `result` also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
+- A write with no structure or content change stores no row and answers the current mission revision with empty arrays.
 
 ## Operation contracts
 
@@ -419,6 +496,21 @@ kanthord runs no automatic evidence cleanup.
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
 ## Tests
+
+- Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current revision, empty arrays and no stored row.
+
+- Tests record the child set on the assessment at acceptance, copy it into the outcome context at closure, and keep it unchanged after a later child change or revision.
+- Tests accept 40 and 64 lower-case hexadecimal commits, refuse abbreviations, upper-case and ref names, and refuse a binding that the pinned revision does not name in each admission context. For a success override while the attempt reads 0, they check the revision current at the act.
+- Tests write `change` on every revision with the write path, the previous revision and the exact changed fields, list task changes on an objective revision, and revise both objectives on a task move.
+- Tests return every violation of the failing stage with its code, locators and a malformed file name, stop an apply at the first violation with the envelope and its status, and keep an authorization failure an operation failure.
+- Tests accept `type/subtype` at 255 bytes and refuse a parameter, a longer value, a missing subtype and a non-ASCII byte.
+- Tests record a signal name with a null exit code, a timed-out item with `timedOut: true`, a started process with neither fact, a null overall exit code in each of those cases, and no result for an unstarted item.
+- Tests replay an evidence submission by execution identity and observation key after a restart, refuse another payload under the same key, refuse a `begin` repeat after expiry, give another execution its own record, and keep the key after content removal.
+- Tests answer `mission.evidence.content_repository` with the address on a human and an execution content read of repository evidence, and refuse an unauthorized read before that answer.
+
+- Tests derive the human, execution and service actors from the verified caller, reject an actor in any input, and keep the copied client identity after deregistration.
+- Tests freeze the key, binding revision, action, expected end state, a null predecessor and the base branch at the opening, keep them after a strategy change, and resolve the binding currently for the address and the credential.
+- Tests fold `expected`, `other` and `none` into `External.Success`, `External.Failed` and an unresolved request, read no `detail`, and require nonempty `landedCommits` on an `expected` repository observation and an empty list otherwise.
 
 - Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
   They also write `attempt: 0` for the landed-commit evidence of a success override on such a node.
