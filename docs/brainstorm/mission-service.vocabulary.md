@@ -23,11 +23,11 @@ A new binding kind adds a row.
 
 ## node content
 
-Every kind has the same five required content fields.
-A name is a nonblank title, not an identity, and is not unique.
-A criterion can hold several checkable statements.
-Identity, kind, revision, state, attempt counter, priority and edges stay outside content.
-These YAML documents show the content of an initiative, its objective and a task of that objective, respectively.
+- Every kind has the same five required plan content fields and a plan file name.
+- A name is a nonblank title, not an identity, and is not unique.
+- A criterion can hold several checkable statements.
+- Identity, kind, revision, state, attempt counter, priority and edges stay outside content.
+- These YAML documents show the plan content of an initiative, its objective and a task of that objective, respectively.
 
 ```yaml
 name: Account recovery
@@ -338,7 +338,7 @@ The term names no closed set.
 ## node revision
 
 One version of the whole content of a node.
-It covers the name, the requirement, the criterion, the verifications and the bindings.
+It covers the plan file name, the name, the requirement, the criterion, the verifications and the bindings.
 A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.
 
@@ -505,7 +505,10 @@ The landing record above names pull request 42 and commit `abc123`.
 
 ## import
 
-The snapshot reconciliation that writes the structure and the criterion of each node of a mission.
+- The snapshot reconciliation that writes the structure and the criterion of each node of a mission.
+- An import covers the whole mission.
+- An import accepts the Markdown format or the JSON format.
+
 An import carries these effects on a node.
 
 - **create**: A plan file that carries no identifier creates a node when the import condition holds.
@@ -513,8 +516,9 @@ An import carries these effects on a node.
 - **retirement**: A plan file that the import set omits retires its node when the import condition holds.
 
 The import condition holds when the node holds `Pending` or `Available` and its attempt counter reads 0.
-Neither write path deletes a node that holds an attempt.
-The delete condition is the same on both write paths, so the attempt counter of the node reads 0.
+
+- An import retires no node that holds an attempt.
+
 An import modifies no node that holds an attempt, whatever its state.
 A release to `Pending` or `Available` leaves the node with an attempt and its records.
 A create reads the condition on the parent whose child set changes.
@@ -533,10 +537,14 @@ The Mission Service terminates an import that fails the condition, and that impo
 A transaction and a lock cover the condition check and the commit together.
 One import applies any mix of the three effects, and the import is atomic.
 The import set is authoritative.
-An import declares its scope, and it names the mission revision that it expects.
+
+- An import names the mission revision that it expects.
+
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.
-The node API deletes no node that holds an attempt.
+
+- The node API retires no node.
+
 The node API edits no node in a terminal state.
 The node API reads no condition of the import when it updates a node.
 A human takes responsibility for an edit through the node API.
@@ -544,23 +552,65 @@ No execution identity writes a node, and no execution identity writes a criterio
 
 ## import set
 
-The complete set of nodes that one import carries.
-A file name is unique inside the import set, and a dependency names a plan file.
-The import resolves that name inside the import set, and that dependency carries no path.
-The membership changes with each import, so the term names no closed set.
+- The complete set of nodes that one import carries for the whole mission.
+- An import accepts the Markdown format or the JSON format.
+- A plan file name is unique inside the import set.
+- Each parent and dependency names a plan file inside that set, never a path or a node outside the set.
+- The membership changes with each import, so the term names no closed set.
 
-A human keeps the plan of the initiative in markdown, and one import set holds these three files.
+A human keeps the whole mission plan in Markdown, and one import set holds these four files.
 
-- `add-password-reset.md`, the objective
+- `account-recovery.md`, the initiative
+- `add-password-reset.md`, an objective of that initiative
 - `add-reset-token-expiry.md`, a task of that objective
-- `add-password-reset-email.md`, an objective that names `add-password-reset.md` as a dependency
+- `add-password-reset-email.md`, another objective of that initiative, with `add-password-reset.md` as a dependency
 
-The import resolves the name `add-password-reset.md` inside this set.
-The omission of a file from this set requests a retirement of its node within the declared scope.
+- The import resolves the name `add-password-reset.md` inside this set.
+- The omission of a file from this set requests a retirement of its node.
+
 Each modification requires `Pending` or `Available` and an attempt counter that reads 0.
 A task modification reads the state and the attempt counter of its objective.
 An inadmissible modification aborts the whole import with no effect.
 A rewrite of `add-password-reset.md` with no identifier creates a new node, and the unchanged `add-password-reset-email.md` now names that new node, so the import modifies "Add password reset email" and reads its condition.
+
+## plan file name
+
+- The name of the plan file of a node, unique in its mission.
+- An import or a create sets it, and every export writes it unchanged.
+- The term names no closed set.
+- Two objectives titled "Add tests" hold `add-tests-api.md` and `add-tests-web.md`.
+- After the first leaves the plan, the export still writes `add-tests-web.md` for the other.
+
+## plan file
+
+- The Markdown document that represents one node under the [plan file grammar](mission-service.impl.md#the-plan-file-grammar).
+- Its file name is the import-set key and the plan file name of the node.
+- The term names no closed set.
+- This example is `add-password-reset.md`, the objective "Add password reset" in the import set above.
+- The `id` names a known node; a new node omits it.
+
+```markdown
+---
+id: node_01ARZ3NDEKTSV4RRFFQ69G5FAV
+kind: objective
+parent: account-recovery.md
+dependsOn: []
+bindings:
+  - api-repo
+verifications:
+  - npm run e2e
+  - npm run test:reset
+---
+# Add password reset
+
+## Requirement
+
+Let account holders reset a forgotten password.
+
+## Criterion
+
+A valid token permits one reset and an expired token permits none.
+```
 
 ## request identifier
 
