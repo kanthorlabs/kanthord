@@ -7,7 +7,7 @@ title: Tracking Service
 ## Scope
 
 The Tracking Service holds the telemetry of the server.
-It holds no evidence, assessment, outcome, validation criterion, configuration or claim.
+It holds no evidence, assessment, outcome, criterion, configuration or claim.
 It decides nothing, and no record it holds has current effect.
 No service reads telemetry to make a decision.
 The Tracking Service does one thing: tracking.

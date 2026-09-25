@@ -103,7 +103,7 @@ Under the workers that kanthord hosts, the worker instance that executes a node'
 - A project binds `reviewer@1`, a worker whose method is evaluation and that declares `Waiting` and `External.Requested`.
 - A `reviewer@1` instance claims a `Waiting` objective through the Scheduler Service.
 - The instance produces an execution, and that execution is the reviewer execution.
-- The reviewer execution reads the validation criteria and the evidence from the Mission Service.
+- The reviewer execution reads the criterion and the evidence from the Mission Service.
 - The reviewer execution writes the assessment to the Mission Service.
 
 ## telemetry

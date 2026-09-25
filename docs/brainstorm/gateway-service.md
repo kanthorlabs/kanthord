@@ -78,7 +78,7 @@ It describes no mechanism of another service.
 ## Boundary
 
 - The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization, and it owns the custody of the credential of a resource that a project binds.
-- The [Mission Service](mission-service.md#validation-criteria-and-authority) owns node writes and their authority.
+- The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
 - The [Scheduler Service](scheduler-service.md#work-pulls) owns claim and scheduling.
 - The [Tracking Service](tracking-service.md) owns telemetry.
 - The Gateway Service owns the RESTful API surface, [human authentication](gateway-service.vocabulary.md#human-authentication), the human identity, the credentials of a human account, and the [forwarding contract](gateway-service.vocabulary.md#forwarding-contract).

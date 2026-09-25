@@ -25,6 +25,52 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An attempt uses its attempt number as its key within the node. Neither an attempt nor a mission change takes a prefix.
 - The Scheduler Service declares the execution identity.
 
+## The node content
+
+Every node holds all five required fields.
+The same rules apply to an import, a node write and an unblock content change.
+
+- `name` is nonblank text, a title with no identity or uniqueness requirement.
+- `requirement` is nonblank text.
+- `criterion` is nonblank text that can hold several checkable statements.
+- `verifications` is a nonempty ordered list of nonblank bash command strings.
+- `bindings` is a list of binding names of the project.
+
+The write resolves each binding name to its identity and checks the rule table.
+The node kind determines the column.
+A new binding kind adds a row.
+
+| Binding kind | Initiative | Objective | Task |
+| --- | --- | --- | --- |
+| Repository | 0 | Exactly 1 | 0 |
+| Worker | 0 | 0 | 0 |
+| Provider account | 0 | 0 | 0 |
+| Source | 0 | 0 | 0 |
+
+A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
+An absent or empty `verifications` list answers `mission.node.verifications_missing`.
+A nonlist `verifications` value or a blank or nontext item answers `mission.node.content_invalid`.
+A node with no verification need holds an always-successful command such as `true`.
+An absent or nonlist `bindings` value, an unresolved name or a rule-table violation answers `mission.node.bindings_invalid`.
+The identity, kind, node revision, state, attempt counter, priority and edges stay outside the content.
+A task's content belongs to the node revision of its objective.
+Test-kind guidance changes no validation rule.
+
+## The verifications
+
+The execution runs the verifications in list order, one by one, never in parallel.
+Each item runs through `bash -c` in the workspace root of the execution.
+The run stops at the first nonzero exit.
+The machine check records one result `{ command, exitCode }` per item that ran, in list order.
+The overall exit code is that of the failed item, or 0 when every item passes.
+No result claims that an unrun item ran.
+The start refuses a host without bash.
+No execution identity infers a verification from prose.
+
+The Mission Service refuses an assessment that asserts success with a failed or unrun verification.
+It answers `mission.assessment.verification_failed` for both a task assessment and a reviewer assessment.
+Judgement decides success only after every verification of the pinned content passes.
+
 ## The revisions
 
 - Every revision and version counter of the server starts at 1.
@@ -81,6 +127,28 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
 ## Tests
+
+- Tests apply the node-content rules to imports, node writes and unblock content changes for every node kind.
+- Tests omit each required field and assert its error code.
+- Tests reject blank and nontext values for each text field with `mission.node.content_invalid`.
+- Tests accept duplicate titles and a criterion with several checkable statements.
+- Tests reject absent and empty verifications with `mission.node.verifications_missing`.
+- Tests reject nonlist verifications and blank or nontext items with `mission.node.content_invalid`.
+- A test accepts `true` for a node with no verification need.
+- Tests resolve project binding names to identities at the write.
+- Tests reject absent or nonlist bindings and unknown or foreign-project names with `mission.node.bindings_invalid`.
+- Tests cover every cell of the rule table, with each permitted count and a forbidden count.
+- Tests reject repeated repository names on an objective because its list requires exactly one entry.
+- Tests keep identity, kind, revision, state, attempt counter, priority and edges outside content.
+- A test keeps task content inside the objective revision.
+- Tests accept verification kinds outside the guidance for each node kind.
+- A test runs verifications serially in list order through `bash -c` from the execution workspace root.
+- A test uses shell syntax to prove that each item is a full bash command.
+- A test stops at the first nonzero exit and records no result for a later item.
+- Tests assert each recorded command, its exit code and the overall exit code for success and failure.
+- A start test refuses a host without bash.
+- Tests refuse success with a failed or unrun item under `mission.assessment.verification_failed` for tasks and reviewers.
+- A test permits judgement only after every verification passes; zero exits alone never establish success.
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that every revision and version counter starts at 1 and every such field requires a positive safe integer.

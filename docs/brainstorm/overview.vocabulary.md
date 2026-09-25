@@ -31,12 +31,30 @@ One project has one mission. The mission includes the objective "Add password re
 
 ## WHAT
 
-The WHAT is the goal, the steps to achieve it, and the validation criteria for success.
+The WHAT is the requirement, the criterion and the verifications that check it.
 The set is closed and it holds three values.
 
-- **the goal**
-- **the steps to achieve it**
-- **the validation criteria for success**
+- **the requirement**
+- **the criterion**
+- **the verifications**
+
+## requirement
+
+A requirement is the text that states what a node must achieve.
+The term names no closed set.
+The requirement of "Add password reset" states that an account holder can reset a forgotten password.
+
+## criterion
+
+A criterion is the text that states how to judge the result of a node.
+The term names no closed set.
+The criterion of "Add password reset" states that a valid token permits one reset and an expired token permits none.
+
+## verification
+
+A verification is one bash command in the ordered `verifications` list that checks the criterion of a node.
+The term names no closed set.
+One verification of "Add password reset" is `npm run test:reset`.
 
 ## node
 
@@ -50,31 +68,31 @@ Nothing else is a node. The word names a vertex of the graph, and it never names
 
 ## initiative
 
-An initiative is a node of WHAT with its own validation criteria and outcome.
+An initiative is a node of WHAT with its own criterion and outcome.
 The term names no closed set.
 An initiative contains the objective "Add password reset" and is a root of the graph.
 
 ## objective
 
-An objective is a node of WHAT that contains tasks and has its own validation criteria and outcome.
+An objective is a node of WHAT that contains tasks and has its own criterion and outcome.
 The term names no closed set.
 A `tdd@1` instance claims the objective "Add password reset". A `reviewer@1` instance later claims the objective.
 
 ## task
 
-A task is a node of WHAT that belongs to an objective and has its own validation criteria and outcome.
+A task is a node of WHAT that belongs to an objective and has its own criterion and outcome.
 The term names no closed set.
 The import set holds `add-password-reset.md`, the objective, and `add-reset-token-expiry.md`, a task of that objective.
 
 ## evidence
 
-Evidence is what execution records about the results, and what evaluation assesses against the validation criteria.
+Evidence is what execution records about the results, and what evaluation assesses against the criterion.
 The term names no closed set.
 The landing observation of the objective "Add password reset" appends the landed commit identities to its evidence set.
 
 ## outcome
 
-An outcome is an assessment from evaluation of evidence against validation criteria, or a human act that a human assertion records.
+An outcome is an assessment from evaluation of evidence against the criterion, or a human act that a human assertion records.
 The term names no closed set.
 The [Mission Service Vocabulary](mission-service.vocabulary.md#assessment) owns the three values that an assessment establishes.
 A human override of the outcome of "Add password reset" produces a new outcome that carries the human assertion.
@@ -216,9 +234,11 @@ Each sub-agent has its own agent prompt that defines its responsibilities and co
 
 ## default standard
 
-The default standard is the standard that the base prompt of a worker states as the default of the human, and an assessment weighs the evidence against it beside the validation criteria.
+The default standard is the standard that the base prompt of a worker states as the default of the human.
+An assessment weighs the evidence against it beside the criterion.
 The worker that declares the base prompt owns the default standard, and a change to it is a new worker version, so the worker version of the reviewer fixes the default standard that an assessment applies.
 The term names no closed set.
 The base prompt of `swe@1` and `re@1` forbids an abstraction for single-use code.
-The change of task "Add reset token expiry" meets every validation criterion of "Add password reset" and adds a helper class with one call site.
+The change of task "Add reset token expiry" meets the criterion of "Add password reset".
+It adds a helper class with one call site.
 The assessment of `reviewer@1` records that finding as a blocker and does not pass, and "Add password reset" moves to `Blocked` for the human review.

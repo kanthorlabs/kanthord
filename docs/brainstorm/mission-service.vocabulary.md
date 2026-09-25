@@ -8,6 +8,62 @@ This file holds the values and the examples of the terms that [mission-service.m
 A product term lives in [overview.vocabulary.md](overview.vocabulary.md).
 This file is not a design document, and `mission-service.md` stays the single source of truth.
 
+## bindings of a node
+
+The bindings of a node are the project binding names in its content.
+The write resolves those names to identities and checks these counts.
+A new binding kind adds a row.
+
+| Binding kind | Initiative | Objective | Task |
+| --- | --- | --- | --- |
+| Repository | 0 | Exactly 1 | 0 |
+| Worker | 0 | 0 | 0 |
+| Provider account | 0 | 0 | 0 |
+| Source | 0 | 0 | 0 |
+
+## node content
+
+Every kind has the same five required content fields.
+A name is a nonblank title, not an identity, and is not unique.
+A criterion can hold several checkable statements.
+Identity, kind, revision, state, attempt counter, priority and edges stay outside content.
+These YAML documents show the content of an initiative, its objective and a task of that objective, respectively.
+
+```yaml
+name: Account recovery
+requirement: Let account holders recover access.
+criterion: A password reset restores access and rejects expired tokens.
+verifications:
+  - cd api-repo && npm run e2e
+bindings: []
+---
+name: Add password reset
+requirement: Let account holders reset a forgotten password.
+criterion: A valid token permits one reset and an expired token permits none.
+verifications:
+  - npm run e2e
+  - npm run test:reset
+bindings:
+  - api-repo
+---
+name: Expire the reset token
+requirement: Reject a reset token after its expiry.
+criterion: An expired token never changes the password.
+verifications:
+  - npm run test:token-expiry
+  - bash ./scripts/check-expired-token.sh
+bindings: []
+```
+
+Verification guidance depends on the node kind.
+The service does not validate this guidance.
+
+- Initiative: end-to-end tests.
+- Objective: end-to-end and unit tests.
+- Task: unit tests and functional checks.
+
+A node with no verification need holds `true`, not an empty list.
+
 ## attempt
 
 The overview owns the term.
@@ -125,7 +181,7 @@ The result that an outcome asserts, separately from its stopping reason.
 The set is closed and it holds three values.
 
 - **success**
-- **the results do not meet the criteria or the default standard**
+- **the results do not meet the criterion or the default standard**
 - **nothing is established**
 
 The asserted result of a discard is that nothing is established.
@@ -147,7 +203,7 @@ The term names no closed set.
 
 Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
 The objective reaches `Waiting`, and both tasks hold current outcomes of its open attempt.
-The outcome of "Add reset email" states that its results do not meet its criteria.
+The outcome of "Add reset email" states that its results do not meet its criterion.
 No external action of the open attempt is unresolved.
 The readiness condition admits an evaluation claim.
 
@@ -204,49 +260,61 @@ An edit writes the WHAT, and a correction writes a new outcome record.
 
 ## assessment
 
-The record of one evaluation of one evidence set against the criteria of one node revision.
-An assessment weighs the evidence against the criteria of the node revision that it names.
+The record of one evaluation of one evidence set against the criterion of one node revision.
+An assessment weighs the evidence against the criterion of the node revision that it names.
 An assessment names six things.
 
 - the evidence set that it evaluates
-- the node revision whose criteria it evaluates
+- the node revision whose criterion it evaluates
 - every immutable child outcome record that it weighs
 - the method that it applies
 - the actor that performs it
-- the tested input of its machine check, when the pinned node revision carries a verification command
+- the tested input of its verifications
 
 The [overview](overview.md) gives what an assessment establishes.
 That set is closed and it holds three values.
 
-- The results meet the validation criteria.
-- The results do not meet the validation criteria or the default standard.
+- The results meet the criterion.
+- The results do not meet the criterion or the default standard.
 - The available evidence establishes neither.
 
 Take the objective "Add password reset" above.
 A `reviewer@1` instance evaluates that objective, and it writes one assessment.
 That assessment names the evidence set of the objective, the node revision pinned by the attempt, and the outcome record of each task.
 It names the evaluation method, and it names the reviewer instance as the actor.
-The revision carries a verification command, so the assessment names the tested input of its machine check.
+The assessment names the tested input of the verifications of the pinned revision.
 Assessments accumulate, so a second assessment of the same objective never overwrites the first.
 
 ## tested input
 
-What one machine check ran against, named by the assessment that weighs the result of that check.
-The term names a closed set of two forms.
+What the verifications read, named by the assessment that weighs their results.
+The term names a closed set of three forms.
 
-- **a repository snapshot**, when the evidence that the check reads names one
-- **the content address of the produced evidence that the check reads**, when that evidence names no repository snapshot
+- **a repository snapshot**, for an objective or task whose evidence names one
+- **a list of repository snapshots**, one commit per distinct binding from the current objectives of an initiative
+- **the content address of produced evidence**, when no repository supplies the tested input
 
-The tested input names the content that the check reads.
-It never names the produced evidence that records the result of the check.
-An assessment names the tested input of one check, so a later addition to the append-only evidence set of the attempt changes no earlier tested input.
+The tested input never names the produced evidence that records the verification results.
+A later addition to the evidence set changes no earlier tested input.
 
 Take the objective "Add password reset" above.
-Its evidence names the task commit of the attempt, so the tested input of its machine check is that repository snapshot.
+Its evidence names the task commit of the attempt, so the tested input is that repository snapshot.
 
-Take the initiative "Account recovery" whose objectives all hold a terminal state.
-Its steps execution submits a report as produced evidence, and that evidence names no repository snapshot.
-The tested input of its machine check is the content address of that report.
+Take the initiative "Account recovery" with current objectives on `api-repo` and `web-repo`.
+The reviewer removes duplicate bindings, even when several objectives name `api-repo`.
+A discarded objective still contributes its repository binding.
+The reviewer checks out each base-branch head under the binding name in the workspace.
+The tested input names `api-repo` at `a41b9c0` and `web-repo` at `9f1c2e7`, one commit per binding.
+The end-to-end suite lives in `web-repo`.
+The verification runs from the workspace root:
+
+```bash
+cd web-repo && npm run e2e -- --api ../api-repo
+```
+
+Take an initiative whose objectives name no repository.
+Its steps execution submits a report as produced evidence.
+The reviewer places that evidence in the workspace, and the tested input is the content address of that report.
 
 ## run output
 
@@ -270,7 +338,7 @@ The term names no closed set.
 ## node revision
 
 One version of the whole content of a node.
-It covers the goal, the steps, the validation criteria and every structured field of the node.
+It covers the name, the requirement, the criterion, the verifications and the bindings.
 A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.
 
@@ -300,7 +368,7 @@ The identifier of the objective stays the same across all three revisions.
 The property of an assessment that three checks admit.
 The set of checks is closed and it holds three members.
 
-- **context**: Context checks the evidence that the assessment names, its criteria, the structure and the selected child outcomes.
+- **context**: Context checks the evidence that the assessment names, its criterion, the structure and the selected child outcomes.
   The check never requires equality with the whole evidence set.
 - **authority**: Authority checks intervening acts: a block, an unblock, a pause, a resume, a discard, a human override and an attempt closure.
   The authority check determines whether an assessment still affects current state.
@@ -437,7 +505,7 @@ The landing record above names pull request 42 and commit `abc123`.
 
 ## import
 
-The snapshot reconciliation that writes the structure and the criteria of a mission.
+The snapshot reconciliation that writes the structure and the criterion of each node of a mission.
 An import carries these effects on a node.
 
 - **create**: A plan file that carries no identifier creates a node when the import condition holds.
