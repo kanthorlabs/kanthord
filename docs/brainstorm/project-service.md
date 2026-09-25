@@ -148,6 +148,7 @@ An execution holds no credential, and an external harness holds no credential.
 An execution identity presented under a live claim proves that the execution is live, and it authorizes no operation.
 The Project Service reads the claim state of an execution from the Scheduler Service.
 A credential store holds one record for a secret, and a binding names that record.
+A credential store record has a [credential name](project-service.vocabulary.md#credential-name) that is unique on the server. A human chooses it.
 A credential store record serves more than one project.
 Each project holds its own binding that names that record.
 A rotation changes one record, and every binding that names that record stays valid.
@@ -182,7 +183,8 @@ A change to the resource that a binding names creates a replacement binding.
 A change to the configuration of a binding preserves the identity of the binding and creates a revision.
 A change to the credential reference of a binding is a configuration change, so it creates a revision.
 A change to the secret material behind an unchanged reference changes no binding.
-A change to the remote that a credential authorizes is a change to the resource, so it creates a replacement binding.
+The remote identity of a credential store record never changes.
+A credential for another remote is a new record, and a binding adopts it through a change of its credential reference.
 A revision never invalidates a reference to its binding.
 A replacement invalidates every reference to the binding that it replaces.
 An edit that replaces a binding repoints every dependent binding in that same edit.

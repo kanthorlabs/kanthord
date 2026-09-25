@@ -95,7 +95,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
-- The table `credential(id, type, remote_identity, nonce, ciphertext, created_at, updated_at)` is such a table. The Project Service owns it through custody, and the section below rules its envelope.
+- The table `credential(id, name, type, remote_identity, nonce, ciphertext, created_at, updated_at)` is such a table. The Project Service owns it through custody, and the section below rules its envelope.
 - The table `migration(service, version, applied_at)` records each migration that ran.
 - The migrations run at startup, in a fixed order of the services.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
@@ -189,6 +189,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The credential table
 
+- A unique index holds `name`, which [project-service.impl.md](project-service.impl.md#the-credential-store-record) rules.
 - `credential` holds one record for one secret, and it holds no project identity, because a record serves more than one project.
 - Several services use a credential, and each one reaches a record through the Project Service, so the envelope of this table is a server-wide mechanism and no mechanism of one service. The Project Service authorizes the use of a record.
 - The column `type` is an opaque string at this level. The service that registers a type owns its meaning, and [project-service.impl.md](project-service.impl.md) names the types of the Project Service.
