@@ -148,8 +148,7 @@ The attempt row records the frozen required external actions next to the pinned 
 
 ## Node API admission
 
-- The node API serves no `node retire` operation.
-- A human retires a node through a whole-mission import that omits its plan file, under the import condition.
+- A human retires a node through a whole-mission import that omits its plan file, under the import condition, or through `node retire` under [Node retire](#node-retire).
 - `node create` admits an initiative at any time.
 - It admits an objective or task under a parent in `Pending`, `Available`, `Executing`, `Blocked` or `Paused`.
 - Every other parent state answers `mission.node.create_refused` with the parent state in `details`.
@@ -432,6 +431,22 @@ kanthord runs no automatic evidence cleanup.
 - `landedCommit` is admitted only with `result: success`.
 - The server writes the actor, the time, the basis and the outcome record.
 
+## Node retire
+
+- `mission.node.retire.preview` uses `GET /api/mission/node/:nodeId/retire/preview?force=true|false` with `human` access. It changes no state and stores no receipt. `force` defaults to false.
+- `mission.node.retire` uses `POST /api/mission/node/:nodeId/retire` with `human` access.
+- The retirement set is the node and every current descendant. The service checks each retiring initiative and objective itself and each retiring task through its objective.
+- A checked node that fails `Pending` or `Available` with attempt 0 answers 409 `mission.node.retire_refused` with `details: { nodeId, state, attempt }` of the first failed node.
+- A dependency on a node of the set from a nonterminal dependent outside the set answers 409 `mission.node.retire_has_dependents` with `details: { dependents: NodeId[] }` when `force` is false.
+- With `force: true`, the retirement removes each such dependency and moves each freed dependent between `Pending` and `Available` in the same transaction. A dependency from a terminal dependent stays.
+- Preview and apply answer the same refusals.
+- The preview answers `RetirePreview`: `nodeId`, `force`, `missionRevision`, `retiredNodeIds`, `removedEdges`, `previewDigest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- The apply request `Retire` holds `expectedMissionRevision`, `force`, `previewDigest` and `reason`. A stale mission revision answers 409 `mission.revision_conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
+- One transaction rechecks every condition, sets `retired` on every node of the set, removes current inbound references except terminal dependents' historical dependencies, increments the mission revision once and inserts one mission change.
+- A retired task changes the content of its objective, so an objective outside the set takes a node revision with `write: node.retire` and a `retired` task change.
+- The answer is `NodeChange`.
+- A retirement deletes no row. A retired node keeps its identity, `file`, its revisions and its last state.
+
 ## The revisions
 
 - Every revision and version counter of the server starts at 1.
@@ -445,6 +460,7 @@ kanthord runs no automatic evidence cleanup.
   - node create
   - node update
   - node move
+  - node retire
   - dependency add
   - dependency remove
   - criterion set
@@ -464,7 +480,7 @@ kanthord runs no automatic evidence cleanup.
 - One write increments once, however many nodes it touches.
 - A write with no structure or content change leaves the mission revision unchanged.
 - Every node revision holds `change`.
-- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `criterion.set` or `unblock`.
+- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `node.retire`, `criterion.set` or `unblock`.
 - A move of an objective changes its parent link and no content, so it creates no node revision. A move of a task changes the content of both objectives, so each one takes a node revision with `write: node.move`.
 - `change.previousRevision` is the previous revision, or null on revision 1.
 - `change.changedFields` lists the content fields whose value differs from the previous revision: `file`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.
@@ -599,7 +615,16 @@ kanthord runs no automatic evidence cleanup.
 - Tests reject an import scope field and list every omitted current node as a retirement.
 - Tests accept an empty import set only when every retirement satisfies the import condition.
 - Tests reject an inexact retirement confirmation or stale preview digest without an effect.
-- A test asserts that the node API exposes no retirement operation.
+- Tests assert that the retirement set covers every current descendant.
+- Tests assert that `Executing`, `Waiting`, `Evaluating`, `Blocked`, `Paused`, `Completed`, `Discarded`, each `External.*` state, and an attempt of 1 or more answer `mission.node.retire_refused`.
+- Tests assert that a retiring task is checked through its objective.
+- Tests assert that a nonterminal dependent outside the set answers `mission.node.retire_has_dependents` without `force`.
+- Tests assert that `force` removes the dependency and moves each freed dependent between `Pending` and `Available`.
+- Tests assert that a terminal dependent keeps its dependency.
+- Tests assert that preview changes no state and answers the same refusals.
+- Tests assert that a stale mission revision and a changed digest refuse the apply with no effect.
+- Tests assert that one retirement increments the mission revision once and inserts one mission change.
+- Tests assert that a retired node row stays readable with its identity, `file`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.
 - Tests cover objective and task creation under each of the twelve parent states.
 - Each refused create names `mission.node.create_refused` and the parent state in `details`.
