@@ -102,6 +102,7 @@ A human discard of "Add password reset" produces an outcome whose asserted resul
 ## attempt
 
 An attempt is one try at a node across its executions, observations and evaluations.
+The attempt of a node is the number of its latest attempt, or 0 when no attempt opened.
 The term names no closed set.
 The first claim of "Add password reset" opens attempt 1, and a human unblock opens attempt 2.
 
