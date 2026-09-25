@@ -40,13 +40,13 @@ The Mission Service holds the mission of one project.
 Every project holds exactly one mission. The creation of a project creates its mission in the same commit.
 It maps one to one with a project.
 It represents a mission as a graph.
-It holds the validation criteria of every node.
+It holds the criterion of every node.
 It holds the evidence record, the assessment record and the outcome record of every node.
 It stores the content of evidence that no other system holds.
 It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
-Every write of a validation criterion, of an assessment and of an outcome passes through the Mission Service.
+Every write of a criterion, of an assessment and of an outcome passes through the Mission Service.
 It owns the separation between the claimant that executes a node's steps and the claimant that evaluates the node.
 
 ### Scheduler Service
@@ -173,7 +173,7 @@ The store, the log and the host toolchain are internal components, not external 
 - An execution reads the repository strategy and the permitted resources from the Project Service.
 - An execution uses a repository credential that the Project Service holds.
 - An execution writes evidence to the Mission Service.
-- A reviewer execution reads the validation criteria and the evidence from the Mission Service.
+- A reviewer execution reads the criterion and the evidence from the Mission Service.
 - The action performer reads the required external actions of the attempt and the external objects of the node from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.

@@ -6,30 +6,30 @@ title: Overview
 
 ## Identity
 
-kanthord is a work orchestration system that organizes goals, executes steps, and evaluates results.
-It represents the WHAT independently of execution because goals and validation criteria remain meaningful across supported harnesses.
+kanthord is a work orchestration system that organizes requirements, executes steps, and evaluates results.
+It represents the WHAT independently of execution because requirements and their criterion remain meaningful across supported harnesses.
 Its own harness provides the primary execution mechanism.
 
 ## WHAT
 
-Initiative, objective, and task describe goals, the steps to achieve them, and the validation criteria for success.
+Initiative, objective, and task each state a requirement, a criterion and the verifications that check it.
 Both harnesses share this WHAT.
 The initiatives, the objectives and the tasks of one project form its mission.
 
 Success has three separate parts:
 
-- The WHAT specifies validation criteria.
+- The WHAT specifies a criterion.
 - Execution produces results and evidence.
-- Evaluation assesses the evidence against the criteria, and against the [default standard](overview.vocabulary.md#default-standard) when the evaluating worker declares a base prompt, and produces an outcome.
+- Evaluation assesses the evidence against the criterion and produces an outcome.
+  It also applies the [default standard](overview.vocabulary.md#default-standard) when the worker declares a base prompt.
 
-Some criteria support machine checks; others need judgement.
-The evaluation method follows the criterion and never the node.
+The verifications supply machine checks, and the criterion needs judgement.
 Completing an execution does not establish success, because evaluation assesses the evidence against the WHAT.
 
 Every initiative, objective, and task must have an outcome.
 For both harnesses, every ending at each node produces an outcome.
-An outcome can record that evidence establishes that the results did not meet the validation criteria or the default standard.
-It can also record that available evidence cannot establish whether the results met the validation criteria.
+An outcome can record that evidence establishes that the results do not meet the criterion or the default standard.
+It can also record that available evidence cannot establish whether the results meet the criterion.
 Neither assessment establishes success.
 The outcome records the stopping reason separately from the assessment of evidence.
 Stopping execution does not by itself satisfy the outcome requirement.
@@ -101,7 +101,7 @@ Under a repository strategy that requires a pull request for every change, that 
 Under a repository strategy that requires a merge and push, that action merges the branch and pushes to main.
 
 Opening a pull request does not merge it.
-Evaluation determines whether the results meet the objective's validation criteria.
+Evaluation determines whether the results meet the objective's criterion.
 A successful push to main does not establish achievement of the objective.
 
 ## External harness

@@ -52,7 +52,9 @@ Its execution takes the three tasks of the pinned revision in the order of the r
 
 The evaluation method is the method of a worker whose executions evaluate a node and request its required external actions.
 `reviewer@1` holds the evaluation method.
-A `reviewer@1` instance claims "Add password reset" from `Waiting`, checks out the commit that the objective evidence names in a fresh workspace, runs the verification command, records its result as produced evidence and writes the assessment.
+A `reviewer@1` instance claims "Add password reset" from `Waiting`.
+It checks out the commit that the objective evidence names in a fresh workspace.
+It runs the verifications, records their results as produced evidence and writes the assessment.
 A later `reviewer@1` instance claims the same objective from `External.Requested` and evaluates nothing.
 The action performer requests the unrequested action whose predecessor reaches its expected end state, and the reviewer execution releases.
 A change request on pull request 42 blocks the objective.
@@ -79,9 +81,10 @@ The set is closed and it holds five values.
 The global prompt of the server states "Every answer is short. A commit message states the change and no reason."
 `general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, which describes a senior software engineer, and its text is `assets/prompt/base.md`.
 `general@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
-`reviewer@1` declares the agent prompt of `re@1`, which states that the agent judges evidence against criteria and changes no file of the repository.
+`reviewer@1` declares the agent prompt of `re@1`.
+The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
-The work prompt of task "Add reset token expiry" states its goal, its steps and its validation criteria.
+The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
 `general@2` declares another agent prompt for `swe@1`, because a change to an agent prompt is a new worker version.
 
 ## prompt source
@@ -263,11 +266,13 @@ An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared n
 The required node format is the fields of a node that a method requires.
 Every worker of this page requires the same format, and the set is closed.
 
-- the goal
-- the steps
-- the validation criteria
+- the name
+- the requirement
+- the criterion
+- the verifications
+- the bindings
 
-The verification command is an optional field, and a method reads it when the node carries it.
+Every node holds verifications, and a method reads them.
 
 ## instance healthcheck
 
@@ -278,9 +283,11 @@ The instance of `claude@1` fails when its registration is not live.
 
 ## trust boundary
 
-The trust boundary is the containment that the operator provides, and the Worker Service runs the tool of an agent and the verification command of a node inside it.
+The trust boundary is the containment that the operator provides.
+The Worker Service runs the tool of an agent and the verifications of a node inside it.
 The term names no closed set.
-The verification command of "Add password reset" comes from the repository `kanthorlabs/kanthord`, so it runs inside the boundary and reaches no resource of another project.
+The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
+They run inside the boundary and reach no resource of another project.
 
 ## workspace
 

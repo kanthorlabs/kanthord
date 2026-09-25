@@ -142,7 +142,7 @@ The [Mission Service](mission-service.md#evaluation-and-assessment) owns currenc
 
 The [external input](scheduler-service.vocabulary.md#external-input) identifies the business effect that admission considers.
 A request for new WHAT creates no node and receives no acceptance as a scheduling request.
-The [Mission Service](mission-service.md#validation-criteria-and-authority) owns node writes and their authority.
+The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
 Its [unblock](mission-service.md#the-unblock) requires human authority.
 Delivery acceptance alone creates no claim, unblocks no node and starts no execution.
 A change request produces an observation whose observed state is not the expected end state.
@@ -170,7 +170,7 @@ The Worker Service produces the instance healthcheck and the compatibility decla
 The Scheduler selects the first entry of the project's work queue that the claimant admits.
 The match reads the node states that the worker declares, the exact worker name and the required node format of the worker.
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
-The [Mission Service](mission-service.md#validation-criteria-and-authority) owns that revision selection.
+The [Mission Service](mission-service.md#criterion-and-authority) owns that revision selection.
 The worker requests work and never authorizes its own claim.
 Under the workers that kanthord hosts, reviewer instances pull independently of instances that execute steps.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the restriction on the executing worker's choice of reviewer and reviewer instructions.
@@ -210,7 +210,7 @@ A work pull adds the instance healthcheck and the compatibility match.
 The Scheduler takes the instance healthcheck once more immediately before the claim commits.
 A failed healthcheck at that point returns the pull empty.
 The operation counts the execution against the claimant's count and records the execution.
-The [Mission Service](mission-service.md#state-transitions) performs the node transition and owns the [attempt opening](mission-service.md#attempt) and [revision pin](mission-service.md#validation-criteria-and-authority).
+The [Mission Service](mission-service.md#state-transitions) performs the node transition and owns the [attempt opening](mission-service.md#attempt) and [revision pin](mission-service.md#criterion-and-authority).
 The claim operation serializes with a block, a pause, a graph or import change and a binding change.
 The [Mission Service](mission-service.md#the-enforcement) requires refusal of a blocked node on both harnesses.
 

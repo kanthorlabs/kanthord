@@ -136,12 +136,23 @@ An epic decides that form for each platform.
 
 ## Repository connector
 
+The start requires git, OpenSSH and bash on the host and refuses a host without any of them.
+
 - `simple-git` at 3.36.0 performs every git operation by spawning the `git` binary of the host.
 - Its timeout plugin bounds each operation by the remaining resource budget of the execution.
 - Its abort plugin binds to the `Context` of the execution.
 - The `git` child inherits the SSH environment of the user that runs the hosting application.
 - [project-service.impl.md](project-service.impl.md#the-network-git-operations) rules that environment.
 - The connector passes no credential inside a URL and no credential on a command line.
+
+## The verifications
+
+The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
+The workspace root for that run is the root of the execution workspace, not the server's `workspaces/` directory.
+An initiative uses one subdirectory per distinct repository binding from its current objectives.
+A test checks the host requirements and the shared verification run mechanism.
+A test checks duplicate removal, discarded objectives, base-branch heads and one tested commit per binding for an initiative.
+A test checks the evidence-placement rule when an initiative's objectives name no repository.
 
 ## Workspace
 

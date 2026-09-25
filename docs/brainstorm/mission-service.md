@@ -7,7 +7,7 @@ title: Mission Service
 ## Scope
 
 This document describes the Mission Service.
-It describes the mission graph, the criteria authority, the evidence record and the assessment record.
+It describes the mission graph, the criterion authority, the evidence record and the assessment record.
 It describes the outcome record and the state of a node.
 It describes no mechanism of another service.
 
@@ -17,6 +17,9 @@ The [overview](overview.vocabulary.md) defines a mission, an initiative, an obje
 A mission comes into existence with its project, empty and at mission revision 1. No operation creates or deletes a mission.
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
+Every node holds a name, a requirement, a criterion, its verifications and its bindings.
+The name is a title and no identity.
+A node revision covers that whole content.
 Containment and dependency are the two edge kinds.
 Every task belongs to exactly one objective.
 Every objective belongs to exactly one initiative.
@@ -29,7 +32,7 @@ A task is a unit of execution inside a worker.
 A task is never a unit of scheduling.
 A dependency makes its dependent unavailable until the node that it names is `Completed`.
 A human override that asserts success satisfies a dependency, because it makes the named node `Completed`.
-A dependency establishes only what the criteria of the node that it names establish.
+A dependency establishes only what the criterion of the node that it names establishes.
 
 A node waits for the nodes that its own dependencies name.
 A node waits for the nodes that the dependencies of its ancestors name.
@@ -51,12 +54,12 @@ An addition on a node whose execution ended changes no routing of that node, bec
 
 A landing observation is a platform action, and it uses the credential of a repository binding.
 
-An objective names exactly one repository binding of its project.
+A node names the bindings that its kind permits, and each binding kind states how many a node of each kind names.
 An initiative names no repository binding.
 A task names no repository binding, and a task acts on the repository that its objective names.
 Two objectives name the same binding or different bindings.
 An objective names any repository binding that its project holds.
-An execution of an initiative derives its repositories from the objectives of that initiative.
+An execution of an initiative derives its repositories from the objectives of that initiative, for its verifications too.
 One initiative holds work in many repositories.
 
 The mission holds no branch, no merge and no repository action.
@@ -76,11 +79,11 @@ The Mission Service admits the act while no claim holds the node and the node is
 The work-queue entry that the Mission Service writes carries the priority, and an absent priority reads 0.
 An import carries no priority.
 
-## Validation criteria and authority
+## Criterion and authority
 
 Planning occurs outside kanthord.
 A human writes the initiatives, the objectives and the tasks in markdown.
-A human decides what the system tests, and which command verifies it.
+A human decides what the system tests, and which verifications check it.
 A human imports that plan into the Mission Service.
 An execution creates no node, and an execution writes no criterion.
 The import and the node API are the two write paths for a node and for a criterion.
@@ -149,7 +152,7 @@ The import decides a modification on the resolved graph and never on the text of
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one version of the whole content of a node.
-It covers the goal, the steps, the validation criteria and every structured field of the node.
+It covers the name, the requirement, the criterion, the verifications and the bindings.
 A node starts at node revision 1.
 A node revision changes no attempt counter.
 The attempt counter is independent of the revision number.
@@ -198,14 +201,14 @@ On a terminal node no attempt ever pins it.
 
 An import records the actor that submits it.
 That record establishes attribution, and it establishes no authorship and no approval.
-A criterion that states human authorship records a claim and establishes no authorship.
 
-The verification command is a structured field of the node content, and an import carries it.
-A human writes its value.
-No execution identity infers a command from prose.
-The [tested input](mission-service.vocabulary.md#tested-input) names the content that the command reads, and that content stays mutable.
-Attribution and a judgement criterion protect the verification.
-An exit status of zero proves that one command returned zero.
+Every node holds a criterion and at least one verification.
+The verifications are an ordered list in the node content, and an import carries them.
+A human writes their value.
+No execution identity infers a verification from prose.
+The [tested input](mission-service.vocabulary.md#tested-input) names the content that the verification reads, and that content stays mutable.
+Attribution and judgement against the criterion protect the verification.
+An exit status of zero proves that one verification returned zero.
 It proves nothing about test adequacy, about coverage or about a suppressed failure.
 
 ## Evidence
@@ -320,7 +323,7 @@ An executor requests no evaluation.
 Under kanthord's own harness a reviewer is a worker binding of its project.
 
 Under the workers that kanthord hosts, the execution that carries out the steps of a node never writes the assessment of that node, because `general@1` declares `Available` and `reviewer@1` declares `Waiting` and `External.Requested`.
-The Mission Service supplies the criteria and the evidence.
+The Mission Service supplies the criterion and the evidence.
 Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.
 That separation is a separation of duties, and it is not independent verification.
@@ -329,15 +332,16 @@ A task assessment carries no separation of duties.
 A task assessment names the node revision of its objective, because a task holds no revision of its own.
 The independent review sits at the node whose outcome persists.
 
-The scope of an evaluation differs by node, and its method follows its criterion.
+The scope of an evaluation differs by node kind.
 The evaluation of an objective weighs the child outcomes and the tested input.
 A model judgement transcript is evidence of its invocation, and it is not an assessment.
 The boundary is authority, and it is not a file format.
 
 An assessment names its evidence set and its node revision.
-An assessment weighs the evidence against the criteria of that revision.
+An assessment weighs the evidence against the criterion of that revision.
+An assessment does not pass when a verification exits nonzero or does not run.
 The assessment of an execution whose worker declares a base prompt also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
-A worker that an external harness hosts declares no base prompt, so its assessment weighs the criteria alone.
+A worker that an external harness hosts declares no base prompt, so its assessment weighs the criterion alone.
 An assessment that finds a violation of the default standard does not pass.
 It names every immutable child outcome record that it weighs.
 It names the method that it applies and the actor that performs it.
@@ -473,7 +477,7 @@ An outcome record holds these fields.
 
 - The node and the attempt.
 - The closing event and the stopping reason, separately from the asserted result.
-- The asserted result: success, the results do not meet the criteria or the default standard, or nothing is established.
+- The asserted result: success, the results do not meet the criterion or the default standard, or nothing is established.
 - The basis: an assessment or a human assertion.
 - The assessment and its evaluation context, when the basis is an assessment.
 - The actor and the human decision, when the basis is a human assertion.
@@ -481,7 +485,7 @@ An outcome record holds these fields.
 - The previous outcome, when the outcome corrects one.
 
 An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
-An outcome that asserts that the results do not meet the criteria or the default standard names an assessment as its basis.
+An outcome that asserts that the results do not meet the criterion or the default standard names an assessment as its basis.
 A human override that asserts success writes a successful outcome whose basis is a human assertion.
 A success override carries an optional landed commit identity.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
@@ -759,7 +763,7 @@ The Mission Service refuses nothing there.
 The Project Service owns the authorization of each operation on a resource.
 
 An import never unblocks a node.
-Validation criteria and authority owns that rule.
+Criterion and authority owns that rule.
 
 ### The read
 

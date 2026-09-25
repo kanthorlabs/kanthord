@@ -79,7 +79,7 @@ A change to either one is a new worker version.
 The project prompt states the programming language, the development style and the coding conventions of the work product of one repository.
 It states no rule about the method, the tools, the repository operations, the assessment or the release.
 The work prompt renders from the node revision that the attempt pins.
-It states the goal, the steps and the validation criteria of the work that the execution takes.
+It states the requirement, the criterion and the verifications of the work that the execution takes.
 The agent prompt and the work prompt are required, and every other layer is optional.
 
 A prompt layer takes its text from one prompt source.
@@ -103,8 +103,8 @@ The agent prompt holds the highest precedence, then the base prompt, then the wo
 The base prompt and the agent prompt state the obligations of the worker, and no other layer revokes one.
 The agent prompt governs the base prompt, and a base prompt that contradicts the agent prompt that uses it is a defect of the worker.
 An execution performs no conduct that its base prompt or its agent prompt forbids, whatever another layer states.
-A global prompt and a project prompt define no validation criterion.
-An assessment follows the validation criteria of the node and the [default standard](overview.vocabulary.md#default-standard) that the base prompt states.
+A global prompt and a project prompt define no criterion.
+An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that the base prompt states.
 
 A prompt layer carries instructions, and it authorizes no operation.
 It names no value of the effective configuration, it adds no tool and it changes no resource budget.
@@ -179,7 +179,7 @@ The instance carries the compatibility declarations of its worker: the worker na
 - It performs its network git read, network git write and model inference calls on its own host.
 - Its platform actions run through the server like every execution.
 
-The tool of an agent and the verification command of a node run code that the repository supplies.
+The tool of an agent and the verifications of a node run code that the repository supplies.
 The Worker Service runs them inside a trust boundary that the operator provides.
 The host of a `worker` application is inside that trust boundary.
 A rule on the content of a command is a policy and no trust boundary.
@@ -252,17 +252,21 @@ The execution pushes the node branch through the repository connector before eve
 The steps method chooses the order of the tasks of the pinned revision.
 For each task the agent performs the steps in the workspace, and the execution commits the changes of the task work.
 The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
-The execution runs the verification command of the task against the task commit when the task carries one, and it discards every change that the command made.
+The execution runs the verifications of the task against the task commit.
+It discards every change that the verifications make.
 The agent revises the work within the resource budget of the execution before the execution records the task assessment.
 The execution commits a revision as a new commit.
-The agent judges the result against the validation criteria of the task, with the exit status of the verification command as an input.
+The agent judges the result against the criterion of the task.
+A task assessment does not pass when a verification of the task fails or does not run.
 The execution writes the task assessment and the task outcome.
-The task assessment names the task commit and, when the task carries a verification command, the [tested input](mission-service.vocabulary.md#tested-input) that the command ran against.
+The task assessment names the task commit and the [tested input](mission-service.vocabulary.md#tested-input) of the verifications.
 The task outcome carries the task commit as its evidence.
 A worker fixes the resource budget of one execution: a turn count and a wall time.
 
 In an attempt after the first, the execution reads the outcome of the cleared attempt for each task.
-When that outcome asserts success, the task is unchanged between the revision that the cleared attempt pinned and the revision of the attempt, and the repository binding is unchanged, the execution runs the verification command again against the head of the node branch when the task carries one, judges again, and writes a new task assessment and a new task outcome.
+The execution checks whether that outcome asserts success, the task content is unchanged between the pinned revisions, and the repository binding is unchanged.
+If all conditions hold, it runs the verifications again against the head of the node branch and judges again.
+It writes a new task assessment and a new task outcome.
 It executes every other task.
 Inside one attempt, a task that holds a current task outcome of the attempt is complete, and the execution skips it.
 
@@ -313,7 +317,7 @@ sequenceDiagram
         end
         rect rgb(248, 215, 218)
             A-->>E: steps done in the workspace, revised within the resource budget
-            E->>E: task commit, run the verification command against it, discard its changes, the agent judges
+            E->>E: task commit, run the verifications against it, discard their changes, the agent judges
         end
         rect rgb(212, 237, 218)
             E->>M: task assessment (task commit and tested input) and task outcome (task commit)
@@ -489,15 +493,23 @@ No page defines those rules.
 
 ## Evaluation and required external actions
 
-The evaluation method follows the criterion and never the node, as the [overview](overview.md#what) states.
-The reviewer execution reads the validation criteria of the pinned revision, the evidence set of the attempt and the current child outcomes.
+The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and the current child outcomes.
 The child outcomes of an objective are its task outcomes, and the child outcomes of an initiative are its objective outcomes.
-When the evidence names a repository snapshot, the reviewer execution makes a clean isolated checkout of that snapshot in its workspace through the repository connector.
-It runs the verification command of the pinned revision when the revision carries one, whatever the node kind.
-The command runs in the workspace of the reviewer execution: in the checkout when the evidence names a repository snapshot.
-When the evidence names no repository snapshot, the reviewer execution places the produced evidence of the attempt in its workspace, and the command runs there.
-The execution records the result of that machine check as produced evidence bound to the tested input and the pinned revision, and the assessment names it in its evidence set.
-The agent judges the evidence against the criteria.
+For an objective, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
+It uses the repository connector.
+For an initiative, the reviewer derives the repository bindings of the current objectives and removes duplicates.
+A discarded objective still contributes its repository.
+The reviewer checks out the head of the base branch of each binding under a directory named after that binding.
+An end-to-end suite lives in a repository of one of the objectives.
+The tested input names every commit, one per binding.
+An initiative whose objectives name no repository keeps the evidence-placement rule.
+For an objective whose evidence names no repository snapshot, the reviewer also uses that rule.
+Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
+The reviewer runs the verifications of the pinned revision from the workspace root, whatever the node kind.
+The execution records the machine-check results as produced evidence bound to the tested input and the pinned revision.
+The assessment names that evidence in its evidence set.
+The agent judges the evidence against the criterion.
+An assessment does not pass when a verification fails or does not run.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the record and its currency.
 
@@ -555,15 +567,15 @@ sequenceDiagram
         S-->>R: claim response, execution identity
     end
     rect rgb(248, 215, 218)
-        R->>M: read the criteria of the pinned revision, the evidence set, the task outcomes of the attempt
+        R->>M: read the criterion of the pinned revision, the evidence set, the task outcomes of the attempt
         R->>RG: clean isolated checkout of the repository snapshot in a fresh workspace
-        R->>R: run the verification command of the pinned revision
+        R->>R: run the verifications of the pinned revision
     end
     rect rgb(212, 237, 218)
         R->>M: produced evidence: the machine-check result bound to the tested input and the pinned revision
     end
     rect rgb(248, 215, 218)
-        R->>R: the agent judges the evidence against the criteria
+        R->>R: the agent judges the evidence against the criterion
     end
     rect rgb(212, 237, 218)
         R->>M: assessment
@@ -682,7 +694,7 @@ sequenceDiagram
         E->>RG: reuse the workspace of the objective and its repository binding, same node branch
         loop for each task
             alt the outcome of the closed attempt asserts success, the task and the repository binding are unchanged
-                E->>E: run the verification command again against the head of the node branch, judge again
+                E->>E: run the verifications again against the head of the node branch, judge again
             else
                 E->>E: execute the task, new task commit
             end
