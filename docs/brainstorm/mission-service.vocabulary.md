@@ -258,6 +258,15 @@ Its resource budget ends before it repairs that fixture.
 Execution 1 submits a run output that names the fixture and the repair that it proposes, then it releases with further work.
 Execution 2 claims the node on another host and reads that run output before it starts its own work.
 
+## mission change
+
+The record of one write that increments the mission revision.
+The term names no closed set.
+
+- A human runs `dependency remove` between "Add password reset" and "Add recovery codes" with the reason "unblock the demo".
+- The mission revision goes from 8 to 9.
+- Mission change 9 holds the actor, the reason, the time and the removed edge.
+
 ## node revision
 
 One version of the whole content of a node.
