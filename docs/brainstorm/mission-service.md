@@ -14,7 +14,7 @@ It describes no mechanism of another service.
 ## Mission structure and nodes
 
 The [overview](overview.vocabulary.md) defines a mission, an initiative, an objective, a task, an execution, a worker, the act of executing a node and landing.
-A mission comes into existence with its project, empty and at mission revision 0. No operation creates or deletes a mission.
+A mission comes into existence with its project, empty and at mission revision 1. No operation creates or deletes a mission.
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Containment and dependency are the two edge kinds.
@@ -110,6 +110,8 @@ An import is atomic, and the Mission Service validates the resulting graph.
 One import deletes a node and removes every current inbound reference to it when the import condition holds.
 An import declares its scope.
 An import names the mission revision that it expects, and a stale snapshot fails that check.
+A write that changes the structure of a mission or the content of a node increments the mission revision once.
+No other write changes it.
 A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier and an identifier of another mission.
 An import request identifier binds to its payload, so a retry is idempotent.
@@ -148,7 +150,8 @@ The import decides a modification on the resolved graph and never on the text of
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one version of the whole content of a node.
 It covers the goal, the steps, the validation criteria and every structured field of the node.
-A node revision changes no other counter.
+A node starts at node revision 1.
+A node revision changes no attempt counter.
 The attempt counter is independent of the revision number.
 An attempt that a human unblock opens pins the node revision that its unblock names.
 An attempt that no human unblock opens pins the revision current at its opening.
@@ -174,6 +177,10 @@ One record carries the change and its result.
 
 A dependency change is not a field write.
 The graph validation and the authority checks of the Mission Service govern it.
+
+Every write that increments the mission revision records one [mission change](mission-service.vocabulary.md#mission-change).
+The record holds its actor, its reason, its time and its result.
+The Mission Service keeps every mission change for the life of the mission.
 
 An edit of a node carries no state change.
 It writes a node revision.

@@ -30,7 +30,8 @@ It reads no table of another service.
 The tables are below.
 
 - `project_project(id, name, binding_set_version, created_at)` holds the identity of a project and the version of its binding set.
-- A new project holds `binding_set_version` 0.
+- A new project takes binding-set version 1 in `binding_set_version`.
+- Its first write names version 1 and commits version 2.
 - `project_binding(id, project_id, name, kind, resource_identity, current_revision, created_at, removed_at)` holds the identity of a binding.
 - `project_binding_revision(id, project_id, binding_id, revision, config, created_at)` holds one immutable row for each revision, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
 
