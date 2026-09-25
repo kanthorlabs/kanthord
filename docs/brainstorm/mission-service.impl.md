@@ -333,9 +333,10 @@ kanthord runs no automatic evidence cleanup.
 - This section states no rule for a task assessment that does not pass when the execution releases without further work.
   The B9 item of the Mission Service owns that path.
 
-## Mark-ready
+## Node ready
 
-- `node mark-ready` requires `expectedState: Available` and an `expectedAttempt` equal to the attempt of the node.
+- `mission.node.ready` uses `POST /api/mission/node/:nodeId/ready` with `human` access.
+- `node ready` requires `expectedState: Available` and an `expectedAttempt` equal to the attempt of the node.
   A mismatch answers 409 `mission.node.state_conflict`.
 - When the attempt reads 0, the readiness condition reads no attempt-scoped record.
   An objective is ready only when it holds no current task.
@@ -354,6 +355,14 @@ kanthord runs no automatic evidence cleanup.
   It sets `Waiting` the same way, with no opening.
 - The answer is `ControlResult` with the node in `Waiting` and the opened or open attempt.
   It holds `outcome: null` and `taskOutcomeIds: []`.
+
+## Node override
+
+- `mission.node.override` uses `POST /api/mission/node/:nodeId/override` with `human` access.
+- The request `Override` holds every field of `HumanAct`, a required `result` and an optional `landedCommit`.
+- The closed set of `result` is `success`. A failure override waits for the B9 items of the Mission Service.
+- `landedCommit` is admitted only with `result: success`.
+- The server writes the actor, the time, the basis and the outcome record.
 
 ## The revisions
 
@@ -378,7 +387,7 @@ kanthord runs no automatic evidence cleanup.
   - resume
   - block
   - discard
-  - mark-ready
+  - ready
   - attempt
   - evidence
   - run output
@@ -426,13 +435,13 @@ kanthord runs no automatic evidence cleanup.
   They assert the closing event as the stopping reason, `undetermined`, the node basis and the task evidence of the attempt.
 - Tests keep `contentOwnerId` after a task move.
 - Tests fill no task outcome on a closure that follows the evaluation.
-- Tests admit mark-ready on an initiative whose attempt reads 0 and whose objectives are all terminal.
+- Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
   They also admit an objective whose attempt reads 0 with no current task.
   They open attempt 1 with `executionEnded: true` and the frozen actions.
   They reach `Waiting` with a queue entry in the same transaction.
-- Tests refuse mark-ready with `mission.node.not_ready` on an objective whose attempt reads 0 with a current task.
+- Tests refuse `node ready` with `mission.node.not_ready` on an objective whose attempt reads 0 with a current task.
   They name the tasks in `details` and leave the attempt at 0 with no queue entry.
-- Tests refuse a state or attempt mismatch of mark-ready with `mission.node.state_conflict`.
+- Tests refuse a state or attempt mismatch of `node ready` with `mission.node.state_conflict`.
 
 - Tests accept both signed safe-integer limits, negative values and zero as priority on initiatives and objectives.
 - Tests read absent priority as 0 and reject fractions, nonnumbers and unsafe integers.
