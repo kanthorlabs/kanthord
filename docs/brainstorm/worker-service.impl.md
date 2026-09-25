@@ -27,6 +27,119 @@ It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendi
 A pi version bump affects the workers that run on it and the credential shape of the handover.
 Every runtime setup call carries an abort signal with a deadline.
 
+## The worker template registry
+
+- A worker template is a static server module; the registry maps worker names to templates and loads no runtime plugin.
+- The catalog holds one declaration per agent name, with options, a whole-configuration constraint and prompts.
+- A worker references that declaration and carries no separate configuration version.
+- Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
+- `general@1` references `swe@1`; `reviewer@1` references `re@1`.
+- Both declare an empty option schema.
+- The declaration supplies no provider, model identifier or reasoning-effort default.
+- `agent get` answers the declaration, `configurationSchema`, `overridableFields` and `enablement`.
+- `enablement` is null when no record exists.
+
+## Agent configuration validation
+
+- The Worker Service owns enablement writes, effective configuration resolution and `validateEntry(tx, workerName, entry)`.
+- The [entry forms](worker-service.vocabulary.md#entry) define inheritance and required fields.
+- A write refuses nonempty `options`.
+- Every enablement write, worker binding write and resolution runs the same checks.
+- It checks the override allowlist before the merge, then validates the complete effective configuration.
+- `overridableFields` of `swe@1` and `re@1` is `["agentProvider", "modelIdentifier", "reasoningEffort"]`.
+- `validateEntry` refuses a worker whose agent has no enabled enablement, and names that agent.
+- This refusal occurs inside the worker binding write transaction.
+- An enablement change calls `entriesOfAgent(tx, agentName)` of the Project Service in the transaction of its commit.
+- It validates every dependent worker binding and lists invalid bindings in its refusal.
+- Removal checks all dependents in that same transaction.
+- [The collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) requires co-location of the two owners.
+- A resolution reads the worker binding, entry, enablement and credential metadata from one snapshot and records their revisions.
+- Resolution makes no network call.
+- The instance healthcheck reports whether the effective configuration resolves.
+
+Provider definitions contain no auth types; [custody](custody.impl.md#platform-implementations) owns those types and suitability.
+
+- A provider is a member of the [agent provider set](worker-service.vocabulary.md#agent-provider).
+- Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
+- A model identifier belongs to `getBuiltinModels(provider)` or the `models` metadata of an `openai-compatible` credential.
+- An empty `models` list permits no model selection.
+- The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoningLevels`.
+- A level that no source establishes fails validation.
+- The Worker Service sends `{ credential, platform }` to custody and consumes its suitability result.
+- It reads metadata through custody, never the secret.
+
+## Configuration schema
+
+- `configurationSchema` uses JSON Schema draft 2020-12, emitted by `z.toJSONSchema` of `zod` at 4.4.3.
+- Its source is the effective-configuration schema, not the template's option schema.
+- The root is an object with `additionalProperties: false`.
+- All five properties below are required; none carries `default`, and the schema holds no `options`.
+
+| Property | Schema |
+| --- | --- |
+| `agentProvider` | `string`; the name of an agent provider of the enablement |
+| `provider` | `string`, enum `github-copilot`, `openai`, `anthropic`, `openai-compatible` |
+| `credential` | `string`; a credential name |
+| `modelIdentifier` | `string` |
+| `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` |
+
+- The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
+- It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
+- JSON Schema validates no cross-field lookup; the Worker Service enforces it.
+
+## The OpenAI-compatible provider
+
+- The Worker Service builds the pi provider from the credential metadata of the resolved revision.
+- It calls `createProvider` with id `openai-compatible`, the agent provider name and metadata `baseUrl`.
+- It supplies `auth: { apiKey: envApiKeyAuth("<agent provider name> API key", []) }` and `api: openAIResponsesApi()`.
+- The environment-variable list is empty; the execution store supplies the credential.
+- Each metadata model becomes a pi model with provider `openai-compatible` and the metadata base URL.
+- The model carries `api: "openai-responses"`, `contextWindow`, `maxTokens` and the established reasoning levels.
+- Input defaults to `["text"]`, and all cost rates are zero.
+- The model list enters `createProvider`, and `setProvider` registers the provider.
+- The adapter builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
+- Provider construction performs no write-time remote call.
+
+## The provider check
+
+- `worker.provider.check` is a server-wide read operation under `human` access, with no project or binding.
+- Its route is `POST /api/worker/provider/check`, and its input is only `{ credential }`.
+- It accepts an `openai-compatible` credential and reads `baseUrl` from metadata through custody.
+- No raw key reaches a Worker operation.
+- Custody attaches the authorization header inside `use`, caches nothing and records the call against the credential record.
+- `GET <baseUrl>/models` has a 10 s deadline.
+- HTTP 200 holds `connection` with one of these values:
+  - `ok`: the remote returns the OpenAI list shape.
+  - `unauthorized`: the remote returns 401 or 403.
+  - `unreachable`: a network failure or deadline prevents the answer.
+  - `invalid_response`: the answer lacks the OpenAI list shape.
+- An `ok` answer holds `models`, with `id`, `ownedBy` and `created` per model.
+- HTTP 400 reports invalid input or an unsuitable credential; HTTP 404 reports an unknown credential.
+- Error codes use the prefix `worker.provider.*`.
+- The answer holds no key and pre-fills model ids, not limits or reasoning levels.
+- A human approves models through a [credential metadata revision](custody.impl.md#platform-implementations).
+
+## Agent provider healthcheck
+
+- Every agent provider has a report-only resource healthcheck in the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
+- The check reads `GET /models` of its provider with its credential and reports provider readiness.
+- It groups calls by provider endpoint and credential and attributes the result to each agent provider.
+- Its capability is `model-list read`; it spends one request and no inference token.
+- `GET /models` proves model-list access only, not inference readiness or model suitability.
+- The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
+- [Custody healthcheck limits](custody.impl.md#the-resource-healthcheck) govern forbidden probes, unavailable probes and OAuth expiry without refresh.
+- Shared probe code changes no owner.
+
+## Configuration tests
+
+- Tests cover both entry forms, missing enablement, disablement, complete-entry refusal and the empty option schema.
+- Tests cover override allowlists, model catalogs, established reasoning levels and all five effective-configuration fields.
+- Tests assert schema draft, required properties, absent defaults, absent options and the whole-configuration description.
+- Tests cover transactional changes and removals, dependency lists, snapshot reads and recorded revisions.
+- Tests cover the metadata provider build, per-model base URLs, zero costs and absent environment keys.
+- Tests cover every provider-check answer, status, deadline and the absence of raw keys.
+- Tests cover healthcheck grouping, attribution, report-only behaviour and no inference call.
+
 ## Externally hosted worker
 
 The kanthord extension of Claude Code and the kanthord plugin of opencode register the instance under its client identity, issue the work pull, drive the execution operations through the CLI and the MCP server, and release.
@@ -94,14 +207,16 @@ It proves that a reviewer execution takes no agent file of the workspace.
 
 ## The credential store of an execution
 
-- Every inference call of a native agent, including compaction and retries, resolves its auth through the pi-ai credential store of the execution. [project-service.impl.md](project-service.impl.md#the-credential-store-of-an-execution) rules that store.
+- Every native inference call, including compaction and retries, resolves auth through the [custody execution store](custody.impl.md#the-credential-store-of-an-execution).
+- The view exposes only the credential that the effective agent provider names, under the pi adapter id.
+- `read(providerId)` answers `undefined` for every other id.
 - The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed.
 - The store holds the credential of one execution, so no credential crosses executions.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 
 ## The credential handover
 
-- `worker.handover` is a `client` operation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes an empty body and answers the envelope that [project-service.impl.md](project-service.impl.md#the-credential-handover) rules.
+- `worker.handover` is a `client` operation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes an empty body and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
 - The `worker` application calls it once after its claim and before the first inference call.
 - It decrypts the envelope with the key that it derives from its own `masterKey`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. The application calls it after each refresh that pi-ai performs and once at the release.
@@ -144,7 +259,21 @@ The tool register and the abstraction layer for tool instances manage the three 
 
 ## Platform connector and platform implementations
 
-The GitHub implementation calls the GitHub REST API through Octokit at a pinned version.
+The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
+
+- Pull request read calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`.
+- Review comment list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
+- Both return the response body unchanged.
+- `limit` maps to `per_page`, defaults to 100 and ranges from 1 to 100.
+- `cursor` is base64url canonical JSON `{ page, perPage }`.
+- A differing `limit` answers 400 `worker.platform.github.cursor_page_size_mismatch`.
+- `nextCursor` is null when no `rel="next"` link exists.
+- Tool discovery embeds each endpoint's dereferenced response schema under `result`.
+- The build extracts those schemas from `@octokit/openapi` at 23.0.2.
+- A result class answers `worker.platform.github.<class>` with the HTTP status and GitHub message.
+- The embedded schema is large; a harness that sends `outputSchema` to its model spends tokens on it.
+- Tests assert unchanged bodies, pagination bounds, cursor page-size refusal, schema extraction and result-class details.
+
 A platform implementation is a TypeScript module with its own method signatures and no shared interface.
 The platform connector is a registry keyed by the platform value of the binding.
 The registry uses static registration and loads no runtime plugin.
@@ -236,6 +365,14 @@ The page requires that every commit of the execution is attributable to its task
 The carrier of that attribution is an epic decision.
 
 ## Stop and budget
+
+- `general@1` and `reviewer@1` declare default `resourceBudget: { turns: 200, wallTimeMs: 7200000 }`.
+- Both fields are positive safe integers.
+- The optional `resourceBudget` of a native worker binding overrides that default.
+- A turn is one `turn_end` event of the pi agent loop.
+- Wall time runs from the claim response to release.
+- `claude@1` and `opencode@1` declare no resource budget.
+- Tests cover defaults, binding overrides, positive safe integers, turn events and elapsed wall time.
 
 The lease runs in the execution.
 On revocation or loss the execution aborts the pi session and dispatches nothing after.

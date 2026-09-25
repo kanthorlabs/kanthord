@@ -24,7 +24,7 @@ The subscription store, the delivery store and the handoff follow with the Intak
 
 ## The webhook acquisition
 
-- The registration, the read of the registrations and the deregistration of a GitHub webhook call the GitHub REST API through `@octokit/rest`. The calls use the version that [worker-service.impl.md](worker-service.impl.md#platform-connector-and-platform-implementations) pins and the material of the grant, and each call carries a deadline.
+- The registration, the read of the registrations and the deregistration of a GitHub webhook call the GitHub REST API through `octokit`. The calls use the version that [worker-service.impl.md](worker-service.impl.md#platform-connector-and-platform-implementations) pins and the material of the grant, and each call carries a deadline.
 - The registration names the webhook address `/hooks/<binding id>` that [project-service.impl.md](project-service.impl.md#the-verification-of-a-delivery) rules and the current verification secret that the Project Service returns.
 - An indeterminate registration result makes the reconciler read the registrations before any retry. It adopts an existing registration that names the same address.
 - A passive webhook subscription obtains no grant and registers nothing.

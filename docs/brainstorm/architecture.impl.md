@@ -95,7 +95,8 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
-- The table `credential(id, name, type, remote_identity, nonce, ciphertext, created_at, updated_at)` is such a table. The Project Service owns it through custody, and the section below rules its envelope.
+- The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record).
+- [The credential table](#the-credential-table) defines its envelope.
 - The table `migration(service, version, applied_at)` records each migration that ran.
 - The migrations run at startup, in a fixed order of the services.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
@@ -184,15 +185,14 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The function accepts a validated JSON value and no JSON text, because `JSON.parse` discards a duplicate member name before a check can see it. The ingress validation of a route owns the text.
 - A digest reads exact bytes. Canonical JSON reaches it as UTF-8, with no byte-order mark and no trailing newline.
 - The algorithm is SHA-256 through `crypto.createHash`, and the text rendering of a digest is lower-case hexadecimal.
-- This convention replaces no binary credential hash of [project-service.impl.md](project-service.impl.md) and no protocol-defined representation.
+- This convention governs no binary credential hash of [custody](custody.impl.md) and no protocol-defined representation.
 - [mission-service.md](mission-service.md) stays authoritative for the content address of evidence, and this section states no second algorithm for it.
 
 ## The credential table
 
-- A unique index holds `name`, which [project-service.impl.md](project-service.impl.md#the-credential-store-record) rules.
-- `credential` holds one record for one secret, and it holds no project identity, because a record serves more than one project.
-- Several services use a credential, and each one reaches a record through the Project Service, so the envelope of this table is a server-wide mechanism and no mechanism of one service. The Project Service authorizes the use of a record.
-- The column `type` is an opaque string at this level. The service that registers a type owns its meaning, and [project-service.impl.md](project-service.impl.md) names the types of the Project Service.
+- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, name index, credential types, platforms and metadata.
+- Each service reaches a record through custody, so the envelope is a shared mechanism.
+- The protected facility checks authorization before secret use.
 - The column `remote_identity` records the identity that the secret acts as at its remote. The server enforces nothing from it, so it sits outside the authenticated data below.
 - `crypto.createCipheriv` encrypts the material with AES-256-GCM, a 12-byte nonce from `crypto.randomBytes` and a 16-byte tag.
 - The plaintext is the JSON of the material of the type, so one record holds several fields under one ciphertext.
@@ -500,13 +500,13 @@ A fatal error runs as below.
 - The exception covers that token display alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
-- A rotation of `masterKey` invalidates every issued JWT, so a human obtains a newly generated token. It makes every credential store record of the Project Service unreadable, and it makes every derived webhook secret stale.
+- A rotation of `masterKey` invalidates every issued JWT, so a human obtains a newly generated token. It makes every credential store record of custody unreadable, and it makes every derived webhook secret stale.
 
 ## Scope
 
 - This sibling specifies the configuration of the server process.
 - This sibling specifies the command surface of the `kanthord` bin. The CLI specification of the engine specifies the command table of each group.
-- The custody of a credential of a resource that a project binds belongs to the Project Service, and [project-service.md](project-service.md) governs it.
+- [Custody](custody.md) owns resource credentials as a shared component.
 
 ## The command surface
 
@@ -563,7 +563,7 @@ The public interfaces have three kinds.
 
 - Kind 1, an operation, is public and routable.
 - Every invocation from an outside application enters through an operation.
-- The owning service declares its operations in `contract.ts`.
+- The owning service or shared component declares its operations in its own `contract.ts`.
 - The Gateway Service projects each operation into a route and into the emitted OpenAPI document.
 - [gateway-service.impl.md](gateway-service.impl.md#the-operation-registry) describes that projection.
 - Kind 2, a collaboration, is a synchronous function on an interface in the owner's `contract.ts`.
@@ -574,6 +574,11 @@ The public interfaces have three kinds.
 - This collaboration co-locates the Mission Service and the Scheduler Service.
 - A collaboration is a co-location contract of those services in one process on one database.
 - `project.create` commits through the Project Service tables and calls the Mission collaboration `createMission` inside the same transaction, so every project holds exactly one mission. This collaboration co-locates the Project Service and the Mission Service.
+- The Project Service offers `entriesOfAgent(tx, agentName)` for entries of every binding whose worker references the agent.
+- The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement.
+- These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
+- They co-locate the Project Service and Worker Service in one process on one database.
+- [Worker configuration validation](worker-service.impl.md#agent-configuration-validation) defines the checks and refusals.
 - Kind 3, a client, carries every other call between services through `ServiceClient<typeof peerOperations>`.
 - Kind 3 is the default.
 - Kind 2 requires the written atomicity reason.
@@ -691,7 +696,8 @@ Both adapters implement one transport-neutral value and error contract.
 - Its output conforms to the output schema.
 - The direct adapter isolates values as HTTP does.
 - No result carries a live object, a transaction or a runtime resource.
-- A result carries credential material only in two operations that [project-service.impl.md](project-service.impl.md) declares: the credential handover, encrypted under `masterKey` on either adapter, and the acquisition grant, in plain text through the direct adapter alone.
+- Only the [credential handover](custody.impl.md#the-credential-handover) and [acquisition grant](project-service.impl.md#the-acquisition-grant) carry credential material in operation results.
+- The handover is encrypted under `masterKey` on either adapter; the acquisition grant carries plaintext through the direct adapter alone.
 - A client returns `Completed`, `Failure` or `Indeterminate`.
 - An indeterminate result appears on either adapter because one caller implementation runs in every application.
 

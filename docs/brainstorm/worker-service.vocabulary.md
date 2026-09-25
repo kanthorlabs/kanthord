@@ -65,7 +65,8 @@ The action performer performs the network git write only.
 
 A native agent is an agent loop that the Worker Service runs itself.
 The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
-The Worker Service runs the agent loop of `swe@1` and sends each model inference call through the model connector with the provider account, the model identifier and the reasoning effort of the effective configuration of the agent under worker binding `general-main`.
+The Worker Service runs `swe@1` under worker binding `general-main`.
+Each model inference call uses the model connector and the agent's effective configuration.
 
 ## prompt layer
 
@@ -85,7 +86,7 @@ The global prompt of the server states "Every answer is short. A commit message 
 The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
 The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
-`general@2` declares another agent prompt for `swe@1`, because a change to an agent prompt is a new worker version.
+The catalog holds one prompt declaration for `swe@1`, and `general@1` references that declaration.
 
 ## prompt source
 
@@ -126,11 +127,69 @@ It takes the work prompt from task "Add reset token expiry".
 It reads no agent file of the workspace, because the repository binding supplies the project prompt.
 The reviewer execution of the same objective composes the project prompt from that repository binding, and it reads no agent file of the workspace.
 
+## in the catalog
+
+The phrase states that the catalog holds an agent declaration; it is no state value.
+`swe@1` is in the catalog when no enablement exists for it.
+
+## agent enablement
+
+The global record keyed by agent name that permits agent use.
+The closed state set is:
+
+- `enabled`
+- `disabled`
+
+The `swe@1` enablement holds agent providers `openai-org` and `atlas-llm`, and one default configuration.
+An absent record denies use like `disabled`.
+
+## agent provider
+
+One named provider and credential pair inside an agent enablement.
+Its fields are `name`, `provider` and `credential`; it holds no model list.
+For example, `{ name: "openai-org", provider: "openai", credential: "openai-main" }` belongs to the `swe@1` enablement.
+The closed provider set is:
+
+- `github-copilot`
+- `openai`
+- `anthropic`
+- `openai-compatible`
+
+Each value maps to the same-named [platform](custody.vocabulary.md#platform).
+
 ## default configuration
 
-The default configuration is the configuration of an agent that its worker declares, with the options that a project can override and the constraint that a whole configuration satisfies, and it is part of the contract of the worker name.
-`general@1` declares for its agent the provider `openai`, a cheap model identifier and the reasoning effort `medium`.
-A change to a default configuration is a new worker version.
+The values that a human selects in an agent enablement: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
+For example, the `swe@1` default names `atlas-llm`, approved model `qwen3-coder` and effort `off`.
+A worker declaration supplies none of these values.
+
+## entry
+
+The optional override of one agent's default configuration inside a worker binding.
+The closed form set is:
+
+- **tuning**: `modelIdentifier`, `reasoningEffort` or both; it keeps the default agent provider and inherits each absent value.
+- **complete**: `agentProvider`, `modelIdentifier` and `reasoningEffort`, all required; it inherits nothing.
+
+`general-frontier` holds the tuning entry `{ reasoningEffort: "high" }` for `swe@1`.
+A complete entry names `{ agentProvider: "atlas-llm", modelIdentifier: "qwen3-coder", reasoningEffort: "off" }`.
+An entry holds no `options`.
+
+## effective configuration
+
+The configuration that the Worker Service resolves for one agent under one worker binding.
+It holds `agentProvider`, `provider`, `credential`, `modelIdentifier` and `reasoningEffort`.
+Under `general-main`, a complete entry selects `atlas-llm`, which supplies provider `openai-compatible` and credential `atlas-key`.
+The model is `qwen3-coder` and the effort is `off`.
+The closed reasoning-effort set is:
+
+- `off`
+- `minimal`
+- `low`
+- `medium`
+- `high`
+- `xhigh`
+- `max`
 
 ## connector
 
@@ -277,8 +336,8 @@ Every node holds verifications, and a method reads them.
 ## instance healthcheck
 
 The [Scheduler Service](scheduler-service.vocabulary.md#instance-healthcheck) owns the term, and the Worker Service produces the check.
-The instance of `general@1` passes: the effective configuration of its agent resolves under the binding set of the project with the default account of its provider, and a native agent requires no program on the host.
-The instance of `general@1` fails when the project holds no default account for the provider of the agent and no entry names one.
+The instance of `general@1` passes when its effective configuration resolves under the current worker binding and enabled agent enablement.
+It fails when the `swe@1` enablement is absent or disabled.
 The instance of `claude@1` fails when its registration is not live.
 
 ## trust boundary
@@ -319,10 +378,9 @@ Execution 2 continues the task from that commit, and the task holds no outcome u
 
 ## resource budget
 
-The resource budget is the bound that a worker fixes on one execution: a turn count and a wall time.
-`general@1` fixes a bound on the turns of its agent and the wall time of one execution, for example 200 turns and 2 hours.
-`claude@1` fixes no resource budget, because the external harness hosts its executions.
-The values are illustrations, and the implementation epics set the configured values.
+The resource budget bounds one execution by turn count and wall time.
+`general@1` declares 200 turns and 2 hours, and `general-lab` overrides them with 50 turns and 30 minutes.
+The [budget contract](worker-service.impl.md#stop-and-budget) defines measurement and validation.
 
 ## lease renewal interval
 

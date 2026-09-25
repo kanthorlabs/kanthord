@@ -27,7 +27,7 @@ The seven services are logical boundaries inside one server.
 
 The report on a resource under the [resource healthcheck rule](architecture.md#resource-healthcheck).
 
-The Project Service checks the provider account binding `openai-main` of the project `atlas`.
+The Worker Service checks agent provider `openai-main` of the global `swe@1` enablement.
 
 ## resource status
 

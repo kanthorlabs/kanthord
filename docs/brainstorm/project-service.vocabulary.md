@@ -18,49 +18,25 @@ A repository binding holds three capabilities.
 - **a network git write**
 - **a platform action**
 
-A provider account binding holds one capability.
-
-- **a model inference call**
-
 These are the capabilities that `project-service.md` names, and the page closes no set across every resource kind.
 
 - A commit, a branch and a merge are local, so none of them is a capability.
-
-## platform
-
-The platform is the external platform that a binding names.
-The set is open.
-The first version holds one value.
-
-- **GitHub**
-
-The repository binding of `kanthorlabs/kanthord` names GitHub.
-A self-hosted address reveals no platform, so the binding names it explicitly.
-
-## custom provider
-
-The provider that a human defines for a server that serves the OpenAI API.
-The term names no closed set.
-
-- The provider account binding `atlas-llm` names the custom provider and the base URL `https://llm.atlas.internal/v1`.
-- It names the approved model `qwen3-coder` with a context window of 32768 and a maximum of 8192 output tokens.
-- Its resource identity is `openai-compatible:account:llm.atlas.internal`.
 
 ## binding name
 
 The name that a human chooses for a binding, unique inside its project.
 The term names no closed set.
 
-Project `atlas` names its worker binding `general-main` and its provider account binding `openai-atlas`. The `swe@1` entry of `general-main` names `openai-atlas`. A second binding named `general-main` in `atlas` is refused.
+Project `atlas` names its worker binding `general-main`.
+A second binding with that name in `atlas` is refused.
 
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
-`project-service.md` names five kinds, and it closes no set of kinds.
+The set holds four kinds.
 
 - **repository**
 - **worker**
-- **provider account**
 - **source**
 - **storage**
 
@@ -70,16 +46,16 @@ A repository binding of the objective "Add password reset" permits three capabil
 ## cardinality
 
 The number of bindings of one kind that a project holds for one resource.
-The set is closed for each kind and it holds five values.
+The set is closed for each kind and it holds four values.
 
 - **repository**: one binding for each repository that the project uses.
 - **worker**: any number of bindings of one worker, each with its own configuration.
-- **provider account**: one binding for each account at a provider.
 - **source**: one binding for each delivery source that the project accepts.
 - **storage**: at most one binding per project, for one S3-compatible bucket.
 
-The project of "Account recovery" binds two repositories, one `tdd@1` worker as `tdd-main` and two provider accounts at one provider.
-A second binding for the repository `kanthorlabs/kanthord` is refused, and a second `tdd@1` binding `tdd-experimental` with another provider account is accepted.
+The project of "Account recovery" binds two repositories and one `tdd@1` worker as `tdd-main`.
+A second binding for repository `kanthorlabs/kanthord` is refused.
+A second `tdd@1` binding `tdd-experimental` with another entry is accepted.
 A third `tdd@1` binding with the values of `tdd-main` is accepted.
 
 ## storage binding
@@ -88,9 +64,7 @@ The binding of one S3-compatible bucket that holds the object evidence of a proj
 A project holds at most one storage binding.
 Project `atlas` names its binding `evidence-store` and its bucket `atlas-evidence`.
 Its configuration holds `endpoint`, `bucket`, `region`, `prefix` and `credential` beside `available`.
-The credential reference names a custody record of type `s3_access_key`.
-That record holds `accessKeyId` and `secretAccessKey`, with no session token.
-Its remote identity uses the lower-cased endpoint host, for example `s3.eu-central-1.amazonaws.com:user:kanthord-evidence`.
+The credential reference names an `s3` [credential store record](custody.vocabulary.md#credential-store-record).
 The storage credential stays in server custody.
 A presigned grant reaches the kanthord component for one operation on one object, never the context of an agent.
 Without this binding, the project accepts only inline evidence content.
@@ -99,48 +73,22 @@ Without this binding, the project accepts only inline evidence content.
 
 The bindings that one project holds.
 
-A project binds two repositories, one `tdd@1` worker and two provider accounts.
-The `tdd@1` binding holds no entry, so its agents run on their default configuration, and the default account of each provider serves them.
+A project binds two repositories and one `tdd@1` worker.
+The worker binding holds no [entry](worker-service.vocabulary.md#entry), so each agent uses its enablement's default configuration.
 The Project Service rejects the set when it references a binding that does not exist.
 The Project Service validates the set when the project writes it, and it validates a binding again when an execution resolves it.
 
-## entry
-
-The override of the default configuration of one agent inside a worker binding.
-The term names no closed set.
-
-The worker binding `general-frontier` of `general@1` holds an entry for its agent that names the model identifier `gpt-6-astra` and the reasoning effort `high`, and nothing else.
-Every other value of the agent comes from the default configuration that `general@1` declares.
-
-## effective configuration
-
-The configuration of one agent under one worker binding: the values that the entry names, and the default configuration for every other value.
-The term names no closed set.
-
-Under `general-main`, which holds no entry, the effective configuration of the agent is its default configuration, and the default account of its provider serves it.
-Under `general-frontier`, the effective configuration takes the model identifier and the reasoning effort from the entry and the provider from the default configuration.
-The Project Service rejects the binding set when `gpt-6-astra` refuses an option that the default configuration supplies.
-
-## default account
-
-The provider account binding that serves a native agent whose entry names no account, for the provider of its default configuration.
-A project holds at most one default account for each provider.
-
-Project `atlas` marks `openai-dev` as the default account of `openai`.
-A human adds `openai-review` without the mark, and `general-main` keeps `openai-dev`.
-The binding `general-frontier` names `openai-review` in its entry.
-
 ## revision
 
-One version of the configuration of a binding, or one version of a credential store record.
+One version of the configuration of a binding.
+[Custody](custody.md#credential-records) owns credential record revisions.
 
 A worker binding holds one entry that names a model identifier.
 The project changes the model identifier.
 The identity of the binding stays, and the change creates a revision.
 Every reference to that binding stays valid, because a reference never names a revision.
 An execution that resolves that revision records it.
-A change to the credential reference of a provider account binding creates a revision of that binding too.
-A credential store record keeps its identity across a rotation, an OAuth refresh and every other change to its secret material, and none of those changes creates a revision, because a reference names the record and never its content.
+A change to the credential reference of a repository binding creates a revision of that binding too.
 
 ## replacement binding
 
@@ -157,42 +105,6 @@ The team moves to a token of `github:organization:kanthorlabs`, so a human creat
 The binding `kanthord-repo` of `atlas` changes its credential reference to `credential_B`, which creates a revision.
 The binding of `beacon` keeps `credential_A` until its own edit.
 
-## credential name
-
-The name that a human chooses for a credential store record, unique on the server.
-The term names no closed set.
-
-The record `credential_A` holds the credential name `atlas-github`.
-A second `credential create` with `atlas-github` returns the holder `credential_A`.
-
-## credential reference
-
-What a binding holds for a capability that it requires.
-
-- The repository binding of `git@github.com:kanthorlabs/kanthord.git` names one API key of GitHub for every platform action.
-- Git uses the SSH configuration of the host.
-- A credential reference names a record of the credential store.
-
-## credential store
-
-The store that holds one record for a secret.
-
-The credential store holds one record for one API key, a fine-grained personal access token of the organization `kanthorlabs`.
-Two projects use that key.
-The store holds that one record.
-Each project holds its own binding that names the record.
-A rotation changes that one record, and every binding that names the record stays valid.
-Unrestricted selection of a record is the danger, and central storage is not.
-
-## credential store record
-
-One record of the credential store.
-
-A record holds one API key of the account `org-kanthorlabs` at OpenAI, and it names the remote identity.
-A human selects the record that satisfies a capability.
-The type of the record decides the class of operation that the record performs.
-The record serves more than one project.
-
 ## coverage
 
 One of the two checks that validate a credential reference.
@@ -200,75 +112,6 @@ One of the two checks that validate a credential reference.
 - The repository binding of `git@github.com:kanthorlabs/kanthord.git` requires one API key of GitHub for every platform action.
 - Git uses the SSH configuration of the host.
 - The submission names no credential reference, so coverage fails.
-
-## suitability
-
-The other of the two checks that validate a credential reference.
-
-A repository binding requires a platform action.
-Its credential reference names a record that holds an API key of the account `org-kanthorlabs` at OpenAI.
-Suitability fails, because an API key of a model provider does not perform a platform action.
-Suitability states no scope, because a binding does not narrow upstream authority.
-Coverage and suitability are the whole validation of a credential reference.
-
-## custody
-
-The holding of the secret material of a resource credential behind a protected facility.
-
-The credential store holds an API key behind the protected facility, a fine-grained personal access token of the organization `kanthorlabs`.
-
-- An execution requests a platform action on `git@github.com:kanthorlabs/kanthord.git`.
-- Its repository binding names one API key of GitHub for every platform action.
-- Git uses the SSH configuration of the host.
-- The facility checks the binding of the project, then it consults custody.
-
-The execution holds no credential under the [custody rule](project-service.md#authorization-and-credential-custody).
-Holding the repository binding does not confer custody of the key.
-A credential handover alone lets material leave the server for the `worker` application, which belongs to the kanthord installation and is no external harness.
-
-## credential handover
-
-Custody transfers the credentials of one execution, encrypted, to the `worker` application that hosts that execution.
-
-The execution of `Add password reset` runs at the `worker` placement on the host `build-02`.
-
-- It resolves the provider account binding `openai-main` and the repository binding of `git@github.com:kanthorlabs/kanthord.git`.
-- The repository binding names one API key of GitHub for every platform action.
-- Git uses the SSH configuration of the host.
-- Custody hands over the API key of `openai-main` and the fine-grained personal access token of the organization `kanthorlabs`.
-
-The `worker` application on `build-02` decrypts both and connects to OpenAI and to GitHub itself.
-When the execution ends, the application discards both.
-
-The provider account binding `copilot-main` names an OAuth credential of GitHub Copilot.
-The handover carries its access token and its refresh token.
-The execution runs for nine hours and refreshes four times on `build-02`.
-The application reports each refreshed credential to custody.
-
-## login session
-
-One attempt of a human to obtain an OAuth credential of a provider account on the server.
-Its states form the closed set `pending`, `completed`, `failed` and `expired`.
-Its modes form the closed set `browser` and `device`.
-
-Ulrich starts a login session for GitHub Copilot in device mode.
-The session states the address `https://github.com/login/device` and the code `ABCD-1234`.
-Ulrich enters the code in a browser.
-The session completes, and custody stores the credential of `copilot-main`.
-
-Ulrich starts a login session for OpenAI Codex in browser mode from a laptop while the server runs on `build-01`.
-The session states the authorization address.
-Ulrich opens it, and the redirect to `localhost:1455` fails on the laptop.
-Ulrich returns the redirect URL to the session, and the session completes.
-
-## protected facility
-
-The component that secret material sits behind.
-
-An execution presents its execution identity and requests a platform action.
-The protected facility resolves that identity to the project and to the node of the request.
-The facility checks the binding of that project for the requested operation.
-The facility consults custody after that check, so a refusal never reaches custody.
 
 ## system authorization
 
@@ -281,28 +124,6 @@ The Project Service enforces system authorization.
 
 The Gateway Service authenticates `ulrich` and passes the human identity of `ulrich` to a downstream service.
 The Project Service authorizes that human identity for an operation on any project of the server.
-
-## credential authority
-
-What the remote permits any holder.
-
-The remote permits any holder of the API key to act on the whole account.
-The Project Service records that authority, and no binding narrows it.
-An operation that is in progress ends against the remote, because the remote holds the credential authority.
-
-## remote identity
-
-The identity at the remote that a credential store record acts as.
-The value is one string in three colon-separated parts, `<platform>:<identity kind>:<identifier>`.
-The term names no closed set, because a new platform adds its own identity kinds.
-
-- `github:user:ulrich` for a classic personal access token of that account.
-- `github:organization:kanthorlabs` for a fine-grained personal access token that the organization owns.
-- `openai:organization:org-kanthorlabs` for a key of that account at OpenAI.
-
-An OAuth credential does not imply a person, so the record states that identity.
-The remote identity and the execution identity stay separate.
-kanthord records the remote identity and it asks no remote to confirm it.
 
 ## execution identity
 
@@ -392,7 +213,7 @@ The set is closed and it holds five values.
 - **local disablement**: It takes effect at the next resolution. A recorded revision never authorizes an operation after it.
 - **upstream revocation**: The remote withdraws the credential. A human revokes the OAuth credential of `kanthorlabs` at GitHub. The record and every binding that names it stay unchanged, the next platform action ends against the remote, and a human rotates the record.
 - **rotation**: It changes one record, and every binding that names that record stays valid.
-- **expiry**: The credential reaches its end date at the remote. The API key of a provider account expires, the next model inference call ends against the remote, and the recorded revision that an execution resolved still states what it selected.
+- **expiry**: The credential reaches its end date at the remote. The API key of an agent provider expires. The next model inference call fails at the remote. The recorded revision still states what the execution selected.
 - **OAuth refresh**: Custody obtains a new token behind the record. The OAuth credential of `kanthorlabs` is refreshed, the reference and every binding that names it stay unchanged, and no revision is created.
 
 A change to the secret material behind an unchanged credential reference changes no binding.
