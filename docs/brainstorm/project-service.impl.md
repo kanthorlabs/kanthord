@@ -16,6 +16,12 @@ It also provides `zod` at 4.4.3 and `ulid`.
 The first version holds one platform entry, GitHub.
 Slack, Telegram and Jira hold no platform entry until their design lands.
 A credential type is no platform, because an API key spans platforms.
+The GitHub action catalog holds exactly two actions.
+
+- `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
+- `merge_push` merges the node branch into the base branch and pushes. It requires the network git write capability. Its expected end state is the push to the base branch.
+- Each action implies its expected end state and takes no parameter.
+- A repository strategy holds at most one action, because a policy configures one external action.
 
 ## The binding store
 
@@ -65,18 +71,36 @@ It names the resource that the binding allocates, and `credential.remote_identit
 A per-kind function derives it from the binding configuration on every write, so a human enters it never and it disagrees with that configuration never.
 The values of the first version are below.
 
-- `github:repository:kanthorlabs/kanthord` for the repository binding of that repository, under either transport form of its address.
+- `github:repository:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`.
 - `openai:account:org-kanthorlabs` for the provider account binding of that account.
 - `github:webhook:kanthorlabs/kanthord` for the source binding of the GitHub webhook of that repository.
 - A worker binding holds no value.
 
 The middle part names the resource and not the binding kind, so a GitHub webhook and a source of another platform hold different values under the one kind `source`.
-Normalization decides a revision against a replacement. `git@github.com:kanthorlabs/kanthord.git` and `https://github.com/kanthorlabs/kanthord.git` are one repository, so a change between them changes the transport form alone, creates a revision and invalidates no reference.
+Normalization decides a revision against a replacement.
+
+- A repository identity derives from its SSH address alone.
+- Every provider account has the resource identity `<provider>:account:<account>`.
+- For a built-in provider, the account is the trimmed `account` field. The service keeps it verbatim with no case folding, because provider account ids are case-sensitive.
+- For `openai-compatible`, the account is the lower-cased host of the base URL. It holds no scheme, no port, no path and no version.
+- The base URL `https://llm.atlas.internal/v1` gives `openai-compatible:account:llm.atlas.internal`.
+- A host change replaces the binding.
+- A change of the scheme, the port, the path or the model list creates a revision.
+- The base URL scheme is `https` or `http`. A query or a fragment refuses the write.
 
 ## The write of a binding set
 
 A write submits the complete binding set of the project as one object keyed by binding name.
 The submission names the version of the binding set that the client read.
+The write checks custom providers before the `BEGIN IMMEDIATE` transaction.
+
+- The write calls `GET <baseUrl>/models` once for each `openai-compatible` binding that the edit adds or whose configuration changes.
+- The call uses custody `use` with a 10 s deadline.
+- A connection other than `ok` refuses the write with `project.bindings.provider.unreachable`. The error names the connection value.
+- A model id absent from the answer refuses the write with `project.bindings.provider.model_unknown`. The error names the id.
+- An unchanged binding makes no call.
+- The resolution makes no network call.
+
 One `BEGIN IMMEDIATE` transaction holds the read of `project_project.binding_set_version`, the comparison, the difference and every write of the edit.
 The transaction refuses a submission that names another version, so two concurrent writes never interleave.
 It increments that column on every write that it commits.
@@ -120,6 +144,28 @@ The validation of the whole set runs at the write, and the validation of one bin
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
 The write refuses a submission that changes the worker of an existing worker binding under the same binding name.
 
+- The provider id is a member of `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0, or `openai-compatible`.
+- A model identifier is a member of `getBuiltinModels(provider)`, or of the model list of the binding for `openai-compatible`.
+- The write and the resolution check both catalogs. A pi version bump changes both catalogs.
+- Suitability requires that the record type is an auth type of the provider. `apiKey` maps to `api_key`, and `oauth` maps to `oauth`.
+- The `account` field is required for a built-in provider and forbidden for `openai-compatible`.
+- The `baseUrl` and `models` fields are required for `openai-compatible` and forbidden for every other provider.
+- Each custom model requires an `id` from the check answer at approval, a positive integer `contextWindow` and a positive integer `maxTokens`.
+- The `maxTokens` value is at most `contextWindow`.
+- The optional boolean `reasoning` defaults to `false`. The optional `input` is a subset of `text | image` and defaults to `["text"]`.
+- A custom model entry holds no cost.
+- An agent entry holds optional `reasoningEffort`; absence selects the template default.
+- Its values are `off | minimal | low | medium | high | xhigh | max`.
+- The reasoning effort of an effective configuration is a member of `getSupportedThinkingLevels` of the effective model.
+- The write and the resolution check that level. An unsupported level refuses the write with `project.bindings.worker.reasoning_effort_unsupported` and prevents resolution.
+- The `instanceCount` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
+- An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
+- The repository, provider account and source kinds keep `available`.
+- A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
+- Every repository binding names exactly one `credential` of type `api_key` of its platform. An absent credential refuses the write.
+- An HTTPS repository address refuses the write.
+- A strategy with more than one action refuses the write.
+
 ## The worker template registry
 
 A worker template is a static module of the server.
@@ -127,6 +173,8 @@ The registry maps a worker name to its template, and it loads no runtime plugin.
 A template declares its agents, the default configuration of each agent, the options that a project overrides and the constraint of a whole configuration.
 The template expresses the options as a `zod` schema and the constraint as a `superRefine` of that schema.
 The registry holds `general@1` and `reviewer@1`, which [worker-service.impl.md](worker-service.impl.md) names as the workers of the first version.
+
+- `general@1` and `reviewer@1` declare no further option, so their option schema is empty.
 
 ## The resolution of a binding
 
@@ -144,13 +192,15 @@ A recorded revision authorizes nothing, so the next operation resolves the chain
 A record holds one secret of one type.
 The types are below, and each one names the class of operation that it performs.
 
-- **api_key**: `{type:"api_key", key}` of pi-ai. For a git platform the key is a personal access token, classic or fine-grained. It performs a network git read and a network git write under the HTTPS transport form, and a platform action under both forms. For a provider account the key performs a model inference call. API key providers include `openai` and `anthropic`.
+- **api_key**: `{type:"api_key", key}` of pi-ai. For a git platform the key is a personal access token, classic or fine-grained. The key of a git platform performs a platform action only. For a provider account the key performs a model inference call. API key providers include `openai` and `anthropic`.
 - **oauth**: `{type:"oauth", refresh, access, expires}` of pi-ai. It performs a model inference call for a provider whose pi-ai provider carries OAuth: `anthropic`, `openai-codex`, `github-copilot` and `openrouter`.
 
 The first version registers those two types and no other.
 
-Suitability is a pure function of the type, the capability and the transport form, over the table above.
-Coverage is a pure function of the required capabilities, the transport form and the credential references of the binding.
+- Suitability is a pure function of the type, the capability and the provider, over the table above.
+- Coverage checks the required capabilities and the credential references of the binding.
+- Coverage requires one `api_key` credential reference on every repository binding.
+
 The two functions are the whole validation of a credential reference, and neither one reads secret material.
 
 ## The remote identity of a record
@@ -223,17 +273,30 @@ Custody defends the material against a record of the system, and it defends noth
 ## The credential store of an execution
 
 - Custody implements the `CredentialStore` contract of `@earendil-works/pi-ai` at 0.86.0: `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
-- A provider account binding names its pi provider id in its configuration, from the closed set of providers that pi-ai ships. Resolution rejects an unknown id.
+- A provider account binding names its pi provider id from `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0, or the id `openai-compatible`. The write and the resolution reject an unknown id.
 - Custody builds one store view for each execution. `read(providerId)` maps the pi provider id of the agent's provider account binding to the one credential store record that the binding names. It answers `undefined` for every other id, and the store holds one credential per pi provider id.
 - `list()` returns the one non-secret pair of provider id and credential type. `modify()` serializes on the record and writes the result of pi-ai in place. The view refuses `delete()`.
 - At the `server` placement the view reads custody directly and the plaintext never leaves the process.
 - At the `worker` placement the view is the decrypted handover.
 - Custody drops the view when the execution ends.
 
+The resolution builds a custom provider from the resolved revision.
+
+- It calls `createProvider` with the id `openai-compatible`, the binding name as its name and the base URL of the binding.
+- It supplies `auth: { apiKey: envApiKeyAuth("<binding name> API key", []) }` and `api: openAIResponsesApi()`.
+- The environment variable list is empty, so the key comes only from the custody record that the provider account binding names.
+- Each model of the binding becomes a pi model with `provider: "openai-compatible"` and the base URL of the binding.
+- The model carries `api: "openai-responses"`, its `contextWindow` and its `maxTokens`.
+- Its `reasoning` defaults to `false`, its `input` defaults to `["text"]` and its cost rates are zero.
+- The model list goes to `createProvider`, and `setProvider` registers the provider.
+- The resolution builds the models rather than reuses them, because a request uses the base URL of its model.
+- Every model of `OPENAI_MODELS` carries `provider: "openai"` and `baseUrl: "https://api.openai.com/v1"`. Its reuse sends the request and the key to OpenAI.
+
 ## The credential handover
 
 - The handover is the answer of `worker.handover` of the Worker Service, which [worker-service.impl.md](worker-service.impl.md#the-credential-handover) declares. This `client` operation has `unary` lifetime and requires a live execution.
-- The payload holds the canonical JSON list of the credentials that the capabilities of the execution require. Each entry holds its record identity, its pi provider id or its git platform, and its pi-ai credential.
+- The payload holds the canonical JSON list of the platform key and the provider credential that the execution requires.
+- Each entry holds its record identity, its pi provider id or its git platform, and its pi-ai credential.
 - The envelope uses AES-256-GCM under `HKDF(masterKey, info = "handover/aes-256-gcm/v1")`, a 12-byte random nonce and a 16-byte tag. The additional authenticated data concatenates the length-prefixed execution identity and runtime identity of the instance.
 - The value contract of [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) names the handover as one of the two operations whose answer carries credential material.
 - The `worker` application holds the same `masterKey` and derives the same key.
@@ -272,19 +335,15 @@ Custody performs a network git read and a network git write through the reposito
 Custody requires git 2.40 or later and OpenSSH 9.0 or later on the host, and it stops the start when the host holds neither.
 It passes no secret on the command line of a child, because the command line of a process is readable by every user of the host.
 
-Under the HTTPS transport form, custody sets `GIT_ASKPASS` in the environment of the git child to a helper of the server, and it passes the token in that environment.
-The helper prints the token for the password prompt and the account name for the username prompt.
-The helper writes no file and it reaches no socket.
-At the `worker` placement the application runs the same helper with the token of the handover.
-
-- Under the SSH transport form, custody supplies no material.
+- Custody supplies no material for git.
 - The `git` child inherits the SSH environment of the user that runs the hosting application.
 - That environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
 - Custody sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
-- At the write of a repository binding under the SSH form, custody runs one `git ls-remote` of that repository through the repository connector.
+- At every repository binding write, custody runs one `git ls-remote` of that repository through the repository connector.
+- The read precedes the `BEGIN IMMEDIATE` transaction.
 - A deadline of 30 s bounds that read.
 - A failed or timed-out read refuses the write with the error code `project.bindings.repository.ssh_unreachable`.
-- Custody attributes a network git operation under the SSH form to no credential record.
+- Custody attributes a network git operation to no credential record.
 
 ## The platform action
 
@@ -292,6 +351,26 @@ Custody attaches the credential to the request of a platform implementation insi
 An api key of a git platform travels in the `Authorization` header of that request, and custody builds that header and returns it to no caller.
 Custody mints no token and caches no token for a platform action, because that capability uses an API key in the first version.
 A request that the remote refuses fails the operation closed, and custody records the failure against the record.
+
+## The provider check
+
+- `project.provider.check` is a server-wide read operation with `human` access, no project and no binding.
+- Its route is `POST /api/project/provider/check`, and its body is `{ baseUrl, credential }`.
+- The base URL scheme is `https` or `http`. A query or a fragment is invalid input.
+- Custody builds the `Authorization: Bearer` header inside `use`, caches nothing and records the call against the record.
+- The server calls `GET <baseUrl>/models` with a 10 s deadline.
+- HTTP 200 holds `connection` with one of four values.
+  - `ok`: the remote returns the OpenAI list shape.
+  - `unauthorized`: the remote returns 401 or 403.
+  - `unreachable`: a network failure or the deadline prevents the answer.
+  - `invalid_response`: the answer does not have the OpenAI list shape.
+- The answer holds `models` only with `ok`. Each model holds `id`, `ownedBy` and `created`.
+- HTTP 400 answers invalid input or a record type other than `api_key`.
+- HTTP 404 answers an unknown credential.
+- The answer holds no key material.
+- The check pre-fills model ids only. The OpenAI answer holds `id`, `object`, `created` and `owned_by`, not model limits.
+- The human enters `contextWindow` and `maxTokens` at review.
+- The human configures the base URL and the credential record, checks for `ok`, approves models and submits the binding.
 
 ## The model inference call
 
@@ -338,7 +417,17 @@ The `kanthord` bin of `package.json` releases it.
 
 - A test covers a creation and a rename to a taken project name, and it asserts 409 with the identity of the holder.
 - A test covers a project creation whose mission insert fails, and it asserts that no project row remains.
-- A test covers coverage and suitability against every pair of a type and a capability, under both transport forms.
+- A test covers SSH-only coverage and suitability for every type, capability and provider. It refuses an absent platform key and an HTTPS repository address.
+- A test covers the provider and model catalogs at the write and the resolution.
+- A test covers the custom provider build. It asserts the base URL on every model, zero cost rates and the empty environment variable list.
+- A test covers every provider check answer, status and model field. It asserts the deadline and the absence of key material.
+- A test covers the write-time call for each added or changed custom provider before the transaction. It asserts both error codes and their details.
+- A test asserts no call for an unchanged custom provider and no network call at resolution.
+- A test covers built-in account case preservation and custom-provider host normalization. It checks replacement against revision for each base URL part.
+- A test covers the reasoning-effort check against the effective model at the write and the resolution.
+- A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
+- A test covers the project prompt bound in UTF-8 bytes and its error code.
+- A test covers both GitHub actions, their capabilities and their implied expected end states. It refuses more than one action.
 - A test covers each of the five changes, and it asserts the revision that each one creates.
 - A test covers a disablement that takes effect at the next resolution, and a consumed grant that authorizes no second operation.
 - A test covers an omitted name, a name whose resource changed, a set that references a name absent from the submission, and a dependent reference that follows a new identity under its name.
@@ -351,7 +440,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.
 - A test covers a `masterKey` that decodes to other than 32 bytes.
 - A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose worker binding is not the worker binding of the claim.
-- A test covers a repository binding under the SSH form whose network git read fails. It asserts that the Project Service refuses the write with its error code.
+- A test covers a repository binding whose network git read fails. It asserts that the Project Service refuses the write with its error code.
 - A test covers a worker binding that is absent, removed or unavailable, and it asserts that the verification of a machine JWT that names it fails.
 - A test covers a missing, a duplicate, a malformed and a wrong-length delivery signature, and a valid signature over the exact bytes.
 - A test covers an increment of `webhookSecretRotation`, and it asserts that a delivery signed with the previous secret fails.

@@ -25,7 +25,6 @@ A provider account binding holds one capability.
 These are the capabilities that `project-service.md` names, and the page closes no set across every resource kind.
 
 - A commit, a branch and a merge are local, so none of them is a capability.
-- An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
 
 ## platform
 
@@ -38,19 +37,14 @@ The first version holds one value.
 The repository binding of `kanthorlabs/kanthord` names GitHub.
 A self-hosted address reveals no platform, so the binding names it explicitly.
 
-## transport form
+## custom provider
 
-The transport form of a repository address determines whether its network git read and network git write require a credential and its type.
-The set is closed and it holds two values.
+The provider that a human defines for a server that serves the OpenAI API.
+The term names no closed set.
 
-- **SSH**: A network git read and a network git write use the SSH configuration of the host. They require no credential reference.
-- **HTTPS**: A network git read and a network git write require an OAuth credential or an API key of the git platform.
-
-A platform action requires an OAuth credential or an API key under both forms.
-The address `git@github.com:kanthorlabs/kanthord.git` has the SSH form.
-Its repository binding names no credential for the network git read and the network git write.
-It names an API key or an OAuth credential for the platform action.
-The address `https://github.com/kanthorlabs/kanthord.git` has the HTTPS form, so one OAuth credential of the git platform satisfies all three capabilities.
+- The provider account binding `atlas-llm` names the custom provider and the base URL `https://llm.atlas.internal/v1`.
+- It names the approved model `qwen3-coder` with a context window of 32768 and a maximum of 8192 output tokens.
+- Its resource identity is `openai-compatible:account:llm.atlas.internal`.
 
 ## binding name
 
@@ -148,10 +142,9 @@ A change to the remote that a credential authorizes is also a change to the reso
 
 What a binding holds for a capability that it requires.
 
-A repository binding under the HTTPS form requires a network git write and a platform action.
-It holds one credential reference for each of the two capabilities.
-One credential reference satisfies both capabilities when the type of the referenced record performs both classes of operation.
-A credential reference names a record of the credential store.
+- The repository binding of `git@github.com:kanthorlabs/kanthord.git` names one API key of GitHub for every platform action.
+- Git uses the SSH configuration of the host.
+- A credential reference names a record of the credential store.
 
 ## credential store
 
@@ -177,9 +170,9 @@ The record serves more than one project.
 
 One of the two checks that validate a credential reference.
 
-A repository binding under the HTTPS form requires a network git write and a platform action.
-It holds a credential reference for the network git write only.
-Coverage fails, because one required capability holds no credential reference.
+- The repository binding of `git@github.com:kanthorlabs/kanthord.git` requires one API key of GitHub for every platform action.
+- Git uses the SSH configuration of the host.
+- The submission names no credential reference, so coverage fails.
 
 ## suitability
 
@@ -196,8 +189,12 @@ Coverage and suitability are the whole validation of a credential reference.
 The holding of the secret material of a resource credential behind a protected facility.
 
 The credential store holds an API key behind the protected facility, a fine-grained personal access token of the organization `kanthorlabs`.
-An execution requests a network git write under the HTTPS form.
-The facility checks the binding of the project, then it consults custody.
+
+- An execution requests a platform action on `git@github.com:kanthorlabs/kanthord.git`.
+- Its repository binding names one API key of GitHub for every platform action.
+- Git uses the SSH configuration of the host.
+- The facility checks the binding of the project, then it consults custody.
+
 The execution holds no credential under the [custody rule](project-service.md#authorization-and-credential-custody).
 Holding the repository binding does not confer custody of the key.
 A credential handover alone lets material leave the server for the `worker` application, which belongs to the kanthord installation and is no external harness.
@@ -207,8 +204,12 @@ A credential handover alone lets material leave the server for the `worker` appl
 Custody transfers the credentials of one execution, encrypted, to the `worker` application that hosts that execution.
 
 The execution of `Add password reset` runs at the `worker` placement on the host `build-02`.
-It resolves the provider account binding `openai-main` and the repository binding of `https://github.com/kanthorlabs/kanthord.git`.
-Custody hands over the API key of `openai-main` and the fine-grained personal access token of the organization `kanthorlabs`.
+
+- It resolves the provider account binding `openai-main` and the repository binding of `git@github.com:kanthorlabs/kanthord.git`.
+- The repository binding names one API key of GitHub for every platform action.
+- Git uses the SSH configuration of the host.
+- Custody hands over the API key of `openai-main` and the fine-grained personal access token of the organization `kanthorlabs`.
+
 The `worker` application on `build-02` decrypts both and connects to OpenAI and to GitHub itself.
 When the execution ends, the application discards both.
 

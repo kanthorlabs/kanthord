@@ -47,17 +47,12 @@ An external action states its expected end state on its platform.
 A capability is one class of authenticated operation on a repository.
 A network git read, a network git write and a platform action are the capabilities.
 A commit, a branch and a merge are local, so none of them is a capability.
-An unauthenticated operation is not a capability, so a public read requires no capability and no credential reference.
-The repository strategy and the transport form of the repository address determine the capabilities that a repository binding requires.
-A repository address has one of two transport forms, SSH and HTTPS.
-Under the SSH form, a network git read and a network git write use the SSH configuration of the hosting application.
-Neither operation requires a credential reference.
-Under the HTTPS form, they require an OAuth credential or an API key of the git platform.
-A platform action requires an OAuth credential or an API key under both forms.
-At the write of a repository binding under the SSH form, the Project Service performs one network git read of that repository.
+A repository address is an SSH address.
+A network git read and a network git write use the SSH configuration of the hosting application, so neither operation requires a credential reference.
+A platform action requires an API key of the platform.
+Every repository binding holds one credential reference, and that reference serves every platform action of the binding, including the read of an external object by the observer.
+At the write of a repository binding, the Project Service performs one network git read of that repository.
 A failed read refuses the write.
-A repository binding holds one credential reference for each required capability that requires a credential.
-One credential reference satisfies more than one capability.
 A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
 The Project Service validates the length of the project prompt against a fixed bound.
 
@@ -70,7 +65,7 @@ A worker template carries no configuration version of its own.
 A worker name that differs in its version declares its own configuration.
 A worker binding names one worker.
 The worker that a worker binding names never changes. A project removes the binding and adds another one instead.
-A worker binding holds the worker configuration: the instance count and the availability of the binding.
+A worker binding holds the worker configuration: the instance count. An instance count of 0 makes the binding unavailable.
 A worker binding holds an entry for an agent of its worker only when the project overrides the default configuration of that agent.
 An entry names the values that it overrides, and every other value of the agent comes from its default configuration.
 The effective configuration of an agent is the value that its entry names where the entry names one, and the default configuration otherwise, and for a native agent it includes the provider account that resolves below.
@@ -78,6 +73,8 @@ The Project Service validates the effective configuration as a whole against the
 A worker binding holds no provider account of its own.
 A provider account is a binding kind.
 A model inference call is the capability of a provider account.
+A provider is a built-in provider or a [custom provider](project-service.vocabulary.md#custom-provider) that serves the OpenAI API.
+A provider account binding of a custom provider holds the base URL of its server and the models that a human approves after a check of that server.
 A provider account binding holds a credential reference for that capability.
 A provider account binding is the default account of its provider when the project marks it so, and a project holds at most one default account for each provider.
 The provider account of a [native agent](worker-service.md#workers-and-templates) is the one that its entry names; when the entry of the agent names no account, it is the default account of the provider that the default configuration names, and an effective configuration with neither is invalid.

@@ -81,7 +81,11 @@ The tool table enforces every obligation that a tool can enforce, and `re@1` hol
 The first version supplies one base prompt for `swe@1` and `re@1`, [assets/prompt/base.md](assets/prompt/base.md), and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md).
 The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to the base prompt, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
 The recommendation-first format of a confirmation request returns with the clarification interface.
-The bound of the global prompt and the bound of the project prompt are epic decisions.
+
+- Every source of the global prompt and of the project prompt holds at most 32768 UTF-8 bytes.
+- A source above the bound is invalid.
+- The layer takes no content from an invalid source.
+
 The acceptance path proves the configured precedence, an absent source, an invalid source, a disabled layer and a link that leaves the workspace.
 It proves that a reviewer execution takes no agent file of the workspace.
 
@@ -132,11 +136,9 @@ An epic decides that form for each platform.
 - `simple-git` at 3.36.0 performs every git operation by spawning the `git` binary of the host.
 - Its timeout plugin bounds each operation by the remaining resource budget of the execution.
 - Its abort plugin binds to the `Context` of the execution.
-- Under the SSH transport form, the `git` child inherits the SSH environment of the user that runs the hosting application.
-- Under the HTTPS transport form, the hosting application supplies `GIT_ASKPASS` and the token through the environment of the child.
-- [project-service.impl.md](project-service.impl.md) rules that supply.
+- The `git` child inherits the SSH environment of the user that runs the hosting application.
+- [project-service.impl.md](project-service.impl.md#the-network-git-operations) rules that environment.
 - The connector passes no credential inside a URL and no credential on a command line.
-- The credential helper writes no credential to a file in the workspace.
 
 ## Workspace
 
