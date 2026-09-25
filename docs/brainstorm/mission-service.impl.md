@@ -112,7 +112,8 @@ The attempt row records the frozen required external actions next to the pinned 
 
 ## The plan file name
 
-- The node row holds `file` with a unique index on `(mission_id, file)`.
+- The node row holds `file` with a unique index on `(mission_id, file)` where `retired` is false.
+- A retirement keeps `file` on the retired row. A create, an import or a node update can take the name of a retired node.
 - The form is a lower-case name that ends in `.md` with no path separator.
 - An import sets `file` from the file name, and `node create` requires it.
 - Node reads return `file`, and every export writes it unchanged.
@@ -144,11 +145,14 @@ The attempt row records the frozen required external actions next to the pinned 
 - A violation holds `code`, `message`, `file`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `file` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
-- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.file_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
+- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.file_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
 
 ## Node API admission
 
 - A human retires a node through a whole-mission import that omits its plan file, under the import condition, or through `node retire` under [Node retire](#node-retire).
+- Every node API write and every human control on a retired node answers 409 `mission.node.retired` with `details: { nodeId }`.
+- A write that names a retired node as a parent or a dependency answers 409 `mission.node.retired` with `details: { nodeId }` of that node.
+- An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
 - `node create` admits an initiative at any time.
 - It admits an objective or task under a parent in `Pending`, `Available`, `Executing`, `Blocked` or `Paused`.
 - Every other parent state answers `mission.node.create_refused` with the parent state in `details`.
@@ -442,7 +446,9 @@ kanthord runs no automatic evidence cleanup.
 - Preview and apply answer the same refusals.
 - The preview answers `RetirePreview`: `nodeId`, `force`, `missionRevision`, `retiredNodeIds`, `removedEdges`, `previewDigest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
 - The apply request `Retire` holds `expectedMissionRevision`, `force`, `previewDigest` and `reason`. A stale mission revision answers 409 `mission.revision_conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
-- One transaction rechecks every condition, sets `retired` on every node of the set, removes current inbound references except terminal dependents' historical dependencies, increments the mission revision once and inserts one mission change.
+- One transaction rechecks every condition, sets `retired` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
+- That transaction deletes the work queue entry of every node of the retirement set through the Scheduler Service public delete.
+- It increments the mission revision once and inserts one mission change.
 - A retired task changes the content of its objective, so an objective outside the set takes a node revision with `write: node.retire` and a `retired` task change.
 - The answer is `NodeChange`.
 - A retirement deletes no row. A retired node keeps its identity, `file`, its revisions and its last state.
@@ -603,8 +609,10 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert that the file name becomes the import-set key and the node's `file`.
 - Tests refuse upper-case names, names without `.md`, and path separators.
 - Tests require `file` on create and return it on node reads.
-- Tests assert uniqueness within a mission and accept the same name in separate missions.
+- Tests assert uniqueness among nodes that are not retired within a mission and accept the same name in separate missions.
 - A name conflict answers 409 `mission.node.file_conflict` without a partial write.
+- Tests commit one import that retires a node and creates a node with the same `file`, and assert both rows with distinct identities.
+- Tests assert 409 `mission.node.file_conflict` when two nodes that are not retired hold one `file`.
 - Tests assert that a name change creates a node revision, or an objective revision for a task.
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
@@ -624,6 +632,10 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert that preview changes no state and answers the same refusals.
 - Tests assert that a stale mission revision and a changed digest refuse the apply with no effect.
 - Tests assert that one retirement increments the mission revision once and inserts one mission change.
+- Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
+- Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
+- Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
+- Tests assert that a retirement deletes the work queue entry of every node of the set in its transaction.
 - Tests assert that a retired node row stays readable with its identity, `file`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.
 - Tests cover objective and task creation under each of the twelve parent states.
