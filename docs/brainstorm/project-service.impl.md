@@ -381,6 +381,26 @@ A request that the remote refuses fails the operation closed, and custody record
 - The human enters `contextWindow` and `maxTokens` at review.
 - The human configures the base URL and the credential record, checks for `ok`, approves models and submits the binding.
 
+## The resource healthcheck
+
+The [resource healthcheck rule](architecture.md#resource-healthcheck) governs the checks that the Project Service owns.
+The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) bounds the checks and groups their entries.
+
+- A GitHub platform API key record reads `GET /rate_limit` with its credential.
+- This call spends no rate limit and reports the capability `rate-limit read`.
+- A provider account binding reads `GET /models` of its provider with its credential.
+- It reuses the model-list call of [the provider check](project-service.impl.md#the-provider-check), not its API-key-only input contract.
+- The call spends one request and no inference token, and it reports the capability `model-list read`.
+- A repository binding runs the SSH read of [the network git operations](project-service.impl.md#the-network-git-operations).
+- That read answers `project.bindings.repository.ssh_unreachable` on failure and reports the capability `network git read`.
+- The resource healthcheck deadline replaces the binding-write deadline for this read.
+- The target rule permits one read per repository address in a request.
+- A check never refreshes an OAuth record.
+- An OAuth record whose access token is expired reports `unknown` without a remote call.
+- Custody records each credential check call against the credential store record, as in the provider check.
+- The network git operation keeps its existing attribution rule.
+- The call record holds no check result.
+
 ## The model inference call
 
 Custody serves the model inference call through the credential store of the execution.
@@ -433,6 +453,13 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the provider and model catalogs at the write and the resolution.
 - A test covers the custom provider build. It asserts the base URL on every model, zero cost rates and the empty environment variable list.
 - A test covers every provider check answer, status and model field. It asserts the deadline and the absence of key material.
+- A resource healthcheck test asserts the GitHub rate-limit read with the record credential and no other call.
+- A test asserts the provider model-list read with its credential and no inference call.
+- A test covers successful reads, remote refusals and invalid answers, and checks the resource status and capability.
+- A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
+- A test covers an expired OAuth access token and asserts `unknown`, no remote call and no refresh.
+- A test asserts the custody call record and no stored check result.
+- A test asserts that the repository check names no credential store record in its attribution.
 - A test covers the write-time call for each added or changed custom provider before the transaction. It asserts both error codes and their details.
 - A test asserts no call for an unchanged custom provider and no network call at resolution.
 - A test covers built-in account case preservation and custom-provider host normalization. It checks replacement against revision for each base URL part.
@@ -475,5 +502,6 @@ The `kanthord` bin of `package.json` releases it.
 
 - The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
-- The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
+- The record of the failure of a credential.
+- The model-list read of a built-in provider whose API offers no model list, or whose OAuth account rejects it.
 - The rotation behaviour of the refresh token of each OAuth provider under two concurrent holders.

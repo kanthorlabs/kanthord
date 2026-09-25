@@ -41,6 +41,7 @@ One server holds one Intake Service that serves every project.
 
 ## Subscriptions
 
+The Intake Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a subscription.
 A [subscription](intake-service.vocabulary.md#subscription) belongs to one [source binding](project-service.vocabulary.md#source-binding).
 It has one [subscription kind](intake-service.vocabulary.md#subscription-kind).
 A source binding holds at most one subscription per kind.

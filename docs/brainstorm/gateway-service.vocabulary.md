@@ -7,6 +7,18 @@ title: Gateway Service Vocabulary
 This file holds the values and the examples of the terms that [gateway-service.md](gateway-service.md) owns.
 This file is not a design document, and `gateway-service.md` stays the single source of truth.
 
+## health report
+
+The resource report that the [Gateway Service](gateway-service.md#health-report-and-liveness-answer) answers to a human.
+
+A human requests a health report and reads the entry for `openai-main` under the Project Service and the project `atlas`.
+
+## liveness answer
+
+The internal component report that the [Gateway Service](gateway-service.md#health-report-and-liveness-answer) answers without authentication.
+
+A supervisor reads a liveness answer that reports a failure of the store component of the server.
+
 ## logged-in account
 
 The human account that the Gateway Service authenticates.
