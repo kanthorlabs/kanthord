@@ -226,7 +226,7 @@ The action performer requests the required external actions of one attempt for e
 Its callers form a closed set of two values.
 
 - **evaluation method of reviewer@1**
-- **MCP tool of an external harness**
+- **MCP tool of a native agent or an external harness**
 
 The reviewer execution of `reviewer@1` evaluates "Add password reset" with agent `re@1`.
 Its evaluation method passes only the execution identity to the action performer, which opens pull request 42.
@@ -278,7 +278,7 @@ Its client kinds form a closed set of two values.
 
 Each tool maps to one method of a platform implementation or to the action performer.
 The MCP server exposes individually approved resource-scoped read methods and the tool of the action performer.
-It exposes the tool of the action performer to an external harness only.
+It exposes the same tools to every client, and no state of a claim or of an assessment changes the list.
 It exposes no other write.
 The external harness `claude-code` authenticates with the JWT of its client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`.
 It presents the execution identity of its evaluation claim on "Add password reset" and calls the tool of the action performer.

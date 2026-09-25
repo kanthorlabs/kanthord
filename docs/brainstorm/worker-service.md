@@ -183,12 +183,14 @@ It accepts registrations up to the instance count of the binding, and it refuses
 The instance presents its credential at the registration and on every later request, the registration returns no credential, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
 A work pull and every execution operation of a registered instance require its live registration.
 A registered instance sends a [heartbeat](worker-service.vocabulary.md#heartbeat), and a registration ends when no heartbeat arrives inside its window.
-A registration also ends when the program deregisters or when the server restarts.
+A registration also ends when the program deregisters its own instance through the API or when the server restarts.
 Removal or unavailability of its worker binding also ends the registration.
 A live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The end of a registration proves no stop of the program.
 The Worker Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a registered instance.
 It reports the liveness of the registration from server state, distinct from the [instance healthcheck](scheduler-service.vocabulary.md#instance-healthcheck).
+A human reads the contract of every worker, the declaration and the enablement of every agent in the catalog, and the instance record of every instance.
+That read changes no instance, no pool and no configuration.
 
 An instance record is runtime-only.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
@@ -520,7 +522,7 @@ The Gateway Service authenticates the client identity, the Scheduler Service est
 The MCP server exposes a list of resource-scoped read methods of the platform implementations and the tool of the action performer.
 The Worker Service permits each read method individually.
 The MCP server exposes no other write to a native agent or to an external harness.
-It exposes the tool of the action performer to an external harness only, because the evaluation method invokes the action performer for a native agent.
+It exposes the same tools to every client, and no state of a claim or of an assessment changes the list.
 The tool of the action performer takes no parameter beyond the execution identity.
 It returns the four return classes of the action performer.
 A native agent reaches the permitted read methods of the platform connector as tools through the MCP server.

@@ -207,6 +207,8 @@ It logs one record at entry and one at exit with the status and the latency.
 
 Each route registers its method, path, access policy, timeout, parameter locations, request content type and whether it is a mutation.
 It registers response status codes and schemas, error responses and its security scheme.
+The three operations of the MCP endpoint declare `application/json` and `text/event-stream` bodies whose schema is the MCP specification; the emitter includes them with the specification revision in their description and no JSON schema.
+The tool schemas live in MCP `tools/list`.
 The server emits an OpenAPI 3.1 document from the registry with `z.toJSONSchema()` of `zod` at 4.4.3.
 A test validates the document with `@apidevtools/swagger-parser` at 12.1.0.
 It asserts a real response against its declared schema.
@@ -343,6 +345,8 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), [custod
 - The key is no identity that the server generates for an entity of its own.
 - The operation registry declares a route as a mutation.
 - The idempotency component runs on mutation routes alone.
+- The three operations `worker.mcp.message`, `worker.mcp.listen` and `worker.mcp.close` are exempt: they declare `mutation: false`, because an MCP client carries no `Idempotency-Key`.
+- A tool call that writes carries its idempotency in the action performer under [worker-service.impl.md](worker-service.impl.md#mcp-server), and the durable dispatch record stays B9 W2.
 - Both entry adapters enter the same invocation chain, as [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) describes.
 - Both adapters reserve the same key, meet the same 409 and replay the same recorded answer.
 - The idempotency component runs in memory inside the invocation chain.
@@ -429,7 +433,7 @@ The server serves the RESTful API on one listener on one port, and the delivery 
 A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [custody.impl.md](custody.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
-It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover` and `POST /api/worker/credential` for a worker instance.
+It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential` and `DELETE /api/worker/instance/:runtimeIdentity` for a worker instance.
 It forwards the registered work-pull, claim inspection, lease renewal, release and MCP paths for an instance that runs outside the host of the server.
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
@@ -446,12 +450,13 @@ The operator adds the public hostname of the ingress to the host allowlist.
 ## Entry paths
 
 The work pull and the registration of a worker instance are registered routes.
-The MCP server of the Worker Service occupies its own path prefix, and [worker-service.impl.md](worker-service.impl.md) owns it.
+The MCP server of the Worker Service occupies the path `/api/worker/mcp`, and [worker-service.impl.md](worker-service.impl.md#mcp-server) declares its three operations.
 A webhook delivery enters through a registered route whose handler passes it to the [Intake Service](intake-service.md#deliveries).
 Each operation declares its own access policy; a path prefix grants no policy.
 `GET /api/liveness` and the OpenAPI routes declare the `public` policy.
 `GET /api/healthcheck` declares the `human` policy.
-`GET /api/auth/verify` declares the human policy. `POST /api/worker/register` and the other worker operations declare the client policy, and delivery operations declare the delivery policy.
+`GET /api/auth/verify` and the inspection operations of the Worker Service declare the human policy.
+`POST /api/worker/register` and the worker-instance lifecycle, credential and MCP operations declare the client policy, and delivery operations declare the delivery policy.
 
 ## The client configuration file
 
