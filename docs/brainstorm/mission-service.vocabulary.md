@@ -625,11 +625,13 @@ A rewrite of `add-password-reset.md` with no identifier creates a new node, and 
 
 ## plan file name
 
-- The name of the plan file of a node, unique in its mission.
+- The name of the plan file of a node, unique among the nodes of its mission that are not retired.
 - An import or a create sets it, and every export writes it unchanged.
 - The term names no closed set.
 - Two objectives titled "Add tests" hold `add-tests-api.md` and `add-tests-web.md`.
 - After the first leaves the plan, the export still writes `add-tests-web.md` for the other.
+- A human retires the objective `add-recovery-codes.md` and imports a new objective with the same file name and no `id`.
+- The import creates a new node with that name, and `node list --include-retired` returns both nodes with distinct identities.
 
 ## plan file
 
@@ -678,6 +680,7 @@ The unblock of "Add password reset" carries its own request identifier, and a re
 The removal of the executable work of a node, with its historical records preserved.
 A human retires a node through an import omission or through the node API.
 A retirement deletes no node record.
+A retirement is final, and no operation reverses it.
 A retired node keeps its identity, its plan file name, its revisions and its last state, which is `Pending` or `Available`.
 A retirement removes one thing.
 
@@ -713,6 +716,10 @@ The retirement set holds that objective and its two tasks.
 `add-recovery-email.md` holds `Pending` and depends on `add-recovery-codes.md`, so the retirement fails until the human forces it.
 The forced retirement removes that dependency.
 `add-recovery-email.md` moves to `Available` when it has no other unmet dependency.
+
+The human copies the plan file of the retired `add-recovery-codes.md` from git, with its `id`, and imports it.
+The import refuses the identifier of a retired node and applies nothing.
+The human deletes the `id` line and imports again, and the import creates a new node with the same content.
 
 ## retirement set
 

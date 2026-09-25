@@ -18,7 +18,8 @@ A mission comes into existence with its project, empty and at mission revision 1
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Every node holds a name, a requirement, a criterion, its verifications and its bindings.
-A node holds a [plan file name](mission-service.vocabulary.md#plan-file-name) that is unique in its mission.
+A node holds a [plan file name](mission-service.vocabulary.md#plan-file-name) that is unique among the nodes of its mission that are not retired.
+A retired node keeps its plan file name as a record, and a node that is not retired can take that name.
 An export writes that name.
 The name is a title and no identity.
 A node revision covers that whole content.
@@ -120,7 +121,7 @@ An import names the mission revision that it expects, and a stale snapshot fails
 A write that changes the structure of a mission or the content of a node increments the mission revision once.
 No other write changes it.
 A preview confirms every retirement before the import applies.
-The Mission Service rejects an unknown identifier, a duplicate identifier and an identifier of another mission.
+The Mission Service rejects an unknown identifier, a duplicate identifier, an identifier of another mission and an identifier of a retired node.
 An import request identifier binds to its payload, so a retry is idempotent.
 The map of assigned identifiers stays retrievable.
 The Mission Service keeps every accepted import request and unblock request for the life of the mission.
@@ -129,6 +130,8 @@ A retirement removes the executable work of its node.
 A retirement preserves the outcomes, the assessments, the evidence and the historical relations of that node.
 A retirement deletes no node record.
 A retired node keeps its identity, its plan file name, its revisions and its last state.
+A retirement is final, and no operation reverses it.
+A retired node accepts no write, and no write names a retired node as a parent or a dependency.
 
 A node API retirement retires the named node and every current descendant of that node.
 It checks every retiring initiative and every retiring objective itself, and every retiring task through its objective.
@@ -680,7 +683,7 @@ Block and unblock owns the block and the unblock.
 The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.
 The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
-The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome and a priority change.
+The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome, a priority change and a retirement.
 After the commit the Mission Service wakes the Scheduler Service.
 The Scheduler Service owns the work queue, the claim and the lease.
 

@@ -20,9 +20,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Mission Service
 
-- [ ] Added 2026-09-25 from the `node retire` ruling. Rule whether the plan file name of a retired node stays reserved. The unique index on `(mission_id, file)` keeps the name of a retired row taken, so one import that retires `add-tests.md` and creates a new `add-tests.md` answers `mission.node.file_conflict`. Recommendation of Aelita: free the name; the index covers live nodes only.
-- [ ] Added 2026-09-25 from the `node retire` ruling. Rule what an import does with the identifier of a retired node. No page states it, and no operation reverses a retirement.
-- [ ] Added 2026-09-25 from the `node retire` ruling. Rule how a client presents a retired node. Ulrich accepted "the CLI shows `retired` in place of the state", but every CLI domain result is one JSON value under `engine/docs/cli/other.md`, so the CLI renders no state column. The candidate homes are the `Node` read schema and the web application.
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication, `Text` bounds, run-output content bounds and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
   - Next session 2026-09-25: open with external-action publication.
 - [ ] Added 2026-09-25 from the no-attempt ruling. A human override, discard or block on an objective whose attempt reads 0 writes the node outcome only. Define whether a task of that objective ever holds an outcome.
