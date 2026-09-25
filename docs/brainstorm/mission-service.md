@@ -133,13 +133,13 @@ A node in a terminal state holds no new revision, because a terminal node is not
 A no-op import of a terminal node returns no error.
 
 An import creates, updates and deletes a node, and each operation requires the import condition.
-The condition holds when the node holds `Pending` or `Available` and its attempt counter reads 0.
+The condition holds when the node holds `Pending` or `Available` and its attempt reads 0.
 An import retires no node that holds an attempt.
 An import modifies no node that holds an attempt, whatever its state.
 A release to `Pending` or `Available` leaves the node with an attempt and its records.
 An import create reads the condition on the parent whose child set changes.
 The import condition of a task is the condition of its objective.
-A task modification requires its objective to hold `Pending` or `Available` and its attempt counter to read 0.
+A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
 This rule covers a create, an update and a delete of a task.
 A containment move reads the condition on the moved node, the old parent and the new parent.
 A dependency edit follows the condition of Mission structure and nodes, and it never reads the node that the dependency names.
@@ -159,8 +159,8 @@ A change to the content of a node preserves the identity of that node and create
 A node revision is one version of the whole content of a node.
 It covers the plan file name, the name, the requirement, the criterion, the verifications and the bindings.
 A node starts at node revision 1.
-A node revision changes no attempt counter.
-The attempt counter is independent of the revision number.
+A node revision changes no attempt.
+The attempt is independent of the revision number.
 An attempt that a human unblock opens pins the node revision that its unblock names.
 An attempt that no human unblock opens pins the revision current at its opening.
 An active attempt keeps the revision that it pins.
@@ -176,7 +176,7 @@ That revision is the head of the list that the Mission Service returns to it.
 The read of a human returns every revision.
 The list of a worker holds the pinned revision and every older revision, and the Mission Service computes no difference between revisions, because each record carries its change.
 An execution reads no content of another node, except a current child objective of its initiative through the current outcome of that objective.
-That read resolves to the revision that the attempt of that outcome pins.
+That read resolves to the revision that the attempt of that outcome pins, or to the revision current at the human act when the outcome names no attempt.
 A child objective that holds no outcome shows its identity and its state.
 An execution reads no dependency edge, no node outside its own subtree and no historical record of another node.
 
@@ -446,7 +446,7 @@ The [observer](scheduler-service.vocabulary.md#observer) records the detail of t
 ### Attempt
 
 At most one attempt of a node is open.
-A node whose attempt never opened holds no attempt, and its attempt counter reads 0.
+A node whose attempt never opened holds no attempt, and its attempt reads 0.
 Three acts open an attempt.
 
 - a claim of the node, which opens attempt 1 when the node holds no attempt
@@ -462,7 +462,7 @@ It invalidates continuation, and it never invalidates a completed record.
 A closed attempt never reopens.
 An opening and an attempt closure are separate acts.
 An attempt that a human unblock opens holds no claim until a claim arrives.
-A block of a node whose attempt counter reads 0 closes no attempt, and the counter stays 0.
+A block of a node whose attempt reads 0 closes no attempt, and the attempt stays 0.
 The unblock of that node clears no attempt and opens none.
 A record never migrates into the next attempt.
 A human unblock therefore returns the node to `Available` or to `Pending`, and never to `Waiting`.
@@ -579,7 +579,7 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Paused -> External.Requested` | Human resumes the node; resume precedence selects External.Requested | Stays open | None |
 | `Paused -> External.Success` | Human resumes the node; resume precedence selects External.Success | Stays open | None |
 | `Paused -> External.Failed` | Human resumes the node; resume precedence selects External.Failed | Stays open | None |
-| `Paused -> Blocked` | Human blocks the node; record carries the human reason | Closes when an attempt is open; no effect when the counter reads 0; counter stays 0 | Outcome |
+| `Paused -> Blocked` | Human blocks the node; record carries the human reason | Closes when an attempt is open; no effect when the attempt reads 0; the attempt stays 0 | Outcome |
 | `Paused -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Paused -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `External.Requested -> External.Success` | Accepted observation establishes the expected end state of the last unresolved required external action | No effect | Observation record; a landing adds the landed commit identities to the evidence set; an external action that is not a repository action adds none |
@@ -703,7 +703,7 @@ A human blocks a paused node, and that path is the only human block.
 The outcome carries the human reason as the human decision.
 
 The human block closes the attempt when one is open.
-A block of a node whose attempt counter reads 0 takes no effect on that counter.
+A block of a node whose attempt reads 0 takes no effect on that attempt.
 The unblock of that node clears no attempt and opens none.
 [Attempt](#attempt) owns the acts that open an attempt.
 
@@ -724,7 +724,7 @@ The act checks the authority of the human, the blocked attempt and the expected 
 An unblock that carries a content change also checks the authority that a node edit requires.
 It writes the node revision when the human carries a change.
 It opens exactly one attempt, and it pins a revision to that attempt.
-An unblock of a node whose attempt counter reads 0 opens none.
+An unblock of a node whose attempt reads 0 opens none.
 
 The expected revision is the current revision of the node when the human submits the act.
 A content change uses that revision as its base and writes the next revision.

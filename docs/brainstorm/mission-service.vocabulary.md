@@ -27,7 +27,7 @@ A new binding kind adds a row.
 - Every kind has the same five required plan content fields and a plan file name.
 - A name is a nonblank title, not an identity, and is not unique.
 - A criterion can hold several checkable statements.
-- Identity, kind, revision, state, attempt counter, priority and edges stay outside content.
+- Identity, kind, revision, state, attempt, priority and edges stay outside content.
 - These YAML documents show the plan content of an initiative, its objective and a task of that objective, respectively.
 
 ```yaml
@@ -111,7 +111,7 @@ Write `attempt` alone everywhere else.
 Take the objective "Add password reset".
 A `tdd@1` instance and a `reviewer@1` instance each execute it using their worker's method.
 
-The import creates the objective with no attempt, and its attempt counter reads 0.
+The import creates the objective with no attempt, and its attempt reads 0.
 
 1. A `tdd@1` instance claims the objective.
    The first claim opens attempt 1, and Execution 1 starts.
@@ -135,14 +135,11 @@ The import creates the objective with no attempt, and its attempt counter reads 
 
 Every record in this example names attempt 1 forever.
 
-## attempt counter
-
-The per-node ordinal that names which attempt a record belongs to.
-A node whose attempt never opened holds no attempt, and its attempt counter reads 0.
+A node whose attempt never opened holds no attempt, and its attempt reads 0.
 [Attempt](mission-service.md#attempt) owns the acts that open an attempt.
-The counter of the objective above reads 1 for every record in the attempt example.
-The import condition requires `Pending` or `Available` and an attempt counter that reads 0.
-A task modification reads the state and the attempt counter of its objective.
+The attempt of the objective above reads 1 for every record in the attempt example.
+The import condition requires `Pending` or `Available` and an attempt that reads 0.
+A task modification reads the state and the attempt of its objective.
 Attempt identity is a necessary eligibility check of a task outcome in objective readiness.
 The task outcome belongs to the open attempt of the objective.
 Attempt identity establishes no currency by itself.
@@ -568,7 +565,7 @@ An import carries these effects on a node.
 - **update**: A plan file that carries an identifier updates that node when the import condition holds.
 - **retirement**: A plan file that the import set omits retires its node when the import condition holds.
 
-The import condition holds when the node holds `Pending` or `Available` and its attempt counter reads 0.
+The import condition holds when the node holds `Pending` or `Available` and its attempt reads 0.
 
 - An import retires no node that holds an attempt.
 
@@ -576,7 +573,7 @@ An import modifies no node that holds an attempt, whatever its state.
 A release to `Pending` or `Available` leaves the node with an attempt and its records.
 A create reads the condition on the parent whose child set changes.
 The import condition of a task is the condition of its objective.
-A task modification requires its objective to hold `Pending` or `Available` and its attempt counter to read 0.
+A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
 This rule covers a create, an update and a delete of a task.
 A modification covers the record of the node, its parent link, its dependency edges and its child set.
 A containment move reads the condition on the moved node, the old parent and the new parent.
@@ -621,8 +618,8 @@ A human keeps the whole mission plan in Markdown, and one import set holds these
 - The import resolves the name `add-password-reset.md` inside this set.
 - The omission of a file from this set requests a retirement of its node.
 
-Each modification requires `Pending` or `Available` and an attempt counter that reads 0.
-A task modification reads the state and the attempt counter of its objective.
+Each modification requires `Pending` or `Available` and an attempt that reads 0.
+A task modification reads the state and the attempt of its objective.
 An inadmissible modification aborts the whole import with no effect.
 A rewrite of `add-password-reset.md` with no identifier creates a new node, and the unchanged `add-password-reset-email.md` now names that new node, so the import modifies "Add password reset email" and reads its condition.
 
@@ -694,9 +691,9 @@ A retirement never reaches a node that holds an attempt.
 A retirement requires the import condition on every node that the deletion modifies.
 The condition covers the retired node and the parent whose child set changes.
 It also covers every dependent whose edges change.
-Each check requires `Pending` or `Available` and an attempt counter that reads 0.
+Each check requires `Pending` or `Available` and an attempt that reads 0.
 The import condition of a task is the condition of its objective.
-A task modification requires its objective to hold `Pending` or `Available` and its attempt counter to read 0.
+A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
 This rule covers a create, an update and a delete of a task.
 One failed check aborts the whole import with no effect.
 The import that retires a node removes every current inbound reference to that node.
@@ -704,6 +701,6 @@ A retirement removes the node from the current child set that the readiness cond
 A preview confirms every retirement before the import applies.
 
 Take the import set above, and drop the file `add-reset-token-expiry.md`.
-The objective of that task holds `Available`, and its attempt counter reads 0.
+The objective of that task holds `Available`, and its attempt reads 0.
 The next import retires that task when the import condition holds.
 The assessment and the evidence of that task stay retrievable.

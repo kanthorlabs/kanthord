@@ -52,7 +52,7 @@ An absent or empty `verifications` list answers `mission.node.verifications_miss
 A nonlist `verifications` value or a blank or nontext item answers `mission.node.content_invalid`.
 A node with no verification need holds an always-successful command such as `true`.
 An absent or nonlist `bindings` value, an unresolved name or a rule-table violation answers `mission.node.bindings_invalid`.
-The identity, kind, node revision, state, attempt counter, priority and edges stay outside the content.
+The identity, kind, node revision, state, attempt, priority and edges stay outside the content.
 A task's content belongs to the node revision of its objective.
 Test-kind guidance changes no validation rule.
 
@@ -272,11 +272,94 @@ kanthord runs no automatic evidence cleanup.
 - That typed failure returns no content or presigned GET.
 - Removal admits an outcome reference and changes no effect of that outcome.
 
+## The outcome record
+
+- The node exposes one attempt field, `attempt`.
+  It holds the number of the latest attempt, or 0 when no attempt opened.
+  A node holds an open attempt when `attempt` is 1 or more, except in `Blocked`, `Completed` or `Discarded`.
+- Every attempt field of a record is a `nonnegative integer`.
+  No attempt field is null.
+  A record that the Mission Service writes while the attempt of its node reads 0 holds `attempt: 0`.
+  This rule covers the outcome of a human override, discard or block on such a node.
+  It also covers the landed-commit evidence that a success override supplies on such a node.
+- A human act on a node whose attempt reads 0 writes the node outcome only.
+  It closes no attempt and writes no task outcome.
+- Every outcome carries `nodeRevision`, which the service authors.
+  When the attempt is 1 or more, `nodeRevision` is the revision that the attempt pins.
+  When the attempt is 0, `nodeRevision` is the node revision current at the act.
+- The initiative-only objective read resolves a child objective to the `nodeRevision` of its current outcome.
+- An execution submission always names an attempt of 1 or more, because a claim exists only under an open attempt.
+- An omitted `attempt` filter selects every authorized record of the node.
+  `--attempt <n>` selects the records of attempt n.
+  `--attempt 0` selects the records that the service writes while the attempt reads 0.
+- Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
+  For a node blocked while its attempt reads 0, the read returns that outcome with no external object or observation.
+- The service writes these `closingEvent` spellings:
+  - `success-override` for a human override that asserts success.
+  - `human-discard` for a human discard.
+  - `human-block` for a human block.
+  - `task-assessment` for a task outcome that a steps execution submits.
+
+  An outcome with attempt 0 uses one of the first three.
+  `closingEvent` stays `Text`; these spellings form no closed set.
+- The outcome of a human block or a human discard asserts `undetermined`.
+  Its basis is a human assertion, and only an assessment basis asserts `criterion-not-met`.
+- `execution cleared-outcome get` and `execution unblock get` answer 404 `mission.not_found` when no unblock opened the claimed attempt.
+  After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
+  That attempt holds no unblock request.
+- A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
+  A mismatch answers 409 `mission.node.state_conflict`, with the current `state` and `attempt` in `details`.
+  An `Unblock` whose `blockedAttempt` differs from the current attempt answers the same code.
+- A task outcome is an outcome whose `nodeId` names the task.
+  Its `attempt` names the attempt of its objective.
+  Its `contentOwnerId` names that objective at the time of the write.
+  A later move of the task changes no stored outcome.
+- Task outcomes accumulate like node outcomes.
+  A correction names `previousOutcomeId`, and the corrected outcome names the same task and attempt.
+- `task-result submit` writes the task assessment and the task outcome in one transaction.
+  The outcome holds `closingEvent: task-assessment`, the `stoppingReason` of the assertion and the `result` of the paired assessment.
+  It holds a `basis` of kind `assessment` that names that assessment, and the `evidenceIds` of the assertion.
+- A `result` that differs from the paired assessment answers 400 `mission.task_result.result_mismatch`.
+  The `evidenceIds` set must include the accepted task commit evidence of that task in the attempt.
+  An omission answers 400 `mission.task_result.commit_missing`.
+- A closure that a human override, discard or block causes fills each missing task outcome.
+  It covers each current task that holds no current outcome of the closed attempt.
+  The filled outcome holds the closing event of the act as `closingEvent` and as `stoppingReason`.
+  It holds `result: undetermined`, even under a success override, and the `basis` of the node outcome.
+  Its evidence set holds the accepted evidence records of scope `task` for that task in the closed attempt.
+  The set is empty when no such record exists.
+- A closure that follows the evaluation fills no task outcome on the ordinary path.
+  The readiness condition requires every current task outcome before `Waiting` admits an evaluation claim.
+- This section states no rule for a task assessment that does not pass when the execution releases without further work.
+  The B9 item of the Mission Service owns that path.
+
+## Mark-ready
+
+- `node mark-ready` requires `expectedState: Available` and an `expectedAttempt` equal to the attempt of the node.
+  A mismatch answers 409 `mission.node.state_conflict`.
+- When the attempt reads 0, the readiness condition reads no attempt-scoped record.
+  An objective is ready only when it holds no current task.
+  An initiative is ready only when every current objective holds a terminal state.
+  No action is unresolved, because no attempt requested one.
+- A node that is not ready answers 409 `mission.node.not_ready`.
+  Its `details` hold `tasksWithoutOutcome: NodeId[]`, `objectivesNotTerminal: NodeId[]` and `unresolvedActions: Key[]`.
+  Each array is empty when it does not apply.
+  The refusal opens no attempt, changes no state and writes no queue entry.
+- A ready act while the attempt reads 0 opens attempt 1 in one transaction.
+  The transaction pins the current node revision and freezes the required external actions from the current Project configuration.
+  It records the execution-end fact, sets `Waiting` and inserts the evaluation work-queue entry.
+  The service wakes the Scheduler after the commit.
+  The act writes no assessment, no outcome and no task outcome.
+- A ready act on an open attempt records the execution-end fact on that attempt.
+  It sets `Waiting` the same way, with no opening.
+- The answer is `ControlResult` with the node in `Waiting` and the opened or open attempt.
+  It holds `outcome: null` and `taskOutcomeIds: []`.
+
 ## The revisions
 
 - Every revision and version counter of the server starts at 1.
 - Every `version`, `revision` and `expected*Revision` field holds a positive safe integer.
-- A count is no revision. The attempt counter starts at 0.
+- A count is no revision. The attempt starts at 0.
 - `gateway.tokenGeneration` keeps its default of 1.
 - A mission starts at mission revision 1, and a node starts at node revision 1.
 - A node takes its next node revision on every content change.
@@ -327,6 +410,29 @@ kanthord runs no automatic evidence cleanup.
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
 ## Tests
+
+- Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
+  They also write `attempt: 0` for the landed-commit evidence of a success override on such a node.
+  They keep the attempt at 0 and write no task outcome.
+- Tests return the block outcome from the blocked read while the attempt reads 0.
+  They return empty external objects and observations.
+- Tests block and unblock a node while its attempt reads 0, then claim attempt 1.
+  They assert 404 from `execution cleared-outcome get` and `execution unblock get`.
+- Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
+- Tests resolve a child objective with an attempt-0 outcome to the revision current at the act.
+- Tests commit the task assessment and the task outcome together or not at all.
+- Tests reject a result mismatch with `mission.task_result.result_mismatch` and a missing task commit with `mission.task_result.commit_missing`.
+- Tests fill task outcomes on an override, a discard and a human block.
+  They assert the closing event as the stopping reason, `undetermined`, the node basis and the task evidence of the attempt.
+- Tests keep `contentOwnerId` after a task move.
+- Tests fill no task outcome on a closure that follows the evaluation.
+- Tests admit mark-ready on an initiative whose attempt reads 0 and whose objectives are all terminal.
+  They also admit an objective whose attempt reads 0 with no current task.
+  They open attempt 1 with `executionEnded: true` and the frozen actions.
+  They reach `Waiting` with a queue entry in the same transaction.
+- Tests refuse mark-ready with `mission.node.not_ready` on an objective whose attempt reads 0 with a current task.
+  They name the tasks in `details` and leave the attempt at 0 with no queue entry.
+- Tests refuse a state or attempt mismatch of mark-ready with `mission.node.state_conflict`.
 
 - Tests accept both signed safe-integer limits, negative values and zero as priority on initiatives and objectives.
 - Tests read absent priority as 0 and reject fractions, nonnumbers and unsafe integers.
@@ -416,7 +522,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests reject absent or nonlist bindings and unknown or foreign-project names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject repeated repository names on an objective because its list requires exactly one entry.
-- Tests keep identity, kind, revision, state, attempt counter, priority and edges outside content.
+- Tests keep identity, kind, revision, state, attempt, priority and edges outside content.
 - A test keeps task content inside the objective revision.
 - Tests accept verification kinds outside the guidance for each node kind.
 - A test runs verifications serially in list order through `bash -c` from the execution workspace root.
@@ -429,7 +535,7 @@ kanthord runs no automatic evidence cleanup.
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that every revision and version counter starts at 1 and every such field requires a positive safe integer.
-- A test asserts that the attempt counter starts at 0 and the default of `gateway.tokenGeneration` stays 1.
+- A test asserts that the attempt starts at 0 and the default of `gateway.tokenGeneration` stays 1.
 - A test asserts one mission revision increment for each graph write, even when the write touches several nodes.
 - A test asserts no mission revision increment for each non-graph write and for a write with no structure or content change.
 - A test asserts that each content change creates the next node revision.
