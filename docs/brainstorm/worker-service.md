@@ -241,6 +241,13 @@ The Worker Service removes it after a bounded retention since the last execution
 The workspace of the evaluation method is fresh, and the Worker Service removes it at the release.
 The workspace of the steps method on an initiative holds no checkout.
 
+The kanthord component on the file's host serves `evidence upload <path>`.
+That component is the server, the `worker` application or the harness extension.
+It opens the path safely inside the execution workspace and uses the Mission Service's presigned-transfer flow.
+It returns the evidence identity and object URI, never the presigned URL, to the agent.
+The storage credential stays in server custody.
+The MCP server exposes no upload write.
+
 The rules of the four paragraphs below hold for the steps method on an objective.
 The steps method uses one node branch for each objective and repository binding, and it continues that branch across attempts.
 The node branch takes its name from the node identity.
@@ -252,12 +259,13 @@ The execution pushes the node branch through the repository connector before eve
 The steps method chooses the order of the tasks of the pinned revision.
 For each task the agent performs the steps in the workspace, and the execution commits the changes of the task work.
 The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
-The execution runs the verifications of the task against the task commit.
+The execution code, never the agent, runs the verifications of the task against the task commit.
 It discards every change that the verifications make.
-The agent revises the work within the resource budget of the execution before the execution records the task assessment.
-The execution commits a revision as a new commit.
-The agent judges the result against the criterion of the task.
-A task assessment does not pass when a verification of the task fails or does not run.
+A failed verification leads the agent to revise the task within the resource budget before the execution records the task assessment.
+The execution commits a revision as a new commit and runs the verifications again.
+The agent judges the result against the criterion only after every verification passes.
+A failed or unrun verification at the end of the budget produces a task assessment that does not pass, without a judgement.
+Its required rationale names that verification.
 The execution writes the task assessment and the task outcome.
 The task assessment names the task commit and the [tested input](mission-service.vocabulary.md#tested-input) of the verifications.
 The task outcome carries the task commit as its evidence.
@@ -265,7 +273,8 @@ A worker fixes the resource budget of one execution: a turn count and a wall tim
 
 In an attempt after the first, the execution reads the outcome of the cleared attempt for each task.
 The execution checks whether that outcome asserts success, the task content is unchanged between the pinned revisions, and the repository binding is unchanged.
-If all conditions hold, it runs the verifications again against the head of the node branch and judges again.
+If all conditions hold, it runs the verifications again against the head of the node branch.
+The same revise-first and judgement rules apply.
 It writes a new task assessment and a new task outcome.
 It executes every other task.
 Inside one attempt, a task that holds a current task outcome of the attempt is complete, and the execution skips it.
@@ -273,7 +282,7 @@ Inside one attempt, a task that holds a current task outcome of the attempt is c
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
 When every task of the revision holds a current task outcome of the attempt, the execution releases with no further work.
 A recorded task assessment that does not pass ends the task work, and the execution releases with no further work.
-When the resource budget ends before every task holds a task outcome, the execution releases with further work.
+Otherwise, when the resource budget ends before every task holds a task outcome, the execution releases with further work.
 Before a release with further work that names no wait fact, the execution submits its [run output](mission-service.md#run-output).
 Before that release, the execution commits the task work in progress as a checkpoint commit.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
@@ -505,11 +514,12 @@ The tested input names every commit, one per binding.
 An initiative whose objectives name no repository keeps the evidence-placement rule.
 For an objective whose evidence names no repository snapshot, the reviewer also uses that rule.
 Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
-The reviewer runs the verifications of the pinned revision from the workspace root, whatever the node kind.
+The reviewer execution code, never the agent, runs the verifications of the pinned revision from the workspace root.
 The execution records the machine-check results as produced evidence bound to the tested input and the pinned revision.
 The assessment names that evidence in its evidence set.
-The agent judges the evidence against the criterion.
-An assessment does not pass when a verification fails or does not run.
+A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
+Its required rationale names that verification.
+Only after every verification passes does the agent judge the evidence against the criterion.
 The execution writes the [assessment](mission-service.md#evaluation-and-assessment) with the fields that the Mission Service defines.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the record and its currency.
 
@@ -549,7 +559,7 @@ That rule holds for a reviewer execution of an external harness after the tool o
 When a required action awaits a prerequisite, the release names the observation that the action follows as its wait fact.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) owns the wait record, and the [Mission Service](mission-service.md#continuation-condition) owns the continuation condition.
 
-The sequence diagram below shows the evaluation and the configured repository action, on an objective that requires one action.
+The sequence diagram below shows an objective with one required action after every verification passes.
 
 ```mermaid
 sequenceDiagram

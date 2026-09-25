@@ -45,6 +45,7 @@ A new binding kind adds a row.
 | Worker | 0 | 0 | 0 |
 | Provider account | 0 | 0 | 0 |
 | Source | 0 | 0 | 0 |
+| Storage | 0 | 0 | 0 |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
@@ -54,6 +55,17 @@ An absent or nonlist `bindings` value, an unresolved name or a rule-table violat
 The identity, kind, node revision, state, attempt counter, priority and edges stay outside the content.
 A task's content belongs to the node revision of its objective.
 Test-kind guidance changes no validation rule.
+
+## Priority
+
+A human sets the priority of an initiative or an objective only.
+A task holds no priority; a priority write on a task answers `mission.node.priority_task`.
+The value is any signed safe integer, from -9007199254740991 through 9007199254740991, with no narrower bound.
+An absent priority reads 0.
+The service answers HTTP 400 with an issue list for a fraction, a nonnumber or an unsafe integer.
+The act requires a nonterminal node with no live claim.
+The service records the actor and time outside the node revision.
+An import carries no priority.
 
 ## The plan file grammar
 
@@ -145,6 +157,91 @@ The Mission Service refuses an assessment that asserts success with a failed or 
 It answers `mission.assessment.verification_failed` for both a task assessment and a reviewer assessment.
 Judgement decides success only after every verification of the pinned content passes.
 
+## The assessment
+
+An assessment holds one `result` and one required, nonblank `rationale`.
+It holds the evidence identities, immutable child outcome identities and tested input.
+It holds no `method` field and no separate criterion result.
+The actor and evaluation fields identify who judged.
+A task assessment has no evaluation identity; its actor is the steps execution of its objective.
+A reviewer assessment names its evaluation identity.
+An external harness assessment identifies the client identity of its harness worker.
+A human writes no assessment.
+The execution code, never the agent, runs the verifications before the judgement.
+
+The result follows this order:
+
+1. A failed or unrun verification gives `criterion-not-met`, with no judgement.
+   The required rationale names that verification.
+2. Otherwise, judgement against the criterion gives `success`, `criterion-not-met` or `undetermined`.
+3. For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
+
+Only the first case permits an empty judgement.
+The judgement is absent in that case; the rationale is never absent.
+The Mission Service answers `mission.assessment.verification_failed` when an assessment asserts success with a failed or unrun verification.
+HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
+The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
+
+## Evidence content
+
+Inline evidence holds at most 5 MiB of decoded content.
+`ContentBytes` holds `mediaType`, `encoding: "base64"` and canonical base64 `data`.
+The produced content address holds the required SHA-256 of those decoded bytes.
+The server verifies the hash before it accepts the content.
+Larger inline content answers 413 `mission.evidence.too_large`.
+The service never truncates evidence.
+Without a storage binding, the service accepts only inline evidence content.
+Repository evidence remains an address, not an upload of repository content.
+
+## Object evidence
+
+Object evidence uses one presigned-transfer strategy for every placement and every co-location.
+The host-local helper serves `evidence upload <path>` inside the execution workspace.
+The host component is the server, the `worker` application or the harness extension.
+It opens the path safely and refuses any path or symbolic-link escape from that workspace.
+The file path is local input, not an evidence address.
+
+1. The component calls `mission.evidence.upload.begin` with execution context, evidence metadata, size, media type and optional SHA-256.
+   This operation requires execution access and a live claim for the node or its task.
+   The server checks the live claim, the storage binding and the 5 GiB single-object limit.
+   It creates a pending record with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence id>`.
+   The record names the storage binding identity and revision.
+   Custody returns a presigned PUT for that key with a lifetime of 1 hour.
+   The grant requires a checksum header only when the component supplies a SHA-256.
+2. The component sends the bytes directly to the store with that PUT.
+   No transfer through the server proxies those bytes.
+3. The component calls `mission.evidence.upload.complete` under execution access with the evidence identity and execution context.
+   The server checks the live claim, the object size and, when given, the checksum.
+   A mismatch prevents publication.
+   The server publishes the evidence record only after those checks pass.
+   The record holds the object location, version when the store returns one, size, media type and optional SHA-256.
+   The answer holds the evidence identity and the `s3://` URI.
+
+A pending upload expires after 1 hour.
+An expired pending upload cannot complete.
+SHA-256 is optional for object evidence.
+A component supplies it when it wants; the store verifies it when both sides support it.
+kanthord enforces no object immutability.
+It records an object version when the store returns one.
+A human who disables versioning accepts that choice.
+The binding write probes no store capability.
+
+An authorized reader gets a presigned GET through its kanthord component.
+The read targets the recorded object version when one exists.
+The presigned URL is an API answer, never part of the credential handover or the agent context.
+The storage credential stays in server custody.
+The MCP server exposes no upload write.
+Removal deletes the object and withdraws kanthord's access; it recalls no downloaded copy.
+The human cleanup mechanism remains open in [HANDOFF](HANDOFF.md#mission-service).
+
+## Evidence retention
+
+Every evidence record and its content stay for the life of the mission.
+This lifetime applies whether an outcome depends on the evidence or not.
+kanthord runs no automatic evidence cleanup.
+Only a human removes evidence.
+The human cleanup mechanism remains open in [HANDOFF](HANDOFF.md#mission-service).
+
 ## The revisions
 
 - Every revision and version counter of the server starts at 1.
@@ -200,6 +297,37 @@ Judgement decides success only after every verification of the pinned content pa
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
 ## Tests
+
+- Tests accept both signed safe-integer limits, negative values and zero as priority on initiatives and objectives.
+- Tests read absent priority as 0 and reject fractions, nonnumbers and unsafe integers.
+- Tests reject task priority with `mission.node.priority_task` and refuse a live claim or terminal node.
+- Tests keep priority outside content, revision and import, with the actor and time of the human act.
+- Tests reject human assessments under execution access.
+- Tests answer HTTP 400 for a method field, an absent or blank rationale, or a result that violates the order.
+- Tests check task, reviewer and external harness attribution and their evaluation fields.
+- Tests check one result and one rationale, with no separate criterion result.
+- Tests check each result-order branch and allow an empty judgement only for a failed or unrun verification.
+- Tests require the rationale to name that verification and reject success with `mission.assessment.verification_failed`.
+- Tests prove that execution code runs verifications before judgement.
+- Tests permit judgement only after every verification of the current tested input passes.
+- Tests turn success into `criterion-not-met` for a default-standard violation only when the worker declares a base prompt.
+- Tests accept inline content at 5 MiB decoded and refuse one byte more with 413 `mission.evidence.too_large`.
+- Tests require canonical base64, media type and the correct SHA-256, and assert no truncation.
+- Tests refuse object uploads without a storage binding and preserve inline evidence and repository addresses.
+- Tests exercise the same begin, direct PUT and complete flow at every placement, with and without co-location.
+- Tests refuse paths outside the workspace, symbolic-link escapes and a path replacement race at open.
+- Tests check live-claim admission and task ownership at begin and complete.
+- Tests accept 5 GiB, refuse larger objects, and assert server-generated keys and the storage binding revision.
+- Tests check the 1 hour PUT lifetime and the checksum header only when SHA-256 exists.
+- Tests keep a record pending until complete verifies size and optional checksum; mismatches publish no evidence.
+- Tests expire pending uploads after 1 hour and refuse completion after expiry.
+- Tests preserve location, returned version, size, media type and optional SHA-256, then return identity and `s3://` URI.
+- Tests accept stores without versions, enforce no immutability and make no capability probe on a binding write.
+- Tests give authorized readers a presigned GET for the recorded version and refuse unauthorized reads.
+- Tests keep URLs outside the handover and agent context, and keep storage credentials in server custody.
+- Tests expose no MCP upload write.
+- Tests assert that removal deletes the object and withdraws access without recall of downloaded copies.
+- Tests retain all evidence for the mission lifetime, with or without outcome references, and run no automatic evidence cleanup.
 
 - Tests refuse each unknown front matter key and unknown H2 with `mission.import.plan_invalid` and the file name.
 - Tests refuse each absent or repeated H1, Requirement section and Criterion section with the same error and file name.

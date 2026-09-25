@@ -56,12 +56,13 @@ Project `atlas` names its worker binding `general-main` and its provider account
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
-`project-service.md` names four kinds, and it closes no set of kinds.
+`project-service.md` names five kinds, and it closes no set of kinds.
 
 - **repository**
 - **worker**
 - **provider account**
 - **source**
+- **storage**
 
 The mission of a project is intrinsic to that project, so no binding allocates it.
 A repository binding of the objective "Add password reset" permits three capabilities, and its cardinality permits one binding for each repository that the project uses.
@@ -69,16 +70,28 @@ A repository binding of the objective "Add password reset" permits three capabil
 ## cardinality
 
 The number of bindings of one kind that a project holds for one resource.
-The set is closed for each kind and it holds four values.
+The set is closed for each kind and it holds five values.
 
 - **repository**: one binding for each repository that the project uses.
 - **worker**: any number of bindings of one worker, each with its own configuration.
 - **provider account**: one binding for each account at a provider.
 - **source**: one binding for each delivery source that the project accepts.
+- **storage**: at most one binding per project, for one S3-compatible bucket.
 
 The project of "Account recovery" binds two repositories, one `tdd@1` worker as `tdd-main` and two provider accounts at one provider.
 A second binding for the repository `kanthorlabs/kanthord` is refused, and a second `tdd@1` binding `tdd-experimental` with another provider account is accepted.
 A third `tdd@1` binding with the values of `tdd-main` is accepted.
+
+## storage binding
+
+The binding of one S3-compatible bucket that holds the object evidence of a project.
+A project holds at most one storage binding.
+Project `atlas` names its binding `evidence-store` and its bucket `atlas-evidence`.
+Its configuration holds `endpoint`, `bucket`, `region`, `prefix` and `credential` beside `available`.
+The credential reference names a custody record; its record type follows the [HANDOFF Mission item](HANDOFF.md#mission-service).
+The storage credential stays in server custody.
+A presigned grant reaches the kanthord component for one operation on one object, never the context of an agent.
+Without this binding, the project accepts only inline evidence content.
 
 ## binding set
 

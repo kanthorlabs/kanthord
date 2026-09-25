@@ -20,6 +20,7 @@ A new binding kind adds a row.
 | Worker | 0 | 0 | 0 |
 | Provider account | 0 | 0 | 0 |
 | Source | 0 | 0 | 0 |
+| Storage | 0 | 0 | 0 |
 
 ## node content
 
@@ -63,6 +64,31 @@ The service does not validate this guidance.
 - Task: unit tests and functional checks.
 
 A node with no verification need holds `true`, not an empty list.
+
+## priority
+
+The human act that orders an initiative or an objective in the work queue.
+A task holds no priority.
+A human sets the priority of "Add password reset" to -2, then to 7.
+Each act records its actor and time outside the node revision.
+Any signed safe integer is valid; absent priority reads 0.
+A priority write on "Expire the reset token" answers `mission.node.priority_task`, because that node is a task.
+
+## object evidence
+
+Evidence whose content occupies an object in the bucket of a project's storage binding.
+Its address is the object location and its version when the store keeps one.
+SHA-256 is optional.
+
+The execution of "Add password reset" produces a 3 GB video of the reset flow.
+The video exceeds the 5 MiB inline limit.
+Its host component safely opens the video inside the execution workspace.
+The component calls begin, uses the presigned PUT, then calls complete.
+The record names the `atlas-evidence` bucket, its object key, size, media type and storage binding revision.
+It records the object version when the store returns one.
+The answer gives the evidence identity and `s3://atlas-evidence/<object key>`.
+The reviewer gets a presigned GET through its kanthord component, not a storage credential.
+The video and its evidence record stay for the life of the mission unless a human removes them.
 
 ## attempt
 
@@ -262,14 +288,15 @@ An edit writes the WHAT, and a correction writes a new outcome record.
 
 The record of one evaluation of one evidence set against the criterion of one node revision.
 An assessment weighs the evidence against the criterion of the node revision that it names.
-An assessment names six things.
+An assessment names seven things.
 
 - the evidence set that it evaluates
 - the node revision whose criterion it evaluates
 - every immutable child outcome record that it weighs
-- the method that it applies
 - the actor that performs it
 - the tested input of its verifications
+- one result
+- one required rationale
 
 The [overview](overview.md) gives what an assessment establishes.
 That set is closed and it holds three values.
@@ -281,9 +308,23 @@ That set is closed and it holds three values.
 Take the objective "Add password reset" above.
 A `reviewer@1` instance evaluates that objective, and it writes one assessment.
 That assessment names the evidence set of the objective, the node revision pinned by the attempt, and the outcome record of each task.
-It names the evaluation method, and it names the reviewer instance as the actor.
+It names the reviewer execution as the actor and holds no method field.
+Its evaluation identity distinguishes it from a task assessment.
+An external harness assessment identifies the client identity of the harness worker.
+A human writes no assessment.
 The assessment names the tested input of the verifications of the pinned revision.
 Assessments accumulate, so a second assessment of the same objective never overwrites the first.
+
+The assessment result follows this order for "Add password reset":
+
+1. `npm run test:reset` fails or does not run.
+   The result is `criterion-not-met`; the execution makes no judgement, and the rationale names that verification.
+2. Otherwise, the agent judges the criterion.
+   The judgement gives `success`, `criterion-not-met` or `undetermined`.
+3. The worker declares a base prompt and the judgement finds a default-standard violation.
+   That violation turns `success` into `criterion-not-met`.
+
+Only the first case permits an empty judgement, and no case permits an absent rationale.
 
 ## tested input
 

@@ -25,7 +25,10 @@ A binding has a [binding name](project-service.vocabulary.md#binding-name) that 
 A change of the binding name removes the binding and adds another one.
 A binding has a kind.
 The kind determines the configuration that the binding holds, the cardinality that a project permits, and the validation that the configuration satisfies.
-A project holds one binding for each repository, each provider account and each delivery source that it uses, and any number of bindings of one worker.
+A project holds one binding for each repository, each provider account and each delivery source that it uses.
+It holds any number of bindings of one worker and at most one [storage binding](project-service.vocabulary.md#storage-binding).
+The storage binding names one S3-compatible bucket for the object evidence of the project.
+Without a storage binding, the project accepts only inline evidence content.
 A binding references another binding by identity.
 A reference never names a revision.
 A project shares a resource with another project.
@@ -132,6 +135,10 @@ The facility recognizes every authenticated human identity as authorized for the
 
 For a machine identity, the facility checks the binding of that project for the requested operation.
 The facility consults custody after that check.
+
+A presigned grant of a storage binding is no credential.
+It authorizes one operation on one object for a bounded time.
+It reaches a kanthord component and never the context of an agent.
 
 - A credential leaves the server only through a [credential handover](project-service.vocabulary.md#credential-handover) to a `worker` application of kanthord. It leaves it in no other way.
 - For an execution at the `worker` placement, custody hands over every credential that its capabilities require. The handover lasts for the execution.
