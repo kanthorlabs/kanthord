@@ -430,7 +430,7 @@ A loopback callback listener that pi-ai opens for an OAuth login session belongs
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
 It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover` and `POST /api/worker/credential` for a worker instance.
-It forwards the registered work-pull and MCP paths for an instance that runs outside the host of the server.
+It forwards the registered work-pull, claim inspection, lease renewal, release and MCP paths for an instance that runs outside the host of the server.
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
 An instance presents its long-lived JWT on every request, so the ingress provides confidentiality for registration, heartbeat, work-pull and MCP traffic.

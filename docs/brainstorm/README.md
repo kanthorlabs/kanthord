@@ -11,7 +11,7 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 - [Project Service](project-service.md), [vocabulary](project-service.vocabulary.md), and [implementation proposals](project-service.impl.md)
 - [Custody](custody.md), [vocabulary](custody.vocabulary.md), and [implementation proposals](custody.impl.md)
 - [Mission Service](mission-service.md) and [vocabulary](mission-service.vocabulary.md)
-- [Scheduler Service](scheduler-service.md) and [vocabulary](scheduler-service.vocabulary.md)
+- [Scheduler Service](scheduler-service.md), [vocabulary](scheduler-service.vocabulary.md), and [implementation proposals](scheduler-service.impl.md)
 - [Intake Service](intake-service.md) and [vocabulary](intake-service.vocabulary.md)
 - [Worker Service](worker-service.md), [vocabulary](worker-service.vocabulary.md), and [implementation proposals](worker-service.impl.md)
 - [Tracking Service](tracking-service.md), [vocabulary](tracking-service.vocabulary.md), and [implementation proposals](tracking-service.impl.md)
