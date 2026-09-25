@@ -159,11 +159,36 @@ The write refuses a submission that changes the worker of an existing worker bin
 - The write and the resolution check that level. An unsupported level refuses the write with `project.bindings.worker.reasoning_effort_unsupported` and prevents resolution.
 - The `instanceCount` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
-- The repository, provider account and source kinds keep `available`.
+- The repository, provider account, source and storage kinds keep `available`.
 - A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
 - Every repository binding names exactly one `credential` of type `api_key` of its platform. An absent credential refuses the write.
 - An HTTPS repository address refuses the write.
 - A strategy with more than one action refuses the write.
+
+## Storage configuration
+
+The `storage` binding names one S3-compatible bucket of a project.
+A project holds at most one current storage binding.
+The set validation and a partial unique index on `project_id` for current `storage` rows enforce that cardinality.
+The configuration holds these fields beside `available`:
+
+- `endpoint`: required URL of the S3-compatible service.
+- `bucket`: required nonblank bucket name.
+- `region`: required nonblank region.
+- `prefix`: required text for the object-key prefix.
+- `credential`: required reference to a custody record, never inline secret material.
+
+The credential record type follows the [HANDOFF Mission item](HANDOFF.md#mission-service); this configuration declares no record type.
+Validation checks the field types, the endpoint URL, the custody reference and project cardinality at write and resolution.
+An absent field, invalid value or second storage binding refuses the write.
+The binding write probes no store capability or version support.
+The store controls object versioning; kanthord enforces no object immutability.
+A human who disables versioning accepts that choice.
+Without a storage binding, the Mission Service accepts only inline evidence content, not object uploads.
+
+Tests reject absent fields, invalid values, an unknown custody reference and a second storage binding.
+Tests assert that binding writes make no capability probe and that stores without versions remain valid.
+Tests preserve the storage binding revision in each object evidence record.
 
 ## The worker template registry
 
@@ -277,6 +302,26 @@ Custody fills its plaintext buffer with zeroes when the operation returns.
 That cleanup is best effort, because a parsed string and a cached token outlive the buffer in this runtime.
 [worker-service.impl.md](worker-service.impl.md) owns the trust boundary of the host, including the host of every `worker` application.
 Custody defends the material against a record of the system, and it defends nothing against a party that controls that host.
+
+## Presigned storage grants
+
+Custody mints a presigned storage grant inside `use` after the protected facility authorizes the operation.
+Custody derives the endpoint, bucket and credential from the storage binding.
+The Mission Service supplies the server-generated object key, never an agent-selected destination.
+A PUT grant authorizes one object upload and expires after 1 hour.
+It requires the checksum header only when begin supplies a SHA-256.
+Custody also provides the object metadata check for complete and a presigned GET for an authorized reader's kanthord component.
+The GET addresses the recorded version when one exists.
+Each grant authorizes one operation on one object for a bounded time.
+The API answer carries the URL directly to the component, never through the credential handover.
+The storage credential stays in server custody at every placement and every co-location.
+The component keeps the grant outside the context of an agent.
+kanthord cannot prove that a harness keeps it out of the model context; the single-object scope bounds that risk.
+
+Tests assert authorization before custody use and derive the destination only from the checked binding and server-generated key.
+Tests assert the 1 hour PUT expiry, optional checksum header and authorized GET for the recorded object version.
+Tests assert that no storage credential or presigned URL enters the handover, logs or agent context.
+Tests refuse grants for unauthorized readers or executions without a live claim.
 
 ## The credential store of an execution
 

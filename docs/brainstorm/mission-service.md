@@ -74,7 +74,8 @@ The priority of a node is a recorded act that orders the work queue of the Sched
 It is not part of the WHAT.
 The mission holds no order over the tasks of an objective.
 
-A human sets the priority of a node through the node API.
+A human sets the priority of an initiative or an objective through the node API.
+A task holds no priority, because a task is never a unit of scheduling.
 The Mission Service records the priority with the actor and the time of the act, outside the node revision.
 No rule of the Mission Service reads the priority.
 The Mission Service admits the act while no claim holds the node and the node is not terminal.
@@ -225,7 +226,7 @@ A repeated address of unchanged content, with no new observation, creates no evi
 
 A commit hash is the preferred address of work that a repository holds.
 A commit hash is never required.
-A SHA-256 hash addresses content that no repository holds.
+A SHA-256 hash, or an object location and its version when the store keeps one, addresses content that no repository holds.
 Addressed prose is evidence, and a research report and a judgement rationale qualify.
 An evaluation determines the strength of that evidence.
 A claim that carries no addressed content is not evidence.
@@ -251,7 +252,7 @@ A failure to inspect the platform is therefore not a failure of the request, and
 An outcome that an `External.Failed` observation closes names that observation, so the cause of the block is reachable from the outcome.
 The basis of that outcome stays the passing assessment.
 
-The Mission Service stores the content of produced evidence.
+The Mission Service stores produced evidence as inline content or [object evidence](mission-service.vocabulary.md#object-evidence).
 It stores the address of repository evidence.
 Stored content stays retrievable.
 An address resolves while its repository holds the content.
@@ -290,9 +291,8 @@ Redaction happens before an artifact receives its address.
 An evidence record states that redaction transformed its content.
 One exceptional path removes content that holds a credential.
 An evidence submission is bounded, and it never truncates content silently.
-Unassessed evidence, rejected evidence and abandoned evidence each carry a bounded retention.
-The retention of outcome-dependent evidence is transitive.
-It covers the evidence that supports every child outcome that an assessment weighs.
+Every evidence record and its content stay for the life of the mission.
+Only a human removes evidence.
 A correction names what it corrects.
 
 ## Run output
@@ -343,12 +343,20 @@ The boundary is authority, and it is not a file format.
 
 An assessment names its evidence set and its node revision.
 An assessment weighs the evidence against the criterion of that revision.
-An assessment does not pass when a verification exits nonzero or does not run.
+An assessment holds one result and one required rationale.
+The verifications decide the result first, then the judgement against the criterion and the default standard.
+A failed or unrun verification produces a result that does not pass, without a judgement.
+The rationale names that verification.
+Only this case permits an empty judgement.
 The assessment of an execution whose worker declares a base prompt also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
 A worker that an external harness hosts declares no base prompt, so its assessment weighs the criterion alone.
 An assessment that finds a violation of the default standard does not pass.
 It names every immutable child outcome record that it weighs.
-It names the method that it applies and the actor that performs it.
+It names the actor that performs it.
+An assessment holds no method field.
+Its actor and evaluation fields identify who judged.
+A human writes no assessment.
+The execution code, never the agent, runs the verifications before the judgement.
 
 Currency needs three checks.
 Context asks whether an assessment matches the evidence that it names, the node revision that its attempt pins, the structure and the selected child outcomes.

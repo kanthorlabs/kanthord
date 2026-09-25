@@ -111,6 +111,27 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - An absent or invalid `masterKey` stops the start of `kanthord serve worker`.
 - A `masterKey` that differs from the one of the server fails every decryption. The application ends the execution as a cannot-progress condition.
 
+## Evidence upload
+
+The `worker` application serves `evidence upload` locally for a file on its host.
+The server and the harness extension serve the same helper on their own hosts.
+The helper safely opens the path inside the execution workspace.
+It refuses path traversal, symbolic-link escapes and path replacement races.
+It calls `mission.evidence.upload.begin` with execution context, evidence metadata, size, media type and optional SHA-256.
+It sends the file directly to the presigned PUT destination, then calls `mission.evidence.upload.complete`.
+It follows [the object evidence contract](mission-service.impl.md#object-evidence) for all placements and co-locations.
+It returns the evidence identity and `s3://` URI to the agent.
+A reader's component obtains a presigned GET through the content read operation.
+No storage credential enters the credential handover.
+The presigned URL is an API answer, not a handover field, tool result or agent-context value.
+The MCP server exposes no upload write.
+
+- Tests exercise local file access at every placement and refuse an out-of-workspace path or unsafe open.
+- Tests assert begin, direct PUT and complete order, with publication only after the checks pass.
+- Tests keep the storage credential and presigned URL out of the handover and agent context.
+- Tests return only the evidence identity and object URI to the agent.
+- Tests keep the MCP write set unchanged.
+
 ## Tool table
 
 The tool table of a native agent holds three sources.
@@ -153,6 +174,11 @@ An initiative uses one subdirectory per distinct repository binding from its cur
 A test checks the host requirements and the shared verification run mechanism.
 A test checks duplicate removal, discarded objectives, base-branch heads and one tested commit per binding for an initiative.
 A test checks the evidence-placement rule when an initiative's objectives name no repository.
+Tests prove that execution code, never the agent, runs verifications before judgement.
+Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
+Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
+Budget-end tests assert a failed task assessment without judgement when a verification fails or remains unrun.
+Tests permit judgement only after every verification passes.
 
 ## Workspace
 
@@ -160,7 +186,7 @@ A test checks the evidence-placement rule when an initiative's objectives name n
 - The workspace of a steps execution is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
 - The workspace of an evaluation execution is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
-- The bounded retention of [worker-service.md](worker-service.md#executions) is 7 days since the end of the last execution of the objective.
+- The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.
 - The state directory holds the workspace because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
 
