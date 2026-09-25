@@ -11,9 +11,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the receiving-side authentication contract of a forwarded caller identity. The identity value is process-local and the JWT stays in the Gateway Service, so a split that forwards a caller identity to another process needs a contract that no page holds.
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the temporal validity of a cross-service precondition of a handler. A handler reads a fact of a peer through a client, awaits, then commits, and the fact can change during the wait: the Scheduler reads that a node is available and a human blocks it before the claim commits. Parked candidate: every cross-service precondition declares itself as a frozen snapshot, read before the commit and recorded with the effect, or as a commit-time condition, read through a collaboration inside the transaction while the two services are co-located, so a client read never satisfies a commit-time condition. This adds a second admissible case of a collaboration beside the atomic invariant, and it names the service pairs that no composition change alone can split. Not needed while every service runs in one process, because the complexity outweighs the benefit there.
-- [ ] Added 2026-09-25 by Ulrich. Every external resource that the system registers has a resource healthcheck. Only the check method of a subscription remains open.
-  - [architecture.md](architecture.md#resource-healthcheck), [gateway-service.md](gateway-service.md#health-report-and-liveness-answer) and their siblings hold the other rulings of 2026-09-25 by Ulrich.
-  - Parked 2026-09-25, exposed by the check method ruling. Rule the resource healthcheck of a subscription. The Intake Service holds acquisition material only inside a grant session, so a disabled subscription has no material. A passive webhook, a poll and a stream hold no registration to read.
 
 ### Project Service
 
@@ -47,6 +44,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription mutations await incompatible-create handling, desired-state omission, disabled-source admission and retirement semantics. Candidate: omitted desired state selects `disabled`; disabled-source admission returns validation failure with HTTP 400.
 
 ### Worker Service
+- [ ] Added 2026-09-25, exposed by the subscription healthcheck ruling. A webhook subscription with one verified receipt stays `healthy` when its route breaks, the platform suspends delivery or the platform deletes its registration. Decide whether the reconciler gathers remote evidence inside a session that it already holds, for example a registration read, so that the local check reads that evidence.
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 

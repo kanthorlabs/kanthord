@@ -47,6 +47,11 @@ The poll subscription of `kanthord-docs` keeps the last accepted event identity 
 A resume position is the platform position from which a stream resumes acquisition.
 The stream subscription of `kanthord-web` keeps the last accepted stream cursor for the Slack workspace `kanthorlabs` as its resume position.
 
+## acquisition window
+
+The acquisition window is the period in which the last successful answer of a poll counts as evidence for its subscription resource healthcheck.
+The poll subscription of `kanthord-docs` reports healthy because its last successful request lies inside the acquisition window.
+
 ## disposition
 
 A disposition is the answer that the Scheduler Service records for delivery admission.
