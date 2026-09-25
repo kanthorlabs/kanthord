@@ -36,7 +36,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - `general@1` references `swe@1`; `reviewer@1` references `re@1`.
 - Both declare an empty option schema.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
-- `agent get` answers the declaration, `configurationSchema`, `overridableFields` and `enablement`.
+- `agent get` answers the prompts of the declaration, `configurationSchema`, `overridableFields` and `enablement`.
 - `enablement` is null when no record exists.
 
 ## Agent configuration validation
