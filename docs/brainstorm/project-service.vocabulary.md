@@ -136,7 +136,19 @@ A repository binding names one repository, and the project moves the work to ano
 That change names another resource, so it creates a replacement binding.
 The replacement invalidates every reference to the binding that it replaces.
 The same edit repoints every dependent binding.
-A change to the remote that a credential authorizes is also a change to the resource, so it creates a replacement binding.
+
+`credential_A` holds the remote identity `github:user:ulrich`.
+The team moves to a token of `github:organization:kanthorlabs`, so a human creates `credential_B`.
+The binding `kanthord-repo` of `atlas` changes its credential reference to `credential_B`, which creates a revision.
+The binding of `beacon` keeps `credential_A` until its own edit.
+
+## credential name
+
+The name that a human chooses for a credential store record, unique on the server.
+The term names no closed set.
+
+The record `credential_A` holds the credential name `atlas-github`.
+A second `credential create` with `atlas-github` returns the holder `credential_A`.
 
 ## credential reference
 

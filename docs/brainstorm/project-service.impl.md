@@ -122,7 +122,7 @@ A dependent reference follows the name, so a new identity under a name repoints 
 Validation refuses a set that references a binding name that the submission does not hold.
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
-## Revision, disablement and the change of a remote
+## Revision, disablement and rotation
 
 A revision is the unit of a configuration change.
 The local disablement of a binding is a field of the configuration, so a disablement creates a revision.
@@ -132,9 +132,7 @@ A rotation therefore updates one `credential` row in place and creates a revisio
 A rotation commits in one transaction, and the last write wins.
 An `oauth` record obtains material through the refresh of pi-ai, which runs inside `modify` under the credential store lock.
 That refresh updates the row in place and creates no revision.
-A change to the remote that a record authorizes is no rotation.
-It is a change to the resource, so it creates a replacement binding in every project that names that record, and each of those projects submits that edit.
-The Project Service marks such a record and refuses a resolution that reaches it through a binding which no edit repointed.
+A rotation keeps the remote identity of the record. Material for another remote goes into a new record.
 
 ## Validation
 
@@ -190,6 +188,15 @@ A recorded revision authorizes nothing, so the next operation resolves the chain
 ## The credential store record
 
 A record holds one secret of one type.
+
+- A credential store record holds its credential name in `name`, with 1 to 63 characters.
+- The name starts with a lower-case letter, then uses lower-case letters, digits and hyphens.
+- A unique index holds `name`.
+- The credential name is the natural key of `credential create` and of an OAuth login.
+- A taken name answers 409 `project.credential.name_conflict` with the holder identity in `error.details`.
+- A login session takes the credential name at its start, checks it at the start and checks it again at the commit.
+- A rotation keeps the credential name and the remote identity.
+
 The types are below, and each one names the class of operation that it performs.
 
 - **api_key**: `{type:"api_key", key}` of pi-ai. For a git platform the key is a personal access token, classic or fine-grained. The key of a git platform performs a platform action only. For a provider account the key performs a model inference call. API key providers include `openai` and `anthropic`.
@@ -309,9 +316,10 @@ The resolution builds a custom provider from the resolved revision.
 ## The OAuth login
 
 - Custody runs `models.login(providerId, "oauth", interaction)` of `@earendil-works/pi-ai` at 0.86.0 over its own credential store. The credential lands in a `credential` record through `modify` and never leaves the server.
-- A login session is a runtime record of the Project Service with identity `login_session_<ulid>`, provider id, mode and starting human identity. It holds the remote identity that the human names for the record, its state, emitted address and code, failure reason and expiry. The expiry falls 15 minutes after the start.
+- A login session is a runtime record of the Project Service with identity `login_session_<ulid>`, provider id, mode and the initial human identity. It holds the credential name and the remote identity that the human names for the credential store record. It also holds its state, emitted address and code, failure reason and expiry. The expiry falls 15 minutes after the start.
 - The interaction adapter answers a `select` prompt with the session mode, `browser` or `device_code`. It fails the session for an option outside those two. It records an `auth_url` notification as the address and a `device_code` notification as the code and address. It records `info` and `progress` notifications as the last message of the session. It suspends a `manual_code`, `text` or `secret` prompt until the second operation supplies the value. It fails the session when the expiry arrives first.
-- All operations use the `human` access policy. `project.credential.login` is a `unary` mutation with provider id, mode and remote identity as input. Its output holds the session identity, address, code and expiry. `project.credential.login_code` is a `unary` mutation with session identity and value as input. It answers 409 when the session awaits no value. `project.credential.login_status` is a `unary` read keyed by session identity. It returns state, last message and failure reason. A provider that offers one mode ignores the input mode.
+- All operations use the `human` access policy. `project.credential.login` is a `unary` mutation with provider id, mode, credential name and remote identity as input. Its output holds the session identity, address, code and expiry. `project.credential.login_code` is a `unary` mutation with session identity and value as input. It answers 409 when the session awaits no value. `project.credential.login_status` is a `unary` read keyed by session identity. It returns state, last message and failure reason. A provider that offers one mode ignores the input mode.
+- The login operation checks the credential name at the start and at the commit under [the credential store record](#the-credential-store-record) rule. A taken name answers 409 `project.credential.name_conflict` with the holder identity in `error.details`.
 - In browser mode, pi-ai opens a callback listener on the server host loopback for the duration of the session. OpenAI Codex uses `127.0.0.1:1455`, and Anthropic uses port `53692`. The environment variable `PI_OAUTH_CALLBACK_HOST` changes the host. The server sets no `PI_OAUTH_CALLBACK_HOST`. The listener belongs to pi-ai and serves no kanthord operation. The Gateway registers no route for it. A browser on the server host completes the callback. A browser on another machine fails it, and the human returns the redirect URL or code through `project.credential.login_code`.
 - The device mode needs no listener. pi-ai polls the provider until success, failure or expiry.
 - Custody holds at most one pending session per provider id and human identity. A second start answers 409. A completed session writes the record and ends. The session record holds no token at any time.
@@ -415,6 +423,9 @@ The `kanthord` bin of `package.json` releases it.
 
 ## Tests
 
+- A test covers a credential create and an OAuth login with a taken credential name. It asserts 409 `project.credential.name_conflict` and the holder identity in `error.details`. It checks the login refusal at the start and at the commit.
+- A test covers a credential create retry after a restart. It asserts one credential store record for the credential name.
+- A test covers a rotation. It asserts that the credential name and the remote identity stay unchanged.
 - A test covers a creation and a rename to a taken project name, and it asserts 409 with the identity of the holder.
 - A test covers a project creation whose mission insert fails, and it asserts that no project row remains.
 - A test covers SSH-only coverage and suitability for every type, capability and provider. It refuses an absent platform key and an HTTPS repository address.
@@ -464,5 +475,4 @@ The `kanthord` bin of `package.json` releases it.
 - The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
 - The record of the failure of a credential, and the healthcheck of a provider account, which [HANDOFF.md](HANDOFF.md) holds as a B9 item.
-- The support of a GitHub App installation credential, which the first version omits and which needs a short-lived token, a mint and a cache.
 - The rotation behaviour of the refresh token of each OAuth provider under two concurrent holders.
