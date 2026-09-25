@@ -514,12 +514,14 @@ A fatal error runs as below.
 - A command reads no prompt, confirmation, password or other input from a terminal. Missing required arguments or options and unknown arguments or options produce a diagnostic and a non-zero exit before the command performs work.
 - Documented configuration files and environment variables supply only their declared values. They never trigger an interactive fallback.
 - The `kanthord` bin exposes one program, and the launcher of the runtime section is the entry of every invocation.
-- A top-level name of that program belongs to one of two closed sets.
+- A top-level name of that program belongs to one of three closed sets.
 - The first set holds the global commands that this sibling declares, and it holds `config`, `serve` and `jwt`.
 - The second set holds one group for each service of [architecture.md](architecture.md), named by that service in lower case.
 - It holds `project`, `mission`, `scheduler`, `intake`, `worker`, `tracking` and `gateway`.
-- The two sets are disjoint, so the group of a service collides with no global command. A top-level name outside the two sets is a defect.
-- This sibling declares the two sets and the shape of the surface.
+- The third set holds one group for each shared component of [architecture.md](architecture.md#shared-components), named by the prefix of its operations.
+- It holds `credential`.
+- The three sets are disjoint, so no group collides with a global command or with another group. A top-level name outside the three sets is a defect.
+- This sibling declares the three sets and the shape of the surface.
 - Each group page in the engine [CLI specification](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/README.md) declares its command table. It declares no top-level name.
 - A command table holds one row for each command of the group. A row names the command, then the operation of the RESTful API that it calls with the access policy of that route, or the statement that the command runs locally and calls no route.
 - A command that names an operation which no route of the published contract serves is a defect.
@@ -529,17 +531,17 @@ A fatal error runs as below.
 - `kanthord` with no command prints the help and exits with a non-zero status, so no invocation starts an application by default.
 - `serve` defaults its optional application operand to `server`.
 - The `cli` application is no operand of `serve`, because it holds every command that is no `serve`.
-- An application name is an operand and no top-level name, so an application collides with the group of a service never.
+- An application name is an operand and no top-level name, so an application collides with the group of a service or shared component never.
 - A later application joins the operand set of `serve`. A later application that needs a process of its own contradicts the one-process rule of [architecture.md](architecture.md), so it is a change of that page and no ruling of this sibling.
 - The `config` group holds `init`, `validate` and `show`, which the section below rules. `init` creates an absent file; no command edits an existing configuration file.
-- The `config` group, `serve` and a local command of the group of a service need no running server.
-- A command of the group of a service that names an operation reaches the server through the RESTful API, which [gateway-service.md](gateway-service.md) rules.
+- The `config` group, `serve` and a local command of the group of a service or shared component need no running server.
+- A command of the group of a service or shared component that names an operation reaches the server through the RESTful API, which [gateway-service.md](gateway-service.md) rules.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
 - The CLI provides `kanthord jwt [username] [--name <display>] [--binding <worker binding>] [--config <path>]` to generate a JWT. Without `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `masterKey`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password, secret or client configuration. This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
 - The help of a command and the validation of its arguments need no running server.
-- `--config` belongs to `config`, `serve`, and the local `jwt` command. Service commands reject that option, because they use the client configuration. `jwt` resolves the path through the same option, environment and default order as the server.
-- `kanthord --help` lists the three global commands and the seven groups, and it names nothing else. The help of a group lists the commands of that group alone.
+- `--config` belongs to `config`, `serve`, and the local `jwt` command. Service and shared component commands reject that option, because they use the client configuration. `jwt` resolves the path through the same option, environment and default order as the server.
+- `kanthord --help` lists the three global commands, the seven service groups and the one shared component group, and it names nothing else. The help of a group lists the commands of that group alone.
 - `commander` at 15.0.0 produces the help.
 
 ## The client configuration
