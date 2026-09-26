@@ -223,6 +223,7 @@ The execution record holds these fields.
 - The kind of the claim: a steps claim or an evaluation claim.
 - The node and its attempt.
 - The pinned node revision.
+- The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
 - The lease.
 - The trace identity of the execution.
 - The root span identity of the execution.

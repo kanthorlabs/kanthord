@@ -38,9 +38,11 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `claimKind` is `steps` or `evaluation`, the two kinds of a [claim](scheduler-service.vocabulary.md#claim).
   - `priority` is the signed safe integer that the entry copies from the Mission Service.
   - `heldOut` is a boolean, and `waitFor` holds the `WaitFact` of the wait record or `null`.
-- `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
+- `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
   - `claimant` holds `workerBindingId` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
   - `attempt` and `pinnedRevision` are positive safe integers.
+  - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
+  - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
   - The closed set of `claimState` remains **[blocked](HANDOFF.md#scheduler-service-and-delivery)** under the request and response schemas (claim state) question.
   - `lease` holds `expiresAt`, `renewedAt` as a timestamp or `null` before the first renewal, and `lossDeclaredAt` as a timestamp or `null` before a loss declaration.
   - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` while the claim is live.

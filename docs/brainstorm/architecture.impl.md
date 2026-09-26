@@ -192,11 +192,12 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 - [Custody](custody.impl.md#the-credential-store-record) owns the table schema, name index, platforms, secret shapes and metadata.
 - Each service reaches a record through custody, so the envelope is a shared mechanism.
+- One row holds one revision of a credential, and the row identity names that revision.
 - The protected facility checks authorization before secret use.
 - `crypto.createCipheriv` encrypts the material with AES-256-GCM, a 12-byte nonce from `crypto.randomBytes` and a 16-byte tag.
 - The plaintext is the JSON of the material of the secret shape of the platform, so one record holds several fields under one ciphertext.
 - The column `nonce` holds the nonce as 12 bytes, and the column `ciphertext` holds the ciphertext followed by the 16-byte tag. A read that meets another length fails the record.
-- The additional authenticated data is the concatenation of two length-prefixed fields, the record identity and the platform, so the encoding admits no second reading.
+- The additional authenticated data is the concatenation of two length-prefixed fields, the row identity and the platform, so the encoding admits no second reading.
 - `createDecipheriv` verifies the tag before any caller reads the plaintext.
 - The cipher key is `HKDF(masterKey, info = "custody/aes-256-gcm/v1")`. The server derives it at startup and holds it for the life of the process.
 - A nonce is random for each write of a record, and the count of the writes of this server stays far below the birthday bound of a 12-byte nonce.

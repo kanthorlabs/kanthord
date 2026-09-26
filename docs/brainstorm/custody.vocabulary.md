@@ -19,7 +19,7 @@ The store holds one GitHub key that the repository bindings of `atlas` and `beac
 
 ## credential store record
 
-One global record for a secret, with its platform, metadata, times and revision.
+One revision of a credential: its secret, platform, metadata, times and revision number.
 Record `credential_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` has name `copilot-login` and platform `github-copilot`.
 Its platform gives it the secret shape `oauth`.
 The closed set of secret shapes is:
@@ -27,6 +27,22 @@ The closed set of secret shapes is:
 - `api_key`
 - `oauth`
 - `s3_access_key`
+
+## credential revision
+
+One version of the secret of a credential, stored as one credential store record.
+A rotation adds the next revision and keeps the older revisions live until custody drains them or a human revokes them.
+`github-main` holds revision 1 with key A. A rotation adds revision 2 with key B, an execution that pinned revision 1 finishes with key A, and a new execution takes key B.
+
+## drain
+
+The automatic end of an older credential revision when no live execution pins it.
+Revision 1 of `github-main` drains after the last execution that pinned it ends, and a human then revokes key A at GitHub.
+
+## revoke
+
+The immediate end of a credential revision by a human.
+Key A of `github-main` leaks, so a human revokes revision 1, and the next use of key A by a pinned execution is refused.
 
 ## credential name
 

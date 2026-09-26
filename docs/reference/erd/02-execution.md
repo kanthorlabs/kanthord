@@ -29,7 +29,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - The MCP session `mcp_session_<ulid>` lives in memory and ends at the server stop.
 - The mutex of the action performer lives in memory.
 - A workspace is a directory of the state directory, not a row.
-- The credential handover is an API answer. The mark on a record that a `worker` placement holds is a runtime record of custody.
+- The credential handover is an API answer. The pin of a credential revision is the `credentials` list of `scheduler_execution`.
 - The currency of an assessment is computed at each read, not stored.
 - The `worker` application and an external harness hold no table of the server.
 
@@ -72,6 +72,7 @@ erDiagram
         text claim_kind "steps | evaluation"
         integer attempt "positive"
         integer pinned_revision "positive"
+        text credentials "JSON list of pinned credential row ids"
         integer expires_at "lease expiry, Unix ms"
         integer renewed_at "Unix ms or null"
         text renewal_request_id "current renewal or null"
@@ -456,6 +457,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `scheduler_execution.worker_binding_id` | `project_binding.id` | Reference, no FK. |
 | `scheduler_execution.runtime_identity` | `worker_registration.runtime_identity` | Reference, no FK. A hosted instance has no row. |
 | `scheduler_execution.node_id` | `mission_node.id` | Reference, no FK. |
+| `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |
 | `mission_evidence.execution_id`, `mission_run_output.execution_id`, `mission_evaluation_try.execution_id` and every execution actor | `scheduler_execution.id` | Reference, no FK. |
 | `mission_evidence.binding_id`, `storage_binding_id` | `project_binding.id` | Reference, no FK. |

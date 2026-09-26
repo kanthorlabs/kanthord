@@ -49,7 +49,7 @@ The constraints are below.
 - A binding is the group of the rows that share `project_id` and `resource_identity`. A unique index over `project_id`, `resource_identity` and `revision` orders the revisions of a group, and the latest revision states the binding.
 - The write refuses a binding name that another current binding of the project holds. A partial index cannot select the latest revision of a group, so the write checks this rule. A removed binding releases its name.
 - `project_binding.resource_identity` names the resource that the binding allocates, and every kind holds a value. The section below gives its form. The first part of `resource_identity` is the binding kind, so no column holds the kind.
-- A credential reference sits inside `config`, and the write validates it through custody. SQLite enforces no foreign key inside JSON.
+- A credential reference sits inside `config` and names a credential by its name, never a revision. The write validates it through custody. SQLite enforces no foreign key inside JSON.
 - A binding name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - A new binding takes revision 1.
 - A tombstone is the next revision of a group with `removed_at` set and the last configuration copied.
@@ -144,7 +144,7 @@ The configuration holds these fields beside `available`:
 - `bucket`: required nonblank bucket name.
 - `region`: required nonblank region.
 - `prefix`: required text for the object-key prefix.
-- `credential`: required reference to a custody record, never inline secret material.
+- `credential`: required credential name, never inline secret material.
 
 The storage binding sends `{ credential, platform: s3 }` to [custody's use check](custody.impl.md#suitability).
 The work endpoint, bucket, region and prefix stay in the binding.

@@ -11,21 +11,27 @@ A mechanism here never overrides a rule there.
 ## The credential store record
 
 - Custody owns the shared `credential` table and the [credential envelope](architecture.impl.md#the-credential-table).
-- A record holds `id`, `name`, `platform`, `secret`, `metadata`, `created_at`, `updated_at` and `revision`.
+- A row holds `id`, `name`, `platform`, `revision`, `secret`, `metadata`, `created_at`, `ended_at` and `end_reason`, and one row is one revision of a credential.
 - The encrypted columns represent `secret`; no plaintext secret persists.
-- The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time).
+- The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
-- A unique index holds `name`, the natural key of creation and login.
-- A taken name answers 409 `credential.name_conflict` with the holder identity in `error.details`.
+- The name is the group key of a credential and never changes. A unique index holds `name` and `revision`, and a new name starts at revision 1.
+- The name `login` is refused, because the static route `/api/credential/login` holds that path segment.
+- Creation and login refuse a name that a row holds with 409 `credential.name_conflict` and the identity of its newest revision in `error.details`.
 - A login checks the name at start and at commit.
-- Rotation updates one row in one transaction; the last write wins.
+- The write code keeps one platform for every row of a name.
+- The newest live revision is the row of the name with the greatest `revision` and a null `ended_at`.
+- A rotation inserts the next revision in one transaction. It copies the metadata of the newest live revision unless the request replaces it, and the older revisions stay live.
+- A drain and a revoke set `ended_at` and `end_reason`, which is `drained` or `revoked`. `end_reason` is an enum in code.
+- An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
-- A metadata change increments the record revision.
-- Every record answer includes metadata and excludes the secret.
+- A metadata edit without a rotation updates the newest live revision in place and adds no revision.
+- Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
+- Removal revokes every live revision of the name and keeps the rows, because an execution record references them.
 - A refusal lists the dependents.
 - Creation and rotation validate the local schema and make no remote call.
-- Custody logs a human creation or update with the human identity and record identity, never the secret.
+- Custody logs a human creation or update with the human identity and row identity, never the secret.
 
 The platform determines the secret shape of a record, and each shape has one secret schema:
 
@@ -51,13 +57,13 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - An official OpenAI record is an `openai-compatible` record with `baseUrl` `https://api.openai.com/v1`.
 - The Copilot probe writes no minted token back to the record.
 - `openai-compatible.baseUrl` uses `https` or `http`, with no query and no fragment.
-- The base URL is fixed; an update that changes it fails.
-- An `openai-compatible` record starts with `models: []`.
+- The base URL is fixed for the life of a revision. A metadata edit that changes it fails, and a rotation can set a new one.
+- The first revision of an `openai-compatible` credential starts with `models: []`.
 - Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`.
 - An omitted value takes the default of pi 0.86.0: `contextWindow` `128000`, `maxTokens` `16384` and `reasoningLevels` `["off"]`.
 - `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
-- A metadata revision adds approved models after the [provider check](worker-service.impl.md#the-provider-check).
-- A model removal fails while a default configuration or an entry names it.
+- A metadata edit of the newest live revision adds approved models after the [provider check](worker-service.impl.md#the-provider-check).
+- A metadata edit or a rotation that drops a model fails while a default configuration or an entry names it.
 - The dependency check and metadata update commit in one transaction; a refusal lists the dependents.
 - S3 metadata serves the healthcheck, not work destinations.
 - [Storage configuration](project-service.impl.md#storage-configuration) owns work destinations.
@@ -123,7 +129,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - The methods are `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
 - The [Worker Service](worker-service.impl.md#the-credential-store-of-an-execution) defines the selection and visibility of the execution view.
 - `list()` returns the selected non-secret pair of adapter id and credential type, and custody derives that type from the platform of the record.
-- `modify()` serializes on the record and writes the pi-ai result in place.
+- The view reads the revision that the execution pins.
+- `modify()` serializes on the pinned revision and writes the pi-ai result in place.
 - The view refuses `delete()`.
 - At `server` placement, the view reads custody directly; plaintext stays inside the process.
 - At `worker` placement, the view reads the decrypted handover.
@@ -138,12 +145,22 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
 - The worker application holds the same `masterKey` and derives the same key.
 - A refresh report uses the same envelope; custody writes its record in place.
-- Custody marks a record while a live execution at `worker` placement holds it.
-- Custody refreshes no marked record, and the mark ends with the execution.
-- Two executions can hold one record at once.
+- The handover carries the revisions that the execution pins.
+- Custody refreshes no pinned revision on the server while a live execution at `worker` placement holds it.
+- Two executions can hold one revision at once.
 - The refresh-token rotation behaviour of concurrent holders remains a provider constraint.
 - Custody logs the execution identity and record identity of each handover and report, never material.
 - `pino` redacts the payload paths.
+
+## The pin of an execution
+
+- At the first use of a credential name in an execution, custody resolves the newest live revision and calls the Scheduler collaboration `pinCredential(tx, executionId, credentialId)` in the same transaction.
+- The collaboration appends the row identity to `scheduler_execution.credentials`.
+- A later use of that name in the execution reads the pinned revision.
+- A use of a revoked revision answers 409 `credential.revision.revoked`.
+- The drain check calls `liveExecutionsPinning(tx, credentialId)` for each live revision that is not the newest, and it drains a revision that no live execution pins.
+- Custody runs the drain check at each pin, rotation, revoke and credential read.
+- The list stays in the execution record after the execution ends.
 
 ## Operations
 
@@ -151,7 +168,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Credential management uses the `human` access policy.
 - `credential.create` accepts a record of every platform whose secret shape is not `oauth`.
 - `credential.login` obtains a record of a platform whose secret shape is `oauth`.
-- `credential.rotate` updates secret material without a remote call.
+- `credential.rotate` adds a revision without a remote call.
+- `credential.revoke` ends one revision at once.
 - `credential.get` and `credential.list` return metadata and no secret.
 - The resource healthcheck validates a record on demand.
 
@@ -199,6 +217,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Tests cover model and credential removal with dependents and concurrent changes.
 - Tests cover every platform probe, S3 status mapping, expired OAuth, forbidden probes and attribution without stored results.
 - Tests preserve names and binding references across rotation.
+- Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, the metadata copy and replacement at rotation, and a `baseUrl` change at rotation alone.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.

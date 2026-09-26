@@ -13,8 +13,8 @@ Custody grants no authority through possession of a credential reference.
 
 ## Credential records
 
-- A [credential store](custody.vocabulary.md#credential-store) holds one [credential store record](custody.vocabulary.md#credential-store-record) for a secret.
-- A human chooses its [credential name](custody.vocabulary.md#credential-name), which is unique on the server.
+- A [credential store](custody.vocabulary.md#credential-store) holds a credential as one [credential store record](custody.vocabulary.md#credential-store-record) for each [credential revision](custody.vocabulary.md#credential-revision) of its secret.
+- A human chooses its [credential name](custody.vocabulary.md#credential-name), which is unique on the server, and every revision of the credential holds that name.
 - A record belongs to no project and can serve more than one project.
 - A credential reaches an operation through the entity that performs it, never through a direct relationship with a project.
 - That entity holds a [credential reference](custody.vocabulary.md#credential-reference).
@@ -24,8 +24,14 @@ Custody grants no authority through possession of a credential reference.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
 - An OAuth credential enters only through a [login session](custody.vocabulary.md#login-session) on the server.
 - Creation and rotation make no remote call.
-- A rotation preserves the record identity and its name.
-- A metadata change creates a revision.
+- A rotation adds the next revision under the same name and keeps the older revisions live.
+- A reference names the credential by its name and never a revision.
+- An execution pins the newest live revision at its first use of a credential and uses that revision until the execution ends.
+- An operation outside an execution uses the newest live revision.
+- An older revision takes no new pin, and custody [drains](custody.vocabulary.md#drain) it when no live execution pins it.
+- A human [revokes](custody.vocabulary.md#revoke) a revision to end it at once, and every pinned use of that revision is refused.
+- Custody refuses a revoke of the newest live revision.
+- Each revision holds its own metadata. A rotation copies the metadata of the newest live revision, and the human can replace it in that rotation.
 - Custody refuses removal while dependents exist and lists those dependents in the refusal.
 - Dependents include every agent provider that names the record.
 - The dependency check and removal are atomic.
@@ -59,7 +65,7 @@ Custody grants no authority through possession of a credential reference.
 - A credential leaves the server only through a [credential handover](custody.vocabulary.md#credential-handover) to a kanthord worker application.
 - The handover lasts for the execution.
 - The worker application reports a refreshed credential to custody.
-- Custody refreshes no record while its handover remains outstanding.
+- Custody refreshes no revision while a handover of that revision remains outstanding.
 - Disablement takes effect at the next resolution and recalls no handover in flight.
 - No credential reaches an external harness, agent context, tool result, log record or workspace file.
 - An execution holds no credential itself.

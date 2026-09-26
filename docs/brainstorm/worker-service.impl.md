@@ -51,7 +51,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - It validates every dependent worker binding and lists invalid bindings in its refusal.
 - Removal checks all dependents in that same transaction.
 - [The collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) requires co-location of the two owners.
-- A resolution reads the worker binding, entry, enablement and credential metadata from one snapshot and records their revisions.
+- A resolution reads the worker binding, entry, enablement and credential metadata from one snapshot, and it records the revisions of the binding, the entry and the enablement.
 - Resolution makes no network call.
 - The instance healthcheck reports whether the effective configuration resolves.
 
@@ -234,7 +234,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 ## The credential store of an execution
 
 - Every native inference call, including compaction and retries, resolves auth through the [custody execution store](custody.impl.md#the-credential-store-of-an-execution).
-- The view exposes only the credential that the effective agent provider names, under the pi adapter id.
+- The view exposes only the credential that the effective agent provider names, at the revision that the execution pins, under the pi adapter id.
 - `read(providerId)` answers `undefined` for every other id.
 - The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed.
 - The store holds the credential of one execution, so no credential crosses executions.
@@ -243,7 +243,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 ## The credential handover
 
 - `worker.handover` is a `client` operation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes an empty body and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
-- The `worker` application calls it once after its claim and before the first inference call.
+- The `worker` application calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
 - It decrypts the envelope with the key that it derives from its own `masterKey`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. The application calls it after each refresh that pi-ai performs and once at the release.
 - The application discards every credential when the execution ends, and it writes none to a file.

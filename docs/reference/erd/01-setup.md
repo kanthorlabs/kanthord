@@ -33,15 +33,16 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 ```mermaid
 erDiagram
     credential {
-        text id PK "credential_ + ULID"
-        text name UK "1-63 chars, unique on the server"
+        text id PK "credential_ + ULID, one revision"
+        text name "group key, 1-63 chars, never changes"
         text platform "github | github-copilot | anthropic | openai-compatible | s3"
+        integer revision "unique with name, starts at 1"
         blob nonce "12 bytes, AES-256-GCM"
         blob ciphertext "secret material + 16-byte tag"
         text metadata "canonical JSON, platform schema, or null"
-        integer revision "positive, starts at 1"
         integer created_at "Unix ms"
-        integer updated_at "Unix ms"
+        integer ended_at "Unix ms, null while live"
+        text end_reason "drained | revoked, null while live"
     }
 
     project_project {
@@ -245,12 +246,14 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 ### Custody
 
-- `credential.name` has a unique index. A taken name answers 409 `credential.name_conflict`.
+- `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name_conflict`.
+- The write keeps one `platform` for every row of a name. The newest live revision is the greatest `revision` of the name with a null `ended_at`.
+- A rotation inserts the next revision and keeps the older revisions live. A drain or a revoke sets `ended_at` and `end_reason`. Custody refuses a revoke of the newest live revision.
 - The secret shape and the `metadata` schema depend on `platform`, as the [platform validators](../../brainstorm/custody.impl.md#platform-validators) state.
-- The `baseUrl` of an `openai-compatible` record is fixed for the life of the record. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
-- The additional authenticated data of the envelope is the record identity and the platform.
-- A rotation updates one row and keeps `id` and `name`. A metadata change increments `revision`.
-- A removal is refused while a dependent names the record. The dependents are a binding configuration and an agent provider. The check and the removal are atomic.
+- Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit without a rotation updates the newest live revision in place.
+- The `baseUrl` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
+- The additional authenticated data of the envelope is the row identity and the platform.
+- A removal is refused while a dependent names the credential. The dependents are a binding configuration and an agent provider. The check and the removal are atomic. A removal revokes every live revision and keeps the rows.
 - A login session is a runtime record of custody, and no table holds it. A failed or expired session stores nothing.
 
 ### Project Service
@@ -268,7 +271,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A write derives `resource_identity` from the configuration of the binding. A human never enters it.
 - A write compares each submitted binding with the current binding of the same name. An unchanged configuration inserts no row. A changed configuration of the same resource inserts the next revision of the group. A changed resource inserts a tombstone in the old group and revision 1 of the new group. A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again. A name that the submission omits takes a tombstone, and its rows stay.
 - A write refuses a change of the worker of an existing worker binding under the same name.
-- `config` holds the configuration of its kind: [repository](../../../engine/docs/cli/project.md#repository-configuration--proposed-fields), [worker](../../../engine/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](../../../engine/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a `credential` identity. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
+- `config` holds the configuration of its kind: [repository](../../../engine/docs/cli/project.md#repository-configuration--proposed-fields), [worker](../../../engine/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](../../../engine/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
 
 ### Worker Service
 
@@ -326,7 +329,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 | --- | --- | --- |
 | `mission_mission.project_id` | `project_project.id` | Reference, no FK. |
 | `mission_node_revision.bindings` | `project_binding.id` | Reference in JSON, no FK. Each item pins one row. An objective names exactly one repository binding, and an initiative or an objective names at most one storage binding. |
-| `project_binding.config` | `credential.id` | Reference in JSON, no FK. |
+| `project_binding.config` | `credential.name` | Reference in JSON by name, no FK. |
 | `project_binding.config` | `worker_agent_enablement.agent_name` | Reference through the catalog agents of the worker, no FK. |
 | `project_binding.config` | `worker_agent_provider.name` | Reference in a complete entry, no FK. |
 | `worker_agent_provider.credential_name` | `credential.name` | Reference by name, no FK. |

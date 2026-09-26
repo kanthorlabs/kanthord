@@ -59,6 +59,7 @@ flowchart TB
     w2 -.->|registration of binding| p1
     s2 -.->|claim of node| m1
     s2 -.->|claim of binding| p1
+    s2 -.->|execution pins credential revision| c1
     m2 -.->|records of node| m1
     m2 -.->|evidence and object name binding| p1
     s1 -.->|wait fact names external object| m2
