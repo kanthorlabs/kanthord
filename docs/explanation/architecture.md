@@ -239,8 +239,10 @@ flowchart TB
 | Action performer                     | Scheduler, Mission and connectors        | Live evaluation claim, passing assessment, required actions, evidence operands and external-object reconciliation. | Repository actions follow claim and assessment contracts; they are not arbitrary agent tools.                     |
 | Intake acquisition                   | Project verification and grants          | Verify a delivery; acquire and revoke session-scoped acquisition material.                                         | Intake cannot acknowledge an unverified or unstored webhook/stream delivery.                                      |
 | Intake handoff                       | Scheduler delivery admission             | Durable, idempotent acceptance and an explicit disposition.                                                        | Implement admission and interrupted-handoff recovery before turning on live acquisition.                          |
-| Scheduler observer                   | Worker platform connector and Mission    | Decode deliveries, read external objects and submit observations.                                                  | Observer integration needs platform reads; it does not need a worker instance or an LLM.                          |
+| Scheduler observer                   | [Repository][repository-platform] and Mission | Decode deliveries, read external objects and submit observations.                                                  | Observer integration needs platform reads; it does not need a worker instance or an LLM.                          |
 | Service telemetry                    | Tracking interface                       | Trace/span production without influencing business results.                                                        | Inject a no-op implementation first; real storage and retention can follow independently.                         |
+
+[repository-platform]: https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.md#platform-connector-and-platform-implementations
 
 ## Component boundaries that must remain explicit
 
@@ -249,7 +251,7 @@ flowchart TB
 - **Queue and claim:** Queue order suggests work. The atomic claim operation rechecks admission and creates the execution record and lease. A wait record holds out work without keeping an instance busy.
 - **Registration and claim:** Worker owns runtime identities and registration heartbeat. Scheduler owns execution claims and leases. Neither a registration nor a healthcheck is a claim.
 - **Agents and tools:** The prompt composer provides instructions, not permissions. Native agents use model and repository connectors; MCP exposes permitted platform reads and the controlled action tool for external reviewers.
-- **Acquisition and interpretation:** Intake owns webhook/poll/stream transport. Worker platform implementations decode platform payloads. Scheduler admission owns their business effects.
+- **Acquisition and interpretation:** Intake owns webhook/poll/stream transport. [Repository platform implementations][repository-platform] decode platform payloads. Scheduler admission owns their business effects.
 - **Evidence and telemetry:** Mission evidence supports assessment. Tracking telemetry explains behavior and may expire. Operational logs are a third, separate facility.
 
 ## Persistence and deployment

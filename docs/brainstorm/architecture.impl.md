@@ -709,6 +709,7 @@ Cross-service references retain their targets.
 - An owner deletes no record that a peer can reference.
 - The owner disables or retires that record.
 - A referencing service tolerates a disabled target.
+- Telemetry is the one exception. The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion.
 - No existence operation exists.
 
 The applications compare package versions.

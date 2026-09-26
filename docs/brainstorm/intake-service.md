@@ -127,8 +127,9 @@ Beyond the bound, a webhook receives a retryable refusal.
 A poll pauses beyond the bound.
 A stream closes beyond the bound with the observed state failed and the reason capacity.
 The Intake Service never acknowledges a delivery and drops it.
-It bounds the retention of a resolved delivery.
-It never removes an unresolved delivery.
+It keeps the record of a resolved delivery with its identity, because the Scheduler Service references that identity.
+It bounds the retention of the payload of a resolved delivery.
+It never removes an unresolved delivery or its payload.
 It promises the durability of every accepted delivery.
 It promises no receipt of every update that a platform produces.
 
