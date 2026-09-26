@@ -23,6 +23,22 @@ The set is closed and it holds seven values.
 The server holds no other service.
 The seven services are logical boundaries inside one server.
 
+## connector
+
+A connector is a component through which a caller performs an authenticated operation that the Project Service authorizes.
+The set is closed and it holds three values.
+
+- **model connector**: the Worker Service owns it; it performs a model inference call.
+- **repository connector**: the Repository component owns it; it performs a network git read and a network git write.
+- **platform connector**: the Repository component owns it; it performs every operation on the API of an external platform through the platform implementation of that platform.
+
+Execution 1 of "Add password reset" asks the repository connector to push the node branch.
+The connector resolves the repository binding of the objective through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
+
+The action performer asks the platform connector to open pull request 42 for the node branch of "Add password reset".
+The platform connector selects the GitHub implementation because the repository binding of the objective names GitHub.
+The GitHub implementation resolves the binding through the Project Service under the execution identity before the call.
+
 ## resource healthcheck
 
 The report on a resource under the [resource healthcheck rule](architecture.md#resource-healthcheck).

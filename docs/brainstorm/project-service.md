@@ -54,7 +54,7 @@ A repository address is an SSH address.
 A network git read and a network git write use the SSH configuration of the hosting application, so neither operation requires a credential reference.
 A platform action requires an API key of the platform.
 Every repository binding holds one credential reference, and that reference serves every platform action of the binding, including the read of an external object by the observer.
-At the write of a repository binding, the Project Service performs one network git read of that repository.
+At the write of a repository binding, the Project Service performs one network git read through the [Repository component](repository.md#repository-connector).
 A failed read refuses the write.
 A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
 The Project Service validates the length of the project prompt against a fixed bound.

@@ -106,7 +106,7 @@ It bounds admission and observer processing separately from work-pull handling.
 The Scheduler retries no unauthorized request.
 
 Admission resolves the project from the [source binding](project-service.vocabulary.md#source-binding) of the delivery.
-It invokes the decoding of the [platform implementation](worker-service.vocabulary.md#platform-implementation) of the [Worker Service](worker-service.md#platform-connector-action-performer-and-mcp-server).
+It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the [Repository component](repository.md#platform-connector-and-platform-implementations).
 The scheduling core consumes that decoded delivery and interprets no platform payload.
 Admission resolves the external object, its [node](overview.vocabulary.md#node) and its [attempt](overview.vocabulary.md#attempt) within that project.
 Acceptance as an observation creates an [observation obligation](scheduler-service.vocabulary.md#observation-obligation).
@@ -121,7 +121,7 @@ The observer is a component of the Scheduler Service, not a worker instance.
 Nothing dispatches the observer.
 The scheduling processors execute the observer on an observation obligation.
 The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the external object.
-It reads the state of that object through the [platform connector](worker-service.md#platform-connector-action-performer-and-mcp-server) of the Worker Service.
+It reads the state of that object through the [platform connector](repository.md#platform-connector-and-platform-implementations) of the Repository component.
 The observer folds that state into the observed state.
 It writes the observation record to the Mission Service.
 The [Mission Service](mission-service.md#evidence) owns the external object and the observation record.

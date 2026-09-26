@@ -8,8 +8,6 @@ This file holds the implementation rulings for the mechanisms that realize [work
 This file is not a design document, and `worker-service.md` stays the single source of truth, so a mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate, and a change to it is a change to the workers that run on it.
 
-The implementation uses `simple-git` at 3.36.0.
-
 ## Native agent runtime
 
 The first version supplies the workers `general@1` and `reviewer@1`.
@@ -57,7 +55,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - Resolution makes no network call.
 - The instance healthcheck reports whether the effective configuration resolves.
 
-Provider definitions contain no auth types; [custody](custody.impl.md#platform-implementations) owns those types and suitability.
+Provider definitions contain no auth types; [custody](custody.impl.md#platform-validators) owns those types and suitability.
 
 - A provider is a member of the [agent provider set](worker-service.vocabulary.md#agent-provider).
 - Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
@@ -117,7 +115,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-i
 - HTTP 400 reports invalid input or an unsuitable credential; HTTP 404 reports an unknown credential.
 - Error codes use the prefix `worker.provider.*`.
 - The answer holds no key and pre-fills model ids, not limits or reasoning levels.
-- A human approves models through a [credential metadata revision](custody.impl.md#platform-implementations).
+- A human approves models through a [credential metadata revision](custody.impl.md#platform-validators).
 
 ## Agent provider healthcheck
 
@@ -283,50 +281,14 @@ The third source is the other tools that a project adds, including other MCP ser
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the three sources.
 
-## Platform connector and platform implementations
-
-The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
-
-- Pull request read calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`.
-- Review comment list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
-- Both return the response body unchanged.
-- `limit` maps to `per_page`, defaults to 100 and ranges from 1 to 100.
-- `cursor` is base64url canonical JSON `{ page, perPage }`.
-- A differing `limit` answers 400 `worker.platform.github.cursor_page_size_mismatch`.
-- `nextCursor` is null when no `rel="next"` link exists.
-- Tool discovery embeds each endpoint's dereferenced response schema under `result`.
-- The build extracts those schemas from `@octokit/openapi` at 23.0.2.
-- A result class answers `worker.platform.github.<class>` with the HTTP status and GitHub message.
-- The embedded schema is large; a harness that sends `outputSchema` to its model spends tokens on it.
-- Tests assert unchanged bodies, pagination bounds, cursor page-size refusal, schema extraction and result-class details.
-
-A platform implementation is a TypeScript module with its own method signatures and no shared interface.
-The platform connector is a registry keyed by the platform value of the binding.
-The registry uses static registration and loads no runtime plugin.
-The GitHub implementation decodes a GitHub webhook payload into GitHub event types.
-Every method returns a discriminated union: the success with the result of the operation, or the result class.
-A deadline bounds the retry of a read on a transport error.
-The platform implementation retries no write.
-The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
-An epic decides that form for each platform.
-
-## Repository connector
-
-The start requires git, OpenSSH and bash on the host and refuses a host without any of them.
-
-- `simple-git` at 3.36.0 performs every git operation by spawning the `git` binary of the host.
-- Its timeout plugin bounds each operation by the remaining resource budget of the execution.
-- Its abort plugin binds to the `Context` of the execution.
-- The `git` child inherits the SSH environment of the user that runs the hosting application.
-- [project-service.impl.md](project-service.impl.md#the-network-git-operations) rules that environment.
-- The connector passes no credential inside a URL and no credential on a command line.
+The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
 
 ## The verifications
 
 The verification run follows [mission-service.impl.md](mission-service.impl.md#the-verifications).
 The workspace root for that run is the root of the execution workspace, not the server's `workspaces/` directory.
 An initiative uses one subdirectory per distinct repository binding from its current objectives.
-A test checks the host requirements and the shared verification run mechanism.
+A test checks the [host requirements](repository.impl.md#repository-connector) and the shared verification run mechanism.
 A test checks duplicate removal, discarded objectives, base-branch heads and one tested commit per binding for an initiative.
 A test checks the evidence-placement rule when an initiative's objectives name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
@@ -353,7 +315,7 @@ The evaluation method of `reviewer@1` and the MCP tool both call that function.
 A per-execution-identity mutex serializes invocations inside the server.
 The mutex establishes the no-redispatch invariant inside one server process only.
 A durable dispatch record that survives a server restart is the B9 item W2, and it is an epic decision.
-The action performer creates a fresh clone through the repository connector for a network git write.
+The action performer creates a fresh clone through the [Repository component](repository.impl.md#repository-connector) for a network git write.
 It removes that checkout after the call.
 
 The tool answers `{ toolName: "repository-action-request", items: ActionResultItem[] }`.
@@ -361,7 +323,7 @@ The tool answers `{ toolName: "repository-action-request", items: ActionResultIt
 
 - `submitted` holds `externalObject`, the `ExternalObject` record that the Mission Service accepted, in the schema that `mission.externalObject.get` answers.
 - `awaiting-prerequisite` holds `action: { key, bindingId }`, the waiting action, and `prerequisite: { key, externalObjectId }`, the requested action it follows and its external object. The reviewer release names that `externalObjectId` in its `external-observation` wait fact.
-- `failed-before-effect` holds `action: { key, bindingId }` and `refusal: { class, code, message }`, where `class` is `confirmed_failure`, `retryable_refusal` or `final_refusal`. A final refusal declines the request before any write. `code` and `message` come from the connector that transported the request: the platform implementation for a platform action, the repository connector for a network git write.
+- `failed-before-effect` holds `action: { key, bindingId }` and `refusal: { class, code, message }`, where `class` is `confirmed_failure`, `retryable_refusal` or `final_refusal`. A final refusal declines the request before any write. `code` and `message` come from the [Repository component](repository.impl.md): the platform implementation for a platform action, the repository connector for a network git write.
 - `uncertain` holds `action: { key, bindingId }`, `uncertainty: "effect" | "recording" | "both"` and an optional `address`, present when the remote returned the address and the Mission submission stayed uncertain. An `unknown_outcome` result class produces `effect`.
 
 `key` is the `FrozenAction.key` of the attempt, and `bindingId` is the repository binding of the action, under [the attempt](mission-service.impl.md#the-attempt).
@@ -415,7 +377,7 @@ A tool is reached through the MCP server.
 - Tests assert no `Idempotency-Key` on the MCP path, proof before every tool call, a failed proof as a JSON-RPC error, tool refusal as an `isError` result, and a disconnect during a tool call that completes and records its write. They cover the server-placement proof without registration and all three emitted operations with the specification revision.
 - Tests assert the same tool list for every client and before and after an assessment, no Mission read for a list, both action-tool refusal codes, and serialized native-method and tool calls with no duplicate dispatch.
 
-The first version approves two read methods of the GitHub implementation.
+The first version approves two read methods of the [GitHub implementation of the Repository component](repository.impl.md#platform-connector-and-platform-implementations).
 
 - The read of a pull request.
 - The list of the review comments of a pull request.
@@ -440,7 +402,7 @@ The carrier of that attribution is an epic decision.
 The lease runs in the execution.
 On revocation or loss the execution aborts the pi session and dispatches nothing after.
 Abort is not proven to kill every descendant process, so the quiescence check before workspace reuse that the page states needs a mechanism.
-`simple-git` kills the `git` process and not the `ssh` child of that process.
+The [Repository implementation](repository.impl.md#repository-connector) states the transport's process-cancellation limit.
 The budget of a turn count and a wall time is enforced on pi turn events and by abort, with the bash timeout below the remaining budget.
 
 ## Trust boundary

@@ -25,7 +25,8 @@ It receives a webhook, runs a poll and opens and closes a stream.
 It holds the transport knowledge of a platform.
 That knowledge identifies the signature header and the field that carries the platform delivery identity.
 It defines the meaning of a poll checkpoint and the protocol and acknowledgement of a stream.
-The [Worker Service](worker-service.md#platform-connector-action-performer-and-mcp-server) owns platform actions and payload decoding through its [platform implementation](worker-service.vocabulary.md#platform-implementation).
+The [Repository component](repository.md#platform-connector-and-platform-implementations) owns platform implementations and payload decoders.
+The Intake Service calls a platform implementation of that component for webhook registration with the material of its acquisition grant.
 
 The Intake Service reaches a peer through an [operation](architecture.md#invocation) only.
 It declares no collaboration.

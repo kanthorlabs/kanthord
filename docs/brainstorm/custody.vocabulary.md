@@ -55,6 +55,11 @@ Each provider of an agent provider maps to one platform.
 The pi adapter id `openai-compatible` names no platform.
 The credential's platform and metadata identify the external system.
 
+## platform validator
+
+The custody part that declares the accepted types, the metadata schema and the validation of one platform.
+The platform validator of `github` accepts `api_key` and validates a record with `GET https://api.github.com/rate_limit`.
+
 ## remote identity
 
 The identity at the remote that a credential acts as.

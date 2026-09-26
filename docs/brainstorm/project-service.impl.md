@@ -14,7 +14,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `randomBytes` and `timingSafeEqual`.
 It also provides `zod` at 4.4.3 and `ulid`.
 The repository action catalog supports GitHub.
-[Custody](custody.impl.md#platform-implementations) owns credential platforms.
+[Custody](custody.impl.md#platform-validators) owns credential platforms.
 The GitHub action catalog holds exactly two actions.
 
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
@@ -230,19 +230,11 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 ## The network git operations
 
-Custody performs a network git read and a network git write through the repository connector of the Worker Service, which runs the git CLI.
-Custody requires git 2.40 or later and OpenSSH 9.0 or later on the host, and it stops the start when the host holds neither.
-It passes no secret on the command line of a child, because the command line of a process is readable by every user of the host.
-
-- Custody supplies no material for git.
-- The `git` child inherits the SSH environment of the user that runs the hosting application.
-- That environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
-- Custody sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
-- At every repository binding write, custody runs one `git ls-remote` of that repository through the repository connector.
+- At every repository binding write, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
 - The read precedes the `BEGIN IMMEDIATE` transaction.
 - A deadline of 30 s bounds that read.
 - A failed or timed-out read refuses the write with the error code `project.bindings.repository.ssh_unreachable`.
-- Custody attributes a network git operation to no credential record.
+- The [Repository implementation](repository.impl.md#the-ssh-environment) defines the SSH environment.
 
 ## The resource healthcheck
 
@@ -253,7 +245,7 @@ The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) b
 - That read answers `project.bindings.repository.ssh_unreachable` on failure and reports the capability `network git read`.
 - The resource healthcheck deadline replaces the binding-write deadline for this read.
 - The target rule permits one read per repository address in a request.
-- The network git operation keeps its existing attribution rule.
+- The network git operation follows the [Repository attribution rule](repository.impl.md#the-ssh-environment).
 - The call record holds no check result.
 
 [Custody](custody.impl.md#the-resource-healthcheck) owns credential checks.
@@ -284,7 +276,7 @@ The signature of the platform over the exact bytes stays the proof of authentici
 The function names no requester identity, and it returns a boolean and no secret.
 A valid HMAC proves the possession of the secret alone.
 It authenticates no other header, it establishes no repository, and it detects no replay.
-The GitHub implementation of [worker-service.impl.md](worker-service.impl.md) associates the payload with its repository, and the Scheduler Service owns the duplicate effect of a repeated delivery.
+The GitHub implementation of the [Repository component](repository.impl.md#platform-connector-and-platform-implementations) associates the payload with its repository, and the Scheduler Service owns the duplicate effect of a repeated delivery.
 This sibling states no replay window.
 
 ## Repository layout, build, test and release

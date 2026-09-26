@@ -33,11 +33,11 @@ The secret schemas are:
 - `oauth`: `{ refresh, access, expires }`; only a login session supplies initial material.
 - `s3_access_key`: `{ accessKeyId, secretAccessKey }`; a session token is invalid.
 
-## Platform implementations
+## Platform validators
 
-Custody owns a dedicated implementation for every [platform](custody.vocabulary.md#platform), including each LLM platform.
-Each implementation declares its accepted types, metadata schema and validation.
-The implementations use the credential contracts of `@earendil-works/pi-ai` at 0.86.0.
+Custody owns a dedicated platform validator for every [platform](custody.vocabulary.md#platform), including each LLM platform.
+Each platform validator declares its accepted types, metadata schema and validation.
+The platform validators use the credential contracts of `@earendil-works/pi-ai` at 0.86.0.
 
 | Platform | Accepted type | Metadata | Validation |
 | --- | --- | --- | --- |
@@ -69,7 +69,7 @@ The implementations use the credential contracts of `@earendil-works/pi-ai` at 0
 - The use request is `{ credential, platform }`.
 - Custody compares the record platform with the requested platform before any remote call.
 - It compares no metadata and reads no secret for this comparison.
-- Remote validation uses the record's own platform implementation.
+- Remote validation uses the record's own platform validator.
 - The use check performs no remote validation at creation or rotation.
 - Services supply no accepted-type list and no capability wire value.
 
@@ -166,7 +166,7 @@ The implementations use the credential contracts of `@earendil-works/pi-ai` at 0
 ## The OAuth login
 
 - Custody calls `models.login(providerId, "oauth", interaction)` of pi-ai over its own credential store.
-- The [platform table](#platform-implementations) determines whether OAuth is accepted.
+- The [platform table](#platform-validators) determines whether OAuth is accepted.
 - A login session is a custody runtime record with identity `login_session_<ulid>`.
 - It holds platform, mode, initial human identity, credential name, remote identity, state, address, code, failure reason and expiry.
 - Expiry falls 15 minutes after start.
@@ -191,7 +191,7 @@ The implementations use the credential contracts of `@earendil-works/pi-ai` at 0
 ## The resource healthcheck
 
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline and concurrency bounds.
-- The [platform implementations](#platform-implementations) supply the probes.
+- The [platform validators](#platform-validators) supply the probes.
 - A supported platform with no remote call reports `unknown`.
 - A forbidden probe proves no invalid credential.
 - No check refreshes an OAuth record; an expired access token reports `unknown` without a remote call.

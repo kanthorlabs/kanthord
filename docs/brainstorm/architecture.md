@@ -70,7 +70,7 @@ It holds no credential and obtains an [acquisition grant](project-service.vocabu
 The Worker Service supplies the workers and the agents.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider.
-It supplies the [platform connector](worker-service.vocabulary.md#connector) for platform actions and external object reads.
+It uses the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations) for platform actions and external object reads.
 The [Intake Service](intake-service.md#boundary) owns acquisition transport.
 It supplies the MCP server through which a native agent and an external harness reach the server tools.
 It performs the configured repository action for both harnesses.
@@ -95,6 +95,7 @@ It routes each request to the service or shared component that owns the requeste
 
 [Custody](custody.md) is a shared component used by every service, not a service.
 Its [design](custody.md#scope) defines credential ownership and protection.
+The [Repository component](repository.md) is a shared component for repository transport, platform operations and payload decoders.
 
 ## Service diagram
 
@@ -171,7 +172,7 @@ The store, the log and the host toolchain are internal components, not external 
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
 - The Scheduler Service reads the worker bindings and their instance counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
-- The Scheduler Service observes an external object through the platform connector of the Worker Service.
+- The Scheduler Service observes an external object through the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations).
 - The Scheduler Service uses a repository credential through custody after Project Service authorization.
 - The Intake Service obtains an [acquisition grant](project-service.vocabulary.md#acquisition-grant) from the Project Service.
 - The Intake Service submits a delivery to the [verification operation](project-service.md#authorization-and-credential-custody) of the Project Service.

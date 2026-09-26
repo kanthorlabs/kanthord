@@ -130,13 +130,13 @@ The Scheduler Service passes the linked human identity of `ulrich` with the Miss
 ## observer
 
 The observer is a Scheduler Service component that the scheduling processors execute on an observation obligation.
-It reads the state of the external object through the platform connector of the Worker Service under its service identity.
+It reads the state of the external object through the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations) under its service identity.
 It folds that state into the observed state.
 
-The GitHub implementation decodes the delivery about pull request 42 into GitHub event types.
+The [GitHub implementation](repository.vocabulary.md#platform-implementation) decodes the delivery about pull request 42 into GitHub event types.
 Delivery admission resolves that delivery through the repository binding and the address of pull request 42.
 The external object names "Add password reset" and attempt 1.
-The observer reads the merged state through the platform connector and folds it into the observed state of the observation record.
+The observer reads the merged state through the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations) and folds it into the observed state of the observation record.
 
 ## instance healthcheck
 

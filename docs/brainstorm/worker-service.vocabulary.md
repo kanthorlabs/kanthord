@@ -66,7 +66,7 @@ The action performer performs the network git write only.
 A native agent is an agent loop that the Worker Service runs itself.
 The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
 The Worker Service runs `swe@1` under worker binding `general-main`.
-Each model inference call uses the model connector and the agent's effective configuration.
+Each model inference call uses the model [connector](architecture.vocabulary.md#connector) and the agent's effective configuration.
 
 ## prompt layer
 
@@ -191,35 +191,6 @@ The closed reasoning-effort set is:
 - `xhigh`
 - `max`
 
-## connector
-
-A connector is a Worker Service component through which a caller performs an authenticated operation that the Project Service authorizes.
-The set is closed and it holds three values.
-
-- **model connector**: performs a model inference call.
-- **repository connector**: performs a network git read and a network git write.
-- **platform connector**: performs every operation on the API of an external platform through the platform implementation of that platform.
-
-Execution 1 of "Add password reset" asks the repository connector to push the node branch.
-The connector resolves the repository binding of the objective through the Project Service under the execution identity of Execution 1, and the protected facility consults custody after the check.
-
-The action performer asks the platform connector to open pull request 42 for the node branch of "Add password reset".
-The platform connector selects the GitHub implementation because the repository binding of the objective names GitHub.
-The GitHub implementation resolves the binding through the Project Service under the execution identity before the call.
-
-## platform implementation
-
-A platform implementation exposes the operations of its platform under the names and the parameters of that platform.
-The set is open.
-The first version holds one value.
-
-- **GitHub implementation**
-
-The GitHub implementation exposes the operations of GitHub.
-For example, it opens a pull request, reads a pull request and lists the review comments of a pull request.
-It derives the owner `kanthorlabs` and the repository `kanthord` from the repository binding.
-A caller supplies neither resource selector.
-
 ## action performer
 
 The action performer requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
@@ -229,7 +200,7 @@ Its callers form a closed set of two values.
 - **MCP tool of a native agent or an external harness**
 
 The reviewer execution of `reviewer@1` evaluates "Add password reset" with agent `re@1`.
-Its evaluation method passes only the execution identity to the action performer, which opens pull request 42.
+Its evaluation method passes only the execution identity to the action performer, which opens pull request 42 through the [Repository component](repository.md#write-operations).
 The reviewer execution of external harness `claude-code` invokes the same action performer through its MCP tool for "Add password reset".
 It passes only its execution identity.
 The action performer derives node branch `kanthord/obj-7f3a` and base branch `main` from the records, without operands from either caller.
@@ -251,22 +222,6 @@ For "Add password reset", the platform refuses an action for authorization befor
 For "Add password reset", the platform response fails to arrive after dispatch, and the action performer returns the action with an uncertain effect.
 Only the prerequisite class carries a wait fact.
 
-## result class
-
-A result class identifies the outcome that a platform call reports when it does not succeed.
-A call that succeeds returns the result of the operation and no result class.
-The set is closed and holds four values.
-
-- **confirmed failure that establishes no effect**
-- **retryable refusal that establishes no effect**
-- **final refusal**
-- **unknown outcome**
-
-A GitHub call fails before dispatch and confirms no effect.
-GitHub refuses a read of pull request 42 because of a rate limit, with no effect, and permits a retry.
-GitHub refuses a call to open pull request 42 because authorization fails, and the call returns a final refusal.
-A GitHub call to open pull request 42 loses its response after dispatch, so the implementation reports an unknown outcome.
-
 ## MCP server
 
 The MCP server is the server component that exposes tools as one form of the API.
@@ -276,7 +231,7 @@ Its client kinds form a closed set of two values.
 - **native agent**, under the execution identity of its hosted execution
 - **external harness**, under the credential of its client identity and the execution identity of its live claim
 
-Each tool maps to one method of a platform implementation or to the action performer.
+Each tool maps to one method of a [platform implementation](repository.vocabulary.md#platform-implementation) of the Repository component or to the action performer.
 The MCP server exposes individually approved resource-scoped read methods and the tool of the action performer.
 It exposes the same tools to every client, and no state of a claim or of an assessment changes the list.
 It exposes no other write.

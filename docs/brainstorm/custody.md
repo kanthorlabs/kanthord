@@ -80,6 +80,6 @@ Custody grants no authority through possession of a credential reference.
 ## Resource healthcheck
 
 Custody owns the [resource healthcheck](architecture.vocabulary.md#resource-healthcheck) of a credential store record.
-Its platform implementation validates the record on demand.
+Its [platform validator](custody.vocabulary.md#platform-validator) validates the record on demand.
 The [implementation](custody.impl.md#the-resource-healthcheck) defines each remote probe and its limits.
 A healthcheck changes no credential and authorizes no operation.
