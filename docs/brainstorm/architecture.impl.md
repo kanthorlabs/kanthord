@@ -161,7 +161,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The complete prefixed identity is stored as text and retained in API fields, references and logs. Validation checks both the expected entity prefix and the canonical ULID portion; a bare ULID or a prefix of another entity kind is invalid.
 - That convention covers an opaque entity identity alone. It excludes a protocol-defined identity, a natural key and a composite key.
 - A protocol-defined representation stays with its protocol, and the sibling of the service that speaks that protocol names the representation.
-- A remote identity follows the normalization of [project-service.impl.md](project-service.impl.md), which derives it from the binding configuration on every write.
+- A resource identity follows the normalization of [project-service.impl.md](project-service.impl.md), which derives it from the binding configuration on every write.
 
 ## Pagination
 
@@ -190,14 +190,13 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The credential table
 
-- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, name index, credential types, platforms and metadata.
+- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, name index, platforms, secret shapes and metadata.
 - Each service reaches a record through custody, so the envelope is a shared mechanism.
 - The protected facility checks authorization before secret use.
-- The column `remote_identity` records the identity that the secret acts as at its remote. The server enforces nothing from it, so it sits outside the authenticated data below.
 - `crypto.createCipheriv` encrypts the material with AES-256-GCM, a 12-byte nonce from `crypto.randomBytes` and a 16-byte tag.
-- The plaintext is the JSON of the material of the type, so one record holds several fields under one ciphertext.
+- The plaintext is the JSON of the material of the secret shape of the platform, so one record holds several fields under one ciphertext.
 - The column `nonce` holds the nonce as 12 bytes, and the column `ciphertext` holds the ciphertext followed by the 16-byte tag. A read that meets another length fails the record.
-- The additional authenticated data is the concatenation of two length-prefixed fields, the record identity and the type, so the encoding admits no second reading.
+- The additional authenticated data is the concatenation of two length-prefixed fields, the record identity and the platform, so the encoding admits no second reading.
 - `createDecipheriv` verifies the tag before any caller reads the plaintext.
 - The cipher key is `HKDF(masterKey, info = "custody/aes-256-gcm/v1")`. The server derives it at startup and holds it for the life of the process.
 - A nonce is random for each write of a record, and the count of the writes of this server stays far below the birthday bound of a 12-byte nonce.

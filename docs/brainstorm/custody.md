@@ -18,14 +18,13 @@ Custody grants no authority through possession of a credential reference.
 - A record belongs to no project and can serve more than one project.
 - A credential reaches an operation through the entity that performs it, never through a direct relationship with a project.
 - That entity holds a [credential reference](custody.vocabulary.md#credential-reference).
-- Each record names its [platform](custody.vocabulary.md#platform), its type and its [remote identity](custody.vocabulary.md#remote-identity).
-- Its platform defines its accepted types, its metadata and its validation.
-- Custody refuses an unsupported platform or a type that its platform does not accept.
+- Each record names its [platform](custody.vocabulary.md#platform), and its name is its only human label.
+- Its platform defines its secret shape, its metadata and its validation. Each platform holds exactly one secret shape, and a second shape for the same remote is another platform.
+- Custody refuses an unsupported platform.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
 - An OAuth credential enters only through a [login session](custody.vocabulary.md#login-session) on the server.
 - Creation and rotation make no remote call.
-- A rotation preserves the record identity, its name and its remote identity.
-- A credential for another remote identity requires a new record.
+- A rotation preserves the record identity and its name.
 - A metadata change creates a revision.
 - Custody refuses removal while dependents exist and lists those dependents in the refusal.
 - Dependents include every agent provider that names the record.
@@ -48,8 +47,6 @@ Custody grants no authority through possession of a credential reference.
 - Custody refuses a platform mismatch before any remote call.
 - A binding does not narrow [credential authority](custody.vocabulary.md#credential-authority) at the remote.
 - Suitability establishes no scope or authorization.
-- Remote identity neither selects a validation nor proves authorization.
-- The identity of the requester stays separate from the remote identity of the credential.
 - An OAuth credential does not imply a person.
 
 ## Secret use and handover

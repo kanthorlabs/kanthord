@@ -61,7 +61,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
 - A model identifier belongs to `getBuiltinModels(provider)` or the `models` metadata of an `openai-compatible` credential.
 - An empty `models` list permits no model selection.
-- The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoningLevels`.
+- The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoningLevels`, which defaults to `["off"]`.
 - A level that no source establishes fails validation.
 - The Worker Service sends `{ credential, platform }` to custody and consumes its suitability result.
 - It reads metadata through custody, never the secret.
@@ -76,7 +76,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 | Property | Schema |
 | --- | --- |
 | `agentProvider` | `string`; the name of an agent provider of the enablement |
-| `provider` | `string`, enum `github-copilot`, `openai`, `anthropic`, `openai-compatible` |
+| `provider` | `string`, enum `github-copilot`, `anthropic`, `openai-compatible` |
 | `credential` | `string`; a credential name |
 | `modelIdentifier` | `string` |
 | `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` |
@@ -93,7 +93,9 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - The environment-variable list is empty; the execution store supplies the credential.
 - Each metadata model becomes a pi model with provider `openai-compatible` and the metadata base URL.
 - The model carries `api: "openai-responses"`, `contextWindow`, `maxTokens` and the established reasoning levels.
+- The model builder applies the defaults of pi 0.86.0 to each value that the metadata omits: `contextWindow` `128000`, `maxTokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
 - Input defaults to `["text"]`, and all cost rates are zero.
+- An official OpenAI record uses this provider with `baseUrl` `https://api.openai.com/v1`.
 - The model list enters `createProvider`, and `setProvider` registers the provider.
 - The adapter builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
 - Provider construction performs no write-time remote call.

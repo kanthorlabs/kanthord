@@ -19,8 +19,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Project Service
 
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
-- [ ] Define the source-binding configuration for inbound provider deliveries, including webhook subscriptions and a Slack source with human identity mapping. The `source secret get` command also awaits its display, redaction and cache contract.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.
+- [ ] Added 2026-09-26 from the pin-and-use ruling. The UI shows a removed binding with the records that reference it. No page declares that read, and the records live in the Mission, Worker and Scheduler Services. Declare the reverse lookup and the service that answers it.
 
 ### Mission Service
 
@@ -39,6 +39,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Intake Service
 
+- [ ] RULED 2026-09-26 by Ulrich, redesign pending. The Project Service holds no `source` binding kind; its binding kinds are `repository`, `worker` and `storage`. The Intake Service designs the delivery source. A source carries every value that its acquisition needs by itself, for example its platform, its remote resource and its credential, and references no binding, although these values repeat values of a binding. The redesign moves the acquisition grant, the verification secret and the delivery verification that the Project pages hold for a source binding, and covers webhook subscriptions and a Slack source with human identity mapping. The `source secret get` command also awaits its display, redaction and cache contract.
 - [ ] Added 2026-09-24. Declare the subscription store, the delivery store and the handoff in `intake-service.impl.md`. The webhook receipt route of the `intake` group waits for them.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription and delivery commands await their entity prefix declarations.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription commands await kind-specific input fields, validation, protocol state schemas and absent-state representations. Delivery reads and receipt await verification-result schemas, operation declarations, timeouts, response statuses and file bounds.

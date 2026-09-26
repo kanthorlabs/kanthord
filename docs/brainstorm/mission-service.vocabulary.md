@@ -18,9 +18,7 @@ A new binding kind adds a row.
 | --- | --- | --- | --- |
 | Repository | 0 | Exactly 1 | 0 |
 | Worker | 0 | 0 | 0 |
-| Provider account | 0 | 0 | 0 |
-| Source | 0 | 0 | 0 |
-| Storage | 0 | 0 | 0 |
+| Storage | At most 1 | At most 1 | 0 |
 
 ## node content
 
@@ -84,7 +82,7 @@ The execution of "Add password reset" produces a 3 GB video of the reset flow.
 The video exceeds the 5 MiB inline limit.
 Its host component safely opens the video inside the execution workspace.
 The component calls begin, uses the presigned PUT, then calls complete.
-The record names the `atlas-evidence` bucket, its object key, size, media type and storage binding revision.
+The record names the `atlas-evidence` bucket, its object key, size, media type and storage binding revision identity.
 It records the object version when the store returns one.
 The answer gives the evidence identity and `s3://atlas-evidence/<object key>`.
 The reviewer gets a presigned GET through its kanthord component, not a storage credential.

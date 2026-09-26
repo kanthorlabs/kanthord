@@ -186,7 +186,7 @@ The Mission Service receives that identity and names it in its authorization cal
 
 A binding is the record that allocates a resource to a project and permits an operation on that resource.
 The term names no closed set.
-The [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the four binding kinds and their values.
+The [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the three binding kinds and their values.
 A project holds a repository binding for the repository that the objective "Add password reset" belongs to.
 The binding permits three capabilities.
 The Project Service vocabulary holds the cardinality of each binding kind.
@@ -194,7 +194,7 @@ The Project Service vocabulary holds the cardinality of each binding kind.
 ## resource
 
 A resource is what a binding allocates to a project, and it exists independently of that project.
-The term names no closed set; [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the four binding kinds.
+The term names no closed set; [Project Service Vocabulary](project-service.vocabulary.md#binding-kind) owns the three binding kinds.
 The project of "Account recovery" binds the repository `kanthorlabs/kanthord` and the worker `general@1`.
 It also binds a source and the S3-compatible bucket `atlas-evidence`.
 Its [storage binding](project-service.vocabulary.md#storage-binding) allocates that bucket for object evidence.

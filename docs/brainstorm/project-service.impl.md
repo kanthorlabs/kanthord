@@ -32,10 +32,9 @@ The tables are below.
 - `project_project(id, name, binding_set_version, created_at)` holds the identity of a project and the version of its binding set.
 - A new project takes binding-set version 1 in `binding_set_version`.
 - Its first write names version 1 and commits version 2.
-- `project_binding(id, project_id, name, kind, resource_identity, current_revision, created_at, removed_at)` holds the identity of a binding.
-- `project_binding_revision(id, project_id, binding_id, revision, config, created_at)` holds one immutable row for each revision, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
+- `project_binding(id, project_id, name, resource_identity, revision, config, created_at, removed_at)` holds one immutable row for each revision of a binding, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
 
-Every table above holds `id` as its first column and `project_id` as its second column.
+Every table above holds `id` as its first column. Every table that belongs to a project holds `project_id` as its second column.
 A binding references the [credential store](custody.impl.md#the-credential-store-record) through custody, never through a direct table read.
 A project creation inserts the `project_project` row and calls the Mission collaboration `createMission` inside the same transaction, which [architecture.impl.md](architecture.impl.md) rules.
 
@@ -46,38 +45,42 @@ The constraints are below.
 - A creation or a rename to a name that another project holds returns 409 with code `project.name_conflict` and the identity of that project in `error.details`.
 - A rename commits in one transaction, and the last write wins.
 - The Project Service keeps a removed binding and every revision for the life of the project, and no sweep deletes them. Only a human edit adds a row, so the tables grow with human edits alone.
-- The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so a binding identity is unique across the server and satisfies the rule of `project-service.md` that it is unique inside its project.
-- `project_binding.current_revision` carries a composite foreign key to `project_binding_revision`, whose own real key is the pair of the binding and the revision under a unique index.
-- A partial unique index over `project_id` and `name` where `removed_at` is absent enforces the uniqueness of a binding name among the current bindings, so a removed binding releases its name.
-- `project_binding.resource_identity` names the resource that the binding allocates, and a partial unique index over `project_id` and `resource_identity` where `removed_at` is absent enforces the cardinality of the kind, so a project binds a resource again after its removal. The section below gives its form. A worker binding holds no resource identity, because a project holds any number of bindings of one worker, and SQLite treats two absent values as distinct. `kind` stays a plain column that the validation reads.
-- A credential reference and a reference to another binding sit inside `config`, and the write validates each one against `project_binding`. SQLite enforces no foreign key inside JSON.
+- The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so the identity of a revision is unique across the server.
+- A binding is the group of the rows that share `project_id` and `resource_identity`. A unique index over `project_id`, `resource_identity` and `revision` orders the revisions of a group, and the latest revision states the binding.
+- The write refuses a binding name that another current binding of the project holds. A partial index cannot select the latest revision of a group, so the write checks this rule. A removed binding releases its name.
+- `project_binding.resource_identity` names the resource that the binding allocates, and every kind holds a value. The section below gives its form. The first part of `resource_identity` is the binding kind, so no column holds the kind.
+- A credential reference sits inside `config`, and the write validates it through custody. SQLite enforces no foreign key inside JSON.
 - A binding name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - A new binding takes revision 1.
+- A tombstone is the next revision of a group with `removed_at` set and the last configuration copied.
+- A disablement is the next revision with `available: false`, or with `instanceCount: 0` for a worker binding.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](architecture.impl.md).
 
 ## The identities of the Project Service
 
 - A binding identity is `binding_<ulid>` for every binding kind, because the entity kind is the binding and `kind` is a column.
+- A binding identity names one revision of a binding, because each revision is one row of `project_binding`.
 - Validation of the `binding` claim of a machine JWT checks the `binding_` prefix and the canonical ULID portion.
 - [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules that JWT.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
 
 ## The resource identity
 
-`resource_identity` holds the normalized identity of the resource that a binding allocates, in three colon-separated parts, `<platform>:<resource kind>:<identifier>`.
-It names the resource that the binding allocates, and `credential.remote_identity` names the identity that a credential acts as at a remote. The two hold the same form and never the same subject.
+`resource_identity` holds the normalized identity of the resource that a binding allocates, in three colon-separated parts, `<kind>:<platform>:<identifier>`, and its first part is the binding kind.
 A per-kind function derives it from the binding configuration on every write, so a human enters it never and it disagrees with that configuration never.
 The values of the first version are below.
 
-- `github:repository:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`.
-- `github:webhook:kanthorlabs/kanthord` for the source binding of the GitHub webhook of that repository.
-- A worker binding holds no value.
+- `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`.
+- `worker:kanthord:general-main` for the worker binding with the binding name `general-main`.
+- `storage:s3:s3.eu-central-1.amazonaws.com/atlas-evidence` for the storage binding of the bucket `atlas-evidence` at that endpoint.
 
-The middle part names the resource and not the binding kind, so a GitHub webhook and a source of another platform hold different values under the one kind `source`.
-Normalization decides a revision against a replacement.
+A submission carries `kind`, and the write uses it to select the configuration schema and the derivation. A read derives `kind` from the first part, and the validation refuses a first part outside the closed set of binding kinds.
+Normalization decides whether a change stays in its group or starts a replacement.
 
 - A repository identity derives from its SSH address alone.
+- A worker identity derives from its binding name alone.
+- A storage identity derives from the host of its endpoint and its bucket alone.
 
 ## The write of a binding set
 
@@ -87,28 +90,29 @@ One `BEGIN IMMEDIATE` transaction holds the read of `project_project.binding_set
 The transaction refuses a submission that names another version, so two concurrent writes never interleave.
 It increments that column on every write that it commits.
 The transaction spans no `await`, no network call and no nested transaction, because one synchronous connection serves four services.
-The current binding set is the set of the rows of `project_binding` that hold no `removed_at`.
-A reference inside a submission names a binding name of that submission. The transaction resolves each reference to the identity that the name holds after the write, and it stores that identity in the configuration. A stored reference always holds an identity.
+The current binding set holds the latest revision of each group of the project that is no tombstone.
+A binding references no other binding.
 The transaction compares the canonical JSON of each configuration, so a reordered property of the submission creates no revision.
 The outcomes of the comparison by binding name are below.
 
-- A name with an unchanged configuration keeps its identity and its revision.
-- A name whose configuration changed and whose named resource stays keeps its identity and takes a new revision, and the transaction inserts one `project_binding_revision` row.
-- A name whose named resource changed takes a new identity, and the transaction sets `removed_at` on the binding that held the name.
-- A new name adds a binding with a generated identity at revision 1.
-- A name that the submission omits takes `removed_at`, and the transaction keeps its rows.
+- A name with an unchanged configuration keeps its latest revision, and the transaction inserts no row.
+- A name whose configuration changed and whose resource identity stays inserts the next revision of its group.
+- A name whose resource identity changed inserts a tombstone in its old group and revision 1 of the new group.
+- A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again.
+- A name that the submission omits takes a tombstone, and the transaction keeps its rows.
 - A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set increments the version and changes no binding.
 
-A dependent reference follows the name, so a new identity under a name repoints every dependent reference in the same edit and gives each dependent binding a new revision.
-Validation refuses a set that references a binding name that the submission does not hold.
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
 ## Revision, disablement and rotation
 
 A revision is the unit of a configuration change.
 The local disablement of a binding is a field of the configuration, so a disablement creates a revision.
-A resolution reads `current_revision` of the binding row, so a disablement takes effect at the next resolution and cancels no operation in flight.
+A resolution reads the configuration of its pinned revision.
+A resolution checks the latest revision of the group of that revision, and a disablement refuses it.
+A resolution checks the group for a tombstone after its pinned revision, and a removal refuses it.
+A disablement and a removal therefore take effect at the next resolution and cancel no operation in flight.
 [Custody](custody.impl.md#the-credential-store-record) owns credential rotation and record revisions.
 A secret change behind an unchanged reference creates no binding revision.
 
@@ -124,17 +128,16 @@ The write refuses a submission that changes the worker of an existing worker bin
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
 - The `instanceCount` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
-- The repository, source and storage kinds keep `available`.
+- The repository and storage kinds keep `available`.
 - A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
-- Every repository binding names exactly one `credential` of type `api_key` of its platform. An absent credential refuses the write.
+- Every repository binding names exactly one `credential` of its platform. An absent credential refuses the write.
 - An HTTPS repository address refuses the write.
 - A strategy with more than one action refuses the write.
 
 ## Storage configuration
 
 The `storage` binding names one S3-compatible bucket of a project.
-A project holds at most one current storage binding.
-The set validation and a partial unique index on `project_id` for current `storage` rows enforce that cardinality.
+A project holds any number of storage bindings.
 The configuration holds these fields beside `available`:
 
 - `endpoint`: required URL of the S3-compatible service.
@@ -145,18 +148,18 @@ The configuration holds these fields beside `available`:
 
 The storage binding sends `{ credential, platform: s3 }` to [custody's use check](custody.impl.md#suitability).
 The work endpoint, bucket, region and prefix stay in the binding.
-Validation checks the field types, the endpoint URL, the custody reference and project cardinality at write and resolution.
-An absent field, invalid value or second storage binding refuses the write.
+Validation checks the field types, the endpoint URL and the custody reference at write and resolution.
+An absent field or an invalid value refuses the write.
 The binding write probes no store capability or version support.
 The store controls object versioning; kanthord enforces no object immutability.
 A human who disables versioning accepts that choice.
-Without a storage binding, the Mission Service accepts only inline evidence content, not object uploads.
+A node without a storage binding accepts only inline evidence content, not object uploads.
 
-Tests reject absent fields, invalid values, an unknown custody reference and a second storage binding.
+Tests reject absent fields, invalid values and an unknown custody reference.
 Tests accept an `s3` credential and refuse a credential of another platform.
 Tests assert that suitability compares no endpoint, bucket or region metadata.
 Tests assert that binding writes make no capability probe and that stores without versions remain valid.
-Tests preserve the storage binding revision in each object evidence record.
+Tests preserve the pinned storage binding identity in each object evidence record.
 
 ## Worker binding configuration
 
@@ -171,15 +174,17 @@ Tests preserve the storage binding revision in each object evidence record.
 ## The resolution of a binding
 
 An execution calls the resolution at the moment that it needs the resource.
-One read resolves the dependency chain of the binding.
+One read resolves the pinned revision and its dependency chain.
 For an agent configuration, the Project Service asks the [Worker Service](worker-service.impl.md#agent-configuration-validation).
 The Project Service merges no configuration itself.
-It checks the disablement of every binding of the chain, and a disabled or removed member refuses the operation.
-The resolution records the revision of every binding of the chain, and not the revision of the worker binding alone.
+It checks the disablement and the removal of every binding of the chain, and a disabled or removed member refuses the operation.
+The resolution records the identity of every revision of the chain, and not the identity of the worker binding revision alone.
 It performs no cache, because `DatabaseSync` reads the local file synchronously.
-A recorded revision authorizes nothing, so the next operation resolves the chain again.
+A resolution authorizes one operation, so the next operation resolves the chain again.
 
 ## The webhook key
+
+The Intake Service redesigns this section with the delivery source under [HANDOFF](HANDOFF.md#intake-service), because the Project Service holds no `source` binding kind.
 
 [architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file, the rule that a service derives its keys from it and never uses it directly, and the cipher key of the `credential` table.
 The Project Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt.
@@ -218,9 +223,11 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 ## The acquisition grant
 
+The Intake Service redesigns this section with the delivery source under [HANDOFF](HANDOFF.md#intake-service), because the Project Service holds no `source` binding kind.
+
 - The operation is `project.acquisition_grant`, a `unary` mutation under the `service` access policy, reachable through the direct adapter alone. Its input holds the source binding identity, the kind from `webhook-register`, `poll` and `stream-open`, and the subscription identity. Its caller is the service identity of the Intake Service, and the facility refuses every other service identity for this operation.
 - The facility resolves the source binding to its project and credential record. The source binding configuration names that record for its platform. The facility checks the disablement of the binding and refuses a disabled or removed binding.
-- The answer holds the grant identity `acquisition_grant_<ulid>`, the acquisition material, the platform, the remote identity of the record and the expiry. The acquisition material is the record's pi-ai credential value or platform token. The value contract of [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) names this operation as one of the two whose answer carries credential material. [intake-service.md](intake-service.md#boundary) requires that material in the memory of the Intake Service. For `webhook-register`, the answer also holds the current verification secret of the source binding. The log and the idempotency component redact the answer, and no HTTP route reaches the operation.
+- The answer holds the grant identity `acquisition_grant_<ulid>`, the acquisition material, the platform and the expiry. The acquisition material is the record's pi-ai credential value or platform token. The value contract of [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) names this operation as one of the two whose answer carries credential material. [intake-service.md](intake-service.md#boundary) requires that material in the memory of the Intake Service. For `webhook-register`, the answer also holds the current verification secret of the source binding. The log and the idempotency component redact the answer, and no HTTP route reaches the operation.
 - The table `project_acquisition_grant(id, project_id, source_binding_id, subscription_id, kind, service, credential_id, issued_at, expires_at, ended_at, end_reason)` records every grant. `end_reason` is one of `session_end`, `binding_disabled`, `binding_removed`, `credential_rotated`, `expired`. The row holds no material.
 - The code fixes the maximum lifetime at 24 hours from `issued_at`, and a sweep every minute ends an expired grant.
 - A grant ends through `project.acquisition_grant_end`, a `unary` mutation under the `service` policy. The Intake Service calls it with the grant identity when its session ends, and the facility writes `session_end`.
@@ -255,9 +262,12 @@ The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns age
 
 The Project Service holds no table of client identities and no secret of a client identity.
 [gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and is available.
-The answer resolves the project of the worker binding from the current revision of the binding configuration.
+The JWT names one revision of the worker binding.
+The answer reads the project of that revision, and it refuses a disabled or removed binding.
 
 ## The verification of a delivery
+
+The Intake Service redesigns this section with the delivery source under [HANDOFF](HANDOFF.md#intake-service), because the Project Service holds no `source` binding kind.
 
 The delivery route is `/hooks/<binding id>`, inside the path group that [gateway-service.impl.md](gateway-service.impl.md) reserves.
 The path names the binding, because a signature does not say which source sent the delivery, and a binding identity is unique across the server.

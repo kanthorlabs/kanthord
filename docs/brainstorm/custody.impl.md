@@ -11,7 +11,7 @@ A mechanism here never overrides a rule there.
 ## The credential store record
 
 - Custody owns the shared `credential` table and the [credential envelope](architecture.impl.md#the-credential-table).
-- A record holds `id`, `name`, `platform`, `type`, `secret`, `metadata`, `remote_identity`, `created_at`, `updated_at` and `revision`.
+- A record holds `id`, `name`, `platform`, `secret`, `metadata`, `created_at`, `updated_at` and `revision`.
 - The encrypted columns represent `secret`; no plaintext secret persists.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time).
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
@@ -27,7 +27,7 @@ A mechanism here never overrides a rule there.
 - Creation and rotation validate the local schema and make no remote call.
 - Custody logs a human creation or update with the human identity and record identity, never the secret.
 
-The secret schemas are:
+The platform determines the secret shape of a record, and each shape has one secret schema:
 
 - `api_key`: `{ key }`.
 - `oauth`: `{ refresh, access, expires }`; only a login session supplies initial material.
@@ -36,26 +36,26 @@ The secret schemas are:
 ## Platform validators
 
 Custody owns a dedicated platform validator for every [platform](custody.vocabulary.md#platform), including each LLM platform.
-Each platform validator declares its accepted types, metadata schema and validation.
+Each platform validator declares its secret shape, metadata schema and validation. A platform holds exactly one secret shape, and a second shape for the same remote is another platform, for example `anthropic-subscription`, `openai-codex` or `github-app`.
 The platform validators use the credential contracts of `@earendil-works/pi-ai` at 0.86.0.
 
-| Platform | Accepted type | Metadata | Validation |
+| Platform | Secret shape | Metadata | Validation |
 | --- | --- | --- | --- |
 | `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
 | `github-copilot` | `oauth` | None | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token |
-| `openai` | `api_key` | None | `GET https://api.openai.com/v1/models` |
 | `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
 | `openai-compatible` | `api_key` | `baseUrl`, `models` | `GET <baseUrl>/models` |
 | `s3` | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
 
 - Every other platform refuses a record.
-- Creation refuses a type outside the accepted type of its platform.
+- An official OpenAI record is an `openai-compatible` record with `baseUrl` `https://api.openai.com/v1`.
 - The Copilot probe writes no minted token back to the record.
 - `openai-compatible.baseUrl` uses `https` or `http`, with no query and no fragment.
 - The base URL is fixed; an update that changes it fails.
 - An `openai-compatible` record starts with `models: []`.
-- Each approved model holds `id`, `contextWindow`, `maxTokens` and `reasoningLevels`.
-- `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow`.
+- Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`.
+- An omitted value takes the default of pi 0.86.0: `contextWindow` `128000`, `maxTokens` `16384` and `reasoningLevels` `["off"]`.
+- `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
 - A metadata revision adds approved models after the [provider check](worker-service.impl.md#the-provider-check).
 - A model removal fails while a default configuration or an entry names it.
 - The dependency check and metadata update commit in one transaction; a refusal lists the dependents.
@@ -71,15 +71,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - It compares no metadata and reads no secret for this comparison.
 - Remote validation uses the record's own platform validator.
 - The use check performs no remote validation at creation or rotation.
-- Services supply no accepted-type list and no capability wire value.
-
-## The remote identity of a record
-
-- `remote_identity` uses the form in [remote identity](custody.vocabulary.md#remote-identity).
-- The identifier is the login, slug or path that the remote displays, not a numeric identity.
-- Custody asks no remote to confirm this human-entered value.
-- It never routes validation by that value and never treats it as authorization.
-- A rotation preserves the remote identity.
+- Services supply no secret-shape list and no capability wire value.
 
 ## The keys
 
@@ -130,7 +122,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Custody implements `CredentialStore` of `@earendil-works/pi-ai` at 0.86.0.
 - The methods are `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
 - The [Worker Service](worker-service.impl.md#the-credential-store-of-an-execution) defines the selection and visibility of the execution view.
-- `list()` returns the selected non-secret pair of adapter id and credential type.
+- `list()` returns the selected non-secret pair of adapter id and credential type, and custody derives that type from the platform of the record.
 - `modify()` serializes on the record and writes the pi-ai result in place.
 - The view refuses `delete()`.
 - At `server` placement, the view reads custody directly; plaintext stays inside the process.
@@ -157,8 +149,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 
 - Custody declares `credential.*` operations in its own `contract.ts`, under `/api/credential`.
 - Credential management uses the `human` access policy.
-- `credential.create` accepts `api_key` and `s3_access_key` records.
-- `credential.login` obtains an `oauth` record.
+- `credential.create` accepts a record of every platform whose secret shape is not `oauth`.
+- `credential.login` obtains a record of a platform whose secret shape is `oauth`.
 - `credential.rotate` updates secret material without a remote call.
 - `credential.get` and `credential.list` return metadata and no secret.
 - The resource healthcheck validates a record on demand.
@@ -168,7 +160,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Custody calls `models.login(providerId, "oauth", interaction)` of pi-ai over its own credential store.
 - The [platform table](#platform-validators) determines whether OAuth is accepted.
 - A login session is a custody runtime record with identity `login_session_<ulid>`.
-- It holds platform, mode, initial human identity, credential name, remote identity, state, address, code, failure reason and expiry.
+- It holds platform, mode, initial human identity, credential name, state, address, code, failure reason and expiry.
 - Expiry falls 15 minutes after start.
 - The interaction adapter answers `select` with `browser` or `device_code`; an unsupported option fails the session.
 - It records `auth_url` as the address and `device_code` as the code and address.
@@ -202,11 +194,11 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 ## Tests
 
 - Tests cover duplicate names at creation, login start and login commit, including creation retry after restart.
-- Tests assert platform/type acceptance, metadata schemas, fixed base URL and platform-only suitability.
+- Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and platform-only suitability.
 - Tests assert no remote call on creation or rotation, and no secret in record answers.
 - Tests cover model and credential removal with dependents and concurrent changes.
 - Tests cover every platform probe, S3 status mapping, expired OAuth, forbidden probes and attribution without stored results.
-- Tests preserve names, remote identities and binding references across rotation.
+- Tests preserve names and binding references across rotation.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.

@@ -33,11 +33,10 @@ A second binding with that name in `atlas` is refused.
 ## binding kind
 
 The kind of a binding determines its configuration, the cardinality that a project permits, and its validation.
-The set holds four kinds.
+The set holds three kinds.
 
 - **repository**
 - **worker**
-- **source**
 - **storage**
 
 The mission of a project is intrinsic to that project, so no binding allocates it.
@@ -46,12 +45,11 @@ A repository binding of the objective "Add password reset" permits three capabil
 ## cardinality
 
 The number of bindings of one kind that a project holds for one resource.
-The set is closed for each kind and it holds four values.
+The set is closed for each kind and it holds three values.
 
 - **repository**: one binding for each repository that the project uses.
 - **worker**: any number of bindings of one worker, each with its own configuration.
-- **source**: one binding for each delivery source that the project accepts.
-- **storage**: at most one binding per project, for one S3-compatible bucket.
+- **storage**: one binding for each S3-compatible bucket at its endpoint, and any number per project.
 
 The project of "Account recovery" binds two repositories and one `tdd@1` worker as `tdd-main`.
 A second binding for repository `kanthorlabs/kanthord` is refused.
@@ -61,13 +59,13 @@ A third `tdd@1` binding with the values of `tdd-main` is accepted.
 ## storage binding
 
 The binding of one S3-compatible bucket that holds the object evidence of a project.
-A project holds at most one storage binding.
+A project holds any number of storage bindings, and an initiative or an objective names at most one of them for its uploads.
 Project `atlas` names its binding `evidence-store` and its bucket `atlas-evidence`.
 Its configuration holds `endpoint`, `bucket`, `region`, `prefix` and `credential` beside `available`.
 The credential reference names an `s3` [credential store record](custody.vocabulary.md#credential-store-record).
 The storage credential stays in server custody.
 A presigned grant reaches the kanthord component for one operation on one object, never the context of an agent.
-Without this binding, the project accepts only inline evidence content.
+A node without a storage binding accepts only inline evidence content.
 
 ## binding set
 
@@ -85,9 +83,8 @@ One version of the configuration of a binding.
 
 A worker binding holds one entry that names a model identifier.
 The project changes the model identifier.
-The identity of the binding stays, and the change creates a revision.
-Every reference to that binding stays valid, because a reference never names a revision.
-An execution that resolves that revision records it.
+The change creates the next revision of the binding, with its own identity.
+A record that pins the old revision keeps it until a human moves the record to the new revision.
 A change to the credential reference of a repository binding creates a revision of that binding too.
 
 ## replacement binding
@@ -97,11 +94,10 @@ The replacement keeps the binding name and takes a new identity.
 
 A repository binding names one repository, and the project moves the work to another repository.
 That change names another resource, so it creates a replacement binding.
-The replacement invalidates every reference to the binding that it replaces.
-The same edit repoints every dependent binding.
+The old binding takes a tombstone, so every record that pins one of its revisions is refused at its next use.
 
-`credential_A` holds the remote identity `github:user:ulrich`.
-The team moves to a token of `github:organization:kanthorlabs`, so a human creates `credential_B`.
+`credential_A` holds a token of the GitHub user `ulrich`.
+The team moves to a token of the GitHub organization `kanthorlabs`, so a human creates `credential_B`.
 The binding `kanthord-repo` of `atlas` changes its credential reference to `credential_B`, which creates a revision.
 The binding of `beacon` keeps `credential_A` until its own edit.
 
@@ -163,6 +159,8 @@ The Intake Service uses that grant to register the webhook for `kanthorlabs/kant
 
 ## source binding
 
+The Intake Service redesigns the delivery source, and the Project Service holds no `source` binding kind. The entry stays until that redesign.
+
 The binding of a delivery source that a project accepts.
 
 The project binds the GitHub webhook source of its repository.
@@ -174,9 +172,9 @@ The binding holds the [subscriptions](intake-service.vocabulary.md#subscription)
 
 One act of an execution that resolves a binding for one operation.
 
-An execution needs a network git write, and it resolves the repository binding at that moment.
+An execution needs a network git write, and it resolves the repository binding revision that its node pins at that moment.
 That resolution authorizes one operation, and the next operation resolves the binding again.
-The execution records the binding revision that it resolves.
+The execution records the identity of that revision.
 A local disablement takes effect at the next resolution.
 
 ## policy
@@ -210,7 +208,7 @@ Under a repository strategy that requires a merge and push, the expected end sta
 `project-service.md` names five different changes.
 The set is closed and it holds five values.
 
-- **local disablement**: It takes effect at the next resolution. A recorded revision never authorizes an operation after it.
+- **local disablement**: It takes effect at the next resolution. A pinned revision never authorizes an operation after it.
 - **upstream revocation**: The remote withdraws the credential. A human revokes the OAuth credential of `kanthorlabs` at GitHub. The record and every binding that names it stay unchanged, the next platform action ends against the remote, and a human rotates the record.
 - **rotation**: It changes one record, and every binding that names that record stays valid.
 - **expiry**: The credential reaches its end date at the remote. The API key of an agent provider expires. The next model inference call fails at the remote. The recorded revision still states what the execution selected.

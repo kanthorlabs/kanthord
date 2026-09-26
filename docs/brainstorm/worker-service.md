@@ -172,6 +172,7 @@ The Worker Service mints the runtime identity when it creates the instance.
 The runtime identity is unique inside the server, and it names the worker binding of the instance.
 The Worker Service vouches for that association on the [work pull](scheduler-service.md#work-pulls).
 For an instance that registers, the Worker Service accepts the registration under the [client identity](project-service.vocabulary.md#client-identity) of its credential and the worker binding that the credential names, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
+A registration pins the worker binding revision that the credential names, and an instance keeps that revision until it registers again.
 A client identity holds at most one live registration.
 An instance of a worker that an external harness hosts registers, and an instance at the `worker` placement registers.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.

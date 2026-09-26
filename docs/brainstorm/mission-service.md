@@ -60,6 +60,8 @@ A landing observation is a platform action, and it uses the credential of a repo
 A node names the bindings that its kind permits, and each binding kind states how many a node of each kind names.
 An initiative names no repository binding.
 A task names no repository binding, and a task acts on the repository that its objective names.
+An initiative or an objective names at most one storage binding, and its uploads use that binding.
+A task names no storage binding, and its uploads use the storage binding of its objective.
 Two objectives name the same binding or different bindings.
 An objective names any repository binding that its project holds.
 An execution of an initiative derives its repositories from the objectives of that initiative, for its verifications too.
@@ -98,6 +100,12 @@ It creates an objective or a task under a parent that holds `Pending`, `Availabl
 The node API edits no node in a terminal state.
 The node API reads no condition of the import when it updates a node.
 A human takes responsibility for an edit through the node API.
+A rebind is a node API update that changes only the bindings of a node.
+It moves the pinned binding revision of one node, or of every node of a mission, to a later revision of the same binding.
+It admits every node that is not terminal and not retired.
+An open attempt keeps its pinned node revision, so the new binding revision applies at the next attempt.
+A rebind of every node of a mission skips each terminal or retired node and reports it.
+A rebind refuses a revision of another binding, a tombstone and a disabled revision.
 Execution authority never grants planning authority.
 No execution identity writes a node, and no execution identity writes a criterion.
 An execution identity authorizes no import, whatever node that import names.

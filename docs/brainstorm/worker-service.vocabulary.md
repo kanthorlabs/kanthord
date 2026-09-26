@@ -147,11 +147,10 @@ An absent record denies use like `disabled`.
 
 One named provider and credential pair inside an agent enablement.
 Its fields are `name`, `provider` and `credential`; it holds no model list.
-For example, `{ name: "openai-org", provider: "openai", credential: "openai-main" }` belongs to the `swe@1` enablement.
+For example, `{ name: "openai-org", provider: "openai-compatible", credential: "openai-main" }` belongs to the `swe@1` enablement.
 The closed provider set is:
 
 - `github-copilot`
-- `openai`
 - `anthropic`
 - `openai-compatible`
 

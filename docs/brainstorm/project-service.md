@@ -19,19 +19,20 @@ The mission of a project is intrinsic to that project, so no binding allocates i
 
 ## Resource and binding model
 
-A project binds each resource that it uses directly: a repository, a worker, a delivery source and an evidence storage.
+A project binds each resource that it uses directly: a repository, a worker and an evidence storage.
+A delivery source is no binding of the Project Service.
 A binding that needs a credential references a [credential store record](custody.vocabulary.md#credential-store-record), and the project names no credential.
-A binding has an identity that is unique inside its project.
+A binding is the group of its revisions.
+Each revision has an identity that is unique across the server, and a record pins one revision by that identity.
 A binding has a [binding name](project-service.vocabulary.md#binding-name) that is unique inside its project. A human chooses it.
 A change of the binding name removes the binding and adds another one.
 A binding has a kind.
 The kind determines the configuration that the binding holds, the cardinality that a project permits, and the validation that the configuration satisfies.
-A project holds one binding for each repository and each delivery source that it uses.
-It holds any number of bindings of one worker and at most one [storage binding](project-service.vocabulary.md#storage-binding).
-The storage binding names one S3-compatible bucket for the object evidence of the project.
-Without a storage binding, the project accepts only inline evidence content.
-A binding references another binding by identity.
-A reference never names a revision.
+A project holds one binding for each repository that it uses.
+It holds any number of bindings of one worker and any number of [storage bindings](project-service.vocabulary.md#storage-binding).
+A storage binding names one S3-compatible bucket for object evidence.
+An initiative or an objective names at most one storage binding for its uploads, and a node without one accepts only inline evidence content.
+A binding references no other binding.
 A project shares a resource with another project.
 A binding belongs to one project, and no project shares a binding.
 The Project Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a repository binding.
@@ -129,11 +130,8 @@ The Project Service consumes custody's suitability result after coverage passes.
 The operation record names the execution identity, service identity or source binding appropriate to its requester.
 [Custody](custody.md#secret-use-and-handover) governs secret use and handover.
 
-A project binds each delivery source that it accepts.
-A source binding holds the verification secret behind custody.
-A source binding holds the [subscriptions](intake-service.vocabulary.md#subscription) of the [Intake Service](intake-service.md#subscriptions) that acquire its deliveries.
-The Project Service verifies a delivery against the source binding of its project as its own operation.
-That operation names no requester identity, because it acts on nothing external.
+The Intake Service redesigns the delivery source, its verification secret and its delivery verification under [HANDOFF](HANDOFF.md#intake-service).
+Until that redesign, the acquisition grant of this page names a source binding.
 
 The diagram shows the order of one authorization.
 It shows that a refusal never reaches custody.
@@ -141,24 +139,21 @@ It shows that a refusal never reaches custody.
 ## Configuration lifecycle and consistency
 
 A binding set changes when the resource requirements of a project change.
-A change to the resource that a binding names creates a replacement binding.
-A change to the configuration of a binding preserves the identity of the binding and creates a revision.
+A change to the configuration of a binding creates the next revision of that binding.
 A change to the credential reference of a binding is a configuration change, so it creates a revision.
+A change to the resource that a binding names creates a [replacement binding](project-service.vocabulary.md#replacement-binding) and removes the old binding.
 A change to the secret material behind an unchanged reference changes no binding.
-The [credential record rules](custody.md#credential-records) govern rotation and remote identity.
-A revision never invalidates a reference to its binding.
-A replacement invalidates every reference to the binding that it replaces.
-An edit that replaces a binding repoints every dependent binding in that same edit.
-The Project Service rejects a binding set that references a binding which does not exist.
-The Project Service validates a binding set when a project writes it, and it validates a binding again when an execution resolves it.
+The [credential record rules](custody.md#credential-records) govern rotation.
+A record pins one revision, and every use of that record reads the configuration of the pinned revision.
+No use reads a later revision implicitly.
+A later revision reaches a record only when a human moves that record to it.
+A disablement and a removal refuse every use of the binding, whatever revision a record pins.
+A pinned revision never enables a disabled or removed binding.
+The Project Service validates a binding set when a project writes it, and it validates the pinned revision again at each resolution.
 The [claim](scheduler-service.md#claims-and-counts) is no resolution, so the first resolution of an execution is the first validation of its bindings after write time.
 Local disablement, upstream revocation, rotation, expiry and OAuth refresh are five different changes.
-An execution resolves a binding at the moment that it needs the resource.
-A resolution authorizes one operation, and the next operation resolves the binding again.
-An execution records the binding revision that it resolves.
-A recorded revision states what an execution selected.
-Current authorization states what an execution performs.
-A recorded revision never authorizes an operation after a disablement.
+An execution resolves its pinned revision at the moment that it needs the resource.
+A resolution authorizes one operation, and the next operation resolves the pinned revision again.
 A disablement takes effect at the next resolution.
 An operation that is in progress ends against the remote, because the remote holds the credential authority.
 

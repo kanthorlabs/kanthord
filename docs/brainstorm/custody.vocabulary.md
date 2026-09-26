@@ -19,10 +19,10 @@ The store holds one GitHub key that the repository bindings of `atlas` and `beac
 
 ## credential store record
 
-One global record for a secret, with its platform, type, metadata, remote identity, times and revision.
-Record `credential_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` has name `copilot-login`, platform `github-copilot` and remote identity `github:user:ulrich`.
-Its type is `oauth`.
-The closed set of credential types is:
+One global record for a secret, with its platform, metadata, times and revision.
+Record `credential_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` has name `copilot-login` and platform `github-copilot`.
+Its platform gives it the secret shape `oauth`.
+The closed set of secret shapes is:
 
 - `api_key`
 - `oauth`
@@ -45,7 +45,6 @@ The set is closed:
 
 - `github`
 - `github-copilot`
-- `openai`
 - `anthropic`
 - `openai-compatible`
 - `s3`
@@ -60,21 +59,10 @@ The credential's platform and metadata identify the external system.
 The custody part that declares the accepted types, the metadata schema and the validation of one platform.
 The platform validator of `github` accepts `api_key` and validates a record with `GET https://api.github.com/rate_limit`.
 
-## remote identity
-
-The identity at the remote that a credential acts as.
-Its form is `<namespace>:<identity kind>:<identifier>`.
-The namespace names where the identity exists, not necessarily the platform of the record.
-The term names no closed set.
-
-- `copilot-login` has platform `github-copilot` and remote identity `github:user:ulrich`.
-- A GitHub organization key names `github:organization:kanthorlabs`.
-- An OpenAI key names `openai:organization:org-kanthorlabs`.
-
 ## suitability
 
 Custody's check that the credential platform equals the platform of its use.
-A repository binding requests `github` with an `openai` record, so suitability fails.
+A repository binding requests `github` with an `anthropic` record, so suitability fails.
 An `s3` record for another endpoint passes the use check; its first upload fails at that endpoint.
 
 ## credential authority

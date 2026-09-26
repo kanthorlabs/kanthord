@@ -44,7 +44,7 @@ Every record that names an actor stores one of three forms, and the server deriv
 - `verifications` is a nonempty ordered list of nonblank bash command strings.
 - `bindings` is a list of binding names of the project.
 
-The write resolves each binding name to its identity and checks the rule table.
+The write resolves each binding name to the identity of the latest revision of that binding, pins that revision and checks the rule table.
 The node kind determines the column.
 A new binding kind adds a row.
 
@@ -52,9 +52,7 @@ A new binding kind adds a row.
 | --- | --- | --- | --- |
 | Repository | 0 | Exactly 1 | 0 |
 | Worker | 0 | 0 | 0 |
-| Provider account | 0 | 0 | 0 |
-| Source | 0 | 0 | 0 |
-| Storage | 0 | 0 | 0 |
+| Storage | At most 1 | At most 1 | 0 |
 
 A missing, blank or nontext `name`, `requirement` or `criterion` answers `mission.node.content_invalid`.
 An absent or empty `verifications` list answers `mission.node.verifications_missing`.
@@ -80,12 +78,12 @@ An import carries no priority.
 
 The attempt row records the frozen required external actions next to the pinned revision.
 
-- A frozen action holds `key`, `bindingId`, `bindingRevision`, `action`, `expectedEndState`, `follows` and `configuration`.
+- A frozen action holds `key`, `bindingId`, `action`, `expectedEndState`, `follows` and `configuration`.
 - `action` is `pull_request` or `merge_push` for a repository binding, under the action catalog of [project-service.impl.md](project-service.impl.md).
 - `expectedEndState` is `pull_request_merged` for `pull_request` and `base_branch_pushed` for `merge_push`.
 - `follows` is the key of the action that this action follows, or null when it follows the passing assessment. It is null while a strategy holds at most one action; the field stays for a later action kind.
-- `configuration` freezes the operands that the action performer takes from the strategy: `baseBranch`. Every other fact of the operation, the address, the platform and the credential, comes from the current resolution of the binding through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
-- `bindingRevision` records the binding revision that the freeze read, as attribution and no authority.
+- `configuration` freezes the operands that the action performer takes from the strategy: `baseBranch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `bindingId` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
+- `bindingId` is the repository binding revision that the pinned node revision names.
 - A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
 - An initiative freezes an empty set.
 - The frozen action holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and every external object and observation of the attempt names that key.
@@ -239,13 +237,13 @@ The produced content address holds the required SHA-256 of those decoded bytes.
 The server verifies the hash before it accepts the content.
 Larger inline content answers 413 `mission.evidence.too_large`.
 The service never truncates evidence.
-Without a storage binding, the service accepts only inline evidence content.
+A node without a storage binding accepts only inline evidence content.
 Repository evidence remains an address, not an upload of repository content.
 
 - A repository address holds `bindingId` and `commit`.
 - `commit` is the full git object name in lower-case hexadecimal: 40 characters for a SHA-1 repository or 64 characters for a SHA-256 repository, the two object formats of git. An abbreviation, upper-case or a ref name answers HTTP 400 with an issue list.
 - The service checks the form alone and never the repository.
-- `bindingId` names a current repository binding of the project in every context.
+- `bindingId` names a repository binding revision of the project in every context.
 - For the evidence of an objective or a task, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
 - For the tested input of an initiative, the list holds one address per distinct repository binding of its current objectives.
 - The landed commit of a success override follows the same form and binding rule.
@@ -269,9 +267,10 @@ The file path is local input, not an evidence address.
 
 1. The component calls `mission.evidence.upload.begin` with execution context, evidence metadata, size, media type and optional SHA-256.
    This operation requires execution access and a live claim for the node or its task.
-   The server checks the live claim, the storage binding and the 5 GiB single-object limit.
+   The server checks the live claim, the storage binding of the pinned revision and the 5 GiB single-object limit.
+   A node without a storage binding refuses the upload.
    It creates a pending record with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence id>`.
-   The record names the storage binding identity and revision.
+   The record pins that storage binding revision in `storageBindingId`.
    Custody returns a presigned PUT for that key with a lifetime of 1 hour.
    The grant requires a checksum header only when the component supplies a SHA-256.
 2. The component sends the bytes directly to the store with that PUT.
@@ -289,10 +288,10 @@ An expired pending upload cannot complete.
 - kanthord runs no automatic sweep of unpublished upload objects.
 - `mission.evidence.pending.list` uses `GET /api/mission/:missionId/evidence/pending` with `human` access, and lists the expired pending uploads of one mission.
 - The list uses the shared page contract and descending evidence identity order.
-- Each pending row holds `evidenceId`, `missionId`, `nodeId`, `attempt`, `storageBindingId`, `storageBindingRevision`, `location`, `expiresAt` and `cleanedUp`.
+- Each pending row holds `evidenceId`, `missionId`, `nodeId`, `attempt`, `storageBindingId`, `location`, `expiresAt` and `cleanedUp`.
 - `location` is the server-generated `s3://` object URI; `cleanedUp` starts as `false`.
 - `mission.evidence.pending.cleanup` uses `POST /api/mission/:missionId/evidence/pending/cleanup` with `human` access, and cleans up expired pending uploads of one mission.
-- Cleanup deletes each object of an expired pending upload through the storage binding of the project.
+- Cleanup deletes each object of an expired pending upload through its pinned storage binding revision.
 - It marks each pending row `cleanedUp: true` after the object deletion and keeps the row.
 - Cleanup targets only expired pending uploads, never a published evidence record or a published object.
 - The answer holds `missionId` and `cleanedUpEvidenceIds`, the evidence identities of the rows that this cleanup marks.
@@ -326,7 +325,7 @@ kanthord runs no automatic evidence cleanup.
 - `force: true` skips that check and requires a reason, so a human can remove an exposed credential at once.
 - Force without a reason answers HTTP 400 with a validation issue list.
 - The reason is optional without force.
-- The service removes inline bytes or deletes the object through the storage binding of the project.
+- The service removes inline bytes or deletes the object through the storage binding revision that the evidence record pins.
 - Object removal targets the recorded version when one exists.
 - The service keeps the evidence record and marks its content removed.
 - Every evidence record carries `removedBy: Actor | null` and `removedReason: Text | null`.
@@ -435,6 +434,14 @@ kanthord runs no automatic evidence cleanup.
 - `landedCommit` is admitted only with `result: success`.
 - The server writes the actor, the time, the basis and the outcome record.
 
+## The rebind
+
+- `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission revision and an optional node identity. Without a node identity the act covers every node of the mission.
+- The target revision belongs to the same binding as the revision that the node pins, and it is no tombstone and no disabled revision.
+- The act inserts a node revision for each rebound node, increments `mission_mission.revision` once and inserts one `mission_change` row.
+- The answer is the `NodeChange` of the act and the list of skipped nodes, each with the condition that it failed.
+- Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
+
 ## Node retire
 
 - `mission.node.retire.preview` uses `GET /api/mission/node/:nodeId/retire/preview?force=true|false` with `human` access. It changes no state and stores no receipt. `force` defaults to false.
@@ -531,7 +538,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests answer `mission.evidence.content_repository` with the address on a human and an execution content read of repository evidence, and refuse an unauthorized read before that answer.
 
 - Tests derive the human, execution and service actors from the verified caller, reject an actor in any input, and keep the copied client identity after deregistration.
-- Tests freeze the key, binding revision, action, expected end state, a null predecessor and the base branch at the opening, keep them after a strategy change, and resolve the binding currently for the address and the credential.
+- Tests freeze the key, binding revision, action, expected end state, a null predecessor and the base branch at the opening, keep them after a strategy change, and resolve the pinned binding revision for the address and the credential.
 - Tests fold `expected`, `other` and `none` into `External.Success`, `External.Failed` and an unresolved request, read no `detail`, and require nonempty `landedCommits` on an `expected` repository observation and an empty list otherwise.
 
 - Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
@@ -572,11 +579,11 @@ kanthord runs no automatic evidence cleanup.
 - Tests turn success into `criterion-not-met` for a default-standard violation only when the worker declares a base prompt.
 - Tests accept inline content at 5 MiB decoded and refuse one byte more with 413 `mission.evidence.too_large`.
 - Tests require canonical base64, media type and the correct SHA-256, and assert no truncation.
-- Tests refuse object uploads without a storage binding and preserve inline evidence and repository addresses.
+- Tests refuse object uploads of a node without a storage binding and preserve inline evidence and repository addresses.
 - Tests exercise the same begin, direct PUT and complete flow at every placement, with and without co-location.
 - Tests refuse paths outside the workspace, symbolic-link escapes and a path replacement race at open.
 - Tests check live-claim admission and task ownership at begin and complete.
-- Tests accept 5 GiB, refuse larger objects, and assert server-generated keys and the storage binding revision.
+- Tests accept 5 GiB, refuse larger objects, and assert server-generated keys and the pinned storage binding revision.
 - Tests check the 1 hour PUT lifetime and the checksum header only when SHA-256 exists.
 - Tests keep a record pending until complete verifies size and optional checksum; mismatches publish no evidence.
 - Tests expire pending uploads after 1 hour and refuse completion after expiry.
@@ -591,7 +598,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests require human access and one mission for pending upload list and cleanup.
 - Tests list only expired pending uploads and keep other missions outside cleanup.
 - Tests prove that cleanup never touches published evidence records or published objects.
-- Tests delete expired pending objects through the project storage binding, mark their rows cleaned up and keep those rows.
+- Tests delete expired pending objects through their pinned storage binding revision, mark their rows cleaned up and keep those rows.
 - Tests refuse removal on a live node or ancestor with `mission.evidence.remove_node_live`.
 - Tests refuse force without a reason with a validation failure and accept force with a reason on a live chain.
 - Tests accept an optional reason without force and require human access for removal.
@@ -656,7 +663,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests reject absent and empty verifications with `mission.node.verifications_missing`.
 - Tests reject nonlist verifications and blank or nontext items with `mission.node.content_invalid`.
 - A test accepts `true` for a node with no verification need.
-- Tests resolve project binding names to identities at the write.
+- Tests resolve project binding names to the identities of their latest revisions at the write.
 - Tests reject absent or nonlist bindings and unknown or foreign-project names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject repeated repository names on an objective because its list requires exactly one entry.
