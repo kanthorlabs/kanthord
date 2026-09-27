@@ -198,6 +198,27 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The operation proves no process stop, releases no execution and authorizes no workspace reuse. A live execution follows the [Scheduler liveness rules](scheduler-service.md#liveness). Physical stop and capacity reuse stay B9 SC5 and W5.
 - Tests assert end and slot release in one transaction, same-key replay after the end, post-restart 404, and 404 for each non-owned target. They assert that a newer registration stays intact, no server-placement instance ends through the route, and the worker application calls it at graceful stop.
 
+## The worker application
+
+`kanthord serve worker` starts the `worker` application, which hosts one native instance at the `worker` placement.
+
+- The command declares `--endpoint` and `--token` only, and it refuses `--config`.
+- The binding, the worker, the agent configuration and the instance count come from the server through the binding that the machine token names.
+- The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
+- One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
+- N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
+- Startup resolves the client configuration, checks `masterKey`, checks the server package version and registers the instance, in that order.
+- After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `workerBindingId` and `workerName`.
+- The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
+- A startup failure prints its diagnostic, releases what it acquired and exits 1.
+- `SIGINT` and `SIGTERM` stop further startup and further work pulls.
+- The application deregisters only a registration whose runtime identity it knows.
+- It exits 0 after a successful deregistration or after the 404 that ends its registration. Any other deregistration or cleanup failure exits 1 without a retry.
+- A 10-second watchdog applies only when no execution is live and no registration or work pull waits for its answer.
+- `SIGHUP` reopens nothing.
+- B9 owns shutdown during a live execution, a registration or a work pull with no answer, and a stop deadline in those cases.
+- Tests cover the option resolution, the refusal of `--config`, the startup order, each startup failure, the ready record, deregistration before exit, a failed deregistration and the watchdog of a settled state.
+
 ## Configuration
 
 - The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
