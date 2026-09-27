@@ -33,7 +33,7 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
 - `gateway.tokenLifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
-- `gateway.tokenGeneration` holds the generation of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
+- `gateway.tokenVersion` holds the version of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
 - `gateway.idempotencyTtl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
 
 ## Access policy
@@ -87,7 +87,7 @@ The route answers with the runtime identity of the new instance and no token.
 - `gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
 - Each issuance generates a fresh ULID `jti`.
 - A restart or another issuance revokes no earlier JWT.
-- It remains valid until expiry, an increment of `gateway.tokenGeneration` or replacement of `masterKey`.
+- It remains valid until expiry, an increment of `gateway.tokenVersion` or replacement of `masterKey`.
 - For a machine, removal or unavailability of its worker binding also ends that validity.
 - An expired token returns 401.
 - A human obtains a fresh token from `kanthord jwt`.
@@ -136,12 +136,12 @@ A `masterKey` that two servers share is an unsupported configuration, which [arc
 
 ## The signing key
 
-The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v<tokenGeneration>")`, where `<tokenGeneration>` is the decimal value of `gateway.tokenGeneration`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
+The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v<tokenVersion>")`, where `<tokenVersion>` is the decimal value of `gateway.tokenVersion`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
 [architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file and the rule that a service derives its keys from it.
 The Gateway Service derives the key at startup and persists neither the signing key nor the generated human JWT in its database.
 [architecture.impl.md](architecture.impl.md) rules the mode of the configuration file, of its directory, of the data directory and of every database file.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
-An increment of `gateway.tokenGeneration` and a restart of the server invalidate every issued JWT of both kinds. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
+An increment of `gateway.tokenVersion` and a restart of the server invalidate every issued JWT of both kinds. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
 A human then runs `kanthord jwt` again for each human token and each machine token.
 
 ## Local JWT issuance
@@ -418,8 +418,8 @@ It covers a second registration of a client identity that holds a live registrat
 - A test repeats a key after its TTL expires and asserts that the handler runs again.
 
 It covers a repeat of a completed key under another caller, and it asserts that the handler runs and that no recorded answer is returned.
-It covers an expired token and a token signed under an earlier `gateway.tokenGeneration`, and it asserts 401 for each one.
-It covers an increment of `gateway.tokenGeneration`, and it asserts that a credential store record stays readable.
+It covers an expired token and a token signed under an earlier `gateway.tokenVersion`, and it asserts 401 for each one.
+It covers an increment of `gateway.tokenVersion`, and it asserts that a credential store record stays readable.
 It covers a work pull of a machine identity whose registration ended, and it asserts the refusal.
 It emits the directory from the registry and compares it with the committed directory, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.

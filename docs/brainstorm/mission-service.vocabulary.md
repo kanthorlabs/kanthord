@@ -577,7 +577,7 @@ A transaction and a lock cover the condition check and the commit together.
 One import applies any mix of the three effects, and the import is atomic.
 The import set is authoritative.
 
-- An import names the mission revision that it expects.
+- An import names the mission version that it expects.
 
 The import and the node API are the two write paths for a node and for a criterion.
 The node API updates a node that holds an attempt, and that update carries the human override authority.

@@ -77,7 +77,7 @@ erDiagram
     mission_mission {
         text id PK "mission_ + ULID"
         text project_id UK "one mission per project"
-        integer revision "mission revision, starts at 1"
+        integer version "mission version, starts at 1"
         integer created_at "Unix ms"
     }
 
@@ -266,7 +266,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A retirement deletes the queue entry of every retired node in its transaction.
 - A dependency edit, a retirement and a move reroute every claim-free node whose dependency closure changes, including the descendants of the edited node, between `Pending` and `Available`. The same transaction inserts or deletes their queue entries.
 - A dependency relates two initiatives or objectives of one mission. A write that creates a cycle in a dependency closure is refused.
-- A write that changes the structure or the content of the mission increments `mission_mission.revision` once. A write with no change does not.
+- A write that changes the structure or the content of the mission increments `mission_mission.version` once. A write with no change does not.
 - An import or an unblock inserts its `mission_request` row in its own transaction. A repeat with the same identifier and digest returns the stored result before the revision check. The same identifier with another digest answers 409 `mission.request.payload_mismatch`. The import result holds the map from file name to node identity.
 - `mission_node.priority` holds the authoritative priority. A priority act overwrites it, and no Mission row keeps the earlier value. `scheduler_work_queue_entry.priority` holds a copy for the selection order.
 - `mission_request.result` uses the canonical JSON of [architecture.impl.md](../../brainstorm/architecture.impl.md#the-canonical-form-and-the-digest).

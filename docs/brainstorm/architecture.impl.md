@@ -315,7 +315,7 @@ This sibling declares the fields below.
 - `gateway.allowedHosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.allowedOrigins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.tokenGeneration`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.tokenVersion`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `worker.globalPrompt`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.

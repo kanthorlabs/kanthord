@@ -14,7 +14,7 @@ It describes no mechanism of another service.
 ## Mission structure and nodes
 
 The [overview](overview.vocabulary.md) defines a mission, an initiative, an objective, a task, an execution, a worker, the act of executing a node and landing.
-A mission comes into existence with its project, empty and at mission revision 1. No operation creates or deletes a mission.
+A mission comes into existence with its project, empty and at mission version 1. No operation creates or deletes a mission.
 The mission is a directed graph.
 A node of that graph is an initiative, an objective or a task.
 Every node holds a name, a requirement, a criterion, its verifications and its bindings.
@@ -125,8 +125,8 @@ A file name is unique inside the import set.
 An import is atomic, and the Mission Service validates the resulting graph.
 One import retires a node and removes every current inbound reference to it when the import condition holds.
 An import covers the whole mission.
-An import names the mission revision that it expects, and a stale snapshot fails that check.
-A write that changes the structure of a mission or the content of a node increments the mission revision once.
+An import names the mission version that it expects, and a stale snapshot fails that check.
+A write that changes the structure of a mission or the content of a node increments the mission version once.
 No other write changes it.
 A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier, an identifier of another mission and an identifier of a retired node.
@@ -149,7 +149,7 @@ A human who forces the retirement removes that dependency.
 Each freed dependent moves between `Pending` and `Available` by its remaining dependencies.
 A dependency from a terminal dependent stays as a historical relation.
 A preview confirms the retirement set and the removed dependencies before the retirement applies.
-The retirement is atomic and increments the mission revision once.
+The retirement is atomic and increments the mission version once.
 A retirement removes a node that never started work, with no outcome.
 
 A substantive update of a terminal node returns an error.
