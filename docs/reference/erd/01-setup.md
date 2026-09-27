@@ -180,7 +180,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 
 ## Constraints
 
-The owning service enforces every rule below in the transaction of its write. A rule that SQL can hold is an index or a key. Every other rule is a validation of the owner.
+The owning service enforces every rule below in the transaction of its write. A rule that SQL can hold is a unique index or a key. Every other rule is a validation of the owner.
 
 ### Custody
 

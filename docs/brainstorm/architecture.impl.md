@@ -201,7 +201,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The credential table
 
-- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, name index, platforms, secret shapes and metadata.
+- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, the unique index on `(name, revision)`, platforms, secret shapes and metadata.
 - Each service reaches a record through custody, so the envelope is a shared mechanism.
 - One row holds one revision of a credential, and the row identity names that revision.
 - The protected facility checks authorization before secret use.
