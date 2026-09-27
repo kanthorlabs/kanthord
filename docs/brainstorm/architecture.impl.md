@@ -578,6 +578,7 @@ The public interfaces have three kinds.
 - `project.create` commits through the Project Service tables and calls the Mission collaboration `createMission` inside the same transaction, so every project holds exactly one mission. This collaboration co-locates the Project Service and the Mission Service.
 - The Project Service offers `entriesOfAgent(tx, agentName)` for entries of every binding whose worker references the agent.
 - The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement.
+- The Project Service offers `bindingsNaming(tx, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential removal and its dependency check are atomic, so both run in the transaction of the removal.
 - These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
 - They co-locate the Project Service and Worker Service in one process on one database.
 - [Worker configuration validation](worker-service.impl.md#agent-configuration-validation) defines the checks and refusals.

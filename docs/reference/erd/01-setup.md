@@ -64,28 +64,14 @@ erDiagram
     }
 
     worker_agent_enablement {
-        text agent_name PK "catalog agent, for example swe@1"
-        integer current_revision FK "with agent_name"
-        integer created_at "Unix ms"
-        integer removed_at "Unix ms, null while present"
-    }
-
-    worker_agent_enablement_revision {
-        text agent_name PK, FK
-        integer revision PK "positive, starts at 1"
+        text id PK "agent_enablement_ + ULID, one revision"
+        text agent_name "catalog agent, for example swe@1, group key"
+        integer revision "unique with agent_name, starts at 1"
         text state "enabled | disabled"
-        text default_agent_provider FK "name of a provider of this revision"
-        text default_model_identifier
-        text default_reasoning_effort "off | minimal | low | medium | high | xhigh | max"
+        text agent_providers "JSON list of name, provider, credential"
+        text default_configuration "JSON agentProvider, modelIdentifier, reasoningEffort"
         integer created_at "Unix ms"
-    }
-
-    worker_agent_provider {
-        text agent_name PK, FK
-        integer revision PK, FK
-        text name PK "unique inside the enablement"
-        text provider "github-copilot | anthropic | openai-compatible"
-        text credential_name "credential name in custody"
+        integer removed_at "Unix ms, set on a tombstone"
     }
 
     mission_mission {
@@ -170,14 +156,8 @@ erDiagram
 
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
-    project_binding }o..o{ worker_agent_enablement : "ref via catalog agents of config.worker, no FK"
-    project_binding }o..o{ worker_agent_provider : "ref in complete entry agentProvider, no FK"
-
-    worker_agent_enablement ||--|{ worker_agent_enablement_revision : "FK agent_name"
-    worker_agent_enablement |o..|| worker_agent_enablement_revision : "FK (agent_name, current_revision), deferred"
-    worker_agent_enablement_revision ||--|{ worker_agent_provider : "FK (agent_name, revision)"
-    worker_agent_enablement_revision |o..|| worker_agent_provider : "FK (agent_name, revision, default_agent_provider), deferred"
-    worker_agent_provider }o..|| credential : "ref by name, no FK"
+    project_binding }o..o{ worker_agent_enablement : "ref via catalog agents of config.worker, and entry agentProvider, no FK"
+    worker_agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
 
     project_project ||..|| mission_mission : "ref, no FK, createMission"
     mission_mission ||..o{ mission_node : "FK mission_id"
@@ -203,7 +183,7 @@ erDiagram
 
     class credential custody
     class project_project,project_binding project
-    class worker_agent_enablement,worker_agent_enablement_revision,worker_agent_provider worker
+    class worker_agent_enablement worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency,mission_priority,mission_change,mission_request mission
     class scheduler_work_queue_entry scheduler
 ```
@@ -219,9 +199,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `credential` | Custody | Ruled: [custody.impl.md](../../brainstorm/custody.impl.md#the-credential-store-record), [the credential table](../../brainstorm/architecture.impl.md#the-credential-table). |
 | `project_project` | Project Service | Ruled: [the binding store](../../brainstorm/project-service.impl.md#the-binding-store). |
 | `project_binding` | Project Service | Ruled: [the binding store](../../brainstorm/project-service.impl.md#the-binding-store). |
-| `worker_agent_enablement` | Worker Service | Derived from the [agent enablement](../../brainstorm/worker-service.md#agent-configuration) record. |
-| `worker_agent_enablement_revision` | Worker Service | Derived: every enablement change creates a revision. |
-| `worker_agent_provider` | Worker Service | Derived from the [agent provider](../../brainstorm/worker-service.vocabulary.md#agent-provider) record. |
+| `worker_agent_enablement` | Worker Service | Derived from the [agent enablement](../../brainstorm/worker-service.md#agent-configuration) record and the [agent enablement record](../../../engine/docs/cli/worker.md#agent-enablement-record--proposed). |
 | `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](../../../engine/docs/cli/mission.md#proposed-result-schemas). |
 | `mission_node` | Mission Service | Derived; the unique index on `(mission_id, file)` is ruled in [the plan file name](../../brainstorm/mission-service.impl.md#the-plan-file-name). |
 | `mission_node_revision` | Mission Service | Derived from [the revisions](../../brainstorm/mission-service.impl.md#the-revisions). |
@@ -235,9 +213,9 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 
 - A solid line is an identifying relationship: the primary key of the child contains the primary key of the parent. A dashed line is a non-identifying relationship.
 - `project_binding` holds one row for each revision. The group `(project_id, resource_identity)` is one binding, and its latest row states the binding. A record pins one row by `id`.
-- A current-revision pointer is a composite foreign key from the parent to its own revision table: `(id, current_revision)` of `mission_node`, and `(agent_name, current_revision)` of `worker_agent_enablement`. The pointer selects a revision of the same parent. Each revision is current for zero or one parent.
-- `(agent_name, revision, default_agent_provider)` of `worker_agent_enablement_revision` is a composite foreign key to `worker_agent_provider`. It selects a provider of the same revision.
-- These three pairs form cycles. Each pointer foreign key is `DEFERRABLE INITIALLY DEFERRED`, so one transaction inserts the parent, the revision and the providers, and SQLite checks the keys at the commit. `foreign_keys` is `ON`, as [architecture.impl.md](../../brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
+- `worker_agent_enablement` holds one row for each revision. The group `agent_name` is one enablement, and its latest row states the enablement.
+- `(id, current_revision)` of `mission_node` is a composite foreign key to its own revision table. The pointer selects a revision of the same node. Each revision is current for zero or one node.
+- This pair forms a cycle. The pointer foreign key is `DEFERRABLE INITIALLY DEFERRED`, so one transaction inserts the node and its revision, and SQLite checks the key at the commit. `foreign_keys` is `ON`, as [architecture.impl.md](../../brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
 - A null `current_revision` of a task row skips the check of its composite key.
 
 ## Constraints
@@ -253,7 +231,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit without a rotation updates the newest live revision in place.
 - The `baseUrl` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
 - The additional authenticated data of the envelope is the row identity and the platform.
-- A removal is refused while a dependent names the credential. The dependents are a binding configuration and an agent provider. The check and the removal are atomic. A removal revokes every live revision and keeps the rows.
+- A removal is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the removal are atomic. A removal revokes every live revision and keeps the rows.
 - A login session is a runtime record of custody, and no table holds it. A failed or expired session stores nothing.
 
 ### Project Service
@@ -275,17 +253,23 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 ### Worker Service
 
-- An enablement belongs to no project. `agent_name` is its key.
+- An enablement belongs to no project. `agent_name` is its group key.
+- `worker_agent_enablement` has a unique index on `(agent_name, revision)`.
+- A row is immutable. Every change of an enablement, including a change of `state` and a change of a provider credential, inserts the next revision of its group.
+- A removal inserts a tombstone: the next row of the group with `removed_at` set and the last content copied. A later write of the same agent inserts the next revision after the tombstone.
+- `agent_providers` holds one or more items. Each item holds `name`, `provider` and `credential`. `name` is unique inside the row, and `credential` holds a credential name.
+- `default_configuration` holds `agentProvider`, `modelIdentifier` and `reasoningEffort`. `agentProvider` names an item of `agent_providers` of the same row.
+- SQLite enforces no key inside JSON, so the write validates each reference.
 - An enablement write validates its own providers and default configuration first: the suitability of each credential platform, the model catalog or the credential metadata, and the reasoning effort that the model supports. Then it validates every dependent worker binding.
-- Every change of an enablement, including a change of `state` and a change of a provider credential, inserts one `worker_agent_enablement_revision` row.
-- A revision holds one or more `worker_agent_provider` rows.
 - A retained provider name keeps its `provider` in every later revision.
 - A worker binding depends on every agent that the catalog declares for its worker, whether or not the binding holds an entry for that agent. The catalog is static, so this dependency is no column.
 - A binding write is refused when an agent of a native worker has no enabled enablement. `validateEntry` runs for every agent inside the binding write transaction.
 - An enablement change validates every dependent worker binding through `entriesOfAgent` in the transaction of its commit, and a change that invalidates one is refused.
 - A disablement is always permitted, and it refuses every later resolution.
-- An `agentProvider` of a complete entry names a provider of the current revision of the enablement of its own agent. A provider name is unique only inside one enablement, so the lookup uses `(agent_name, current_revision, name)`.
-- A removal of an enablement is refused while a worker binding of a worker that uses the agent exists. A removal of a provider is refused while a default configuration or an entry names it.
+- A resolution reads the latest row of the enablement. A latest row with `state` `disabled` or with `removed_at` set refuses the resolution.
+- The credential dependents of an enablement are the items of `agent_providers` of its latest row, unless that row is a tombstone. An older row is no dependent, because no resolution reads it.
+- An `agentProvider` of a complete entry names an item of `agent_providers` of the latest row of the enablement of its own agent. A provider name is unique only inside one enablement, so the lookup reads the latest row of that `agent_name`.
+- A removal of an enablement is refused while a worker binding of a worker that uses the agent exists. A write that omits a provider of the latest row is refused while an entry of a dependent worker binding names it. The write checks the new row, so a replacement that moves the default configuration to another provider and omits the old provider is valid.
 
 ### Mission Service
 
@@ -331,7 +315,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `mission_node_revision.bindings` | `project_binding.id` | Reference in JSON, no FK. Each item pins one row. An objective names exactly one repository binding, and an initiative or an objective names at most one storage binding. |
 | `project_binding.config` | `credential.name` | Reference in JSON by name, no FK. |
 | `project_binding.config` | `worker_agent_enablement.agent_name` | Reference through the catalog agents of the worker, no FK. |
-| `project_binding.config` | `worker_agent_provider.name` | Reference in a complete entry, no FK. |
-| `worker_agent_provider.credential_name` | `credential.name` | Reference by name, no FK. |
+| `project_binding.config` | `worker_agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK. |
+| `worker_agent_enablement.agent_providers` | `credential.name` | Reference in JSON by name, no FK. |
 | `scheduler_work_queue_entry.node_id` | `mission_node.id` | Reference, no FK. |
 | `scheduler_work_queue_entry.project_id` | `project_project.id` | Reference, no FK. |

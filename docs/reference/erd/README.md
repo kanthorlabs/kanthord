@@ -35,7 +35,7 @@ flowchart TB
         subgraph v1["ERD 1: Environment and planning"]
             c1["Custody: credential"]
             p1["Project: project, binding, binding revision"]
-            w1["Worker: agent enablement, revision, provider"]
+            w1["Worker: agent enablement"]
             m1["Mission: mission, node, node revision, dependency, priority, change, request"]
             s1["Scheduler: work queue entry"]
         end

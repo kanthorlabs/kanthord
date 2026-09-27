@@ -442,6 +442,8 @@ kanthord runs no automatic evidence cleanup.
 - The answer is the `NodeChange` of the act and the list of skipped nodes, each with the condition that it failed.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
 
+- The Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service through its `contract.ts`. It answers every node that is not terminal and not retired when its current revision or the node revision of its open attempt pins the binding revision. A rebind keeps the node revision of an open attempt, so the node keeps the old pin until that attempt ends.
+
 ## Node retire
 
 - `mission.node.retire.preview` uses `GET /api/mission/node/:nodeId/retire/preview?force=true|false` with `human` access. It changes no state and stores no receipt. `force` defaults to false.

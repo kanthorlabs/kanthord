@@ -28,6 +28,7 @@ A mechanism here never overrides a rule there.
 - A metadata edit without a rotation updates the newest live revision in place and adds no revision.
 - Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
+- Removal calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
 - Removal revokes every live revision of the name and keeps the rows, because an execution record references them.
 - A refusal lists the dependents.
 - Creation and rotation validate the local schema and make no remote call.

@@ -171,6 +171,13 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 - The write calls `validateEntry(tx, workerName, entry)` of the Worker Service for every agent of the worker.
 - The [co-location contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) holds both calls inside the write transaction.
 
+## The credential dependents of a binding
+
+- The Project Service offers `bindingsNaming(tx, credentialName)` to custody through its `contract.ts`.
+- It answers every binding revision that names the credential, when that revision is the latest revision of its binding and no tombstone, or when no tombstone follows it and the Mission collaboration `liveNodesPinning(tx, bindingId)` answers a node.
+- A binding edit that names another credential is permitted, so an older revision of the same binding can hold the dependency.
+- Tests assert that a credential of a pinned older revision is a dependent, and that a rebind of every pinning node frees it once no open attempt pins the older revision, as a terminal state of every pinning node does.
+
 ## The resolution of a binding
 
 An execution calls the resolution at the moment that it needs the resource.
