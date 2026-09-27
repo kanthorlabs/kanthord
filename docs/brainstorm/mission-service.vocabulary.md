@@ -376,7 +376,7 @@ Execution 2 claims the node on another host and reads that run output before it 
 
 ## node revision
 
-One version of the whole content of a node.
+One immutable snapshot of the whole content of a node.
 It covers the plan file name, the name, the requirement, the criterion, the verifications and the bindings.
 A change to the content of a node preserves the identity of that node and creates a node revision.
 The term names no closed set.

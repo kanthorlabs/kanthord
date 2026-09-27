@@ -78,7 +78,7 @@ The Project Service validates the set when the project writes it, and it validat
 
 ## revision
 
-One version of the configuration of a binding.
+One immutable snapshot of the configuration of a binding.
 [Custody](custody.md#credential-records) owns credential record revisions.
 
 A worker binding holds one entry that names a model identifier.

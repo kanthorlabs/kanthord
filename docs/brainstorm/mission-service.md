@@ -180,7 +180,7 @@ A genuine no-op makes no modification, so it requires no condition check.
 The import decides a modification on the resolved graph and never on the text of a plan file, so an unchanged plan file whose dependency resolves to another node identifier is a modification of the dependent.
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
-A node revision is one version of the whole content of a node.
+A node revision is one immutable snapshot of the whole content of a node.
 It covers the plan file name, the name, the requirement, the criterion, the verifications and the bindings.
 A node starts at node revision 1.
 A node revision changes no attempt.
