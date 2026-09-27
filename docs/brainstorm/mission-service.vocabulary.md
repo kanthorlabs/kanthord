@@ -68,7 +68,7 @@ A node with no verification need holds `true`, not an empty list.
 The human act that orders an initiative or an objective in the work queue.
 A task holds no priority.
 A human sets the priority of "Add password reset" to -2, then to 7.
-Each act records its actor and time outside the node revision.
+The second act overwrites the value -2, and no Mission record keeps the earlier value, the actor or the time.
 Any signed safe integer is valid; absent priority reads 0.
 A priority write on "Expire the reset token" answers `mission.node.priority_task`, because that node is a task.
 

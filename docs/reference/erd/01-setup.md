@@ -117,15 +117,6 @@ erDiagram
         text mission_id FK
     }
 
-    mission_priority {
-        text node_id PK, FK
-        integer sequence PK "order of the acts"
-        integer value "signed safe integer"
-        text reason
-        text actor "JSON Actor"
-        integer created_at "Unix ms"
-    }
-
     mission_request {
         text mission_id PK, FK
         text request_id PK "request_ + ULID"
@@ -158,7 +149,6 @@ erDiagram
     mission_node ||--o{ mission_dependency : "FK dependent_id"
     mission_node ||--o{ mission_dependency : "FK depends_on_id"
     mission_mission ||..o{ mission_dependency : "FK mission_id"
-    mission_node ||--o{ mission_priority : "FK node_id"
     mission_mission ||--o{ mission_request : "FK mission_id"
     mission_node_revision }o..o| project_binding : "ref in bindings JSON, no FK"
 
@@ -174,7 +164,7 @@ erDiagram
     class credential custody
     class project_project,project_binding project
     class worker_agent_enablement worker
-    class mission_mission,mission_node,mission_node_revision,mission_dependency,mission_priority,mission_request mission
+    class mission_mission,mission_node,mission_node_revision,mission_dependency,mission_request mission
     class scheduler_work_queue_entry scheduler
 ```
 
@@ -194,7 +184,6 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `mission_node` | Mission Service | Derived; the unique index on `(mission_id, file)` is ruled in [the plan file name](../../brainstorm/mission-service.impl.md#the-plan-file-name). |
 | `mission_node_revision` | Mission Service | Derived from [the revisions](../../brainstorm/mission-service.impl.md#the-revisions). |
 | `mission_dependency` | Mission Service | Derived from the dependency [edge kind](../../brainstorm/mission-service.vocabulary.md#edge-kind). |
-| `mission_priority` | Mission Service | Derived from [priority](../../brainstorm/mission-service.impl.md#priority). |
 | `mission_request` | Mission Service | Ruled: [request records](../../brainstorm/mission-service.impl.md#request-records). |
 | `scheduler_work_queue_entry` | Scheduler Service | Derived from the `QueueEntry` record of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts). |
 
@@ -282,7 +271,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A dependency relates two initiatives or objectives of one mission. A write that creates a cycle in a dependency closure is refused.
 - A write that changes the structure or the content of the mission increments `mission_mission.revision` once. A write with no change does not.
 - An import or an unblock inserts its `mission_request` row in its own transaction. A repeat with the same identifier and digest returns the stored result before the revision check. The same identifier with another digest answers 409 `mission.request.payload_mismatch`. The import result holds the map from file name to node identity.
-- `mission_priority` holds every priority act. `mission_node.priority` holds the value of the latest act.
+- `mission_node.priority` holds the authoritative priority. A priority act overwrites it, and no Mission row keeps the earlier value. `scheduler_work_queue_entry.priority` holds a copy for the selection order.
 - `mission_request.result` uses the canonical JSON of [architecture.impl.md](../../brainstorm/architecture.impl.md#the-canonical-form-and-the-digest).
 - No sweep deletes a `mission_request` row.
 - An `actor` column holds one of three JSON forms: a human, an execution or a service. In this group only the human form occurs.

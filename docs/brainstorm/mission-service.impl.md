@@ -70,7 +70,6 @@ The value is any signed safe integer, from -9007199254740991 through 90071992547
 An absent priority reads 0.
 The service answers HTTP 400 with an issue list for a fraction, a nonnumber or an unsafe integer.
 The act requires a nonterminal node with no live claim.
-The service records the actor and time outside the node revision.
 An import carries no priority.
 
 ## The attempt
@@ -562,7 +561,9 @@ kanthord runs no automatic evidence cleanup.
 - Tests accept both signed safe-integer limits, negative values and zero as priority on initiatives and objectives.
 - Tests read absent priority as 0 and reject fractions, nonnumbers and unsafe integers.
 - Tests reject task priority with `mission.node.priority_task` and refuse a live claim or terminal node.
-- Tests keep priority outside content, revision and import, with the actor and time of the human act.
+- Tests keep priority outside content, revision and import.
+- Tests assert that a second priority act overwrites the value and keeps no earlier value, that `PrioritySet` refuses a `reason` field, and that the answer is `Node`.
+- Tests assert that the priority act updates the queue entry in its transaction and keeps the entry identity.
 - Tests reject human assessments under execution access.
 - Tests answer HTTP 400 for a method field, an absent or blank rationale, or a result that violates the order.
 - Tests check task, reviewer and external harness attribution and their evaluation fields.

@@ -56,9 +56,9 @@ Priority orders and never admits.
 No priority and no age makes a `Blocked`, `Paused`, `Pending` or incompatible node claimable.
 
 Priority is an integer.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, its record and the reorder of the entry.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, the current value on the node and the reorder of the entry.
 That section states the value of an absent priority.
-The entry holds a copy of the recorded priority, and the Mission Service stays its source.
+The entry holds a copy of the current priority, and the Mission Service stays its source.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) states that an import carries no priority.
 
 The queue writes follow accepted changes, and selection follows work pulls.

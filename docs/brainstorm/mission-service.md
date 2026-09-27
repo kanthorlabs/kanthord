@@ -73,13 +73,13 @@ The mission supplies the grouping that a repository strategy uses.
 A worker takes an initiative or an objective, and it never takes a task.
 A worker executes a model judgement and an end-to-end test.
 The mission holds precedence alone.
-The priority of a node is a recorded act that orders the work queue of the Scheduler Service.
+The priority of a node orders the work queue of the Scheduler Service.
 It is not part of the WHAT.
 The mission holds no order over the tasks of an objective.
 
 A human sets the priority of an initiative or an objective through the node API.
 A task holds no priority, because a task is never a unit of scheduling.
-The Mission Service records the priority with the actor and the time of the act, outside the node revision.
+The priority is outside the node revision, and no Mission record keeps the earlier value, the actor, the reason or the time of a priority act.
 No rule of the Mission Service reads the priority.
 The Mission Service admits the act while no claim holds the node and the node is not terminal.
 The work-queue entry that the Mission Service writes carries the priority, and an absent priority reads 0.
