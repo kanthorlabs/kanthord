@@ -303,25 +303,26 @@ The health registry owns no service lifetime and starts or stops no service.
 The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy.
 HTTP 200 implements success, and HTTP 503 implements unavailable under that rule.
 
-- The 200 body holds only `services`.
+- The 200 body holds only `services` and `shared`.
 - `services` holds exactly `project`, `intake` and `worker`, one for each owner in the [inventory](architecture.md#resource-healthcheck).
-- Each service holds `global` and `projects`, including empty maps.
+- `shared` holds exactly `custody`, the one [shared component](architecture.md#shared-components) in the inventory.
+- Each owner under `services` or `shared` holds `global` and `projects`, including empty maps.
 - `global` maps a resource name to an entry.
 - `projects` maps a project name to a resource map.
 - Each resource map maps a resource name to an entry.
 - Each entry holds exactly `status` and `capability`.
 - `status` takes a [resource status](architecture.vocabulary.md#resource-status): `healthy`, `unhealthy` or `unknown`.
 - `capability` is a nonempty string that names the capability of the check, not a claim about other capabilities.
-- A global resource name is its credential name.
+- A Custody resource name is its credential name.
 - A project-scoped resource name of the Project Service is its binding name.
 - An Intake Service resource name is `<source binding name>/<subscription kind>`.
 - A Worker Service resource name is `<worker binding name>/<runtime identity>`.
 - Each name segment uses percent encoding, including any literal `/` or `%`, so distinct names remain distinct.
 - No entry name, capability or error detail holds secret material or a private endpoint URL with credentials.
 
-The body therefore places entries at `services.<service>.global.<resource>` or `services.<service>.projects.<project>.<resource>`.
+The body therefore places entries at `<group>.<owner>.global.<resource>` or `<group>.<owner>.projects.<project>.<resource>`, where `<group>` is `services` or `shared`.
 HTTP 503 uses the shared error envelope with code `UNHEALTHY`.
-Its `error.details` holds `{"missingInventories":["<service>"]}`, with each owner that cannot supply its inventory.
+Its `error.details` holds `{"missingInventories":["<owner>"]}`, with each owner that cannot supply its inventory.
 
 - The Gateway Service collects the inventories before it starts the checks.
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.

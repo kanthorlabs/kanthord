@@ -24,11 +24,11 @@ It describes no mechanism of another service.
 
 - The Gateway Service answers a [health report](gateway-service.vocabulary.md#health-report) to a human.
 - The report lists every resource that the [resource healthcheck rule](architecture.md#resource-healthcheck) names.
-- It groups resources first by the owning service, then by [health scope](architecture.vocabulary.md#health-scope).
+- It groups resources first by the owning service or [shared component](architecture.md#shared-components), then by [health scope](architecture.vocabulary.md#health-scope).
 - It lists every resource on every request and pages or drops no entry.
-- The health report answers success when every owning service returns its inventory.
+- The health report answers success when every owner returns its inventory.
 - Each resource carries its [resource status](architecture.vocabulary.md#resource-status).
-- The health report answers unavailable only when an owning service cannot supply its inventory.
+- The health report answers unavailable only when an owner cannot supply its inventory.
 - A resource status changes no answer status.
 - The Gateway Service answers a [liveness answer](gateway-service.vocabulary.md#liveness-answer) to any caller without authentication.
 - It reports the internal components of the server and of the Gateway Service only.
