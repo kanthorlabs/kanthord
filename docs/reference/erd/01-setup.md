@@ -184,7 +184,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 ### Custody
 
-- `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name_conflict`.
+- `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name.conflict`.
 - The write keeps one `platform` for every row of a name. The newest live revision is the greatest `revision` of the name with a null `ended_at`.
 - A rotation inserts the next revision and keeps the older revisions live. A drain or a revoke sets `ended_at`. Custody refuses a revoke of the newest live revision.
 - The secret shape and the `metadata` schema depend on `platform`, as the [platform validators](../../brainstorm/custody.impl.md#platform-validators) state.

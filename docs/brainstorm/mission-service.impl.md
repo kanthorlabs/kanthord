@@ -362,7 +362,7 @@ kanthord runs no automatic evidence cleanup.
   `closingEvent` stays `Text`; these spellings form no closed set.
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assertion, and only an assessment basis asserts `criterion-not-met`.
-- `execution cleared-outcome get` and `execution unblock get` answer 404 `mission.not_found` when no unblock opened the claimed attempt.
+- `execution cleared-outcome get` and `execution unblock get` answer 404 `mission.mission.not_found` when no unblock opened the claimed attempt.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   That attempt holds no unblock record.
 - A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
@@ -447,7 +447,7 @@ kanthord runs no automatic evidence cleanup.
 - With `force: true`, the retirement removes each such dependency and moves each freed dependent between `Pending` and `Available` in the same transaction. A dependency from a terminal dependent stays.
 - Preview and apply answer the same refusals.
 - The preview answers `RetirePreview`: `nodeId`, `force`, `missionVersion`, `retiredNodeIds`, `removedEdges`, `previewDigest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
-- The apply request `Retire` holds `expectedMissionVersion`, `force`, `previewDigest` and `reason`. A stale mission version answers 409 `mission.version_conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
+- The apply request `Retire` holds `expectedMissionVersion`, `force`, `previewDigest` and `reason`. A stale mission version answers 409 `mission.version.conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
 - One transaction rechecks every condition, sets `retired_at` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
 - That transaction deletes the job of every node of the retirement set through the Scheduler Service public delete.
 - It increments the mission version once.
@@ -511,8 +511,8 @@ kanthord runs no automatic evidence cleanup.
 - Every Mission route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging) of the Gateway Service.
 - Every Mission route uses the [default 30 s timeout](gateway-service.impl.md#cancellation).
 - Every Mission route uses the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits).
-- A stale expected revision answers 409 `mission.revision_conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version_conflict` with the current value in `details`.
-- An absent node, mission or record answers 404 `mission.not_found`.
+- A stale expected revision answers 409 `mission.revision.conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version.conflict` with the current value in `details`.
+- An absent node, mission or record answers 404 `mission.mission.not_found`.
 - `graph get` answers at most 10 MiB. A larger graph answers 413 `mission.graph.too_large`.
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
@@ -676,9 +676,9 @@ kanthord runs no automatic evidence cleanup.
 - A test asserts that each content change creates the next node revision.
 - A test checks the `NodeChange` answer of each operation whose answer holds it.
 - A test checks the shared error envelope, the 30 s timeout and the 10 MiB body limit on every Mission route.
-- A test asserts 409 `mission.revision_conflict` with the current value for a stale expected revision, and 409 `mission.version_conflict` with the current value for a stale expected mission version.
-- A test asserts 409 `mission.version_conflict` for a stale expected mission version on every `human` write that changes a node, its edges or its state, and asserts that a human control other than an unblock with a change leaves the mission version unchanged.
+- A test asserts 409 `mission.revision.conflict` with the current value for a stale expected revision, and 409 `mission.version.conflict` with the current value for a stale expected mission version.
+- A test asserts 409 `mission.version.conflict` for a stale expected mission version on every `human` write that changes a node, its edges or its state, and asserts that a human control other than an unblock with a change leaves the mission version unchanged.
 - A test asserts that an execution submission commits after a human graph write increments the mission version.
-- A test asserts 404 `mission.not_found` for an absent node, mission or record.
+- A test asserts 404 `mission.mission.not_found` for an absent node, mission or record.
 - A test checks `graph get` at 10 MiB and above that bound.
 - It asserts 413 `mission.graph.too_large` above the bound, with the node count and both paged reads in `details`.

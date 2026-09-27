@@ -17,7 +17,7 @@ A mechanism here never overrides a rule there.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - The name is the group key of a credential and never changes. A unique index holds `name` and `revision`, and a new name starts at revision 1.
 - The name `login` is refused, because the static route `/api/credential/login` holds that path segment.
-- Creation and login refuse a name that a row holds with 409 `credential.name_conflict` and the identity of its newest revision in `error.details`.
+- Creation and login refuse a name that a row holds with 409 `credential.name.conflict` and the identity of its newest revision in `error.details`.
 - A login checks the name at start and at commit.
 - The write code keeps one platform for every row of a name.
 - The newest live revision is the row of the name with the greatest `revision` and a null `ended_at`.
@@ -26,7 +26,7 @@ A mechanism here never overrides a rule there.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
 - A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
-- A rotation and a metadata edit name `expectedRevision`, the newest live revision that the human read. A stale value answers 409 `credential.revision_conflict` with the current value in `details`.
+- A rotation and a metadata edit name `expectedRevision`, the newest live revision that the human read. A stale value answers 409 `credential.revision.conflict` with the current value in `details`.
 - Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
 - Removal calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
@@ -219,7 +219,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Tests cover model and credential removal with dependents and concurrent changes.
 - Tests cover every platform probe, S3 status mapping, expired OAuth, forbidden probes and attribution without stored results.
 - Tests preserve names and binding references across rotation.
-- A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision_conflict`. A test covers the same case for two metadata edits.
+- A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision.conflict`. A test covers the same case for two metadata edits.
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, the metadata copy and replacement at rotation, and a `baseUrl` change at rotation alone.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.

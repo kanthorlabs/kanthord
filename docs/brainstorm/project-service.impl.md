@@ -42,7 +42,7 @@ The constraints are below.
 
 - A unique index over `project_project.name` enforces the uniqueness of a project name, and the name is the natural key of the project creation.
 - A project name follows the form of a binding name.
-- A creation or a rename to a name that another project holds returns 409 with code `project.name_conflict` and the identity of that project in `error.details`.
+- A creation or a rename to a name that another project holds returns 409 with code `project.name.conflict` and the identity of that project in `error.details`.
 - A rename commits in one transaction, and the last write wins.
 - The Project Service keeps a removed binding and every revision for the life of the project, and no sweep deletes them. Only a human edit adds a row, so the tables grow with human edits alone.
 - The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so the identity of a revision is unique across the server.
