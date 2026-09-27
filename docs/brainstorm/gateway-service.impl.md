@@ -283,7 +283,7 @@ Each service and shared component registers one map under its name: `server`, `g
 The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200}}}`.
 A component code of `200` means healthy, and `503` means unavailable.
 HTTP 200 requires a nonempty, entirely healthy map from each owner.
-An unavailable component produces HTTP 503 with code `UNHEALTHY` through the shared error envelope.
+An unavailable component produces HTTP 503 with code `gateway.liveness.unhealthy` through the shared error envelope.
 `error.details` holds every complete map, including healthy components, with the same structure as `services` on success.
 A probe that throws, rejects, returns an empty or malformed map, or exceeds its deadline contributes `{"healthcheck":503}` under its name.
 This marker reports probe failure, not a state of its individual components.
@@ -324,7 +324,7 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - No entry name, capability or error detail holds secret material or a private endpoint URL with credentials.
 
 The body therefore places entries at `<group>.<owner>.global.<resource>` or `<group>.<owner>.projects.<project>.<resource>`, where `<group>` is `services` or `shared`.
-HTTP 503 uses the shared error envelope with code `UNHEALTHY`.
+HTTP 503 uses the shared error envelope with code `gateway.healthcheck.inventory_failed`.
 Its `error.details` holds `{"missingInventories":["<owner>"]}`, with each owner that cannot supply its inventory.
 
 - The Gateway Service collects the inventories before it starts the checks.
