@@ -319,6 +319,7 @@ This sibling declares the fields below.
 - `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `worker.globalPrompt`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `mission.consecutiveLossLimit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log

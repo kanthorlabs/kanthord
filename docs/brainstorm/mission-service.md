@@ -509,6 +509,15 @@ It holds when every current objective of the initiative holds a terminal state.
 The condition reads the current children of the node, and a retirement removes a node from that set.
 While it does not hold, the initiative in `Available` holds no job.
 
+### Consecutive loss limit
+
+The attempt counts its consecutive losses.
+A loss declaration of a claim of the attempt adds one.
+A release of an execution of the attempt and a human resume reset the count to 0.
+Below the limit, a loss returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
+A loss that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
+The configuration file of the server sets the limit.
+
 ### Successful outcome
 
 The ordinary path needs a current passing assessment and the observed expected end state of every required external action of the attempt.
@@ -582,7 +591,8 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Available -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
 | `Executing -> Available` | Release; execution requires further work | No effect | Run output |
-| `Executing -> Available` | Loss declaration of the steps claim | No effect | None |
+| `Executing -> Available` | Loss declaration of the steps claim below the consecutive loss limit | No effect | None |
+| `Executing -> Paused` | Loss declaration of the steps claim that reaches the consecutive loss limit | Stays open | None |
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -595,7 +605,8 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
 | `Evaluating -> Paused` | Human holds the node; reviewer execution stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `Evaluating -> Waiting` | Loss declaration of the evaluation claim | No effect | None |
+| `Evaluating -> Waiting` | Loss declaration of the evaluation claim below the consecutive loss limit | No effect | None |
+| `Evaluating -> Paused` | Loss declaration of the evaluation claim that reaches the consecutive loss limit | Stays open | None |
 | `Blocked -> Available` | Human unblock; closure holds | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
@@ -638,6 +649,7 @@ stateDiagram-v2
     Executing --> Waiting: Release, no further work
     Executing --> Available: Release, further work
     Executing --> Available: Loss declaration
+    Executing --> Paused: Loss limit reached
     Executing --> Paused: Human hold
     Executing --> Completed: Success override
     Executing --> Discarded: Human discard
@@ -650,6 +662,7 @@ stateDiagram-v2
     Evaluating --> Paused: Human hold
     Evaluating --> Discarded: Human discard
     Evaluating --> Waiting: Loss declaration
+    Evaluating --> Paused: Loss limit reached
     Blocked --> Available: Unblock, closure holds
     Blocked --> Pending: Unblock, closure fails
     Blocked --> Completed: Success override
