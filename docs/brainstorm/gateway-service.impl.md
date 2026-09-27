@@ -268,7 +268,7 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 `GET /api/liveness` carries the [liveness answer](gateway-service.md#health-report-and-liveness-answer).
 The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy.
 The server owns the shared `HealthRegistry` and passes it to the Gateway Service.
-The registry holds only the `server` and `gateway` maps.
+Each service and shared component registers one map under its name: `server`, `gateway`, `custody`, `scheduler`, `worker`, `repository`, `project` and `mission`.
 
 - The `server` map contains `gateway`, `store` and `log`.
 - The `store` probe checks the SQLite database with `SELECT 1`.
@@ -277,12 +277,14 @@ The registry holds only the `server` and `gateway` maps.
 - Its map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation`.
 - The `gateway` component of `server` summarizes that map.
 - The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
+- A domain map reads in-process state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings` and `mission` holds `operations`.
+- The `repository` map holds `toolchain`, which runs the version commands of the required tools without blocking the event loop.
 
-The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200}}}`.
+The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200}}}`.
 A component code of `200` means healthy, and `503` means unavailable.
 HTTP 200 requires a nonempty, entirely healthy map from each owner.
 An unavailable component produces HTTP 503 with code `UNHEALTHY` through the shared error envelope.
-`error.details` holds both complete maps, including healthy components, with the same structure as `services` on success.
+`error.details` holds every complete map, including healthy components, with the same structure as `services` on success.
 A probe that throws, rejects, returns an empty or malformed map, or exceeds its deadline contributes `{"healthcheck":503}` under its name.
 This marker reports probe failure, not a state of its individual components.
 The public response includes no exception text or credentials.
