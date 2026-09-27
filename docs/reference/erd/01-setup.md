@@ -85,7 +85,7 @@ erDiagram
         text id PK "node_ + ULID"
         text mission_id FK
         text kind "initiative | objective | task"
-        text file "plan file name, *.md"
+        text filename "plan file name, *.md"
         text parent_id FK "null for an initiative"
         text state "12 states, null for a task"
         integer attempt "latest attempt, 0 before the first, null for a task"
@@ -97,7 +97,7 @@ erDiagram
     mission_node_revision {
         text node_id PK, FK "initiative or objective"
         integer revision PK "starts at 1"
-        text file
+        text filename
         text name
         text requirement
         text criterion
@@ -179,7 +179,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `project_binding` | Project Service | Ruled: [the binding store](../../brainstorm/project-service.impl.md#the-binding-store). |
 | `worker_agent_enablement` | Worker Service | Derived from the [agent enablement](../../brainstorm/worker-service.md#agent-configuration) record and the [agent enablement record](../../../engine/docs/cli/worker.md#agent-enablement-record--proposed). |
 | `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](../../../engine/docs/cli/mission.md#proposed-result-schemas). |
-| `mission_node` | Mission Service | Derived; the unique index on `(mission_id, file)` is ruled in [the plan file name](../../brainstorm/mission-service.impl.md#the-plan-file-name). |
+| `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](../../brainstorm/mission-service.impl.md#the-plan-file-name). |
 | `mission_node_revision` | Mission Service | Derived from [the revisions](../../brainstorm/mission-service.impl.md#the-revisions). |
 | `mission_dependency` | Mission Service | Derived from the dependency [edge kind](../../brainstorm/mission-service.vocabulary.md#edge-kind). |
 | `mission_request` | Mission Service | Ruled: [request records](../../brainstorm/mission-service.impl.md#request-records). |
@@ -249,7 +249,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 ### Mission Service
 
 - `mission_mission.project_id` has a unique index. `project.create` inserts the project row and calls `createMission` in one transaction.
-- `mission_node` has a partial unique index on `(mission_id, file)` where `retired_at` is null.
+- `mission_node` has a partial unique index on `(mission_id, filename)` where `retired_at` is null.
 - An initiative has a null `parent_id`. An objective names an initiative, and a task names an objective.
 - A parent and a dependency name nodes of the same mission.
 - A binding in `bindings` belongs to the project of the mission.
@@ -257,9 +257,9 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](../../../engine/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
 - `name`, `requirement` and `criterion` are nonblank text. `verifications` is a nonempty ordered list of nonblank bash commands.
 - `bindings` obeys the rule table of [the node content](../../brainstorm/mission-service.impl.md#the-node-content): an objective names exactly one repository binding, an initiative and an objective name at most one storage binding, and an initiative and a task name none.
-- A content change of a node inserts the next `mission_node_revision` row of its content owner in the same transaction. `mission_node.file` equals the `file` of the current revision.
-- A task change inserts the next revision of its objective, and the `file` of a task row equals its item in `tasks`. A task move inserts the next revision of both objectives. An objective move changes `parent_id` and inserts no revision.
-- A retired node keeps its row, its `file`, its revisions and its last state. A retirement is final.
+- A content change of a node inserts the next `mission_node_revision` row of its content owner in the same transaction. `mission_node.filename` equals the `filename` of the current revision.
+- A task change inserts the next revision of its objective, and the `filename` of a task row equals its item in `tasks`. A task move inserts the next revision of both objectives. An objective move changes `parent_id` and inserts no revision.
+- A retired node keeps its row, its `filename`, its revisions and its last state. A retirement is final.
 - A node API retirement retires the node and every current descendant. A retired node accepts no write. A node API write or a human control on it answers 409 `mission.node.retired`, and an import entry with its identifier answers 400 `mission.import.retired_id`. No write names a retired node as a parent or a dependency. The retirement of a task inserts the next revision of its objective when that objective is outside the retirement set, and the task row takes no revision.
 - A node in a terminal state takes no new revision.
 - A dependency on a retiring node from a nonterminal dependent outside the retirement set refuses the retirement, unless the human forces it. A forced retirement deletes that dependency row. A dependency from a terminal dependent stays.

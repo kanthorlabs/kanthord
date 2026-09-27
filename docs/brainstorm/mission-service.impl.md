@@ -108,26 +108,26 @@ The attempt row records the frozen required external actions next to the pinned 
 
 ## The plan file name
 
-- The node row holds `file` with a unique index on `(mission_id, file)` where `retired_at` is null. A retirement sets `retired_at` to the commit time, and the value never changes.
-- A retirement keeps `file` on the retired row. A create, an import or a node update can take the name of a retired node.
+- The node row holds `filename` with a unique index on `(mission_id, filename)` where `retired_at` is null. A retirement sets `retired_at` to the commit time, and the value never changes.
+- A retirement keeps `filename` on the retired row. A create, an import or a node update can take the name of a retired node.
 - The form is a lower-case name that ends in `.md` with no path separator.
-- An import sets `file` from the file name, and `node create` requires it.
-- Node reads return `file`, and every export writes it unchanged.
-- A node update that changes `file` changes content and creates a node revision.
+- An import sets `filename` from the file name, and `node create` requires it.
+- Node reads return `filename`, and every export writes it unchanged.
+- A node update that changes `filename` changes content and creates a node revision.
 - A task change creates a node revision of its objective.
-- A taken name answers 409 `mission.node.file_conflict`.
+- A taken name answers 409 `mission.node.filename_conflict`.
 
 ## Export and the two formats
 
 - `mission.export` uses `GET /api/mission/:missionId/export?format=markdown|json` with `human` access.
-- The JSON answer is `{ missionId, missionRevision, entries: [{ file, id, kind, name, requirement, criterion, verifications, bindings, parent, dependsOn }] }`.
-- The Markdown answer is `{ missionId, missionRevision, files: [{ file, content }] }`.
+- The JSON answer is `{ missionId, missionRevision, entries: [{ filename, id, kind, name, requirement, criterion, verifications, bindings, parent, dependsOn }] }`.
+- The Markdown answer is `{ missionId, missionRevision, files: [{ filename, content }] }`.
 - Each Markdown `content` follows the plan file grammar.
 - JSON entries use the same node content and parent and dependency rules as Markdown.
 - `parent` and `dependsOn` name plan files in the import set, not node identities.
 - An initiative omits `parent`, and a task omits `dependsOn` in both formats.
 - Each answer is the exact plan payload that the import of its format accepts.
-- The import accepts `format: markdown` with raw `files: { file, content }[]`, which the Mission Service parses.
+- The import accepts `format: markdown` with raw `files: { filename, content }[]`, which the Mission Service parses.
 - The import accepts `format: json` with `entries`.
 - The format, reason and apply controls accompany the unchanged plan payload.
 - The payload names `missionId` and `missionRevision`; the latter is the expected mission revision for the import.
@@ -138,10 +138,10 @@ The attempt row records the frozen required external actions next to the pinned 
 - The preview lists every current node that the import set omits as a retirement.
 - The apply confirms that exact retirement set with `confirmedRetirements` and checks `previewDigest` at commit.
 - The apply also carries `requestId` for request recovery.
-- A violation holds `code`, `message`, `file`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `file` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
+- A violation holds `code`, `message`, `filename`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
-- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.file_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
+- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
 
 ## Node API admission
 
@@ -458,7 +458,7 @@ kanthord runs no automatic evidence cleanup.
 - It increments the mission revision once.
 - A retired task changes the content of its objective, so an objective outside the set takes a node revision with `write: node.retire` and a `retired` task change.
 - The answer is `NodeChange`.
-- A retirement deletes no row. A retired node keeps its identity, `file`, its revisions and its last state.
+- A retirement deletes no row. A retired node keeps its identity, `filename`, its revisions and its last state.
 
 ## The revisions
 
@@ -496,7 +496,7 @@ kanthord runs no automatic evidence cleanup.
 - `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `node.retire`, `criterion.set` or `unblock`.
 - A move of an objective changes its parent link and no content, so it creates no node revision. A move of a task changes the content of both objectives, so each one takes a node revision with `write: node.move`.
 - `change.previousRevision` is the previous revision, or null on revision 1.
-- `change.changedFields` lists the content fields whose value differs from the previous revision: `file`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.
+- `change.changedFields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.
 - `change.tasks` is present for an objective and lists `{ id, change, changedFields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changedFields`.
 - The result of the change is the `content` of the same record.
 
@@ -609,13 +609,13 @@ kanthord runs no automatic evidence cleanup.
 - Tests accept an absent `id` for a new node and preserve a known identity.
 - Tests require a parent for objectives and tasks, forbid it on initiatives, and forbid `dependsOn` on tasks.
 - Tests reject unresolved parent and dependency names and references outside the import set.
-- Tests assert that the file name becomes the import-set key and the node's `file`.
+- Tests assert that the file name becomes the import-set key and the node's `filename`.
 - Tests refuse upper-case names, names without `.md`, and path separators.
-- Tests require `file` on create and return it on node reads.
+- Tests require `filename` on create and return it on node reads.
 - Tests assert uniqueness among nodes that are not retired within a mission and accept the same name in separate missions.
-- A name conflict answers 409 `mission.node.file_conflict` without a partial write.
-- Tests commit one import that retires a node and creates a node with the same `file`, and assert both rows with distinct identities.
-- Tests assert 409 `mission.node.file_conflict` when two nodes that are not retired hold one `file`.
+- A name conflict answers 409 `mission.node.filename_conflict` without a partial write.
+- Tests commit one import that retires a node and creates a node with the same `filename`, and assert both rows with distinct identities.
+- Tests assert 409 `mission.node.filename_conflict` when two nodes that are not retired hold one `filename`.
 - Tests assert that a name change creates a node revision, or an objective revision for a task.
 - Tests assert that each export excludes retired nodes and preserves each plan file name.
 - Tests export and import both formats unchanged, with identical node identities, content, edges and revisions.
@@ -639,7 +639,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the work queue entry of every node of the set in its transaction.
-- Tests assert that a retired node row stays readable with its identity, `file`, revisions and last state, and `node list` returns it only with `includeRetired`.
+- Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.
 - Tests cover objective and task creation under each of the twelve parent states.
 - Each refused create names `mission.node.create_refused` and the parent state in `details`.
