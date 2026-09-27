@@ -163,6 +163,17 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A protocol-defined representation stays with its protocol, and the sibling of the service that speaks that protocol names the representation.
 - A resource identity follows the normalization of [project-service.impl.md](project-service.impl.md), which derives it from the binding configuration on every write.
 
+## The revision value
+
+- A revision value is an integer counter of one resource. The first revision holds 1, and each next revision holds the greatest value of the resource plus 1.
+- The value is a positive safe integer.
+- The transaction that inserts a revision allocates its value, so two writers never insert one value for one resource.
+- A revision value is never a timestamp.
+- Every revision row holds `created_at`, a timestamp of the server.
+- The UI shows a revision with the label `r<revision> · <YYYY>.<M>.<D>+<HHMMss>`. The label renders `created_at` in UTC, with no leading zero in the month and the day, and with two digits for each of the hour, the minute and the second.
+- Revision 3 created at `2026-09-27T10:15:00Z` shows as `r3 · 2026.9.27+101500`.
+- A client compares the integer and never the label. The label is a display form and no SemVer version.
+
 ## Pagination
 
 - A list operation orders its rows by their primary key in descending order, so the first page holds the newest rows.
@@ -817,6 +828,7 @@ A process split retains these boundaries.
 - A test covers a recorded history that holds a gap, and one that holds a version above the binary.
 - A test covers the AES-256-GCM round trip of a `credential` record, a ciphertext moved between two records, and a truncated ciphertext.
 - A test covers the derivation of the cipher key, and it asserts that two labels produce two different keys.
+- A test renders revision 3 with `created_at` `2026-09-27T10:15:00Z` on a host in UTC+7, and it asserts the label `r3 · 2026.9.27+101500`.
 
 ## Application source layout
 

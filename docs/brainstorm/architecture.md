@@ -144,6 +144,23 @@ The store, the log and the host toolchain are internal components, not external 
 - A resource whose check exceeds its deadline reports the [resource status](architecture.vocabulary.md#resource-status) for an incomplete check.
 - Each entry names the capability that its check tests.
 
+## Revision and pin
+
+A [revision](architecture.vocabulary.md#revision) is one immutable, committed snapshot of the configuration or content of one resource.
+A [pin](architecture.vocabulary.md#pin) is a reference from a record to one exact revision.
+Every service that versions a resource follows these rules.
+
+- A change never edits a revision. A change inserts the next revision of that resource in the same transaction.
+- The revision value orders the revisions of one resource only. It gives no order across resources.
+- The current revision of a resource is its revision with the greatest value. The owning service states whether the current revision is usable, for example a tombstone, `ended_at` or retirement.
+- A pin never follows a later revision.
+- A pin fixes the configuration, not the runtime values. An OAuth refresh changes the token behind a pinned credential reference. A local disablement refuses a use through a pin.
+- The owning service declares whether a pin can move. An attempt pin never moves. A rebind writes a new node revision that pins the new binding revision.
+- When a pinned revision ends through a tombstone or a revocation, the next use through the pin is refused. The use never goes to the current revision instead.
+- A pin keeps old content, but it does not prevent a lost update. A write that replaces the current revision names the revision that it expects. A stale value answers 409.
+
+[architecture.impl.md](architecture.impl.md#the-revision-value) declares the representation of the revision value.
+
 ## Actors
 
 - A human configures a project, carries out steps, reviews results and overrides an outcome. A human reaches the server through the Gateway Service, which authenticates the human and passes the [human identity](overview.vocabulary.md#human-identity) with the request.

@@ -152,3 +152,23 @@ What the container view shows. A service is not a container.
 - The `cli` application is a container.
 - The `worker` application is a container, and it holds worker instances.
 - A service boundary separates authority inside the server, so it describes no container.
+
+## revision
+
+One immutable, committed snapshot of the configuration or content of one resource.
+The term names no closed set.
+
+- `github-main` holds revision 1 with key A.
+- A rotation inserts revision 2 with key B, and revision 1 stays unchanged.
+- Revision 2 is the current revision, because it holds the greatest value.
+- The UI shows revision 2 as `r2 · 2026.9.27+101500`.
+
+## pin
+
+A reference from a record to one exact revision.
+The term names no closed set.
+
+- Attempt 3 of "Add password reset" pins revision 3 of its node at its opening.
+- A human writes revision 4 of the node, and attempt 3 keeps revision 3.
+- The project removes the binding that revision 3 names, and the binding takes a tombstone.
+- The next use through the pin of attempt 3 is refused, and the use never goes to the current revision.
