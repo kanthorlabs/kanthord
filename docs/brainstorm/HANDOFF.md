@@ -35,7 +35,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Intake, Scheduler, Project and Mission: how the delivery admission of the Scheduler classifies a delivery that the Intake Service hands over, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort. The server-owner ruling of 2026-09-20 gives every authenticated human the same authority, so a person that a delivery maps to a human identity gains that authority, and this effort revisits it. A Scheduler read of admission dispositions per project also awaits a decision.
 - [ ] Add the skills and extensions that support external-harness integration. `tracking-service.md` obliges the extension to capture, to hold its capture in a bounded local store, and to import it when a human issues an ingestion. The contract also covers snapshot export, acknowledgement handoff, cursor persistence, retry deadlines and retained or discarded summaries.
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/scheduler.md`. Scheduler commands await the closed set of the claim state, the child-set wait fact schema, the lease duration, the renewal cadence and the lease start contract. Lists await the retention of completed observation obligations. The debated proposals wait in `.dev/cannot/scheduler-commands.md`.
+- [ ] Added 2026-09-24 from `engine/docs/cli/scheduler.md`. Scheduler commands await the closed set of the claim state, the lease duration, the renewal cadence and the lease start contract. Lists await the retention of completed observation obligations. The debated proposals wait in `.dev/cannot/scheduler-commands.md`.
 
 ### Intake Service
 
@@ -100,7 +100,6 @@ Folded from the Worker Service section on 2026-09-18 by Ulrich, to be designed w
 #### Mission Service
 
 - [ ] Define the task outcomes of the tasks that an execution did not execute when a recorded task assessment does not pass, their basis and evidence, and how the readiness condition treats the release. `worker-service.md` releases with no further work and writes no outcome for those tasks.
-- [ ] Specify the reviewer-loss transition out of `Evaluating` that permits a bounded retry.
 - [ ] **B2:** Define recovery and its budget when the currency check rejects a completed assessment as stale.
 - [ ] **B4 / B5:** Settle exhaustion-notice precedence after an accepted assessment and during a human override that asserts failure.
 - [ ] **C3:** Define the deduplication key for an observation of an unchanged external state.
