@@ -658,11 +658,10 @@ A valid token permits one reset and an expired token permits none.
 The identifier that a caller gives one request and that binds to the payload of that request.
 The term names no closed set.
 
-The command line interface imports the plan of "Account recovery" with request identifier `import-7f3a`.
-The connection drops after the Mission Service accepts the import.
-The retry with `import-7f3a` returns the accepted result, and no second import applies.
-A retry with `import-7f3a` and a changed import set is refused.
-The unblock of "Add password reset" carries its own request identifier, and a repeated unblock with that identifier costs no second attempt.
+A `tdd@1` instance of `atlas` issues a work pull with request identifier `request_01J9ZK3Q7M5V8X2N4R6T0W1Y3B`.
+The connection drops after the Scheduler Service accepts the claim.
+The retry with that identifier returns the accepted claim, and no second claim is made.
+A retry with that identifier and another payload is refused.
 
 ## retirement
 

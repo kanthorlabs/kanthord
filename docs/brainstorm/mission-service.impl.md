@@ -20,7 +20,8 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An outcome uses `outcome_<ulid>`.
 - An external object uses `external_object_<ulid>`.
 - An observation uses `observation_<ulid>`.
-- [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>` and `request_<ulid>`.
+- An unblock record uses `unblock_<ulid>`.
+- [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>`.
 - An attempt uses its attempt number as its key within the node. An attempt takes no prefix.
 - The Scheduler Service declares the execution identity.
 
@@ -137,7 +138,7 @@ The attempt row records the frozen required external actions next to the pinned 
 - Every `parent` and `dependsOn` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
 - The apply confirms that exact retirement set with `confirmedRetirements` and checks `previewDigest` at commit.
-- The apply also carries `requestId` for request recovery.
+- The import result holds the map from file name to node identity.
 - A violation holds `code`, `message`, `filename`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
@@ -155,18 +156,6 @@ The attempt row records the frozen required external actions next to the pinned 
 - The refused states are `Waiting`, `Evaluating`, `External.Requested`, `External.Success`, `External.Failed`, `Completed` and `Discarded`.
 - The commit rechecks the rule.
 - The import keeps the import condition.
-
-## Request records
-
-- The table is `mission_request(mission_id, request_id, kind, payload_digest, result, created_at)`.
-- Its primary key is `(mission_id, request_id)`.
-- `kind` is `import` or `unblock`.
-- The act writes its request row in its own transaction.
-- A repeat with the same identifier and digest returns the stored result before the service checks revision or attempt preconditions.
-- Another digest answers 409 `mission.request.payload_mismatch`.
-- The Mission Service keeps every accepted import request and unblock request for the life of the mission.
-- No sweep deletes a row.
-- The import result holds the map from file name to node identity.
 
 ## The verifications
 
@@ -369,7 +358,7 @@ kanthord runs no automatic evidence cleanup.
   Its basis is a human assertion, and only an assessment basis asserts `criterion-not-met`.
 - `execution cleared-outcome get` and `execution unblock get` answer 404 `mission.not_found` when no unblock opened the claimed attempt.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
-  That attempt holds no unblock request.
+  That attempt holds no unblock record.
 - A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
   A mismatch answers 409 `mission.node.state_conflict`, with the current `state` and `attempt` in `details`.
   An `Unblock` whose `blockedAttempt` differs from the current attempt answers the same code.
@@ -505,11 +494,11 @@ kanthord runs no automatic evidence cleanup.
 
 ## The graph write answer
 
-- An operation whose answer holds `NodeChange` computes it at the commit. The mission keeps no history of changes. An import stores its `ImportResult`, which holds `NodeChange`, in its request record for replay.
+- An operation whose answer holds `NodeChange` computes it at the commit. The mission keeps no history of changes.
 - `NodeChange` holds the new mission version, the node revisions created, the retired node identities, and the edges added and removed.
 - It also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
 - A write with no structure or content change answers the current mission version with empty arrays.
-- A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit or an objective move, or the actor and the reason of a retirement that inserts no node revision, unless its import request record holds them. `retired_at` keeps the time of every retirement.
+- A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit or an objective move, or the actor and the reason of a retirement that inserts no node revision. `retired_at` keeps the time of every retirement.
 
 ## Operation contracts
 
@@ -523,7 +512,7 @@ kanthord runs no automatic evidence cleanup.
 
 ## Tests
 
-- Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change. A no-op import still stores its request record.
+- Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
 
 - Tests record the child set on the assessment at acceptance, copy it into the outcome context at closure, and keep it unchanged after a later child change or revision.
 - Tests accept 40 and 64 lower-case hexadecimal commits, refuse abbreviations, upper-case and ref names, and refuse a binding that the pinned revision does not name in each admission context. For a success override while the attempt reads 0, they check the revision current at the act.
@@ -648,12 +637,6 @@ kanthord runs no automatic evidence cleanup.
 - Each refused create names `mission.node.create_refused` and the parent state in `details`.
 - A race test changes the parent state before commit and asserts that the commit rechecks admission.
 - Tests preserve the stricter import condition for import creates.
-- Tests commit or roll back each import or unblock and its request row together.
-- Tests repeat each request with the same identifier and digest and assert the stored result without a second effect.
-- Tests repeat each identifier with another digest and assert 409 `mission.request.payload_mismatch`.
-- Tests recover the complete file-name-to-node-identity map after a lost import response.
-- Tests retrieve accepted import and unblock requests throughout the life of the mission, after later revisions and terminal states.
-- Tests assert that no sweep deletes a request row.
 
 - Tests apply the node-content rules to imports, node writes and unblock content changes for every node kind.
 - Tests omit each required field and assert its error code.

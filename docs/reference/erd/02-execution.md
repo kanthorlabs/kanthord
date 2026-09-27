@@ -43,10 +43,6 @@ erDiagram
     mission_node {
         text id PK "node_ + ULID, ERD 1"
     }
-    mission_request {
-        text mission_id PK "ERD 1"
-        text request_id PK "ERD 1"
-    }
     scheduler_work_queue_entry {
         text id PK "work_queue_entry_ + ULID, ERD 1"
     }
@@ -109,14 +105,14 @@ erDiagram
         integer node_revision "pinned revision"
         text required_external_actions "JSON FrozenAction list"
         integer execution_ended "0 or 1"
-        text unblock_request_id "request_ + ULID or null"
+        text unblock_id "unblock_ + ULID or null"
         integer opened_at "Unix ms"
         integer closed_at "Unix ms or null"
     }
 
     mission_unblock {
-        text mission_id PK, FK
-        text request_id PK, FK "request_ + ULID"
+        text id PK "unblock_ + ULID"
+        text mission_id FK
         text node_id FK
         integer cleared_attempt "0 or more"
         integer opened_attempt "0 or more"
@@ -268,9 +264,8 @@ erDiagram
     mission_external_object |o..o{ scheduler_work_queue_entry : "ref in wait_for JSON, no FK"
 
     mission_node ||--o{ mission_attempt : "FK node_id"
-    mission_request ||--o| mission_unblock : "FK (mission_id, request_id)"
     mission_node ||..o{ mission_unblock : "FK node_id"
-    mission_attempt |o..o| mission_unblock : "ref unblock_request_id"
+    mission_attempt |o..o| mission_unblock : "ref unblock_id"
 
     mission_node ||..o{ mission_evidence : "FK node_id"
     mission_node ||..o{ mission_evidence : "FK content_owner_id"
@@ -314,9 +309,9 @@ erDiagram
     classDef stub stroke-dasharray:4 3
 
     class project_binding project
-    class mission_node,mission_request mission
+    class mission_node mission
     class scheduler_work_queue_entry scheduler
-    class project_binding,mission_node,mission_request,scheduler_work_queue_entry stub
+    class project_binding,mission_node,scheduler_work_queue_entry stub
     class worker_registration worker
     class scheduler_execution,scheduler_renewal,scheduler_request scheduler
     class mission_attempt,mission_unblock,mission_evidence,mission_run_output,mission_evaluation,mission_evaluation_try,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
@@ -392,8 +387,8 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A human ready act sets `execution_ended` 1 on the opened or the open attempt, sets `Waiting` and inserts the evaluation queue entry in one transaction. A resume reads `execution_ended` to select `Waiting`.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node and the owed task outcomes, in one transaction. A closed attempt never reopens.
 - A human block, discard or success override on a node whose attempt reads 0 writes the node outcome with `attempt` 0. It closes no attempt and writes no task outcome.
-- An unblock is one transaction: its `mission_request` row of kind `unblock`, the content revision when the act carries a change, the `mission_unblock` row, the attempt that it opens and the routing to `Pending` or `Available`.
-- `mission_unblock.mission_id` is the mission of its node. When the cleared attempt exists, `opened_attempt` is `cleared_attempt + 1`, `pinned_revision` is the revision that the act leaves current, and the opened attempt holds `unblock_request_id`. When the attempt reads 0, `cleared_attempt` and `opened_attempt` are 0 and `pinned_revision` is null.
+- An unblock is one transaction: the content revision when the act carries a change, the `mission_unblock` row, the attempt that it opens and the routing to `Pending` or `Available`.
+- `mission_unblock.mission_id` references `mission_mission.id` and is the mission of its node. When the cleared attempt exists, `opened_attempt` is `cleared_attempt + 1`, `pinned_revision` is the revision that the act leaves current, and the opened attempt holds `unblock_id`. When the attempt reads 0, `cleared_attempt` and `opened_attempt` are 0 and `pinned_revision` is null.
 
 ### Mission Service: evidence
 

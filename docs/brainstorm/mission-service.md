@@ -131,9 +131,6 @@ No other write changes it.
 Every `human` write that changes a node, its edges or its state names the mission version that it expects, and a stale value refuses the write, so a human reviews every change of the mission before the next write. A `client` write of an execution names no mission version.
 A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier, an identifier of another mission and an identifier of a retired node.
-An import request identifier binds to its payload, so a retry is idempotent.
-The map of assigned identifiers stays retrievable.
-The Mission Service keeps every accepted import request and unblock request for the life of the mission.
 
 A retirement removes the executable work of its node.
 A retirement preserves the outcomes, the assessments, the evidence and the historical relations of that node.
@@ -739,7 +736,6 @@ An unblock is one atomic act.
 It names the attempt that it clears.
 It names the node revision that it expects.
 It carries a content change when the human changes the direction.
-It carries a request identifier that binds to its payload.
 
 The act checks the authority of the human, the blocked attempt and the expected revision.
 An unblock that carries a content change also checks the authority that a node edit requires.
@@ -751,11 +747,7 @@ The expected revision is the current revision of the node when the human submits
 A content change uses that revision as its base and writes the next revision.
 The attempt pins the revision that the act leaves current.
 
-The act recognizes a repeat of an accepted request identifier before it checks the attempt and the revision.
-A retry of an accepted unblock returns the accepted record and costs no second attempt.
-The same identifier with a different payload is refused.
-
-A repeat of an accepted request identifier authorizes no second attempt, because the act returns the accepted record.
+A retry of an accepted unblock authorizes no second attempt, because the attempt check refuses it.
 A later request that names a cleared attempt or a superseded revision authorizes no attempt, because the check refuses it.
 
 An unblock writes an unblock record.
