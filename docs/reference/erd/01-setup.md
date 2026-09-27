@@ -120,7 +120,6 @@ erDiagram
         text id PK "job_ + ULID, ULID orders"
         text project_id
         text node_id UK "initiative or objective"
-        text claim_kind "steps | evaluation"
         integer priority "copy of the Mission priority"
     }
 
@@ -264,7 +263,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The selection order is `priority` descending, then `id` ascending.
 - A priority change keeps the `id` of the job, so the job keeps its age.
 - The Mission Service inserts and deletes the rows through the public insert and delete of the work queue, in the transaction of its accepted fact.
-- In this group every job has `claim_kind` `steps`. An evaluation job comes with [ERD 2](02-execution.md).
+- In this group every job is for a node in `Available`. An evaluation job comes with [ERD 2](02-execution.md).
 
 ## Cross-group references
 

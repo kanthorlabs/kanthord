@@ -33,8 +33,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
 
-- `Job` holds `jobId`, `projectId`, `nodeId`, `claimKind` and `priority`.
-  - `claimKind` is `steps` or `evaluation`, the two kinds of a [claim](scheduler-service.vocabulary.md#claim).
+- `Job` holds `jobId`, `projectId`, `nodeId` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
 - `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
   - `claimant` holds `workerBindingId` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
