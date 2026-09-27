@@ -62,7 +62,6 @@ flowchart TB
     s2 -.->|execution pins credential revision| c1
     m2 -.->|records of node| m1
     m2 -.->|evidence and object name binding| p1
-    s1 -.->|wait fact names external object| m2
 
     p3 -.->|grant of source binding| p1
     p3 -.->|grant names| c1

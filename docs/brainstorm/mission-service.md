@@ -502,6 +502,13 @@ The continuation condition admits an evaluation claim from `External.Requested`.
 It holds when a required external action of the attempt is unrequested and the action that it follows has reached its expected end state.
 The Project Service owns what a configured action follows.
 
+### Initiative steps condition
+
+The initiative steps condition admits a steps claim on an initiative from `Available`.
+It holds when every current objective of the initiative holds a terminal state.
+The condition reads the current children of the node, and a retirement removes a node from that set.
+While it does not hold, the initiative in `Available` holds no job.
+
 ### Successful outcome
 
 The ordinary path needs a current passing assessment and the observed expected end state of every required external action of the attempt.
@@ -685,7 +692,7 @@ Block and unblock owns the block and the unblock.
 The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.
 The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
-The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome, a priority change and a retirement.
+The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome, a priority change, a graph change and a retirement. It inserts the job when the node becomes claimable, and it deletes the job when the node stops being claimable.
 After the commit the Mission Service wakes the Scheduler Service.
 The Scheduler Service owns the work queue, the claim and the lease.
 

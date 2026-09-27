@@ -318,7 +318,7 @@ Before every release with no further work, the execution submits the head commit
 When every task of the revision holds a current task outcome of the attempt, the execution releases with no further work.
 A recorded task assessment that does not pass ends the task work, and the execution releases with no further work.
 Otherwise, when the resource budget ends before every task holds a task outcome, the execution releases with further work.
-Before a release with further work that names no wait fact, the execution submits its [run output](mission-service.md#run-output).
+Before a release with further work, the execution submits its [run output](mission-service.md#run-output).
 Before that release, the execution commits the task work in progress as a checkpoint commit.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
@@ -384,7 +384,8 @@ sequenceDiagram
 ```
 
 For an initiative the steps method reads the current objectives of the initiative.
-When one objective holds no terminal state, the execution releases with further work and names the terminal state of that child set as its wait fact.
+The [initiative steps condition](mission-service.md#initiative-steps-condition) admits the claim only when every objective holds a terminal state.
+When a graph change adds a nonterminal objective during the execution, the execution releases with further work.
 When every objective holds a terminal state, the agent writes a report on the outcome of each objective, the execution submits that report as produced evidence and releases with no further work.
 
 The sequence diagram below shows the steps method on an initiative.
@@ -393,27 +394,20 @@ The sequence diagram below shows the steps method on an initiative.
 sequenceDiagram
     autonumber
     participant E as Execution (steps method)
-    participant E2 as Later execution (steps method)
     participant M as Mission Service
     participant S as Scheduler Service
 
     rect rgb(248, 215, 218)
         E->>M: read the current objectives of the initiative
-        Note over E,M: one objective holds no terminal state
-    end
-    rect rgb(214, 234, 248)
-        E->>S: release with further work, wait fact: the terminal state of the child set
-    end
-    Note over E2,S: when every objective holds a terminal state, a later work pull of an idle instance takes the initiative
-    rect rgb(248, 215, 218)
-        E2->>M: read the outcome and the evidence set of each objective
-        E2->>E2: the agent writes the report on the objective outcomes
+        Note over E,M: every objective holds a terminal state
+        E->>M: read the outcome and the evidence set of each objective
+        E->>E: the agent writes the report on the objective outcomes
     end
     rect rgb(212, 237, 218)
-        E2->>M: produced evidence: the report
+        E->>M: produced evidence: the report
     end
     rect rgb(214, 234, 248)
-        E2->>S: release, no further work
+        E->>S: release, no further work
     end
 ```
 
@@ -473,7 +467,6 @@ The action performer returns items in four [return classes](worker-service.vocab
 - Actions whose request fails before any effect, with the refusal.
 - Actions whose effect or recording is uncertain.
 
-Only an action that awaits a prerequisite carries a wait fact.
 This page states no release rule for a request failure or an uncertain effect or recording.
 Every write that fulfils a configured action belongs to the action performer, with transport through the Repository component.
 The [Repository component](repository.md#result-classes) defines platform result classes and retry rules.
@@ -557,8 +550,7 @@ Both paths run the same eligibility, operand and reuse rules.
 
 The reviewer execution releases after its requests when the return of the action performer holds only submitted external objects and actions that await a prerequisite.
 That rule holds for a reviewer execution of an external harness after the tool of the action performer returns.
-When a required action awaits a prerequisite, the release names the observation that the action follows as its wait fact.
-The [Scheduler Service](scheduler-service.md#claims-and-counts) owns the wait record, and the [Mission Service](mission-service.md#continuation-condition) owns the continuation condition.
+The [Mission Service](mission-service.md#continuation-condition) owns the continuation condition, and the transaction that makes it hold inserts the evaluation job.
 
 The sequence diagram below shows an objective with one required action after every verification passes.
 
@@ -839,7 +831,7 @@ A later execution never depends on the retained agent context of an earlier exec
 
 The [Project Service](project-service.md) owns bindings, their entries and configured counts, system authorization and repository strategy.
 [Custody](custody.md) owns resource credentials and suitability.
-The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease, the live-execution accounting and the wait record.
+The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease and the live-execution accounting.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
 It owns the healthcheck, the compatibility declarations, the workspace, the model connector and the prompt composer.

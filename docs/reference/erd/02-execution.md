@@ -19,7 +19,6 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - An objective whose attempt requests a required external action stops in `External.Requested`. Only the observer writes an observation, and the observer runs only on an observation obligation that delivery admission creates in [ERD 3](03-integration.md).
 - A success override and a discard do not end that attempt, because a node reaches a terminal state only when no external action of its open attempt is unresolved. A human pauses the node, blocks it and unblocks it. The next attempt freezes the configuration current at its opening.
 - An action that the attempt freezes but has not requested is not unresolved, so it prevents no terminal transition.
-- The steps release of an initiative names the terminal state of its child set as its wait fact. The form of that wait fact is open in [HANDOFF](../../brainstorm/HANDOFF.md#scheduler-service-and-delivery), so that release has no stored form yet.
 - The action performer holds no durable dispatch record. That record is the open item B9 W2 of [HANDOFF](../../brainstorm/HANDOFF.md#worker-and-project-services).
 
 ## Records without a table
@@ -42,9 +41,6 @@ erDiagram
     }
     mission_node {
         text id PK "node_ + ULID, ERD 1"
-    }
-    scheduler_job {
-        text id PK "job_ + ULID, ERD 1"
     }
 
     worker_registration {
@@ -75,7 +71,6 @@ erDiagram
         integer loss_declared_at "Unix ms or null"
         integer released_at "Unix ms or null"
         integer further_work "0 or 1, null before release"
-        text release_wait_for "JSON WaitFact or null"
         text trace_id "Tracking protocol value"
         text root_span_id "Tracking protocol value"
         integer created_at "claim acceptance, Unix ms"
@@ -260,8 +255,6 @@ erDiagram
     mission_node ||..o{ scheduler_execution : "ref, no FK"
     scheduler_execution ||--o{ scheduler_renewal : "FK execution_id"
     scheduler_execution ||..|| scheduler_request : "ref in result JSON"
-    mission_external_object |o..o{ scheduler_execution : "ref in release_wait_for JSON, no FK"
-    mission_external_object |o..o{ scheduler_job : "ref in wait_for JSON, no FK"
 
     mission_node ||--o{ mission_attempt : "FK node_id"
     mission_node ||..o{ mission_unblock : "FK node_id"
@@ -310,8 +303,7 @@ erDiagram
 
     class project_binding project
     class mission_node mission
-    class scheduler_job scheduler
-    class project_binding,mission_node,scheduler_job stub
+    class project_binding,mission_node stub
     class worker_registration worker
     class scheduler_execution,scheduler_renewal,scheduler_request scheduler
     class mission_attempt,mission_unblock,mission_evidence,mission_run_output,mission_evaluation,mission_evaluation_try,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
@@ -368,15 +360,15 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim transaction inserts the execution row and the `scheduler_request` row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
 - `scheduler_request` holds accepted work pulls only. `project_id` equals the project of its execution. `scope_digest` is the digest of the canonical JSON of the worker binding and the runtime identity. `result` is the answer at acceptance and never changes, so a replay returns it and never the current execution row.
 - A renewal with a new identifier inserts a `scheduler_renewal` row and sets `renewed_at`, `expires_at` and `renewal_request_id` on the execution. A repeat of the current identifier extends nothing. An identifier of an earlier row of the execution answers 409 `scheduler.execution.renewal_superseded`. `sequence` of an execution starts at 1 and has no gap.
-- A release sets `released_at`, `further_work`, `release_wait_for` and `ended_at` once. A repeat with an equal payload returns the accepted receipt. `release_wait_for` is permitted only with further work.
-- The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job.
-- The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested`. With a wait fact, it inserts an evaluation job that is held out, because the waiting action becomes requestable only after the observation of its prerequisite. With no wait fact, no action is unrequested, so the node is not claimable and no job exists.
+- A release sets `released_at`, `further_work` and `ended_at` once. A repeat with an equal payload returns the accepted receipt.
+- The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
+- The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested` and inserts no job. The transaction that makes the continuation condition hold inserts the evaluation job.
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
-- A wait fact of the `external-observation` form names an external object of the node and of the open attempt of the execution, and that object is the request of the action that the waiting action follows. A fact that already holds at the release satisfies the wait at once, so no hold remains. Otherwise the job takes `held_out` 1 and `wait_for`, and the Mission Service clears both in the transaction that commits the awaited observation.
 - A loss declaration sets `loss_declared_at` and `ended_at`. A revocation at a Mission transition ends the claim through the same path. A loss closes no attempt.
 - The end of a registration ends no execution row by itself. Its live execution follows the lease and the loss declaration.
 - No sweep deletes an execution row, a renewal row or a request row.
 - The closed set of the claim state, the lease duration and the renewal cadence are open in [HANDOFF](../../brainstorm/HANDOFF.md#scheduler-service-and-delivery). So the table holds no claim state column.
+- An initiative in `Available` holds a steps job only while every current objective holds a terminal state. The transaction that commits the terminal state of its last objective inserts the job, and a graph change that adds a nonterminal objective deletes it.
 
 ### Mission Service: attempts and human controls
 
@@ -457,4 +449,3 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `mission_evidence.execution_id`, `mission_run_output.execution_id`, `mission_evaluation_try.execution_id` and every execution actor | `scheduler_execution.id` | Reference, no FK. |
 | `mission_evidence.binding_id`, `storage_binding_id` | `project_binding.id` | Reference, no FK. |
 | `mission_external_object.binding_id` | `project_binding.id` | Reference, no FK. |
-| `scheduler_job.wait_for`, `scheduler_execution.release_wait_for` | `mission_external_object.id` | Reference in JSON, no FK. |

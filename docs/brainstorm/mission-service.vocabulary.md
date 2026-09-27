@@ -257,6 +257,17 @@ A human merges pull request 42, and the observer records the landing with commit
 The notification is unrequested and the action that it follows has reached its expected end state, so the continuation condition holds.
 A `reviewer@1` instance claims the objective from `External.Requested`, and Execution 3 posts the notification with commit `abc123`.
 
+## initiative steps condition
+
+The condition over the current objectives of an initiative that admits a steps claim from `Available`.
+The term names no closed set.
+
+The initiative "Account recovery" holds `Available` while "Add password reset" holds `Executing`.
+The condition does not hold, so "Account recovery" holds no job.
+"Add password reset" reaches `Completed`, and "Add recovery codes" already holds `Discarded`.
+The transaction that commits `Completed` inserts the steps job of "Account recovery".
+If `ulrich` then adds the objective "Add login alerts", the graph change deletes that job.
+
 ## unblock record
 
 The record of one human unblock.

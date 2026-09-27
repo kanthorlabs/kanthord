@@ -18,7 +18,6 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An observation obligation uses `observation_obligation_<ulid>`. Delivery admission mints it.
 - A claim takes no identity of its own: the execution record is the record of the claim, and it holds the lease.
 - A lease takes no identity of its own: it is a group of fields of the execution record or of the observation obligation, and the loss declaration is one of those fields.
-- A wait record takes no identity of its own: the job that it holds out keys it.
 - The admission record of a delivery is keyed by the delivery identity that the Intake Service owns.
 - The trace identity and the root span identity of an execution are protocol-defined identities of the Tracking Service, and no entity identity of the Scheduler Service.
 
@@ -34,10 +33,9 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
 
-- `Job` holds `jobId`, `projectId`, `nodeId`, `claimKind`, `priority`, `heldOut` and `waitFor`.
+- `Job` holds `jobId`, `projectId`, `nodeId`, `claimKind` and `priority`.
   - `claimKind` is `steps` or `evaluation`, the two kinds of a [claim](scheduler-service.vocabulary.md#claim).
   - `priority` is the signed safe integer that the job copies from the Mission Service.
-  - `heldOut` is a boolean, and `waitFor` holds the `WaitFact` of the wait record or `null`.
 - `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
   - `claimant` holds `workerBindingId` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
   - `attempt` and `pinnedRevision` are positive safe integers.
@@ -49,8 +47,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service.
 - `WorkPull` is the input of `scheduler.work.pull`: `workerBindingId`, `runtimeIdentity` and `requestId`. The binding equals the worker binding of the machine identity, and the runtime identity equals the live registration of that client identity.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
-- `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean and optional `waitFor` as a `WaitFact`, permitted only with `furtherWork: true`. `false` states the execution-end fact of the attempt. The answer is `{ executionId, releasedAt }`.
-- `WaitFact` is exactly one of two closed objects. `{ type: "external-observation", externalObjectId }` names the external object of the action that the awaited action follows. The server checks that the external object belongs to the node and to the open attempt of the execution, and it answers 400 with an issue list otherwise. An accepted observation that already establishes the end state satisfies the wait at once, as [scheduler-service.md](scheduler-service.md#claims-and-counts) requires, and it refuses nothing. The form of the child-set fact remains **[blocked](HANDOFF.md#scheduler-service-and-delivery)** under the request and response schemas (child-set wait fact) question.
+- `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean. `false` states the execution-end fact of the attempt. The answer is `{ executionId, releasedAt }`.
 - `LeaseRenewal` is the input of `scheduler.execution.renew-lease`: `requestId`. The answer is `{ executionId, lease }`.
 - `ObservationObligation` holds `obligationId`, `projectId`, `externalObjectId`, `acceptedAt`, `lease` as the lease object or `null`, `completedAt` as a timestamp or `null`, and `observationId` as `observation_<ulid>` or `null` while no accepted observation exists.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
@@ -65,7 +62,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - Before admission, the claim operation reads the row of the request identifier. The same scope and the same digest return the stored result. Another scope answers 409 `scheduler.request.scope_mismatch` and transfers no execution. Another digest answers 409 `scheduler.request.payload_mismatch`.
 - The request identifier is `request_<ulid>`. The CLI and the `worker` application generate one ULID for one logical invocation and use it for the `Idempotency-Key` header and for `requestId`. The server compares the two never, because the header serves the replay of the invocation chain and the body serves the durable replay.
 - A renewal carries `requestId` in its body. The execution record holds `renewal_request_id`, `renewed_at` and `expires_at` of the latest accepted renewal. A repeat of the current identifier returns the current lease and extends nothing. A new identifier renews. An identifier that a later renewal superseded answers 409 `scheduler.execution.renewal_superseded`, because the holder already holds a later lease.
-- A release carries no request identifier. An execution releases at most once. The execution record holds `released_at`, `further_work` and the wait fact of its release. A repeat with an equal payload returns the accepted `{ executionId, releasedAt }`. A repeat with another payload answers 409 `scheduler.execution.release_conflict`.
+- A release carries no request identifier. An execution releases at most once. The execution record holds `released_at` and `further_work` of its release. A repeat with an equal payload returns the accepted `{ executionId, releasedAt }`. A repeat with another payload answers 409 `scheduler.execution.release_conflict`.
 - `scheduler.execution.renew-lease` and `scheduler.execution.release` require a live execution, and the invocation chain proves it before the handler, as for every other execution operation. `scheduler.claim.get` requires none, because it reports an ended execution; its handler checks that the claimant of the record names the worker binding of the machine identity and the runtime identity of its live registration, and it answers 403 `scheduler.execution.not_owner` otherwise. A holder whose release answer was lost reads `claim get` after a refused retry. No handler repeats the proof.
 - No sweep deletes a request row. The row shares the retention of the execution record.
 
@@ -79,9 +76,8 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 ## Tests
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
-- A test asserts that a claim, a lease and a wait record expose no identity of their own.
+- A test asserts that a claim and a lease expose no identity of their own.
 - A test parses every input and output of the Scheduler operations through the direct adapter and the HTTP adapter and rejects an unknown field, a `null` outside its permitted fields and a bare ULID.
-- A test releases with a wait fact whose observation already holds and asserts an accepted release and a satisfied wait.
 - A test repeats an accepted pull with the same identifier, scope and digest after a restart and asserts the original `claimed` result and no second execution or count.
 - A test repeats the identifier from another runtime identity and asserts 409 `scheduler.request.scope_mismatch` and no transfer.
 - A test repeats the identifier with another payload and asserts 409 `scheduler.request.payload_mismatch`.

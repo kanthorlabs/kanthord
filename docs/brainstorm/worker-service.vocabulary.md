@@ -216,10 +216,9 @@ The set is closed and holds four values.
 - **actions whose effect or recording is uncertain**
 
 For "Add password reset", the action performer submits pull request 42 as an external object and returns that external object.
-For "Add password reset", a second action awaits the merge observation of pull request 42 and returns that observation as its wait fact.
+For "Add password reset", a second action awaits the merge observation of pull request 42, and the action performer returns that action with its prerequisite.
 For "Add password reset", the platform refuses an action for authorization before any effect, and the action performer returns the refusal.
 For "Add password reset", the platform response fails to arrive after dispatch, and the action performer returns the action with an uncertain effect.
-Only the prerequisite class carries a wait fact.
 
 ## MCP server
 

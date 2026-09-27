@@ -631,6 +631,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
+- Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.
 - Tests cover objective and task creation under each of the twelve parent states.

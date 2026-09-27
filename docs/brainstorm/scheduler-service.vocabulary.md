@@ -95,18 +95,6 @@ Execution 1 of "Add password reset" renews its lease while its `tdd@1` instance 
 The Scheduler records a loss declaration when that execution loses its claim.
 The loss declaration revokes the authority of Execution 1 before any replacement claim.
 
-## wait record
-
-A `general@1` instance releases "Account recovery" while its objectives "Add password reset" and "Add recovery codes" hold no terminal state.
-The release names the terminal state of that child set as its wait fact.
-The Scheduler writes a wait record and holds the job out of work-pull selection.
-The terminal state of the last objective satisfies the wait in the transaction that commits it.
-A later work pull takes "Account recovery".
-
-Execution 2 of "Add password reset" opens pull request 42 and releases with the landing observation of that pull request as its wait fact, because the notification that follows the merge is unrequested.
-The Scheduler holds the job out until the observer records the landing.
-A later work pull of a `reviewer@1` instance takes "Add password reset" from `External.Requested`.
-
 ## observation obligation
 
 Admission of a delivery creates an observation obligation for the external object of pull request 42 of "Add password reset".

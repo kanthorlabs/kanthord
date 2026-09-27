@@ -34,10 +34,10 @@ An idle project consumes no processor turn and loses no durable obligation.
 Server shutdown stops new claims and preserves accepted delivery and execution obligations.
 
 The Scheduler persists the work queue in the storage of the server, so its order survives a restart.
-The work queue holds, per project, one job for each claimable node, subject to the wait record in Claims and counts.
-A node is claimable when its Mission state and the readiness condition admit a claim.
+The work queue holds, per project, one job for each claimable node.
+A node is claimable when its Mission state and its Mission condition admit a claim.
 The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
-`Available` admits a steps claim.
+`Available` admits a steps claim, and on an initiative only under the [initiative steps condition](mission-service.md#initiative-steps-condition).
 `Waiting` admits an evaluation claim under the [readiness condition](mission-service.md#readiness-condition).
 `External.Requested` admits an evaluation claim under the [continuation condition](mission-service.md#continuation-condition).
 No other state admits a claim.
@@ -45,8 +45,8 @@ Membership is not the Mission state `Available`: a claimable `Waiting` node is n
 A job carries the node, its admitted kind of claim, its priority and a time-ordered identity.
 The identity carries the creation time of the job.
 The [Mission Service](mission-service.md#boundary) inserts the job when the node becomes claimable, and it removes the job when the node leaves that claimable state.
-A release with further work creates a new job.
-A priority change keeps the identity, and a held-out job keeps the identity.
+A release with further work creates a new job when the node is claimable.
+A priority change keeps the identity.
 
 The Scheduler orders jobs by priority descending, then identity ascending.
 The highest priority comes first, and the oldest job comes first inside one priority.
@@ -261,24 +261,12 @@ The Scheduler introduces no project-wide cap.
 
 A release ends the execution.
 The [Mission Service](mission-service.md#state-transitions) routes a release by its execution-end fact or further work and leaves the attempt open.
-A release that waits names the accepted fact that it waits for.
-That fact has two forms.
-
-- A terminal state of a named child set.
-- An observation of an external object.
-
-A reviewer release for a required external action that awaits a prerequisite names the observation that the action follows.
-The Scheduler records the fact as a wait record and marks the job as held out.
-The Mission Service releases the held-out job in the transaction that commits that fact.
-Writing the wait record reads the current accepted facts at the release.
-A fact that already holds satisfies the wait at once.
-The write serializes with the transactions of the Mission Service for the project, so no intervening fact disappears.
-The work queue maps a child change to the wait of its parent from the graph of the Mission Service.
-A graph change that changes the named set rechecks the wait.
-The wait record adds no Mission state and gates no admission.
-The work-pull path rechecks the wait fact at the claim.
+A release names no wait.
+No job exists while a node waits.
+The Mission Service inserts the job in the transaction that makes the node claimable, and it deletes the job in the transaction that makes the node unclaimable.
+Those transactions serialize with the release, the claim and every other transaction of the Mission Service for the project, so no intervening fact disappears.
 The continuation reaches a later work pull, never a pushed assignment.
-A waiting parent holds no instance while it waits.
+A waiting node holds no instance while it waits.
 
 The [Mission Service](mission-service.md#state-transitions) owns the human pause, discard and success override transitions that end a live claim.
 Those transitions also determine whether the attempt closes or stays open.

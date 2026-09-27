@@ -122,8 +122,6 @@ erDiagram
         text node_id UK "initiative or objective"
         text claim_kind "steps | evaluation"
         integer priority "copy of the Mission priority"
-        integer held_out "0 or 1, wait record"
-        text wait_for "JSON WaitFact or null"
     }
 
     project_project ||..o{ project_binding : "FK project_id"
@@ -266,7 +264,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - The selection order is `priority` descending, then `id` ascending.
 - A priority change keeps the `id` of the job, so the job keeps its age.
 - The Mission Service inserts and deletes the rows through the public insert and delete of the work queue, in the transaction of its accepted fact.
-- In this group every job has `claim_kind` `steps`. An evaluation job and a wait record come with [ERD 2](02-execution.md).
+- In this group every job has `claim_kind` `steps`. An evaluation job comes with [ERD 2](02-execution.md).
 
 ## Cross-group references
 
