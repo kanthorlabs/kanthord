@@ -58,6 +58,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Every other platform refuses a record.
 - An official OpenAI record is an `openai-compatible` record with `baseUrl` `https://api.openai.com/v1`.
 - The Copilot probe writes no minted token back to the record.
+- The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
 - `openai-compatible.baseUrl` uses `https` or `http`, with no query and no fragment.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it fails, and a rotation can set a new one.
 - The first revision of an `openai-compatible` credential starts with `models: []`.
