@@ -92,6 +92,8 @@ The attempt row records the frozen required external actions next to the pinned 
 
 - The Mission Service owns the section `mission` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
 - `mission.consecutiveLossLimit` holds the [consecutive loss limit](mission-service.md#consecutive-loss-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
+- `mission.textMaxBytes` holds the upper bound of a `Text` value in UTF-8 bytes, as a positive integer in the `nat` format of `convict`, and it defaults to `32768`.
+- The bound applies at a write. A stored value keeps its length after a change of the bound.
 
 ## The plan file grammar
 
@@ -513,12 +515,15 @@ kanthord runs no automatic evidence cleanup.
 - Every Mission route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging) of the Gateway Service.
 - Every Mission route uses the [default 30 s timeout](gateway-service.impl.md#cancellation).
 - Every Mission route uses the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits).
+- `Text` is a nonblank JSON string of at most `mission.textMaxBytes` UTF-8 bytes. A larger value answers HTTP 400 with an issue list. The rule applies to every text field of a node and to every item of `verifications`.
 - A stale expected revision answers 409 `mission.revision.conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version.conflict` with the current value in `details`.
 - An absent mission answers 404 `mission.mission.not_found`. An absent node answers 404 `mission.node.not_found`. An absent record answers 404 `mission.record.not_found`.
 - `graph get` answers at most 10 MiB. A larger graph answers 413 `mission.graph.too_large`.
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
 ## Tests
+
+- Tests accept a `Text` value of `mission.textMaxBytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
 
 - Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
 
