@@ -142,4 +142,4 @@ flowchart TB
 | Intake Service | purple |
 | Tracking Service | teal |
 
-The ER diagrams color their tables with `classDef`. Mermaid 11.17.2 renders them. Mermaid 10.9.8 refuses `classDef` in an ER diagram with a parse error. [viewer.html](../../viewer.html) loads mermaid 10.9.1.
+The ER diagrams color their tables with `classDef`. [viewer.html](../../viewer.html) loads Mermaid 11.17.2, which supports this notation.
