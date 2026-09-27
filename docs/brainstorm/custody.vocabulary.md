@@ -30,7 +30,7 @@ The closed set of secret shapes is:
 
 ## credential revision
 
-One immutable snapshot of the secret of a credential, stored as one credential store record.
+One immutable snapshot of the platform, the metadata and the secret material that a human supplies, stored as one credential store record. The OAuth tokens that custody refreshes are runtime values of that revision.
 A rotation adds the next revision and keeps the older revisions live until custody drains them or a human revokes them.
 `github-main` holds revision 1 with key A. A rotation adds revision 2 with key B, an execution that pinned revision 1 finishes with key A, and a new execution takes key B.
 

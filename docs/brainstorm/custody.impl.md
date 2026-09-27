@@ -26,6 +26,7 @@ A mechanism here never overrides a rule there.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
 - A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
+- A rotation and a metadata edit name `expectedRevision`, the newest live revision that the human read. A stale value answers 409 `credential.revision_conflict` with the current value in `details`.
 - Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
 - Removal calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
@@ -218,6 +219,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Tests cover model and credential removal with dependents and concurrent changes.
 - Tests cover every platform probe, S3 status mapping, expired OAuth, forbidden probes and attribution without stored results.
 - Tests preserve names and binding references across rotation.
+- A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision_conflict`. A test covers the same case for two metadata edits.
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, the metadata copy and replacement at rotation, and a `baseUrl` change at rotation alone.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.

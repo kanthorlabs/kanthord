@@ -43,6 +43,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - The [entry forms](worker-service.vocabulary.md#entry) define inheritance and required fields.
 - A write refuses nonempty `options`.
 - Every enablement write, worker binding write and resolution runs the same checks.
+- Every enablement write names `expectedRevision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A stale or absent value answers 409 `worker.agent.enablement.revision_conflict` with the current value in `details`.
 - It checks the override allowlist before the merge, then validates the complete effective configuration.
 - `overridableFields` of `swe@1` and `re@1` is `["agentProvider", "modelIdentifier", "reasoningEffort"]`.
 - `validateEntry` refuses a worker whose agent has no enabled enablement, and names that agent.
@@ -133,6 +134,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 ## Configuration tests
 
 - Tests cover both entry forms, missing enablement, disablement, complete-entry refusal and the empty option schema.
+- A test covers two enablement writes that name one expected revision, and it asserts that the second one answers 409 `worker.agent.enablement.revision_conflict`. A test covers a `put` without `expectedRevision` for an agent that holds a row.
 - Tests cover override allowlists, model catalogs, established reasoning levels and all five effective-configuration fields.
 - Tests assert schema draft, required properties, absent defaults, absent options and the whole-configuration description.
 - Tests cover transactional changes and removals, dependency lists, snapshot reads and recorded revisions.
