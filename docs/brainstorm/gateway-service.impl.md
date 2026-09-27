@@ -316,7 +316,8 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - A Custody resource name is its credential name.
 - A project-scoped resource name of the Project Service is its binding name.
 - An Intake Service resource name is `<source binding name>/<subscription kind>`.
-- A Worker Service resource name is `<worker binding name>/<runtime identity>`.
+- A global resource name of the Worker Service is `<agent name>/<provider name>` for an agent provider.
+- A project-scoped resource name of the Worker Service is `<worker binding name>/<runtime identity>` for a registered instance.
 - Each name segment uses percent encoding, including any literal `/` or `%`, so distinct names remain distinct.
 - No entry name, capability or error detail holds secret material or a private endpoint URL with credentials.
 
