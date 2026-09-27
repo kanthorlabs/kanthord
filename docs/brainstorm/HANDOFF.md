@@ -24,10 +24,9 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Mission Service
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication, `Text` bounds, run-output content bounds and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication, run-output content bounds and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
   - Next session 2026-09-25: open with external-action publication.
 - [ ] Added 2026-09-25 from the no-attempt ruling. A human override, discard or block on an objective whose attempt reads 0 writes the node outcome only. Define whether a task of that objective ever holds an outcome.
-- [ ] Added 2026-09-25 from the task-outcome ruling. No design page defines "content owner". Only `engine/docs/cli/mission.md` uses it, in `Node.contentOwnerId` and `Revision.nodeId`, and the outcome record ruling adds `Outcome.contentOwnerId`. The design set defines the term, or the CLI page uses another name.
 
 ### Scheduler Service and delivery
 
@@ -53,7 +52,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 
 - [ ] Added 2026-09-25 from the `budgets` debate of the Worker catalog item. `worker-service.md` requires a checkpoint commit and a push before a release with further work, and `worker-service.impl.md` bounds that push by the remaining resource budget, which the budget end has exhausted. No page states how the push after the budget end runs.
-- [ ] Added 2026-09-24 from `engine/docs/cli/other.md`. `serve worker` awaits its option declarations, readiness output and shutdown contract. Failure recovery stays with B9.
 
 #### Next phase
 
