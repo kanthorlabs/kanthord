@@ -22,6 +22,71 @@ export function diagramZoom(action, naturalWidth, renderedWidth) {
   return { width: `${(naturalWidth * percent) / 100}px`, label: `${percent}%` };
 }
 
+function enableDiagramPan(panel) {
+  if (!panel?.classList.contains("mermaid-outer"))
+    throw new Error("Pan requires a diagram scroll panel");
+  if (typeof panel.setPointerCapture !== "function")
+    throw new Error("Pan requires pointer capture support");
+
+  let start = null;
+  let dragged = false;
+
+  panel.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "mouse" || event.button !== 0 || !event.isPrimary)
+      return;
+    if (event.target.closest("a, button")) return;
+    if (panel.scrollWidth <= panel.clientWidth && panel.scrollHeight <= panel.clientHeight)
+      return;
+
+    start = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      left: panel.scrollLeft,
+      top: panel.scrollTop,
+    };
+    dragged = false;
+    panel.setPointerCapture(event.pointerId);
+    panel.classList.add("is-panning");
+    event.preventDefault();
+  });
+
+  panel.addEventListener("pointermove", (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) dragged = true;
+    panel.scrollLeft = start.left - dx;
+    panel.scrollTop = start.top - dy;
+    event.preventDefault();
+  });
+
+  function endPan(event) {
+    if (!start || event.pointerId !== start.id) return;
+    start = null;
+    panel.classList.remove("is-panning");
+    if (panel.hasPointerCapture(event.pointerId))
+      panel.releasePointerCapture(event.pointerId);
+  }
+
+  panel.addEventListener("pointerup", endPan);
+  panel.addEventListener("pointercancel", (event) => {
+    endPan(event);
+    dragged = false;
+  });
+  panel.addEventListener("lostpointercapture", (event) => {
+    if (!start) return;
+    endPan(event);
+    dragged = false;
+  });
+  panel.addEventListener("click", (event) => {
+    if (!dragged) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragged = false;
+  }, true);
+}
+
 export function enableDiagramZoom(diagram) {
   const panel = diagram.parentElement;
   const svg = diagram.querySelector("svg");
@@ -46,6 +111,7 @@ export function enableDiagramZoom(diagram) {
   svg.style.maxWidth = "none";
   panel.style.setProperty("--diagram-width", initial.width);
   panel.before(controls);
+  enableDiagramPan(panel);
 
   // The toolbar owns its listener; no window listener or resize observer is needed.
   controls.addEventListener("click", function onZoom(event) {
