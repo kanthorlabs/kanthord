@@ -25,16 +25,16 @@ A node that waits for a model call, a human review or a pull request never occup
 Scheduling concurrency and instance counts solve different bottlenecks.
 
 The work queue is a component of the Scheduler Service with a public insert and a public delete, and the Mission Service is its caller.
-The [Mission Service](mission-service.md#boundary) inserts and removes the entries of every affected node, including dependency and parent effects.
-The work queue never holds an entry that the Mission state of its node contradicts.
+The [Mission Service](mission-service.md#boundary) inserts and removes the jobs of every affected node, including dependency and parent effects.
+The work queue never holds a job that the Mission state of its node contradicts.
 The Scheduler coalesces the wakeups of the [Mission Service](mission-service.md#boundary).
-A peek reads the first entry of the order and removes nothing.
+A peek reads the first job of the order and removes nothing.
 Project configuration changes and claim changes also trigger a recheck of the affected scope.
 An idle project consumes no processor turn and loses no durable obligation.
 Server shutdown stops new claims and preserves accepted delivery and execution obligations.
 
 The Scheduler persists the work queue in the storage of the server, so its order survives a restart.
-The work queue holds, per project, one entry for each claimable node, subject to the wait record in Claims and counts.
+The work queue holds, per project, one job for each claimable node, subject to the wait record in Claims and counts.
 A node is claimable when its Mission state and the readiness condition admit a claim.
 The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
 `Available` admits a steps claim.
@@ -42,30 +42,30 @@ The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
 `External.Requested` admits an evaluation claim under the [continuation condition](mission-service.md#continuation-condition).
 No other state admits a claim.
 Membership is not the Mission state `Available`: a claimable `Waiting` node is not `Available`.
-An entry carries the node, its admitted kind of claim, its priority and a time-ordered identity.
-The identity carries the creation time of the entry.
-The [Mission Service](mission-service.md#boundary) inserts the entry when the node becomes claimable, and it removes the entry when the node leaves that claimable state.
-A release with further work creates a new entry.
-A priority change keeps the identity, and a held-out entry keeps the identity.
+A job carries the node, its admitted kind of claim, its priority and a time-ordered identity.
+The identity carries the creation time of the job.
+The [Mission Service](mission-service.md#boundary) inserts the job when the node becomes claimable, and it removes the job when the node leaves that claimable state.
+A release with further work creates a new job.
+A priority change keeps the identity, and a held-out job keeps the identity.
 
-The Scheduler orders entries by priority descending, then identity ascending.
-The highest priority comes first, and the oldest entry comes first inside one priority.
+The Scheduler orders jobs by priority descending, then identity ascending.
+The highest priority comes first, and the oldest job comes first inside one priority.
 Inside one priority, newer work never overtakes older work.
 Across priorities, a human who raises the priority of a stream of work accepts that priority 0 waits.
 Priority orders and never admits.
 No priority and no age makes a `Blocked`, `Paused`, `Pending` or incompatible node claimable.
 
 Priority is an integer.
-The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, the current value on the node and the reorder of the entry.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, the current value on the node and the reorder of the job.
 That section states the value of an absent priority.
-The entry holds a copy of the current priority, and the Mission Service stays its source.
+The job holds a copy of the current priority, and the Mission Service stays its source.
 The [Mission Service](mission-service.md#mission-structure-and-nodes) states that an import carries no priority.
 
 The queue writes follow accepted changes, and selection follows work pulls.
 Neither path scans every project.
-A large graph change affects many nodes, and the Mission Service writes their entries in its one transaction.
+A large graph change affects many nodes, and the Mission Service writes their jobs in its one transaction.
 A wakeup for the affected scope wakes waiting work pulls.
-A stale entry suggests a node and never authorizes it; the claim operation rechecks.
+A stale job suggests a node and never authorizes it; the claim operation rechecks.
 
 The Scheduler bounds processor time per project turn for both wakeup handling and claim handling.
 One busy project cannot consume the pool.
@@ -167,7 +167,7 @@ That authorization starts at the first operation under the execution identity th
 
 The work pull requires an instance healthcheck taken for the claim and fewer live executions of the binding than its instance count.
 The Worker Service produces the instance healthcheck and the compatibility declarations.
-The Scheduler selects the first entry of the project's work queue that the claimant admits.
+The Scheduler selects the first job of the project's work queue that the claimant admits.
 The match reads the node states that the worker declares, the exact worker name and the required node format of the worker.
 It reads the node revision that the attempt pins or, before the first claim, the current revision.
 The [Mission Service](mission-service.md#criterion-and-authority) owns that revision selection.
@@ -181,8 +181,8 @@ The external harness hosts its own executions, and it never writes the execution
 
 The Scheduler serves a work pull in three ways.
 A wakeup from the Mission Service makes the Scheduler serve the waiting work pulls of the project by the order of the work queue.
-An idle Scheduler with entries left serves the waiting work pulls by the same order.
-An on-demand request from a service of the server names a node that holds an entry, and the Scheduler serves that node to the next compatible work pull ahead of the order.
+An idle Scheduler with jobs left serves the waiting work pulls by the same order.
+An on-demand request from a service of the server names a node that holds a job, and the Scheduler serves that node to the next compatible work pull ahead of the order.
 The on-demand request returns when the claim exists, it holds no claim of its own, and the Scheduler bounds its wait as it bounds a waiting work pull.
 
 When no work matches, the Scheduler returns no work or waits asynchronously for a bounded period.
@@ -268,8 +268,8 @@ That fact has two forms.
 - An observation of an external object.
 
 A reviewer release for a required external action that awaits a prerequisite names the observation that the action follows.
-The Scheduler records the fact as a wait record and marks the entry as held out.
-The Mission Service releases the held-out entry in the transaction that commits that fact.
+The Scheduler records the fact as a wait record and marks the job as held out.
+The Mission Service releases the held-out job in the transaction that commits that fact.
 Writing the wait record reads the current accepted facts at the release.
 A fact that already holds satisfies the wait at once.
 The write serializes with the transactions of the Mission Service for the project, so no intervening fact disappears.

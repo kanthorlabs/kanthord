@@ -14,11 +14,11 @@ A ruling that names a package, a product or a version is deliberate.
 The identities follow the identity convention of [architecture.impl.md](architecture.impl.md#the-identity-and-the-time).
 
 - An execution uses `execution_<ulid>`. The claim operation mints it.
-- A work queue entry uses `work_queue_entry_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the entry, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
+- A job uses `job_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the job, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
 - An observation obligation uses `observation_obligation_<ulid>`. Delivery admission mints it.
 - A claim takes no identity of its own: the execution record is the record of the claim, and it holds the lease.
 - A lease takes no identity of its own: it is a group of fields of the execution record or of the observation obligation, and the loss declaration is one of those fields.
-- A wait record takes no identity of its own: the work queue entry that it holds out keys it.
+- A wait record takes no identity of its own: the job that it holds out keys it.
 - The admission record of a delivery is keyed by the delivery identity that the Intake Service owns.
 - The trace identity and the root span identity of an execution are protocol-defined identities of the Tracking Service, and no entity identity of the Scheduler Service.
 
@@ -34,9 +34,9 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
 
-- `QueueEntry` holds `entryId`, `projectId`, `nodeId`, `claimKind`, `priority`, `heldOut` and `waitFor`.
+- `Job` holds `jobId`, `projectId`, `nodeId`, `claimKind`, `priority`, `heldOut` and `waitFor`.
   - `claimKind` is `steps` or `evaluation`, the two kinds of a [claim](scheduler-service.vocabulary.md#claim).
-  - `priority` is the signed safe integer that the entry copies from the Mission Service.
+  - `priority` is the signed safe integer that the job copies from the Mission Service.
   - `heldOut` is a boolean, and `waitFor` holds the `WaitFact` of the wait record or `null`.
 - `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
   - `claimant` holds `workerBindingId` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
@@ -73,7 +73,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 
 - The Scheduler Service deletes no execution record, because the Mission Service and the Tracking Service reference the execution identity and [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) rules that an owner deletes no record that a peer can reference. No sweep deletes one, and the durable request row of its pull shares that rule.
 - `execution list` and `execution get` therefore return every execution of the project, live and ended.
-- The work queue holds current entries only. The Mission Service inserts and removes an entry with the claimable state of its node, so `queue list` and `queue peek` read a live view and no history.
+- The work queue holds current jobs only. The Mission Service inserts and removes a job with the claimable state of its node, so `queue list` and `queue peek` read a live view and no history.
 - The retention of a completed observation obligation remains **[blocked](HANDOFF.md#scheduler-service-and-delivery)**.
 
 ## Tests
@@ -91,4 +91,4 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - A test calls `claim get` from another worker binding or runtime identity and asserts 403 `scheduler.execution.not_owner`. Through both adapters, it calls the renewal and the release of an ended claim and asserts the 403 of the execution proof before the handler. After a refused release retry, the owner reads the ended claim through `claim get`.
 - A test checks the shared error envelope, the timeout, the lifetime and the body limit of every Scheduler route, and the 404 of delivery admission through the HTTP adapter.
 - A test asserts that no sweep deletes an execution record or its request row, and that an ended execution stays readable through `execution get` after a restart.
-- A test asserts that `queue list` returns no entry of a node that left the claimable state.
+- A test asserts that `queue list` returns no job of a node that left the claimable state.

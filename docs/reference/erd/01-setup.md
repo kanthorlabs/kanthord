@@ -20,7 +20,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - A delivery source is no binding. The Intake Service designs it under [HANDOFF](../../brainstorm/HANDOFF.md#intake-service).
 - The Mission Service accepts the import, the export, the node API, the dependency edits, the criterion set and the priority.
 - The human controls (pause, resume, block, unblock, ready, override and discard) come with [ERD 2](02-execution.md), because most of them write an attempt, an outcome or an unblock record.
-- The Scheduler work queue is in this group, although the Scheduler Service owns it. A Mission write that makes a node claimable inserts its queue entry in the same transaction. A Scheduler migration cannot read a Mission table, so no later migration can back-fill the queue.
+- The Scheduler work queue is in this group, although the Scheduler Service owns it. A Mission write that makes a node claimable inserts its job in the same transaction. A Scheduler migration cannot read a Mission table, so no later migration can back-fill the queue.
 
 ## Owners without a table
 
@@ -116,8 +116,8 @@ erDiagram
         text mission_id FK
     }
 
-    scheduler_work_queue_entry {
-        text id PK "work_queue_entry_ + ULID, ULID orders"
+    scheduler_job {
+        text id PK "job_ + ULID, ULID orders"
         text project_id
         text node_id UK "initiative or objective"
         text claim_kind "steps | evaluation"
@@ -140,8 +140,8 @@ erDiagram
     mission_mission ||..o{ mission_dependency : "FK mission_id"
     mission_node_revision }o..o| project_binding : "ref in bindings JSON, no FK"
 
-    mission_node ||..o| scheduler_work_queue_entry : "ref, no FK"
-    project_project ||..o{ scheduler_work_queue_entry : "ref, no FK"
+    mission_node ||..o| scheduler_job : "ref, no FK"
+    project_project ||..o{ scheduler_job : "ref, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
@@ -153,7 +153,7 @@ erDiagram
     class project_project,project_binding project
     class worker_agent_enablement worker
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
-    class scheduler_work_queue_entry scheduler
+    class scheduler_job scheduler
 ```
 
 ## Tables
@@ -172,7 +172,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](../../brainstorm/mission-service.impl.md#the-plan-file-name). |
 | `mission_node_revision` | Mission Service | Derived from [the revisions](../../brainstorm/mission-service.impl.md#the-revisions). |
 | `mission_dependency` | Mission Service | Derived from the dependency [edge kind](../../brainstorm/mission-service.vocabulary.md#edge-kind). |
-| `scheduler_work_queue_entry` | Scheduler Service | Derived from the `QueueEntry` record of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts). |
+| `scheduler_job` | Scheduler Service | Derived from the `Job` record of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts). |
 
 ## Keys and relationship notation
 
@@ -252,21 +252,21 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A node API retirement retires the node and every current descendant. A retired node accepts no write. A node API write or a human control on it answers 409 `mission.node.retired`, and an import entry with its identifier answers 400 `mission.import.retired_id`. No write names a retired node as a parent or a dependency. The retirement of a task inserts the next revision of its objective when that objective is outside the retirement set, and the task row takes no revision.
 - A node in a terminal state takes no new revision.
 - A dependency on a retiring node from a nonterminal dependent outside the retirement set refuses the retirement, unless the human forces it. A forced retirement deletes that dependency row. A dependency from a terminal dependent stays.
-- A retirement deletes the queue entry of every retired node in its transaction.
-- A dependency edit, a retirement and a move reroute every claim-free node whose dependency closure changes, including the descendants of the edited node, between `Pending` and `Available`. The same transaction inserts or deletes their queue entries.
+- A retirement deletes the job of every retired node in its transaction.
+- A dependency edit, a retirement and a move reroute every claim-free node whose dependency closure changes, including the descendants of the edited node, between `Pending` and `Available`. The same transaction inserts or deletes their jobs.
 - A dependency relates two initiatives or objectives of one mission. A write that creates a cycle in a dependency closure is refused.
 - A write that changes the structure or the content of the mission increments `mission_mission.version` once. A write with no change does not.
-- `mission_node.priority` holds the authoritative priority. A priority act overwrites it, and no Mission row keeps the earlier value. `scheduler_work_queue_entry.priority` holds a copy for the selection order.
+- `mission_node.priority` holds the authoritative priority. A priority act overwrites it, and no Mission row keeps the earlier value. `scheduler_job.priority` holds a copy for the selection order.
 - An `actor` column holds one of three JSON forms: a human, an execution or a service. In this group only the human form occurs.
 
 ### Scheduler Service
 
-- `scheduler_work_queue_entry.node_id` has a unique index, because the queue holds one entry for each claimable node.
+- `scheduler_job.node_id` has a unique index, because the queue holds one job for each claimable node.
 - `project_id` equals the project of the mission of the node. The Mission Service supplies both values at the insert.
 - The selection order is `priority` descending, then `id` ascending.
-- A priority change keeps the `id` of the entry, so the entry keeps its age.
+- A priority change keeps the `id` of the job, so the job keeps its age.
 - The Mission Service inserts and deletes the rows through the public insert and delete of the work queue, in the transaction of its accepted fact.
-- In this group every entry has `claim_kind` `steps`. An evaluation entry and a wait record come with [ERD 2](02-execution.md).
+- In this group every job has `claim_kind` `steps`. An evaluation job and a wait record come with [ERD 2](02-execution.md).
 
 ## Cross-group references
 
@@ -278,5 +278,5 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `project_binding.config` | `worker_agent_enablement.agent_name` | Reference through the catalog agents of the worker, no FK. |
 | `project_binding.config` | `worker_agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK. |
 | `worker_agent_enablement.agent_providers` | `credential.name` | Reference in JSON by name, no FK. |
-| `scheduler_work_queue_entry.node_id` | `mission_node.id` | Reference, no FK. |
-| `scheduler_work_queue_entry.project_id` | `project_project.id` | Reference, no FK. |
+| `scheduler_job.node_id` | `mission_node.id` | Reference, no FK. |
+| `scheduler_job.project_id` | `project_project.id` | Reference, no FK. |

@@ -89,7 +89,7 @@ flowchart TB
         Queue -->|"ordered candidates"| Processors
         Processors -->|"admission recheck"| Claim
         Claim -->|"claim and lease"| Executions
-        Waits -->|"hold out entries"| Queue
+        Waits -->|"hold out jobs"| Queue
         Admission -->|"observation obligation"| Observer
         Processors -->|"runs"| Observer
     end
@@ -231,7 +231,7 @@ flowchart TB
 | Project creation                     | Intrinsic Mission                        | Exactly one mission per project, created through `createMission` in Project's transaction.                         | Build Project creation and Mission creation as one atomic slice; initialize an empty mission at revision 0.       |
 | Project binding resolution           | Worker templates                         | Worker name, declared states, node format, agents and valid configuration.                                         | Publish template declarations early; full worker execution is not required to validate a binding.                 |
 | Gateway authentication               | Project bindings and Worker registration | Resolve a permitted binding and its live client registration.                                                      | Gateway's transport can exist first; working machine authentication needs these collaborators.                    |
-| Mission graph/state                  | Scheduler work queue                     | Insert/delete affected entries inside the committing transaction.                                                  | Mission transitions and queue membership form one atomic implementation slice.                                    |
+| Mission graph/state                  | Scheduler work queue                     | Insert/delete affected jobs inside the committing transaction.                                                     | Mission transitions and queue membership form one atomic implementation slice.                                    |
 | Scheduler claim operation            | Mission, Project and Worker              | Node readiness, attempt/revision transition, binding counts, compatibility and instance health.                    | Use narrow contracts and test doubles first; integrate the real collaborators before admitting production claims. |
 | Project authorization                | Scheduler execution records              | Prove claim ownership and liveness before authorizing resource use.                                                | Execution-scoped resource authorization follows the claim model, not merely JWT authentication.                   |
 | Worker execution                     | Scheduler and Mission                    | Claim/renew/release; read pinned work; submit evidence and assessments.                                            | Implement one minimal execution path before adding more worker methods.                                           |

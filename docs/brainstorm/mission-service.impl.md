@@ -402,10 +402,10 @@ kanthord runs no automatic evidence cleanup.
 - A node that is not ready answers 409 `mission.node.not_ready`.
   Its `details` hold `tasksWithoutOutcome: NodeId[]`, `objectivesNotTerminal: NodeId[]` and `unresolvedActions: Key[]`.
   Each array is empty when it does not apply.
-  The refusal opens no attempt, changes no state and writes no queue entry.
+  The refusal opens no attempt, changes no state and writes no job.
 - A ready act while the attempt reads 0 opens attempt 1 in one transaction.
   The transaction pins the current node revision and freezes the required external actions from the current Project configuration.
-  It records the execution-end fact, sets `Waiting` and inserts the evaluation work-queue entry.
+  It records the execution-end fact, sets `Waiting` and inserts the evaluation job.
   The service wakes the Scheduler after the commit.
   The act writes no assessment, no outcome and no task outcome.
 - A ready act on an open attempt records the execution-end fact on that attempt.
@@ -443,7 +443,7 @@ kanthord runs no automatic evidence cleanup.
 - The preview answers `RetirePreview`: `nodeId`, `force`, `missionVersion`, `retiredNodeIds`, `removedEdges`, `previewDigest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
 - The apply request `Retire` holds `expectedMissionVersion`, `force`, `previewDigest` and `reason`. A stale mission version answers 409 `mission.version_conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
 - One transaction rechecks every condition, sets `retired_at` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
-- That transaction deletes the work queue entry of every node of the retirement set through the Scheduler Service public delete.
+- That transaction deletes the job of every node of the retirement set through the Scheduler Service public delete.
 - It increments the mission version once.
 - A retired task changes the content of its objective, so an objective outside the set takes a node revision with `write: node.retire` and a `retired` task change.
 - The answer is `NodeChange`.
@@ -545,9 +545,9 @@ kanthord runs no automatic evidence cleanup.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
   They also admit an objective whose attempt reads 0 with no current task.
   They open attempt 1 with `executionEnded: true` and the frozen actions.
-  They reach `Waiting` with a queue entry in the same transaction.
+  They reach `Waiting` with a job in the same transaction.
 - Tests refuse `node ready` with `mission.node.not_ready` on an objective whose attempt reads 0 with a current task.
-  They name the tasks in `details` and leave the attempt at 0 with no queue entry.
+  They name the tasks in `details` and leave the attempt at 0 with no job.
 - Tests refuse a state or attempt mismatch of `node ready` with `mission.node.state_conflict`.
 
 - Tests accept both signed safe-integer limits, negative values and zero as priority on initiatives and objectives.
@@ -555,7 +555,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests reject task priority with `mission.node.priority_task` and refuse a live claim or terminal node.
 - Tests keep priority outside content, revision and import.
 - Tests assert that a second priority act overwrites the value and keeps no earlier value, that `PrioritySet` refuses a `reason` field, and that the answer is `Node`.
-- Tests assert that the priority act updates the queue entry in its transaction and keeps the entry identity.
+- Tests assert that the priority act updates the job in its transaction and keeps the job identity.
 - Tests reject human assessments under execution access.
 - Tests answer HTTP 400 for a method field, an absent or blank rationale, or a result that violates the order.
 - Tests check task, reviewer and external harness attribution and their evaluation fields.
@@ -630,7 +630,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
-- Tests assert that a retirement deletes the work queue entry of every node of the set in its transaction.
+- Tests assert that a retirement deletes the job of every node of the set in its transaction.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.
 - Tests cover objective and task creation under each of the twelve parent states.

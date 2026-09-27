@@ -43,8 +43,8 @@ erDiagram
     mission_node {
         text id PK "node_ + ULID, ERD 1"
     }
-    scheduler_work_queue_entry {
-        text id PK "work_queue_entry_ + ULID, ERD 1"
+    scheduler_job {
+        text id PK "job_ + ULID, ERD 1"
     }
 
     worker_registration {
@@ -261,7 +261,7 @@ erDiagram
     scheduler_execution ||--o{ scheduler_renewal : "FK execution_id"
     scheduler_execution ||..|| scheduler_request : "ref in result JSON"
     mission_external_object |o..o{ scheduler_execution : "ref in release_wait_for JSON, no FK"
-    mission_external_object |o..o{ scheduler_work_queue_entry : "ref in wait_for JSON, no FK"
+    mission_external_object |o..o{ scheduler_job : "ref in wait_for JSON, no FK"
 
     mission_node ||--o{ mission_attempt : "FK node_id"
     mission_node ||..o{ mission_unblock : "FK node_id"
@@ -310,8 +310,8 @@ erDiagram
 
     class project_binding project
     class mission_node mission
-    class scheduler_work_queue_entry scheduler
-    class project_binding,mission_node,scheduler_work_queue_entry stub
+    class scheduler_job scheduler
+    class project_binding,mission_node,scheduler_job stub
     class worker_registration worker
     class scheduler_execution,scheduler_renewal,scheduler_request scheduler
     class mission_attempt,mission_unblock,mission_evidence,mission_run_output,mission_evaluation,mission_evaluation_try,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
@@ -365,14 +365,14 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `runtime_identity` names an instance of that worker binding.
 - The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` has `claim_kind` `steps`. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both have `claim_kind` `evaluation`. The kind never changes.
-- The claim transaction inserts the execution row and the `scheduler_request` row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the queue entry of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
+- The claim transaction inserts the execution row and the `scheduler_request` row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
 - `scheduler_request` holds accepted work pulls only. `project_id` equals the project of its execution. `scope_digest` is the digest of the canonical JSON of the worker binding and the runtime identity. `result` is the answer at acceptance and never changes, so a replay returns it and never the current execution row.
 - A renewal with a new identifier inserts a `scheduler_renewal` row and sets `renewed_at`, `expires_at` and `renewal_request_id` on the execution. A repeat of the current identifier extends nothing. An identifier of an earlier row of the execution answers 409 `scheduler.execution.renewal_superseded`. `sequence` of an execution starts at 1 and has no gap.
 - A release sets `released_at`, `further_work`, `release_wait_for` and `ended_at` once. A repeat with an equal payload returns the accepted receipt. `release_wait_for` is permitted only with further work.
-- The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation queue entry when the readiness condition holds. With further work, it sets `Available` and inserts a new steps queue entry.
-- The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested`. With a wait fact, it inserts an evaluation queue entry that is held out, because the waiting action becomes requestable only after the observation of its prerequisite. With no wait fact, no action is unrequested, so the node is not claimable and no entry exists.
+- The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job.
+- The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested`. With a wait fact, it inserts an evaluation job that is held out, because the waiting action becomes requestable only after the observation of its prerequisite. With no wait fact, no action is unrequested, so the node is not claimable and no job exists.
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
-- A wait fact of the `external-observation` form names an external object of the node and of the open attempt of the execution, and that object is the request of the action that the waiting action follows. A fact that already holds at the release satisfies the wait at once, so no hold remains. Otherwise the queue entry takes `held_out` 1 and `wait_for`, and the Mission Service clears both in the transaction that commits the awaited observation.
+- A wait fact of the `external-observation` form names an external object of the node and of the open attempt of the execution, and that object is the request of the action that the waiting action follows. A fact that already holds at the release satisfies the wait at once, so no hold remains. Otherwise the job takes `held_out` 1 and `wait_for`, and the Mission Service clears both in the transaction that commits the awaited observation.
 - A loss declaration sets `loss_declared_at` and `ended_at`. A revocation at a Mission transition ends the claim through the same path. A loss closes no attempt.
 - The end of a registration ends no execution row by itself. Its live execution follows the lease and the loss declaration.
 - No sweep deletes an execution row, a renewal row or a request row.
@@ -384,7 +384,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - Attempt numbers of a node start at 1 and have no gap. `mission_node.attempt` equals the highest number.
 - Three acts open an attempt: a claim of a node that holds no attempt, a human ready act on a node that holds no attempt, and a human unblock of a blocked attempt.
 - An attempt pins `node_revision` at its opening and never changes it. `required_external_actions` freezes the configuration of the Project Service current at the opening. An initiative freezes an empty list.
-- A human ready act sets `execution_ended` 1 on the opened or the open attempt, sets `Waiting` and inserts the evaluation queue entry in one transaction. A resume reads `execution_ended` to select `Waiting`.
+- A human ready act sets `execution_ended` 1 on the opened or the open attempt, sets `Waiting` and inserts the evaluation job in one transaction. A resume reads `execution_ended` to select `Waiting`.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node and the owed task outcomes, in one transaction. A closed attempt never reopens.
 - A human block, discard or success override on a node whose attempt reads 0 writes the node outcome with `attempt` 0. It closes no attempt and writes no task outcome.
 - An unblock is one transaction: the content revision when the act carries a change, the `mission_unblock` row, the attempt that it opens and the routing to `Pending` or `Available`.
@@ -457,4 +457,4 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `mission_evidence.execution_id`, `mission_run_output.execution_id`, `mission_evaluation_try.execution_id` and every execution actor | `scheduler_execution.id` | Reference, no FK. |
 | `mission_evidence.binding_id`, `storage_binding_id` | `project_binding.id` | Reference, no FK. |
 | `mission_external_object.binding_id` | `project_binding.id` | Reference, no FK. |
-| `scheduler_work_queue_entry.wait_for`, `scheduler_execution.release_wait_for` | `mission_external_object.id` | Reference in JSON, no FK. |
+| `scheduler_job.wait_for`, `scheduler_execution.release_wait_for` | `mission_external_object.id` | Reference in JSON, no FK. |

@@ -51,7 +51,7 @@ A dependency edit acts on the live graph at once.
 A dependency addition requires that no live claim holds the dependent or a node in its subtree.
 A dependency removal requires a dependent that is not terminal, because a removal never makes a closure stop holding.
 This condition applies on both write paths, and it replaces the import condition for a dependency edit.
-In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it writes the work-queue entries of those nodes.
+In the same transaction the Mission Service reroutes every claim-free node whose closure changes, `Pending -> Available` or `Available -> Pending`, and it writes the jobs of those nodes.
 The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing and the resume precedence, and nowhere else.
 An addition on a node whose execution ended changes no routing of that node, because the gate gates the start.
 
@@ -82,7 +82,7 @@ A task holds no priority, because a task is never a unit of scheduling.
 The priority is outside the node revision, and no Mission record keeps the earlier value, the actor, the reason or the time of a priority act.
 No rule of the Mission Service reads the priority.
 The Mission Service admits the act while no claim holds the node and the node is not terminal.
-The work-queue entry that the Mission Service writes carries the priority, and an absent priority reads 0.
+The job that the Mission Service writes carries the priority, and an absent priority reads 0.
 An import carries no priority.
 
 ## Criterion and authority
