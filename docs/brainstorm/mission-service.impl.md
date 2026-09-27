@@ -154,6 +154,7 @@ The attempt row records the frozen required external actions next to the pinned 
 
 - A human retires a node through a whole-mission import that omits its plan file, under the import condition, or through `node retire` under [Node retire](#node-retire).
 - Every node API write and every human control on a retired node answers 409 `mission.node.retired` with `details: { nodeId }`.
+- A node API write that changes a node in a terminal state, or a task whose objective holds a terminal state, answers 409 `mission.node.terminal` with `details: { nodeId }`.
 - A write that names a retired node as a parent or a dependency answers 409 `mission.node.retired` with `details: { nodeId }` of that node.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
 - `node create` admits an initiative at any time.
@@ -431,6 +432,7 @@ kanthord runs no automatic evidence cleanup.
 
 - `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission version and an optional node identity. Without a node identity the act covers every node of the mission.
 - The target revision belongs to the same binding as the revision that the node pins, and it is no tombstone and no disabled revision.
+- An absent target revision answers 404 `mission.binding.not_found`. A tombstone answers 409 `mission.binding.removed`, and a disabled revision answers 409 `mission.binding.disabled`.
 - The act inserts a node revision for each rebound node, and increments `mission_mission.version` once.
 - The answer is the `NodeChange` of the act and the list of skipped nodes, each with the condition that it failed.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.

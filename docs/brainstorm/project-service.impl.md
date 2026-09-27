@@ -43,6 +43,7 @@ The constraints are below.
 - A unique index over `project_project.name` enforces the uniqueness of a project name, and the name is the natural key of the project creation.
 - A project name follows the form of a binding name.
 - A creation or a rename to a name that another project holds returns 409 with code `project.name.conflict` and the identity of that project in `error.details`.
+- An absent project answers 404 `project.project.not_found`. An absent binding, or a binding of another project, answers 404 `project.binding.not_found`.
 - A rename commits in one transaction, and the last write wins.
 - The Project Service keeps a removed binding and every revision for the life of the project, and no sweep deletes them. Only a human edit adds a row, so the tables grow with human edits alone.
 - The primary key of `project_binding` is `id`, an identity of the convention that [architecture.impl.md](architecture.impl.md) rules, so the identity of a revision is unique across the server.
@@ -87,7 +88,7 @@ Normalization decides whether a change stays in its group or starts a replacemen
 A write submits the complete binding set of the project as one object keyed by binding name.
 The submission names the version of the binding set that the client read.
 One `BEGIN IMMEDIATE` transaction holds the read of `project_project.binding_set_version`, the comparison, the difference and every write of the edit.
-The transaction refuses a submission that names another version, so two concurrent writes never interleave.
+The transaction refuses a submission that names another version with 409 `project.binding_set.version_conflict` and the current version in `error.details`, so two concurrent writes never interleave.
 It increments that column on every write that it commits.
 The transaction spans no `await`, no network call and no nested transaction, because one synchronous connection serves four services.
 The current binding set holds the latest revision of each group of the project that is no tombstone.
@@ -122,7 +123,7 @@ One `zod` schema at 4.4.3 covers each binding kind, and a discriminated union on
 A schema validates the shape, and a `superRefine` validates the relations of the whole set.
 The validation of the whole set runs at the write, and the validation of one binding with its dependencies runs again at each resolution.
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
-The write refuses a submission that changes the worker of an existing worker binding under the same binding name.
+The write refuses a submission that changes the worker of an existing worker binding under the same binding name with 409 `project.bindings.worker.resource_changed`.
 
 - Worker binding validation calls [Worker configuration validation](worker-service.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
@@ -131,7 +132,9 @@ The write refuses a submission that changes the worker of an existing worker bin
 - The repository and storage kinds keep `available`.
 - A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
 - Every repository binding names exactly one `credential` of its platform. An absent credential refuses the write.
-- An HTTPS repository address refuses the write.
+- An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
+- Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
+- An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
 - A strategy with more than one action refuses the write.
 
 ## Storage configuration
@@ -247,7 +250,7 @@ The Intake Service redesigns this section with the delivery source under [HANDOF
 - At every repository binding write, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
 - The read precedes the `BEGIN IMMEDIATE` transaction.
 - A deadline of 30 s bounds that read.
-- A failed or timed-out read refuses the write with the error code `project.bindings.repository.ssh_unreachable`.
+- A failed or timed-out read refuses the write with 422 `project.bindings.repository.ssh_unreachable`.
 - The [Repository implementation](repository.impl.md#the-ssh-environment) defines the SSH environment.
 
 ## The resource healthcheck

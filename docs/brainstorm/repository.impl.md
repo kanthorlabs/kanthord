@@ -39,7 +39,7 @@ An epic decides that form for each platform.
 ## Repository connector
 
 The start requires git 2.40 or later, OpenSSH 9.0 or later and bash on the host.
-It refuses a host without any required tool or version.
+It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 
 - `simple-git` performs every git operation of the connector by spawning the `git` binary of the host.
 - Its timeout plugin bounds each operation by the remaining resource budget that the caller supplies.

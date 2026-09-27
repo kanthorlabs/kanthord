@@ -251,7 +251,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - A platform action runs through the MCP tool of the server.
 - The `worker` application reads `masterKey` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
-- An absent or invalid `masterKey` stops the start of `kanthord serve worker`.
+- An absent or invalid `masterKey` stops the start of `kanthord serve worker` with `worker.start.master_key_absent` or `worker.start.master_key_invalid`.
 - A `masterKey` that differs from the one of the server fails every decryption. The application ends the execution as a cannot-progress condition.
 
 ## Evidence upload

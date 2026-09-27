@@ -177,12 +177,13 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 ## Pagination
 
 - A list operation orders its rows by their primary key in descending order, so the first page holds the newest rows.
+- A list that answers one item for each group key, for example one credential for each name, orders by that key in ascending alphabetical order. Its cursor encodes that key, and the next page reads the keys that are greater than the cursor.
 - `limit` defaults to 100 and accepts 1 to 1000.
 - The answer holds `items` and `nextCursor`. `nextCursor` is `null` on the last page.
 - The cursor is the base64url encoding of the last key of a page. A client passes it back unchanged.
 - The next page reads the rows whose key is smaller than the cursor, under the filters of the request.
 - A list takes no snapshot. A row that arrives after the first page appears on a refresh of the first page, and a row that disappears between two pages is absent.
-- A cursor does not expire. A malformed cursor returns 400.
+- A cursor does not expire. A malformed cursor returns 400 `system.pagination.cursor_invalid`.
 - The primary key of an entity is its identity. A list of revisions orders by the revision.
 
 ## The canonical form and the digest
@@ -341,6 +342,8 @@ This sibling declares the fields below.
 - At least one component follows the namespace. A deeper location adds component parts from the broadest to the most specific, so the code identifies where the failure happens.
 - The final part names the failure condition, not another component.
 - Each part uses lower-case words, with underscores between words. Dots separate parts, and no part is empty.
+- A CLI code of one command names that command: `cli.<group>.<command word>[.<command word>...].<condition>`. A hyphen inside a command word becomes an underscore, for example `cli.credential.login_code.indeterminate` and `cli.mission.node.retire.preview.invalid_node_id`.
+- A condition that a shared CLI helper detects for every command takes one code: `cli.file.<condition>` for the file that `--file` names, `cli.option.duplicate` for a repeated single-use option, `cli.pagination.limit_invalid` and `cli.pagination.limit_out_of_range` for `--limit`, and `cli.idempotency_key.invalid` for `--idempotency-key`.
 
 Examples:
 
