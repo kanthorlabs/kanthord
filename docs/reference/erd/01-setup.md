@@ -87,11 +87,10 @@ erDiagram
         text kind "initiative | objective | task"
         text file "plan file name, *.md"
         text parent_id FK "null for an initiative"
-        integer current_revision FK "with id, null for a task"
         text state "12 states, null for a task"
         integer attempt "latest attempt, 0 before the first, null for a task"
         integer priority "signed, null reads 0, null for a task"
-        integer retired "0 or 1, final"
+        integer retired_at "Unix ms, null while not retired, final"
         integer created_at "Unix ms"
     }
 
@@ -145,7 +144,6 @@ erDiagram
     mission_mission ||..o{ mission_node : "FK mission_id"
     mission_node |o..o{ mission_node : "FK parent_id"
     mission_node ||--o{ mission_node_revision : "FK node_id"
-    mission_node |o..o| mission_node_revision : "FK (id, current_revision), deferred"
     mission_node ||--o{ mission_dependency : "FK dependent_id"
     mission_node ||--o{ mission_dependency : "FK depends_on_id"
     mission_mission ||..o{ mission_dependency : "FK mission_id"
@@ -192,9 +190,8 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 - A solid line is an identifying relationship: the primary key of the child contains the primary key of the parent. A dashed line is a non-identifying relationship.
 - `project_binding` holds one row for each revision. The group `(project_id, resource_identity)` is one binding, and its latest row states the binding. A record pins one row by `id`.
 - `worker_agent_enablement` holds one row for each revision. The group `agent_name` is one enablement, and its latest row states the enablement.
-- `(id, current_revision)` of `mission_node` is a composite foreign key to its own revision table. The pointer selects a revision of the same node. Each revision is current for zero or one node.
-- This pair forms a cycle. The pointer foreign key is `DEFERRABLE INITIALLY DEFERRED`, so one transaction inserts the node and its revision, and SQLite checks the key at the commit. `foreign_keys` is `ON`, as [architecture.impl.md](../../brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
-- A null `current_revision` of a task row skips the check of its composite key.
+- `mission_node_revision` holds one row for each content revision of an initiative or an objective. The current revision of a node is its row with the greatest `revision`, and the primary key `(node_id, revision)` serves that lookup. A task has no revision row.
+- No pair of tables references each other. The self-reference `parent_id` of `mission_node` inserts the parent first, so no key is deferred. `foreign_keys` is `ON`, as [architecture.impl.md](../../brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
 
 ## Constraints
 
@@ -252,7 +249,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 ### Mission Service
 
 - `mission_mission.project_id` has a unique index. `project.create` inserts the project row and calls `createMission` in one transaction.
-- `mission_node` has a partial unique index on `(mission_id, file)` where `retired` is 0.
+- `mission_node` has a partial unique index on `(mission_id, file)` where `retired_at` is null.
 - An initiative has a null `parent_id`. An objective names an initiative, and a task names an objective.
 - A parent and a dependency name nodes of the same mission.
 - A binding in `bindings` belongs to the project of the mission.
@@ -260,7 +257,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](../../../engine/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
 - `name`, `requirement` and `criterion` are nonblank text. `verifications` is a nonempty ordered list of nonblank bash commands.
 - `bindings` obeys the rule table of [the node content](../../brainstorm/mission-service.impl.md#the-node-content): an objective names exactly one repository binding, an initiative and an objective name at most one storage binding, and an initiative and a task name none.
-- A content change of a node inserts the next `mission_node_revision` row of its content owner and advances `current_revision` in the same transaction. `mission_node.file` equals the `file` of the current revision.
+- A content change of a node inserts the next `mission_node_revision` row of its content owner in the same transaction. `mission_node.file` equals the `file` of the current revision.
 - A task change inserts the next revision of its objective, and the `file` of a task row equals its item in `tasks`. A task move inserts the next revision of both objectives. An objective move changes `parent_id` and inserts no revision.
 - A retired node keeps its row, its `file`, its revisions and its last state. A retirement is final.
 - A node API retirement retires the node and every current descendant. A retired node accepts no write. A node API write or a human control on it answers 409 `mission.node.retired`, and an import entry with its identifier answers 400 `mission.import.retired_id`. No write names a retired node as a parent or a dependency. The retirement of a task inserts the next revision of its objective when that objective is outside the retirement set, and the task row takes no revision.

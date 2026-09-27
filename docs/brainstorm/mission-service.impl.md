@@ -108,7 +108,7 @@ The attempt row records the frozen required external actions next to the pinned 
 
 ## The plan file name
 
-- The node row holds `file` with a unique index on `(mission_id, file)` where `retired` is false.
+- The node row holds `file` with a unique index on `(mission_id, file)` where `retired_at` is null. A retirement sets `retired_at` to the commit time, and the value never changes.
 - A retirement keeps `file` on the retired row. A create, an import or a node update can take the name of a retired node.
 - The form is a lower-case name that ends in `.md` with no path separator.
 - An import sets `file` from the file name, and `node create` requires it.
@@ -453,7 +453,7 @@ kanthord runs no automatic evidence cleanup.
 - Preview and apply answer the same refusals.
 - The preview answers `RetirePreview`: `nodeId`, `force`, `missionRevision`, `retiredNodeIds`, `removedEdges`, `previewDigest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
 - The apply request `Retire` holds `expectedMissionRevision`, `force`, `previewDigest` and `reason`. A stale mission revision answers 409 `mission.revision_conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
-- One transaction rechecks every condition, sets `retired` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
+- One transaction rechecks every condition, sets `retired_at` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
 - That transaction deletes the work queue entry of every node of the retirement set through the Scheduler Service public delete.
 - It increments the mission revision once.
 - A retired task changes the content of its objective, so an objective outside the set takes a node revision with `write: node.retire` and a `retired` task change.
@@ -506,7 +506,7 @@ kanthord runs no automatic evidence cleanup.
 - `NodeChange` holds the new mission revision, the node revisions created, the retired node identities, and the edges added and removed.
 - It also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
 - A write with no structure or content change answers the current mission revision with empty arrays.
-- A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit, an objective move or a retirement that inserts no node revision, unless its import request record holds them.
+- A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit or an objective move, or the actor and the reason of a retirement that inserts no node revision, unless its import request record holds them. `retired_at` keeps the time of every retirement.
 
 ## Operation contracts
 
