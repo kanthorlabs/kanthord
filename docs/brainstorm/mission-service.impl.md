@@ -492,6 +492,9 @@ kanthord runs no automatic evidence cleanup.
   - observation
 - One write increments once, however many nodes it touches.
 - A write with no structure or content change leaves the mission version unchanged.
+- Every `human` write that changes a node, its edges or its state names `expectedMissionVersion`: import apply, node create, node update, node move, node retire, node rebind, dependency add, dependency remove, criterion set, unblock with or without a change, priority, pause, resume, block, ready, override and discard.
+- A human control checks the mission version and leaves it unchanged, except an unblock that carries a change.
+- A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
 - `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `node.retire`, `criterion.set` or `unblock`.
 - A move of an objective changes its parent link and no content, so it creates no node revision. A move of a task changes the content of both objectives, so each one takes a node revision with `write: node.move`.
@@ -683,6 +686,8 @@ kanthord runs no automatic evidence cleanup.
 - A test checks the `NodeChange` answer of each operation whose answer holds it.
 - A test checks the shared error envelope, the 30 s timeout and the 10 MiB body limit on every Mission route.
 - A test asserts 409 `mission.revision_conflict` with the current value for a stale expected revision, and 409 `mission.version_conflict` with the current value for a stale expected mission version.
+- A test asserts 409 `mission.version_conflict` for a stale expected mission version on every `human` write that changes a node, its edges or its state, and asserts that a human control other than an unblock with a change leaves the mission version unchanged.
+- A test asserts that an execution submission commits after a human graph write increments the mission version.
 - A test asserts 404 `mission.not_found` for an absent node, mission or record.
 - A test checks `graph get` at 10 MiB and above that bound.
 - It asserts 413 `mission.graph.too_large` above the bound, with the node count and both paged reads in `details`.

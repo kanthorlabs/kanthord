@@ -128,6 +128,7 @@ An import covers the whole mission.
 An import names the mission version that it expects, and a stale snapshot fails that check.
 A write that changes the structure of a mission or the content of a node increments the mission version once.
 No other write changes it.
+Every `human` write that changes a node, its edges or its state names the mission version that it expects, and a stale value refuses the write, so a human reviews every change of the mission before the next write. A `client` write of an execution names no mission version.
 A preview confirms every retirement before the import applies.
 The Mission Service rejects an unknown identifier, a duplicate identifier, an identifier of another mission and an identifier of a retired node.
 An import request identifier binds to its payload, so a retry is idempotent.
