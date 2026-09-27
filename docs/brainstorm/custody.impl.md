@@ -25,7 +25,7 @@ A mechanism here never overrides a rule there.
 - A drain and a revoke set `ended_at` and `end_reason`, which is `drained` or `revoked`. `end_reason` is an enum in code.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
-- A metadata edit without a rotation updates the newest live revision in place and adds no revision.
+- A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
 - Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
 - Removal calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
@@ -63,7 +63,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`.
 - An omitted value takes the default of pi 0.86.0: `contextWindow` `128000`, `maxTokens` `16384` and `reasoningLevels` `["off"]`.
 - `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
-- A metadata edit of the newest live revision adds approved models after the [provider check](worker-service.impl.md#the-provider-check).
+- A metadata edit adds approved models to the next revision after the [provider check](worker-service.impl.md#the-provider-check).
 - A metadata edit or a rotation that drops a model fails while a default configuration or an entry names it.
 - The dependency check and metadata update commit in one transaction; a refusal lists the dependents.
 - S3 metadata serves the healthcheck, not work destinations.
