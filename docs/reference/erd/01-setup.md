@@ -42,7 +42,6 @@ erDiagram
         text metadata "canonical JSON, platform schema, or null"
         integer created_at "Unix ms"
         integer ended_at "Unix ms, null while live"
-        text end_reason "drained | revoked, null while live"
     }
 
     project_project {
@@ -187,7 +186,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 
 - `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name_conflict`.
 - The write keeps one `platform` for every row of a name. The newest live revision is the greatest `revision` of the name with a null `ended_at`.
-- A rotation inserts the next revision and keeps the older revisions live. A drain or a revoke sets `ended_at` and `end_reason`. Custody refuses a revoke of the newest live revision.
+- A rotation inserts the next revision and keeps the older revisions live. A drain or a revoke sets `ended_at`. Custody refuses a revoke of the newest live revision.
 - The secret shape and the `metadata` schema depend on `platform`, as the [platform validators](../../brainstorm/custody.impl.md#platform-validators) state.
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
 - The `baseUrl` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.

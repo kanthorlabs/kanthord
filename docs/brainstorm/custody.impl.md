@@ -11,7 +11,7 @@ A mechanism here never overrides a rule there.
 ## The credential store record
 
 - Custody owns the shared `credential` table and the [credential envelope](architecture.impl.md#the-credential-table).
-- A row holds `id`, `name`, `platform`, `revision`, `secret`, `metadata`, `created_at`, `ended_at` and `end_reason`, and one row is one revision of a credential.
+- A row holds `id`, `name`, `platform`, `revision`, `secret`, `metadata`, `created_at` and `ended_at`, and one row is one revision of a credential.
 - The encrypted columns represent `secret`; no plaintext secret persists.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
@@ -22,7 +22,7 @@ A mechanism here never overrides a rule there.
 - The write code keeps one platform for every row of a name.
 - The newest live revision is the row of the name with the greatest `revision` and a null `ended_at`.
 - A rotation inserts the next revision in one transaction. It copies the metadata of the newest live revision unless the request replaces it, and the older revisions stay live.
-- A drain and a revoke set `ended_at` and `end_reason`, which is `drained` or `revoked`. `end_reason` is an enum in code.
+- A drain and a revoke set `ended_at`.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
 - A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
