@@ -582,6 +582,7 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Available -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
 | `Executing -> Available` | Release; execution requires further work | No effect | Run output |
+| `Executing -> Available` | Loss declaration of the steps claim | No effect | None |
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
 | `Executing -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Executing -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -594,6 +595,7 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Evaluating -> Blocked` | Current assessment does not pass | Closes | Outcome |
 | `Evaluating -> Paused` | Human holds the node; reviewer execution stops | Stays open | None |
 | `Evaluating -> Discarded` | Human discards the node | Closes by force | Outcome |
+| `Evaluating -> Waiting` | Loss declaration of the evaluation claim | No effect | None |
 | `Blocked -> Available` | Human unblock; closure holds | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
@@ -635,6 +637,7 @@ stateDiagram-v2
     Available --> Discarded: Human discard
     Executing --> Waiting: Release, no further work
     Executing --> Available: Release, further work
+    Executing --> Available: Loss declaration
     Executing --> Paused: Human hold
     Executing --> Completed: Success override
     Executing --> Discarded: Human discard
@@ -646,6 +649,7 @@ stateDiagram-v2
     Evaluating --> Blocked: Assessment does not pass
     Evaluating --> Paused: Human hold
     Evaluating --> Discarded: Human discard
+    Evaluating --> Waiting: Loss declaration
     Blocked --> Available: Unblock, closure holds
     Blocked --> Pending: Unblock, closure fails
     Blocked --> Completed: Success override
