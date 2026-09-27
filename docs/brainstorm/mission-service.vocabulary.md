@@ -413,6 +413,19 @@ An active attempt keeps the node revision that it pins.
 A new node revision authorizes no later attempt by itself.
 The identifier of the objective stays the same across all three revisions.
 
+## content owner
+
+The node whose node revision holds the content of a node.
+An initiative and an objective are their own content owner.
+The content owner of a task is its objective, because the content of a task belongs to the node revision of its objective.
+The term names no closed set.
+
+Take the task "Write the reset email" under the objective "Add password reset".
+
+- The content owner of "Write the reset email" is "Add password reset".
+- A change to "Write the reset email" creates the next revision of "Add password reset".
+- A move of "Write the reset email" to "Add recovery codes" creates the next revision of both objectives. The content owner becomes "Add recovery codes".
+
 ## currency
 
 The property of an assessment that three checks admit.
