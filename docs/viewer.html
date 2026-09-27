@@ -129,6 +129,15 @@
       height: auto;
     }
 
+    .mermaid-outer .mermaid {
+      cursor: grab;
+      user-select: none;
+    }
+
+    .mermaid-outer.is-panning .mermaid {
+      cursor: grabbing;
+    }
+
     .mermaid-error {
       background: var(--code-bg);
       color: var(--text-muted);
@@ -354,7 +363,7 @@
           var pre = codeEl.closest('pre') || codeEl;
           var hint = document.createElement('p');
           hint.className = 'mermaid-hint';
-          hint.textContent = 'Fit width shows the whole diagram. Zoom in for detail; scroll horizontally when enlarged.';
+          hint.textContent = 'Fit width shows the whole diagram. Zoom in for detail; drag to pan when enlarged.';
           var outer = document.createElement('div');
           outer.className = 'mermaid-outer overflow-x';
           outer.tabIndex = 0;
