@@ -149,7 +149,7 @@ A human who forces the retirement removes that dependency.
 Each freed dependent moves between `Pending` and `Available` by its remaining dependencies.
 A dependency from a terminal dependent stays as a historical relation.
 A preview confirms the retirement set and the removed dependencies before the retirement applies.
-The retirement is atomic, increments the mission revision once and records one mission change.
+The retirement is atomic and increments the mission revision once.
 A retirement removes a node that never started work, with no outcome.
 
 A substantive update of a terminal node returns an error.
@@ -209,10 +209,6 @@ One record carries the change and its result.
 
 A dependency change is not a field write.
 The graph validation and the authority checks of the Mission Service govern it.
-
-Every write that increments the mission revision records one [mission change](mission-service.vocabulary.md#mission-change).
-The record holds its actor, its reason, its time and its result.
-The Mission Service keeps every mission change for the life of the mission.
 
 An edit of a node carries no state change.
 It writes a node revision.

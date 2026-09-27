@@ -18,7 +18,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - A worker binding of a native worker needs an enabled [agent enablement](#worker-service), because `validateEntry` refuses a binding whose agent has no enabled enablement.
 - A worker binding of an externally hosted worker needs no agent enablement.
 - A delivery source is no binding. The Intake Service designs it under [HANDOFF](../../brainstorm/HANDOFF.md#intake-service).
-- The Mission Service accepts the import, the export, the node API, the dependency edits, the criterion set, the priority and the mission change reads.
+- The Mission Service accepts the import, the export, the node API, the dependency edits, the criterion set and the priority.
 - The human controls (pause, resume, block, unblock, ready, override and discard) come with [ERD 2](02-execution.md), because most of them write an attempt, an outcome or an unblock record.
 - The Scheduler work queue is in this group, although the Scheduler Service owns it. A Mission write that makes a node claimable inserts its queue entry in the same transaction. A Scheduler migration cannot read a Mission table, so no later migration can back-fill the queue.
 
@@ -126,15 +126,6 @@ erDiagram
         integer created_at "Unix ms"
     }
 
-    mission_change {
-        text mission_id PK, FK
-        integer mission_revision PK
-        text actor "JSON Actor"
-        text reason
-        text result "canonical JSON NodeChange"
-        integer created_at "Unix ms"
-    }
-
     mission_request {
         text mission_id PK, FK
         text request_id PK "request_ + ULID"
@@ -168,7 +159,6 @@ erDiagram
     mission_node ||--o{ mission_dependency : "FK depends_on_id"
     mission_mission ||..o{ mission_dependency : "FK mission_id"
     mission_node ||--o{ mission_priority : "FK node_id"
-    mission_mission ||--o{ mission_change : "FK mission_id"
     mission_mission ||--o{ mission_request : "FK mission_id"
     mission_node_revision }o..o| project_binding : "ref in bindings JSON, no FK"
 
@@ -184,7 +174,7 @@ erDiagram
     class credential custody
     class project_project,project_binding project
     class worker_agent_enablement worker
-    class mission_mission,mission_node,mission_node_revision,mission_dependency,mission_priority,mission_change,mission_request mission
+    class mission_mission,mission_node,mission_node_revision,mission_dependency,mission_priority,mission_request mission
     class scheduler_work_queue_entry scheduler
 ```
 
@@ -205,7 +195,6 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `mission_node_revision` | Mission Service | Derived from [the revisions](../../brainstorm/mission-service.impl.md#the-revisions). |
 | `mission_dependency` | Mission Service | Derived from the dependency [edge kind](../../brainstorm/mission-service.vocabulary.md#edge-kind). |
 | `mission_priority` | Mission Service | Derived from [priority](../../brainstorm/mission-service.impl.md#priority). |
-| `mission_change` | Mission Service | Ruled: [the mission change](../../brainstorm/mission-service.impl.md#the-mission-change). |
 | `mission_request` | Mission Service | Ruled: [request records](../../brainstorm/mission-service.impl.md#request-records). |
 | `scheduler_work_queue_entry` | Scheduler Service | Derived from the `QueueEntry` record of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts). |
 
@@ -291,11 +280,11 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A retirement deletes the queue entry of every retired node in its transaction.
 - A dependency edit, a retirement and a move reroute every claim-free node whose dependency closure changes, including the descendants of the edited node, between `Pending` and `Available`. The same transaction inserts or deletes their queue entries.
 - A dependency relates two initiatives or objectives of one mission. A write that creates a cycle in a dependency closure is refused.
-- A write that changes the structure or the content of the mission increments `mission_mission.revision` once and inserts one `mission_change` row in the same transaction. A write with no change does neither.
+- A write that changes the structure or the content of the mission increments `mission_mission.revision` once. A write with no change does not.
 - An import or an unblock inserts its `mission_request` row in its own transaction. A repeat with the same identifier and digest returns the stored result before the revision check. The same identifier with another digest answers 409 `mission.request.payload_mismatch`. The import result holds the map from file name to node identity.
 - `mission_priority` holds every priority act. `mission_node.priority` holds the value of the latest act.
-- `mission_change.result` and `mission_request.result` use the canonical JSON of [architecture.impl.md](../../brainstorm/architecture.impl.md#the-canonical-form-and-the-digest).
-- No sweep deletes a `mission_change` row or a `mission_request` row.
+- `mission_request.result` uses the canonical JSON of [architecture.impl.md](../../brainstorm/architecture.impl.md#the-canonical-form-and-the-digest).
+- No sweep deletes a `mission_request` row.
 - An `actor` column holds one of three JSON forms: a human, an execution or a service. In this group only the human form occurs.
 
 ### Scheduler Service

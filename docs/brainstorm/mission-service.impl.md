@@ -21,8 +21,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An external object uses `external_object_<ulid>`.
 - An observation uses `observation_<ulid>`.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>` and `request_<ulid>`.
-- A mission change uses its mission revision as its key within the mission.
-- An attempt uses its attempt number as its key within the node. Neither an attempt nor a mission change takes a prefix.
+- An attempt uses its attempt number as its key within the node. An attempt takes no prefix.
 - The Scheduler Service declares the execution identity.
 
 ## The actor
@@ -438,7 +437,7 @@ kanthord runs no automatic evidence cleanup.
 
 - `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission revision and an optional node identity. Without a node identity the act covers every node of the mission.
 - The target revision belongs to the same binding as the revision that the node pins, and it is no tombstone and no disabled revision.
-- The act inserts a node revision for each rebound node, increments `mission_mission.revision` once and inserts one `mission_change` row.
+- The act inserts a node revision for each rebound node, and increments `mission_mission.revision` once.
 - The answer is the `NodeChange` of the act and the list of skipped nodes, each with the condition that it failed.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
 
@@ -457,7 +456,7 @@ kanthord runs no automatic evidence cleanup.
 - The apply request `Retire` holds `expectedMissionRevision`, `force`, `previewDigest` and `reason`. A stale mission revision answers 409 `mission.revision_conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
 - One transaction rechecks every condition, sets `retired` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
 - That transaction deletes the work queue entry of every node of the retirement set through the Scheduler Service public delete.
-- It increments the mission revision once and inserts one mission change.
+- It increments the mission revision once.
 - A retired task changes the content of its objective, so an objective outside the set takes a node revision with `write: node.retire` and a `retired` task change.
 - The answer is `NodeChange`.
 - A retirement deletes no row. A retired node keeps its identity, `file`, its revisions and its last state.
@@ -502,19 +501,13 @@ kanthord runs no automatic evidence cleanup.
 - `change.tasks` is present for an objective and lists `{ id, change, changedFields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changedFields`.
 - The result of the change is the `content` of the same record.
 
-## The mission change
+## The graph write answer
 
-- The table is `mission_change(mission_id, mission_revision, actor, reason, created_at, result)`.
-- Its primary key is `(mission_id, mission_revision)`.
-- The write that increments the mission revision inserts the row in its own transaction.
-- `result` holds the node revisions created, the retired node identities, and the edges added and removed.
-- `result` uses the canonical JSON of [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
-- The Mission Service keeps every mission change for the life of the mission. No sweep deletes a row.
-- `change list` pages by the shared descending rule of [architecture.impl.md](architecture.impl.md#pagination).
-- `change list` and `change get` use the `human` access policy.
-- The `NodeChange` answer of a graph write is the stored result of its mission change.
-- `result` also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
-- A write with no structure or content change stores no row and answers the current mission revision with empty arrays.
+- An operation whose answer holds `NodeChange` computes it at the commit. The mission keeps no history of changes. An import stores its `ImportResult`, which holds `NodeChange`, in its request record for replay.
+- `NodeChange` holds the new mission revision, the node revisions created, the retired node identities, and the edges added and removed.
+- It also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
+- A write with no structure or content change answers the current mission revision with empty arrays.
+- A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit, an objective move or a retirement that inserts no node revision, unless its import request record holds them.
 
 ## Operation contracts
 
@@ -528,7 +521,7 @@ kanthord runs no automatic evidence cleanup.
 
 ## Tests
 
-- Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current revision, empty arrays and no stored row.
+- Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current revision, empty arrays, no revision increment and no graph or content change. A no-op import still stores its request record.
 
 - Tests record the child set on the assessment at acceptance, copy it into the outcome context at closure, and keep it unchanged after a later child change or revision.
 - Tests accept 40 and 64 lower-case hexadecimal commits, refuse abbreviations, upper-case and ref names, and refuse a binding that the pinned revision does not name in each admission context. For a success override while the attempt reads 0, they check the revision current at the act.
@@ -640,7 +633,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert that a terminal dependent keeps its dependency.
 - Tests assert that preview changes no state and answers the same refusals.
 - Tests assert that a stale mission revision and a changed digest refuse the apply with no effect.
-- Tests assert that one retirement increments the mission revision once and inserts one mission change.
+- Tests assert that one retirement increments the mission revision once.
 - Tests assert that an import entry with a retired identifier fails with `mission.import.retired_id` and applies nothing.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
@@ -686,10 +679,7 @@ kanthord runs no automatic evidence cleanup.
 - A test asserts one mission revision increment for each graph write, even when the write touches several nodes.
 - A test asserts no mission revision increment for each non-graph write and for a write with no structure or content change.
 - A test asserts that each content change creates the next node revision.
-- A test asserts that the mission change row and its write commit or roll back together.
-- A test checks the canonical result, its `NodeChange` answer and its retention for the life of the mission.
-- A test asserts that no sweep deletes a mission change row.
-- A test checks `change list` and `change get`, the `human` policy and the shared page order.
+- A test checks the `NodeChange` answer of each operation whose answer holds it.
 - A test checks the shared error envelope, the 30 s timeout and the 10 MiB body limit on every Mission route.
 - A test asserts 409 `mission.revision_conflict` with the current value for a stale expected revision or mission revision.
 - A test asserts 404 `mission.not_found` for an absent node, mission or record.
