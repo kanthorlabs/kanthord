@@ -15,10 +15,10 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Capability limits
 
-- An objective whose attempt freezes no required external action completes after a current passing assessment.
+- An objective whose attempt requires no external action completes after a current passing assessment.
 - An objective whose attempt requests a required external action stops in `External.Requested`. Only the observer writes an observation, and the observer runs only on an observation obligation that delivery admission creates in [ERD 3](03-integration.md).
-- A success override and a discard do not end that attempt, because a node reaches a terminal state only when no external action of its open attempt is unresolved. A human pauses the node, blocks it and unblocks it. The next attempt freezes the configuration current at its opening.
-- An action that the attempt freezes but has not requested is not unresolved, so it prevents no terminal transition.
+- A success override and a discard do not end that attempt, because a node reaches a terminal state only when no external action of its open attempt is unresolved. A human pauses the node, blocks it and unblocks it. The next attempt reads the binding row that its pinned revision names.
+- An action that the attempt requires but has not requested is not unresolved, so it prevents no terminal transition.
 - The action performer holds no durable dispatch record. That record is the open item B9 W2 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-and-project-services).
 
 ## Records without a table
@@ -74,10 +74,6 @@ erDiagram
         text node_id PK, FK "initiative or objective"
         integer attempt PK "1 or more"
         integer node_revision "pinned revision"
-        text required_external_actions "JSON FrozenAction list"
-        integer execution_ended "0 or 1"
-        integer consecutive_losses "0 or more, reset by a release and a resume"
-        text unblock_id "unblock_ + ULID or null"
         integer opened_at "Unix ms"
         integer closed_at "Unix ms or null"
     }
@@ -233,7 +229,7 @@ erDiagram
 
     mission_node ||--o{ mission_attempt : "FK node_id"
     mission_node ||..o{ mission_unblock : "FK node_id"
-    mission_attempt |o..o| mission_unblock : "ref unblock_id"
+    mission_attempt |o..o| mission_unblock : "ref (node_id, attempt) to (node_id, opened_attempt)"
 
     mission_node ||..o{ mission_evidence : "FK node_id"
     mission_node ||..o{ mission_evidence : "FK content_owner_id"
@@ -342,12 +338,12 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.releaseReserve`, under [Scheduler configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration). The effective `wallTimeMs` comes from the worker binding row that `worker_binding_id` pins. The deadline never moves, including at a registration resume. A later configuration change affects only later claims.
 - Every execution mutation repeats the full proof in its write transaction: the claimant, a null `ended_at` and time before `expired_at`. This includes release, evidence and assessment submissions, and every operation that requires a live execution. The transaction reads the clock once at its start, and a terminal write uses that reading as `ended_at`. Equality with `expired_at` is a loss. A failed check answers 409 `scheduler.execution.not_running`. The invocation-chain proof before the handler stays in place. Of two terminal writes, only one wins, and only the winner routes the Mission Service.
 - A release sets `ended_at` and answers `{ executionId, endedAt }`. The Mission Service reads the `ExecutionRelease.furtherWork` input in that transaction, and nothing stores it. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
-- The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
+- The Mission Service routes a steps release in the same transaction. With no further work, it sets `Waiting` and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
 - The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested` and inserts no job. The transaction that makes the continuation condition hold inserts the evaluation job.
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
-- Every 30 s, the Scheduler settles every row whose `ended_at` is null and whose `expired_at` is reached or passed. The loss declaration sets `ended_at` to the clock reading at the start of its transaction. A loss closes no attempt. The Mission Service consumes it in the same transaction: it adds one to `consecutive_losses` of the attempt. Below `mission.consecutiveLossLimit`, `Executing` returns to `Available` and `Evaluating` returns to `Waiting`, and the transaction inserts the job when the node is claimable. At the limit, the node moves to `Paused`, the attempt stays open and no job exists. The open evaluation try ends. A release and a resume set `consecutive_losses` to 0.
+- Every 30 s, the Scheduler settles every row whose `ended_at` is null and whose `expired_at` is reached or passed. The loss declaration sets `ended_at` to the clock reading at the start of its transaction. A loss closes no attempt. The loss declaration counts the lost rows of the attempt after its latest finished row, and it hands the count to the Mission Service. The Mission Service consumes it in the same transaction. Below `mission.consecutiveLossLimit`, `Executing` returns to `Available` and `Evaluating` returns to `Waiting`, and the transaction inserts the job when the node is claimable. At the limit, the node moves to `Paused`, the attempt stays open and no job exists. The open evaluation try ends. A release ends the count. A resume resets nothing, so it grants one more try.
 - A claim and every Mission transition first settle each expired unsettled execution that they meet in the same transaction. A human act then checks its own precondition against the settled state. The work-pull lookup and the registration resume follow the same rule and read a `running` execution, never merely a null `ended_at`.
-- A revocation at a Mission transition before expiry sets `ended_at` in that transaction. It is no loss and adds nothing to `consecutive_losses`. Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
+- A revocation at a Mission transition before expiry sets `ended_at` in that transaction. It counts as no loss. Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
 - The end of a registration ends no execution row by itself. Its live execution follows its deadline and the loss declaration.
 - No sweep deletes an execution row.
 - The Scheduler derives `claimState`: `running` means `ended_at` is null and time is before `expired_at`; `lost` means `ended_at` is at or after `expired_at`, or `ended_at` is null and time is at or after `expired_at`; `finished` means `ended_at` is before `expired_at`. So the table holds no claim state column.
@@ -358,12 +354,14 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `mission_attempt` has a partial unique index on `node_id` where `closed_at` is null, so a node holds at most one open attempt. A task holds no attempt row.
 - Attempt numbers of a node start at 1 and have no gap. `mission_node.attempt` equals the highest number.
 - Three acts open an attempt: a claim of a node that holds no attempt, a human ready act on a node that holds no attempt, and a human unblock of a blocked attempt.
-- An attempt pins `node_revision` at its opening and never changes it. `required_external_actions` freezes the configuration of the Project Service current at the opening. An initiative freezes an empty list.
-- A human ready act sets `execution_ended` 1 on the opened or the open attempt, sets `Waiting` and inserts the evaluation job in one transaction. A resume reads `execution_ended` to select `Waiting`.
+- An attempt pins `node_revision` at its opening and never changes it. The required external actions of the attempt are the policy of the `project_binding` row that its pinned revision names. An initiative requires none.
+- A human ready act opens attempt 1 when the node holds none, sets `Waiting` and inserts the evaluation job in one transaction.
+- A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition. `Available` routes to `Pending` when the closure does not hold.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node and the owed task outcomes, in one transaction. A closed attempt never reopens.
 - A human block, discard or success override on a node whose attempt reads 0 writes the node outcome with `attempt` 0. It closes no attempt and writes no task outcome.
 - An unblock is one transaction: the content revision when the act carries a change, the `mission_unblock` row, the attempt that it opens and the routing to `Pending` or `Available`.
-- `mission_unblock.mission_id` references `mission_mission.id` and is the mission of its node. When the cleared attempt exists, `opened_attempt` is `cleared_attempt + 1`, `pinned_revision` is the revision that the act leaves current, and the opened attempt holds `unblock_id`. When the attempt reads 0, `cleared_attempt` and `opened_attempt` are 0 and `pinned_revision` is null.
+- `mission_unblock.mission_id` references `mission_mission.id` and is the mission of its node. When the cleared attempt exists, `opened_attempt` is `cleared_attempt + 1` and `pinned_revision` is the revision that the act leaves current. When the attempt reads 0, `cleared_attempt` and `opened_attempt` are 0 and `pinned_revision` is null.
+- `mission_unblock` has a partial unique index on `(node_id, opened_attempt)` where `opened_attempt` is greater than 0, so each attempt has at most one unblock. The unblock of an attempt is the row with its `node_id` and `opened_attempt` equal to its number.
 
 ### Mission Service: evidence
 
@@ -413,9 +411,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: external objects and observations
 
-- The action performer submits an external object under a live evaluation claim, for the open attempt of the claim. `action_key` and `binding_id` equal a frozen action of that attempt.
+- The action performer submits an external object under a live evaluation claim, for the open attempt of the claim. `action_key` and `binding_id` equal a required external action of that attempt.
 - `reuses_external_object_id` names an external object of an earlier attempt of the same node, with the same action and binding, and the new object keeps its `address`.
-- An observation names an external object of the same node and attempt, and `action_key` equals the `action_key` of that object. `expected_end_state` copies the frozen action.
+- An observation names an external object of the same node and attempt, and `action_key` equals the `action_key` of that object. `expected_end_state` copies the required external action.
 - An `expected` observation of a repository action holds a nonempty `landed_commits`. Every other observation holds an empty list.
 - The Mission Service reads `end_state` alone and never `detail`.
 
