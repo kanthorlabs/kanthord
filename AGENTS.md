@@ -85,6 +85,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A prefix for the credential table (`custody_credential`, `kernel_credential`, `system_credential`) or a Kernel or System Service that owns it. Custody is a component, not a service, so its table has no prefix. The table stays `credential`, and the migration test carries its one exemption.
 - A `custody` key under `services` in the health report. Custody is a shared component. Its entries sit under `shared.custody`.
 - A JWT denylist (`gateway_token_denylist`, `ban`, `sweep`). Revocation is `gateway.tokenVersion` only.
+- A table-named binding column, for example `scheduler_execution.project_binding_id`. A binding column names the binding kind that it requires: `worker_binding_id`, `storage_binding_id`, `source_binding_id`.
 
 ## Contracts
 
