@@ -39,7 +39,7 @@ The [error-code reference](errors.md) defines the shared naming rule, failure en
 
 Run `kanthord` from an installed package, or `node bin/kanthord.mjs` from `engine/` after `pnpm run build`. The launcher requires Node.js `>=24.15.0 <25`. Commands declare their arguments and options and read no interactive input.
 
-`--help` describes each command. Invoking a group displays its help. The `project`, `mission`, `scheduler`, and `tracking` groups currently expose help only. Human and machine tokens come from `kanthord jwt`; startup and registration issue none, and there are no login or logout commands.
+`--help` describes each command. Invoking a group displays its help. The `project`, `mission`, `scheduler`, and `tracking` groups currently expose help only. Human and machine tokens come from `kanthord jwt generate`, and `kanthord jwt inspect` decodes one; startup and registration issue none, and there are no login or logout commands.
 
 ### Client configuration
 
