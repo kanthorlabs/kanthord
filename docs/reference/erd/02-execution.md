@@ -321,7 +321,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 - `worker_instance` holds one row for each registration of an instance. `worker.register` inserts the row, and `id` is the runtime identity.
 - `worker_instance` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
-- `worker_instance` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live registrations of a worker binding are the live rows of that group.
+- The live registrations of a worker binding are the rows of that group where `ended_at` is null.
 - A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
 - `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
@@ -334,7 +334,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 - `scheduler_execution` has a partial unique index on `node_id` where `ended_at` is null, so one live claim holds a node.
 - `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so an instance hosts at most one execution.
-- `scheduler_execution` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live executions of a worker binding are the live rows of that group, whatever revision each row pins.
+- The live executions of a worker binding are the rows of that group where `ended_at` is null, whatever revision each row pins.
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
