@@ -217,6 +217,8 @@ The tool schemas live in MCP `tools/list`.
 The server emits an OpenAPI 3.1 document from the registry with `z.toJSONSchema()` of `zod` at 4.4.3.
 A test validates the document with `@apidevtools/swagger-parser` at 12.1.0.
 It asserts a real response against its declared schema.
+A test asserts that every stored file equals the emitted file byte for byte.
+A fragment has a soft limit of 500 lines. The test reports a larger fragment as a diagnostic, never fails on its size and holds no named fragment exception.
 
 - `kanthord gateway openapi` emits one scoped OpenAPI 3.1 document from the `contract.ts` of each service into `static/openapi/<service>/` of the `engine` repository.
 - It emits the entry document `static/openapi/index.yaml`, an OpenAPI 3.1 document that references every scoped document and declares no operation of its own.
@@ -333,12 +335,16 @@ HTTP 503 uses the shared error envelope with code `gateway.healthcheck.inventory
 Its `error.details` holds `{"missingInventories":["<owner>"]}`, with each owner that cannot supply its inventory.
 
 - The Gateway Service collects the inventories before it starts the checks.
+- The composition root hands the Gateway Service `collectInventories()`. It reads the three inventories in one transaction and answers `{ entries, missingInventories }`, so the Gateway Service holds no transaction capability.
+- An owner failure adds that owner to `missingInventories`. A failure of the transaction itself is an ordinary invocation failure.
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
 - The request runs at most 32 checks concurrently across all owners.
 - Each check receives a child `Context` with a deadline of 10 s from its start.
 - A check that exceeds its deadline reports `unknown`.
 - The [route timeout](gateway-service.impl.md#cancellation) bounds the whole request.
-- Before that timeout, the report includes `unknown` for every entry whose check has no result, including a check without a start.
+- The report deadline is the handler start plus the route timeout minus a margin of 5 s (`REPORT_MARGIN_MS`), because the route deadline does not reach the caller context.
+- At the report deadline, the report includes `unknown` for every entry whose check has no result, including a check without a start.
+- The handler calls `caller.commit` once, at the end, with the report.
 - The Gateway Service cancels the checks that have no result before it answers.
 - Caller cancellation cancels all checks and produces no success answer.
 - Each check releases its timer and cancellation subscription on completion, failure or cancellation.
@@ -495,7 +501,7 @@ The Gateway Service source sits under `src/gateway/` of the `engine` repository.
 - Private files include `service.ts`, `authentication.ts`, `invocation.ts`, `idempotency.ts` and `openapi.ts`.
 - The remaining private files are `migrations.ts`, `errors.ts`, `request-id.ts`, `json.ts` and `constants.ts`.
 - `migrations.ts` holds no table.
-- `src/gateway/` is the one importer of `src/kernel/caller-mint.ts`.
+- `src/gateway/` and `src/kernel/test-identity.ts` are the only importers of `src/kernel/caller-mint.ts`.
 
 `static/openapi/` of that repository holds the emitted OpenAPI directory, and the released package ships the `static` directory.
 A test file sits beside its source as `*.test.ts`.

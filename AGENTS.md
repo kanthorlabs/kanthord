@@ -91,6 +91,8 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - Never use a shortened alias, for example `deps` for `dependencies`. Never rename a field in an adapter.
 - Diff every key of a new contract against the vocabulary sibling of the owning page.
 - A divergence from the model is an explicit locked decision, never a naming convenience.
+- Every error code that the engine answers stands on the owning design page and on the `engine/docs/cli/` page of its command group.
+- Every command page of `engine/docs/cli/` holds an error-code table with the HTTP status, the code and the condition of each code that its commands answer.
 
 ## Database design
 

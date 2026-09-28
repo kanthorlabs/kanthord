@@ -150,7 +150,8 @@ The attempt row records the frozen required external actions next to the pinned 
 - A violation holds `code`, `message`, `filename`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
-- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
+- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.mission_mismatch`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.reference_kind_invalid` with `details: { reference, name }`, `mission.import.kind_changed` with `details: { id, kind, currentKind }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
+- A body `missionId` that differs from the route is a first-stage violation `mission.import.mission_mismatch`. A parent or dependency name that resolves inside the set to a file of the wrong kind is a second-stage violation `mission.import.reference_kind_invalid`. An entry with the identifier of a known node of another kind is a second-stage violation `mission.import.kind_changed`.
 
 ## Node API admission
 
@@ -158,6 +159,8 @@ The attempt row records the frozen required external actions next to the pinned 
 - Every node API write and every human control on a retired node answers 409 `mission.node.retired` with `details: { nodeId }`.
 - A node API write that changes a node in a terminal state, or a task whose objective holds a terminal state, answers 409 `mission.node.terminal` with `details: { nodeId }`.
 - A write that names a retired node as a parent or a dependency answers 409 `mission.node.retired` with `details: { nodeId }` of that node.
+- `dependency add` with a task endpoint or with endpoints in two missions answers 409 `mission.dependency.endpoint_invalid` with `details: { reason, nodeId, dependsOnId }`, where `reason` is `task_endpoint` or `cross_mission`.
+- A self addition answers 409 `mission.import.cycle` after the endpoint checks. `dependency remove` checks no endpoint pair, and an absent edge is a no-op.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
 - `node create` admits an initiative at any time.
 - It admits an objective or task under a parent in `Pending`, `Available`, `Executing`, `Blocked` or `Paused`.
@@ -434,9 +437,12 @@ kanthord runs no automatic evidence cleanup.
 
 - `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission version and an optional node identity. Without a node identity the act covers every node of the mission.
 - The target revision belongs to the same binding as the revision that the node pins, and it is no tombstone and no disabled revision.
-- An absent target revision answers 404 `mission.binding.not_found`. A tombstone answers 409 `mission.binding.removed`, and a disabled revision answers 409 `mission.binding.disabled`.
+- An absent target revision, or a target revision of another project, answers 404 `mission.binding.not_found`. A tombstone answers 409 `mission.binding.removed`, and a disabled revision answers 409 `mission.binding.disabled`.
+- The target is a later revision of the same binding. A named node that pins neither an earlier revision of that binding nor the target answers 409 `mission.binding.mismatch` with `details: { nodeId, bindingId }`. A node that already pins the target is a no-op, and an act with no rebound node leaves the mission version unchanged.
+- A named retired node answers 409 `mission.node.retired`, and a named terminal node answers 409 `mission.node.terminal`.
 - The act inserts a node revision for each rebound node, and increments `mission_mission.version` once.
-- The answer is the `NodeChange` of the act and the list of skipped nodes, each with the condition that it failed.
+- The answer is the `NodeChange` of the act and `skipped`, a list of `{ node, condition }` where `condition` is `terminal` or `retired`, for a mission rebind.
+- A rebind revision holds `change.write: node.rebind`, `changedFields: ["bindings"]`, the unchanged task snapshot of an objective and `change.tasks: []`.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
 
 - The Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service through its `contract.ts`. It answers every node that is not terminal and not retired when its current revision or the node revision of its open attempt pins the binding revision. A rebind keeps the node revision of an open attempt, so the node keeps the old pin until that attempt ends.
@@ -495,7 +501,7 @@ kanthord runs no automatic evidence cleanup.
 - A human control checks the mission version and leaves it unchanged, except an unblock that carries a change.
 - A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
-- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `node.retire`, `criterion.set` or `unblock`.
+- `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `node.retire`, `node.rebind`, `criterion.set` or `unblock`.
 - A move of an objective changes its parent link and no content, so it creates no node revision. A move of a task changes the content of both objectives, so each one takes a node revision with `write: node.move`.
 - `change.previousRevision` is the previous revision, or null on revision 1.
 - `change.changedFields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.

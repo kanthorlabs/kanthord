@@ -794,7 +794,8 @@ A process split retains these boundaries.
 - A test asserts that `quiesce()` leaves the handlers of a service available to a peer during the drain.
 - It asserts that `stop()` after the drain releases the resources of the service.
 - A lint test rejects an import of a private module of a peer.
-- It rejects an import of `caller-mint.ts` outside `src/gateway/` and an import of `service-mint.ts` outside `src/apps/server/`.
+- It rejects an import of `caller-mint.ts` outside `src/gateway/` and `src/kernel/test-identity.ts`, and an import of `service-mint.ts` outside `src/apps/server/`.
+- It rejects an import of `test-identity.ts` from a file that is not a `*.test.ts` file.
 - A test covers a `service` operation through the HTTP adapter.
 - It asserts 404 and no route in the emitted OpenAPI directory.
 - A test covers a service identity calling an operation without authorization from its owning service, and it asserts the refusal.
@@ -855,7 +856,7 @@ engine/src/
 │   ├── service.ts  context.ts  store.ts  health.ts  log.ts  errors.ts
 │   ├── operation.ts  caller.ts  caller-mint.ts  service-mint.ts
 │   ├── json.ts  identity.ts  values.ts  files.ts  http.ts
-│   └── test-support.ts
+│   └── test-support.ts  test-identity.ts
 ├── project/  mission/  scheduler/  intake/  worker/  tracking/
 │   ├── contract.ts        operations + collaboration interface types   [peers, apps]
 │   ├── index.ts           <Name>Service, Dependencies, <service>Migrations   [apps/server]
@@ -911,7 +912,8 @@ The kernel holds shared contracts and runtime components.
 - The Gateway emitter validates the OpenAPI scope of each registry entry.
 - `caller.ts` holds `HumanIdentity`, `MachineIdentity`, `ServiceIdentity`, module-private `WeakSet`s, `isHumanIdentity`, `isMachineIdentity` and `isServiceIdentity`.
 - `caller-mint.ts` holds the human and the machine identity factory, and `service-mint.ts` holds the service identity factory.
-- Only `src/gateway/` imports `src/kernel/caller-mint.ts`, and only `src/apps/server/` imports `src/kernel/service-mint.ts`.
+- Only `src/gateway/` and `src/kernel/test-identity.ts` import `src/kernel/caller-mint.ts`, and only `src/apps/server/` imports `src/kernel/service-mint.ts`.
+- `test-identity.ts` holds the test factory of a minted human identity. Only a `*.test.ts` file imports it, so a service test needs no import exception.
 
 The import boundaries follow the public files.
 

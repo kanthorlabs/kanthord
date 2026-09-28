@@ -186,7 +186,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - The interaction adapter answers `select` with `browser` or `device_code`; an unsupported option fails the session.
 - It records `auth_url` as the address and `device_code` as the code and address.
 - It records `info` and `progress` as the last message.
-- A `manual_code`, `text` or `secret` prompt waits for a supplied value until expiry.
+- The GitHub Copilot login of pi-ai first asks for a GitHub Enterprise domain with the placeholder `company.ghe.com`. While the session holds no address, the adapter answers that one prompt with the empty value, which selects github.com.
+- Every other `manual_code`, `text` or `secret` prompt waits for a supplied value until expiry.
 - `credential.login` is a unary mutation and answers session identity, address, code and expiry.
 - `credential.login_code` is a unary mutation with session identity and value; it answers 409 when no value is awaited.
 - `credential.login_status` is a unary read with session identity; it answers state, last message and failure reason.
@@ -196,7 +197,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A remote browser can return its redirect URL or code through `credential.login_code` when its loopback callback fails.
 - Device mode needs no listener; pi-ai polls until success, failure or expiry.
 - Custody permits at most one pending session per platform and human identity; another start answers 409.
-- Completion writes the credential through `modify` and ends the session.
+- `CustodyComponent` takes a required `store`, an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot provider, and an optional `now` clock.
+- Completion writes the credential inside the pi-ai `CredentialStore.modify` call. The transaction checks the session state again, so an expired or failed session stores nothing. The session ends only after the commit.
 - The session record holds no token, and a failed or expired session stores nothing.
 - The login flow proves the OAuth record; no extra validation call follows it.
 - Output exposes the address and code that the human needs, never a token.
@@ -225,4 +227,5 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
+- A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests assert no secret in outputs, logs, transcripts or errors.

@@ -135,6 +135,8 @@ The write refuses a submission that changes the worker of an existing worker bin
 - An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
 - An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
+- For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `worker.agent.configuration.invalid`.
+- A worker binding of a known worker with no declared agent, an external harness, that carries `entries` or `resourceBudget` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
 - A strategy with more than one action refuses the write.
 
 ## Storage configuration
@@ -191,6 +193,8 @@ It checks the disablement and the removal of every binding of the chain, and a d
 The resolution records the identity of every revision of the chain, and not the identity of the worker binding revision alone.
 It performs no cache, because `DatabaseSync` reads the local file synchronously.
 A resolution authorizes one operation, so the next operation resolves the chain again.
+
+- The Project Service offers `getBindingRevision(tx, bindingRevisionId)` to the Mission Service through its `contract.ts`. It answers the binding revision with its `projectId`, so the Mission Service checks the project ownership of a rebind target directly.
 
 ## The webhook key
 
