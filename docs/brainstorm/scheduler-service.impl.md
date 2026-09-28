@@ -51,6 +51,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `LeaseRenewal` is the input of `scheduler.execution.renew-lease`: `requestId`. The answer is `{ executionId, lease }`.
 - `ObservationObligation` holds `obligationId`, `projectId`, `externalObjectId`, `acceptedAt`, `lease` as the lease object or `null`, `completedAt` as a timestamp or `null`, and `observationId` as `observation_<ulid>` or `null` while no accepted observation exists.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
+- `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only, ordered by `attempt` ascending, then `createdAt` ascending. A `nodeId` that the project does not hold answers an empty page.
 
 ## Durable requests
 
