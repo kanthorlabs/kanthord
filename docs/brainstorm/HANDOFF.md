@@ -64,6 +64,10 @@ After the first native-agent worker runs the acceptance path.
 - [ ] Live streaming of a running turn. pi emits streaming events. The Tracking Service page bounds this to the harness that kanthord hosts, because an external harness reaches the Tracking Service only through an import that a human issues. A Tracking command awaits event schemas, start position, order, resume and loss behavior, limits, timeout, access and cancellation.
 - [ ] Containment beyond the minimum trust boundary, the quality and replay suite, provenance tags on tool results.
 
+### Gateway Service
+
+- [ ] POSTPONED 2026-09-28 by Ulrich until Ulrich rules it. Decide whether `kanthord jwt inspect` verifies the signature, the header and the closed claim set with the server configuration.
+
 ### Tracking Service
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await trace, span, text and record identity contracts, OpenTelemetry mapping and the canonical identity-attribute registry. Execution identity validation awaits the Scheduler contract.
