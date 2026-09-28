@@ -390,7 +390,7 @@ kanthord runs no automatic evidence cleanup.
   It covers each current task that holds no current outcome of the closed attempt.
   The filled outcome holds the closing event of the act as `closingEvent` and as `stoppingReason`.
   It holds `result: undetermined`, even under a success override, and the `basis` of the node outcome.
-  Its evidence set holds the accepted evidence records of scope `task` for that task in the closed attempt.
+  Its evidence set holds the accepted evidence records of that task in the closed attempt.
   The set is empty when no such record exists.
 - A closure that follows the evaluation fills no task outcome on the ordinary path.
   The readiness condition requires every current task outcome before `Waiting` admits an evaluation claim.
