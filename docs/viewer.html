@@ -101,6 +101,10 @@
     }
 
     .mermaid-outer {
+      color-scheme: light;
+      --code-bg: #ffffff;
+      --code-text: #18181b;
+      background: var(--code-bg);
       width: 100%;
       max-width: 100%;
       min-width: 0;
@@ -386,8 +390,7 @@
               item.node.replaceWith(err);
             });
           } else {
-            var darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            mermaid.initialize({ startOnLoad: false, theme: darkMode ? 'dark' : 'default' });
+            mermaid.initialize({ startOnLoad: false, theme: 'default' });
             for (var i = 0; i < diagramItems.length; i++) {
               var item = diagramItems[i];
               try {
