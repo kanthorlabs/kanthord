@@ -103,7 +103,7 @@ The Mission Service consumes the loss in that transaction.
 Below `mission.consecutiveLossLimit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
 At the limit, it moves the node to `Paused`, and no job exists.
-The attempt stays open, and the open evaluation try ends.
+The attempt stays open.
 The operations that [Liveness](scheduler-service.md#liveness) names apply this same settlement before their own precondition checks in the same transaction.
 
 ## Retention
@@ -135,7 +135,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   A registration resume meets the same row and asserts settlement before its precondition check.
   A human act also checks its precondition against the settled state.
 - Tests sweep expired steps and evaluation claims below and at `mission.consecutiveLossLimit`.
-  They assert one loss increment, the specified node state, a job only when claimable, and the end of the open evaluation try.
+  They assert one loss increment, the specified node state and a job only when claimable.
 - A test computes the deadline from a binding override of `wallTimeMs` and the configured reserve, including the default `600` seconds.
   A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.
 - A test revokes a claim before expiry and asserts `finished`, no loss increment and the transaction reading as `ended_at`.

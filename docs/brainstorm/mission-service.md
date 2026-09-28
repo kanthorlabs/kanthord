@@ -472,10 +472,11 @@ Three acts open an attempt.
 - the human assertion that the execution requires no further work, which opens attempt 1 when the node holds no attempt
 - a human unblock, which opens the next attempt
 
-An execution and an evaluation attempt pin the attempt that they start under.
+The attempt names the actor of the act that opens it.
+An execution pins the attempt that it starts under.
 The required external actions of an attempt follow from the binding row that its pinned node revision names.
 Every record names its attempt, and it stays the record of that attempt forever.
-An attempt closure ends every execution and every evaluation attempt in flight under that attempt.
+An attempt closure ends every execution in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
 A closed attempt never reopens.
 An opening and an attempt closure are separate acts.
@@ -780,12 +781,11 @@ The attempt pins the revision that the act leaves current.
 A retry of an accepted unblock authorizes no second attempt, because the attempt check refuses it.
 A later request that names a cleared attempt or a superseded revision authorizes no attempt, because the check refuses it.
 
-An unblock writes an unblock record.
-The record names the node, the attempt that it clears, the attempt that it opens, the node revision that it pins, the actor and the time.
+An unblock names the human as the opener of the attempt that it opens.
 
 Every human direction enters the node revision.
 The unblock carries that change.
-The unblock record carries no direction of its own.
+The attempt carries no direction of its own.
 
 A human who redirects a node that holds an open attempt pauses the node, blocks it and unblocks it with the content change.
 
@@ -793,7 +793,7 @@ Outcome and completion owns the routing of the opened attempt to `Available` or 
 
 The next execution reads the node revision that its attempt pins.
 It reads the outcome of the cleared attempt and the cause that the outcome names.
-It reads the unblock record of its attempt.
+It reads the opener of its attempt.
 A read of a record of a closed attempt migrates nothing.
 
 The external conversation stays with its platform.

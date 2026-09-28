@@ -42,7 +42,7 @@ flowchart TB
         subgraph v2["ERD 2: Execution"]
             w2["Worker: instance"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt, unblock, evidence, run output, evaluation, try, assessment, outcome, external object, observation"]
+            m2["Mission: attempt, evidence, run output, assessment, outcome, external object, observation"]
         end
         subgraph v3["ERD 3: External acquisition and observation"]
             p3["Project: acquisition grant"]
@@ -121,7 +121,7 @@ flowchart TB
 - A timestamp is an `INTEGER` of Unix milliseconds in UTC.
 - A JSON column holds the canonical JSON of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785).
 - A boolean is an `INTEGER` 0 or 1.
-- A revision and a version start at 1. The attempt of a node reads 0 before its first attempt opens, and no attempt row exists for 0. An opened attempt and an evaluation attempt start at 1.
+- A revision and a version start at 1. The attempt of a node reads 0 before its first attempt opens, and no attempt row exists for 0. An opened attempt starts at 1.
 - An owner deletes no row that a peer can reference. It retires or disables that row. Telemetry is the one exception: the Tracking Service deletes a trace at its retention, and a peer value that names it resolves to expired.
 
 ## Diagram notation

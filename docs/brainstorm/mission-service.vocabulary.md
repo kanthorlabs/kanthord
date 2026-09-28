@@ -161,6 +161,7 @@ Take the evaluation claim in step 4 of the attempt example.
 
 One node attempt holds two evaluation attempts.
 An evaluation attempt ends while its node attempt stays open.
+An evaluation attempt is one reviewer execution and holds no record of its own.
 
 ## attempt closure
 
@@ -267,28 +268,6 @@ The condition does not hold, so "Account recovery" holds no job.
 "Add password reset" reaches `Completed`, and "Add recovery codes" already holds `Discarded`.
 The transaction that commits `Completed` inserts the steps job of "Account recovery".
 If `ulrich` then adds the objective "Add login alerts", the graph change deletes that job.
-
-## unblock record
-
-The record of one human unblock.
-The term names no closed set.
-An unblock record names six things.
-
-- the node
-- the attempt that it clears
-- the attempt that it opens
-- the node revision that it pins
-- the actor
-- the time
-
-Take the history in which attempt 2 of "Add password reset" closes on a block.
-
-- node: "Add password reset"
-- attempt cleared: 2
-- attempt opened: 3
-- node revision pinned: 3
-- actor: `ulrich`
-- time: `2026-09-11T10:15:00Z`
 
 ## terminal state
 

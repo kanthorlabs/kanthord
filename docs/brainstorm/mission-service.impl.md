@@ -15,12 +15,10 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 - A node uses `node_<ulid>`.
 - An evidence record uses `evidence_<ulid>`.
-- An evaluation uses `evaluation_<ulid>`.
 - An assessment uses `assessment_<ulid>`.
 - An outcome uses `outcome_<ulid>`.
 - An external object uses `external_object_<ulid>`.
 - An observation uses `observation_<ulid>`.
-- An unblock record uses `unblock_<ulid>`.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>`.
 - An attempt uses its attempt number as its key within the node. An attempt takes no prefix.
 - The Scheduler Service declares the execution identity.
@@ -196,9 +194,9 @@ Judgement decides success only after every verification of the pinned content pa
 An assessment holds one `result` and one required, nonblank `rationale`.
 It holds the evidence identities, immutable child outcome identities and tested input.
 It holds no `method` field and no separate criterion result.
-The actor and evaluation fields identify who judged.
-A task assessment has no evaluation identity; its actor is the steps execution of its objective.
-A reviewer assessment names its evaluation identity.
+The actor identifies who judged.
+The actor of a task assessment is the steps execution of its objective.
+The actor of a reviewer assessment is the execution of its evaluation claim.
 An external harness assessment identifies the client identity of its harness worker.
 A human writes no assessment.
 The execution code, never the agent, runs the verifications before the judgement.
@@ -370,9 +368,9 @@ kanthord runs no automatic evidence cleanup.
   `closingEvent` stays `Text`; these spellings form no closed set.
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assertion, and only an assessment basis asserts `criterion-not-met`.
-- `execution cleared-outcome get` and `execution unblock get` answer 404 `mission.record.not_found` when no unblock opened the claimed attempt.
+- `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
-  That attempt holds no unblock record.
+  The execution of that claim is the opener of that attempt.
 - A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
   A mismatch answers 409 `mission.node.state_conflict`, with the current `state` and `attempt` in `details`.
   An `Unblock` whose `blockedAttempt` differs from the current attempt answers the same code.
@@ -398,10 +396,8 @@ kanthord runs no automatic evidence cleanup.
   The readiness condition requires every current task outcome before `Waiting` admits an evaluation claim.
 - This section states no rule for a task assessment that does not pass when the execution releases without further work.
   The B9 item of the Mission Service owns that path.
-- An outcome with an assessment basis holds `evaluationContext`.
-- `evaluationContext` holds `nodeRevision`, `evidenceIds`, `childNodeIds` and `childOutcomeIds`, copied from the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
-- The closure copies and recomputes nothing, so a child change after the acceptance never enters the context.
-- Empty arrays are explicit.
+- The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
+- The assessment is immutable and the closure copies nothing, so a child change after the acceptance never enters the context.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
 
 ## Node ready
@@ -570,7 +566,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests return the block outcome from the blocked read while the attempt reads 0.
   They return empty external objects and observations.
 - Tests block and unblock a node while its attempt reads 0, then claim attempt 1.
-  They assert 404 from `execution cleared-outcome get` and `execution unblock get`.
+  They assert 404 from `execution cleared-outcome get` and the execution as `opened_by` of attempt 1.
 - Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
 - Tests resolve a child objective with an attempt-0 outcome to the revision current at the act.
 - Tests commit the task assessment and the task outcome together or not at all.
@@ -671,7 +667,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
 - Tests assert that a loss below `mission.consecutiveLossLimit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
 - Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfiedIds` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
-- Tests refuse a second `mission_unblock` row with the same `node_id` and an `opened_attempt` greater than 0.
+- Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.

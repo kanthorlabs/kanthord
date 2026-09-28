@@ -19,7 +19,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - A worker binding of an externally hosted worker needs no agent enablement.
 - A delivery source is no binding. The Intake Service designs it under [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#intake-service).
 - The Mission Service accepts the import, the export, the node API, the dependency edits, the criterion set and the priority.
-- The human controls (pause, resume, block, unblock, ready, override and discard) come with [ERD 2](02-execution.md), because most of them write an attempt, an outcome or an unblock record.
+- The human controls (pause, resume, block, unblock, ready, override and discard) come with [ERD 2](02-execution.md), because most of them write an attempt or an outcome.
 - The Scheduler work queue is in this group, although the Scheduler Service owns it. A Mission write that makes a node claimable inserts its job in the same transaction. A Scheduler migration cannot read a Mission table, so no later migration can back-fill the queue.
 
 ## Owners without a table
