@@ -89,6 +89,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A stored claim kind on `scheduler_execution` or `scheduler_job`. While a claim is live, the node state `Executing` or `Evaluating` fixes its kind.
 - A durable Scheduler request record (`scheduler_request`, `WorkPull.requestId`, `scheduler.request.scope_mismatch`). A work pull is idempotent by the runtime identity: it returns the live execution of its instance. A worker crash or a server restart ends the runtime identity, and B9 owns recovery.
 - A renewal request identifier or a renewal record (`scheduler_renewal`, `renewal_request_id`, `scheduler.execution.renewal_superseded`). A renewal is idempotent by its execution identity and sets the expiry from its acceptance time.
+- A merge of the runtime identity and the client identity, or a new runtime identity at a worker restart. A restarted program gets its live registration back, and a server restart ends no registration.
 
 ## Contracts
 

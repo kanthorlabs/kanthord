@@ -164,6 +164,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - An explicit heartbeat request is `POST /api/worker/heartbeat`, operation ID `worker.heartbeat`, with the client access policy and an empty body.
 - It answers 204.
 - The Worker Service records the time of the last heartbeat with a monotonic clock.
+- The start of the server keeps every live registration and sets its last heartbeat to the start time.
 - The [resource healthcheck](worker-service.md#instances-and-hosting) of an instance reports `healthy` when its last heartbeat is inside `worker.heartbeatWindow`, and `unhealthy` otherwise.
 - Its `capability` is `liveness of a registration`.
 - A test checks both sides of the heartbeat window and asserts that the resource healthcheck changes no registration or instance healthcheck.
@@ -196,9 +197,23 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - Every target that is no live registration of the caller answers 404 `worker.instance.not_found`. This includes an unknown or ended identity, another client's instance, a server-placement instance and a newer registration of the same client identity, which stays intact. A delayed request for an ended runtime identity never ends a newer registration.
 - The answer is 200 `{ runtimeIdentity, registered: false }`.
 - A retry with the same `Idempotency-Key`, caller and target replays the recorded answer after the end, inside one process and the TTL. The operation declares no `replayGuard`. Authentication grants no bypass for a revoked credential or unavailable binding.
-- A retry after a restart answers 404. The worker application and harness extension read that answer after their own call as the end of their registration.
+- A retry after a restart runs the handler again. It ends the registration when the registration is still live, and it answers 404 when the registration already ended. The worker application and harness extension read that 404 after their own call as the end of their registration.
 - The operation proves no process stop, releases no execution and authorizes no workspace reuse. A live execution follows the [Scheduler liveness rules](scheduler-service.md#liveness). Physical stop and capacity reuse stay B9 SC5 and W5.
-- Tests assert end and slot release in one transaction, same-key replay after the end, post-restart 404, and 404 for each non-owned target. They assert that a newer registration stays intact, no server-placement instance ends through the route, and the worker application calls it at graceful stop.
+- Tests assert end and slot release in one transaction, same-key replay after the end, a post-restart retry that ends a live registration or answers 404 for an ended one, and 404 for each non-owned target. They assert that a newer registration stays intact, no server-placement instance ends through the route, and the worker application calls it at graceful stop.
+
+## Resume of a registration
+
+- `worker.instance.resume` is a `human` mutation of `unary` lifetime at `POST /api/worker/instance/:runtimeIdentity/resume`, with no body, the default 30 s timeout and the default 10 MiB body limit.
+- It reopens an ended registration while that registration is the claimant of a live execution. The Worker Service reads the live execution of the runtime identity through the Scheduler Service in the same transaction.
+- It clears `ended_at`, sets the last heartbeat to the time of the act and takes the slot through the Project instance-count collaboration, in one transaction.
+- The next registration of its client identity answers that registration, and its work pull returns the live execution.
+- A resume of a live registration answers 200 and changes nothing.
+- An unknown runtime identity or one of the `server` placement answers 404 `worker.instance.not_found`.
+- A registration that is the claimant of no live execution answers 409 `worker.instance.no_live_execution`. A lost execution is never revived.
+- A client identity that holds another live registration answers 409 `worker.instance.client_live`.
+- A binding without a free slot, or an unavailable binding, answers 409 `worker.instance.slot_unavailable`.
+- The answer is 200 `{ runtimeIdentity, registered: true }`.
+- Tests assert the reopen, the heartbeat and the slot in one transaction, each refusal, and the resume of the live execution through the next registration and work pull.
 
 ## The worker application
 
@@ -215,6 +230,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
 - `SIGINT` and `SIGTERM` stop further startup and further work pulls.
 - The application deregisters only a registration whose runtime identity it knows.
+- The application deregisters at a stop only when no execution is live. An upgrade stops the old process before it starts the new one.
 - It exits 0 after a successful deregistration or after the 404 that ends its registration. Any other deregistration or cleanup failure exits 1 without a retry.
 - A 10-second watchdog applies only when no execution is live and no registration or work pull waits for its answer.
 - `SIGHUP` reopens nothing.

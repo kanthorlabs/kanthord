@@ -70,8 +70,8 @@ This operation creates a live worker-instance registration, not a human account,
 That route declares the client access policy, and the verification of the JWT section authenticates it.
 The request nominates no project, no resource identity, no subject and no kind, and the server takes all four from the verified JWT.
 The Worker Service creates the registration and checks the instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
-A client identity holds at most one live registration, and a registration of a client identity that holds one answers 409.
-The route answers with the runtime identity of the new instance and no token.
+A client identity holds at most one live registration, and a registration of a client identity that holds one answers that registration, so a restarted program keeps its runtime identity.
+The route answers with the runtime identity of the registration and no token.
 
 - A repeat of the idempotency key under the same client identity replays the recorded answer within one process and the TTL.
 - The registration must remain live for that replay.
@@ -463,7 +463,7 @@ It verifies the default and explicitly supplied subjects and derived-key signatu
 It covers the removed password-login route and its absence from OpenAPI.
 It covers a registration with a machine JWT whose worker binding is absent or unavailable, and it asserts 401 and no registration.
 It covers two concurrent registrations against a binding of one instance, and it asserts one registration and one refusal.
-It covers a second registration of a client identity that holds a live registration, and it asserts 409.
+It covers a second registration of a client identity that holds a live registration, and it asserts the runtime identity of that registration and no second slot.
 
 - A test repeats the registration key within the TTL while the registration is live and asserts the recorded runtime identity without another slot.
 - A test repeats the registration key after a restart and asserts that the handler runs again with its natural key.

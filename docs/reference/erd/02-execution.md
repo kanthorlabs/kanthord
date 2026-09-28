@@ -326,7 +326,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
 - `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
-- A registration ends at a deregistration, at a heartbeat expiry, at a removal or unavailability of its worker binding, and at a server restart. The start of the server ends every live row before it admits a request.
+- A registration ends at a deregistration, at a heartbeat expiry, and at a removal or unavailability of its worker binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
+- A registration of a client identity that holds a live row answers that row and inserts nothing.
+- `worker.instance.resume` clears `ended_at` of an ended row while that row is the claimant of a live execution, and it takes the slot again. No other act clears `ended_at`.
 - An instance at the `server` placement registers never, so it holds no row.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
 

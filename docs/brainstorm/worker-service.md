@@ -174,12 +174,15 @@ The Worker Service vouches for that association on the [work pull](scheduler-ser
 For an instance that registers, the Worker Service accepts the registration under the [client identity](project-service.vocabulary.md#client-identity) of its credential and the worker binding that the credential names by its project and its resource identity, mints its runtime identity at that registration, and vouches for it on the work pull like every instance.
 A registration pins no revision of the worker binding. Each claim pins the latest revision of the binding, and the execution reads the configuration of that revision until it ends.
 A client identity holds at most one live registration.
+A registration of a client identity that holds a live registration returns that registration, so a restarted program resumes its live execution.
+A human resumes an ended registration while it is the claimant of a live execution.
+Two live processes of one machine JWT are an accepted risk until a B9 item fences them.
 An instance of a worker that an external harness hosts registers, and an instance at the `worker` placement registers.
 It accepts registrations up to the instance count of the binding, and it refuses a further one.
 The instance presents its credential at the registration and on every later request, the registration returns no credential, and the [Gateway Service](gateway-service.md#machine-identities) rules that credential.
 A work pull and every execution operation of a registered instance require its live registration.
 A registered instance sends a [heartbeat](worker-service.vocabulary.md#heartbeat), and a registration ends when no heartbeat arrives inside its window.
-A registration also ends when the program deregisters its own instance through the API or when the server restarts.
+A registration also ends when the program deregisters its own instance through the API. A server restart ends no registration.
 Removal or unavailability of its worker binding also ends the registration.
 A live execution of that instance follows the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The end of a registration proves no stop of the program.
@@ -192,7 +195,7 @@ An instance record is runtime-only. The `worker_instance` row holds the durable 
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
 At server start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
 A configuration revision of the binding replaces no instance.
-A server restart creates new instances with new runtime identities.
+A server restart creates new instances with new runtime identities for a worker at the `server` placement.
 For a worker that kanthord hosts at the `server` placement, the Worker Service drains the excess instances of a lowered count under the [count-change rule](scheduler-service.md#claims-and-counts) of the Scheduler Service: it retires idle instances first, and a busy instance ends its execution before it retires.
 
 An instance hosts at most one execution at a time.
