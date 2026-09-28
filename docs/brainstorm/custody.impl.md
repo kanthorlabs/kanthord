@@ -85,8 +85,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 ## The keys
 
 - Custody uses the derived cipher key of the [credential table](architecture.impl.md#the-credential-table), never `masterKey` directly.
-- The handover key derives through `crypto.hkdfSync` with SHA-256 and an empty salt.
-- Its info is `handover/aes-256-gcm/v1`.
+- The handover keys derive from the [client secret](gateway-service.impl.md#the-client-secret) of the machine JWT through `crypto.hkdfSync` with SHA-256 and an empty salt.
+- The info of the handover key is `handover/server-to-worker/v1`, and the info of the refresh-report key is `handover/worker-to-server/v1`.
 - A manual replacement of `masterKey` makes stored credentials unreadable.
 - A human enters each secret again into its existing record; entity references stay valid.
 - [Delivery verification](project-service.impl.md#the-verification-of-a-delivery) owns the webhook secret derivation.
@@ -144,10 +144,13 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
 - The payload is canonical JSON of the platform key and provider credential that the execution requires.
 - Each item holds the record identity, pi adapter id or git platform, and pi-ai credential.
-- AES-256-GCM uses the handover key, a random 12-byte nonce and a 16-byte tag.
+- AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
-- The worker application holds the same `masterKey` and derives the same key.
-- A refresh report uses the same envelope; custody writes its record in place.
+- The worker application holds the client secret of its machine JWT and derives the same two keys. Custody derives the client secret again from the verified `sub`.
+- A valid tag proves the sender and the direction, because only the server and that one worker hold the client secret.
+- A refresh report carries the digest of the credential value that it replaces. Custody writes the new value in place only when the stored value has that digest, in the same transaction, so a replayed earlier report writes nothing.
+- The client secret protects the handover and the refresh report alone. Registration, the work pull and the MCP calls stay bearer-only.
+- The envelope has no forward secrecy. A client secret that leaks later opens every recorded envelope of its client identity.
 - The handover carries the revisions that the execution pins.
 - Custody refreshes no pinned revision on the server while a live execution at `worker` placement holds it.
 - Two executions can hold one revision at once.

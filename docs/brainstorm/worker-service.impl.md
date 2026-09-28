@@ -208,7 +208,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup resolves the client configuration, checks `masterKey`, checks the server package version and registers the instance, in that order.
+- Startup resolves the client configuration, checks `clientSecret`, checks the server package version and registers the instance, in that order.
 - After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `resourceIdentity` and `workerName`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -268,13 +268,14 @@ It proves that a reviewer execution takes no agent file of the workspace.
 
 - `worker.handover` is a `client` operation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes an empty body and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
 - The `worker` application calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
-- It decrypts the envelope with the key that it derives from its own `masterKey`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
+- It decrypts the envelope with the handover key that it derives from its own `clientSecret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. The application calls it after each refresh that pi-ai performs and once at the release.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - A platform action runs through the MCP tool of the server.
-- The `worker` application reads `masterKey` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
-- An absent or invalid `masterKey` stops the start of `kanthord serve worker` with `worker.start.master_key_absent` or `worker.start.master_key_invalid`.
-- A `masterKey` that differs from the one of the server fails every decryption. The application ends the execution as a cannot-progress condition.
+- The `worker` application reads `clientSecret` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
+- The `worker` application holds no `masterKey`.
+- An absent or invalid `clientSecret` stops the start of `kanthord serve worker` with `worker.start.client_secret_absent` or `worker.start.client_secret_invalid`.
+- A `clientSecret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
 
 ## Evidence upload
 
@@ -434,7 +435,7 @@ The budget of a turn count and a wall time is enforced on pi turn events and by 
 ## Trust boundary
 
 The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the server.
-The host of every `worker` application sits inside it because that host holds `masterKey` and the credentials of its executions.
+The host of every `worker` application sits inside it because that host holds its `clientSecret` and the credentials of its executions.
 
 ## Traces
 

@@ -62,7 +62,8 @@ Rules for every agent that works in the kanthord repository. Ulrich is the human
 The pages record only the decision. Do not propose these alternatives again. When a new ruling rejects an alternative, add it here.
 
 - An SSH key in custody or a kanthord ssh-agent. SSH transport uses the SSH configuration of the host user.
-- A proxy for the remote runtime. Custody hands credentials to the `worker` app encrypted under `masterKey`.
+- A proxy for the remote runtime. Custody hands credentials to the `worker` app encrypted under keys derived from its client secret.
+- `masterKey` on a client, a worker key pair, or a public-key handover envelope. A worker holds the client secret of its machine JWT, derived from `masterKey` and `sub`.
 - A workspace root in the cache directory. It lives in the state directory.
 - One agent per worker. A worker declares one or more agents.
 - A "human OR client" access policy or an optional revision bound. One operation serves one caller kind.

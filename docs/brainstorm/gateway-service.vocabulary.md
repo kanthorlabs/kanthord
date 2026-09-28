@@ -44,6 +44,13 @@ That JWT holds `sub` = `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`, `name` = `C
 The Gateway Service verifies that JWT and establishes the machine identity, which names the client identity, the worker binding `claude-main`, the project `Billing` and the runtime identity of its live registration.
 The Project Service receives that value, and it takes no association from the caller.
 
+## client secret
+
+The secret that the server derives for one machine JWT and that the `worker` application holds in `cli.yaml`.
+
+`kanthord jwt generate --binding tdd-main` prints `token: eyJhbGciOi...` and `clientSecret: 3q2+7wAAAAC1...`.
+The worker of `tdd-main` derives the handover key from that client secret. No other worker opens its handover.
+
 ## JWT claim set
 
 The closed set of claims of a kanthord JWT.

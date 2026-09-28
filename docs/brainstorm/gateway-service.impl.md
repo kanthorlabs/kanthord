@@ -144,7 +144,7 @@ The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v<tokenVersion>")`
 The Gateway Service derives the key at startup and persists neither the signing key nor the generated human JWT in its database.
 [architecture.impl.md](architecture.impl.md) rules the mode of the configuration file, of its directory, of the data directory and of every database file.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
-An increment of `gateway.tokenVersion` and a restart of the server invalidate every issued JWT of both kinds. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
+An increment of `gateway.tokenVersion` and a restart of the server invalidate every issued JWT of both kinds. Every client secret changes with them. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
 A human then runs `kanthord jwt generate` again for each human token and each machine token.
 
 ## Local JWT issuance
@@ -157,8 +157,10 @@ With `--project` and `--binding` it generates a machine JWT with a fresh client 
 The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` and `--project` without `--binding` are errors.
 Mint one machine token for each concurrent instance. An instance reuses its token across restarts while the token is valid.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
-It prints the JWT followed by a newline only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
-With `--verbose` it prints the claim list after the JWT.
+It prints only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
+For a human it prints the JWT followed by a newline.
+For a machine it prints the `cli.yaml` fragment `token: <jwt>` and `clientSecret: <client secret>`, one line each.
+With `--verbose` it prints the claim list after that output.
 It prompts for nothing, requires no terminal on standard input, calls no route and saves no client configuration.
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
 
@@ -170,6 +172,14 @@ A token that is not three base64url segments with a JSON header and a JSON objec
 
 The claim list is one `<claim>: <value>` line per claim, in signed order, between two `---` lines.
 `iat` and `exp` print their Unix seconds with the UTC time as a YAML comment, for example `exp: 1822040100 # 2027-09-28T10:15:00Z`.
+
+## The client secret
+
+Each machine JWT has one client secret, and a human JWT has none.
+The client secret is `HKDF-SHA256(masterKey, info = "worker/client-secret/v<tokenVersion>/" + sub)`, 32 bytes encoded in base64, with an empty salt.
+`sub` is the client identity of the machine JWT, so each machine JWT has its own client secret.
+The server stores no client secret. It derives the secret again from the verified `sub` of each request that needs it.
+From a client secret, no party derives `masterKey`, the signing key, the Custody key or another client secret.
 
 - The Gateway Service owns no human account table and no client identity table.
 - It owns no table of the operational database.
@@ -469,7 +479,7 @@ It forwards the registered work-pull, claim inspection, lease renewal, release a
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.
 An instance presents its long-lived JWT on every request, so the ingress provides confidentiality for registration, heartbeat, work-pull and MCP traffic.
-A credential handover uses encryption under `masterKey`.
+A credential handover uses encryption under keys derived from the client secret, which never travels on the wire.
 It needs no confidentiality of the ingress beyond that of the JWT that carries it.
 The server distinguishes no request of the ingress from a local request.
 The path restriction therefore lives in the configuration of the ingress.
@@ -499,7 +509,8 @@ The client configuration file holds the three fields below.
 
 - `endpoint` holds the absolute URL of the server. It defaults to `http://127.0.0.1:31415`, which the defaults of `gateway.bind` and `gateway.port` give.
 - `token` holds the JWT of a human or of a machine, and the client presents it as a bearer token.
-- `masterKey` holds the 32-byte key of the server encoded in base64, and only `kanthord serve worker` reads it. It has no environment variable and no option. A CLI command of a service group ignores it.
+- `clientSecret` holds the [client secret](#the-client-secret) of the machine JWT in `token`, and only `kanthord serve worker` reads it. It has no environment variable and no option. A CLI command of a service group ignores it.
+- The file holds no `masterKey`, and the schema refuses that field.
 
 The environment carries the endpoint and token values.
 
