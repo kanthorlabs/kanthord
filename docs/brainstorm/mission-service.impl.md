@@ -87,6 +87,8 @@ The service derives it from the policy of the `project_binding` row that the pin
 - A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
 - An initiative requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and every external object and observation of the attempt names that key.
+- The admission of an external object checks the node, the open attempt of the live evaluation claim, the required external action and its binding.
+  A reuse names an external object of an earlier attempt of the same node, with the same action, binding and address.
 
 ## Configuration
 
@@ -412,7 +414,8 @@ kanthord runs no automatic evidence cleanup.
   An initiative is ready only when every current objective holds a terminal state.
   No action is unresolved, because no attempt requested one.
 - A node that is not ready answers 409 `mission.node.not_ready`.
-  Its `details` hold `tasksWithoutOutcome: NodeId[]`, `objectivesNotTerminal: NodeId[]` and `unresolvedActions: Key[]`.
+  Its `details` hold `tasksWithoutOutcome: NodeId[]`, `objectivesNotTerminal: NodeId[]`, `unresolvedActions: Key[]` and `unsatisfiedIds: NodeId[]`.
+  `unsatisfiedIds` names the dependencies of the closure that are not `Completed`.
   Each array is empty when it does not apply.
   The refusal opens no attempt, changes no state and writes no job.
 - A ready act while the attempt reads 0 opens attempt 1 in one transaction.
@@ -432,7 +435,7 @@ kanthord runs no automatic evidence cleanup.
   A mismatch answers 409 `mission.node.state_conflict`.
 - The external action records of the attempt take precedence over the target, under [the state transitions](mission-service.md#state-transitions).
   A resume that they route to `External.Failed`, `External.Success` or `External.Requested` does not read the target.
-- `target: Waiting` requires the readiness condition.
+- `target: Waiting` requires the readiness condition and the dependency closure.
   A node that is not ready answers 409 `mission.node.not_ready` with the `details` of [Node ready](#node-ready).
   The refusal changes no state and writes no job.
 - `target: Available` moves the node to `Available` when the dependency closure holds, and to `Pending` when it does not hold.
@@ -667,7 +670,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
 - Tests assert that a loss below `mission.consecutiveLossLimit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
-- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, and refuse it with `mission.node.not_ready` otherwise. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
+- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfiedIds` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests refuse a second `mission_unblock` row with the same `node_id` and an `opened_attempt` greater than 0.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.

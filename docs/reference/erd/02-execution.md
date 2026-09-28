@@ -356,7 +356,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - Three acts open an attempt: a claim of a node that holds no attempt, a human ready act on a node that holds no attempt, and a human unblock of a blocked attempt.
 - An attempt pins `node_revision` at its opening and never changes it. The required external actions of the attempt are the policy of the `project_binding` row that its pinned revision names. An initiative requires none.
 - A human ready act opens attempt 1 when the node holds none, sets `Waiting` and inserts the evaluation job in one transaction.
-- A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition. `Available` routes to `Pending` when the closure does not hold.
+- A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition and the dependency closure. `Available` routes to `Pending` when the closure does not hold.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node and the owed task outcomes, in one transaction. A closed attempt never reopens.
 - A human block, discard or success override on a node whose attempt reads 0 writes the node outcome with `attempt` 0. It closes no attempt and writes no task outcome.
 - An unblock is one transaction: the content revision when the act carries a change, the `mission_unblock` row, the attempt that it opens and the routing to `Pending` or `Available`.

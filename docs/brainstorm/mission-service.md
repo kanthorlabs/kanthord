@@ -253,9 +253,9 @@ A claim that carries no addressed content is not evidence.
 An external object is an entity of the Mission Service.
 It represents one requested external action and the remote thing that serves it.
 The entity is a representation.
-It is informative, and no rule of the Mission Service reads it.
+The Mission Service reads its existence to decide whether an attempt requested a required external action.
 The Worker Service uses that representation under its own rules.
-The Mission Service acts on an accepted observation alone.
+The Mission Service takes the end state of a requested external action from accepted observations alone.
 An external object carries its own identity, because one binding of the Project Service serves several requests.
 An external object names the external action that it fulfils, the binding of the Project Service, the address of the remote thing and a label for display.
 The Mission Service parses no platform content.
@@ -580,7 +580,7 @@ When a required action ended in a state other than its expected end state, the n
 Otherwise, when a required action is requested and every required action has reached its expected end state, the node goes to `External.Success`.
 Otherwise, when a required action is requested, the node goes to `External.Requested`.
 Otherwise the target of the resume selects the state.
-The target `Waiting` needs the readiness condition.
+The target `Waiting` needs the readiness condition and the dependency closure, as the ready act does.
 The target `Available` sends the node to `Available` when the dependency closure holds, or to `Pending` when it does not hold.
 
 | Transition | Event | Attempt | Record |
@@ -617,7 +617,7 @@ The target `Available` sends the node to `Available` when the dependency closure
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
 | `Blocked -> Discarded` | Human discards the node | No open attempt | Outcome |
-| `Paused -> Waiting` | Human resumes the node with target Waiting; readiness condition holds | Stays open | None |
+| `Paused -> Waiting` | Human resumes the node with target Waiting; readiness condition and closure hold | Stays open | None |
 | `Paused -> Available` | Human resumes the node with target Available; closure holds | Stays open | None |
 | `Paused -> Pending` | Human resumes the node with target Available; closure does not hold | Stays open | None |
 | `Paused -> External.Requested` | Human resumes the node; resume precedence selects External.Requested | Stays open | None |
