@@ -219,19 +219,26 @@ A test validates the document with `@apidevtools/swagger-parser` at 12.1.0.
 It asserts a real response against its declared schema.
 A test asserts that every stored file equals the emitted file byte for byte.
 A fragment has a soft limit of 500 lines. The test reports a larger fragment as a diagnostic, never fails on its size and holds no named fragment exception.
+A fragment above 500 lines passes on size, because the emitter already groups every operation of one URL path into one fragment. No hard limit applies.
+The test keeps its general structure checks and holds no check that exists only for one fragment.
+The review unit of an OpenAPI change is the changed operation contract with its schemas. A change of the emitter or of the shared file also needs a review of the affected published output.
 
-- `kanthord gateway openapi` emits one scoped OpenAPI 3.1 document from the `contract.ts` of each service into `static/openapi/<service>/` of the `engine` repository.
-- It emits the entry document `static/openapi/index.yaml`, an OpenAPI 3.1 document that references every scoped document and declares no operation of its own.
-- The entry document carries the `version` of `package.json` in its `info.version`.
-- It prints the path of the directory.
+- `kanthord gateway openapi` emits one OpenAPI 3.1 document from the `contract.ts` of each service into `static/` of the `engine` repository.
+- The index `static/openapi.yaml` references one fragment for each URL path and declares no operation of its own.
+- A fragment `static/openapi/<service>/<operation>.yaml` holds the path item of one URL path with every method at that path, and the full input and output schemas of each of those operations.
+- `<operation>` is the alphabetically first operation identity at that path without its service prefix. A new operation that sorts first renames the fragment.
+- `static/openapi/shared/components.yaml` holds only `bearerAuth`, the `IdempotencyKey` parameter and the `Error` response.
+- A fragment shares no domain schema with another fragment. A shared domain schema needs a proven consumer need or a measured maintenance problem.
+- The index carries the `version` of `package.json` in its `info.version`.
+- It prints the absolute path of the index.
 
 `yaml` at 2.9.0 serializes the document, and [architecture.impl.md](architecture.impl.md) already names that package for the configuration file, so this command adds none.
 It starts no server, and it reaches none.
 A human runs that command after a change of a route, and the repository holds the emitted directory.
 The server emits no document at its start, so the start of [architecture.impl.md](architecture.impl.md) holds no emission step.
-The server serves `static/openapi/` of its own package with `hono/serve-static` under the path `/api/openapi/`.
+The server serves `static/openapi.yaml` and `static/openapi/` of its own package with `hono/serve-static`.
 It uses the public access policy and the `application/yaml` content type.
-The entry document answers at `GET /api/openapi/index.yaml`, and every relative reference resolves the same on disk and over HTTP.
+The index answers at `GET /api/openapi.yaml`, and a fragment answers at `GET /api/openapi/<service>/<file>`. Every relative reference resolves the same on disk and over HTTP.
 A client generates its own client code from that directory.
 A build of a client copies the directory instead of calling a running server.
 

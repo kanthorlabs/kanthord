@@ -479,6 +479,7 @@ kanthord runs no automatic evidence cleanup.
   - node update
   - node move
   - node retire
+  - node rebind
   - dependency add
   - dependency remove
   - criterion set
