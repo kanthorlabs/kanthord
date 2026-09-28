@@ -41,7 +41,7 @@ flowchart TB
         end
         subgraph v2["ERD 2: Execution"]
             w2["Worker: instance"]
-            s2["Scheduler: execution, renewal, request"]
+            s2["Scheduler: execution"]
             m2["Mission: attempt, unblock, evidence, run output, evaluation, try, assessment, outcome, external object, observation"]
         end
         subgraph v3["ERD 3: External acquisition and observation"]

@@ -80,7 +80,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - Removal of `mission_mission.version`, a mission row lock instead of it, or the name `generation`. The counter stays as the compare-and-swap of a whole-mission write. `version` names every mutable counter that goes up by one, for example `gateway.tokenVersion`.
 - A narrower `expectedMissionVersion` that covers only the import and a whole-mission rebind. A change of the mission version makes the human review before the next graph write, so the "false" 409 is intended.
 - A durable Mission request record (`mission_request`, `import get`, `mission.request.payload_mismatch`). The version checks refuse a second act, and the Gateway replay covers a retry. `mission_unblock` is keyed by `unblock_<ulid>`.
-- A job state machine, a visibility timeout (`due_at`) on `scheduler_job`, or a single-queue model where one job row lives from enqueue to finish. `scheduler_job` stays stateless, the claim deletes it, and the execution lease with its renewal is the only zombie detector.
+- A job state machine, a visibility timeout (`due_at`) on `scheduler_job`, or a single-queue model where one job row lives from enqueue to finish. `scheduler_job` stays stateless, the claim deletes it, and the execution deadline is the only zombie detector.
 - A second ordering column on `scheduler_job` that keeps the first job time across a release. A release with further work inserts a new job, and the node takes its age from the release.
 - A prefix for the credential table (`custody_credential`, `kernel_credential`, `system_credential`) or a Kernel or System Service that owns it. Custody is a component, not a service, so its table has no prefix. The table stays `credential`, and the migration test carries its one exemption.
 - A `custody` key under `services` in the health report. Custody is a shared component. Its entries sit under `shared.custody`.
@@ -88,7 +88,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A table-named binding column, for example `scheduler_execution.project_binding_id`. A binding column names the binding kind that it requires: `worker_binding_id`, `storage_binding_id`, `source_binding_id`.
 - A stored claim kind on `scheduler_execution` or `scheduler_job`. While a claim is live, the node state `Executing` or `Evaluating` fixes its kind.
 - A durable Scheduler request record (`scheduler_request`, `WorkPull.requestId`, `scheduler.request.scope_mismatch`). A work pull is idempotent by the runtime identity: it returns the live execution of its instance. A worker crash or a server restart ends the runtime identity, and B9 owns recovery.
-- A renewal request identifier or a renewal record (`scheduler_renewal`, `renewal_request_id`, `scheduler.execution.renewal_superseded`). A renewal is idempotent by its execution identity and sets the expiry from its acceptance time.
+- A renewal of a Scheduler execution, or an execution-renewal request identifier or record (`scheduler_renewal`, `renewal_request_id`, `scheduler.execution.renewal_superseded`, `renew-lease`). An execution deadline is fixed at the claim. The renewal of an observation-obligation lease is unchanged.
 - A merge of the runtime identity and the client identity, or a new runtime identity at a worker restart. A restarted program gets its live registration back, and a server restart ends no registration.
 
 ## Contracts
