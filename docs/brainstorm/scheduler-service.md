@@ -219,7 +219,7 @@ The execution record holds these fields.
 - The execution identity that the claim mints.
 - The project.
 - The claimant: the worker binding and its instance.
-- For a registered instance, the client identity and the display name of its credential at the claim. The execution record preserves both after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
+- For a registered instance, the client identity and the display name of its credential. The execution record reads both from the registration of its runtime identity through the Worker Service, also after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
 - The kind of the claim: a steps claim or an evaluation claim.
 - The node and its attempt.
 - The pinned node revision.

@@ -60,8 +60,6 @@ erDiagram
         text worker_binding_id "latest row of the group at the claim"
         text resource_identity "group key, copy of the pinned row"
         text runtime_identity
-        text client_id "copy at the claim, null for a hosted instance"
-        text client_name "copy at the claim, null for a hosted instance"
         text claim_kind "steps | evaluation"
         integer attempt "positive"
         integer pinned_revision "positive"
@@ -353,7 +351,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
 - A registration ends at a deregistration, at a heartbeat expiry, at a removal or unavailability of its worker binding, and at a server restart. The start of the server ends every live row before it admits a request.
 - An instance at the `server` placement registers never, so it holds no row.
-- An ended row stays. The execution record copies its client identity and display name, so a trace names the program after the deregistration.
+- An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
 
 ### Scheduler Service
 
@@ -451,7 +449,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `scheduler_execution.worker_binding_id` | `project_binding.id` | Reference, no FK. The latest row of the group at the claim. |
 | `scheduler_execution.worker_binding_id` | `worker_agent_enablement.agent_name` | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
 | `scheduler_execution.resource_identity` | `project_binding.resource_identity` | Copy of the pinned row, no FK. It groups the rows of one binding across revisions. |
-| `scheduler_execution.runtime_identity` | `worker_instance.id` | Reference, no FK. A hosted instance has no row. |
+| `scheduler_execution.runtime_identity` | `worker_instance.id` | Reference, no FK. A hosted instance has no row. The Worker Service answers the client attribution of a registered instance through it. |
 | `scheduler_execution.node_id` | `mission_node.id` | Reference, no FK. |
 | `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |

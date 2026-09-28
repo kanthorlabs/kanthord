@@ -36,7 +36,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `Job` holds `jobId`, `projectId`, `nodeId` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
 - `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
-  - `claimant` holds `workerBindingId`, `resourceIdentity` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
+  - `claimant` holds `workerBindingId`, `resourceIdentity` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtimeIdentity` through the Worker Service. Both are absent for an instance that the server hosts.
   - `workerBindingId` is the latest row of the group `(projectId, resourceIdentity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinnedRevision` are positive safe integers.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.

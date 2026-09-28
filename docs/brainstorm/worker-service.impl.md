@@ -155,6 +155,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The machine identity of [gateway-service.impl.md](gateway-service.impl.md#the-forwarding-contract) names it for a live registration.
 - It is no JWT claim.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
+- The Worker Service answers the client attribution of a runtime identity to the Scheduler Service in-process: the `client_id` and the `client_name` of its `worker_instance` row, ended rows included. A runtime identity of the `server` placement holds no row and no attribution. The human `worker.instance.get` still answers 404 for an ended instance.
 
 ## Registration heartbeat
 

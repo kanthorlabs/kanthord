@@ -82,12 +82,12 @@ After the release and the readiness condition, a `reviewer@1` instance obtains a
 ## execution record
 
 The record of an execution that the Scheduler Service holds.
-For a registered instance, it preserves the client identity and the display name of its credential at the claim.
+For a registered instance, it names the client identity and the display name of its credential through the registration of its runtime identity.
 It holds neither for an instance that the server hosts.
 Both are attribution and no authority.
 
 The `claude-code` instance of worker binding `claude-main` claims the objective "Add password reset".
-Its execution record keeps the client identity and the display name after that instance deregisters, so a trace still names the program.
+Its execution record names the client identity and the display name after that instance deregisters, because the registration row stays, so a trace still names the program.
 
 ## lease
 
