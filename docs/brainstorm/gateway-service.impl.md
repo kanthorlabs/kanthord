@@ -146,11 +146,12 @@ A human then runs `kanthord jwt` again for each human token and each machine tok
 
 ## Local JWT issuance
 
-`kanthord jwt [username] [--name <display>] [--binding <worker binding>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
+`kanthord jwt [username] [--name <display>] [--binding <binding identity>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
 [architecture.impl.md](architecture.impl.md) declares this top-level command and its configuration path resolution.
 It uses the signing-key derivation and token contract above, with the configured lifetime.
 Without `--binding` it generates a human JWT with the selected username as `sub`.
-With `--binding` it generates a machine JWT with a fresh client identity as `sub` and the named worker binding as `binding`, and it rejects a `username` argument.
+With `--binding` it generates a machine JWT with a fresh client identity as `sub` and the binding identity `binding_<ulid>` of the worker binding as `binding`, and it rejects a `username` argument.
+The human reads that identity from the binding record, because the command opens no database and a binding name is unique only inside its project.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
 It prints the JWT followed by a newline only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
 It prompts for nothing, requires no terminal on standard input, calls no route and saves no client configuration.

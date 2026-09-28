@@ -60,7 +60,7 @@ A binding identity and a project identity follow the identity convention of [arc
 
 ## The identities of the Project Service
 
-- A binding identity is `binding_<ulid>` for every binding kind, because the entity kind is the binding and `kind` is a column.
+- A binding identity is `binding_<ulid>` for every binding kind, because the entity kind is the binding and the first part of `resource_identity` is the binding kind.
 - A binding identity names one revision of a binding, because each revision is one row of `project_binding`.
 - Validation of the `binding` claim of a machine JWT checks the `binding_` prefix and the canonical ULID portion.
 - [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules that JWT.

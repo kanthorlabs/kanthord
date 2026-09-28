@@ -80,6 +80,7 @@ The set has these values.
 - **worker binding**
 - **worker instance**
 - **agent**
+- **agent enablement**
 - **client identity**
 - **external object**
 - **repository**

@@ -53,6 +53,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - Removal checks all dependents in that same transaction.
 - [The collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) requires co-location of the two owners.
 - A resolution reads the worker binding, entry, enablement and credential metadata from one snapshot, and it records the revisions of the binding, the entry and the enablement.
+- The span of each native model inference call carries the worker binding and the agent enablement as identity attributes. Each value is the row id that the resolution read, so the span records the revisions of the binding, the entry and the enablement.
 - Resolution makes no network call.
 - The instance healthcheck reports whether the effective configuration resolves.
 
