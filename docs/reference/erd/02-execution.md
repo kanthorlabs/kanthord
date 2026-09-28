@@ -45,9 +45,8 @@ erDiagram
 
     worker_instance {
         text id PK "worker_instance_ + ULID, runtime identity"
-        text project_id
-        text worker_binding_id
-        text resource_identity "group key, copy of the pinned row"
+        text project_id "from the machine JWT"
+        text resource_identity "binding group key, from the machine JWT"
         text client_id "client_identity_ + ULID"
         text client_name "display name, 1-64 chars"
         integer registered_at "Unix ms"
@@ -58,7 +57,7 @@ erDiagram
         text id PK "execution_ + ULID"
         text project_id
         text node_id
-        text worker_binding_id
+        text worker_binding_id "latest row of the group at the claim"
         text resource_identity "group key, copy of the pinned row"
         text runtime_identity
         text client_id "copy at the claim, null for a hosted instance"
@@ -90,7 +89,7 @@ erDiagram
     scheduler_request {
         text project_id PK
         text request_id PK "request_ + ULID"
-        text scope_digest "binding + runtime identity"
+        text scope_digest "resource identity + runtime identity"
         text payload_digest
         text result "JSON claimed answer at acceptance"
         integer created_at "Unix ms"
@@ -252,7 +251,7 @@ erDiagram
         integer accepted_at "Unix ms"
     }
 
-    project_binding ||..o{ worker_instance : "ref, no FK"
+    project_binding }o..o{ worker_instance : "ref by (project_id, resource_identity), no FK"
     project_binding ||..o{ scheduler_execution : "ref worker_binding_id, no FK"
     worker_instance |o..o{ scheduler_execution : "ref runtime_identity to id, no FK"
     mission_node ||..o{ scheduler_execution : "ref, no FK"
@@ -347,10 +346,11 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 - `worker_instance` holds one row for each registration of an instance. `worker.register` inserts the row, and `id` is the runtime identity.
 - `worker_instance` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
-- `worker_instance` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live registrations of a worker binding are the live rows of that group, whatever revision each row pins.
+- `worker_instance` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live registrations of a worker binding are the live rows of that group.
 - A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
-- `worker_binding_id` comes from the verified machine JWT. The Project Service resolves `project_id` and `resource_identity` from that binding.
+- `project_id` and `resource_identity` come from the verified machine JWT. The Project Service confirms that the group is a current, available worker binding of that project.
+- A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
 - A registration ends at a deregistration, at a heartbeat expiry, at a removal or unavailability of its worker binding, and at a server restart. The start of the server ends every live row before it admits a request.
 - An instance at the `server` placement registers never, so it holds no row.
 - An ended row stays. The execution record copies its client identity and display name, so a trace names the program after the deregistration.
@@ -361,10 +361,11 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so an instance hosts at most one execution.
 - `scheduler_execution` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live executions of a worker binding are the live rows of that group, whatever revision each row pins.
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
-- `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding.
+- The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
+- `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
 - The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` has `claim_kind` `steps`. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both have `claim_kind` `evaluation`. The kind never changes.
 - The claim transaction inserts the execution row and the `scheduler_request` row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
-- `scheduler_request` holds accepted work pulls only. `project_id` equals the project of its execution. `scope_digest` is the digest of the canonical JSON of the worker binding and the runtime identity. `result` is the answer at acceptance and never changes, so a replay returns it and never the current execution row.
+- `scheduler_request` holds accepted work pulls only. `project_id` equals the project of its execution. `scope_digest` is the digest of the canonical JSON of the resource identity and the runtime identity. `result` is the answer at acceptance and never changes, so a replay returns it and never the current execution row.
 - A renewal with a new identifier inserts a `scheduler_renewal` row and sets `renewed_at`, `expires_at` and `renewal_request_id` on the execution. A repeat of the current identifier extends nothing. An identifier of an earlier row of the execution answers 409 `scheduler.execution.renewal_superseded`. `sequence` of an execution starts at 1 and has no gap.
 - A release sets `released_at`, `further_work` and `ended_at` once. A repeat with an equal payload returns the accepted receipt.
 - The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
@@ -446,10 +447,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 | From | To | Kind |
 | --- | --- | --- |
-| `worker_instance.worker_binding_id` | `project_binding.id` | Reference, no FK. |
-| `worker_instance.worker_binding_id` | `worker_agent_enablement.agent_name` | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
-| `worker_instance.resource_identity` | `project_binding.resource_identity` | Copy of the pinned row, no FK. It groups the rows of one binding across revisions. |
-| `scheduler_execution.worker_binding_id` | `project_binding.id` | Reference, no FK. |
+| `worker_instance.project_id`, `resource_identity` | `project_binding.project_id`, `resource_identity` | Reference to a binding group, from the machine JWT, no FK. It pins no revision. |
+| `scheduler_execution.worker_binding_id` | `project_binding.id` | Reference, no FK. The latest row of the group at the claim. |
+| `scheduler_execution.worker_binding_id` | `worker_agent_enablement.agent_name` | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
 | `scheduler_execution.resource_identity` | `project_binding.resource_identity` | Copy of the pinned row, no FK. It groups the rows of one binding across revisions. |
 | `scheduler_execution.runtime_identity` | `worker_instance.id` | Reference, no FK. A hosted instance has no row. |
 | `scheduler_execution.node_id` | `mission_node.id` | Reference, no FK. |

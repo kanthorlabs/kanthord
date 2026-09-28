@@ -179,9 +179,9 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in descending order. An item holds `name`, `host` (`kanthord` or `external-harness`), `declaredNodeStates` and `requiredNodeFormat`. The answer lists the supplied workers; a registration adds no entry.
 - `worker.catalog.get` is `GET /api/worker/catalog/:workerName`. The answer holds the item fields, `harness` for an externally hosted worker, and `method`, `agentName` and `resourceBudget` for a worker that kanthord hosts. An unknown name answers 404 `worker.catalog.not_found`.
 - `worker.agent.get` is `GET /api/worker/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `worker.agent.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the worker template registry](#the-worker-template-registry) owns the declaration.
-- `worker.instance.list` is `GET /api/worker/instance` with optional `projectId`, `workerBindingId`, `limit` and `cursor`. `projectId` is a `project_<ulid>` and `workerBindingId` is a `binding_<ulid>` of a worker binding. With `projectId`, a binding outside that project answers 400. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
+- `worker.instance.list` is `GET /api/worker/instance` with optional `projectId`, `resourceIdentity`, `limit` and `cursor`. `projectId` is a `project_<ulid>` and `resourceIdentity` is `worker:kanthord:<binding name>`. `resourceIdentity` requires `projectId`, and a binding that the project does not hold answers 400. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
 - `worker.instance.get` is `GET /api/worker/instance/:runtimeIdentity`. An unknown or ended instance answers 404 `worker.instance.not_found`.
-- An instance record holds `runtimeIdentity`, `projectId`, `workerBindingId`, `workerName`, `host`, `placement` for a kanthord host, `clientId` and `name` for a registered instance, `activity` (`idle`, `pulling` or `executing`), `draining`, `executionId` while executing, and `registered`. It holds no JWT.
+- An instance record holds `runtimeIdentity`, `projectId`, `resourceIdentity`, `workerName`, `host`, `placement` for a kanthord host, `clientId` and `name` for a registered instance, `activity` (`idle`, `pulling` or `executing`), `draining`, `executionId` while executing, and `registered`. It holds no JWT.
 - The reads change no registration, no pool, no configuration and no scheduling state, and they infer no dead process from silence.
 - The instance healthcheck runs before a work pull and before a claim commits, not through a human inspection command. A disabled enablement shows in `worker agent get`; a missing enablement refuses the binding write under [configuration validation](#agent-configuration-validation). The health report covers registration liveness.
 - Tests cover each human read and machine-JWT refusal, each unknown name or identity, the binding-to-project check, and records after registration, during execution and after a drain. They assert null and disabled enablements, no JWT and no pool side effect.
@@ -190,7 +190,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 - `worker.instance.deregister` is a `client` mutation of `unary` lifetime at `DELETE /api/worker/instance/:runtimeIdentity`, with no body, the default 30 s timeout and the default 10 MiB body limit.
 - It is no execution operation and requires no live registration under [the Gateway machine identity rules](gateway-service.impl.md#the-jwt). Authentication still checks the credential and binding.
-- The handler ends the live registration whose runtime identity equals the path parameter and whose client identity, worker binding and project equal those of the caller. The path parameter names the target because the machine identity names no runtime identity after the end.
+- The handler ends the live registration whose runtime identity equals the path parameter and whose client identity, project and resource identity equal those of the caller. The path parameter names the target because the machine identity names no runtime identity after the end.
 - The handler ends the registration and frees its slot through the Project instance-count collaboration in the same transaction, as registration takes it.
 - Every target that is no live registration of the caller answers 404 `worker.instance.not_found`. This includes an unknown or ended identity, another client's instance, a server-placement instance and a newer registration of the same client identity, which stays intact. A delayed request for an ended runtime identity never ends a newer registration.
 - The answer is 200 `{ runtimeIdentity, registered: false }`.
@@ -204,12 +204,12 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 `kanthord serve worker` starts the `worker` application, which hosts one native instance at the `worker` placement.
 
 - The command declares `--endpoint` and `--token` only, and it refuses `--config`.
-- The binding, the worker, the agent configuration and the instance count come from the server through the binding that the machine token names.
+- The binding, the worker, the agent configuration and the instance count come from the server through the project and the resource identity that the machine token names.
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
 - Startup resolves the client configuration, checks `masterKey`, checks the server package version and registers the instance, in that order.
-- After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `workerBindingId` and `workerName`.
+- After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `resourceIdentity` and `workerName`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
 - `SIGINT` and `SIGTERM` stop further startup and further work pulls.

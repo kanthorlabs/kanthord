@@ -36,7 +36,8 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `Job` holds `jobId`, `projectId`, `nodeId` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
 - `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `claimKind`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
-  - `claimant` holds `workerBindingId` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
+  - `claimant` holds `workerBindingId`, `resourceIdentity` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, copied at the claim. Both are absent for an instance that the server hosts.
+  - `workerBindingId` is the latest row of the group `(projectId, resourceIdentity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinnedRevision` are positive safe integers.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
@@ -44,7 +45,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `lease` holds `expiresAt`, `renewedAt` as a timestamp or `null` before the first renewal, and `lossDeclaredAt` as a timestamp or `null` before a loss declaration.
   - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` while the claim is live.
   - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service.
-- `WorkPull` is the input of `scheduler.work.pull`: `workerBindingId`, `runtimeIdentity` and `requestId`. The binding equals the worker binding of the machine identity, and the runtime identity equals the live registration of that client identity.
+- `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity`, `runtimeIdentity` and `requestId`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean. `false` states the execution-end fact of the attempt. The answer is `{ executionId, releasedAt }`.
 - `LeaseRenewal` is the input of `scheduler.execution.renew-lease`: `requestId`. The answer is `{ executionId, lease }`.
@@ -55,7 +56,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 
 - The table is `scheduler_request(project_id, request_id, scope_digest, payload_digest, result, created_at)`, with the primary key `(project_id, request_id)`.
 - It holds the accepted work pulls only. A `no-work` answer writes no row, because a no-work result ends the request.
-- `scope_digest` is the digest of the canonical JSON of the worker binding identity and the runtime identity of the claimant, and `payload_digest` is the digest of the validated input, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- `scope_digest` is the digest of the canonical JSON of the resource identity and the runtime identity of the claimant, and `payload_digest` is the digest of the validated input, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
 - `result` holds the `claimed` answer as accepted, so a replay returns the original result and never the current row of the execution.
 - The claim operation writes the row in the transaction of the claim.
 - Before admission, the claim operation reads the row of the request identifier. The same scope and the same digest return the stored result. Another scope answers 409 `scheduler.request.scope_mismatch` and transfers no execution. Another digest answers 409 `scheduler.request.payload_mismatch`.
