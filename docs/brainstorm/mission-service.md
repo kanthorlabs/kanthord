@@ -473,8 +473,7 @@ Three acts open an attempt.
 - a human unblock, which opens the next attempt
 
 An execution and an evaluation attempt pin the attempt that they start under.
-An attempt fixes the required external actions of its node at its opening, from the configuration of the Project Service current at that moment, and it records them next to the node revision that it pins.
-A configuration change during an open attempt reaches the next attempt.
+The required external actions of an attempt follow from the binding row that its pinned node revision names.
 Every record names its attempt, and it stays the record of that attempt forever.
 An attempt closure ends every execution and every evaluation attempt in flight under that attempt.
 It invalidates continuation, and it never invalidates a completed record.
@@ -512,13 +511,14 @@ While it does not hold, the initiative in `Available` holds no job.
 
 ### Consecutive loss limit
 
-The attempt counts its consecutive losses.
-A loss declaration of a claim of the attempt adds one.
+The consecutive losses of an attempt are its lost executions after its latest finished execution.
+The Scheduler Service counts them at each loss declaration and hands the count to the Mission Service.
 A revocation at a Mission transition before the expiry of the claim is no loss.
 A human act can meet a claim whose `ended_at` is null and whose `expired_at` is reached or passed.
 The Mission Service first consumes its loss declaration in the same transaction, under [Scheduler liveness](scheduler-service.md#liveness).
 The human act then checks its own precondition against the settled state.
-A release of an execution of the attempt and a human resume reset the count to 0.
+A release of an execution of the attempt ends the count.
+A human resume resets nothing, so it grants one more try.
 Below the limit, a loss returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
 The configuration file of the server sets the limit.
@@ -579,8 +579,9 @@ A human resume reads the required external actions of the attempt, their request
 When a required action ended in a state other than its expected end state, the node goes to `External.Failed`.
 Otherwise, when a required action is requested and every required action has reached its expected end state, the node goes to `External.Success`.
 Otherwise, when a required action is requested, the node goes to `External.Requested`.
-Otherwise the execution-end fact of the attempt sends the node to `Waiting`.
-Otherwise the dependency closure sends the node to `Available` when it holds, or to `Pending` when it does not hold.
+Otherwise the target of the resume selects the state.
+The target `Waiting` needs the readiness condition.
+The target `Available` sends the node to `Available` when the dependency closure holds, or to `Pending` when it does not hold.
 
 | Transition | Event | Attempt | Record |
 | --- | --- | --- | --- |
@@ -616,9 +617,9 @@ Otherwise the dependency closure sends the node to `Available` when it holds, or
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
 | `Blocked -> Discarded` | Human discards the node | No open attempt | Outcome |
-| `Paused -> Waiting` | Human resumes the node; resume precedence selects Waiting | Stays open | None |
-| `Paused -> Available` | Human resumes the node; resume precedence selects Available | Stays open | None |
-| `Paused -> Pending` | Human resumes the node; resume precedence selects Pending | Stays open | None |
+| `Paused -> Waiting` | Human resumes the node with target Waiting; readiness condition holds | Stays open | None |
+| `Paused -> Available` | Human resumes the node with target Available; closure holds | Stays open | None |
+| `Paused -> Pending` | Human resumes the node with target Available; closure does not hold | Stays open | None |
 | `Paused -> External.Requested` | Human resumes the node; resume precedence selects External.Requested | Stays open | None |
 | `Paused -> External.Success` | Human resumes the node; resume precedence selects External.Success | Stays open | None |
 | `Paused -> External.Failed` | Human resumes the node; resume precedence selects External.Failed | Stays open | None |
@@ -672,9 +673,9 @@ stateDiagram-v2
     Blocked --> Pending: Unblock, closure fails
     Blocked --> Completed: Success override
     Blocked --> Discarded: Human discard
-    Paused --> Waiting: Resume precedence selects Waiting
-    Paused --> Available: Resume precedence selects Available
-    Paused --> Pending: Resume precedence selects Pending
+    Paused --> Waiting: Resume target Waiting
+    Paused --> Available: Resume target Available, closure holds
+    Paused --> Pending: Resume target Available, closure fails
     Paused --> Blocked: Human reason
     Paused --> Completed: Success override
     Paused --> Discarded: Human discard

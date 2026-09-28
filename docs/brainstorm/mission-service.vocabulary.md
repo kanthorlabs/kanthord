@@ -113,7 +113,7 @@ The import creates the objective with no attempt, and its attempt reads 0.
 
 1. A `tdd@1` instance claims the objective.
    The first claim opens attempt 1, and Execution 1 starts.
-   Attempt 1 fixes its required external action, a pull request that must merge, from the repository strategy current at the claim.
+   Attempt 1 requires one external action, a pull request that must merge, from the repository strategy of the binding row that its pinned revision names.
 2. The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
    It writes each task assessment and task outcome.
 3. The instance releases with the evidence of Execution 1, and the execution of the attempt requires no further work.
