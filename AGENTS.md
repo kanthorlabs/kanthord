@@ -86,6 +86,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A `custody` key under `services` in the health report. Custody is a shared component. Its entries sit under `shared.custody`.
 - A JWT denylist (`gateway_token_denylist`, `ban`, `sweep`). Revocation is `gateway.tokenVersion` only.
 - A table-named binding column, for example `scheduler_execution.project_binding_id`. A binding column names the binding kind that it requires: `worker_binding_id`, `storage_binding_id`, `source_binding_id`.
+- A stored claim kind on `scheduler_execution` or `scheduler_job`. While a claim is live, the node state `Executing` or `Evaluating` fixes its kind.
 
 ## Contracts
 

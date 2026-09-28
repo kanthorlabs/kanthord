@@ -60,7 +60,6 @@ erDiagram
         text worker_binding_id "latest row of the group at the claim"
         text resource_identity "group key, copy of the pinned row"
         text runtime_identity
-        text claim_kind "steps | evaluation"
         integer attempt "positive"
         integer pinned_revision "positive"
         text credentials "JSON list of pinned credential row ids"
@@ -361,7 +360,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
-- The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` has `claim_kind` `steps`. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both have `claim_kind` `evaluation`. The kind never changes.
+- The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
 - The claim transaction inserts the execution row and the `scheduler_request` row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
 - `scheduler_request` holds accepted work pulls only. `project_id` equals the project of its execution. `scope_digest` is the digest of the canonical JSON of the resource identity and the runtime identity. `result` is the answer at acceptance and never changes, so a replay returns it and never the current execution row.
 - A renewal with a new identifier inserts a `scheduler_renewal` row and sets `renewed_at`, `expires_at` and `renewal_request_id` on the execution. A repeat of the current identifier extends nothing. An identifier of an earlier row of the execution answers 409 `scheduler.execution.renewal_superseded`. `sequence` of an execution starts at 1 and has no gap.

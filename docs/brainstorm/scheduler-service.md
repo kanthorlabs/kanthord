@@ -220,7 +220,6 @@ The execution record holds these fields.
 - The project.
 - The claimant: the worker binding and its instance.
 - For a registered instance, the client identity and the display name of its credential. The execution record reads both from the registration of its runtime identity through the Worker Service, also after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
-- The kind of the claim: a steps claim or an evaluation claim.
 - The node and its attempt.
 - The pinned node revision.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
@@ -242,7 +241,7 @@ A worker declares the node states that its instances consume, and the [Mission S
 For an otherwise eligible node, the Scheduler admits a claim only when the worker of the pulling instance declares the state of the node at admission.
 A claim from `Available` is a steps claim and authorizes the steps work.
 A claim from `Waiting` or `External.Requested` is an evaluation claim and authorizes the evaluation.
-The accepted claim records its kind, and it keeps that kind for its lifetime.
+The claim records no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes its kind.
 The declared states come from the worker contract that the Worker Service publishes, never from a registering instance.
 A new worker declares its states without a change to a rule of the Scheduler.
 The [Mission Service](mission-service.md#evaluation-and-assessment) owns the separation between the execution of the steps of a node and its assessment.
