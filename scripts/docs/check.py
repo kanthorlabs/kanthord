@@ -54,9 +54,13 @@ def check_link(source, href, boundary, public):
     if url.fragment and target.suffix == ".md":
         text = target.read_text()
         headings = re.findall(r"^#{1,6} (.+)$", text, re.MULTILINE)
-        anchors = {
-            re.sub(r"\s+", "-", re.sub(r"[^\w\s-]", "", h.lower())) for h in headings
-        }
+        anchors = set()
+        seen = {}
+        for heading in headings:
+            slug = re.sub(r"\s", "-", re.sub(r"[^\w\s-]", "", heading.lower().strip()))
+            count = seen.get(slug, 0)
+            anchors.add(slug if count == 0 else f"{slug}-{count}")
+            seen[slug] = count + 1
         anchors.update(re.findall(r'id="([^"]+)"', text))
         if unquote(url.fragment) not in anchors:
             raise ValueError(f"{source}: missing anchor: {href}")
