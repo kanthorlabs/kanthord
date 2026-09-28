@@ -23,7 +23,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 - The local store of an external harness is an append-only log on the host of the harness, not a kanthord record. Only an ingested record is a kanthord record.
 - The Tracking Service holds no state of the progress of an ingestion between two ingestions.
-- The count of a drop and of a refusal is itself telemetry. Its representation is open in [HANDOFF](../../brainstorm/HANDOFF.md#tracking-service).
+- The count of a drop and of a refusal is itself telemetry. Its representation is open in [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#tracking-service).
 
 ## Diagram
 
@@ -85,10 +85,10 @@ erDiagram
 
 | Table | Owner | Basis |
 | --- | --- | --- |
-| `tracking_trace` | Tracking Service | Derived: a trace belongs to exactly one project or to no project, it is the unit of deletion, and an ingestion resolves the project through the records of the Tracking Service, under [the trace and the project](../../brainstorm/tracking-service.md#the-trace-and-the-project) and [ingestion](../../brainstorm/tracking-service.md#ingestion). |
-| `tracking_span` | Tracking Service | Ruled: [primary store](../../brainstorm/tracking-service.impl.md#primary-store) holds the span. The columns are derived from [the trace model](../../brainstorm/tracking-service.md#the-trace-model) and the span record of the [Tracking CLI](../../../engine/docs/cli/tracking.md#span-record-fields-kind-span). |
+| `tracking_trace` | Tracking Service | Derived: a trace belongs to exactly one project or to no project, it is the unit of deletion, and an ingestion resolves the project through the records of the Tracking Service, under [the trace and the project](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-and-the-project) and [ingestion](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#ingestion). |
+| `tracking_span` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the span. The columns are derived from [the trace model](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.md#the-trace-model) and the span record of the [Tracking CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/tracking.md#span-record-fields-kind-span). |
 | `tracking_record` | Tracking Service | Derived: the Tracking Service deduplicates by the record identity that its producer mints, within the retention of the trace. The identity contract is open in HANDOFF. |
-| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](../../brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [expiry](../../brainstorm/tracking-service.impl.md#expiry) keeps its identity. The columns are derived, and the identity contract of a text is open in HANDOFF. |
+| `tracking_telemetry_text` | Tracking Service | Ruled: [primary store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#primary-store) holds the telemetry text; [expiry](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/tracking-service.impl.md#expiry) keeps its identity. The columns are derived, and the identity contract of a text is open in HANDOFF. |
 
 ## Constraints
 
@@ -139,7 +139,7 @@ The rules below have two kinds. A structural check is a rule that the Tracking S
 - The retention of a telemetry text is never longer than the retention of a span. The operator configures both once for the server, never per project. The values and the start of the retention of a text are open.
 - The trace is the unit of deletion. The deletion of a trace deletes its spans, its records and its telemetry texts. The deletion of a span deletes no telemetry text.
 - A deletion of a telemetry row changes no outcome, removes no evidence and changes no state of a node.
-- Telemetry is the one exception to the rule that an owner deletes no record that a peer can reference, as [architecture.impl.md](../../brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. `scheduler_execution.trace_id` and `root_span_id` keep their values after the deletion of their trace, and they resolve to expired.
+- Telemetry is the one exception to the rule that an owner deletes no record that a peer can reference, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. `scheduler_execution.trace_id` and `root_span_id` keep their values after the deletion of their trace, and they resolve to expired.
 
 ## Cross-store references
 

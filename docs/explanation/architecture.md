@@ -1,12 +1,12 @@
 # KanthorD component architecture
 
-[Explanations](README.md) · [Services and build order](high-level.md)
+[Explanations](README.md)
 
-This view expands services into individual named components. **A container owns its contents. An arrow names a collaboration, call or record flow.** It does not mean “build the entire source service first.” The [build sequence](high-level.md#which-part-should-we-build-first) handles cyclic dependencies through joint implementation slices.
+This view expands services into individual named components. **A container owns its contents. An arrow names a collaboration, call or record flow.** It does not mean “build the entire source service first.” The [implementation order](#interfaces-that-determine-implementation-order) handles cyclic dependencies through joint implementation slices.
 
 Mission Service is embedded in the Project boundary because a mission is intrinsic to its project. It is not a repository, provider, worker or source binding. This containment does not remove Mission's separate authority over its records.
 
-> **Design scope:** The complete component map includes planned work. Current implementation status is listed in [what runs today](high-level.md#what-runs-today). On the documentation site, the diagram fits a wide panel and shows its full height. Zoom in for detail and scroll horizontally when enlarged; use the high-level diagram for an initial reading.
+> **Design scope:** The complete component map includes planned work. On the documentation site, the diagram fits a wide panel and shows its full height. Zoom in for detail and scroll horizontally when enlarged.
 
 ## Components and ownership
 
@@ -220,7 +220,7 @@ flowchart TB
 
 **Legend:** Service containers establish component ownership. White nodes are components or domain records; gray nodes are shared infrastructure or persistence. Orange identifies the mandatory Project–Mission composition. Cylinders are database files. Arrow labels state relationships; they do not imply shared authority or one transaction unless explicitly marked atomic.
 
-**Coverage:** The diagram expands the major architectural components rather than listing responsibilities inside service boxes. Repeated cross-cutting edges are omitted: services use Context, lifecycle, health, logging and the store; all services produce telemetry; every resource connector resolves and authorizes its operation through Project. External systems and execution hosts appear in the [service view](high-level.md#services-and-their-relationships).
+**Coverage:** The diagram expands the major architectural components rather than listing responsibilities inside service boxes. Repeated cross-cutting edges are omitted: services use Context, lifecycle, health, logging and the store; all services produce telemetry; every resource connector resolves and authorizes its operation through Project. External systems and execution hosts are not drawn.
 
 ## Interfaces that determine implementation order
 
@@ -232,7 +232,7 @@ flowchart TB
 | Mission graph/state                  | Scheduler work queue                     | Insert/delete affected jobs inside the committing transaction.                                                     | Mission transitions and queue membership form one atomic implementation slice.                                    |
 | Scheduler claim operation            | Mission, Project and Worker              | Node readiness, attempt/revision transition, binding counts, compatibility and instance health.                    | Use narrow contracts and test doubles first; integrate the real collaborators before admitting production claims. |
 | Project authorization                | Scheduler execution records              | Prove claim ownership and liveness before authorizing resource use.                                                | Execution-scoped resource authorization follows the claim model, not merely JWT authentication.                   |
-| Worker execution                     | Scheduler and Mission                    | Claim/renew/release; read pinned work; submit evidence and assessments.                                            | Implement one minimal execution path before adding more worker methods.                                           |
+| Worker execution                     | Scheduler and Mission                    | Claim/release; read pinned work; submit evidence and assessments.                                            | Implement one minimal execution path before adding more worker methods.                                           |
 | Model/repository/platform connectors | Project resolution and custody           | Resolve the binding, authorize use and consult protected credential material.                                      | A connector cannot treat possession of a token or a prompt as permission.                                         |
 | Action performer                     | Scheduler, Mission and connectors        | Live evaluation claim, passing assessment, required actions, evidence operands and external-object reconciliation. | Repository actions follow claim and assessment contracts; they are not arbitrary agent tools.                     |
 | Intake acquisition                   | Project verification and grants          | Verify a delivery; acquire and revoke session-scoped acquisition material.                                         | Intake cannot acknowledge an unverified or unstored webhook/stream delivery.                                      |
@@ -269,4 +269,4 @@ flowchart TB
 
 **No service split is implied.** All seven services target one server process. The platform connector, action performer and MCP server stay server-side. Native model/repository calls can run on a trusted worker host after the required authorization and credential handover.
 
-Read [services and build order](high-level.md) for the recommended first implementation slice and [healthchecks](healthchecks.md) for diagnostics.
+Read [healthchecks](healthchecks.md) for diagnostics.

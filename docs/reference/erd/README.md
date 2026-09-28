@@ -7,8 +7,8 @@ title: Database schema
 ## Status
 
 These pages are a design of the KanthorD database, not a description of implemented behavior.
-They follow the rulings of the [design set](../../brainstorm/README.md) as of 2026-09-26.
-An open item of [HANDOFF](../../brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema through a migration.
+They follow the rulings of the [design set](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/README.md) as of 2026-09-26.
+An open item of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md) stays out of the schema. A later ruling changes the schema through a migration.
 
 ## Views
 

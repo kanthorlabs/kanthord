@@ -15,8 +15,8 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Capability limits
 
-- The ruled acquisition and delivery machinery supports the GitHub platform only. Slack, Telegram and Jira wait for their platform entries and credential types in [HANDOFF](../../brainstorm/HANDOFF.md#project-service).
-- The complete source binding configuration is open. The proposed GitHub fields are in the [Project CLI](../../../engine/docs/cli/project.md#source-configuration--partially-blocked).
+- The ruled acquisition and delivery machinery supports the GitHub platform only. Slack, Telegram and Jira wait for their platform entries and credential types in [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#project-service).
+- The complete source binding configuration is open. The proposed GitHub fields are in the [Project CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#source-configuration--partially-blocked).
 - Acceptance as a human act needs a linked human identity. The mapping from a platform account to a human identity is part of the open source binding configuration.
 - A request for new WHAT receives no acceptance. The inbound request contract is POSTPONED in HANDOFF.
 - The Intake Service is extractable in principle: it declares no collaboration, and no foreign key crosses its boundary. It still runs in the server process and in `kanthord.db`. Its peers reach it through `service`-policy operations, which the direct adapter alone serves, and the cross-process identity contract is POSTPONED.
@@ -147,11 +147,11 @@ erDiagram
 
 | Table | Owner | Basis |
 | --- | --- | --- |
-| `project_acquisition_grant` | Project Service | Ruled: [the acquisition grant](../../brainstorm/project-service.impl.md#the-acquisition-grant). |
-| `intake_subscription` | Intake Service | Derived from [subscriptions](../../brainstorm/intake-service.md#subscriptions); the column `last_verified_receipt_at` is ruled in [the resource healthcheck](../../brainstorm/intake-service.impl.md#the-resource-healthcheck). The subscription store is open in [HANDOFF](../../brainstorm/HANDOFF.md#intake-service). |
-| `intake_delivery` | Intake Service | Derived from [deliveries](../../brainstorm/intake-service.md#deliveries) and [handoff](../../brainstorm/intake-service.md#handoff). The delivery store is open in HANDOFF. |
-| `scheduler_delivery_admission` | Scheduler Service | Derived: admission records its decision durably before it answers, keyed by the delivery identity, under [the Scheduler identities](../../brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service). |
-| `scheduler_observation_obligation` | Scheduler Service | Derived from the `ObservationObligation` record of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts). |
+| `project_acquisition_grant` | Project Service | Ruled: [the acquisition grant](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-acquisition-grant). |
+| `intake_subscription` | Intake Service | Derived from [subscriptions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#subscriptions); the column `last_verified_receipt_at` is ruled in [the resource healthcheck](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-resource-healthcheck). The subscription store is open in [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#intake-service). |
+| `intake_delivery` | Intake Service | Derived from [deliveries](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#deliveries) and [handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff). The delivery store is open in HANDOFF. |
+| `scheduler_delivery_admission` | Scheduler Service | Derived: admission records its decision durably before it answers, keyed by the delivery identity, under [the Scheduler identities](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service). |
+| `scheduler_observation_obligation` | Scheduler Service | Derived from the `ObservationObligation` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts). |
 
 The source binding is a `project_binding` row of kind `source` in [ERD 1](01-setup.md). Its configuration holds `webhookSecretRotation`, and the verification secret derives from `masterKey`, so no table holds a webhook secret.
 
@@ -205,13 +205,13 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `external_object_id` names an external object of the project. Admission resolves it by the repository binding and the address of the object, never by the newest attempt alone.
 - An acceptance as an observation inserts exactly one `scheduler_observation_obligation` row in the admission transaction, and every other disposition inserts none. `delivery_id` of the obligation has a unique index. `project_id` and `external_object_id` of the obligation equal those of the admission.
 - `external_object_id` of an admission is null when the admission refuses the delivery before it resolves an external object.
-- The Scheduler deduplicates effects per project and per external object across subscription kinds and redeliveries. The deduplication key of an observation is the open item C3 of [HANDOFF](../../brainstorm/HANDOFF.md#mission-service-1), so this page states no index for it.
+- The Scheduler deduplicates effects per project and per external object across subscription kinds and redeliveries. The deduplication key of an observation is the open item C3 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#mission-service-1), so this page states no index for it.
 - An acceptance as a human act invokes the Mission operation under the linked human identity before the admission row commits, and it creates no obligation.
 - An obligation holds no claim and no claimant. The observer holds its lease while it reads the external object.
 - The lease columns are all null before an observer holds the lease. A held lease has `expires_at`. `renewed_at` and `loss_declared_at` need `expires_at`.
 - Renewal, loss declaration and completion of an obligation serialize with each other.
 - `observation_id` names an accepted observation of the same external object, and so of the same project, node and attempt.
-- The observer writes the observation to the Mission Service, then sets `observation_id` and `completed_at` on the obligation. The recovery of an obligation whose observer is lost before the observation is the open item C1 of [HANDOFF](../../brainstorm/HANDOFF.md#scheduler-service).
+- The observer writes the observation to the Mission Service, then sets `observation_id` and `completed_at` on the obligation. The recovery of an obligation whose observer is lost before the observation is the open item C1 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#scheduler-service).
 - The retention of a completed obligation is open.
 
 ## Cross-group references

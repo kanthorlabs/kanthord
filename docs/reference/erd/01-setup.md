@@ -17,7 +17,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - A project binds the kinds `repository`, `storage` and `worker`.
 - A worker binding of a native worker needs an enabled [agent enablement](#worker-service), because `validateEntry` refuses a binding whose agent has no enabled enablement.
 - A worker binding of an externally hosted worker needs no agent enablement.
-- A delivery source is no binding. The Intake Service designs it under [HANDOFF](../../brainstorm/HANDOFF.md#intake-service).
+- A delivery source is no binding. The Intake Service designs it under [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#intake-service).
 - The Mission Service accepts the import, the export, the node API, the dependency edits, the criterion set and the priority.
 - The human controls (pause, resume, block, unblock, ready, override and discard) come with [ERD 2](02-execution.md), because most of them write an attempt, an outcome or an unblock record.
 - The Scheduler work queue is in this group, although the Scheduler Service owns it. A Mission write that makes a node claimable inserts its job in the same transaction. A Scheduler migration cannot read a Mission table, so no later migration can back-fill the queue.
@@ -160,15 +160,15 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 
 | Table | Owner | Basis |
 | --- | --- | --- |
-| `credential` | Custody | Ruled: [custody.impl.md](../../brainstorm/custody.impl.md#the-credential-store-record), [the credential table](../../brainstorm/architecture.impl.md#the-credential-table). |
-| `project_project` | Project Service | Ruled: [the binding store](../../brainstorm/project-service.impl.md#the-binding-store). |
-| `project_binding` | Project Service | Ruled: [the binding store](../../brainstorm/project-service.impl.md#the-binding-store). |
-| `worker_agent_enablement` | Worker Service | Derived from the [agent enablement](../../brainstorm/worker-service.md#agent-configuration) record and the [agent enablement record](../../../engine/docs/cli/worker.md#agent-enablement-record--proposed). |
-| `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](../../../engine/docs/cli/mission.md#proposed-result-schemas). |
-| `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](../../brainstorm/mission-service.impl.md#the-plan-file-name). |
-| `mission_node_revision` | Mission Service | Derived from [the revisions](../../brainstorm/mission-service.impl.md#the-revisions). |
-| `mission_dependency` | Mission Service | Derived from the dependency [edge kind](../../brainstorm/mission-service.vocabulary.md#edge-kind). |
-| `scheduler_job` | Scheduler Service | Derived from the `Job` record of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts). |
+| `credential` | Custody | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table). |
+| `project_project` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
+| `project_binding` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
+| `worker_agent_enablement` | Worker Service | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/worker-service.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/worker.md#agent-enablement-record--proposed). |
+| `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). |
+| `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name). |
+| `mission_node_revision` | Mission Service | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions). |
+| `mission_dependency` | Mission Service | Derived from the dependency [edge kind](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.vocabulary.md#edge-kind). |
+| `scheduler_job` | Scheduler Service | Derived from the `Job` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts). |
 
 ## Keys and relationship notation
 
@@ -176,7 +176,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 - `project_binding` holds one row for each revision. The group `(project_id, resource_identity)` is one binding, and its latest row states the binding. A record pins one row by `id`.
 - `worker_agent_enablement` holds one row for each revision. The group `agent_name` is one enablement, and its latest row states the enablement.
 - `mission_node_revision` holds one row for each content revision of an initiative or an objective. The current revision of a node is its row with the greatest `revision`, and the primary key `(node_id, revision)` serves that lookup. A task has no revision row.
-- No pair of tables references each other. The self-reference `parent_id` of `mission_node` inserts the parent first, so no key is deferred. `foreign_keys` is `ON`, as [architecture.impl.md](../../brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
+- No pair of tables references each other. The self-reference `parent_id` of `mission_node` inserts the parent first, so no key is deferred. `foreign_keys` is `ON`, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
 
 ## Constraints
 
@@ -187,7 +187,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name.conflict`.
 - The write keeps one `platform` for every row of a name. The newest live revision is the greatest `revision` of the name with a null `ended_at`.
 - A rotation inserts the next revision and keeps the older revisions live. A drain or a revoke sets `ended_at`. Custody refuses a revoke of the newest live revision.
-- The secret shape and the `metadata` schema depend on `platform`, as the [platform validators](../../brainstorm/custody.impl.md#platform-validators) state.
+- The secret shape and the `metadata` schema depend on `platform`, as the [platform validators](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#platform-validators) state.
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
 - The `baseUrl` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
 - The additional authenticated data of the envelope is the row identity and the platform.
@@ -203,13 +203,13 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A row is immutable. A configuration change inserts the next revision of its group.
 - A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `instanceCount: 0` for a worker binding.
 - A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, and a tombstone after the pinned row refuses the use.
-- Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](../../brainstorm/project-service.impl.md#the-binding-store) rules.
+- Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store) rules.
 - Every committed binding-set write increments `binding_set_version`, including a write equal to the stored set. A write that names another version is refused.
 - No sweep deletes a removed binding or a revision.
 - A write derives `resource_identity` from the configuration of the binding. A human never enters it.
 - A write compares each submitted binding with the current binding of the same name. An unchanged configuration inserts no row. A changed configuration of the same resource inserts the next revision of the group. A changed resource inserts a tombstone in the old group and revision 1 of the new group. A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again. A name that the submission omits takes a tombstone, and its rows stay.
 - A write refuses a change of the worker of an existing worker binding under the same name.
-- `config` holds the configuration of its kind: [repository](../../../engine/docs/cli/project.md#repository-configuration--proposed-fields), [worker](../../../engine/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](../../../engine/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
+- `config` holds the configuration of its kind: [repository](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#repository-configuration--proposed-fields), [worker](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
 
 ### Worker Service
 
@@ -239,9 +239,9 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A parent and a dependency name nodes of the same mission.
 - A binding in `bindings` belongs to the project of the mission.
 - A task holds no revision, no state, no attempt and no priority. Its content is in the `tasks` column of the revision of its objective.
-- `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](../../../engine/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
+- `tasks` holds one `TaskContent` item for each current task, as the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#human-actions) proposes: the task identity, its plan file name and its complete content. A revision keeps that content for its moment, so a later move or rename changes no stored revision.
 - `name`, `requirement` and `criterion` are nonblank text. `verifications` is a nonempty ordered list of nonblank bash commands.
-- `bindings` obeys the rule table of [the node content](../../brainstorm/mission-service.impl.md#the-node-content): an objective names exactly one repository binding, an initiative and an objective name at most one storage binding, and an initiative and a task name none.
+- `bindings` obeys the rule table of [the node content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-node-content): an objective names exactly one repository binding, an initiative and an objective name at most one storage binding, and an initiative and a task name none.
 - A content change of a node inserts the next `mission_node_revision` row of its content owner in the same transaction. `mission_node.filename` equals the `filename` of the current revision.
 - A task change inserts the next revision of its objective, and the `filename` of a task row equals its item in `tasks`. A task move inserts the next revision of both objectives. An objective move changes `parent_id` and inserts no revision.
 - A retired node keeps its row, its `filename`, its revisions and its last state. A retirement is final.
