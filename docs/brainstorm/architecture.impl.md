@@ -320,6 +320,7 @@ This sibling declares the fields below.
 - `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `worker.globalPrompt`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `scheduler.releaseReserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `mission.consecutiveLossLimit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
@@ -643,9 +644,15 @@ An operation declares its execution contract.
 - An operation declares whether it requires a live execution.
 - For such an operation the invocation chain proves the execution identity of the input once, before the handler runs.
 - The chain resolves that identity through the authorization of the Project Service, which reads the claim state from the Scheduler Service.
-- The proof holds when the claimant instance of the claim is the runtime identity of the live registration that the machine identity names, and the lease of the claim is live.
+- The proof requires all three conditions:
+  - The claimant instance equals the runtime identity of a live registration.
+    That registration is the one that the machine identity names.
+  - `ended_at` is null.
+  - The time is before `expired_at`.
 - The chain passes the node, the attempt and the pinned revision of the claim to the handler, and the handler reads none of them from the input.
 - A failed proof answers 403 with the error code `gateway.invocation.execution_proof_failed` before the handler runs.
+- Every execution mutation repeats the full proof inside its write transaction under [Scheduler liveness](scheduler-service.md#liveness).
+  A failed check answers 409 `scheduler.execution.not_running`.
 - The MCP server of the Worker Service runs the same proof component before each tool call, because its execution identity sits inside the JSON-RPC message and not in the operation input. [The MCP server contract](worker-service.impl.md#mcp-server) rules its JSON-RPC error and the in-process proof for a native agent at the `server` placement.
 - The proof establishes ownership and liveness, and it grants no operation authority.
 

@@ -331,11 +331,7 @@ Execution 2 continues the task from that commit, and the task holds no outcome u
 
 ## resource budget
 
-The resource budget bounds one execution by turn count and wall time.
+The resource budget bounds the agent work of one execution by wall time and, when declared, turn count.
 `general@1` declares 200 turns and 2 hours, and `general-lab` overrides them with 50 turns and 30 minutes.
+`claude@1` and `opencode@1` each declare 2 hours of wall time.
 The [budget contract](worker-service.impl.md#stop-and-budget) defines measurement and validation.
-
-## lease renewal interval
-
-The execution renews its lease at a fixed interval shorter than the lease expiry, for example every 30 seconds against a lease of 2 minutes.
-The values are illustrations, and the implementation epics set the configured values.

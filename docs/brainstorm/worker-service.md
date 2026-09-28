@@ -42,7 +42,8 @@ The evaluation method declares `Waiting` and `External.Requested`.
 A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`.
 
 Each agent of a worker that kanthord hosts is a native agent, an agent loop that the Worker Service runs itself.
-The Worker Service publishes the contract of `claude@1` and `opencode@1`: the name, the host, the declared node states and the required node format.
+The Worker Service publishes the contract of `claude@1` and `opencode@1`.
+It holds the name, host, declared node states, required node format and resource budget.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
 A worker that kanthord hosts declares the base prompt and the agent prompt of each of its agents.
@@ -247,7 +248,7 @@ sequenceDiagram
     rect rgb(214, 234, 248)
         I->>S: work pull (worker binding, runtime identity, compatibility declarations)
         Note over S,M: the claim opens the attempt and pins the revision
-        S-->>I: claim response: execution identity, node, attempt, pinned revision, lease, trace identity, root span identity
+        S-->>I: claim response: execution identity, node, attempt, pinned revision, expiredAt, trace identity, root span identity
     end
     rect rgb(248, 215, 218)
         I->>I: the execution starts, the instance is busy
@@ -260,9 +261,12 @@ An execution performs the method of its worker under the live claim that its ins
 The execution takes its execution identity, its node, its attempt, the pinned node revision, its trace identity and its root span identity from the [claim response](scheduler-service.md#work-pulls) of the Scheduler Service.
 The [Tracking Service](tracking-service.md#producer-and-ownership) owns what a span of the execution names as its parent.
 Every operation of the execution presents its execution identity under the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
-The execution renews its lease at a fixed interval shorter than the lease expiry while it runs.
-The renewal runs outside the agent, so a long model call renews the lease.
+The execution holds a fixed `expired_at` under [Scheduler configuration](scheduler-service.impl.md#configuration).
 A revoked or lost execution stops its agent and performs no further operation under its execution identity.
+
+Every worker declares a default [resource budget](worker-service.vocabulary.md#resource-budget) with `wallTimeMs` for one execution.
+Every worker binding can override it under the [budget contract](worker-service.impl.md#stop-and-budget).
+The agent stops when its turn count or wall time reaches the budget.
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
@@ -307,7 +311,6 @@ Its required rationale names that verification.
 The execution writes the task assessment and the task outcome.
 The task assessment names the task commit and the [tested input](mission-service.vocabulary.md#tested-input) of the verifications.
 The task outcome carries the task commit as its evidence.
-A worker declares the default [resource budget](worker-service.vocabulary.md#resource-budget) of one execution, and a worker binding can override it.
 
 In an attempt after the first, the execution reads the outcome of the cleared attempt for each task.
 The execution checks whether that outcome asserts success, the task content is unchanged between the pinned revisions, and the repository binding is unchanged.
@@ -320,9 +323,10 @@ Inside one attempt, a task that holds a current task outcome of the attempt is c
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
 When every task of the revision holds a current task outcome of the attempt, the execution releases with no further work.
 A recorded task assessment that does not pass ends the task work, and the execution releases with no further work.
-Otherwise, when the resource budget ends before every task holds a task outcome, the execution releases with further work.
+Otherwise, when the resource budget ends before every task holds a task outcome, the agent stops and the execution performs cleanup.
+The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
+Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
 Before a release with further work, the execution submits its [run output](mission-service.md#run-output).
-Before that release, the execution commits the task work in progress as a checkpoint commit.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
@@ -371,10 +375,6 @@ sequenceDiagram
             E->>M: task assessment (task commit and tested input) and task outcome (task commit)
         end
     end
-    rect rgb(214, 234, 248)
-        Note over E,S: lease renewal at a fixed interval, outside the agent
-        E->>S: renew the lease
-    end
     rect rgb(248, 215, 218)
         E->>RG: push the node branch
     end
@@ -418,7 +418,7 @@ The [overview](overview.md#kanthords-own-harness) owns the end conditions of an 
 A human pause, a human discard and a success override reach the execution as a revocation.
 An assessment that does not pass and a resource limit reach the Mission Service as a release.
 
-The sequence diagram below shows a revocation and the loss of the lease.
+The sequence diagram below shows how an execution learns of a revocation or a loss after deadline expiry.
 
 ```mermaid
 sequenceDiagram
@@ -434,8 +434,12 @@ sequenceDiagram
         Note over M,S: the transition revokes the claim of the execution
     end
     rect rgb(214, 234, 248)
-        E->>S: renew the lease
-        S-->>E: revoked
+        alt hosted execution
+            S-->>E: in-process abort from the transaction that ends the execution
+        else other execution
+            E->>S: next execution call
+            S-->>E: call refused
+        end
     end
     rect rgb(248, 215, 218)
         E->>A: stop the agent
@@ -443,7 +447,7 @@ sequenceDiagram
         Note over E: the instance is idle again and pulls
     end
     rect rgb(214, 234, 248)
-        Note over S: the same path serves a loss declaration after lease expiry
+        Note over S: the same path serves a loss declaration after deadline expiry
     end
 ```
 
@@ -834,7 +838,7 @@ A later execution never depends on the retained agent context of an earlier exec
 
 The [Project Service](project-service.md) owns bindings, their entries and configured counts, system authorization and repository strategy.
 [Custody](custody.md) owns resource credentials and suitability.
-The [Scheduler Service](scheduler-service.md) owns the work queue, the claim, the execution record, the lease and the live-execution accounting.
+The [Scheduler Service](scheduler-service.md) owns the work queue, claim, execution record, fixed deadline and live-execution accounting.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
 It owns the healthcheck, the compatibility declarations, the workspace, the model connector and the prompt composer.

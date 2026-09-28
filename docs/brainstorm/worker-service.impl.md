@@ -179,7 +179,10 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 - Five `human` operations expose the published worker contract, the agent declaration and enablement, and the runtime-only instance record. Each one is `unary`, declares `mutation: false`, uses the default 30 s timeout and reads no table of another service.
 - `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in descending order. An item holds `name`, `host` (`kanthord` or `external-harness`), `declaredNodeStates` and `requiredNodeFormat`. The answer lists the supplied workers; a registration adds no entry.
-- `worker.catalog.get` is `GET /api/worker/catalog/:workerName`. The answer holds the item fields, `harness` for an externally hosted worker, and `method`, `agentName` and `resourceBudget` for a worker that kanthord hosts. An unknown name answers 404 `worker.catalog.not_found`.
+- `worker.catalog.get` is `GET /api/worker/catalog/:workerName`.
+  The answer holds the item fields and `resourceBudget` for every worker.
+  It also holds `harness` for an externally hosted worker, or `method` and `agentName` for a worker that kanthord hosts.
+  An unknown name answers 404 `worker.catalog.not_found`.
 - `worker.agent.get` is `GET /api/worker/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `worker.agent.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the worker template registry](#the-worker-template-registry) owns the declaration.
 - `worker.instance.list` is `GET /api/worker/instance` with optional `projectId`, `resourceIdentity`, `limit` and `cursor`. `projectId` is a `project_<ulid>` and `resourceIdentity` is `worker:kanthord:<binding name>`. `resourceIdentity` requires `projectId`, and a binding that the project does not hold answers 400. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
 - `worker.instance.get` is `GET /api/worker/instance/:runtimeIdentity`. An unknown or ended instance answers 404 `worker.instance.not_found`.
@@ -204,16 +207,20 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## Resume of a registration
 
 - `worker.instance.resume` is a `human` mutation of `unary` lifetime at `POST /api/worker/instance/:runtimeIdentity/resume`, with no body, the default 30 s timeout and the default 10 MiB body limit.
-- It reopens an ended registration while that registration is the claimant of a live execution. The Worker Service reads the live execution of the runtime identity through the Scheduler Service in the same transaction.
+- It reopens an ended registration while that registration is the claimant of a `running` execution.
+  The Worker Service reads the `running` execution of the runtime identity through the Scheduler Service in the same transaction.
+  The Scheduler first settles any expired unsettled execution under [Scheduler liveness](scheduler-service.md#liveness).
 - It clears `ended_at`, sets the last heartbeat to the time of the act and takes the slot through the Project instance-count collaboration, in one transaction.
-- The next registration of its client identity answers that registration, and its work pull returns the live execution.
+- The next registration of its client identity answers that registration, and its work pull returns the `running` execution.
 - A resume of a live registration answers 200 and changes nothing.
 - An unknown runtime identity or one of the `server` placement answers 404 `worker.instance.not_found`.
-- A registration that is the claimant of no live execution answers 409 `worker.instance.no_live_execution`. A lost execution is never revived.
+- A registration that is the claimant of no `running` execution answers 409 `worker.instance.no_live_execution`.
+  A lost execution is never revived.
 - A client identity that holds another live registration answers 409 `worker.instance.client_live`.
 - A binding without a free slot, or an unavailable binding, answers 409 `worker.instance.slot_unavailable`.
 - The answer is 200 `{ runtimeIdentity, registered: true }`.
-- Tests assert the reopen, the heartbeat and the slot in one transaction, each refusal, and the resume of the live execution through the next registration and work pull.
+- Tests assert the reopen, the heartbeat and the slot in one transaction, and each refusal.
+  They assert the resume of the `running` execution through the next registration and work pull.
 
 ## The worker application
 
@@ -435,19 +442,28 @@ The carrier of that attribution is an epic decision.
 
 ## Stop and budget
 
+- Every worker declares `resourceBudget.wallTimeMs`.
 - `general@1` and `reviewer@1` declare default `resourceBudget: { turns: 200, wallTimeMs: 7200000 }`.
-- Both fields are positive safe integers.
-- The optional `resourceBudget` of a native worker binding overrides that default.
+- `claude@1` and `opencode@1` declare default `resourceBudget: { wallTimeMs: 7200000 }`.
+- Every worker binding can override its default through the optional `resourceBudget`.
+- `wallTimeMs` and any declared `turns` are positive safe integers, including in overrides.
 - A turn is one `turn_end` event of the pi agent loop.
-- Wall time runs from the claim response to release.
-- `claude@1` and `opencode@1` declare no resource budget.
-- Tests cover defaults, binding overrides, positive safe integers, turn events and elapsed wall time.
+- Wall time runs from `created_at` of the execution.
+- Tests cover native and external-harness defaults, overrides for every worker binding, and positive safe integers.
+  They cover turn events, wall time from `created_at`, and cleanup bounded by `expired_at`, not by the remaining budget.
 
-The lease runs in the execution.
-On revocation or loss the execution aborts the pi session and dispatches nothing after.
-Abort is not proven to kill every descendant process, so the quiescence check before workspace reuse that the page states needs a mechanism.
+The execution holds a fixed `expired_at`, exposed as `expiredAt`, under [Scheduler configuration](scheduler-service.impl.md#configuration).
+An external harness must release before the `expiredAt` of its execution record.
+A hosted execution gets the abort in-process from the transaction that ends it.
+Every other execution learns of the end from its first refused call and aborts then.
+On revocation or loss, the execution aborts its pi session and dispatches nothing after.
+Abort does not prove that every descendant process stops.
+The quiescence check before workspace reuse still needs a mechanism.
 The [Repository implementation](repository.impl.md#repository-connector) states the transport's process-cancellation limit.
-The budget of a turn count and a wall time is enforced on pi turn events and by abort, with the bash timeout below the remaining budget.
+The execution enforces the turn budget on pi turn events and aborts the agent when either budget ends.
+The bash timeout of an agent command stays below the remaining wall-time budget.
+After the agent stops at budget end, the execution code, not the agent, writes the checkpoint commit, pushes and releases with further work.
+Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 
 ## Trust boundary
 
