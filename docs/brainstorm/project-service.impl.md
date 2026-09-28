@@ -62,7 +62,7 @@ A binding identity and a project identity follow the identity convention of [arc
 
 - A binding identity is `binding_<ulid>` for every binding kind, because the entity kind is the binding and the first part of `resource_identity` is the binding kind.
 - A binding identity names one revision of a binding, because each revision is one row of `project_binding`.
-- Validation of the `binding` claim of a machine JWT checks the `binding_` prefix and the canonical ULID portion.
+- Validation of the `project_id` claim of a machine JWT checks the `project_` prefix and the canonical ULID portion. Validation of the `resource_identity` claim checks the form `worker:kanthord:<binding name>` and the binding-name form.
 - [gateway-service.impl.md](gateway-service.impl.md#the-jwt) rules that JWT.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
 
@@ -272,8 +272,8 @@ The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns age
 
 The Project Service holds no table of client identities and no secret of a client identity.
 [gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and is available.
-The JWT names one revision of the worker binding.
-The answer reads the project of that revision, and it refuses a disabled or removed binding.
+The JWT names one binding group by `project_id` and `resource_identity`, and no revision.
+The answer reads the latest row of that group. It refuses a disabled or removed binding, and a token whose `iat` is before the latest tombstone of the group.
 
 ## The verification of a delivery
 
@@ -330,7 +330,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.
 - A test covers a `masterKey` that decodes to other than 32 bytes.
-- A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose worker binding is not the worker binding of the claim.
+- A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose binding group is not the binding group of the claim.
 - A test covers a repository binding whose network git read fails. It asserts that the Project Service refuses the write with its error code.
 - A test covers a worker binding that is absent, removed or unavailable, and it asserts that the verification of a machine JWT that names it fails.
 - A test covers a missing, a duplicate, a malformed and a wrong-length delivery signature, and a valid signature over the exact bytes.

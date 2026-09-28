@@ -68,7 +68,7 @@ An instance at the `worker` placement or hosted by an external harness presents 
 The operation ID is `worker.register`, and the Worker Service owns its operation declaration and scoped OpenAPI file.
 This operation creates a live worker-instance registration, not a human account, client identity or worker definition. Server-hosted instances are created internally.
 That route declares the client access policy, and the verification of the JWT section authenticates it.
-The request nominates no binding, no subject and no kind, and the server takes all three from the verified JWT.
+The request nominates no project, no resource identity, no subject and no kind, and the server takes all four from the verified JWT.
 The Worker Service creates the registration and checks the instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
 A client identity holds at most one live registration, and a registration of a client identity that holds one answers 409.
 The route answers with the runtime identity of the new instance and no token.
@@ -110,7 +110,8 @@ The claim set is closed, and the matrix below holds for both kinds.
 - Both kinds require `iat` and `exp`, integers of JWT Unix seconds inside the safe NumericDate range.
 - `iat` is not after the verification time, and `exp` is after it, with no clock-skew tolerance.
 - Both kinds require `jti`, a canonical ULID.
-- `client` requires `binding`, a `binding_<ulid>` identity of a worker binding; `human` forbids it.
+- `client` requires `project_id`, a `project_<ulid>` identity, and `resource_identity`, the resource identity `worker:kanthord:<binding name>` of a worker binding of that project; `human` forbids both.
+- The two claims name a binding group, not a revision. A token supplies no configuration.
 - Both kinds forbid `iss`, `aud` and `nbf`.
 - A claim outside this set, a claim of another type, a missing required claim and a present forbidden claim each reject the token with 401.
 - Each cause has one error code under `gateway.jwt.<cause>`.
@@ -125,7 +126,9 @@ Verification runs in this order.
 - `exp` and `iat`.
 - `kind`.
 - The per-kind rules.
-- For `client`, the Project Service answers whether the worker binding exists and is available and resolves the project from it.
+- For `client`, the Project Service answers whether the group `(project_id, resource_identity)` exists, whether its latest row is no tombstone and holds an `instanceCount` of 1 or more, and whether `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
+- A `resource_identity` of another binding kind answers 401 `gateway.jwt.invalid_type`.
+- The tombstone rule refuses every token that a removal preceded, so a binding that a human removes and binds again under the same name accepts no earlier token.
 - Verification reads no list of client identities because the signed token states the membership.
 - A machine identity names the runtime identity of the live registration of its client identity when one exists.
 - The work pull and every execution operation refuse a machine identity that names no live registration.
@@ -146,12 +149,12 @@ A human then runs `kanthord jwt` again for each human token and each machine tok
 
 ## Local JWT issuance
 
-`kanthord jwt [username] [--name <display>] [--binding <binding identity>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
+`kanthord jwt [username] [--name <display>] [--project <project id> --binding <binding name>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
 [architecture.impl.md](architecture.impl.md) declares this top-level command and its configuration path resolution.
 It uses the signing-key derivation and token contract above, with the configured lifetime.
-Without `--binding` it generates a human JWT with the selected username as `sub`.
-With `--binding` it generates a machine JWT with a fresh client identity as `sub` and the binding identity `binding_<ulid>` of the worker binding as `binding`, and it rejects a `username` argument.
-The human reads that identity from the binding record, because the command opens no database and a binding name is unique only inside its project.
+Without `--project` and `--binding` it generates a human JWT with the selected username as `sub`.
+With `--project` and `--binding` it generates a machine JWT with a fresh client identity as `sub`, the project as `project_id` and `worker:kanthord:<binding name>` as `resource_identity`, and it rejects a `username` argument.
+The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` and `--project` without `--binding` are errors.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
 It prints the JWT followed by a newline only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
 It prompts for nothing, requires no terminal on standard input, calls no route and saves no client configuration.
@@ -184,7 +187,7 @@ The `hono/body-limit` middleware permits 40 KiB on the worker registration opera
 - It records each identity value in the corresponding module-private `WeakSet`.
 - A downstream service calls `isHumanIdentity` and rejects a value that it does not recognize.
 
-The machine identity names the client identity, its worker binding and its project, which the verification resolved, and the runtime identity of its live registration when one exists.
+The machine identity names the client identity, its project and its resource identity, which the verification confirmed, and the runtime identity of its live registration when one exists.
 A direct call that supplies a machine identity passes the worker-binding check and the live-registration check again before the handler runs, so a removal reaches the direct adapter as it reaches the HTTP adapter.
 The route handler passes the identity to the service function as an explicit caller argument, so a service module imports no Hono symbol.
 The JWT never leaves the Gateway Service module.

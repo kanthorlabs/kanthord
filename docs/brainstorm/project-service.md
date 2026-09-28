@@ -81,7 +81,7 @@ A binding identity is separate from a worker name.
 Two worker bindings of one worker do not share an instance count.
 
 A worker binding of a worker whose instances register groups those instances for its instance count.
-Each such instance presents the credential of its own [client identity](project-service.vocabulary.md#client-identity), and that credential names the worker binding.
+Each such instance presents the credential of its own [client identity](project-service.vocabulary.md#client-identity), and that credential names the worker binding by its project and its resource identity.
 The [Gateway Service](gateway-service.md#machine-identities) authenticates that credential, and the Project Service holds no secret of a client identity and no list of the client identities of a binding.
 A client identity authenticates nothing while its worker binding is removed or unavailable.
 A worker binding of an externally hosted worker holds no agent configuration.
