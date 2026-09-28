@@ -48,7 +48,7 @@ Not available. JWT issuance is a local operation using the server configuration,
 ## CLI shape
 
 ```text
-kanthord jwt generate [username] [--name <display>] [--config <path>]
+kanthord jwt generate [username] [--name <display>] [--output [path]] [--endpoint <url>] [--config <path>]
 kanthord jwt generate --binding <binding> [--name <display>] [--config <path>]
 kanthord jwt inspect [token]
 ```
@@ -62,6 +62,19 @@ kanthord jwt generate
 kanthord jwt generate ulrich --name 'Ulrich' --config /absolute/path/kanthord.yaml
 kanthord jwt generate ulrich --verbose
 ```
+
+### Write a client file
+
+```sh
+kanthord jwt generate --output
+kanthord jwt generate ulrich --output ./ulrich.cli.yaml --endpoint https://tunnel.example
+```
+
+`--output` writes the human JWT into a new private `cli.yaml` instead of stdout. Without a value it writes the default path; with a value it writes that path. The file holds `token`, and `endpoint` only when `--endpoint` is given. The command prints only `Created <absolute path>`, so stdout need not be a terminal.
+
+The command creates an absent file only. An existing file fails with `system.files.publish_failed` and stays unchanged; delete it first to replace it. A file at another path is an export: commands read the default path only, so copy it there as a regular file with mode `0600` that the running user owns.
+
+`--output` with `--binding` fails with `cli.jwt.output_with_binding`, and `--endpoint` without `--output` fails with `cli.jwt.endpoint_without_output`. A machine token and its client secret never go into a file; paste the printed fragment instead.
 
 ### Machine token
 
