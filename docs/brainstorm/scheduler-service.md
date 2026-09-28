@@ -155,7 +155,7 @@ A platform signature grants no authority to write WHAT, execute a node or overri
 
 ## Work pulls
 
-A worker instance that can take work issues a work pull with an idempotent [request identifier](mission-service.vocabulary.md#request-identifier).
+A worker instance that can take work issues a work pull.
 The [overview](overview.vocabulary.md) defines the worker instance, the execution and the act of executing a node.
 The pull carries its worker binding identity and the runtime identity of the instance.
 The [Project Service](project-service.md#resource-and-binding-model) owns the worker binding identity.
@@ -189,7 +189,7 @@ When no work matches, the Scheduler returns no work or waits asynchronously for 
 Waiting holds no lock, no processor permit and no node reservation.
 The Scheduler bounds waiting-request counts and timeouts separately from claim handling.
 An empty work pull opens no attempt, creates no execution and counts no live execution.
-A no-work result ends the request, and a later request uses a new request identifier.
+A no-work result ends the request.
 An instance retries with backoff, never with tight polling.
 A Mission write, an accepted delivery or an ended execution of the binding triggers a recheck for a waiting pull.
 The Scheduler rechecks every admission condition before it satisfies that pull.
@@ -230,10 +230,10 @@ The execution record holds these fields.
 The claim response returns these fields.
 Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.
 This covers evidence, task assessments, task outcomes, evaluation assessments and invoked repository actions.
-A retry after a lost response returns the original accepted result and creates no second execution or count.
-The [request identifier](mission-service.vocabulary.md#request-identifier) of a work pull is scoped to the project, the claimant and the runtime identity of the instance, so a replay from another instance returns nothing and transfers no execution.
-The operation recognizes an accepted identifier before admission and returns the accepted result.
-An ended claim does not change that result.
+A work pull from an instance that holds a live execution returns that execution and selects nothing, so a retry after a lost response creates no second execution or count.
+The operation reads the live execution of the runtime identity before admission.
+A pull from another instance never receives that execution.
+After the execution ends, a pull of the instance selects new work.
 An acknowledgement of an ended claim restores no authority.
 A replayed delivery revives no claim.
 

@@ -683,10 +683,9 @@ A valid token permits one reset and an expired token permits none.
 The identifier that a caller gives one request and that binds to the payload of that request.
 The term names no closed set.
 
-A `tdd@1` instance of `atlas` issues a work pull with request identifier `request_01J9ZK3Q7M5V8X2N4R6T0W1Y3B`.
-The connection drops after the Scheduler Service accepts the claim.
-The retry with that identifier returns the accepted claim, and no second claim is made.
-A retry with that identifier and another payload is refused.
+A `tdd@1` instance of `atlas` renews the lease of its execution with request identifier `request_01J9ZK3Q7M5V8X2N4R6T0W1Y3B`.
+The connection drops after the Scheduler Service accepts the renewal.
+The retry with that identifier returns the current lease and extends nothing.
 
 ## retirement
 

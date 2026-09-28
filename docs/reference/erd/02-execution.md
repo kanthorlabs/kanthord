@@ -83,15 +83,6 @@ erDiagram
         integer accepted_at "Unix ms"
     }
 
-    scheduler_request {
-        text project_id PK
-        text request_id PK "request_ + ULID"
-        text scope_digest "resource identity + runtime identity"
-        text payload_digest
-        text result "JSON claimed answer at acceptance"
-        integer created_at "Unix ms"
-    }
-
     mission_attempt {
         text node_id PK, FK "initiative or objective"
         integer attempt PK "1 or more"
@@ -253,7 +244,6 @@ erDiagram
     worker_instance |o..o{ scheduler_execution : "ref runtime_identity to id, no FK"
     mission_node ||..o{ scheduler_execution : "ref, no FK"
     scheduler_execution ||--o{ scheduler_renewal : "FK execution_id"
-    scheduler_execution ||..|| scheduler_request : "ref in result JSON"
 
     mission_node ||--o{ mission_attempt : "FK node_id"
     mission_node ||..o{ mission_unblock : "FK node_id"
@@ -304,7 +294,7 @@ erDiagram
     class mission_node mission
     class project_binding,mission_node stub
     class worker_instance worker
-    class scheduler_execution,scheduler_renewal,scheduler_request scheduler
+    class scheduler_execution,scheduler_renewal scheduler
     class mission_attempt,mission_unblock,mission_evidence,mission_run_output,mission_evaluation,mission_evaluation_try,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
 ```
 
@@ -315,7 +305,6 @@ erDiagram
 | `worker_instance` | Worker Service | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](../../brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters). |
 | `scheduler_execution` | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts); the renewal and release columns are ruled in [durable requests](../../brainstorm/scheduler-service.impl.md#durable-requests). |
 | `scheduler_renewal` | Scheduler Service | Derived: a renewal identifier that a later renewal superseded answers 409, so the Scheduler keeps every accepted renewal identifier of an execution. |
-| `scheduler_request` | Scheduler Service | Ruled: [durable requests](../../brainstorm/scheduler-service.impl.md#durable-requests). |
 | `mission_attempt` | Mission Service | Derived from [the attempt](../../brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](../../../engine/docs/cli/mission.md#proposed-result-schemas). |
 | `mission_unblock` | Mission Service | Derived from the [unblock record](../../brainstorm/mission-service.vocabulary.md#unblock-record). |
 | `mission_evidence` | Mission Service | Derived from [evidence content](../../brainstorm/mission-service.impl.md#evidence-content), [object evidence](../../brainstorm/mission-service.impl.md#object-evidence) and [evidence retention](../../brainstorm/mission-service.impl.md#evidence-retention). `content_owner_id` is derived from the outcome record, so a task move changes no stored row. |
@@ -361,8 +350,8 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
 - The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
-- The claim transaction inserts the execution row and the `scheduler_request` row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
-- `scheduler_request` holds accepted work pulls only. `project_id` equals the project of its execution. `scope_digest` is the digest of the canonical JSON of the resource identity and the runtime identity. `result` is the answer at acceptance and never changes, so a replay returns it and never the current execution row.
+- The claim transaction inserts the execution row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
+- A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction reads the live row of the pulling runtime identity. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the instance selects new work.
 - A renewal with a new identifier inserts a `scheduler_renewal` row and sets `renewed_at`, `expires_at` and `renewal_request_id` on the execution. A repeat of the current identifier extends nothing. An identifier of an earlier row of the execution answers 409 `scheduler.execution.renewal_superseded`. `sequence` of an execution starts at 1 and has no gap.
 - A release sets `released_at`, `further_work` and `ended_at` once. A repeat with an equal payload returns the accepted receipt.
 - The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
@@ -370,7 +359,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
 - A loss declaration sets `loss_declared_at` and `ended_at`. A revocation at a Mission transition ends the claim through the same path. A loss closes no attempt. The Mission Service consumes it in the same transaction: it adds one to `consecutive_losses` of the attempt. Below `mission.consecutiveLossLimit`, `Executing` returns to `Available` and `Evaluating` returns to `Waiting`, and the transaction inserts the job when the node is claimable. At the limit, the node moves to `Paused`, the attempt stays open and no job exists. A release and a resume set `consecutive_losses` to 0.
 - The end of a registration ends no execution row by itself. Its live execution follows the lease and the loss declaration.
-- No sweep deletes an execution row, a renewal row or a request row.
+- No sweep deletes an execution row or a renewal row.
 - The closed set of the claim state, the lease duration and the renewal cadence are open in [HANDOFF](../../brainstorm/HANDOFF.md#scheduler-service-and-delivery). So the table holds no claim state column.
 - An initiative in `Available` holds a steps job only while every current objective holds a terminal state. The transaction that commits the terminal state of its last objective inserts the job, and a graph change that adds a nonterminal objective deletes it.
 

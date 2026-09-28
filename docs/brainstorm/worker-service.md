@@ -242,7 +242,7 @@ sequenceDiagram
         W->>I: instance healthcheck (effective configuration resolves)
     end
     rect rgb(214, 234, 248)
-        I->>S: work pull (request identifier, worker binding, runtime identity, compatibility declarations)
+        I->>S: work pull (worker binding, runtime identity, compatibility declarations)
         Note over S,M: the claim opens the attempt and pins the revision
         S-->>I: claim response: execution identity, node, attempt, pinned revision, lease, trace identity, root span identity
     end

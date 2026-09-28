@@ -87,6 +87,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A JWT denylist (`gateway_token_denylist`, `ban`, `sweep`). Revocation is `gateway.tokenVersion` only.
 - A table-named binding column, for example `scheduler_execution.project_binding_id`. A binding column names the binding kind that it requires: `worker_binding_id`, `storage_binding_id`, `source_binding_id`.
 - A stored claim kind on `scheduler_execution` or `scheduler_job`. While a claim is live, the node state `Executing` or `Evaluating` fixes its kind.
+- A durable Scheduler request record (`scheduler_request`, `WorkPull.requestId`, `scheduler.request.scope_mismatch`). A work pull is idempotent by the runtime identity: it returns the live execution of its instance. A worker crash or a server restart ends the runtime identity, and B9 owns recovery.
 
 ## Contracts
 
