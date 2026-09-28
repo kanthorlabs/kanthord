@@ -23,7 +23,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 ## Records without a table
 
-- The instance record and the pool of a worker binding are runtime-only.
+- The pool of a worker binding and the runtime fields of an instance record are runtime-only. A `server` placement instance holds no `worker_instance` row.
 - The time of the last heartbeat is a monotonic-clock value in memory.
 - The MCP session `mcp_session_<ulid>` lives in memory and ends at the server stop.
 - The mutex of the action performer lives in memory.
@@ -43,8 +43,8 @@ erDiagram
         text id PK "node_ + ULID, ERD 1"
     }
 
-    worker_registration {
-        text runtime_identity PK "worker_instance_ + ULID"
+    worker_instance {
+        text id PK "worker_instance_ + ULID, runtime identity"
         text project_id
         text worker_binding_id
         text resource_identity "group key, copy of the pinned row"
@@ -252,9 +252,9 @@ erDiagram
         integer accepted_at "Unix ms"
     }
 
-    project_binding ||..o{ worker_registration : "ref, no FK"
+    project_binding ||..o{ worker_instance : "ref, no FK"
     project_binding ||..o{ scheduler_execution : "ref worker_binding_id, no FK"
-    worker_registration |o..o{ scheduler_execution : "ref runtime_identity, no FK"
+    worker_instance |o..o{ scheduler_execution : "ref runtime_identity to id, no FK"
     mission_node ||..o{ scheduler_execution : "ref, no FK"
     scheduler_execution ||--o{ scheduler_renewal : "FK execution_id"
     scheduler_execution ||..|| scheduler_request : "ref in result JSON"
@@ -307,7 +307,7 @@ erDiagram
     class project_binding project
     class mission_node mission
     class project_binding,mission_node stub
-    class worker_registration worker
+    class worker_instance worker
     class scheduler_execution,scheduler_renewal,scheduler_request scheduler
     class mission_attempt,mission_unblock,mission_evidence,mission_run_output,mission_evaluation,mission_evaluation_try,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
 ```
@@ -316,7 +316,7 @@ erDiagram
 
 | Table | Owner | Basis |
 | --- | --- | --- |
-| `worker_registration` | Worker Service | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](../../brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters). |
+| `worker_instance` | Worker Service | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](../../brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters). |
 | `scheduler_execution` | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts); the renewal and release columns are ruled in [durable requests](../../brainstorm/scheduler-service.impl.md#durable-requests). |
 | `scheduler_renewal` | Scheduler Service | Derived: a renewal identifier that a later renewal superseded answers 409, so the Scheduler keeps every accepted renewal identifier of an execution. |
 | `scheduler_request` | Scheduler Service | Ruled: [durable requests](../../brainstorm/scheduler-service.impl.md#durable-requests). |
@@ -345,8 +345,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Worker Service
 
-- `worker_registration` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
-- `worker_registration` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live registrations of a worker binding are the live rows of that group, whatever revision each row pins.
+- `worker_instance` holds one row for each registration of an instance. `worker.register` inserts the row, and `id` is the runtime identity.
+- `worker_instance` has a partial unique index on `client_id` where `ended_at` is null, so a client identity holds at most one live registration.
+- `worker_instance` has a partial index on `(project_id, resource_identity)` where `ended_at` is null. The live registrations of a worker binding are the live rows of that group, whatever revision each row pins.
 - A registration is admitted only while the live registrations of its worker binding are fewer than the instance count of that binding. The registration and the instance-count collaboration of the Project Service commit in one transaction, and a deregistration frees the slot in its transaction.
 - A lower instance count of 1 or more ends no live registration. It refuses a new registration until the live registrations fall below the count, and the Scheduler Service admits no claim beyond the count. An instance count of 0 makes the binding unavailable, so it ends every live registration of the binding.
 - `worker_binding_id` comes from the verified machine JWT. The Project Service resolves `project_id` and `resource_identity` from that binding.
@@ -445,12 +446,12 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 | From | To | Kind |
 | --- | --- | --- |
-| `worker_registration.worker_binding_id` | `project_binding.id` | Reference, no FK. |
-| `worker_registration.worker_binding_id` | `worker_agent_enablement.agent_name` | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
-| `worker_registration.resource_identity` | `project_binding.resource_identity` | Copy of the pinned row, no FK. It groups the rows of one binding across revisions. |
+| `worker_instance.worker_binding_id` | `project_binding.id` | Reference, no FK. |
+| `worker_instance.worker_binding_id` | `worker_agent_enablement.agent_name` | Derived through the catalog agents of `config.worker` of the pinned binding row, no FK. A resolution reads the latest row of the enablement. |
+| `worker_instance.resource_identity` | `project_binding.resource_identity` | Copy of the pinned row, no FK. It groups the rows of one binding across revisions. |
 | `scheduler_execution.worker_binding_id` | `project_binding.id` | Reference, no FK. |
 | `scheduler_execution.resource_identity` | `project_binding.resource_identity` | Copy of the pinned row, no FK. It groups the rows of one binding across revisions. |
-| `scheduler_execution.runtime_identity` | `worker_registration.runtime_identity` | Reference, no FK. A hosted instance has no row. |
+| `scheduler_execution.runtime_identity` | `worker_instance.id` | Reference, no FK. A hosted instance has no row. |
 | `scheduler_execution.node_id` | `mission_node.id` | Reference, no FK. |
 | `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |

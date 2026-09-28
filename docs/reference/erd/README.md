@@ -17,7 +17,7 @@ The schema has four functional views. Their order is the order of delivery.
 | View | Scope | Tables of the owners |
 | --- | --- | --- |
 | [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, the mission plan and the work queue. | Custody, Project, Worker, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md) | Registrations, executions, attempts, evidence, assessments, outcomes, external objects and observations. | Worker, Scheduler, Mission |
+| [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence, assessments, outcomes, external objects and observations. | Worker, Scheduler, Mission |
 | [ERD 3: External acquisition and observation](03-integration.md) | Acquisition grants, subscriptions, deliveries, delivery admission and observation obligations. | Project, Intake, Scheduler |
 | [ERD 4: Telemetry](04-tracking.md) | Traces, spans, records and telemetry texts. | Tracking |
 
@@ -40,7 +40,7 @@ flowchart TB
             s1["Scheduler: job"]
         end
         subgraph v2["ERD 2: Execution"]
-            w2["Worker: registration"]
+            w2["Worker: instance"]
             s2["Scheduler: execution, renewal, request"]
             m2["Mission: attempt, unblock, evidence, run output, evaluation, try, assessment, outcome, external object, observation"]
         end
@@ -56,7 +56,7 @@ flowchart TB
         end
     end
 
-    w2 -.->|registration of binding| p1
+    w2 -.->|instance of binding| p1
     s2 -.->|claim of node| m1
     s2 -.->|claim of binding| p1
     s2 -.->|execution pins credential revision| c1

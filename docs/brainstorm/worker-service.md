@@ -188,7 +188,7 @@ It reports the liveness of the registration from server state, distinct from the
 A human reads the contract of every worker, the declaration and the enablement of every agent in the catalog, and the instance record of every instance.
 That read changes no instance, no pool and no configuration.
 
-An instance record is runtime-only.
+An instance record is runtime-only. The `worker_instance` row holds the durable part of a registered instance.
 The [Scheduler Service](scheduler-service.md#liveness) governs the execution record and the claim.
 At server start, and when the availability or the instance count of a worker binding changes, the Worker Service adjusts the pool of that binding.
 A configuration revision of the binding replaces no instance.
