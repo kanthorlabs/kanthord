@@ -108,7 +108,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - `project_id` is the second key column only in project-scoped tables.
 - A resolved Intake delivery keeps its row. Only its payload expires.
 - A rename of a table or a column also updates the map in `docs/reference/erd/README.md`.
-- `docs/viewer.html` pins mermaid 10.9.1. Do not use `classDef` in an `erDiagram`, because it needs mermaid 11.
+- `docs/viewer.html` pins mermaid 11.17.2. Never pin a version below 11, because the ERD views use `classDef` in an `erDiagram`.
 
 ## Shared working tree and commits
 
