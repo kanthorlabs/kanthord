@@ -91,9 +91,18 @@ Its execution record names the client identity and the display name after that i
 
 ## lease
 
-Execution 1 of "Add password reset" renews its lease while its `tdd@1` instance executes the steps.
-The Scheduler records a loss declaration when that execution loses its claim.
-The loss declaration revokes the authority of Execution 1 before any replacement claim.
+The validity of an observation obligation, which its observer renews while it processes that obligation.
+An execution holds no lease. It holds a deadline.
+
+## deadline
+
+The fixed time at which the claim of an execution loses its authority.
+The claim sets it once, and nothing moves it.
+
+Execution 1 of "Add password reset" claims at 10:00 with a 2 h wall time and a 600 s reserve.
+Its `expired_at` is 12:10.
+If Execution 1 holds no earlier end, it loses its authority at 12:10, before any replacement claim.
+The Scheduler records the loss declaration when it settles that loss.
 
 ## observation obligation
 

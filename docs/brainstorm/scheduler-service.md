@@ -7,7 +7,7 @@ title: Scheduler Service
 ## Scope
 
 This document describes the Scheduler Service.
-It describes the work queue and its order, the work pull, the execution record and its lease.
+It describes the work queue and its order, the work pull, the execution record and its deadline.
 It describes the declared node states of a worker and the count of a claimant.
 It describes the admission of a delivery and the observer.
 It describes no mechanism of another service.
@@ -130,7 +130,7 @@ The observer decides the observed state and never the outcome of the node.
 The [Mission Service](mission-service.md#the-enforcement) owns observation admission without a node claim.
 An observation obligation is a Scheduler record with a lease and a recovery path.
 It is not an execution: it holds no node claim and has no claimant.
-Liveness defines the lease for both an observation obligation and an execution.
+Liveness defines the lease of an observation obligation and the deadline of an execution.
 
 Admission resolves a delivery to an external object by the repository binding and the address that the object names.
 Correlation never depends on the continued existence of the originating instance.
@@ -223,15 +223,16 @@ The execution record holds these fields.
 - The node and its attempt.
 - The pinned node revision.
 - The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
-- The lease.
+- The fixed deadline.
 - The trace identity of the execution.
 - The root span identity of the execution.
 
 The claim response returns these fields.
 Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.
 This covers evidence, task assessments, task outcomes, evaluation assessments and invoked repository actions.
-A work pull from an instance that holds a live execution returns that execution and selects nothing, so a retry after a lost response creates no second execution or count.
-The operation reads the live execution of the runtime identity before admission.
+A work pull from an instance that holds a `running` execution returns that execution and selects nothing.
+A retry after a lost response creates no second execution or count.
+The operation reads the `running` execution of the runtime identity before admission, under the settlement rule of [Liveness](#liveness).
 A pull from another instance never receives that execution.
 After the execution ends, a pull of the instance selects new work.
 An acknowledgement of an ended claim restores no authority.
@@ -271,7 +272,8 @@ The [Mission Service](mission-service.md#state-transitions) owns the human pause
 Those transitions also determine whether the attempt closes or stays open.
 Its success override from `Executing` ends a live steps claim.
 Its human pause from `Evaluating` ends a live evaluation claim.
-The Scheduler revokes the claim at the Mission transition through the same path as a loss declaration.
+Before expiry, the Scheduler revokes the claim in the transaction of the Mission transition and sets `ended_at`.
+That revocation is no loss and adds nothing to `consecutive_losses`.
 It accepts the revocation before any later operation admission reads the claim state.
 The [Project Service](project-service.md#configuration-lifecycle-and-consistency) owns completion against the remote of an operation that already holds admission.
 The revoked execution leaves its claimant's count at revocation.
@@ -281,29 +283,56 @@ The Scheduler counts live executions during the drain and treats no configuratio
 
 ## Liveness
 
-The lease records the validity of a claim or of an observation obligation: its expiry, the renewal that its holder performs, and the loss declaration.
-An execution renews the lease of its claim while it executes, and it releases durably when it finishes or must wait.
+An execution holds a fixed deadline, `expired_at`, which the claim sets under [Configuration](scheduler-service.impl.md#configuration).
+An execution releases durably when it finishes or must wait.
+The Scheduler derives the claim state at each read and never stores it.
+The closed set holds three values.
+
+- `running`: `ended_at` is null and the time is before `expired_at`.
+- `lost`: `ended_at` is at or after `expired_at`, or `ended_at` is null and the time is at or after `expired_at`.
+- `finished`: `ended_at` is before `expired_at`, after a release, an assessment end or a revocation.
+
+The lease records the validity of an observation obligation: its expiry, the renewal that its holder performs, and the loss declaration.
 The observer renews the lease of an obligation while it processes that obligation.
-Renewal, loss declaration, release and completion serialize with each other.
+Renewal, loss declaration, release and completion of an observation obligation serialize with each other.
 
 An execution presents its execution identity, and a service establishes liveness from the claim state of that identity in the Scheduler Service.
 The [Project Service](project-service.md#authorization-and-credential-custody) owns its claim-state read and the distinction between liveness proof and operation authorization.
-A write under the identity of a stale execution fails the comparison with the current claim of the node.
+The invocation chain proves liveness before the handler.
+Every execution mutation checks the full proof again inside its write transaction.
+This covers release, evidence and assessment submissions, and every other operation that requires a live execution.
+The transaction reads the clock once at its start.
+It checks the claimant, a null `ended_at` and a reading before `expired_at`.
+A terminal write uses that reading as `ended_at`.
+A reading equal to `expired_at` is a loss.
+A failed check answers 409 `scheduler.execution.not_running`.
+Of two terminal writes, only one wins, and only the winner routes the Mission Service.
+
+The Scheduler settles an expired row whose `ended_at` is null through a loss declaration.
+The [sweep](scheduler-service.impl.md#loss-settlement) performs that write every 30 s.
+The claim, the work-pull lookup and the worker registration resume first settle each expired unsettled row that they meet.
+Every Mission transition does the same.
+Each operation settles the loss in its own transaction, before it checks its precondition against the settled state.
+The pull lookup and the registration resume read a `running` execution, never merely a null `ended_at`.
+
+A hosted execution gets the abort in-process from the transaction that ends it.
+Every other execution learns of the end from its first refused call and aborts then.
+An already running remote operation stays with B9 SC5.
 
 Four signals stay separate.
 
 - The instance healthcheck before a claim.
-- The lease of a live claim.
+- The deadline of a running claim.
 - The observed progress that telemetry holds.
 - The readiness condition of a node.
 
 Log silence and a provider outage are not a failed assessment.
-Revocation of a lost claim takes effect at the loss declaration, never at the replacement claim.
+Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
 A loss declaration is an accepted fact that the Mission Service consumes through a transition.
 Loss of a claim closes no attempt.
-Lease expiry is not proof that the runtime stopped.
+Deadline expiry is not proof that the runtime stopped.
 A stopped execution never publishes afterwards.
 The Mission Service refuses current effect from a submission under a revoked claim.
 The Project Service refuses an operation from a revoked claimant.
-The lease and the loss declaration are the whole liveness contract of this document.
+The deadline and the loss declaration are the whole liveness contract of an execution in this document.
 This document defines no further recovery rule, retry policy or budget beyond the count.

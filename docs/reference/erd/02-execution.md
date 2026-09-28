@@ -63,15 +63,11 @@ erDiagram
         integer attempt "positive"
         integer pinned_revision "positive"
         text credentials "JSON list of pinned credential row ids"
-        integer expires_at "lease expiry, Unix ms"
-        integer renewed_at "Unix ms or null"
-        integer loss_declared_at "Unix ms or null"
-        integer released_at "Unix ms or null"
-        integer further_work "0 or 1, null before release"
+        integer expired_at "fixed deadline, Unix ms"
         text trace_id "Tracking protocol value"
         text root_span_id "Tracking protocol value"
         integer created_at "claim acceptance, Unix ms"
-        integer ended_at "Unix ms, null while live"
+        integer ended_at "Unix ms, null before terminal write"
     }
 
     mission_attempt {
@@ -293,7 +289,7 @@ erDiagram
 | Table | Owner | Basis |
 | --- | --- | --- |
 | `worker_instance` | Worker Service | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](../../brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters). |
-| `scheduler_execution` | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts); the renewal and release columns are ruled in [durable requests](../../brainstorm/scheduler-service.impl.md#durable-requests). |
+| `scheduler_execution` | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](../../brainstorm/scheduler-service.impl.md#operation-contracts); [configuration](../../brainstorm/scheduler-service.impl.md#configuration) rules the fixed deadline, and [loss settlement](../../brainstorm/scheduler-service.impl.md#loss-settlement) rules the loss declaration. |
 | `mission_attempt` | Mission Service | Derived from [the attempt](../../brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](../../../engine/docs/cli/mission.md#proposed-result-schemas). |
 | `mission_unblock` | Mission Service | Derived from the [unblock record](../../brainstorm/mission-service.vocabulary.md#unblock-record). |
 | `mission_evidence` | Mission Service | Derived from [evidence content](../../brainstorm/mission-service.impl.md#evidence-content), [object evidence](../../brainstorm/mission-service.impl.md#object-evidence) and [evidence retention](../../brainstorm/mission-service.impl.md#evidence-retention). `content_owner_id` is derived from the outcome record, so a task move changes no stored row. |
@@ -328,30 +324,33 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A row pins no binding revision. Each claim pins the latest row of the group in `scheduler_execution.worker_binding_id`.
 - A registration ends at a deregistration, at a heartbeat expiry, and at a removal or unavailability of its worker binding. The start of the server keeps every live row and sets its last heartbeat to the start time.
 - A registration of a client identity that holds a live row answers that row and inserts nothing.
-- `worker.instance.resume` clears `ended_at` of an ended row while that row is the claimant of a live execution, and it takes the slot again. No other act clears `ended_at`.
+- `worker.instance.resume` first settles an expired unsettled execution in the same transaction. It clears `ended_at` of an ended registration only while that row is the claimant of a `running` execution, and it takes the slot again. No other act clears `ended_at`.
 - An instance at the `server` placement registers never, so it holds no row.
 - An ended row stays, so an execution names its program through `runtime_identity` after the deregistration.
 
 ### Scheduler Service
 
-- `scheduler_execution` has a partial unique index on `node_id` where `ended_at` is null, so one live claim holds a node.
-- `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so an instance hosts at most one execution.
-- The live executions of a worker binding are the rows of that group where `ended_at` is null, whatever revision each row pins.
+- `scheduler_execution` has a partial unique index on `node_id` where `ended_at` is null, so a node holds at most one execution without a terminal write.
+- `scheduler_execution` has a partial unique index on `runtime_identity` where `ended_at` is null, so an instance holds at most one execution without a terminal write.
+- The live executions of a worker binding are the `running` rows of that group, whatever revision each row pins.
 - The claim admits an execution only while the live executions of the worker binding are fewer than its instance count.
 - The claim reads the latest row of the group `(project_id, resource_identity)` through the Project Service in its transaction. `worker_binding_id` holds that row, and every use of the execution reads the `config` of that row.
 - `project_id` is the project of the worker binding and the project of the mission of the node. `resource_identity` copies the value of the worker binding row. `runtime_identity` names an instance of that worker binding. For a registered instance, it equals `worker_instance.id`.
 - The claim admits a node only in a state that the worker of the binding declares. A claim from `Available` is a steps claim. A claim from `Waiting` needs the readiness condition, a claim from `External.Requested` needs the continuation condition, and both are evaluation claims. The row holds no kind. While the claim is live, the node state `Executing` or `Evaluating` fixes it.
 - The claim transaction inserts the execution row, sets the node state to `Executing` or `Evaluating`, opens attempt 1 when the node holds none, and deletes the job of the node. `attempt` and `pinned_revision` equal the open attempt and its `node_revision`.
-- A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction reads the live row of the pulling runtime identity. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the instance selects new work.
-- A renewal of a live execution sets `renewed_at`, and it sets `expires_at` from its acceptance time. A repeat renews again.
-- A release sets `released_at`, `further_work` and `ended_at` once. A repeat with an equal payload returns the accepted receipt.
+- A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction settles an expired unsettled execution of the pulling runtime identity, then reads its `running` row. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the instance selects new work.
+- The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.releaseReserve`, under [Scheduler configuration](../../brainstorm/scheduler-service.impl.md#configuration). The effective `wallTimeMs` comes from the worker binding row that `worker_binding_id` pins. The deadline never moves, including at a registration resume. A later configuration change affects only later claims.
+- Every execution mutation repeats the full proof in its write transaction: the claimant, a null `ended_at` and time before `expired_at`. This includes release, evidence and assessment submissions, and every operation that requires a live execution. The transaction reads the clock once at its start, and a terminal write uses that reading as `ended_at`. Equality with `expired_at` is a loss. A failed check answers 409 `scheduler.execution.not_running`. The invocation-chain proof before the handler stays in place. Of two terminal writes, only one wins, and only the winner routes the Mission Service.
+- A release sets `ended_at` and answers `{ executionId, endedAt }`. The Mission Service reads the `ExecutionRelease.furtherWork` input in that transaction, and nothing stores it. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
 - The Mission Service routes a steps release in the same transaction. With no further work, it sets `execution_ended` 1 on the attempt, sets `Waiting`, and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
 - The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested` and inserts no job. The transaction that makes the continuation condition hold inserts the evaluation job.
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
-- A loss declaration sets `loss_declared_at` and `ended_at`. A revocation at a Mission transition ends the claim through the same path. A loss closes no attempt. The Mission Service consumes it in the same transaction: it adds one to `consecutive_losses` of the attempt. Below `mission.consecutiveLossLimit`, `Executing` returns to `Available` and `Evaluating` returns to `Waiting`, and the transaction inserts the job when the node is claimable. At the limit, the node moves to `Paused`, the attempt stays open and no job exists. A release and a resume set `consecutive_losses` to 0.
-- The end of a registration ends no execution row by itself. Its live execution follows the lease and the loss declaration.
+- Every 30 s, the Scheduler settles every row whose `ended_at` is null and whose `expired_at` is reached or passed. The loss declaration sets `ended_at` to the clock reading at the start of its transaction. A loss closes no attempt. The Mission Service consumes it in the same transaction: it adds one to `consecutive_losses` of the attempt. Below `mission.consecutiveLossLimit`, `Executing` returns to `Available` and `Evaluating` returns to `Waiting`, and the transaction inserts the job when the node is claimable. At the limit, the node moves to `Paused`, the attempt stays open and no job exists. The open evaluation try ends. A release and a resume set `consecutive_losses` to 0.
+- A claim and every Mission transition first settle each expired unsettled execution that they meet in the same transaction. A human act then checks its own precondition against the settled state. The work-pull lookup and the registration resume follow the same rule and read a `running` execution, never merely a null `ended_at`.
+- A revocation at a Mission transition before expiry sets `ended_at` in that transaction. It is no loss and adds nothing to `consecutive_losses`. Revocation of a lost claim takes effect at the expiry, never at the replacement claim.
+- The end of a registration ends no execution row by itself. Its live execution follows its deadline and the loss declaration.
 - No sweep deletes an execution row.
-- The closed set of the claim state, the lease duration and the renewal cadence are open in [HANDOFF](../../brainstorm/HANDOFF.md#scheduler-service-and-delivery). So the table holds no claim state column.
+- The Scheduler derives `claimState`: `running` means `ended_at` is null and time is before `expired_at`; `lost` means `ended_at` is at or after `expired_at`, or `ended_at` is null and time is at or after `expired_at`; `finished` means `ended_at` is before `expired_at`. So the table holds no claim state column.
 - An initiative in `Available` holds a steps job only while every current objective holds a terminal state. The transaction that commits the terminal state of its last objective inserts the job, and a graph change that adds a nonterminal objective deletes it.
 
 ### Mission Service: attempts and human controls

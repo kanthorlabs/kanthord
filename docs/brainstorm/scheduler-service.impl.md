@@ -16,8 +16,9 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An execution uses `execution_<ulid>`. The claim operation mints it.
 - A job uses `job_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the job, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
 - An observation obligation uses `observation_obligation_<ulid>`. Delivery admission mints it.
-- A claim takes no identity of its own: the execution record is the record of the claim, and it holds the lease.
-- A lease takes no identity of its own: it is a group of fields of the execution record or of the observation obligation, and the loss declaration is one of those fields.
+- A claim takes no identity of its own: the execution record is the record of the claim, and it holds the fixed deadline.
+- An observation obligation lease takes no identity of its own.
+  It is a group of fields of the observation obligation, and the loss declaration is one of those fields.
 - The admission record of a delivery is keyed by the delivery identity that the Intake Service owns.
 - The trace identity and the root span identity of an execution are protocol-defined identities of the Tracking Service, and no entity identity of the Scheduler Service.
 
@@ -25,7 +26,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 - Every Scheduler route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging), the [default 30 s timeout](gateway-service.impl.md#cancellation) and the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits) unless a row below says otherwise.
 - `scheduler.work.pull` at `POST /api/scheduler/work/pull` is a `client` mutation of `wait` lifetime. Its route timeout is 120 s and its wait window is 90 s. Cancellation ends the wait and no accepted claim.
-- `scheduler.execution.renew-lease` at `POST /api/scheduler/execution/:executionId/renew-lease` and `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` are `client` mutations of `unary` lifetime.
+- `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` is a `client` mutation of `unary` lifetime.
 - `scheduler.claim.get` at `GET /api/scheduler/claim/:executionId` is a `client` read of `unary` lifetime with no body.
 - `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list`, `scheduler.execution.get`, `scheduler.observation-obligation.list` and `scheduler.observation-obligation.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
 - Delivery admission is a `service` operation of `unary` lifetime with a 30 s timeout of its own. It has no route, so the body limit does not apply.
@@ -35,30 +36,74 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 
 - `Job` holds `jobId`, `projectId`, `nodeId` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
-- `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `lease`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
+- `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `expiredAt`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
   - `claimant` holds `workerBindingId`, `resourceIdentity` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtimeIdentity` through the Worker Service. Both are absent for an instance that the server hosts.
   - `workerBindingId` is the latest row of the group `(projectId, resourceIdentity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
   - `attempt` and `pinnedRevision` are positive safe integers.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
-  - The closed set of `claimState` remains **[blocked](HANDOFF.md#scheduler-service-and-delivery)** under the request and response schemas (claim state) question.
-  - `lease` holds `expiresAt`, `renewedAt` as a timestamp or `null` before the first renewal, and `lossDeclaredAt` as a timestamp or `null` before a loss declaration.
-  - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` while the claim is live.
+  - `claimState` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
+  - `expiredAt` is the fixed deadline, stored as `expired_at` under [Configuration](#configuration).
+  - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` before a terminal write.
+    A null `endedAt` alone establishes no liveness.
   - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service.
 - `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity` and `runtimeIdentity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
-- `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean. `false` states the execution-end fact of the attempt. The answer is `{ executionId, releasedAt }`.
-- `LeaseRenewal` is the input of `scheduler.execution.renew-lease`: an empty object. The answer is `{ executionId, lease }`.
+- `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean.
+  `false` states the execution-end fact of the attempt.
+  The Mission Service reads `furtherWork` for routing in the release transaction, and nothing stores it.
+  The answer is `{ executionId, endedAt }`.
 - `ObservationObligation` holds `obligationId`, `projectId`, `externalObjectId`, `acceptedAt`, `lease` as the lease object or `null`, `completedAt` as a timestamp or `null`, and `observationId` as `observation_<ulid>` or `null` while no accepted observation exists.
+  - Its `lease` holds `expiresAt`, `renewedAt` and `lossDeclaredAt`.
+    `renewedAt` is a timestamp or `null` before the first renewal.
+    `lossDeclaredAt` is a timestamp or `null` before a loss declaration.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
 - `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only, ordered by `attempt` ascending, then `createdAt` ascending. A `nodeId` that the project does not hold answers an empty page.
 
 ## Durable requests
 
-- A work pull is idempotent by the runtime identity. Before admission, the claim transaction reads the live execution of the pulling runtime identity. When one exists, the pull answers `{ kind: "claimed", execution }` with the current row and selects nothing. The rule that an instance holds at most one outstanding pull or one live execution refuses no such pull. Two concurrent pulls of one runtime identity serialize in the claim transaction, and the second answers the execution of the first. After the execution ends, a pull selects new work. A worker crash or a server restart ends the runtime identity, so the lease and the loss declaration end the execution.
-- A renewal is idempotent by its execution identity. Each accepted renewal sets `renewed_at` and sets `expires_at` from its acceptance time. A delayed duplicate extends the lease of the holder that sent it.
-- A release carries no request identifier. An execution releases at most once. The execution record holds `released_at` and `further_work` of its release. A repeat with an equal payload returns the accepted `{ executionId, releasedAt }`. A repeat with another payload answers 409 `scheduler.execution.release_conflict`.
-- `scheduler.execution.renew-lease` and `scheduler.execution.release` require a live execution, and the invocation chain proves it before the handler, as for every other execution operation. `scheduler.claim.get` requires none, because it reports an ended execution; its handler checks that the claimant of the record names the worker binding of the machine identity and the runtime identity of its live registration, and it answers 403 `scheduler.execution.not_owner` otherwise. A holder whose release answer was lost reads `claim get` after a refused retry. No handler repeats the proof.
+- A work pull is idempotent by the runtime identity.
+  Before admission, the claim transaction applies [loss settlement](#loss-settlement), then reads the `running` execution of the pulling runtime identity.
+  When one exists, the pull answers `{ kind: "claimed", execution }` with the current row and selects nothing.
+  The rule that an instance holds at most one outstanding pull or one live execution refuses no such pull.
+  Two concurrent pulls of one runtime identity serialize in the claim transaction, and the second answers the execution of the first.
+  After the execution ends, a pull selects new work.
+  A worker restart recovers its live registration, and a server restart ends no registration.
+  Neither moves the deadline of an execution.
+- A release carries no request identifier and stores no release receipt.
+  An execution releases at most once.
+  A release retry after the end meets the refusal of the proof.
+  After a lost release answer and a refused retry, the worker reads `claim get`, which shows `finished`.
+- `scheduler.execution.release` requires a live execution, and the invocation chain proves it before the handler, as for every other execution operation.
+  The handler repeats the full proof in its write transaction under [Liveness](scheduler-service.md#liveness).
+  A failed transactional check answers 409 `scheduler.execution.not_running`.
+  Only the winning terminal write routes the Mission Service.
+- `scheduler.claim.get` requires no live execution, because it reports an ended execution.
+  Its handler checks the claimant against the worker binding of the machine identity and the runtime identity of its live registration.
+  A mismatch answers 403 `scheduler.execution.not_owner`.
+
+## Configuration
+
+The Scheduler Service owns the section `scheduler` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
+
+- `scheduler.releaseReserve` holds the reserve after the effective worker wall time, in seconds.
+  It is a positive safe integer and defaults to `600`.
+- The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.releaseReserve` once.
+  It reads the effective `wallTimeMs` of the worker binding row that `worker_binding_id` pins.
+  Nothing moves that deadline, including a resume of a worker registration.
+  A later configuration change affects only later claims.
+
+## Loss settlement
+
+Every 30 s, the Scheduler settles every execution row whose `ended_at` is null and whose `expired_at` is reached or passed.
+This write is the loss declaration.
+It sets `ended_at` to the clock reading at the start of its transaction.
+The Mission Service consumes the loss in that transaction and adds one to `consecutive_losses` of the attempt.
+Below `mission.consecutiveLossLimit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
+It inserts a job only when the node is claimable.
+At the limit, it moves the node to `Paused`, and no job exists.
+The attempt stays open, and the open evaluation try ends.
+The operations that [Liveness](scheduler-service.md#liveness) names apply this same settlement before their own precondition checks in the same transaction.
 
 ## Retention
 
@@ -70,14 +115,35 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 ## Tests
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
-- A test asserts that a claim and a lease expose no identity of their own.
+- A test asserts that a claim and an observation obligation lease expose no identity of their own.
 - A test parses every input and output of the Scheduler operations through the direct adapter and the HTTP adapter and rejects an unknown field, a `null` outside its permitted fields and a bare ULID.
 - A test loses an accepted pull answer and repeats the pull from the same runtime identity, once with the same key and once with a new key, and asserts the same execution and no second execution or count.
 - A test pulls from another runtime identity of the same binding while an execution is live and asserts that it never receives that execution.
 - A test ends the execution, repeats the pull from the same runtime identity and asserts a fresh admission.
-- A test renews twice and asserts that each renewal sets `expires_at` from its acceptance time, and renews an ended claim and asserts a refusal.
-- A handler test repeats a release with an equal payload and asserts the accepted receipt, and with another payload asserts 409 `scheduler.execution.release_conflict`. This test grants no adapter bypass of the live-execution proof.
-- A test calls `claim get` from another worker binding or runtime identity and asserts 403 `scheduler.execution.not_owner`. Through both adapters, it calls the renewal and the release of an ended claim and asserts the 403 of the execution proof before the handler. After a refused release retry, the owner reads the ended claim through `claim get`.
+- Tests submit two concurrent releases with equal `furtherWork` values and with different values.
+  They assert one winner, one 409 `scheduler.execution.not_running` from the transactional check, and one Mission routing.
+- Tests race a release against the sweep, an assessment end and a human revocation.
+  They assert one terminal write and one Mission routing.
+  A release that passes the invocation-chain proof but loses the transaction check answers 409 `scheduler.execution.not_running`.
+- A test admits an invocation before expiry and starts its write transaction exactly at `expired_at`.
+  It asserts 409 `scheduler.execution.not_running` and the `lost` claim state.
+  Another test starts the write transaction before expiry and commits after expiry.
+  It asserts acceptance and, for a terminal write, `ended_at` equal to the start reading and `claimState` equal to `finished`.
+- Tests meet an expired unsettled row through a claim of its node and a work pull of its instance.
+  They assert loss settlement before admission and no return of the lost execution.
+  A registration resume meets the same row and asserts settlement before its precondition check.
+  A human act also checks its precondition against the settled state.
+- Tests sweep expired steps and evaluation claims below and at `mission.consecutiveLossLimit`.
+  They assert one loss increment, the specified node state, a job only when claimable, and the end of the open evaluation try.
+- A test computes the deadline from a binding override of `wallTimeMs` and the configured reserve, including the default `600` seconds.
+  A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.
+- A test revokes a claim before expiry and asserts `finished`, no loss increment and the transaction reading as `ended_at`.
+- Tests cover all three derived claim states before, at and after the deadline, with and without `ended_at`.
+- Tests assert an in-process abort for a hosted execution and an abort on the first refused call for every other execution.
+- A test calls `claim get` from another worker binding or runtime identity and asserts 403 `scheduler.execution.not_owner`.
+  Through both adapters, it calls the release of an ended claim and asserts the 403 of the execution proof before the handler.
+  After a lost release answer and a refused retry, the owner reads `finished` through `claim get`.
+  No stored release receipt exists.
 - A test checks the shared error envelope, the timeout, the lifetime and the body limit of every Scheduler route, and the 404 of delivery admission through the HTTP adapter.
 - A test asserts that no sweep deletes an execution record, and that an ended execution stays readable through `execution get` after a restart.
 - A test asserts that `queue list` returns no job of a node that left the claimable state.

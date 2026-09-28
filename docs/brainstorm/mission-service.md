@@ -514,6 +514,10 @@ While it does not hold, the initiative in `Available` holds no job.
 
 The attempt counts its consecutive losses.
 A loss declaration of a claim of the attempt adds one.
+A revocation at a Mission transition before the expiry of the claim is no loss.
+A human act can meet a claim whose `ended_at` is null and whose `expired_at` is reached or passed.
+The Mission Service first consumes its loss declaration in the same transaction, under [Scheduler liveness](scheduler-service.md#liveness).
+The human act then checks its own precondition against the settled state.
 A release of an execution of the attempt and a human resume reset the count to 0.
 Below the limit, a loss returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
@@ -712,7 +716,7 @@ The Mission Service records the external object.
 No rule of the Mission Service reads that record to decide whether to request the action again.
 The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome, a priority change, a graph change and a retirement. It inserts the job when the node becomes claimable, and it deletes the job when the node stops being claimable.
 After the commit the Mission Service wakes the Scheduler Service.
-The Scheduler Service owns the work queue, the claim and the lease.
+The Scheduler Service owns the work queue, the claim and its deadline.
 
 ## Block and unblock
 
