@@ -457,6 +457,7 @@ The set is closed and it holds two values.
 - **dependency**: A dependency relates an initiative or an objective.
 
 Containment descends from a parent to a child, so a containment edge alone forms no cycle.
+The initiative "Account recovery" waits for its objective "Add password reset" through the initiative steps condition, so a dependency of "Add password reset" on "Account recovery" forms a cycle.
 
 ## dependency
 

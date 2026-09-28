@@ -621,6 +621,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests accept an absent `id` for a new node and preserve a known identity.
 - Tests require a parent for objectives and tasks, forbid it on initiatives, and forbid `dependsOn` on tasks.
 - Tests reject unresolved parent and dependency names and references outside the import set.
+- Tests refuse a dependency of an objective on its own initiative through dependency add, import and node move with `mission.import.cycle`. A test refuses the crossed case, where an objective of each of two initiatives depends on the other initiative.
 - Tests assert that the file name becomes the import-set key and the node's `filename`.
 - Tests refuse upper-case names, names without `.md`, and path separators.
 - Tests require `filename` on create and return it on node reads.

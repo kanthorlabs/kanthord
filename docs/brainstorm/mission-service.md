@@ -40,9 +40,10 @@ A dependency establishes only what the criterion of the node that it names estab
 A node waits for the nodes that its own dependencies name.
 A node waits for the nodes that the dependencies of its ancestors name.
 The dependency closure of a node is the set of those nodes, and it holds no node of their subtrees.
-The Mission Service checks that closure for a cycle.
+The Mission Service checks the closure edges and the wait edges for a cycle.
 It rejects a write that creates a cycle, at construction and at every update.
-A containment edge alone forms no cycle, because containment descends from a parent to a child.
+A wait edge leads from each initiative to each of its current objectives, because the initiative steps condition waits for them.
+A dependency from an objective to its own initiative therefore forms a cycle.
 
 An unsatisfied dependency never blocks a node.
 A dependency determines availability, and Block and unblock owns the block.
