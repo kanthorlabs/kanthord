@@ -42,7 +42,7 @@ flowchart TB
         subgraph v2["ERD 2: Execution"]
             w2["Worker: instance"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt, evidence, run output, assessment, outcome, external object, observation"]
+            m2["Mission: attempt, evidence, assessment, outcome, external object, observation"]
         end
         subgraph v3["ERD 3: External acquisition and observation"]
             p3["Project: acquisition grant"]

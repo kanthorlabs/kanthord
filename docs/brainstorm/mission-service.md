@@ -327,24 +327,6 @@ The Mission Service lets a human list expired pending uploads of one mission and
 The cleanup deletes only their objects and keeps their records with a cleanup mark.
 It never removes a published evidence record or its content.
 
-## Run output
-
-A run output is the account that an execution gives of its own run.
-It holds what the execution tried, what stopped it and what it recommends for the next run.
-A run output is no evidence, so it joins no evidence set and no assessment weighs it.
-
-A run output names its node, its attempt, the execution identity that produced it and the node revision that its attempt pins.
-An execution submits a run output before its release.
-The Mission Service holds a run output that it accepted, and it recovers no submission that failed.
-A repeated submission under one execution identity creates no second record.
-
-The run outputs of a node accumulate.
-An execution reads every run output of its node, and a closed attempt keeps its run outputs readable.
-The Mission Service retains a run output while its node holds no terminal state, and a bounded retention follows a terminal state.
-
-A run output changes no state of its node and closes no attempt.
-It carries the recommendation of an execution as history, and never as a direction that binds a later execution or a human.
-
 ## Evaluation and assessment
 
 The Mission Service performs no evaluation, and it is the record authority.
@@ -597,7 +579,7 @@ The target `Available` sends the node to `Available` when the dependency closure
 | `Available -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Available -> Discarded` | Human discards the node | Closes by force | Outcome |
 | `Executing -> Waiting` | Release; the execution of the attempt requires no further work | No effect | Evidence |
-| `Executing -> Available` | Release; execution requires further work | No effect | Run output |
+| `Executing -> Available` | Release; execution requires further work | No effect | None |
 | `Executing -> Available` | Loss declaration of the steps claim below the consecutive loss limit | No effect | None |
 | `Executing -> Paused` | Loss declaration of the steps claim that reaches the consecutive loss limit | Stays open | None |
 | `Executing -> Paused` | Human holds the node; execution stops | Stays open | None |
@@ -710,7 +692,6 @@ stateDiagram-v2
 
 Mission structure and nodes owns the dependency and the repository binding of a node.
 Evidence owns the evidence record and its durability.
-Run output owns the run output record and its retention.
 Evaluation and assessment owns the lifecycle of an evaluation.
 Block and unblock owns the block and the unblock.
 The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.

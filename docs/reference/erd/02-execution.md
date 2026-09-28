@@ -105,14 +105,6 @@ erDiagram
         integer created_at "Unix ms"
     }
 
-    mission_run_output {
-        text execution_id PK
-        text tried
-        text stopped_by
-        text recommendations "JSON list"
-        integer accepted_at "Unix ms"
-    }
-
     mission_assessment {
         text id PK "assessment_ + ULID"
         text node_id FK "node or task"
@@ -188,8 +180,6 @@ erDiagram
     scheduler_execution |o..o{ mission_evidence : "ref execution_id, no FK"
     project_binding |o..o{ mission_evidence : "ref bindingId, storageBindingId in address, no FK"
 
-    scheduler_execution ||--o| mission_run_output : "ref execution_id, no FK"
-
     mission_node ||..o{ mission_assessment : "FK node_id"
     mission_node ||..o{ mission_assessment : "FK content_owner_id"
     scheduler_execution ||..o{ mission_assessment : "ref in actor, no FK"
@@ -219,7 +209,7 @@ erDiagram
     class project_binding,mission_node stub
     class worker_instance worker
     class scheduler_execution scheduler
-    class mission_attempt,mission_evidence,mission_run_output,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
+    class mission_attempt,mission_evidence,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
 ```
 
 ## Tables
@@ -230,7 +220,6 @@ erDiagram
 | `scheduler_execution` | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts); [configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration) rules the fixed deadline, and [loss settlement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#loss-settlement) rules the loss declaration. |
 | `mission_attempt` | Mission Service | Derived from [the attempt](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). `opened_by` names the actor of the act that opens the attempt. |
 | `mission_evidence` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention). `content_owner_id` is derived from the outcome record, so a task move changes no stored row. `address` holds the `Address` union of the Mission CLI. |
-| `mission_run_output` | Mission Service | Derived from the [run output](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.md#run-output) record; its key is `execution_id`, and the node, the attempt and the revision are those of that execution row. |
 | `mission_assessment` | Mission Service | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order. |
 | `mission_outcome` | Mission Service | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). |
 | `mission_external_object` | Mission Service | Derived from the [external object](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.md#evidence) record. |
@@ -241,7 +230,6 @@ erDiagram
 - The [README](README.md) states the notation. A solid line is identifying, a dashed line is non-identifying, and the label states the enforcement.
 - A record that names an attempt holds the attempt number, not an attempt row. The attempt reads 0 before the first attempt opens, and no `mission_attempt` row exists for 0. So `(content_owner_id, attempt)` is a validated reference and no foreign key.
 - A task record names the task in `node_id`, its objective in `content_owner_id` and the attempt of that objective in `attempt`. For an initiative or an objective, `content_owner_id` equals `node_id`.
-- `mission_run_output` is keyed by `execution_id`, so its line to `scheduler_execution` is identifying, and the value stays a reference without a foreign key.
 
 ## Constraints
 
@@ -318,11 +306,8 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - An accepted `expected` landing observation appends its landed commits to the evidence set. This page maps each landed commit to a published evidence row of the repository address kind, with the service actor as provenance and the attempt of the observation.
 - A success override with a landed commit inserts a published evidence row with the human actor as provenance, and the outcome names it.
 
-### Mission Service: run outputs and assessments
+### Mission Service: assessments
 
-- `mission_run_output` holds zero or one row for each execution. A repeat under the same execution creates no second row, and a failed submission leaves no row.
-- An execution submits a run output before a release with further work. Its node, its attempt, its revision and its actor are those of the `scheduler_execution` row that `execution_id` names.
-- A run output stays while its node holds no terminal state. The bound of its retention after a terminal state is open.
 - A task assessment names the steps execution of its objective as actor. A reviewer assessment names the execution of its evaluation claim as actor. An evaluation attempt is one reviewer execution and holds no row of its own.
 - `node_revision` of an assessment equals the revision that its attempt pins. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
 - `child_node_ids` equals the current child set of the node at the acceptance. Each child outcome names a node of that set. `evidence_ids`, `child_outcome_ids` and `child_node_ids` are sets.
@@ -362,6 +347,6 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `scheduler_execution.node_id` | `mission_node.id` | Reference, no FK. |
 | `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |
-| `mission_evidence.execution_id`, `mission_run_output.execution_id` and every execution actor | `scheduler_execution.id` | Reference, no FK. |
+| `mission_evidence.execution_id` and every execution actor | `scheduler_execution.id` | Reference, no FK. |
 | `mission_evidence.address` (`bindingId`, `storageBindingId`) | `project_binding.id` | Reference in JSON, no FK. |
 | `mission_external_object.binding_id` | `project_binding.id` | Reference, no FK. |

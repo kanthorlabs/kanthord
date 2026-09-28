@@ -506,7 +506,6 @@ kanthord runs no automatic evidence cleanup.
   - ready
   - attempt
   - evidence
-  - run output
   - outcome
   - observation
 - One write increments once, however many nodes it touches.

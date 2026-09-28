@@ -59,7 +59,6 @@ flowchart TB
             Attempts["Attempts"]
             Criteria["Validation criteria"]
             Evidence["Evidence records"]
-            RunOutputs["Run outputs"]
             Assessments["Assessment records"]
             Outcomes["Outcome records"]
             Objects["External objects"]
@@ -186,7 +185,6 @@ flowchart TB
     Model -->|"resolve resource"| Resolution
     Repository -->|"resolve resource"| Resolution
     Platform -->|"resolve resource"| Resolution
-    Execution -->|"submits"| RunOutputs
     Execution -->|"submits"| Evidence
     Execution -->|"reviewer submits"| Assessments
     Action -->|"requires passing assessment"| Assessments
@@ -205,7 +203,7 @@ flowchart TB
     classDef component fill:#ffffff,stroke:#4f5d75,color:#2d3142;
     classDef shared fill:#ececec,stroke:#7a8399,color:#2d3142;
     class Project,Graph focal;
-    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,RunOutputs,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,InstanceHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion,Retention component;
+    class HTTP,Auth,Registry,Invocation,Replay,HTTPAdapter,DirectAdapter,OpenAPI,Bindings,Resolution,Authorization,Custody,Grants,Verification,Attempts,Criteria,Evidence,Assessments,Outcomes,Objects,Queue,Processors,Claim,Executions,Admission,Observer,Templates,Registration,InstanceHealth,Pools,Execution,Agents,Prompts,Workspace,Memory,Model,Repository,Platform,Implementations,Action,MCP,Subscriptions,Reconciler,Webhook,Poll,Stream,Deliveries,Handoff,Tracer,SpanProcessor,Exporter,Ingestion,Retention component;
     class Config,Keys,Context,Lifecycle,Health,Log,Store,OperationalDB,TrackingDB,ConfigFiles,StateFiles,Cache shared;
     style Runtime fill:#ececec,stroke:#bfc0c0,color:#2d3142
     style Gateway fill:#f5f5f5,stroke:#bfc0c0,color:#2d3142
@@ -245,7 +243,7 @@ flowchart TB
 ## Component boundaries that must remain explicit
 
 - **Project and Mission:** Mission is mandatory project content. Bindings allocate independently existing resources, never the mission. Mission continues to own its record schemas and operations.
-- **Graph and records:** The Mission graph contains initiatives, objectives and tasks. Revisions, attempts, criteria, evidence, run outputs, external objects, assessments and outcomes remain distinct records. Only initiatives and objectives are scheduled; tasks run inside an execution.
+- **Graph and records:** The Mission graph contains initiatives, objectives and tasks. Revisions, attempts, criteria, evidence, external objects, assessments and outcomes remain distinct records. Only initiatives and objectives are scheduled; tasks run inside an execution.
 - **Queue and claim:** Queue order suggests work. The atomic claim operation rechecks admission and creates the execution record and lease. A waiting node holds no job and keeps no instance busy.
 - **Registration and claim:** Worker owns runtime identities and registration heartbeat. Scheduler owns execution claims and leases. Neither a registration nor a healthcheck is a claim.
 - **Agents and tools:** The prompt composer provides instructions, not permissions. Native agents use model and repository connectors; MCP exposes permitted platform reads and the controlled action tool for external reviewers.

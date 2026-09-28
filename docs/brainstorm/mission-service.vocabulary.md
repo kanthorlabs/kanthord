@@ -354,16 +354,6 @@ Take an initiative whose objectives name no repository.
 Its steps execution submits a report as produced evidence.
 The reviewer places that evidence in the workspace, and the tested input is the content address of that report.
 
-## run output
-
-The account that an execution gives of its own run.
-The term names no closed set.
-
-Execution 1 of "Add password reset" finishes "Add reset token expiry" and traces the failure of "Add reset email" to a fixture.
-Its resource budget ends before it repairs that fixture.
-Execution 1 submits a run output that names the fixture and the repair that it proposes, then it releases with further work.
-Execution 2 claims the node on another host and reads that run output before it starts its own work.
-
 ## node revision
 
 One immutable snapshot of the whole content of a node.

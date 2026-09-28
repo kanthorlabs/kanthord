@@ -270,7 +270,6 @@ The agent stops when its turn count or wall time reaches the budget.
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
-It reads every [run output](mission-service.md#run-output) of its node.
 It fetches the external content that the external objects reference through the [Repository component](repository.md#platform-connector-and-platform-implementations).
 
 A workspace is a host-local working directory of one execution.
@@ -326,7 +325,6 @@ A recorded task assessment that does not pass ends the task work, and the execut
 Otherwise, when the resource budget ends before every task holds a task outcome, the agent stops and the execution performs cleanup.
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
 Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
-Before a release with further work, the execution submits its [run output](mission-service.md#run-output).
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 

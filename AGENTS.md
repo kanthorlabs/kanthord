@@ -82,6 +82,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A durable Mission request record (`mission_request`, `import get`, `mission.request.payload_mismatch`). The version checks refuse a second act, and the Gateway replay covers a retry.
 - An unblock record or table (`mission_unblock`, `unblock_<ulid>`). The attempt names its opener in `opened_by`.
 - A durable evaluation record or evaluation try record (`mission_evaluation`, `mission_evaluation_try`, `claimed_from`). An evaluation attempt is one reviewer execution, and B9 item W7 owns the retry bound.
+- A run output record (`mission_run_output`, `run-output submit`). The node revision carries the direction of a human, the checkpoint commit carries the work, and the handoff between executions waits for the budget design.
 - A job state machine, a visibility timeout (`due_at`) on `scheduler_job`, or a single-queue model where one job row lives from enqueue to finish. `scheduler_job` stays stateless, the claim deletes it, and the execution deadline is the only zombie detector.
 - A second ordering column on `scheduler_job` that keeps the first job time across a release. A release with further work inserts a new job, and the node takes its age from the release.
 - A prefix for the credential table (`custody_credential`, `kernel_credential`, `system_credential`) or a Kernel or System Service that owns it. Custody is a component, not a service, so its table has no prefix. The table stays `credential`, and the migration test carries its one exemption.
