@@ -75,18 +75,18 @@ An import carries no priority.
 
 ## The attempt
 
-The attempt row records the frozen required external actions next to the pinned revision.
+`FrozenAction` is the read shape of a required external action.
+The service derives it from the policy of the `project_binding` row that the pinned revision of the attempt names.
 
-- A frozen action holds `key`, `bindingId`, `action`, `expectedEndState`, `follows` and `configuration`.
+- A `FrozenAction` holds `key`, `bindingId`, `action`, `expectedEndState`, `follows` and `configuration`.
 - `action` is `pull_request` or `merge_push` for a repository binding, under the action catalog of [project-service.impl.md](project-service.impl.md).
 - `expectedEndState` is `pull_request_merged` for `pull_request` and `base_branch_pushed` for `merge_push`.
 - `follows` is the key of the action that this action follows, or null when it follows the passing assessment. It is null while a strategy holds at most one action; the field stays for a later action kind.
-- `configuration` freezes the operands that the action performer takes from the strategy: `baseBranch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `bindingId` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
+- `configuration` holds the operands that the action performer takes from the strategy: `baseBranch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `bindingId` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
 - `bindingId` is the repository binding revision that the pinned node revision names.
 - A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
-- An initiative freezes an empty set.
-- The attempt row holds `consecutive_losses`, a nonnegative integer that starts at 0, under the [consecutive loss limit](mission-service.md#consecutive-loss-limit).
-- The frozen action holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and every external object and observation of the attempt names that key.
+- An initiative requires no external action, so its set is empty.
+- A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and every external object and observation of the attempt names that key.
 
 ## Configuration
 
@@ -218,7 +218,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 
 ## The observation record
 
-- `expectedEndState` copies the value of the frozen action of the attempt. For a repository action the set holds `pull_request_merged` and `base_branch_pushed`; a configured action of another binding kind adds its own values with its design.
+- `expectedEndState` copies the value of the `FrozenAction` of the attempt. For a repository action the set holds `pull_request_merged` and `base_branch_pushed`; a configured action of another binding kind adds its own values with its design.
 - `observedState` holds `endState` and `detail`.
 - `endState` is one of `expected`, `other` and `none`. `expected` means the accepted observation establishes the expected end state. `other` means it establishes another end state. `none` means it establishes no end state and leaves the request unresolved.
 - `detail` is nonblank `Text` that the observer writes in platform-neutral words, for example `merged` or `closed without merge`.
@@ -400,7 +400,7 @@ kanthord runs no automatic evidence cleanup.
 - `evaluationContext` holds `nodeRevision`, `evidenceIds`, `childNodeIds` and `childOutcomeIds`, copied from the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
 - The closure copies and recomputes nothing, so a child change after the acceptance never enters the context.
 - Empty arrays are explicit.
-- The required-action snapshot lives on the attempt record and is not repeated.
+- The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
 
 ## Node ready
 
@@ -416,14 +416,28 @@ kanthord runs no automatic evidence cleanup.
   Each array is empty when it does not apply.
   The refusal opens no attempt, changes no state and writes no job.
 - A ready act while the attempt reads 0 opens attempt 1 in one transaction.
-  The transaction pins the current node revision and freezes the required external actions from the current Project configuration.
-  It records the execution-end fact, sets `Waiting` and inserts the evaluation job.
+  The transaction pins the current node revision.
+  It sets `Waiting` and inserts the evaluation job.
   The service wakes the Scheduler after the commit.
   The act writes no assessment, no outcome and no task outcome.
-- A ready act on an open attempt records the execution-end fact on that attempt.
-  It sets `Waiting` the same way, with no opening.
+- A ready act on an open attempt sets `Waiting` the same way, with no opening.
 - The answer is `ControlResult` with the node in `Waiting` and the opened or open attempt.
   It holds `outcome: null` and `taskOutcomeIds: []`.
+
+## Node resume
+
+- `mission.node.resume` uses `POST /api/mission/node/:nodeId/resume` with `human` access.
+- Its input is `Resume`: every field of `HumanAct`, plus the required `target`, which is `Available` or `Waiting`.
+- `node resume` requires `expectedState: Paused` and an `expectedAttempt` equal to the attempt of the node.
+  A mismatch answers 409 `mission.node.state_conflict`.
+- The external action records of the attempt take precedence over the target, under [the state transitions](mission-service.md#state-transitions).
+  A resume that they route to `External.Failed`, `External.Success` or `External.Requested` does not read the target.
+- `target: Waiting` requires the readiness condition.
+  A node that is not ready answers 409 `mission.node.not_ready` with the `details` of [Node ready](#node-ready).
+  The refusal changes no state and writes no job.
+- `target: Available` moves the node to `Available` when the dependency closure holds, and to `Pending` when it does not hold.
+- A resume opens no attempt and resets no loss count.
+- The answer is `ControlResult` with the node in the selected state and the open attempt.
 
 ## Node override
 
@@ -544,7 +558,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests answer `mission.evidence.content_repository` with the address on a human and an execution content read of repository evidence, and refuse an unauthorized read before that answer.
 
 - Tests derive the human, execution and service actors from the verified caller, reject an actor in any input, and keep the copied client identity after deregistration.
-- Tests freeze the key, binding revision, action, expected end state, a null predecessor and the base branch at the opening, keep them after a strategy change, and resolve the pinned binding revision for the address and the credential.
+- Tests derive the key, binding revision, action, expected end state, a null predecessor and the base branch from the binding row that the pinned revision names, keep them after a strategy change without a rebind, and resolve the pinned binding revision for the address and the credential.
 - Tests fold `expected`, `other` and `none` into `External.Success`, `External.Failed` and an unresolved request, read no `detail`, and require nonempty `landedCommits` on an `expected` repository observation and an empty list otherwise.
 
 - Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
@@ -564,7 +578,7 @@ kanthord runs no automatic evidence cleanup.
 - Tests fill no task outcome on a closure that follows the evaluation.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
   They also admit an objective whose attempt reads 0 with no current task.
-  They open attempt 1 with `executionEnded: true` and the frozen actions.
+  They open attempt 1 with the pinned revision.
   They reach `Waiting` with a job in the same transaction.
 - Tests refuse `node ready` with `mission.node.not_ready` on an objective whose attempt reads 0 with a current task.
   They name the tasks in `details` and leave the attempt at 0 with no job.
@@ -652,7 +666,9 @@ kanthord runs no automatic evidence cleanup.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
-- Tests assert that a loss below `mission.consecutiveLossLimit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, and that a release and a resume reset `consecutive_losses` to 0.
+- Tests assert that a loss below `mission.consecutiveLossLimit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
+- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, and refuse it with `mission.node.not_ready` otherwise. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
+- Tests refuse a second `mission_unblock` row with the same `node_id` and an `opened_attempt` greater than 0.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.
 - Tests admit initiative creation at any time.
