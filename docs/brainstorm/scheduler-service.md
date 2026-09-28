@@ -1,0 +1,310 @@
+---
+title: Scheduler Service
+---
+
+# Scheduler Service
+
+## Scope
+
+This document describes the Scheduler Service.
+It describes the work queue and its order, the work pull, the execution record and its lease.
+It describes the declared node states of a worker and the count of a claimant.
+It describes the admission of a delivery and the observer.
+It describes no mechanism of another service.
+
+## Topology and work queue
+
+The [architecture](architecture.md#container-diagram) defines the deployment target.
+One Scheduler Service serves every project of the server.
+It starts and stops with the server.
+It holds a bounded pool of scheduling processors.
+A scheduling processor serves a work pull or handles a wakeup after an accepted change.
+It returns to the pool after that short decision.
+A waiting work pull or an instance that executes a node never occupies the processor.
+A node that waits for a model call, a human review or a pull request never occupies the processor.
+Scheduling concurrency and instance counts solve different bottlenecks.
+
+The work queue is a component of the Scheduler Service with a public insert and a public delete, and the Mission Service is its caller.
+The [Mission Service](mission-service.md#boundary) inserts and removes the jobs of every affected node, including dependency and parent effects.
+The work queue never holds a job that the Mission state of its node contradicts.
+The Scheduler coalesces the wakeups of the [Mission Service](mission-service.md#boundary).
+A peek reads the first job of the order and removes nothing.
+Project configuration changes and claim changes also trigger a recheck of the affected scope.
+An idle project consumes no processor turn and loses no durable obligation.
+Server shutdown stops new claims and preserves accepted delivery and execution obligations.
+
+The Scheduler persists the work queue in the storage of the server, so its order survives a restart.
+The work queue holds, per project, one job for each claimable node.
+A node is claimable when its Mission state and its Mission condition admit a claim.
+The [Mission Service](mission-service.md#state-of-a-node) owns the node states.
+`Available` admits a steps claim, and on an initiative only under the [initiative steps condition](mission-service.md#initiative-steps-condition).
+`Waiting` admits an evaluation claim under the [readiness condition](mission-service.md#readiness-condition).
+`External.Requested` admits an evaluation claim under the [continuation condition](mission-service.md#continuation-condition).
+No other state admits a claim.
+Membership is not the Mission state `Available`: a claimable `Waiting` node is not `Available`.
+A job carries the node, its priority and a time-ordered identity.
+The identity carries the creation time of the job.
+The [Mission Service](mission-service.md#boundary) inserts the job when the node becomes claimable, and it removes the job when the node leaves that claimable state.
+A release with further work creates a new job when the node is claimable.
+A priority change keeps the identity.
+
+The Scheduler orders jobs by priority descending, then identity ascending.
+The highest priority comes first, and the oldest job comes first inside one priority.
+Inside one priority, newer work never overtakes older work.
+Across priorities, a human who raises the priority of a stream of work accepts that priority 0 waits.
+Priority orders and never admits.
+No priority and no age makes a `Blocked`, `Paused`, `Pending` or incompatible node claimable.
+
+Priority is an integer.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) owns the human act through the node API, its admission, the current value on the node and the reorder of the job.
+That section states the value of an absent priority.
+The job holds a copy of the current priority, and the Mission Service stays its source.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) states that an import carries no priority.
+
+The queue writes follow accepted changes, and selection follows work pulls.
+Neither path scans every project.
+A large graph change affects many nodes, and the Mission Service writes their jobs in its one transaction.
+A wakeup for the affected scope wakes waiting work pulls.
+A stale job suggests a node and never authorizes it; the claim operation rechecks.
+
+The Scheduler bounds processor time per project turn for both wakeup handling and claim handling.
+One busy project cannot consume the pool.
+This bound specifies no ordering policy across projects.
+Work-pull progress requires compatible instances that pull and sufficient counts and processing time.
+Scheduling state carries a project key, and each claim and count keeps that key.
+The processor that handles a project is temporary.
+Two processors that select the same node compete through the single claim operation.
+Only one obtains the claim.
+Coordination covers a short decision and never holds a project-wide lock during an execution.
+
+The Scheduler Service supports 1,000 active projects on one server.
+The fairness bound survives a noisy project that competes with quiet projects.
+Two properties have bounds and measurements.
+Discovery lag measures the interval from the commit of an accepted change to the handling of its wakeup.
+Claim latency measures the interval from a work pull to a claim when work exists.
+The [Intake Service](intake-service.md#capacity-and-retention) owns delivery capacity.
+This document names no value for a bound.
+The pool size and the limits follow the workload and the measurements.
+The [Tracking Service](tracking-service.md#writing-telemetry) holds these measurements and decides nothing.
+
+## Delivery admission and observation
+
+The [delivery admission](scheduler-service.vocabulary.md#delivery-admission) operation receives one [delivery](intake-service.vocabulary.md#delivery) from the [Intake Service](intake-service.md).
+The operation has a unary lifetime: one request and one answer.
+Admission records its decision durably before it answers.
+Admission is idempotent by the delivery identity.
+A repeat with the same identity and content returns the recorded [disposition](intake-service.vocabulary.md#disposition).
+A repeat with different content receives a refusal.
+A refusal is terminal and names its reason.
+Acceptance means the Scheduler owes every effect of the delivery.
+Admission preserves every obligation whose effect lacks durable acceptance.
+Acceptance promises no execution.
+Admission operates when a project has no live worker instance.
+Processing occurs at least once and produces idempotent effects.
+The Scheduler deduplicates effects per project and per [external object](mission-service.vocabulary.md#external-object) across subscription kinds and redeliveries.
+It bounds admission and observer processing separately from work-pull handling.
+The Scheduler retries no unauthorized request.
+
+Admission resolves the project from the [source binding](project-service.vocabulary.md#source-binding) of the delivery.
+It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the [Repository component](repository.md#platform-connector-and-platform-implementations).
+The scheduling core consumes that decoded delivery and interprets no platform payload.
+Admission resolves the external object, its [node](overview.vocabulary.md#node) and its [attempt](overview.vocabulary.md#attempt) within that project.
+Acceptance as an observation creates an [observation obligation](scheduler-service.vocabulary.md#observation-obligation).
+Acceptance as a human act invokes the Mission operation under the [linked human identity](scheduler-service.vocabulary.md#linked-human-identity).
+Refusal admits no effect.
+A duplicate creates no second effect.
+
+The observer acts under the [service identity](project-service.vocabulary.md#service-identity) whose authorization the [Project Service](project-service.md#authorization-and-credential-custody) defines.
+The observation obligation supplies the external object for that resolution.
+
+The observer is a component of the Scheduler Service, not a worker instance.
+Nothing dispatches the observer.
+The scheduling processors execute the observer on an observation obligation.
+The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the external object.
+It reads the state of that object through the [platform connector](repository.md#platform-connector-and-platform-implementations) of the Repository component.
+The observer folds that state into the observed state.
+It writes the observation record to the Mission Service.
+The [Mission Service](mission-service.md#evidence) owns the external object and the observation record.
+It owns the transition on the accepted observation without platform interpretation.
+The observer decides the observed state and never the outcome of the node.
+The [Mission Service](mission-service.md#the-enforcement) owns observation admission without a node claim.
+An observation obligation is a Scheduler record with a lease and a recovery path.
+It is not an execution: it holds no node claim and has no claimant.
+Liveness defines the lease for both an observation obligation and an execution.
+
+Admission resolves a delivery to an external object by the repository binding and the address that the object names.
+Correlation never depends on the continued existence of the originating instance.
+A repository binding alone is insufficient: projects share a repository, and one binding serves several external objects.
+A remote object survives an attempt boundary.
+A matching pull request identifier never attaches a delivery to the newest attempt by itself.
+An ambiguous or out-of-order delivery reconciles against the external objects of the node.
+The [Mission Service](mission-service.md#evaluation-and-assessment) owns currency checks, and its [attempt](mission-service.md#attempt) rules remain authoritative.
+
+The [external input](scheduler-service.vocabulary.md#external-input) identifies the business effect that admission considers.
+A request for new WHAT creates no node and receives no acceptance as a scheduling request.
+The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
+Its [unblock](mission-service.md#the-unblock) requires human authority.
+Delivery acceptance alone creates no claim, unblocks no node and starts no execution.
+A change request produces an observation whose observed state is not the expected end state.
+The [Mission Service](mission-service.md#state-transitions) owns the resulting block, and its [unblock](mission-service.md#the-unblock) opens the next attempt.
+The Scheduler serves the node after that unblock.
+
+Receiving a delivery is inbound; requesting an external action is outbound.
+The [Mission Service boundary](mission-service.md#boundary) assigns the performance of the request of a required external action and its idempotency to the Worker Service.
+A platform signature grants no authority to write WHAT, execute a node or override an outcome.
+
+## Work pulls
+
+A worker instance that can take work issues a work pull with an idempotent [request identifier](mission-service.vocabulary.md#request-identifier).
+The [overview](overview.vocabulary.md) defines the worker instance, the execution and the act of executing a node.
+The pull carries its worker binding identity and the runtime identity of the instance.
+The [Project Service](project-service.md#resource-and-binding-model) owns the worker binding identity.
+The Worker Service owns the runtime identity and vouches for its association with the binding inside the server.
+The Scheduler checks the binding against the [binding set](project-service.md#configuration-lifecycle-and-consistency) of its project.
+A caller cannot widen that scope with another project's identifier.
+The [Project Service](project-service.md#authorization-and-credential-custody) authorizes resource operations, and a work pull is no resource operation.
+That authorization starts at the first operation under the execution identity that the claim creates.
+
+The work pull requires an instance healthcheck taken for the claim and fewer live executions of the binding than its instance count.
+The Worker Service produces the instance healthcheck and the compatibility declarations.
+The Scheduler selects the first job of the project's work queue that the claimant admits.
+The match reads the node states that the worker declares, the exact worker name and the required node format of the worker.
+It reads the node revision that the attempt pins or, before the first claim, the current revision.
+The [Mission Service](mission-service.md#criterion-and-authority) owns that revision selection.
+The worker requests work and never authorizes its own claim.
+Under the workers that kanthord hosts, reviewer instances pull independently of instances that execute steps.
+The [Mission Service](mission-service.md#evaluation-and-assessment) owns the restriction on the executing worker's choice of reviewer and reviewer instructions.
+The [Mission Service](mission-service.md#mission-structure-and-nodes) restricts scheduling to initiatives and objectives, never tasks.
+
+The [Worker Service](worker-service.md#instances-and-hosting) accepts the registration of an instance that an external harness hosts, and that instance pulls work like every instance, with the instance healthcheck and the compatibility match.
+The external harness hosts its own executions, and it never writes the execution record or authorizes its own claim.
+
+The Scheduler serves a work pull in three ways.
+A wakeup from the Mission Service makes the Scheduler serve the waiting work pulls of the project by the order of the work queue.
+An idle Scheduler with jobs left serves the waiting work pulls by the same order.
+An on-demand request from a service of the server names a node that holds a job, and the Scheduler serves that node to the next compatible work pull ahead of the order.
+The on-demand request returns when the claim exists, it holds no claim of its own, and the Scheduler bounds its wait as it bounds a waiting work pull.
+
+When no work matches, the Scheduler returns no work or waits asynchronously for a bounded period.
+Waiting holds no lock, no processor permit and no node reservation.
+The Scheduler bounds waiting-request counts and timeouts separately from claim handling.
+An empty work pull opens no attempt, creates no execution and counts no live execution.
+A no-work result ends the request, and a later request uses a new request identifier.
+An instance retries with backoff, never with tight polling.
+A Mission write, an accepted delivery or an ended execution of the binding triggers a recheck for a waiting pull.
+The Scheduler rechecks every admission condition before it satisfies that pull.
+A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
+
+An instance healthcheck establishes no liveness, no idleness, no operation authorization and no proof of success.
+An unreachable provider creates no block condition and authorizes no model or provider substitution.
+
+## Claims and counts
+
+The claim operation is one atomic operation.
+Only a work pull invokes it.
+Selection and claim form one acquisition operation without an unprotected gap.
+The operation rechecks the Mission state, the readiness condition, the availability of the worker binding and its instance count, the declared node states of the worker and the count of the claimant.
+The claim resolves no binding, and it validates no effective configuration of an agent.
+It rechecks the exclusion of one claim per node that the [Mission states](mission-service.md#state-of-a-node) require.
+A work pull adds the instance healthcheck and the compatibility match.
+The Scheduler takes the instance healthcheck once more immediately before the claim commits.
+A failed healthcheck at that point returns the pull empty.
+The operation counts the execution against the claimant's count and records the execution.
+The [Mission Service](mission-service.md#state-transitions) performs the node transition and owns the [attempt opening](mission-service.md#attempt) and [revision pin](mission-service.md#criterion-and-authority).
+The claim operation serializes with a block, a pause, a graph or import change and a binding change.
+The [Mission Service](mission-service.md#the-enforcement) requires refusal of a blocked node on both harnesses.
+
+The execution record holds these fields.
+
+- The execution identity that the claim mints.
+- The project.
+- The claimant: the worker binding and its instance.
+- For a registered instance, the client identity and the display name of its credential at the claim. The execution record preserves both after deregistration. It holds neither for an instance that the server hosts. Both are attribution and no authority.
+- The kind of the claim: a steps claim or an evaluation claim.
+- The node and its attempt.
+- The pinned node revision.
+- The credential revisions that the execution pins. Custody adds each one at the first use of its credential, and the list stays after the execution ends.
+- The lease.
+- The trace identity of the execution.
+- The root span identity of the execution.
+
+The claim response returns these fields.
+Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.
+This covers evidence, task assessments, task outcomes, evaluation assessments and invoked repository actions.
+A retry after a lost response returns the original accepted result and creates no second execution or count.
+The [request identifier](mission-service.vocabulary.md#request-identifier) of a work pull is scoped to the project, the claimant and the runtime identity of the instance, so a replay from another instance returns nothing and transfers no execution.
+The operation recognizes an accepted identifier before admission and returns the accepted result.
+An ended claim does not change that result.
+An acknowledgement of an ended claim restores no authority.
+A replayed delivery revives no claim.
+
+A worker declares the node states that its instances consume, and the [Mission Service](mission-service.md#state-transitions) owns the states that admit a claim: `Available`, `Waiting` and `External.Requested`.
+For an otherwise eligible node, the Scheduler admits a claim only when the worker of the pulling instance declares the state of the node at admission.
+A claim from `Available` is a steps claim and authorizes the steps work.
+A claim from `Waiting` or `External.Requested` is an evaluation claim and authorizes the evaluation.
+The accepted claim records its kind, and it keeps that kind for its lifetime.
+The declared states come from the worker contract that the Worker Service publishes, never from a registering instance.
+A new worker declares its states without a change to a rule of the Scheduler.
+The [Mission Service](mission-service.md#evaluation-and-assessment) owns the separation between the execution of the steps of a node and its assessment.
+A worker that an external harness hosts declares `Available`, `Waiting` and `External.Requested`, and one of its instances can perform both through the corresponding claims.
+The [Mission Service](mission-service.md#evaluation-and-assessment) owns the policy on the verification of that separation inside an external harness.
+Only the orchestrator of the external harness communicates with kanthord, and it chooses its sub-agents and their prompts.
+The declared states give the capability to take a state and no continuity: the Scheduler serves a node to the first compatible pull, and no rule prefers the binding whose instance executed the steps of the node.
+
+The [Project Service](project-service.md#execution-configuration-and-instance-count) owns the instance count of a worker binding.
+The Scheduler admits a claim only while the live executions of the claimant are fewer than its count.
+It admits no claim for an instance that holds a live execution.
+The Scheduler counts executions per claimant; the Worker Service owns how an instance hosts an execution.
+An ordinary claim debits no other budget.
+The [Mission Service](mission-service.md#attempt) owns the two acts that open an attempt: a first claim and a human unblock.
+The Scheduler introduces no project-wide cap.
+
+A release ends the execution.
+The [Mission Service](mission-service.md#state-transitions) routes a release by its execution-end fact or further work and leaves the attempt open.
+A release names no wait.
+No job exists while a node waits.
+The Mission Service inserts the job in the transaction that makes the node claimable, and it deletes the job in the transaction that makes the node unclaimable.
+Those transactions serialize with the release, the claim and every other transaction of the Mission Service for the project, so no intervening fact disappears.
+The continuation reaches a later work pull, never a pushed assignment.
+A waiting node holds no instance while it waits.
+
+The [Mission Service](mission-service.md#state-transitions) owns the human pause, discard and success override transitions that end a live claim.
+Those transitions also determine whether the attempt closes or stays open.
+Its success override from `Executing` ends a live steps claim.
+Its human pause from `Evaluating` ends a live evaluation claim.
+The Scheduler revokes the claim at the Mission transition through the same path as a loss declaration.
+It accepts the revocation before any later operation admission reads the claim state.
+The [Project Service](project-service.md#configuration-lifecycle-and-consistency) owns completion against the remote of an operation that already holds admission.
+The revoked execution leaves its claimant's count at revocation.
+
+An instance-count change stops new admissions where the new count requires it.
+The Scheduler counts live executions during the drain and treats no configuration edit as a discard of a node.
+
+## Liveness
+
+The lease records the validity of a claim or of an observation obligation: its expiry, the renewal that its holder performs, and the loss declaration.
+An execution renews the lease of its claim while it executes, and it releases durably when it finishes or must wait.
+The observer renews the lease of an obligation while it processes that obligation.
+Renewal, loss declaration, release and completion serialize with each other.
+
+An execution presents its execution identity, and a service establishes liveness from the claim state of that identity in the Scheduler Service.
+The [Project Service](project-service.md#authorization-and-credential-custody) owns its claim-state read and the distinction between liveness proof and operation authorization.
+A write under the identity of a stale execution fails the comparison with the current claim of the node.
+
+Four signals stay separate.
+
+- The instance healthcheck before a claim.
+- The lease of a live claim.
+- The observed progress that telemetry holds.
+- The readiness condition of a node.
+
+Log silence and a provider outage are not a failed assessment.
+Revocation of a lost claim takes effect at the loss declaration, never at the replacement claim.
+A loss declaration is an accepted fact that the Mission Service consumes through a transition.
+Loss of a claim closes no attempt.
+Lease expiry is not proof that the runtime stopped.
+A stopped execution never publishes afterwards.
+The Mission Service refuses current effect from a submission under a revoked claim.
+The Project Service refuses an operation from a revoked claimant.
+The lease and the loss declaration are the whole liveness contract of this document.
+This document defines no further recovery rule, retry policy or budget beyond the count.

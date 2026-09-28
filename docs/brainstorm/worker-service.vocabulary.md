@@ -1,0 +1,341 @@
+---
+title: Worker Service Vocabulary
+---
+
+# Worker Service Vocabulary
+
+This file holds the values and the examples of the terms that [worker-service.md](worker-service.md) owns.
+A product term lives in [overview.vocabulary.md](overview.vocabulary.md).
+This file is not a design document, and `worker-service.md` stays the single source of truth.
+
+## worker
+
+The overview owns the term.
+This revision of the Worker Service supplies four workers.
+
+- **general@1**: the steps method with the native agent `swe@1`.
+- **reviewer@1**: the evaluation method with the native agent `re@1`.
+- **claude@1**: hosted by the external harness `claude-code`, declares `Available`, `Waiting` and `External.Requested`.
+- **opencode@1**: hosted by the external harness `opencode`, declares `Available`, `Waiting` and `External.Requested`.
+
+## host
+
+The host of a worker is the system that runs the instances of the worker.
+The set is closed and it holds two values.
+
+- **kanthord**
+- **an external harness**
+
+`general@1` and `reviewer@1` have kanthord as their host.
+`claude@1` has the external harness `claude-code` as its host, and `opencode@1` has the external harness `opencode`.
+
+## placement
+
+The placement of an instance is the application of kanthord that runs it.
+The set is closed and it holds two values.
+
+- **`server`**, which runs the instance inside the `server` application
+- **`worker`**, which runs the instance inside a `worker` application
+
+An instance of `general@1` inside the `server` application holds the `server` placement.
+An instance of `general@1` inside a `worker` application holds the `worker` placement.
+An instance that an external harness hosts holds no placement, because kanthord runs it never.
+
+## steps method
+
+The steps method is the method of a worker whose executions carry out the steps of a node.
+`general@1` holds the steps method.
+A `general@1` instance of worker binding `general-main` claims "Add password reset" from `Available`.
+Its execution takes the three tasks of the pinned revision in the order of the revision, commits the work of each task on the node branch, and releases with no further work.
+
+## evaluation method
+
+The evaluation method is the method of a worker whose executions evaluate a node and request its required external actions.
+`reviewer@1` holds the evaluation method.
+A `reviewer@1` instance claims "Add password reset" from `Waiting`.
+It checks out the commit that the objective evidence names in a fresh workspace.
+It runs the verifications, records their results as produced evidence and writes the assessment.
+A later `reviewer@1` instance claims the same objective from `External.Requested` and evaluates nothing.
+The action performer requests the unrequested action whose predecessor reaches its expected end state, and the reviewer execution releases.
+A change request on pull request 42 blocks the objective.
+For the reviewer execution of attempt 2, the action performer reuses that pull request because it stays open and fulfils the operands.
+The action performer performs the network git write only.
+
+## native agent
+
+A native agent is an agent loop that the Worker Service runs itself.
+The agent `swe@1` of `general@1` and the agent `re@1` of `reviewer@1` are native agents.
+The Worker Service runs `swe@1` under worker binding `general-main`.
+Each model inference call uses the model [connector](architecture.vocabulary.md#connector) and the agent's effective configuration.
+
+## prompt layer
+
+A prompt layer is one part of the prompt of a native agent, and it has one owner.
+The set is closed and it holds five values.
+
+- **global prompt**: the operator of the server owns it.
+- **base prompt**: the worker that declares the agent owns it, and it holds for every agent that uses it.
+- **agent prompt**: the worker that declares the agent owns it.
+- **project prompt**: the project that binds the repository owns it.
+- **work prompt**: the node revision that the attempt pins owns it.
+
+The global prompt of the server states "Every answer is short. A commit message states the change and no reason."
+`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, which describes a senior software engineer, and its text is `assets/prompt/base.md`.
+`general@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
+`reviewer@1` declares the agent prompt of `re@1`.
+The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
+The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
+The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
+The catalog holds one prompt declaration for `swe@1`, and `general@1` references that declaration.
+
+## prompt source
+
+A prompt source is one origin of the text of a prompt layer.
+The global prompt and the project prompt each hold an ordered list, and the set of each list is closed.
+
+- global prompt: **the configuration of the server**, then **the agent file of the host**.
+- project prompt: **the repository binding**, then **the agent file of the workspace**.
+
+The base prompt and the agent prompt each take the declaration of their worker, and the work prompt takes the pinned node revision.
+The server holds no configured global prompt and the host holds an agent file, so the global prompt takes that file.
+The server holds a configured global prompt and the host holds an agent file.
+The global prompt takes the configuration, and the composer reads no file.
+The repository binding of `kanthorlabs/kanthord` holds no project prompt and the workspace holds an agent file, so the project prompt takes that file.
+The workspace holds an agent file that exceeds the bound, so that source is invalid and the project prompt is absent.
+The configuration of the global prompt holds the value that disables the layer, so the composer reads no agent file of the host.
+
+## agent file
+
+An agent file is a convention file that an agent harness reads by convention.
+The set is closed and it holds two values.
+
+- **AGENTS.md**
+- **CLAUDE.md**
+
+The host of the server holds both files.
+The workspace root of `kanthorlabs/kanthord` holds `AGENTS.md` only.
+
+## prompt composer
+
+The prompt composer is the Worker Service component that produces the prompt of a native agent.
+The term names no closed set.
+The composer of Execution 1 on "Add password reset" resolves five layers.
+It takes the global prompt from the agent file of the host.
+It takes the base prompt and the agent prompt from the declaration of `general@1`.
+It takes the project prompt from the repository binding of `kanthorlabs/kanthord`.
+It takes the work prompt from task "Add reset token expiry".
+It reads no agent file of the workspace, because the repository binding supplies the project prompt.
+The reviewer execution of the same objective composes the project prompt from that repository binding, and it reads no agent file of the workspace.
+
+## in the catalog
+
+The phrase states that the catalog holds an agent declaration; it is no state value.
+`swe@1` is in the catalog when no enablement exists for it.
+
+## agent enablement
+
+The global record keyed by agent name that permits agent use.
+The closed state set is:
+
+- `enabled`
+- `disabled`
+
+The `swe@1` enablement holds agent providers `openai-org` and `atlas-llm`, and one default configuration.
+An absent record denies use like `disabled`.
+
+## agent provider
+
+One named provider and credential pair inside an agent enablement.
+Its fields are `name`, `provider` and `credential`; it holds no model list.
+For example, `{ name: "openai-org", provider: "openai-compatible", credential: "openai-main" }` belongs to the `swe@1` enablement.
+The closed provider set is:
+
+- `github-copilot`
+- `anthropic`
+- `openai-compatible`
+
+Each value maps to the same-named [platform](custody.vocabulary.md#platform).
+
+## default configuration
+
+The values that a human selects in an agent enablement: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
+For example, the `swe@1` default names `atlas-llm`, approved model `qwen3-coder` and effort `off`.
+A worker declaration supplies none of these values.
+
+## entry
+
+The optional override of one agent's default configuration inside a worker binding.
+The closed form set is:
+
+- **tuning**: `modelIdentifier`, `reasoningEffort` or both; it keeps the default agent provider and inherits each absent value.
+- **complete**: `agentProvider`, `modelIdentifier` and `reasoningEffort`, all required; it inherits nothing.
+
+`general-frontier` holds the tuning entry `{ reasoningEffort: "high" }` for `swe@1`.
+A complete entry names `{ agentProvider: "atlas-llm", modelIdentifier: "qwen3-coder", reasoningEffort: "off" }`.
+An entry holds no `options`.
+
+## effective configuration
+
+The configuration that the Worker Service resolves for one agent under one worker binding.
+It holds `agentProvider`, `provider`, `credential`, `modelIdentifier` and `reasoningEffort`.
+Under `general-main`, a complete entry selects `atlas-llm`, which supplies provider `openai-compatible` and credential `atlas-key`.
+The model is `qwen3-coder` and the effort is `off`.
+The closed reasoning-effort set is:
+
+- `off`
+- `minimal`
+- `low`
+- `medium`
+- `high`
+- `xhigh`
+- `max`
+
+## action performer
+
+The action performer requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.
+Its callers form a closed set of two values.
+
+- **evaluation method of reviewer@1**
+- **MCP tool of a native agent or an external harness**
+
+The reviewer execution of `reviewer@1` evaluates "Add password reset" with agent `re@1`.
+Its evaluation method passes only the execution identity to the action performer, which opens pull request 42 through the [Repository component](repository.md#write-operations).
+The reviewer execution of external harness `claude-code` invokes the same action performer through its MCP tool for "Add password reset".
+It passes only its execution identity.
+The action performer derives node branch `kanthord/obj-7f3a` and base branch `main` from the records, without operands from either caller.
+A second invocation under the same claim dispatches nothing when the first dispatch remains unresolved.
+
+## return class
+
+A return class identifies one kind of item that the action performer returns.
+The set is closed and holds four values.
+
+- **submitted external objects**
+- **actions that await a prerequisite**, with the observation that each one follows
+- **actions whose request fails before any effect**, with the refusal
+- **actions whose effect or recording is uncertain**
+
+For "Add password reset", the action performer submits pull request 42 as an external object and returns that external object.
+For "Add password reset", a second action awaits the merge observation of pull request 42, and the action performer returns that action with its prerequisite.
+For "Add password reset", the platform refuses an action for authorization before any effect, and the action performer returns the refusal.
+For "Add password reset", the platform response fails to arrive after dispatch, and the action performer returns the action with an uncertain effect.
+
+## MCP server
+
+The MCP server is the server component that exposes tools as one form of the API.
+The server runs one MCP server.
+Its client kinds form a closed set of two values.
+
+- **native agent**, under the execution identity of its hosted execution
+- **external harness**, under the credential of its client identity and the execution identity of its live claim
+
+Each tool maps to one method of a [platform implementation](repository.vocabulary.md#platform-implementation) of the Repository component or to the action performer.
+The MCP server exposes individually approved resource-scoped read methods and the tool of the action performer.
+It exposes the same tools to every client, and no state of a claim or of an assessment changes the list.
+It exposes no other write.
+The external harness `claude-code` authenticates with the JWT of its client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`.
+It presents the execution identity of its evaluation claim on "Add password reset" and calls the tool of the action performer.
+The MCP server exposes the read of pull request 42 and the list of its review comments to that external harness.
+It exposes no direct platform write.
+
+## runtime identity
+
+The runtime identity is the identity that the Worker Service mints for a worker instance and that names its worker binding.
+The Worker Service creates two instances for worker binding `general-main`, whose instance count is 2, and mints a runtime identity for each one.
+A server restart creates two new instances with two new runtime identities.
+A revision of `general-main` that changes the model identifier of its entry replaces no instance.
+
+## heartbeat
+
+The signal that a registered instance sends to keep its registration live.
+The set of signals that count as a heartbeat is closed.
+
+- A work pull.
+- An execution operation.
+- An MCP request.
+- An explicit heartbeat request.
+
+The `claude-code` instance of worker binding `claude-main` pulls work every 60 s while idle, so every pull is its heartbeat.
+While it runs a 20-minute MCP tool call, it sends an explicit heartbeat request.
+When the laptop of Ulrich sleeps, no heartbeat arrives inside the window, and the registration ends.
+A restart of `claude-code` therefore registers again.
+
+## pool
+
+The pool is the instances of one worker binding.
+The pool of worker binding `general-main` holds two instances.
+Both are idle, both pull, and the Scheduler serves "Add password reset" to the first pull.
+The second instance keeps its pull outstanding and starts no other pull.
+
+## compatibility declarations
+
+The compatibility declarations are the worker name, the declared node states and the required node format that an instance carries on a work pull.
+An instance of `general@1` carries the worker name `general@1`, the declared node state `Available` and the required node format.
+An instance of `reviewer@1` carries the worker name `reviewer@1`, the declared node states `Waiting` and `External.Requested` and the required node format.
+
+## required node format
+
+The required node format is the fields of a node that a method requires.
+Every worker of this page requires the same format, and the set is closed.
+
+- the name
+- the requirement
+- the criterion
+- the verifications
+- the bindings
+
+Every node holds verifications, and a method reads them.
+
+## instance healthcheck
+
+The [Scheduler Service](scheduler-service.vocabulary.md#instance-healthcheck) owns the term, and the Worker Service produces the check.
+The instance of `general@1` passes when its effective configuration resolves under the current worker binding and enabled agent enablement.
+It fails when the `swe@1` enablement is absent or disabled.
+The instance of `claude@1` fails when its registration is not live.
+
+## trust boundary
+
+The trust boundary is the containment that the operator provides.
+The Worker Service runs the tool of an agent and the verifications of a node inside it.
+The term names no closed set.
+The verifications of "Add password reset" come from the repository `kanthorlabs/kanthord`.
+They run inside the boundary and reach no resource of another project.
+
+## workspace
+
+A workspace is the host-local working directory of one execution.
+The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorlabs/kanthord` on the node branch, under the workspace root of the server, keyed by the objective and its repository binding.
+Execution 3 of the same objective under the same repository binding reuses it.
+The Worker Service removes it after the fixed retention period.
+The reviewer execution of the objective uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
+The execution of "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
+
+## node branch
+
+The node branch is the branch that the steps method uses for one objective in one repository across its attempts.
+The node branch of "Add password reset" takes its name from the node identity, for example `kanthord/obj-7f3a`.
+Attempt 1 and attempt 2 both work on that branch.
+A revision of the objective that names another repository binding starts a new node branch in that repository.
+
+## task commit
+
+The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
+Task "Add reset token expiry" of "Add password reset" ends with two commits on the node branch: the commit of the first task work and the commit of the revision after the first verification failed, and the second one is the task commit.
+That commit is the evidence of the task outcome, and the task assessment names it with the tested input that the verification ran against.
+
+## checkpoint commit
+
+A checkpoint commit is the commit of the task work in progress that the execution makes before a release with further work.
+The resource budget of Execution 1 ends while task "Add reset token expiry" is half done, so the execution commits the changed files as a checkpoint commit, pushes the node branch and releases with further work.
+Execution 2 continues the task from that commit, and the task holds no outcome until Execution 2 records one.
+
+## resource budget
+
+The resource budget bounds one execution by turn count and wall time.
+`general@1` declares 200 turns and 2 hours, and `general-lab` overrides them with 50 turns and 30 minutes.
+The [budget contract](worker-service.impl.md#stop-and-budget) defines measurement and validation.
+
+## lease renewal interval
+
+The execution renews its lease at a fixed interval shorter than the lease expiry, for example every 30 seconds against a lease of 2 minutes.
+The values are illustrations, and the implementation epics set the configured values.
