@@ -260,7 +260,7 @@ The [Mission Service](mission-service.md#attempt) owns the two acts that open an
 The Scheduler introduces no project-wide cap.
 
 A release ends the execution.
-The [Mission Service](mission-service.md#state-transitions) routes a release by its execution-end fact or further work and leaves the attempt open.
+The [Mission Service](mission-service.md#state-transitions) routes a release by `furtherWork` and leaves the attempt open.
 A release names no wait.
 No job exists while a node waits.
 The Mission Service inserts the job in the transaction that makes the node claimable, and it deletes the job in the transaction that makes the node unclaimable.
@@ -273,7 +273,7 @@ Those transitions also determine whether the attempt closes or stays open.
 Its success override from `Executing` ends a live steps claim.
 Its human pause from `Evaluating` ends a live evaluation claim.
 Before expiry, the Scheduler revokes the claim in the transaction of the Mission transition and sets `ended_at`.
-That revocation is no loss and adds nothing to `consecutive_losses`.
+That revocation counts as no loss.
 It accepts the revocation before any later operation admission reads the claim state.
 The [Project Service](project-service.md#configuration-lifecycle-and-consistency) owns completion against the remote of an operation that already holds admission.
 The revoked execution leaves its claimant's count at revocation.

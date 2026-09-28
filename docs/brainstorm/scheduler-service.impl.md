@@ -50,7 +50,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity` and `runtimeIdentity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean.
-  `false` states the execution-end fact of the attempt.
+  `false` states that the execution of the attempt requires no further work.
   The Mission Service reads `furtherWork` for routing in the release transaction, and nothing stores it.
   The answer is `{ executionId, endedAt }`.
 - `ObservationObligation` holds `obligationId`, `projectId`, `externalObjectId`, `acceptedAt`, `lease` as the lease object or `null`, `completedAt` as a timestamp or `null`, and `observationId` as `observation_<ulid>` or `null` while no accepted observation exists.
@@ -98,7 +98,8 @@ The Scheduler Service owns the section `scheduler` of the configuration file tha
 Every 30 s, the Scheduler settles every execution row whose `ended_at` is null and whose `expired_at` is reached or passed.
 This write is the loss declaration.
 It sets `ended_at` to the clock reading at the start of its transaction.
-The Mission Service consumes the loss in that transaction and adds one to `consecutive_losses` of the attempt.
+The loss declaration counts the lost rows of the attempt after its latest finished row and hands the count to the Mission Service.
+The Mission Service consumes the loss in that transaction.
 Below `mission.consecutiveLossLimit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
 At the limit, it moves the node to `Paused`, and no job exists.
