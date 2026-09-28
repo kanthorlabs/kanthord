@@ -50,7 +50,7 @@ Commands that call the server resolve their client settings as follows:
 | Token    | `--token` → `KANTHORD_TOKEN` → client-file `token`                                     |
 | Endpoint | `--endpoint` → `KANTHORD_ENDPOINT` → client-file `endpoint` → `http://127.0.0.1:31415` |
 
-The optional operator-supplied client file is `$XDG_CONFIG_HOME/kanthord/cli.yaml`, falling back to `~/.config/kanthord/cli.yaml`, and must have mode `0600`. Its optional fields are `token` and `endpoint`. Endpoints must be absolute HTTP(S) URLs without credentials, query, or fragment. No command saves these client settings. Prefer an environment variable or private client file over literal tokens in shell history.
+The optional operator-supplied client file is `$XDG_CONFIG_HOME/kanthord/cli.yaml`, falling back to `~/.config/kanthord/cli.yaml`, and must have mode `0600`. Its optional fields are `token`, `endpoint` and `clientSecret`. Only `serve worker` reads `clientSecret`, and no option or environment variable supplies it. The file holds no `masterKey`, and a `masterKey` field fails with `cli.config.invalid`. Endpoints must be absolute HTTP(S) URLs without credentials, query, or fragment. No command saves these client settings. Prefer an environment variable or private client file over literal tokens in shell history.
 
 Local server configuration uses a separate `kanthord.yaml`; see [initialize configuration](config/init.md#cli-shape).
 

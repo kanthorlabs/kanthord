@@ -12,7 +12,7 @@ A machine presents its JWT to [worker registration](worker/register.md), which r
 
 ## Expected response
 
-`jwt generate` prints only the JWT and a newline to **terminal stdout**, then exits `0`. With `--verbose` it prints the claim list after the JWT. The output is a token string, not a JSON response. Its decoded claims have these properties:
+In human mode, `jwt generate` prints only the JWT and a newline to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the JWT and its client secret, one line each. With `--verbose` it prints the claim list after that output. The output is a token string, not a JSON response. Its decoded claims have these properties:
 
 | Property  | Type                    | Purpose                                                                     |
 | --------- | ----------------------- | --------------------------------------------------------------------------- |
@@ -69,6 +69,15 @@ kanthord jwt generate ulrich --verbose
 kanthord jwt generate --binding '<worker-binding>' --name 'Worker display name' \
   --config /absolute/path/kanthord.yaml
 ```
+
+The output pastes into `cli.yaml` of the worker host, below `endpoint`:
+
+```yaml
+token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+clientSecret: 3q2+7wAAAAC1...
+```
+
+The client secret is `HKDF-SHA256(masterKey, "worker/client-secret/v1/" + sub)`. The server stores it nowhere and derives it again from the verified `sub`. Each machine JWT has its own secret, and a human JWT has none. The worker uses it to open its credential handover, so the worker host holds no `masterKey`.
 
 | Argument / option     | Default / constraints                                                                       | Purpose                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |

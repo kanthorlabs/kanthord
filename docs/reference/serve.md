@@ -53,4 +53,4 @@ kanthord serve worker --endpoint http://127.0.0.1:31415 --token '<machine-jwt>'
 | `--endpoint <url>` | Worker only | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415` | Server base URL for the version check.                                 |
 | `--token <jwt>`    | Worker only | `KANTHORD_TOKEN` → client-file token                                  | Machine credential; the current version-check endpoint is public.      |
 
-Explicit options take precedence. The worker rejects `--config`; use its client options or private `cli.yaml` instead. See [client configuration](README.md#client-configuration).
+Explicit options take precedence. The worker rejects `--config`; use its client options or private `cli.yaml` instead. The worker reads `clientSecret` from `cli.yaml` alone, and it refuses to start with `worker.start.client_secret_absent` or `worker.start.client_secret_invalid`. See [client configuration](README.md#client-configuration).
