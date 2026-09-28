@@ -149,7 +149,7 @@ A human then runs `kanthord jwt generate` again for each human token and each ma
 
 ## Local JWT issuance
 
-`kanthord jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
+`kanthord jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
 [architecture.impl.md](architecture.impl.md) declares this top-level command and its configuration path resolution.
 It uses the signing-key derivation and token contract above, with the configured lifetime.
 Without `--project` and `--binding` it generates a human JWT with the selected username as `sub`.
@@ -161,8 +161,18 @@ It prints only when standard output is a terminal. A failed terminal check stops
 For a human it prints the JWT followed by a newline.
 For a machine it prints the `cli.yaml` fragment `token: <jwt>` and `clientSecret: <client secret>`, one line each.
 With `--verbose` it prints the claim list after that output.
-It prompts for nothing, requires no terminal on standard input, calls no route and saves no client configuration.
+It prompts for nothing, requires no terminal on standard input and calls no route. Without `--output` it saves no client configuration.
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
+
+With `--output`, a human JWT goes into a new private client configuration file instead of standard output.
+
+- `--output` without a value selects the default path of the client configuration file. `--output <path>` selects that path.
+- The file holds `token`, and it holds `endpoint` only when `--endpoint` is given. The command validates the document against the client configuration schema before it writes.
+- The command publishes the file as `kanthord config init` publishes its file: directory `0700` when absent, temporary file `0600`, link without replacement. An existing destination fails with `system.files.publish_failed` and stays unchanged. No force option exists.
+- Standard output holds only `Created <absolute path>`, so no terminal check applies. A failed publication prints no token.
+- A file at another path is an export. Every reader reads the default path only.
+- `--output` with `--binding` fails with `cli.jwt.output_with_binding` before configuration load, so a machine JWT and its client secret never go into a file.
+- `--endpoint` without `--output` fails with `cli.jwt.endpoint_without_output`. An invalid endpoint fails with `cli.config.invalid_endpoint`.
 
 `kanthord jwt inspect [token]` decodes a JWT locally and prints its claim list.
 It resolves the token from the argument, then `KANTHORD_TOKEN`, then `token` of the client configuration file.
@@ -502,7 +512,7 @@ Each operation declares its own access policy; a path prefix grants no policy.
 ## The client configuration file
 
 [architecture.impl.md](architecture.impl.md) rules the command surface and the client configuration. The engine CLI specification [gateway page](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/gateway.md) declares the command table of the group `gateway`.
-The CLI provides no login, logout or automatic credential-saving flow. An operator may supply a private client configuration file manually. Saving a token establishes no authenticated identity; the Gateway Service authenticates it on a later API request.
+The CLI provides no login or logout. `kanthord jwt generate --output` in human mode is the only flow that saves a credential, and it creates an absent file only. No command updates or deletes the client configuration file. An operator may also supply the file manually. Saving a token establishes no authenticated identity; the Gateway Service authenticates it on a later API request.
 The JWT and signing key sections govern revocation.
 
 The client configuration file holds the three fields below.
