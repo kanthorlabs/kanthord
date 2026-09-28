@@ -132,7 +132,7 @@ The record of the operation names the execution identity.
 
 ## client identity
 
-The identity of one worker instance, or of one program of an external harness, that registers. `kanthord jwt` generates it inside a machine JWT, and it holds no secret. It is never reused, and it never moves to another worker binding.
+The identity of one worker instance, or of one program of an external harness, that registers. `kanthord jwt generate` generates it inside a machine JWT, and it holds no secret. It is never reused, and it never moves to another worker binding.
 
 `ulrich` generates a machine JWT for worker binding `claude-main` of `claude@1` with `--project project_01K5ZN4M6Q8R0S2T4V6W8X0Y2Z --binding claude-main` and the name `Claude Code on ulrich-mbp`, and the command generates the client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` inside it.
 The program of `claude-code` presents that JWT, and the protected facility resolves the client identity to the worker binding `claude-main` and to its project.

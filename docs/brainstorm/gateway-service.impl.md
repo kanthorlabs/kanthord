@@ -55,7 +55,7 @@ A machine presents its JWT on every request, including the registration route, a
 A human presents a JWT as a bearer token. The default username is `KANTHORD_AUTH_USERNAME = "kanthorlabs"`.
 The Gateway Service verifies the signature using its key derived from `masterKey`, then checks the token claims.
 The server creates no human account row and generates, hashes and stores no human password. It exposes no password-login route.
-The local `kanthord jwt` command is the only token issuance entry point. For a human it accepts an optional username argument and defaults to the constant when it is omitted.
+The local `kanthord jwt generate` command is the only token issuance entry point. For a human it accepts an optional username argument and defaults to the constant when it is omitted.
 Server startup issues and displays no human token. The CLI exposes no human login or logout command.
 A request that carries a missing or an invalid credential on a route that requires one returns 401 before the handler runs.
 `GET /api/auth/verify` declares the human access policy and returns the verified JWT's business properties as `{"kind":"human","sub":"<username>","name":"<display name>"}` with HTTP 200. Property names and values are preserved from the JWT; the response adds no aliases.
@@ -90,7 +90,7 @@ The route answers with the runtime identity of the new instance and no token.
 - It remains valid until expiry, an increment of `gateway.tokenVersion` or replacement of `masterKey`.
 - For a machine, removal or unavailability of its worker binding also ends that validity.
 - An expired token returns 401.
-- A human obtains a fresh token from `kanthord jwt`.
+- A human obtains a fresh token from `kanthord jwt generate`.
 - A worker instance receives a fresh token with a fresh client identity and registers again.
 
 The claim set is closed, and the matrix below holds for both kinds.
@@ -145,11 +145,11 @@ The Gateway Service derives the key at startup and persists neither the signing 
 [architecture.impl.md](architecture.impl.md) rules the mode of the configuration file, of its directory, of the data directory and of every database file.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
 An increment of `gateway.tokenVersion` and a restart of the server invalidate every issued JWT of both kinds. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
-A human then runs `kanthord jwt` again for each human token and each machine token.
+A human then runs `kanthord jwt generate` again for each human token and each machine token.
 
 ## Local JWT issuance
 
-`kanthord jwt [username] [--name <display>] [--project <project id> --binding <binding name>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
+`kanthord jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--config <path>]` reads the validated server configuration and generates a JWT locally.
 [architecture.impl.md](architecture.impl.md) declares this top-level command and its configuration path resolution.
 It uses the signing-key derivation and token contract above, with the configured lifetime.
 Without `--project` and `--binding` it generates a human JWT with the selected username as `sub`.
@@ -158,8 +158,18 @@ The command derives the resource identity from the binding name, so a human neve
 Mint one machine token for each concurrent instance. An instance reuses its token across restarts while the token is valid.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
 It prints the JWT followed by a newline only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
+With `--verbose` it prints the claim list after the JWT.
 It prompts for nothing, requires no terminal on standard input, calls no route and saves no client configuration.
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
+
+`kanthord jwt inspect [token]` decodes a JWT locally and prints its claim list.
+It resolves the token from the argument, then `KANTHORD_TOKEN`, then `token` of the client configuration file.
+It verifies no signature, checks no expiry, reads no server configuration, opens no database and calls no route.
+It prints the claim list without the token and requires no terminal.
+A token that is not three base64url segments with a JSON header and a JSON object payload fails with `cli.jwt.inspect.malformed_token`. No resolved token fails with `cli.jwt.inspect.token_required`.
+
+The claim list is one `<claim>: <value>` line per claim, in signed order, between two `---` lines.
+`iat` and `exp` print their Unix seconds with the UTC time as a YAML comment, for example `exp: 1822040100 # 2027-09-28T10:15:00Z`.
 
 - The Gateway Service owns no human account table and no client identity table.
 - It owns no table of the operational database.
