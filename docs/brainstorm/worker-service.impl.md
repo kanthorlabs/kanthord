@@ -172,6 +172,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
 - The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.
 - A registration that ends by expiry frees the slot of its binding.
+- A registration of a binding with no free slot, or of an unavailable binding, answers 409 `worker.instance.slot_unavailable`, the code of the resume.
 - The same client identity registers again with a fresh idempotency key, after an expiry or after its deregistration.
 - The expiry proves no stop, and physical stop and capacity reuse are the B9 items SC5 and W5.
 
@@ -184,7 +185,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
   It also holds `harness` for an externally hosted worker, or `method` and `agentName` for a worker that kanthord hosts.
   An unknown name answers 404 `worker.catalog.not_found`.
 - `worker.agent.get` is `GET /api/worker/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `worker.agent.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the worker template registry](#the-worker-template-registry) owns the declaration.
-- `worker.instance.list` is `GET /api/worker/instance` with optional `projectId`, `resourceIdentity`, `limit` and `cursor`. `projectId` is a `project_<ulid>` and `resourceIdentity` is `worker:kanthord:<binding name>`. `resourceIdentity` requires `projectId`, and a binding that the project does not hold answers 400. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
+- `worker.instance.list` is `GET /api/worker/instance` with optional `projectId`, `resourceIdentity`, `limit` and `cursor`. `projectId` is a `project_<ulid>` and `resourceIdentity` is `worker:kanthord:<binding name>`. `resourceIdentity` requires `projectId`, and a binding that the project does not hold answers 400 `worker.instance.binding_unknown`. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
 - `worker.instance.get` is `GET /api/worker/instance/:runtimeIdentity`. An unknown or ended instance answers 404 `worker.instance.not_found`.
 - An instance record holds `runtimeIdentity`, `projectId`, `resourceIdentity`, `workerName`, `host`, `placement` for a kanthord host, `clientId` and `name` for a registered instance, `activity` (`idle`, `pulling` or `executing`), `draining`, `executionId` while executing, and `registered`. It holds no JWT.
 - The reads change no registration, no pool, no configuration and no scheduling state, and they infer no dead process from silence.
