@@ -25,6 +25,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 ## The actor
 
 Every record that names an actor stores one of three forms, and the server derives each one from the verified caller.
+An assessment is the exception: it stores the execution identity, and the read derives the execution form.
 
 - `{ kind: "human", account, name }` from the human identity: `account` is the `sub` of the JWT and `name` its display name, under the bounds of [gateway-service.impl.md](gateway-service.impl.md#the-jwt). A human carries no ULID.
 - `{ kind: "execution", executionId, clientId, name }` from the execution record of the claim: `executionId` follows the identity that the Scheduler Service declares; `clientId` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
@@ -200,6 +201,7 @@ It holds no `method` field and no separate criterion result.
 The actor identifies who judged.
 The actor of a task assessment is the steps execution of its objective.
 The actor of a reviewer assessment is the execution of its evaluation claim.
+An assessment stores `executionId`, and the read derives the `Actor` of the execution form from it.
 An external harness assessment identifies the client identity of its harness worker.
 A human writes no assessment.
 The execution code, never the agent, runs the verifications before the judgement.

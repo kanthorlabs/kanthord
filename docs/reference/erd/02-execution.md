@@ -116,7 +116,7 @@ erDiagram
         text child_node_ids "JSON set, recorded at acceptance"
         text tested_input "JSON TestedInput"
         text default_standard_findings "JSON list or null"
-        text actor "JSON Actor, execution"
+        text execution_id "execution_ + ULID"
         integer created_at "Unix ms"
     }
 
@@ -152,7 +152,7 @@ erDiagram
 
     mission_node ||..o{ mission_assessment : "FK node_id"
     mission_node ||..o{ mission_assessment : "FK content_owner_id"
-    scheduler_execution ||..o{ mission_assessment : "ref in actor, no FK"
+    scheduler_execution ||..o{ mission_assessment : "ref execution_id, no FK"
 
     mission_node ||..o{ mission_outcome : "FK node_id"
     mission_node ||..o{ mission_outcome : "FK content_owner_id"
@@ -269,7 +269,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: assessments
 
-- A task assessment names the steps execution of its objective as actor. A reviewer assessment names the execution of its evaluation claim as actor. An evaluation attempt is one reviewer execution and holds no row of its own.
+- A task assessment names the steps execution of its objective in `execution_id`. A reviewer assessment names the execution of its evaluation claim in `execution_id`. The read derives the `Actor` of the execution form from it. An evaluation attempt is one reviewer execution and holds no row of its own.
 - An assessment stores no revision. Its revision is the pin of `mission_attempt` at `(content_owner_id, attempt)`, because an assessment always names an attempt of 1 or more. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
 - `child_node_ids` equals the current child set of the node at the acceptance. Each child outcome names a node of that set. `evidence_ids`, `child_outcome_ids` and `child_node_ids` are sets.
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
@@ -312,4 +312,5 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |
 | Every execution actor, `mission_evidence.provenance` included | `scheduler_execution.id` | Reference in JSON, no FK. |
+| `mission_assessment.execution_id` | `scheduler_execution.id` | Reference, no FK. |
 | `mission_evidence_asset.content` (`bindingId`, `storageBindingId`) | `project_binding.id` | Reference in JSON, no FK. |
