@@ -92,10 +92,10 @@ The expected end state of the pull request of the objective "Add password reset"
 
 ## outcome
 
-An outcome is an assessment from evaluation of evidence against the criterion, or a human act that a human assertion records.
+An outcome is an assessment from evaluation of evidence against the criterion, or a human act that a human assessment records.
 The term names no closed set.
 The [Mission Service Vocabulary](mission-service.vocabulary.md#assessment) owns the three values that an assessment establishes.
-A human override of the outcome of "Add password reset" produces a new outcome that carries the human assertion.
+A human override of the outcome of "Add password reset" produces a human assessment and a new outcome that names it.
 kanthord keeps the previous outcome, and the new outcome becomes the current outcome.
 A human discard of "Add password reset" produces an outcome whose asserted result establishes nothing.
 

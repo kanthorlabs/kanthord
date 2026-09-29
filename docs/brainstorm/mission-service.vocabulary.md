@@ -190,11 +190,12 @@ The set is closed and it holds twelve values.
 
 ## basis
 
-The assessment or human assertion that an outcome names as its basis.
+The assessment that an outcome names as its basis.
+The kind of the basis is the kind of the actor of that assessment.
 The set is closed and it holds two values.
 
-- **assessment**
-- **human assertion**
+- **execution assessment**
+- **human assessment**, which records a human assertion
 
 ## block condition
 
@@ -294,7 +295,7 @@ A `reviewer@1` instance evaluates that objective, and it writes one assessment.
 That assessment names the evidence set of the objective and the node revision pinned by the attempt, and its rationale names each task whose criterion is unmet.
 It names the reviewer execution as the actor and holds no method field.
 An external harness assessment identifies the client identity of the harness worker.
-A human writes no assessment.
+A human writes an assessment only through a human act.
 The assessment names the tested input of the verifications of the pinned revision.
 Assessments accumulate, so a second assessment of the same objective never overwrites the first.
 
@@ -391,7 +392,7 @@ The set of checks is closed and it holds three members.
   The check never requires equality with the whole evidence set.
 - **authority**: Authority checks intervening acts: a block, an unblock, a pause, a resume, a discard, a human override and an attempt closure.
   The authority check determines whether an assessment still affects current state.
-- **order**: Order selects the latest assessment that the context check and the authority check admit.
+- **order**: Order selects the latest execution assessment that the context check and the authority check admit.
 
 An attempt closure never invalidates a completed record.
 An attempt closure scopes a record to its own attempt.

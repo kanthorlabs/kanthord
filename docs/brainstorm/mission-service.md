@@ -281,7 +281,7 @@ A task commit is an internal step of the execution of its objective, and no reco
 The outcome of an objective represents its tasks.
 An initiative reads the outcome of each objective and the evidence set that the outcome carries.
 A landed commit is a commit identity that the expected end state of a repository request appends or that a success override carries, and it is the durable repository evidence of an objective.
-An objective that a success override completes without a landed commit identity, and an objective whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assertion or on the stored content.
+An objective that a success override completes without a landed commit identity, and an objective whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assessment or on the stored content.
 
 The evidence of a node is a set of items, and it holds one item most of the time.
 When a repository request reaches its expected end state, the Mission Service writes each landed commit as its own evidence record, with the Mission Service as provenance and the attempt of the request.
@@ -366,7 +366,9 @@ An assessment of an initiative names the current outcome of each current objecti
 It names the actor that performs it.
 An assessment holds no method field.
 Its actor and evaluation fields identify who judged.
-A human writes no assessment.
+The actor of an assessment is an execution or a human.
+A human writes an assessment only through a human act on the node: a success override, a discard or a block.
+A human assessment weighs no verification, names no tested input and names no child outcome.
 The execution code, never the agent, runs the verifications before the judgement.
 A success assessment names exactly one evidence that holds the verification of the pinned revision, and it names no evidence with a pending asset.
 For an objective, that verification covers the verifications of the objective and of each current task of the pinned revision.
@@ -382,7 +384,8 @@ The authority check determines whether an assessment still affects current state
 An attempt closure never invalidates a completed record.
 An attempt closure scopes a record to its own attempt.
 A pause and a resume never invalidate a passing assessment by themselves.
-Order selects the latest assessment that those two checks admit.
+Order selects the latest execution assessment that those two checks admit.
+A human assessment is never a candidate of the order check, and its human act stays an intervening act of the authority check.
 The record order answers the order check alone.
 A changed child outcome invalidates the currency of the assessment of its parent.
 That invalidation queues no retry, and it reopens no terminal success.
@@ -399,7 +402,7 @@ That retry repeats no execution and no repository action.
 ## Outcome and completion
 
 The evidence is the artifact of the execution.
-The assessment is the artifact of the evaluation.
+The assessment is the artifact of the evaluation or of a human act.
 An attempt closure produces the outcome, and the Mission Service writes it on the closing transition.
 
 ### State of a node
@@ -522,16 +525,15 @@ An outcome record holds these fields.
 
 - The node and the attempt.
 - The asserted result: success, the results do not meet the criterion or the default standard, or nothing is established.
-- The basis: an assessment or a human assertion.
-- The assessment and its evaluation context, when the basis is an assessment.
-- The actor and the human decision, when the basis is a human assertion.
+- The basis: an execution assessment or a human assessment.
+- The context of that assessment: its actor, its rationale, its node revision and, for an execution assessment, its evaluation context.
 - The evidence set that the outcome carries.
 
-An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
-An outcome that asserts that the results do not meet the criterion or the default standard names an assessment as its basis.
-A human override that asserts success writes a successful outcome whose basis is a human assertion.
+Every outcome names an assessment, and a human assessment never means that an evaluation ran.
+An outcome that asserts that the results do not meet the criterion or the default standard names an execution assessment as its basis.
+A human override that asserts success writes a human assessment and a successful outcome whose basis is that assessment.
 A success override carries an optional landed commit identity.
-A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
+A discard writes a human assessment and an outcome whose basis is that assessment and whose asserted result is that nothing is established.
 A discarded node satisfies no dependency.
 The end state other of a request evidence ends the attempt with an outcome whose basis names the passing assessment.
 That outcome asserts that nothing is established, because the expected end state is absent.
@@ -719,7 +721,7 @@ The Scheduler Service owns the enforcement at the claim.
 
 A human blocks a paused node, and that path is the only human block.
 
-The outcome carries the human reason as the human decision.
+The human assessment of the block carries the human reason as its rationale.
 
 The human block closes the attempt when one is open.
 A block of a node whose attempt reads 0 takes no effect on that attempt.

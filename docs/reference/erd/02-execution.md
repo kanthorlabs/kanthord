@@ -106,13 +106,15 @@ erDiagram
         text id PK "assessment_ + ULID"
         text node_id FK "initiative or objective"
         integer sequence "acceptance order in the node"
-        integer attempt
+        integer attempt "0 only for a human assessment"
         text result "success | criterion-not-met | undetermined"
         text rationale "nonblank"
         text evidence_ids "JSON set"
-        text child_outcome_ids "JSON set, empty for an objective"
-        text tested_input "JSON TestedInput"
-        text execution_id "execution_ + ULID"
+        text child_outcome_ids "JSON set, empty for an objective and a human assessment"
+        text tested_input "JSON TestedInput, null for a human assessment"
+        text execution_id "execution_ + ULID, null for a human assessment"
+        text actor "JSON human Actor, null for an execution assessment"
+        integer node_revision "pin of the attempt, or current at the act for attempt 0"
         integer created_at "Unix ms"
     }
 
@@ -121,11 +123,8 @@ erDiagram
         text node_id FK "initiative or objective"
         integer sequence "acceptance order in the node"
         integer attempt "0 or more"
-        integer node_revision
         text result "success | criterion-not-met | undetermined"
-        text assessment_id FK "assessment basis"
-        text basis_actor "JSON Actor, human assertion"
-        text decision "human assertion"
+        text assessment_id FK "basis, required"
         text evidence_ids "JSON set"
         integer created_at "Unix ms"
     }
@@ -144,11 +143,11 @@ erDiagram
     project_binding |o..o{ mission_evidence_asset : "ref bindingId, storageBindingId in content, no FK"
 
     mission_node ||..o{ mission_assessment : "FK node_id"
-    scheduler_execution ||..o{ mission_assessment : "ref execution_id, no FK"
+    scheduler_execution |o..o{ mission_assessment : "ref execution_id, no FK"
 
     mission_node ||..o{ mission_outcome : "FK node_id"
     mission_attempt |o..o{ mission_outcome : "ref (node_id, attempt), validated"
-    mission_assessment |o..o{ mission_outcome : "FK assessment_id"
+    mission_assessment ||..o{ mission_outcome : "FK assessment_id"
 
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
@@ -236,7 +235,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A human ready act opens attempt 1 when the node holds none, sets `Waiting` and inserts the evaluation job in one transaction.
 - A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition and the dependency closure. `Available` routes to `Pending` when the closure does not hold.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node, in one transaction. A closed attempt never reopens.
-- A human block, discard or success override on a node whose attempt reads 0 writes the node outcome with `attempt` 0. It closes no attempt.
+- A human block, discard or success override on a node whose attempt reads 0 writes its human assessment and the node outcome with `attempt` 0. It closes no attempt.
 - An unblock is one transaction: the content revision when the act carries a change, the attempt that it opens with the human as `opened_by` and the revision that the act leaves current as `node_revision`, and the routing to `Pending` or `Available`. An unblock while the attempt reads 0 opens no attempt and writes no row.
 
 ### Mission Service: evidence
@@ -260,23 +259,24 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: assessments
 
-- An assessment names the execution of its evaluation claim in `execution_id`. The read derives the `Actor` of the execution form from it. An evaluation attempt is one reviewer execution and holds no row of its own.
-- An assessment stores no revision. Its revision is the pin of `mission_attempt` at `(node_id, attempt)`, because an assessment always names an attempt of 1 or more. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
+- Exactly one of `execution_id` and `actor` is set. An execution assessment names the execution of its evaluation claim in `execution_id`, and the read derives the `Actor` of the execution form from it. A human assessment holds a human `actor`, a null `tested_input` and an empty `child_outcome_ids`. An evaluation attempt is one reviewer execution and holds no row of its own.
+- A human override, discard or block writes its human assessment and the outcome that names it in one transaction. No other act writes a human assessment.
+- `node_revision` equals the pin of `mission_attempt` at `(node_id, attempt)`, or the revision current at the act when a human assessment names attempt 0. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
 - `child_outcome_ids` of an initiative names the current outcome of each current objective at the acceptance, and no other outcome. `child_outcome_ids` of an objective is empty. The child set of the assessment is the set of nodes of those outcomes. `evidence_ids` and `child_outcome_ids` are sets.
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
-- A success assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification of the node and, for an objective, of each current task of the pinned revision, each with `exitCode` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
+- A success execution assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification of the node and, for an objective, of each current task of the pinned revision, each with `exitCode` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
 - For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
-- `sequence` is the acceptance order of the assessments of one node, from 1 with no gap. The order check of the currency reads it.
+- `sequence` is the acceptance order of the assessments of one node, from 1 with no gap. The order check of the currency reads it over the execution assessments only.
 - Assessments accumulate. The Mission Service overwrites none and deletes none. A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment row.
 
 ### Mission Service: outcomes
 
-- `node_revision` of an outcome equals the revision that its attempt pins, or the revision current at the act when the attempt reads 0.
+- An outcome stores no revision. Its revision is `node_revision` of the assessment that `assessment_id` names.
 - `sequence` is the acceptance order of the outcomes of one node, from 1 with no gap.
 - The current outcome of a node in an attempt is its outcome of `(node_id, attempt)` with the greatest `sequence`. The current outcome of a node is its outcome with the greatest `sequence`.
-- The basis is one of two variants, and exactly one of `assessment_id` and `basis_actor` is set. An assessment basis holds `assessment_id`. A human-assertion basis holds a human `basis_actor` and `decision`. The read derives the kind from the set column.
-- The context of an assessment basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
-- Only an assessment basis asserts `criterion-not-met`. A human block and a human discard assert `undetermined`.
+- `assessment_id` is required. The kind of the basis is the kind of the actor of that assessment, and the read derives it.
+- The context of the basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
+- Only an execution assessment supports `criterion-not-met`. A human block and a human discard assert `undetermined`.
 - The outcome of an `External.Failed` closure keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
 - An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome of the same node and attempt. No correction reaches a node in a terminal state.
 
@@ -301,5 +301,5 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |
 | Every execution actor, `mission_evidence.provenance` included | `scheduler_execution.id` | Reference in JSON, no FK. |
-| `mission_assessment.execution_id` | `scheduler_execution.id` | Reference, no FK. |
+| `mission_assessment.execution_id` | `scheduler_execution.id` | Reference, no FK. Null for a human assessment. |
 | `mission_evidence_asset.content` (`bindingId`, `storageBindingId`) | `project_binding.id` | Reference in JSON, no FK. |

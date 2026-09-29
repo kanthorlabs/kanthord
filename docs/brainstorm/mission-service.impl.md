@@ -25,7 +25,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 ## The actor
 
 Every record that names an actor stores one of three forms, and the server derives each one from the verified caller.
-An assessment is the exception: it stores the execution identity, and the read derives the execution form.
+An execution assessment is the exception: it stores the execution identity, and the read derives the execution form. A human assessment stores the human form.
 
 - `{ kind: "human", account, name }` from the human identity: `account` is the `sub` of the JWT and `name` its display name, under the bounds of [gateway-service.impl.md](gateway-service.impl.md#the-jwt). A human carries no ULID.
 - `{ kind: "execution", executionId, clientId, name }` from the execution record of the claim: `executionId` follows the identity that the Scheduler Service declares; `clientId` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
@@ -196,13 +196,14 @@ Judgement decides success only after every verification of the pinned content pa
 ## The assessment
 
 An assessment holds one `result` and one required, nonblank `rationale`.
-It holds the evidence identities, child outcome identities and tested input.
+It holds the evidence identities, child outcome identities, tested input and node revision.
 It holds no `method` field and no separate criterion result.
 The actor identifies who judged.
-The actor of an assessment is the execution of its evaluation claim.
-An assessment stores `executionId`, and the read derives the `Actor` of the execution form from it.
+An execution assessment names the execution of its evaluation claim: it stores `executionId`, and the read derives the `Actor` of the execution form from it.
 An external harness assessment identifies the client identity of its harness worker.
-A human writes no assessment.
+A human assessment stores the human `actor`, holds a null `executionId` and a null `testedInput`, and names no child outcome. Its evidence set is optional.
+A human writes an assessment only through a success override, a discard or a block, and that act writes the assessment and the outcome that names it in one transaction.
+Every other rule of this section binds an execution assessment only.
 The execution code, never the agent, runs the verifications before the judgement.
 
 The result follows this order:
@@ -222,6 +223,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 
 - At acceptance `childOutcomeIds` of an initiative names the current outcome of each current objective, and no other outcome. `childOutcomeIds` of an objective is empty. The service refuses every other set with HTTP 400 and an issue list. `evidenceIds` and `childOutcomeIds` are duplicate-free sets.
 - The read derives `childNodeIds` from the nodes of `childOutcomeIds`.
+- `nodeRevision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
 - The read derives `workerVersion` from the worker of the binding row that the execution of the actor pins.
@@ -348,13 +350,11 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Every attempt field of a record is a `nonnegative integer`.
   No attempt field is null.
   A record that the Mission Service writes while the attempt of its node reads 0 holds `attempt: 0`.
-  This rule covers the outcome of a human override, discard or block on such a node.
+  This rule covers the human assessment and the outcome of a human override, discard or block on such a node.
   It also covers the landed-commit evidence that a success override supplies on such a node.
-- A human act on a node whose attempt reads 0 writes the node outcome.
+- A human act on a node whose attempt reads 0 writes its human assessment and the node outcome.
   It closes no attempt.
-- Every outcome carries `nodeRevision`, which the service authors.
-  When the attempt is 1 or more, `nodeRevision` is the revision that the attempt pins.
-  When the attempt is 0, `nodeRevision` is the node revision current at the act.
+- An outcome stores no revision. The read derives `nodeRevision` from the assessment that the outcome names.
 - The initiative-only objective read resolves a child objective to the `nodeRevision` of its current outcome.
 - An execution submission always names an attempt of 1 or more, because a claim exists only under an open attempt.
 - An omitted `attempt` filter selects every authorized record of the node.
@@ -363,18 +363,18 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
   For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
 - An outcome stores no closing event. The read derives `closingEvent` in this order:
-  - `success-override` for a human basis with `result: success`.
-  - `human-discard` for a human basis with `result: undetermined` that is the current outcome of a `Discarded` node.
-  - `human-block` for every other human basis.
-  - `assessment-not-passed` for an assessment basis whose assessment result is not `success`.
-  - `external-failed` for an assessment basis whose assessment result is `success`, with `result: undetermined`.
-  - `assessment-passed` for an assessment basis with `result: success`, when the attempt requires no external action.
-  - `external-success` for an assessment basis with `result: success`, when the attempt requires an external action.
+  - `success-override` for a human assessment with `result: success`.
+  - `human-discard` for a human assessment with `result: undetermined` whose outcome is the current outcome of a `Discarded` node.
+  - `human-block` for every other human assessment.
+  - `assessment-not-passed` for an execution assessment whose result is not `success`.
+  - `external-failed` for an execution assessment whose result is `success`, with `result: undetermined` on the outcome.
+  - `assessment-passed` for an execution assessment with `result: success`, when the attempt requires no external action.
+  - `external-success` for an execution assessment with `result: success`, when the attempt requires an external action.
 
-  An outcome with attempt 0 holds a human basis.
+  An outcome with attempt 0 names a human assessment.
   The required external actions derive from the pinned revision of the attempt, so an evidence delete changes no derived closing event.
 - The outcome of a human block or a human discard asserts `undetermined`.
-  Its basis is a human assertion, and only an assessment basis asserts `criterion-not-met`.
+  Its basis is a human assessment, and only an execution assessment supports `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   The execution of that claim is the opener of that attempt.
@@ -385,8 +385,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
   The current outcome of a node in an attempt is its outcome of that attempt that the service accepted last.
   The current outcome of a node is its outcome that the service accepted last.
   Neither `createdAt` nor the outcome identity decides that order.
-- An outcome stores no basis kind. The read derives `basis.kind` from the set column of `assessmentId` and the basis actor.
-- The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set of the child outcomes that it names and those child outcomes.
+- Every outcome names an assessment in `assessmentId`. The kind of the basis is the kind of the actor of that assessment.
+- The context of the basis is the assessment that it names: its node revision, the evidence that it names, the child set of the child outcomes that it names and those child outcomes.
 - The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
 - An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
@@ -434,7 +434,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - The request `Override` holds every field of `HumanAct`, a required `result` and an optional `landedCommit`.
 - The closed set of `result` is `success`. A failure override waits for the B9 items of the Mission Service.
 - `landedCommit` is admitted only with `result: success`.
-- The server writes the actor, the time, the basis and the outcome record.
+- The server writes the actor, the time, the human assessment and the outcome record.
 
 ## The rebind
 
@@ -563,6 +563,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
 - Tests resolve a child objective with an attempt-0 outcome to the revision current at the act.
 - Tests derive each closing event of the outcome record, also after a forced delete of a request evidence.
+- Tests write a human assessment and its outcome in one transaction for an override, a discard and a block, and keep every human assessment out of the order check.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
   They also admit an objective whose attempt reads 0, with or without current tasks.
   They open attempt 1 with the pinned revision.

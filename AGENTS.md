@@ -99,6 +99,8 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A natural key or a digest of an evidence submission (`observation_key`, `submission_digest`), a stored confirmation time or an aggregate detail text. A repeat after a restart creates a second record.
 - A cleanup process of expired uploads. A human deletes an expired asset.
 - Custody that performs a platform call, a model call or a presign. Custody releases the material, and the holder performs its own operation.
+- A human-assertion basis on an outcome (`basis_actor`, `decision`) or a revision column on `mission_outcome`. A human act writes a human assessment, and every outcome names an assessment.
+- A task record in `mission_evidence`, `mission_assessment` or `mission_outcome`, a `content_owner_id` column or a `task-result submit`. The reviewer of an objective runs and judges every task.
 
 ## Contracts
 
