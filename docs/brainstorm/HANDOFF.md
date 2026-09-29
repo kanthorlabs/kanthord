@@ -24,17 +24,18 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Mission Service
 
-- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication, run-output content bounds and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
+- [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
   - Next session 2026-09-25: open with external-action publication.
 - [ ] Added 2026-09-25 from the no-attempt ruling. A human override, discard or block on an objective whose attempt reads 0 writes the node outcome only. Define whether a task of that objective ever holds an outcome.
+- [ ] Added 2026-09-28 from the attempt simplification. The consecutive-loss count reads every `scheduler_execution` row of the node, because the rules forbid a non-unique index. Decide whether that scan stands.
+- [ ] POSTPONED 2026-09-28 by Ulrich until budgets or agent limits land. Design the handoff from one execution to the next execution of a node. `mission_run_output` is dropped on 2026-09-28; the human direction stays in the node revision, and the checkpoint commit stays the only carrier inside an attempt.
+- [ ] POSTPONED 2026-09-29 by Ulrich until a need for redaction arises. Design the redaction of evidence content and how an asset states it.
 
 ### Scheduler Service and delivery
 
 - [ ] Set numerical acceptance bounds for discovery lag, claim latency and the count of unresolved deliveries of the Intake Service in the implementation epics, against the 1,000-project workload. Intake operations also await handoff attempt and backoff bounds, acquisition deadlines, resolved-delivery retention and bounded read sizes.
 - [ ] POSTPONED 2026-09-17 by Ulrich, a separate design effort. Design the inbound request contract across Intake, Scheduler, Project and Mission: how the delivery admission of the Scheduler classifies a delivery that the Intake Service hands over, how it is dispatched and how each kind is handled, including new work arriving through Slack and the authority to create nodes, goals and validation criteria. Parked recommendation: a fifth delivery disposition, acceptance as a work request; the Mission Service records the work request with its source, its linked human identity, its text and its time; it is no node and schedules nothing; the human import that creates its nodes names it and closes it. The gap that motivates it: the four dispositions on the Scheduler page fit no request for new WHAT, and the inbox retention deletes it. The Project item on the source-binding configuration belongs to the same effort. The server-owner ruling of 2026-09-20 gives every authenticated human the same authority, so a person that a delivery maps to a human identity gains that authority, and this effort revisits it. A Scheduler read of admission dispositions per project also awaits a decision.
 - [ ] Add the skills and extensions that support external-harness integration. `tracking-service.md` obliges the extension to capture, to hold its capture in a bounded local store, and to import it when a human issues an ingestion. The contract also covers snapshot export, acknowledgement handoff, cursor persistence, retry deadlines and retained or discarded summaries.
-
-- [ ] Added 2026-09-24 from `engine/docs/cli/scheduler.md`. Scheduler commands await the closed set of the claim state, the lease duration, the renewal cadence and the lease start contract. Lists await the retention of completed observation obligations. The debated proposals wait in `.dev/cannot/scheduler-commands.md`.
 
 ### Intake Service
 
@@ -50,8 +51,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Worker Service
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
-
-- [ ] Added 2026-09-25 from the `budgets` debate of the Worker catalog item. `worker-service.md` requires a checkpoint commit and a push before a release with further work, and `worker-service.impl.md` bounds that push by the remaining resource budget, which the budget end has exhausted. No page states how the push after the budget end runs.
 
 #### Next phase
 
@@ -70,6 +69,7 @@ After the first native-agent worker runs the acceptance path.
 
 ### Tracking Service
 
+- [ ] POSTPONED 2026-09-29 by Ulrich until the audit action is added. Added 2026-09-29 from the evidence redesign. Design the audit record of a human act, for example a content removal or a pending cleanup, so that a human who regrets a delete reads what it removed. A delete removes the row, and `architecture.impl.md` bans a soft delete.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await trace, span, text and record identity contracts, OpenTelemetry mapping and the canonical identity-attribute registry. Execution identity validation awaits the Scheduler contract.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion and reads await byte and count limits, execution bounds, local-log and segment bounds, and `fsync` bounds. Large transcript and chunk contracts also remain open.
@@ -113,8 +113,8 @@ Folded from the Worker Service section on 2026-09-18 by Ulrich, to be designed w
 
 #### Scheduler Service
 
-- [ ] **C1:** Specify recovery of an observation obligation when the observer is lost before recording the observation.
 - [ ] **SC5:** Define physical-stop enforcement and safe resource and capacity reuse when a runtime returns after a loss declaration.
+- [ ] Added 2026-09-28 by Ulrich. Fence two live processes of one machine JWT. A resumed registration reuses its runtime identity, so an old process with the same JWT passes every execution proof. Ulrich accepts the risk until this item lands.
 
 #### Worker and Project Services
 
