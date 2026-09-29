@@ -9,7 +9,6 @@ title: Scheduler Service
 This document describes the Scheduler Service.
 It describes the work queue and its order, the work pull, the execution record and its deadline.
 It describes the declared node states of a worker and the count of a claimant.
-It describes the admission of a delivery and the observer.
 It describes no mechanism of another service.
 
 ## Topology and work queue
@@ -31,7 +30,7 @@ The Scheduler coalesces the wakeups of the [Mission Service](mission-service.md#
 A peek reads the first job of the order and removes nothing.
 Project configuration changes and claim changes also trigger a recheck of the affected scope.
 An idle project consumes no processor turn and loses no durable obligation.
-Server shutdown stops new claims and preserves accepted delivery and execution obligations.
+Server shutdown stops new claims and preserves accepted execution obligations.
 
 The Scheduler persists the work queue in the storage of the server, so its order survives a restart.
 The work queue holds, per project, one job for each claimable node.
@@ -86,72 +85,6 @@ The [Intake Service](intake-service.md#capacity-and-retention) owns delivery cap
 This document names no value for a bound.
 The pool size and the limits follow the workload and the measurements.
 The [Tracking Service](tracking-service.md#writing-telemetry) holds these measurements and decides nothing.
-
-## Delivery admission and observation
-
-The [delivery admission](scheduler-service.vocabulary.md#delivery-admission) operation receives one [delivery](intake-service.vocabulary.md#delivery) from the [Intake Service](intake-service.md).
-The operation has a unary lifetime: one request and one answer.
-Admission records its decision durably before it answers.
-Admission is idempotent by the delivery identity.
-A repeat with the same identity and content returns the recorded [disposition](intake-service.vocabulary.md#disposition).
-A repeat with different content receives a refusal.
-A refusal is terminal and names its reason.
-Acceptance means the Scheduler owes every effect of the delivery.
-Admission preserves every obligation whose effect lacks durable acceptance.
-Acceptance promises no execution.
-Admission operates when a project has no live worker instance.
-Processing occurs at least once and produces idempotent effects.
-The Scheduler deduplicates effects per project and per [external object](mission-service.vocabulary.md#external-object) across subscription kinds and redeliveries.
-It bounds admission and observer processing separately from work-pull handling.
-The Scheduler retries no unauthorized request.
-
-Admission resolves the project from the [source binding](project-service.vocabulary.md#source-binding) of the delivery.
-It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the [Repository component](repository.md#platform-connector-and-platform-implementations).
-The scheduling core consumes that decoded delivery and interprets no platform payload.
-Admission resolves the external object, its [node](overview.vocabulary.md#node) and its [attempt](overview.vocabulary.md#attempt) within that project.
-Acceptance as an observation creates an [observation obligation](scheduler-service.vocabulary.md#observation-obligation).
-Acceptance as a human act invokes the Mission operation under the [linked human identity](scheduler-service.vocabulary.md#linked-human-identity).
-Refusal admits no effect.
-A duplicate creates no second effect.
-
-The observer acts under the [service identity](project-service.vocabulary.md#service-identity) whose authorization the [Project Service](project-service.md#authorization-and-credential-custody) defines.
-The observation obligation supplies the external object for that resolution.
-
-The observer is a component of the Scheduler Service, not a worker instance.
-Nothing dispatches the observer.
-The scheduling processors execute the observer on an observation obligation.
-The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the external object.
-It reads the state of that object through the [platform connector](repository.md#platform-connector-and-platform-implementations) of the Repository component.
-The observer folds that state into the observed state.
-It writes the observation record to the Mission Service.
-The [Mission Service](mission-service.md#evidence) owns the external object and the observation record.
-It owns the transition on the accepted observation without platform interpretation.
-The observer decides the observed state and never the outcome of the node.
-The [Mission Service](mission-service.md#the-enforcement) owns observation admission without a node claim.
-An observation obligation is a Scheduler record with a lease and a recovery path.
-It is not an execution: it holds no node claim and has no claimant.
-Liveness defines the lease of an observation obligation and the deadline of an execution.
-
-Admission resolves a delivery to an external object by the repository binding and the address that the object names.
-Correlation never depends on the continued existence of the originating instance.
-A repository binding alone is insufficient: projects share a repository, and one binding serves several external objects.
-A remote object survives an attempt boundary.
-A matching pull request identifier never attaches a delivery to the newest attempt by itself.
-An ambiguous or out-of-order delivery reconciles against the external objects of the node.
-The [Mission Service](mission-service.md#evaluation-and-assessment) owns currency checks, and its [attempt](mission-service.md#attempt) rules remain authoritative.
-
-The [external input](scheduler-service.vocabulary.md#external-input) identifies the business effect that admission considers.
-A request for new WHAT creates no node and receives no acceptance as a scheduling request.
-The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
-Its [unblock](mission-service.md#the-unblock) requires human authority.
-Delivery acceptance alone creates no claim, unblocks no node and starts no execution.
-A change request produces an observation whose observed state is not the expected end state.
-The [Mission Service](mission-service.md#state-transitions) owns the resulting block, and its [unblock](mission-service.md#the-unblock) opens the next attempt.
-The Scheduler serves the node after that unblock.
-
-Receiving a delivery is inbound; requesting an external action is outbound.
-The [Mission Service boundary](mission-service.md#boundary) assigns the performance of the request of a required external action and its idempotency to the Worker Service.
-A platform signature grants no authority to write WHAT, execute a node or override an outcome.
 
 ## Work pulls
 
@@ -291,10 +224,6 @@ The closed set holds three values.
 - `running`: `ended_at` is null and the time is before `expired_at`.
 - `lost`: `ended_at` is at or after `expired_at`, or `ended_at` is null and the time is at or after `expired_at`.
 - `finished`: `ended_at` is before `expired_at`, after a release, an assessment end or a revocation.
-
-The lease records the validity of an observation obligation: its expiry, the renewal that its holder performs, and the loss declaration.
-The observer renews the lease of an obligation while it processes that obligation.
-Renewal, loss declaration, release and completion of an observation obligation serialize with each other.
 
 An execution presents its execution identity, and a service establishes liveness from the claim state of that identity in the Scheduler Service.
 The [Project Service](project-service.md#authorization-and-credential-custody) owns its claim-state read and the distinction between liveness proof and operation authorization.

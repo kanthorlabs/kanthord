@@ -10,7 +10,7 @@ This file is not a design document, and `repository.md` stays the single source 
 ## repository component
 
 The shared component through which services reach a repository and its platform after Project Service authorization.
-For "Add password reset", the Worker action performer calls the Repository component to open pull request 42.
+For "Add password reset", the Intake Service calls the Repository component to open pull request 42 for the Worker action performer.
 
 ## platform implementation
 

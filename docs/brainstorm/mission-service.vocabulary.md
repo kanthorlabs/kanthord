@@ -81,24 +81,22 @@ SHA-256 is optional.
 The execution of "Add password reset" produces a 3 GB video of the reset flow.
 The video exceeds the 5 MiB inline limit.
 Its host component safely opens the video inside the execution workspace.
-The component calls begin, uses the presigned PUT, then calls complete.
-The record names the `atlas-evidence` bucket, its object key, size, media type and storage binding revision identity.
+The component submits the evidence with the video as an `object` asset, uses the presigned PUT, then completes the asset.
+The asset names the `atlas-evidence` bucket, its object key, size, media type and storage binding revision identity.
 It records the object version when the store returns one.
-The answer gives the evidence identity and `s3://atlas-evidence/<object key>`.
+The answer gives the asset identity and `s3://atlas-evidence/<object key>`.
 The reviewer gets a presigned GET through its kanthord component, not a storage credential.
-The evidence record stays for the life of the mission.
-The video stays until a human removes its content.
+The evidence record and the video stay until a human deletes them.
 
 ## pending upload
 
-An upload without a published evidence record.
+An `object` asset whose upload no complete published yet.
 The term names no closed set.
 
 The component starts the video upload but never completes it.
-After one hour, the upload expires and cannot complete.
-A human lists the expired pending uploads of the mission and requests their cleanup.
-The cleanup deletes the video object and marks the pending upload cleaned up.
-The pending upload row stays, and published evidence stays unchanged.
+After one hour, the asset expires and cannot complete, so its evidence stays unpublished.
+A human deletes the expired asset with `evidence asset delete`.
+The delete removes the video object and the asset row, and published evidence stays unchanged.
 
 ## attempt
 
@@ -122,11 +120,11 @@ The import creates the objective with no attempt, and its attempt reads 0.
 4. The readiness condition holds, and a `reviewer@1` instance claims the objective.
    Execution 2 starts.
 5. Execution 2 publishes a current passing assessment of the tested input.
-6. Execution 2 requests the required external action: opening a pull request.
+6. Execution 2 requests the required external action: the Intake Service opens pull request 42, and the Mission Service writes its request evidence.
    Execution 2 releases, and the node reaches `External.Requested`.
 7. A human merges the pull request.
-8. An observer establishes the expected end state and records the landing.
-   The observation appends the landed commit identities to the evidence set.
+8. Delivery admission calls the Intake check, which establishes the expected end state, and the Mission Service sets it on the request evidence.
+   The Mission Service writes the landed commit identities as evidence.
    The node reaches `External.Success`.
 9. The current passing assessment stands, and the Mission Service writes the successful outcome.
    Attempt 1 closes, and the node reaches `Completed`.
@@ -206,7 +204,7 @@ A block condition is a condition that closes an attempt and reaches `Blocked`.
 The set is closed and it holds three values.
 
 - **a current assessment that does not pass**
-- **an `External.Failed` observation**
+- **the end state other of a request evidence**
 - **a human reason on a paused node**
 
 ## asserted result
@@ -254,7 +252,7 @@ The term names no closed set.
 
 Take the objective "Add password reset" with two required external actions: pull request 42 that must merge, and a notification with the landed commit in `#account-recovery` that follows the merge.
 Execution 2 opens pull request 42 after the passing assessment and releases, because the notification is not requestable before the merge.
-A human merges pull request 42, and the observer records the landing with commit `abc123`.
+A human merges pull request 42, and delivery admission sets the expected end state with the landed commit `abc123`.
 The notification is unrequested and the action that it follows has reached its expected end state, so the continuation condition holds.
 A `reviewer@1` instance claims the objective from `External.Requested`, and Execution 3 posts the notification with commit `abc123`.
 
@@ -326,11 +324,12 @@ Only the first case permits an empty judgement, and no case permits an absent ra
 ## tested input
 
 What the verifications read, named by the assessment that weighs their results.
-The term names a closed set of three forms.
+The term names a closed set of four forms.
 
 - **a repository snapshot**, for an objective or task whose evidence names one
 - **a list of repository snapshots**, one commit per distinct binding from the current objectives of an initiative
 - **the content address of produced evidence**, when no repository supplies the tested input
+- **the address of object evidence**, when the verifications read an object that the storage binding holds
 
 The tested input never names the produced evidence that records the verification results.
 A later addition to the evidence set changes no earlier tested input.
@@ -450,7 +449,7 @@ The dependency closure of "Add password reset" holds "Add recovery codes" and "O
 
 ## external object
 
-The representation of one requested external action and the remote thing that serves it.
+The remote thing that serves one requested external action, and that the `platform` asset of a request evidence addresses.
 The term names no closed set.
 
 An external object takes one of many forms, and these five are examples of it.
@@ -471,39 +470,11 @@ A human pauses the objective while attempt 2 is open.
 The human blocks the paused objective with the reason "the reset provider is unavailable".
 The human unblocks the objective into attempt 3.
 
-## landing observation
+## request evidence
 
-The platform action that observes a landing.
-It happens after the execution releases, so an authorized observer writes it.
-It uses the credential of a repository binding.
+The evidence record of one requested external action.
+It holds the requirement key of the attempt, one `platform` asset that addresses the external object, and at most one end state.
 The term names no closed set.
-
-Continue step 6 through step 9 of the attempt example.
-
-- A current passing assessment stands, and the reviewer execution requests the pull request of "Add password reset".
-- A human merges that pull request.
-- The observer performs the platform action, and it observes the merged state.
-- The observation retrieves the landed commit identities and appends them to the evidence set.
-- The Mission Service writes the successful outcome, and the objective reaches `Completed`.
-
-## observation record
-
-The record of one accepted observation of one external action.
-The term names no closed set.
-An observation record is one kind.
-It names eight things.
-
-- the node
-- the attempt
-- the external action
-- the expected end state
-- the external object
-- the observed state
-- the observation time
-- the authorized observer that writes it
-
-A landing record is the landing case of an observation record.
-It adds the commit identities.
 
 Take the objective "Add password reset".
 
@@ -511,30 +482,19 @@ Example of a landing case:
 
 - node: "Add password reset"
 - attempt: 1
-- external action: open a pull request
-- expected end state: merged pull request
-- external object: pull request 42
-- observed state: merged
-- observation time: `2026-09-11T11:00:00Z`
-- authorized observer: the authorized observer of the repository binding
-- commit identities: `abc123`
+- requirement key: `kanthord-repo.pull_request`
+- expected end state: `pull_request_merged`
+- asset: pull request 42 of `repository:github:kanthorlabs/kanthord`
+- end state: expected
+- landed commit evidence: `abc123`, with the Mission Service as provenance
 
 Example of an external failure case:
 
 - node: "Add password reset"
 - attempt: 2
-- external action: open a pull request
-- expected end state: merged pull request
-- external object: pull request 57
-- observed state: closed without merge
-- observation time: `2026-09-12T11:00:00Z`
-- authorized observer: the authorized observer of the repository binding
-
-## landing record
-
-The landing case of an observation record.
-A landing record adds the commit identities.
-The landing record above names pull request 42 and commit `abc123`.
+- requirement key: `kanthord-repo.pull_request`
+- asset: pull request 57 of `repository:github:kanthorlabs/kanthord`
+- end state: other, because pull request 57 closed without merge
 
 ## import
 
@@ -700,3 +660,26 @@ For a node API retirement, the set holds the named node and every current descen
 For an import, the set holds every current node that the import set omits.
 The term names no closed set.
 When a human retires `add-recovery-codes.md` through the node API, the set holds that objective and its two tasks.
+
+## delivery admission
+
+Delivery admission is the Mission operation that durably decides the disposition and the owed effects of one delivery.
+The closed set of admission operations holds delivery admission alone.
+The Intake Service submits the delivery about pull request 42 of "Add password reset" to delivery admission.
+Admission calls the Intake check, records acceptance as an observation and sets the expected end state on the request evidence.
+A repeat returns that recorded disposition.
+
+## external input
+
+External input is the decoded business meaning that delivery admission considers.
+The closed set holds an observation of an external object, a human act on an existing node and a request for new WHAT.
+The closed set of human acts holds an unblock, a pause, a resume, an edit and an override.
+
+## linked human identity
+
+The [human identity](overview.vocabulary.md#human-identity) that a delivery links to.
+The Mission Service invokes the human act on a node under that identity.
+The term names no closed set.
+
+A delivery from the GitHub webhook source links to the account `ulrich`.
+Delivery admission invokes the Mission operation under the linked human identity of `ulrich`.

@@ -18,14 +18,12 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The repository connector resolves the binding through the Project Service for each operation, under the requester's identity.
 - [Custody](custody.md#secret-use-and-handover) owns the credential boundary and follows the authorization check.
 - The Project Service calls the repository connector for a network git read at a repository binding write.
-- The [Scheduler observer](scheduler-service.md#delivery-admission-and-observation) calls the platform connector to read an external object.
-- The observer presents its [service identity](project-service.vocabulary.md#service-identity) and the [external object](mission-service.md#evidence) to read its state.
-- The Scheduler Service calls the payload decoders.
-- The [Intake Service](intake-service.md#boundary) calls a platform implementation for webhook registration with the material of its acquisition grant.
-- Intake keeps the acquisition lifecycle and has no part in a pull request.
+- The [Intake Service](intake-service.md#boundary) calls every platform implementation method, with the material of an acquisition grant or of a credential release.
+- The Intake Service calls the platform connector to check the external object of a request evidence for the [Mission Service](mission-service.md#delivery-admission-and-check), and the platform implementation folds the platform state into an end state.
+- The Mission Service calls the payload decoders, and the GitHub decoding of a delivery answers the `PlatformAddress` of its pull request or of its push.
 - The [Worker execution](worker-service.md#executions) calls the repository connector for node-branch transport.
-- The [action performer](worker-service.md#action-performer-and-mcp-server) calls the configured-action write.
-- The [Worker MCP server](worker-service.md#action-performer-and-mcp-server) calls platform implementation methods for its read tools.
+- The Intake Service calls the configured-action write for the [action performer](worker-service.md#action-performer-and-mcp-server).
+- The Intake Service calls the read methods of a platform implementation for the [Worker MCP server](worker-service.md#action-performer-and-mcp-server).
 
 ## Repository connector
 

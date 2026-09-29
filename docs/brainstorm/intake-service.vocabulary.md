@@ -54,9 +54,9 @@ The poll subscription of `kanthord-docs` reports healthy because its last succes
 
 ## disposition
 
-A disposition is the answer that the Scheduler Service records for delivery admission.
+A disposition is the answer that the Mission Service records for delivery admission.
 The closed set holds `accepted as an observation`, `accepted as a human act`, `refused` and `duplicate`.
-The [Scheduler Service](scheduler-service.md#delivery-admission-and-observation) owns their meaning.
+The [Mission Service](mission-service.md#delivery-admission-and-check) owns their meaning.
 
 ## delivery status
 

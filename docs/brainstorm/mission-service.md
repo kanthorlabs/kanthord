@@ -9,6 +9,7 @@ title: Mission Service
 This document describes the Mission Service.
 It describes the mission graph, the criterion authority, the evidence record and the assessment record.
 It describes the outcome record and the state of a node.
+It describes delivery admission and the human check of a request.
 It describes no mechanism of another service.
 
 ## Mission structure and nodes
@@ -56,7 +57,7 @@ In the same transaction the Mission Service reroutes every claim-free node whose
 The closure is read at `Pending -> Available`, `Available -> Pending`, the unblock routing and the resume precedence, and nowhere else.
 An addition on a node whose execution ended changes no routing of that node, because the gate gates the start.
 
-A landing observation is a platform action, and it uses the credential of a repository binding.
+The check of a landing is a platform operation of the Intake Service, and it uses the credential of a repository binding.
 
 A node names the bindings that its kind permits, and each binding kind states how many a node of each kind names.
 An initiative names no repository binding.
@@ -237,11 +238,11 @@ It proves nothing about test adequacy, about coverage or about a suppressed fail
 
 ## Evidence
 
-An evidence record carries a content address, a subject, a provenance and a scope.
-An evidence record is separate from the content that it addresses.
-A content address identifies the accepted bytes, and it establishes nothing about their claims.
-Two executions with identical output produce two observations and two records.
-A repeated address of unchanged content, with no new observation, creates no evidence.
+An evidence record carries one or more assets, a subject, a provenance and a scope.
+An evidence record is separate from the content that its assets address.
+An asset identifies the accepted content, and it establishes nothing about its claims.
+Two executions with identical output produce two records.
+A repeated submission after a server restart or after the replay window creates a second record, and the Mission Service accepts that duplicate.
 
 A commit hash is the preferred address of work that a repository holds.
 A commit hash is never required.
@@ -250,30 +251,27 @@ Addressed prose is evidence, and a research report and a judgement rationale qua
 An evaluation determines the strength of that evidence.
 A claim that carries no addressed content is not evidence.
 
-An external object is an entity of the Mission Service.
-It represents one requested external action and the remote thing that serves it.
-The entity is a representation.
-The Mission Service reads its existence to decide whether an attempt requested a required external action.
-The Worker Service uses that representation under its own rules.
-The Mission Service takes the end state of a requested external action from accepted observations alone.
-An external object carries its own identity, because one binding of the Project Service serves several requests.
-An external object names the external action that it fulfils, the binding of the Project Service, the address of the remote thing and a label for display.
+A request evidence is the evidence of one requested external action.
+Its requirement key names the required external action of the attempt that it answers.
+It holds one asset: the address of the [external object](mission-service.vocabulary.md#external-object), which is the remote thing that serves the request.
+A requirement key names only a required external action, and every other evidence holds none.
+An attempt holds at most one request evidence for each required external action.
+The Mission Service reads the existence of a request evidence to decide whether an attempt requested a required external action.
+The Worker Service uses the request evidence under its own rules.
 The Mission Service parses no platform content.
-An observer interprets the platform, and it writes the accepted observation.
-An external action is resolved by an accepted observation of its expected end state.
-
-An observation record is one kind.
-It names the node and the attempt, the external action, the expected end state, the external object, the observed state, the observation time and the authorized observer that wrote it.
-The observed state is the representation that the Mission Service holds of the external state.
-An observer folds the state of a platform into it, and the Mission Service folds nothing itself.
-An observation that establishes no end state leaves the request unresolved.
+The Intake Service reads the platform, and the platform implementation of the [Repository component](repository.md#platform-connector-and-platform-implementations) folds the platform state into an end state.
+The Mission Service sets the end state of a request evidence once, as expected or other, and it refuses a later conclusive result for the same request.
+No column records the time at which the end state is set.
+An external action is resolved when its request evidence holds an end state.
+A result that establishes no end state writes nothing and leaves the request unresolved.
 A failure to inspect the platform is therefore not a failure of the request, and it costs no attempt.
-An outcome that an `External.Failed` observation closes names that observation, so the cause of the block is reachable from the outcome.
+The cause of an `External.Failed` block is the request evidence of the closed attempt whose end state is other, and the blocked-node read returns it.
+The blocked-node read shows no cause when a human deleted that request evidence.
 The basis of that outcome stays the passing assessment.
 
 The Mission Service stores produced evidence as inline content or [object evidence](mission-service.vocabulary.md#object-evidence).
 It stores the address of repository evidence.
-Stored content stays retrievable.
+Stored content stays retrievable until a human deletes it.
 An address resolves while its repository holds the content.
 
 Evidence durability differs by node.
@@ -281,51 +279,48 @@ A task commit is an internal check, and it has meaning while a worker instance e
 The outcome of an objective represents the outcomes of its tasks after that objective lands.
 The system guarantees no resolution of a task commit after that point.
 An initiative reads the outcome of each objective and the evidence set that the outcome carries.
-A landed commit is a commit identity that a landing observation appends or that a success override carries, and it is the durable repository evidence of an objective.
+A landed commit is a commit identity that the expected end state of a repository request appends or that a success override carries, and it is the durable repository evidence of an objective.
 An objective that a success override completes without a landed commit identity, and an objective whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assertion or on the stored content.
 
 The evidence of a node is a set of items, and it holds one item most of the time.
-An accepted landing observation appends the landed commit identities to the evidence set.
+When a repository request reaches its expected end state, the Mission Service writes each landed commit as its own evidence record, with the Mission Service as provenance and the attempt of the request.
 A success override that carries a landed commit identity appends it to the evidence set, and the Mission Service accepts it as a landed commit and performs no check against the repository.
 The evidence record of that landed commit names the human as its provenance.
 An external action that is not a repository action adds no commit identities.
 No assessment weighs the landed snapshot.
 
-A landing record is the observation record of a landing.
-A landing record names the external object.
-It adds the commit identities.
-An authorized observer writes a landing observation, because that observation happens after the execution releases.
+The Mission Service sets the end state of a request after the execution releases, so no execution sets it.
 An execution submits the evidence of its own node and the evidence of the tasks of that node.
 Each submission carries a valid execution identity.
 A late submission never becomes current because it arrives last.
 
-A machine check binds its result to the [tested input](mission-service.vocabulary.md#tested-input) that it ran against.
+A verification binds its result to the [tested input](mission-service.vocabulary.md#tested-input) that it ran against.
 It binds its result to the pinned node revision.
 A named tested input does not prove that the check used it.
 That binding is an assertion of the executor, unless a clean isolated checkout establishes it.
 An executor report is attributable evidence, and it is not an independently verified check.
 
-Evidence is append-only.
-Redaction happens before an artifact receives its address.
-An evidence record states that redaction transformed its content.
+Evidence is append-only, except the end state of a request evidence and a human delete.
 An evidence submission is bounded, and it never truncates content silently.
-A correction names what it corrects.
+A correction is a new evidence record, and an assessment names the record that it weighs.
 
-- Every evidence record stays for the life of the mission. Its content stays until a human removes it.
-- Only a human removes evidence content, and the Mission Service keeps the record.
-- The record names the remover and any removal reason, but no removal time.
-- A later content read reports that the content is removed.
-- A human removes evidence content only when the node of the evidence and every ancestor hold a terminal state, unless the human forces the removal with a reason.
+- An evidence record and its assets stay until a human deletes them. A delete removes the row, and a deleted row is gone and not recoverable.
+- Only a human deletes an evidence asset or an evidence.
+- A human deletes one asset, or deletes an evidence with every asset of it. The Mission Service deletes the content first and the row after it.
+- A delete of an evidence also removes its identity from every evidence set of an assessment and of an outcome.
+- The span of the delete in the Tracking Service names the remover, any reason and the time.
+- A human deletes an evidence asset or an evidence only when the node of the evidence and every ancestor hold a terminal state, unless the human forces the delete with a reason.
 - A reason is optional without force.
-- Force permits immediate removal of content that holds a credential.
-- Removal does not change the effect of an outcome that names the evidence.
-- An outcome reference does not prevent content removal.
-- kanthord runs no automatic cleanup of evidence content or unpublished upload objects.
+- Force permits the immediate delete of content that holds a credential.
+- A human deletes a request evidence only with force, in every state of the node, and the delete of a request evidence of the open attempt holds the node.
+- A delete does not change the effect of an outcome that named the evidence.
+- An outcome reference does not prevent a delete.
+- kanthord runs no automatic delete of evidence and no cleanup process.
 
-A [pending upload](mission-service.vocabulary.md#pending-upload) holds no published evidence.
-The Mission Service lets a human list expired pending uploads of one mission and clean them up.
-The cleanup deletes only their objects and keeps their records with a cleanup mark.
-It never removes a published evidence record or its content.
+A [pending upload](mission-service.vocabulary.md#pending-upload) is an asset that no complete published yet.
+An evidence counts only when every asset of it is published.
+An expired asset never completes, and a human deletes it like any other asset.
+That delete can publish the evidence when every other asset of it is published.
 
 ## Evaluation and assessment
 
@@ -365,12 +360,13 @@ Only this case permits an empty judgement.
 The assessment of an execution whose worker declares a base prompt also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
 A worker that an external harness hosts declares no base prompt, so its assessment weighs the criterion alone.
 An assessment that finds a violation of the default standard does not pass.
-It names every immutable child outcome record that it weighs.
+It names every child outcome record that it weighs.
 It names the actor that performs it.
 An assessment holds no method field.
 Its actor and evaluation fields identify who judged.
 A human writes no assessment.
 The execution code, never the agent, runs the verifications before the judgement.
+A success assessment names exactly one evidence that holds the verification of the pinned revision, and it names no evidence with a pending asset.
 
 Currency needs three checks.
 Context asks whether an assessment matches the evidence that it names, the node revision that its attempt pins, the structure and the selected child outcomes.
@@ -388,6 +384,7 @@ The record order answers the order check alone.
 A changed child outcome invalidates the currency of the assessment of its parent.
 That invalidation queues no retry, and it reopens no terminal success.
 Assessments accumulate, and the Mission Service overwrites none and deletes none.
+A human delete of an evidence removes its identity from the evidence set of an assessment, and nothing else changes an assessment.
 An assessment that names a superseded context is never current.
 
 An evaluation has a durable lifecycle, and that lifecycle is independent of execution.
@@ -439,10 +436,9 @@ A human who needs further work on a completed node adds a new node.
 An edit writes the WHAT, and a correction writes a new outcome record.
 
 Three conditions reach `Blocked`, and each follows the evaluation except the human block.
-They are a current assessment that does not pass, an `External.Failed` observation and a human reason on a paused node.
+They are a current assessment that does not pass, the end state other of a request evidence and a human reason on a paused node.
 A dependency produces `Pending` under the dependency rules of Mission structure and nodes.
 `External.Failed` folds every non-success end state of the external system.
-The [observer](scheduler-service.vocabulary.md#observer) records the detail of that state in the observed state.
 
 ### Attempt
 
@@ -515,7 +511,7 @@ An initiative configures no external action.
 Evaluation and assessment owns the currency of an assessment.
 The evaluation of a node precedes its external request.
 The reviewer execution requests each required external action, and an action that follows another action is requested after that action reaches its expected end state.
-The assessment names the [tested input](mission-service.vocabulary.md#tested-input) of its machine check.
+The assessment names the [tested input](mission-service.vocabulary.md#tested-input) of the verification that it names.
 Evidence owns the record of the landed commit identities.
 
 ### Outcome record
@@ -537,7 +533,7 @@ A human override that asserts success writes a successful outcome whose basis is
 A success override carries an optional landed commit identity.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
 A discarded node satisfies no dependency.
-An `External.Failed` observation ends the attempt with an outcome whose basis names the passing assessment.
+The end state other of a request evidence ends the attempt with an outcome whose basis names the passing assessment.
 That outcome records the stopping reason of the external action and asserts that nothing is established, because the expected end state is absent.
 
 ### Task outcomes
@@ -555,16 +551,18 @@ The closure in the transition events is the dependency closure of the node.
 It holds when every node of that closure is `Completed`.
 Each row names the event, the effect on the attempt and the record that the transition writes.
 A node reaches a terminal state only when no external action of its open attempt is unresolved.
-An external action is unresolved when the open attempt requests it and no accepted observation establishes an end state.
+An external action is unresolved when the open attempt holds its request evidence and that request evidence holds no end state.
 This invariant also governs `Paused -> Completed` and `Paused -> Discarded`.
 
-A human resume reads the required external actions of the attempt, their requests and their accepted observations first.
+A human resume reads the required external actions of the attempt and their request evidence first.
 When a required action ended in a state other than its expected end state, the node goes to `External.Failed`.
 Otherwise, when a required action is requested and every required action has reached its expected end state, the node goes to `External.Success`.
 Otherwise, when a required action is requested, the node goes to `External.Requested`.
 Otherwise the target of the resume selects the state.
 The target `Waiting` needs the readiness condition and the dependency closure, as the ready act does.
 The target `Available` sends the node to `Available` when the dependency closure holds, or to `Pending` when it does not hold.
+
+A forced delete of the request evidence of the open attempt holds the node, and every `-> Paused` row below whose event is a human hold covers that delete.
 
 | Transition | Event | Attempt | Record |
 | --- | --- | --- | --- |
@@ -609,14 +607,14 @@ The target `Available` sends the node to `Available` when the dependency closure
 | `Paused -> Blocked` | Human blocks the node; record carries the human reason | Closes when an attempt is open; no effect when the attempt reads 0; the attempt stays 0 | Outcome |
 | `Paused -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `Paused -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `External.Requested -> External.Success` | Accepted observation establishes the expected end state of the last unresolved required external action | No effect | Observation record; a landing adds the landed commit identities to the evidence set; an external action that is not a repository action adds none |
-| `External.Requested -> External.Failed` | Accepted observation establishes another end state of the request | No effect | Observation record |
+| `External.Requested -> External.Success` | Delivery admission or a human check sets the expected end state on the request evidence of the last unresolved required external action | No effect | End state of the request evidence; a repository request adds one landed-commit evidence for each commit; an external action that is not a repository action adds none |
+| `External.Requested -> External.Failed` | Delivery admission or a human check sets the end state other on a request evidence | No effect | End state of the request evidence |
 | `External.Requested -> Paused` | Human holds the node | Stays open | None |
 | `External.Requested -> Evaluating` | Evaluation claim; the continuation condition holds | No effect | None |
-| `External.Success -> Completed` | Current passing assessment stands, or human override asserts success after the observation resolves the request | Closes | Outcome |
+| `External.Success -> Completed` | Current passing assessment stands, or human override asserts success after the end state resolves the request | Closes | Outcome |
 | `External.Success -> Paused` | Human holds the node | Stays open | None |
 | `External.Success -> Discarded` | Human discards the node | Closes by force | Outcome |
-| `External.Failed -> Blocked` | Observation ends the attempt | Closes | Outcome |
+| `External.Failed -> Blocked` | The end state other ends the attempt | Closes | Outcome |
 | `External.Failed -> Completed` | Human override asserts success | Closes by force | Outcome |
 | `External.Failed -> Paused` | Human holds the node | Stays open | None |
 | `External.Failed -> Discarded` | Human discards the node | Closes by force | Outcome |
@@ -682,7 +680,7 @@ stateDiagram-v2
     ext_success --> Completed: Current pass or success override, observed end state
     ext_success --> Paused: Human hold
     ext_success --> Discarded: Human discard
-    ext_failed --> Blocked: Observation ends attempt
+    ext_failed --> Blocked: End state other ends attempt
     ext_failed --> Completed: Success override
     ext_failed --> Paused: Human hold
     ext_failed --> Discarded: Human discard
@@ -695,9 +693,9 @@ Evidence owns the evidence record and its durability.
 Evaluation and assessment owns the lifecycle of an evaluation.
 Block and unblock owns the block and the unblock.
 The Worker Service owns how the reviewer execution performs the request of a required external action and the idempotency of that request across an attempt boundary.
-The Mission Service records the external object.
+The Mission Service records the request evidence.
 No rule of the Mission Service reads that record to decide whether to request the action again.
-The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, an accepted observation, an outcome, a priority change, a graph change and a retirement. It inserts the job when the node becomes claimable, and it deletes the job when the node stops being claimable.
+The Mission Service writes the work queue of the Scheduler Service through its public insert and delete, in the transaction that commits every accepted fact that changes the claimability or the priority of a node: a state transition, the end state of a request evidence, an outcome, a priority change, a graph change and a retirement. It inserts the job when the node becomes claimable, and it deletes the job when the node stops being claimable.
 After the commit the Mission Service wakes the Scheduler Service.
 The Scheduler Service owns the work queue, the claim and its deadline.
 
@@ -711,7 +709,7 @@ Outcome and completion owns the block of a node that holds no attempt.
 A block writes no separate block record.
 The closure writes the outcome of the node and the task outcomes that Outcome and completion owes.
 The outcome names the condition through its closing event, its stopping reason and its basis.
-A block cancels no live request of the closed attempt, and the next attempt reads that request through its external object.
+A block cancels no live request of the closed attempt, and the next attempt reads that request through its request evidence.
 
 A block changes the state of no other node.
 A dependent follows the dependency rules of Mission structure and nodes.
@@ -779,7 +777,7 @@ A read of a record of a closed attempt migrates nothing.
 
 The external conversation stays with its platform.
 The Mission Service copies no external content.
-The next execution fetches that content through the external object.
+The next execution fetches that content through the Intake Service with the address of the request evidence.
 
 The actor of an unblock is a human.
 That human carries a [human identity](overview.vocabulary.md#human-identity).
@@ -806,7 +804,7 @@ A completed record stays valid.
 
 An execution operation that a client requests through the API requires a live claim.
 No execution operation proceeds on a blocked node.
-An authorized observation needs no claim, because an observation is not an execution operation.
+Delivery admission and a human check need no claim, because neither is an execution operation.
 A human who acts directly on the platform is outside the API.
 The Mission Service refuses nothing there.
 The Project Service owns the authorization of each operation on a resource.
@@ -819,5 +817,59 @@ Criterion and authority owns that rule.
 A client reads the blocked nodes of a mission.
 For each node, the read returns the outcome of the closed attempt.
 That outcome names its closing event, so the read never infers a cause from the order of the records.
-The read returns the external object of every external action that the attempt requests, with the observed state of each one.
+The read returns the request evidence of every external action that the attempt requests, with the end state of each one.
 A node whose attempt requests no external action returns none.
+
+## Delivery admission and check
+
+The [delivery admission](mission-service.vocabulary.md#delivery-admission) operation receives one [delivery](intake-service.vocabulary.md#delivery) from the [Intake Service](intake-service.md#handoff).
+The operation has a unary lifetime: one request and one answer.
+Admission records its decision durably before it answers.
+Admission is idempotent by the delivery identity.
+A repeat with the same identity and content returns the recorded [disposition](intake-service.vocabulary.md#disposition).
+A repeat with different content receives a refusal.
+A refusal is terminal and names its reason.
+Acceptance means the Mission Service owes every effect of the delivery.
+Acceptance promises no execution.
+Admission operates when a project has no live worker instance.
+Processing occurs at least once and produces idempotent effects.
+The Mission Service deduplicates effects per project and per request evidence across subscription kinds, redeliveries and checks.
+The deduplication key of an unchanged state is the open item C3 of [HANDOFF](HANDOFF.md#mission-service-1).
+The Mission Service bounds admission processing separately from its other operations.
+It retries no unauthorized request.
+
+Admission resolves the project from the [source binding](project-service.vocabulary.md#source-binding) of the delivery.
+It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the [Repository component](repository.md#platform-connector-and-platform-implementations), which answers the address of the external object.
+Admission interprets no platform payload.
+It finds the request evidence of that address among the requests of an open attempt of the project that hold no end state.
+More than one match refuses the delivery as ambiguous.
+A matching pull request identifier never attaches a delivery to the newest attempt by itself.
+The address correlates the request evidence of one remote thing across attempts, and correlation never depends on the continued existence of the originating instance.
+
+Acceptance as an observation calls the check of the [Intake Service](intake-service.md#boundary) for the request evidence before the admission transaction.
+The check reads the platform under the [service identity](project-service.vocabulary.md#service-identity) of the Mission Service and answers the end state.
+The admission transaction then writes the admission record, the end state and the landed-commit evidence together.
+A result that establishes no end state writes only the admission record.
+A failed check answers a retryable failure, and the Intake Service hands the delivery over again and parks it after its bound.
+Acceptance as a human act invokes the Mission operation under the [linked human identity](mission-service.vocabulary.md#linked-human-identity).
+Refusal admits no effect.
+A duplicate creates no second effect.
+
+A human requests the check of a node.
+The check calls the Intake check for each request evidence of the open attempt that holds no end state.
+Each result commits in its own transaction and writes no admission record.
+A node with no unresolved request refuses the check.
+The Mission Service decides the end state from the folded result and never from platform content.
+
+The [external input](mission-service.vocabulary.md#external-input) identifies the business effect that admission considers.
+A request for new WHAT creates no node and receives no acceptance as a scheduling request.
+[Criterion and authority](#criterion-and-authority) owns node writes and their authority.
+The [unblock](#the-unblock) requires human authority.
+Delivery acceptance alone creates no claim, unblocks no node and starts no execution.
+A change request produces an end state that is not the expected end state.
+[State transitions](#state-transitions) own the resulting block, and the unblock opens the next attempt.
+The Scheduler Service serves the node after that unblock.
+
+Receiving a delivery is inbound, requesting an external action is outbound, and the Intake Service performs both.
+The [boundary](#boundary) assigns the performance of the request of a required external action and its idempotency to the Worker Service.
+A platform signature grants no authority to write WHAT, execute a node or override an outcome.

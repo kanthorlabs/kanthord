@@ -89,11 +89,6 @@ Both are attribution and no authority.
 The `claude-code` instance of worker binding `claude-main` claims the objective "Add password reset".
 Its execution record names the client identity and the display name after that instance deregisters, because the registration row stays, so a trace still names the program.
 
-## lease
-
-The validity of an observation obligation, which its observer renews while it processes that obligation.
-An execution holds no lease. It holds a deadline.
-
 ## deadline
 
 The fixed time at which the claim of an execution loses its authority.
@@ -103,46 +98,6 @@ Execution 1 of "Add password reset" claims at 10:00 with a 2 h wall time and a 6
 Its `expired_at` is 12:10.
 If Execution 1 holds no earlier end, it loses its authority at 12:10, before any replacement claim.
 The Scheduler records the loss declaration when it settles that loss.
-
-## observation obligation
-
-Admission of a delivery creates an observation obligation for the external object of pull request 42 of "Add password reset".
-The observer reads that pull request after its merge and writes the observation record to the Mission Service.
-The obligation holds a lease, and the observer holds no claim on "Add password reset".
-
-## delivery admission
-
-Delivery admission is the Scheduler operation that durably decides the disposition and owed effects of one delivery.
-The closed set of admission operations holds delivery admission alone.
-The Intake Service submits the delivery about pull request 42 of "Add password reset" to delivery admission.
-Admission records acceptance as an observation and creates the observation obligation.
-A repeat returns that recorded disposition.
-
-## external input
-
-External input is the decoded business meaning that delivery admission considers.
-The closed set holds an observation of an external object, a human act on an existing node and a request for new WHAT.
-The closed set of human acts holds an unblock, a pause, a resume, an edit and an override.
-
-## linked human identity
-
-The [human identity](overview.vocabulary.md#human-identity) that a delivery links to.
-The Scheduler Service passes it to the Mission Service when it invokes a human act on a node.
-The term names no closed set.
-
-A delivery from the GitHub webhook source links to the account `ulrich`.
-The Scheduler Service passes the linked human identity of `ulrich` with the Mission operation.
-
-## observer
-
-The observer is a Scheduler Service component that the scheduling processors execute on an observation obligation.
-It reads the state of the external object through the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations) under its service identity.
-It folds that state into the observed state.
-
-The [GitHub implementation](repository.vocabulary.md#platform-implementation) decodes the delivery about pull request 42 into GitHub event types.
-Delivery admission resolves that delivery through the repository binding and the address of pull request 42.
-The external object names "Add password reset" and attempt 1.
-The observer reads the merged state through the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations) and folds it into the observed state of the observation record.
 
 ## instance healthcheck
 

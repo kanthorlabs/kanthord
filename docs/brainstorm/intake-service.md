@@ -8,17 +8,18 @@ title: Intake Service
 
 This document describes the Intake Service.
 It describes the subscription and the delivery.
-It describes acquisition through a webhook, a poll or a stream.
+It describes acquisition through a webhook, a poll or a stream, the outbound operation and the check.
 It describes the handoff of a delivery to its consumer and the capacity of the service.
 It describes no business effect of a delivery and no mechanism of another service.
 
 ## Boundary
 
-The Intake Service receives from an external platform.
-It delegates every business effect to the service that owns it.
+The Intake Service performs every operation of kanthord on an external platform, inbound and outbound.
+It performs an outbound operation or a check on the request of the service that owns its effect, and it decides no business meaning.
 It decides nothing about the meaning of a delivery.
 It interprets no payload field for a business meaning.
 It reads a payload only to identify a delivery and to acknowledge it.
+A platform operation establishes no Mission outcome by itself.
 
 The Intake Service owns the connection lifetime of every acquisition.
 It receives a webhook, runs a poll and opens and closes a stream.
@@ -26,7 +27,7 @@ It holds the transport knowledge of a platform.
 That knowledge identifies the signature header and the field that carries the platform delivery identity.
 It defines the meaning of a poll checkpoint and the protocol and acknowledgement of a stream.
 The [Repository component](repository.md#platform-connector-and-platform-implementations) owns platform implementations and payload decoders.
-The Intake Service calls a platform implementation of that component for webhook registration with the material of its acquisition grant.
+The Intake Service calls a platform implementation of that component for every platform operation, with the material of an acquisition grant or of a credential release.
 
 The Intake Service reaches a peer through an [operation](architecture.md#invocation) only.
 It declares no collaboration.
@@ -35,6 +36,13 @@ It acts under its own [service identity](project-service.vocabulary.md#service-i
 It obtains acquisition material only through an [acquisition grant](project-service.vocabulary.md#acquisition-grant) of the [Project Service](project-service.md#authorization-and-credential-custody).
 It obtains no acquisition material from a store.
 It holds acquisition material in memory for the session and persists none.
+An outbound operation or a check forwards the identity of its caller.
+The Project Service authorizes that caller, custody releases the material, and the Intake Service performs the call.
+It holds that material for the call only.
+The Intake Service performs the control operations of a platform.
+The bytes of an object and the git transport of an execution travel directly, through a presigned URL or the SSH configuration of the host.
+The Intake Service performs the operations on a platform that a project binding names.
+A model inference call and the provider check belong to the model connector of the Worker Service.
 A passive webhook needs no grant.
 The Intake Service never verifies a delivery.
 It submits the body, the headers and the candidate source binding to the verification operation of the Project Service.
@@ -102,12 +110,12 @@ Durable storage precedes acknowledgement to the platform.
 A stream message follows the same order.
 The Intake Service acknowledges only a delivery that it stores durably.
 It deduplicates within one subscription by platform delivery identity.
-The [Scheduler Service](scheduler-service.md#delivery-admission-and-observation) owns effect deduplication across kinds and redeliveries.
+The [Mission Service](mission-service.md#delivery-admission-and-check) owns effect deduplication across kinds and redeliveries.
 A delivery holds no credential.
 
 ## Handoff
 
-The consumer of every delivery is the [delivery admission](scheduler-service.vocabulary.md#delivery-admission) operation of the [Scheduler Service](scheduler-service.md#delivery-admission-and-observation).
+The consumer of every delivery is the [delivery admission](mission-service.vocabulary.md#delivery-admission) operation of the [Mission Service](mission-service.md#delivery-admission-and-check).
 The Intake Service hands a delivery over at least once.
 It retries a declared failure and an indeterminate result with backoff.
 A repeat carries the same delivery identity and the same content.
@@ -118,7 +126,16 @@ After a bounded count of failed handoff attempts, the Intake Service parks the d
 A parked delivery remains visible to a human and never expires.
 The [delivery status](intake-service.vocabulary.md#delivery-status) records handoff progress.
 After acceptance, the Intake Service asks nothing further about that delivery.
-The [admission contract](scheduler-service.md#delivery-admission-and-observation) assigns every effect to the consumer.
+The [admission contract](mission-service.md#delivery-admission-and-check) assigns every effect to the consumer.
+
+## Outbound operations and checks
+
+The Intake Service performs a configured action for the action performer of the Worker Service: it opens a pull request, or it merges the node branch into the base branch and pushes.
+For a network git write, it creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the write and removes the clone after the call.
+It checks the state of the external object of a request evidence for the Mission Service, and it answers the end state that the platform implementation folds.
+It reads a pull request and its review comments for an execution.
+It signs a presigned PUT or GET, checks an uploaded object and deletes an object of a storage binding for the Mission Service.
+Each operation serves one caller kind, and [intake-service.impl.md](intake-service.impl.md) declares the operations.
 
 ## Capacity and retention
 
@@ -127,7 +144,7 @@ Beyond the bound, a webhook receives a retryable refusal.
 A poll pauses beyond the bound.
 A stream closes beyond the bound with the observed state failed and the reason capacity.
 The Intake Service never acknowledges a delivery and drops it.
-It keeps the record of a resolved delivery with its identity, because the Scheduler Service references that identity.
+It keeps the record of a resolved delivery with its identity, because the Mission Service references that identity.
 It bounds the retention of the payload of a resolved delivery.
 It never removes an unresolved delivery or its payload.
 It promises the durability of every accepted delivery.
@@ -137,5 +154,5 @@ It promises no receipt of every update that a platform produces.
 
 Every authenticated human holds authority to create, enable, disable and retire a subscription of any source binding.
 The [Gateway Service](gateway-service.md#human-authority) owns that human authority rule.
-A subscription names its consumer from the closed set of [admission operations](scheduler-service.vocabulary.md#delivery-admission).
+A subscription names its consumer from the closed set of [admission operations](mission-service.vocabulary.md#delivery-admission).
 It names no arbitrary operation.

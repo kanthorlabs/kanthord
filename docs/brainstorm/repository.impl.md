@@ -32,6 +32,7 @@ The platform connector is a registry keyed by the platform value of the binding.
 The registry uses static registration and loads no runtime plugin.
 The GitHub implementation decodes a GitHub webhook payload into GitHub event types.
 Every method returns a discriminated union: the success with the result of the operation, or the result class.
+The check method folds the state of an external object into `expected`, `other` or `none` against the expected end state that its caller names, and it answers the landed commits of an `expected` repository result.
 The [retry rules](repository.md#result-classes) use the deadline that the caller supplies.
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
 An epic decides that form for each platform.

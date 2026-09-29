@@ -45,6 +45,7 @@ It stores the content of evidence that no other system holds.
 It stores the address of evidence that a repository holds.
 No credential enters evidence.
 It records the block and the unblock of every node.
+It admits the deliveries that the [Intake Service](intake-service.md#handoff) hands over, and it sets the end state of a request evidence through the check of the Intake Service.
 Every write of a criterion, of an assessment and of an outcome passes through the Mission Service.
 It owns the separation between the claimant that executes a node's steps and the claimant that evaluates the node.
 
@@ -54,26 +55,24 @@ The Scheduler Service manages executions.
 It determines which nodes a claimant can claim, and in which order.
 It does not make a blocked node available.
 It records an execution when a claimant claims a node.
-It admits the deliveries that the [Intake Service](intake-service.md#handoff) hands over and creates the [observation obligation](scheduler-service.vocabulary.md#observation-obligation).
-It observes an external object on the git platform.
 
 ### Intake Service
 
-The [Intake Service](intake-service.md) receives the deliveries of an external platform through a webhook, a poll or a stream.
+The [Intake Service](intake-service.md) performs every operation of kanthord on an external platform: it receives the deliveries through a webhook, a poll or a stream, and it performs every outbound operation and check.
 It owns the [subscription](intake-service.vocabulary.md#subscription) and the [delivery](intake-service.vocabulary.md#delivery).
-Its [handoff](intake-service.md#handoff) sends every delivery to the Scheduler Service.
-Its [boundary](intake-service.md#boundary) excludes every business effect.
-It holds no credential and obtains an [acquisition grant](project-service.vocabulary.md#acquisition-grant) from the Project Service.
+Its [handoff](intake-service.md#handoff) sends every delivery to the Mission Service.
+Its [boundary](intake-service.md#boundary) decides no business meaning.
+It holds no credential, obtains an [acquisition grant](project-service.vocabulary.md#acquisition-grant) from the Project Service, and receives the material of a credential release for one call.
 
 ### Worker Service
 
 The Worker Service supplies the workers and the agents.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider.
-It uses the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations) for platform actions and external object reads.
+It calls the Intake Service for platform actions and platform reads.
 The [Intake Service](intake-service.md#boundary) owns acquisition transport.
 It supplies the MCP server through which a native agent and an external harness reach the server tools.
-It performs the configured repository action for both harnesses.
+It decides the configured repository action for both harnesses, and the Intake Service performs it.
 
 ### Tracking Service
 
@@ -189,17 +188,17 @@ Every service that versions a resource follows these rules.
 - The Mission Service reads the policies of the bindings that a node names from the Project Service at the attempt opening.
 - The Scheduler Service reads the worker bindings and their instance counts from the Project Service.
 - The Project Service reads the claim state of an execution from the Scheduler Service.
-- The Scheduler Service observes an external object through the [platform connector of the Repository component](repository.md#platform-connector-and-platform-implementations).
-- The Scheduler Service uses a repository credential through custody after Project Service authorization.
+- The Mission Service checks the external object of a request evidence through the Intake Service.
+- The Intake Service uses a repository credential through custody after Project Service authorization.
 - The Intake Service obtains an [acquisition grant](project-service.vocabulary.md#acquisition-grant) from the Project Service.
 - The Intake Service submits a delivery to the [verification operation](project-service.md#authorization-and-credential-custody) of the Project Service.
-- The Intake Service [hands a delivery to the Scheduler Service](intake-service.md#handoff).
+- The Intake Service [hands a delivery to the Mission Service](intake-service.md#handoff).
 - A worker instance claims a node from the Scheduler Service through a work pull.
 - An execution reads the repository strategy and the permitted resources from the Project Service.
-- An execution uses a repository credential through custody after Project Service authorization.
+- An execution reaches a platform through the Intake Service, and its git transport uses the SSH configuration of its host.
 - An execution writes evidence to the Mission Service.
 - A reviewer execution reads the criterion and the evidence from the Mission Service.
-- The action performer reads the required external actions of the attempt and the external objects of the node from the Mission Service.
+- The action performer reads the required external actions of the attempt and the request evidence of the node from the Mission Service.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.
