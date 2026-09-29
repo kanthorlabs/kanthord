@@ -17,8 +17,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - An evidence record uses `evidence_<ulid>`.
 - An assessment uses `assessment_<ulid>`.
 - An outcome uses `outcome_<ulid>`.
-- An external object uses `external_object_<ulid>`.
-- An observation uses `observation_<ulid>`.
+- An evidence asset uses `evidence_asset_<ulid>`.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) declares `mission_<ulid>`.
 - An attempt uses its attempt number as its key within the node. An attempt takes no prefix.
 - The Scheduler Service declares the execution identity.
@@ -29,7 +28,7 @@ Every record that names an actor stores one of three forms, and the server deriv
 
 - `{ kind: "human", account, name }` from the human identity: `account` is the `sub` of the JWT and `name` its display name, under the bounds of [gateway-service.impl.md](gateway-service.impl.md#the-jwt). A human carries no ULID.
 - `{ kind: "execution", executionId, clientId, name }` from the execution record of the claim: `executionId` follows the identity that the Scheduler Service declares; `clientId` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
-- `{ kind: "service", service }` for the observer, with `service: "scheduler"`.
+- `{ kind: "service", service }` for a service, with `service: "scheduler"` for the loss declaration of the Scheduler Service and `service: "mission"` for the landed-commit evidence of a request.
 - No input carries an actor, and an actor field in an input answers HTTP 400 with an issue list.
 
 ## The node content
@@ -84,9 +83,11 @@ The service derives it from the policy of the `project_binding` row that the pin
 - `bindingId` is the repository binding revision that the pinned node revision names.
 - A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
 - An initiative requires no external action, so its set is empty.
-- A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and every external object and observation of the attempt names that key.
-- The admission of an external object checks the node, the open attempt of the live evaluation claim, the required external action and its binding.
-  A reuse names an external object of an earlier attempt of the same node, with the same action, binding and address.
+- A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
+- `mission.evidence.request` is a `client` operation under the execution of the live evaluation claim. It checks the node, the open attempt of the claim, the required external action and its binding.
+  Its input holds `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The Mission Service writes the address as the one `platform` asset of the request evidence.
+  A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
+  Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
 
 ## Configuration
 
@@ -174,25 +175,27 @@ The service derives it from the policy of the `project_binding` row that the pin
 The execution runs the verifications in list order, one by one, never in parallel.
 Each item runs through `bash -c` in the workspace root of the execution.
 The run stops at the first failed item.
-The machine check records one result `{ command, exitCode, signal, timedOut }` per item that the execution started, in list order.
+The verification records one result `{ command, exitCode, signal, timedOut }` per item that the execution started, in list order.
+`Verification` holds `testedInput` and `results`, and the evidence that records the run holds it in `verification`.
 `exitCode` is the exit status or null.
 `signal` is the POSIX signal name that ended the process or null.
 `timedOut` is true when the timeout of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that timeout.
 Both `exitCode` and `signal` are null for a process that the execution started and could not observe.
 An item passes only with `exitCode: 0`; every other result fails, and an unstarted item has no result.
-The overall exit code is that of the failed item, null when the failed item ended without an exit status, or 0 when every item passes.
+A run passes when `results` hold one entry per verification and every entry has `exitCode` 0.
 No result claims that an unrun item ran.
 The start refuses a host without bash.
 No execution identity infers a verification from prose.
 
 The Mission Service refuses an assessment that asserts success with a failed or unrun verification.
 It answers `mission.assessment.verification_failed` for both a task assessment and a reviewer assessment.
+A success assessment names exactly one evidence that holds a `verification`, and that run must pass; otherwise the service answers the same code.
 Judgement decides success only after every verification of the pinned content passes.
 
 ## The assessment
 
 An assessment holds one `result` and one required, nonblank `rationale`.
-It holds the evidence identities, immutable child outcome identities and tested input.
+It holds the evidence identities, child outcome identities and tested input.
 It holds no `method` field and no separate criterion result.
 The actor identifies who judged.
 The actor of a task assessment is the steps execution of its objective.
@@ -215,18 +218,21 @@ HTTP 400 with an issue list rejects a method field, an absent or blank rationale
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
 
 - At acceptance the service records `childNodeIds`, the current child set of the node at that moment, on the assessment. `evidenceIds`, `childOutcomeIds` and `childNodeIds` are duplicate-free sets, and the service refuses a child outcome whose node is outside `childNodeIds` with HTTP 400 and an issue list.
+- An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
+- A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
 
-## The observation record
+## The request record
 
-- `expectedEndState` copies the value of the `FrozenAction` of the attempt. For a repository action the set holds `pull_request_merged` and `base_branch_pushed`; a configured action of another binding kind adds its own values with its design.
-- `observedState` holds `endState` and `detail`.
-- `endState` is one of `expected`, `other` and `none`. `expected` means the accepted observation establishes the expected end state. `other` means it establishes another end state. `none` means it establishes no end state and leaves the request unresolved.
-- `detail` is nonblank `Text` that the observer writes in platform-neutral words, for example `merged` or `closed without merge`.
-- The Mission Service reads `endState` alone and never `detail`.
-- An `expected` observation of a repository action holds a nonempty `landedCommits`; every other observation holds an empty list.
-- `observer` is the `service` form of the actor and names `scheduler`.
-- The resolution of a required external action in a read is `unrequested` while the attempt holds no external object for it, `unresolved` while every accepted observation of it holds `endState: none`, `expected-end` after an accepted `expected` observation, and `other-end` after an accepted `other` observation.
-- This record decides no order of contradictory observations, no reversal of an accepted platform state and no request for which no end state arrives. The B9 Mission items of [HANDOFF.md](HANDOFF.md#mission-service-1) own the open recovery rules.
+- `requirement_key` of a request evidence holds the key of its `FrozenAction`. The expected end state is `expectedEndState` of that `FrozenAction`: `pull_request_merged` or `base_branch_pushed` for a repository action; a configured action of another binding kind adds its own values with its design.
+- `PlatformAddress` holds `kind` and `resourceIdentity` of the binding, for example `repository:github:kanthorlabs/kanthord`, and never a `bindingId`. A `pull_request` address adds `number`. A `branch_push` address adds `branch` and `commit`, the commit that the Intake Service pushed. The service stores it as RFC 8785 canonical JSON under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- The Intake check takes the binding and its credential from the pinned `FrozenAction` of the request, and it answers `endState` and `landedCommits`.
+- `endState` is one of `expected`, `other` and `none`. `expected` establishes the expected end state. `other` establishes another end state. `none` establishes no end state.
+- The service sets `end_state` of the request evidence to `expected` or `other` once and refuses a later conclusive result for the same request. `none` writes nothing.
+- An `expected` result of a repository action holds a nonempty `landedCommits`. The service writes each commit as its own evidence with the provenance `{ kind: "service", service: "mission" }` and the attempt of the request. Every other result holds an empty list.
+- The resolution of a required external action in a read is `unrequested` while the attempt holds no request evidence for it, `unresolved` while its request evidence holds no end state, `expected-end` after `expected` and `other-end` after `other`.
+- `mission.delivery.admit` is the `service` operation of delivery admission. Its record is keyed by the delivery identity that the Intake Service owns. It calls the Intake check before its transaction, then commits the admission record, the end state and the landed-commit evidence together, because a transaction awaits nothing. More than one matching request answers the refusal reason `ambiguous`.
+- `mission.node.check` uses `POST /api/mission/node/:nodeId/check` with `human` access and names `expectedMissionVersion`. It calls the Intake check for each request evidence of the open attempt with no end state, commits each result in its own transaction, writes no admission record and answers `{ results: { evidenceId, requirementKey, resolution }[], failures: { evidenceId, error }[] }`. A node with no unresolved request answers 409 `mission.node.no_unresolved_request`.
+- This record decides no order of contradictory results, no reversal of an accepted platform state and no request for which no end state arrives. The B9 Mission items of [HANDOFF.md](HANDOFF.md#mission-service-1) own the open recovery rules.
 
 ## Evidence content
 
@@ -239,6 +245,14 @@ The service never truncates evidence.
 A node without a storage binding accepts only inline evidence content.
 Repository evidence remains an address, not an upload of repository content.
 
+- An evidence asset holds `kind` and `content`. `content` is the RFC 8785 canonical JSON of the shape that `kind` names: `RepositoryAddress` for `repository`, the produced shape `{ mediaType, sha256, data }` for `produced`, `ObjectAddress` for `object` and `PlatformAddress` for `platform`.
+- The produced shape holds canonical base64 `data` of at most 5 MiB decoded, and a content read answers `ContentBytes` from it. The service derives `ProducedAddress` and `ObjectAddress` from `content`.
+- `mission.evidence.submit` takes the full asset list and writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
+- A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
+- An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
+- `requirement_key` holds only the key of a `FrozenAction`; a task commit stays evidence without a requirement key.
+- An evidence has no natural key. A repeat after a server restart or after the replay window of the Gateway creates a new evidence, and the service accepts that duplicate.
+
 - A repository address holds `bindingId` and `commit`.
 - `commit` is the full git object name in lower-case hexadecimal: 40 characters for a SHA-1 repository or 64 characters for a SHA-256 repository, the two object formats of git. An abbreviation, upper-case or a ref name answers HTTP 400 with an issue list.
 - The service checks the form alone and never the repository.
@@ -247,14 +261,7 @@ Repository evidence remains an address, not an upload of repository content.
 - For the tested input of an initiative, the list holds one address per distinct repository binding of its current objectives.
 - The landed commit of a success override follows the same form and binding rule.
 - `mediaType` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
-- The natural key of an evidence submission is `(execution_id, observation_key)` under a unique index over the evidence rows, pending and published alike.
-- The row stores the digest of the canonical JSON of the validated submission, target node included, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
-- A repeat with the same key and digest returns the stored record: the published evidence, or the pending upload with its grant while the upload is unexpired.
-- The same key with another digest answers 409 `mission.evidence.observation_key_conflict` with the stored evidence identity in `details`.
-- A repeat of `begin` for an expired pending upload answers 409 `mission.evidence.upload_expired`; it renews nothing, and a new upload uses a new key.
-- Another execution with the same key creates its own record.
-- The key and the digest are columns of the evidence row, so they stay for the life of the mission under [Evidence retention](#evidence-retention); content removal changes neither.
-- A content read of repository evidence answers 409 `mission.evidence.content_repository` with `evidenceId` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
+- A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidenceId` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
 
 ## Object evidence
 
@@ -264,36 +271,28 @@ The host component is the server, the `worker` application or the harness extens
 It opens the path safely and refuses any path or symbolic-link escape from that workspace.
 The file path is local input, not an evidence address.
 
-1. The component calls `mission.evidence.upload.begin` with execution context, evidence metadata, size, media type and optional SHA-256.
+1. The component calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list. An `object` asset declares `mediaType`, `size` and an optional `sha256`.
    This operation requires execution access and a live claim for the node or its task.
    The server checks the live claim, the storage binding of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload.
-   It creates a pending record with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence id>`.
-   The record pins that storage binding revision in `storageBindingId`.
-   Custody returns a presigned PUT for that key with a lifetime of 1 hour.
+   It creates the evidence and one pending asset for each `object` asset, with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence asset id>`.
+   The asset pins that storage binding revision in `storageBindingId` of its `ObjectAddress`.
+   The Intake Service signs a presigned PUT for that key with a lifetime of 1 hour through `intake.storage.put`, with the material that custody releases.
    The grant requires a checksum header only when the component supplies a SHA-256.
 2. The component sends the bytes directly to the store with that PUT.
    No transfer through the server proxies those bytes.
-3. The component calls `mission.evidence.upload.complete` under execution access with the evidence identity and execution context.
-   The server checks the live claim, the object size and, when given, the checksum.
+3. The component calls `mission.evidence.asset.complete` under execution access with the asset identity and execution context.
+   The server checks the live claim, and the Intake Service checks the object size and, when given, the checksum through `intake.storage.check`.
    A mismatch prevents publication.
-   The server publishes the evidence record only after those checks pass.
-   The record holds the object location, version when the store returns one, size, media type and optional SHA-256.
-   The answer holds the evidence identity and the `s3://` URI.
+   The server sets `published_at` of the asset only after those checks pass.
+   The asset holds the object location, version when the store returns one, size, media type and optional SHA-256.
+   The answer holds the asset identity and the `s3://` URI.
 
-A pending upload expires after 1 hour.
-An expired pending upload cannot complete.
+A pending asset expires at `expired_at`, 1 hour after the submission.
+A `complete` of an expired asset answers 409 `mission.evidence.upload_expired`, and a new upload is a new submission.
 
 - kanthord runs no automatic sweep of unpublished upload objects.
-- `mission.evidence.pending.list` uses `GET /api/mission/:missionId/evidence/pending` with `human` access, and lists the expired pending uploads of one mission.
-- The list uses the shared page contract and descending evidence identity order.
-- Each pending row holds `evidenceId`, `missionId`, `nodeId`, `attempt`, `storageBindingId`, `location`, `expiresAt` and `cleanedUp`.
-- `location` is the server-generated `s3://` object URI; `cleanedUp` starts as `false`.
-- `mission.evidence.pending.cleanup` uses `POST /api/mission/:missionId/evidence/pending/cleanup` with `human` access, and cleans up expired pending uploads of one mission.
-- Cleanup deletes each object of an expired pending upload through its pinned storage binding revision.
-- It marks each pending row `cleanedUp: true` after the object deletion and keeps the row.
-- Cleanup targets only expired pending uploads, never a published evidence record or a published object.
-- The answer holds `missionId` and `cleanedUpEvidenceIds`, the evidence identities of the rows that this cleanup marks.
+- kanthord runs no cleanup process. A human deletes an expired asset through `mission.evidence.asset.delete`.
 
 SHA-256 is optional for object evidence.
 A component supplies it when it wants; the store verifies it when both sides support it.
@@ -302,39 +301,39 @@ It records an object version when the store returns one.
 A human who disables versioning accepts that choice.
 The binding write probes no store capability.
 
-An authorized reader gets a presigned GET through its kanthord component.
+An authorized reader gets a presigned GET through its kanthord component: `mission.evidence.asset.content.get` for a human and `mission.execution.evidence.asset.content.get` for an execution. The Intake Service signs it through `intake.storage.get` or `intake.execution.storage.get`.
 The read targets the recorded object version when one exists.
 The presigned URL is an API answer, never part of the credential handover or the agent context.
-The storage credential stays in server custody.
+The storage credential stays inside the server process.
 The MCP server exposes no upload write.
-Content removal deletes the object and withdraws kanthord's access; it recalls no downloaded copy.
-[Evidence retention](#evidence-retention) governs published content removal.
+A delete of an object asset deletes the object and withdraws kanthord's access; it recalls no downloaded copy.
+[Evidence retention](#evidence-retention) governs the delete.
 
 ## Evidence retention
 
-Every evidence record stays for the life of the mission.
-Its content stays until a human removes it, whether an outcome names the evidence or not.
-kanthord runs no automatic evidence cleanup.
+An evidence record and its assets stay until a human deletes them, whether an outcome names the evidence or not.
+A delete removes the row, and a deleted row is gone and not recoverable under [architecture.impl.md](architecture.impl.md#the-operational-database).
+kanthord runs no automatic evidence delete and no cleanup process.
 
-- `mission.evidence.content.remove` uses `DELETE /api/mission/evidence/:evidenceId/content` with `human` access.
-- The input holds `force: boolean` and optional `reason: Text`; the CLI defaults `force` to `false`.
+- `mission.evidence.asset.delete` uses `DELETE /api/mission/evidence/asset/:assetId` with `human` access. It deletes one asset and keeps the evidence row, even with zero assets.
+- `mission.evidence.delete` uses `DELETE /api/mission/evidence/:evidenceId` with `human` access. It deletes every asset of the evidence, then the evidence row. It removes the evidence identity from every `evidenceIds` set of an assessment and of an outcome, and it sets `mission_delivery_admission.evidence_id` to null where that column names the evidence.
+- Both inputs hold `expectedMissionVersion`, `force: boolean` and an optional `reason: Text`; the CLI defaults `force` to `false`.
 - `Text` is nonblank text; its bounds remain open in [HANDOFF](HANDOFF.md#mission-service).
 - With `force: false`, the node of the evidence and every ancestor must hold a terminal state.
-- A live chain refuses removal with 409 `mission.evidence.remove_node_live`.
-- `force: true` skips that check and requires a reason, so a human can remove an exposed credential at once.
+- A live chain refuses the delete with 409 `mission.evidence.remove_node_live`.
+- `force: true` skips that check and requires a reason, so a human can delete an exposed credential at once. `force` never changes what the command deletes.
 - Force without a reason answers HTTP 400 with a validation issue list.
 - The reason is optional without force.
-- The service removes inline bytes or deletes the object through the storage binding revision that the evidence record pins.
-- Object removal targets the recorded version when one exists.
-- The service keeps the evidence record and marks its content removed.
-- Every evidence record carries `removedBy: Actor | null` and `removedReason: Text | null`.
-- Both fields are null while the content exists.
-- Removal sets `removedBy` to the verified human actor and `removedReason` to the supplied reason, or null without a reason.
-- The record keeps no removal time.
-- Removal returns the evidence record; `evidence list` and `evidence get` also return both fields.
-- A later human or execution content read answers 410 `mission.evidence.content_removed`, with `evidenceId` in `details`.
-- That typed failure returns no content or presigned GET.
-- Removal admits an outcome reference and changes no effect of that outcome.
+- The service deletes the content first and the row after it. It deletes inline content with the row, and it deletes an object through `intake.storage.delete` with the storage binding revision that the asset pins, at the recorded version when one exists.
+- A failed content delete keeps the row, and a repeat deletes again.
+- A disabled or removed storage binding refuses the object delete, and `force` bypasses no binding authorization.
+- The Tracking span of the delete records the human, the reason and the time, and the Mission Service stores none of them.
+- A request evidence is deleted only with `force`, in every node state. Without `force`, the delete answers 409 `mission.evidence.request_force_required`.
+- `mission.evidence.asset.delete` refuses the `platform` asset of a request evidence with 409 `mission.evidence.request_asset_refused`, and a human deletes a request through `mission.evidence.delete`.
+- A forced delete of a request evidence of the open attempt holds the node in `Paused` in the same transaction, unless the node is already `Paused`. A request evidence of a closed attempt or of a terminal node changes no state.
+- A delete of an expired asset can publish its evidence when every other asset of it holds `published_at`; on a live node, `force` is the acknowledgement.
+- A read of a deleted asset or evidence answers 404 `mission.record.not_found`.
+- A delete admits an outcome reference and changes no effect of that outcome.
 
 ## The outcome record
 
@@ -357,7 +356,7 @@ kanthord runs no automatic evidence cleanup.
   `--attempt <n>` selects the records of attempt n.
   `--attempt 0` selects the records that the service writes while the attempt reads 0.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
-  For a node blocked while its attempt reads 0, the read returns that outcome with no external object or observation.
+  For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
 - The service writes these `closingEvent` spellings:
   - `success-override` for a human override that asserts success.
   - `human-discard` for a human discard.
@@ -397,7 +396,8 @@ kanthord runs no automatic evidence cleanup.
 - This section states no rule for a task assessment that does not pass when the execution releases without further work.
   The B9 item of the Mission Service owns that path.
 - The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
-- The assessment is immutable and the closure copies nothing, so a child change after the acceptance never enters the context.
+- The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
+- An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
 
 ## Node ready
@@ -507,10 +507,13 @@ kanthord runs no automatic evidence cleanup.
   - attempt
   - evidence
   - outcome
-  - observation
+  - the end state of a request evidence
+  - node check
+  - evidence asset delete
+  - evidence delete
 - One write increments once, however many nodes it touches.
 - A write with no structure or content change leaves the mission version unchanged.
-- Every `human` write that changes a node, its edges or its state names `expectedMissionVersion`: import apply, node create, node update, node move, node retire, node rebind, dependency add, dependency remove, criterion set, unblock with or without a change, priority, pause, resume, block, ready, override and discard.
+- Every `human` write that changes a node, its edges or its state names `expectedMissionVersion`: import apply, node create, node update, node move, node retire, node rebind, dependency add, dependency remove, criterion set, unblock with or without a change, priority, pause, resume, block, ready, override, discard, node check, evidence asset delete and evidence delete.
 - A human control checks the mission version and leaves it unchanged, except an unblock that carries a change.
 - A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
@@ -551,19 +554,20 @@ kanthord runs no automatic evidence cleanup.
 - Tests write `change` on every revision with the write path, the previous revision and the exact changed fields, list task changes on an objective revision, and revise both objectives on a task move.
 - Tests return every violation of the failing stage with its code, locators and a malformed file name, stop an apply at the first violation with the envelope and its status, and keep an authorization failure an operation failure.
 - Tests accept `type/subtype` at 255 bytes and refuse a parameter, a longer value, a missing subtype and a non-ASCII byte.
-- Tests record a signal name with a null exit code, a timed-out item with `timedOut: true`, a started process with neither fact, a null overall exit code in each of those cases, and no result for an unstarted item.
-- Tests replay an evidence submission by execution identity and observation key after a restart, refuse another payload under the same key, refuse a `begin` repeat after expiry, give another execution its own record, and keep the key after content removal.
+- Tests record a signal name with a null exit code, a timed-out item with `timedOut: true`, a started process with neither fact and no result for an unstarted item, and they fail a run whose `results` miss a verification.
+- Tests create a second evidence for a repeated submission after a restart, and refuse a `complete` of an expired asset with `mission.evidence.upload_expired`.
 - Tests answer `mission.evidence.content_repository` with the address on a human and an execution content read of repository evidence, and refuse an unauthorized read before that answer.
 
 - Tests derive the human, execution and service actors from the verified caller, reject an actor in any input, and keep the copied client identity after deregistration.
-- Tests derive the key, binding revision, action, expected end state, a null predecessor and the base branch from the binding row that the pinned revision names, keep them after a strategy change without a rebind, and resolve the pinned binding revision for the address and the credential.
-- Tests fold `expected`, `other` and `none` into `External.Success`, `External.Failed` and an unresolved request, read no `detail`, and require nonempty `landedCommits` on an `expected` repository observation and an empty list otherwise.
+- Tests derive the key, binding revision, action, expected end state, a null predecessor and the base branch from the binding row that the pinned revision names, keep them after a strategy change without a rebind, and resolve the pinned binding revision for the credential.
+- Tests fold `expected`, `other` and `none` into `External.Success`, `External.Failed` and an unresolved request, set `end_state` once and refuse a second conclusive result, and write one landed-commit evidence for each commit of an `expected` repository result.
+- Tests run `node check` on each unresolved request, commit each result alone, answer `failures` for a failed check, and refuse a node with no unresolved request with `mission.node.no_unresolved_request`.
 
 - Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
   They also write `attempt: 0` for the landed-commit evidence of a success override on such a node.
   They keep the attempt at 0 and write no task outcome.
 - Tests return the block outcome from the blocked read while the attempt reads 0.
-  They return empty external objects and observations.
+  They return no request evidence.
 - Tests block and unblock a node while its attempt reads 0, then claim attempt 1.
   They assert 404 from `execution cleared-outcome get` and the execution as `opened_by` of attempt 1.
 - Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
@@ -594,38 +598,35 @@ kanthord runs no automatic evidence cleanup.
 - Tests check one result and one rationale, with no separate criterion result.
 - Tests check each result-order branch and allow an empty judgement only for a failed or unrun verification.
 - Tests require the rationale to name that verification and reject success with `mission.assessment.verification_failed`.
+- Tests refuse a success assessment that names no evidence with a `verification`, or whose `results` miss a verification, with `mission.assessment.verification_failed`, and an assessment that names an evidence with a pending asset with `mission.assessment.evidence_unpublished`.
 - Tests prove that execution code runs verifications before judgement.
 - Tests permit judgement only after every verification of the current tested input passes.
 - Tests turn success into `criterion-not-met` for a default-standard violation only when the worker declares a base prompt.
 - Tests accept inline content at 5 MiB decoded and refuse one byte more with 413 `mission.evidence.too_large`.
 - Tests require canonical base64, media type and the correct SHA-256, and assert no truncation.
 - Tests refuse object uploads of a node without a storage binding and preserve inline evidence and repository addresses.
-- Tests exercise the same begin, direct PUT and complete flow at every placement, with and without co-location.
+- Tests exercise the same submit, direct PUT and asset complete flow at every placement, with and without co-location.
 - Tests refuse paths outside the workspace, symbolic-link escapes and a path replacement race at open.
-- Tests check live-claim admission and task ownership at begin and complete.
+- Tests check live-claim admission and task ownership at submit and complete.
 - Tests accept 5 GiB, refuse larger objects, and assert server-generated keys and the pinned storage binding revision.
 - Tests check the 1 hour PUT lifetime and the checksum header only when SHA-256 exists.
-- Tests keep a record pending until complete verifies size and optional checksum; mismatches publish no evidence.
-- Tests expire pending uploads after 1 hour and refuse completion after expiry.
+- Tests keep an asset pending until complete verifies size and optional checksum; mismatches publish no asset, and an evidence publishes only when every asset holds `published_at`.
+- Tests expire a pending asset after 1 hour and refuse its completion.
 - Tests preserve location, returned version, size, media type and optional SHA-256, then return identity and `s3://` URI.
 - Tests accept stores without versions, enforce no immutability and make no capability probe on a binding write.
 - Tests give authorized readers a presigned GET for the recorded version and refuse unauthorized reads.
-- Tests keep URLs outside the handover and agent context, and keep storage credentials in server custody.
+- Tests keep URLs outside the handover and agent context, and keep storage credentials inside the server process.
 - Tests expose no MCP upload write.
-- Tests assert that removal deletes the object and withdraws access without recall of downloaded copies.
-- Tests retain all evidence records for the mission lifetime, with or without outcome references, and run no automatic evidence cleanup.
+- Tests assert that an asset delete deletes the object and withdraws access without recall of downloaded copies.
+- Tests keep every evidence record until a human delete, with or without outcome references, and run no automatic evidence delete.
 - Tests run no automatic sweep of unpublished upload objects.
-- Tests require human access and one mission for pending upload list and cleanup.
-- Tests list only expired pending uploads and keep other missions outside cleanup.
-- Tests prove that cleanup never touches published evidence records or published objects.
-- Tests delete expired pending objects through their pinned storage binding revision, mark their rows cleaned up and keep those rows.
-- Tests refuse removal on a live node or ancestor with `mission.evidence.remove_node_live`.
+- Tests refuse both deletes on a live node or ancestor with `mission.evidence.remove_node_live`.
 - Tests refuse force without a reason with a validation failure and accept force with a reason on a live chain.
-- Tests accept an optional reason without force and require human access for removal.
-- Tests remove inline bytes and object content, with the recorded object version when one exists, and keep the evidence record.
-- Tests answer `mission.evidence.content_removed` on each later human or execution content read, with no bytes or presigned GET.
-- Tests return `removedBy` and `removedReason` from list and get, null before removal and with the recorded values after removal.
-- Tests keep no removal time and preserve the effect of every outcome that names removed content.
+- Tests accept an optional reason without force and require human access for both deletes.
+- Tests delete the content first and the row after it, delete an object at its recorded version, keep the evidence row after an asset delete, and remove the evidence identity from every `evidenceIds` set after an evidence delete.
+- Tests answer 404 `mission.record.not_found` on a read of a deleted asset, with no bytes or presigned GET.
+- Tests refuse a request delete without force with `mission.evidence.request_force_required`, refuse the asset delete of a request with `mission.evidence.request_asset_refused`, and hold the node after a forced delete of a request of the open attempt.
+- Tests store no remover, reason or time, and preserve the effect of every outcome that named deleted content.
 
 - Tests refuse each unknown front matter key and unknown H2 with `mission.import.plan_invalid` and the file name.
 - Tests refuse each absent or repeated H1, Requirement section and Criterion section with the same error and file name.

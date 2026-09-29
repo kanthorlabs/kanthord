@@ -15,11 +15,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 - An execution uses `execution_<ulid>`. The claim operation mints it.
 - A job uses `job_<ulid>`. The public insert of the work queue mints it inside the transaction of the Mission Service that inserts the job, and the ULID carries the creation time that the [work queue](scheduler-service.md#topology-and-work-queue) requires.
-- An observation obligation uses `observation_obligation_<ulid>`. Delivery admission mints it.
 - A claim takes no identity of its own: the execution record is the record of the claim, and it holds the fixed deadline.
-- An observation obligation lease takes no identity of its own.
-  It is a group of fields of the observation obligation, and the loss declaration is one of those fields.
-- The admission record of a delivery is keyed by the delivery identity that the Intake Service owns.
 - The trace identity and the root span identity of an execution are protocol-defined identities of the Tracking Service, and no entity identity of the Scheduler Service.
 
 ## Operation contracts
@@ -28,8 +24,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - `scheduler.work.pull` at `POST /api/scheduler/work/pull` is a `client` mutation of `wait` lifetime. Its route timeout is 120 s and its wait window is 90 s. Cancellation ends the wait and no accepted claim.
 - `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` is a `client` mutation of `unary` lifetime.
 - `scheduler.claim.get` at `GET /api/scheduler/claim/:executionId` is a `client` read of `unary` lifetime with no body.
-- `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list`, `scheduler.execution.get`, `scheduler.observation-obligation.list` and `scheduler.observation-obligation.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
-- Delivery admission is a `service` operation of `unary` lifetime with a 30 s timeout of its own. It has no route, so the body limit does not apply.
+- `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
 - A field bound of a schema is declared with that schema, and the body limit bounds nothing at the field level.
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
@@ -53,10 +48,6 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   `false` states that the execution of the attempt requires no further work.
   The Mission Service reads `furtherWork` for routing in the release transaction, and nothing stores it.
   The answer is `{ executionId, endedAt }`.
-- `ObservationObligation` holds `obligationId`, `projectId`, `externalObjectId`, `acceptedAt`, `lease` as the lease object or `null`, `completedAt` as a timestamp or `null`, and `observationId` as `observation_<ulid>` or `null` while no accepted observation exists.
-  - Its `lease` holds `expiresAt`, `renewedAt` and `lossDeclaredAt`.
-    `renewedAt` is a timestamp or `null` before the first renewal.
-    `lossDeclaredAt` is a timestamp or `null` before a loss declaration.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
 - `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only, ordered by `attempt` ascending, then `createdAt` ascending. A `nodeId` that the project does not hold answers an empty page.
 
@@ -108,15 +99,14 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 
 ## Retention
 
-- The Scheduler Service deletes no execution record, because the Mission Service and the Tracking Service reference the execution identity and [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) rules that an owner deletes no record that a peer can reference. No sweep deletes one.
+- The Scheduler Service exposes no delete of an execution record, so under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) it keeps every execution record, and no sweep deletes one.
 - `execution list` and `execution get` therefore return every execution of the project, live and ended.
 - The work queue holds current jobs only. The Mission Service inserts and removes a job with the claimable state of its node, so `queue list` and `queue peek` read a live view and no history.
-- The retention of a completed observation obligation remains **[blocked](HANDOFF.md#scheduler-service-and-delivery)**.
 
 ## Tests
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
-- A test asserts that a claim and an observation obligation lease expose no identity of their own.
+- A test asserts that a claim exposes no identity of its own.
 - A test parses every input and output of the Scheduler operations through the direct adapter and the HTTP adapter and rejects an unknown field, a `null` outside its permitted fields and a bare ULID.
 - A test loses an accepted pull answer and repeats the pull from the same runtime identity, once with the same key and once with a new key, and asserts the same execution and no second execution or count.
 - A test pulls from another runtime identity of the same binding while an execution is live and asserts that it never receives that execution.
@@ -145,6 +135,6 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   Through both adapters, it calls the release of an ended claim and asserts the 403 of the execution proof before the handler.
   After a lost release answer and a refused retry, the owner reads `finished` through `claim get`.
   No stored release receipt exists.
-- A test checks the shared error envelope, the timeout, the lifetime and the body limit of every Scheduler route, and the 404 of delivery admission through the HTTP adapter.
+- A test checks the shared error envelope, the timeout, the lifetime and the body limit of every Scheduler route.
 - A test asserts that no sweep deletes an execution record, and that an ended execution stays readable through `execution get` after a restart.
 - A test asserts that `queue list` returns no job of a node that left the claimable state.

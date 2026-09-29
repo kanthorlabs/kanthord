@@ -407,7 +407,7 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), [custod
 - A replay holds inside one process and inside the TTL.
 - A restart empties the component.
 - A retry after a restart runs the handler again.
-- Every mutation handler is idempotent by a natural key of its own, for example a registration by its client identity.
+- Every mutation handler is idempotent by a natural key of its own, for example a registration by its client identity, except an evidence submission of the Mission Service, whose repeat after a restart creates a second record.
 - The `caller` field holds the account of a human or the client identity of a machine.
 - The component compares the verified caller with that field before it replays.
 - A repeat under another caller reserves its own record and runs the handler.

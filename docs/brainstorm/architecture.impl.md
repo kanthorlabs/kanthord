@@ -503,7 +503,7 @@ A fatal error runs as below.
 - The recovery of the remaining work belongs to the owning service.
 - The idempotency component holds no durable record, as [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) describes.
 - A retry after a restart runs the handler again.
-- Every mutation handler is idempotent by a natural key of its own.
+- Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service, whose repeat after a restart creates a second record.
 - The server restarts nothing, and the process manager of the operator owns a restart.
 
 ## Secret material and the diagnostic contract
@@ -714,7 +714,7 @@ The invocation chain holds idempotency in memory.
 - No store holds a replay record.
 - A replay holds inside one process and inside the TTL.
 - A retry after a restart runs the handler again.
-- Every mutation handler is idempotent by a natural key of its own.
+- Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service, whose repeat after a restart creates a second record.
 - [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) holds the mechanism.
 - The telemetry sink uses a client of a Tracking operation with a lossy guarantee and a handler idempotent by a natural key.
 - The Tracking Service keeps `tracking.db` separate because telemetry and operational records grow fast.
@@ -733,12 +733,14 @@ Both adapters implement one transport-neutral value and error contract.
 - A client returns `Completed`, `Failure` or `Indeterminate`.
 - An indeterminate result appears on either adapter because one caller implementation runs in every application.
 
-Cross-service references retain their targets.
+Cross-service references tolerate a deleted target.
 
-- An owner deletes no record that a peer can reference.
-- The owner disables or retires that record.
+- A human holds the right to delete a record through the delete operation of its owner, and the delete removes the row.
+- A forced delete also removes every usage of the identity in the records of its owner, for example an `evidenceIds` set.
+- A peer holds the identity of a record of another service as a correlation value, which resolves to not found after a delete.
+- An owner that exposes no delete operation keeps its records, and no sweep deletes one.
 - A referencing service tolerates a disabled target.
-- Telemetry is the one exception. The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion.
+- The Tracking Service deletes a trace at its retention, and a peer holds a trace identity or a span identity as a correlation value, which resolves to expired after that deletion.
 - No existence operation exists.
 
 The applications compare package versions.
