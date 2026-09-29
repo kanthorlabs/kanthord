@@ -107,7 +107,6 @@ erDiagram
         text content_owner_id FK "objective for a task assessment"
         integer sequence "acceptance order in the content owner"
         integer attempt
-        integer node_revision "of the content owner"
         text result "success | criterion-not-met | undetermined"
         text rationale "nonblank"
         text evidence_ids "JSON set"
@@ -273,7 +272,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 ### Mission Service: assessments
 
 - A task assessment names the steps execution of its objective as actor. A reviewer assessment names the execution of its evaluation claim as actor. An evaluation attempt is one reviewer execution and holds no row of its own.
-- `node_revision` of an assessment equals the revision that its attempt pins. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
+- An assessment stores no revision. Its revision is the pin of `mission_attempt` at `(content_owner_id, attempt)`, because an assessment always names an attempt of 1 or more. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
 - `child_node_ids` equals the current child set of the node at the acceptance. Each child outcome names a node of that set. `evidence_ids`, `child_outcome_ids` and `child_node_ids` are sets.
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
 - A success assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification, each with `exitCode` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
