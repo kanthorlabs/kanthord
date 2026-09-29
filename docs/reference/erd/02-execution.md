@@ -16,7 +16,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 ## Capability limits
 
 - An objective whose attempt requires no external action completes after a current passing assessment.
-- An objective whose attempt requests a required external action stops in `External.Requested`. Only the observer writes an observation, and the observer runs only on an observation obligation that delivery admission creates in [ERD 3](03-integration.md).
+- An objective whose attempt requests a required external action stops in `External.Requested`. Delivery admission in [ERD 3](03-integration.md) or a human check sets the end state of its request evidence.
 - A success override and a discard do not end that attempt, because a node reaches a terminal state only when no external action of its open attempt is unresolved. A human pauses the node, blocks it and unblocks it. The next attempt reads the binding row that its pinned revision names.
 - An action that the attempt requires but has not requested is not unresolved, so it prevents no terminal transition.
 - The action performer holds no durable dispatch record. That record is the open item B9 W2 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-and-project-services).
@@ -84,25 +84,21 @@ erDiagram
         text node_id FK "node or task"
         text content_owner_id FK "objective for task evidence"
         integer attempt "0 only for override landed commit"
-        integer node_revision
-        text subject
-        text address_kind "repository | produced | object"
-        text address "JSON RepositoryAddress, ProducedAddress or ObjectAddress"
-        blob content "inline bytes, at most 5 MiB, null after removal"
-        text status "pending | published"
-        integer expires_at "pending upload, 1 hour"
-        integer cleaned_up "0 or 1, pending upload"
-        text execution_id "null for a human or service provenance"
-        text observation_key
-        text submission_digest "canonical JSON digest"
-        integer redacted "0 or 1"
-        text redaction_description
-        text corrects_evidence_id FK
-        text machine_check "JSON MachineCheck or null"
+        text subject "label of a request"
+        text requirement_key "FrozenAction key, request only, else null"
+        text end_state "expected | other, request only, null until resolved"
+        text verification "JSON Verification or null"
         text provenance "JSON Actor"
-        text removed_by "JSON Actor or null"
-        text removed_reason
         integer created_at "Unix ms"
+    }
+
+    mission_evidence_asset {
+        text id PK "evidence_asset_ + ULID"
+        text evidence_id FK
+        text kind "repository | produced | object | platform"
+        text content "canonical JSON of the shape of kind"
+        integer published_at "Unix ms, at the insert or at complete"
+        integer expired_at "Unix ms, object upload deadline, else null"
     }
 
     mission_assessment {
@@ -139,31 +135,7 @@ erDiagram
         text decision "human assertion"
         text evidence_ids "JSON set"
         text previous_outcome_id FK "correction"
-        text observation_id FK "External.Failed closure"
         integer created_at "Unix ms"
-    }
-
-    mission_external_object {
-        text id PK "external_object_ + ULID"
-        text node_id FK
-        integer attempt
-        text action_key "binding name.action name"
-        text binding_id
-        text address "remote address"
-        text label "display label"
-        text reuses_external_object_id FK "earlier attempt"
-        text actor "JSON Actor, execution"
-        integer created_at "Unix ms"
-    }
-
-    mission_observation {
-        text id PK "observation_ + ULID"
-        text external_object_id FK
-        text end_state "expected | other | none"
-        text detail "platform-neutral text"
-        text landed_commits "JSON RepositoryAddress list"
-        integer observed_at "Unix ms"
-        integer accepted_at "Unix ms"
     }
 
     project_binding }o..o{ worker_instance : "ref by (project_id, resource_identity), no FK"
@@ -175,10 +147,10 @@ erDiagram
 
     mission_node ||..o{ mission_evidence : "FK node_id"
     mission_node ||..o{ mission_evidence : "FK content_owner_id"
-    mission_evidence |o..o{ mission_evidence : "FK corrects_evidence_id"
     mission_attempt |o..o{ mission_evidence : "ref (content_owner_id, attempt), validated"
-    scheduler_execution |o..o{ mission_evidence : "ref execution_id, no FK"
-    project_binding |o..o{ mission_evidence : "ref bindingId, storageBindingId in address, no FK"
+    scheduler_execution |o..o{ mission_evidence : "ref executionId in provenance, no FK"
+    mission_evidence ||--o{ mission_evidence_asset : "FK evidence_id"
+    project_binding |o..o{ mission_evidence_asset : "ref bindingId, storageBindingId in content, no FK"
 
     mission_node ||..o{ mission_assessment : "FK node_id"
     mission_node ||..o{ mission_assessment : "FK content_owner_id"
@@ -189,14 +161,6 @@ erDiagram
     mission_attempt |o..o{ mission_outcome : "ref (content_owner_id, attempt), validated"
     mission_assessment |o..o{ mission_outcome : "FK assessment_id"
     mission_outcome |o..o| mission_outcome : "FK previous_outcome_id"
-
-    mission_node ||..o{ mission_external_object : "FK node_id"
-    mission_attempt ||..o{ mission_external_object : "ref (node_id, attempt), validated"
-    mission_external_object |o..o{ mission_external_object : "FK reuses_external_object_id"
-    project_binding ||..o{ mission_external_object : "ref binding_id, no FK"
-
-    mission_external_object ||..o{ mission_observation : "FK external_object_id"
-    mission_observation |o..o| mission_outcome : "FK observation_id"
 
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
@@ -209,7 +173,7 @@ erDiagram
     class project_binding,mission_node stub
     class worker_instance worker
     class scheduler_execution scheduler
-    class mission_attempt,mission_evidence,mission_assessment,mission_outcome,mission_external_object,mission_observation mission
+    class mission_attempt,mission_evidence,mission_evidence_asset,mission_assessment,mission_outcome mission
 ```
 
 ## Tables
@@ -219,11 +183,10 @@ erDiagram
 | `worker_instance` | Worker Service | Derived: `worker.register` commits a registration and the instance-count collaboration in one transaction, under [the operation and its two entry adapters](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-operation-and-its-two-entry-adapters). |
 | `scheduler_execution` | Scheduler Service | Derived from the `ExecutionRecord` of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts); [configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration) rules the fixed deadline, and [loss settlement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#loss-settlement) rules the loss declaration. |
 | `mission_attempt` | Mission Service | Derived from [the attempt](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-attempt) and the `Attempt` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). `opened_by` names the actor of the act that opens the attempt. |
-| `mission_evidence` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention). `content_owner_id` is derived from the outcome record, so a task move changes no stored row. `address` holds the `Address` union of the Mission CLI. |
+| `mission_evidence` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention). `content_owner_id` is derived from the outcome record, so a task move changes no stored row. |
+| `mission_evidence_asset` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content) and [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence). `content` holds the canonical JSON of the shape that `kind` names. |
 | `mission_assessment` | Mission Service | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order. |
 | `mission_outcome` | Mission Service | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). |
-| `mission_external_object` | Mission Service | Derived from the [external object](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.md#evidence) record. |
-| `mission_observation` | Mission Service | Derived from [the observation record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-observation-record). Its only writer is the observer of [ERD 3](03-integration.md). |
 
 ## Keys and relationship notation
 
@@ -290,21 +253,22 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: evidence
 
-- An execution submission names an attempt of 1 or more, and its `attempt` and `node_revision` equal the open attempt and the pinned revision of the claim. Evidence whose node is a task names a current task of the claimed objective.
-- An execution submission holds a nonnull `execution_id`, `observation_key` and `submission_digest`, and its provenance is that execution. `mission_evidence` has a unique index on `(execution_id, observation_key)` over pending and published rows.
-- `submission_digest` is the digest of the canonical JSON of the validated submission, the target node included. A repeat with the same key and digest returns the stored row: the published evidence, or the pending upload with its grant while the upload is unexpired. A repeat of `begin` for an expired pending upload answers 409 `mission.evidence.upload_expired`, and a new upload uses a new key. A repeat with another digest answers 409 `mission.evidence.observation_key_conflict`.
-- `address` holds one JSON address of the kind that `address_kind` names. A repository address holds `bindingId` and `commit`, and the row holds no inline content. A produced address holds `sha256` and `mediaType`, the row holds inline `content` of at most 5 MiB, and `sha256` equals the digest of those bytes. A content removal keeps the address. An object address holds `location`, `size`, `mediaType`, `storageBindingId` of the pinned storage binding row, `objectVersion` when the store returns one, and an optional `sha256`.
-- `bindingId` of a repository address names a repository binding row of the project in every context. For the evidence of an objective or a task, and for a landed commit, it equals the repository binding of the pinned revision, or, for a success override while the attempt reads 0, the binding of the revision current at the act. For the tested input of an initiative, the list holds one address for each distinct repository binding of its current objectives.
-- An object upload starts as `pending` with `expires_at` 1 hour after the start. The complete checks the size and the optional checksum, then sets `published`. An expired pending row never completes. A pending row joins no evidence set.
-- An object is at most 5 GiB. Without a storage binding, the Mission Service accepts no object evidence.
-- A published row is append-only. Only a content removal changes it.
-- A content removal needs a terminal state of the node and of every ancestor, unless a human forces it with a reason. It deletes the object, at its recorded version when one exists, or it sets `content` to null. It then sets `removed_by` to the verified human actor and `removed_reason`. Both are null while the content exists. The row, its key and its digest stay for the life of the mission, and no removal time exists.
-- A pending cleanup is a human act on one mission, and it covers expired pending rows only. It deletes the object, then sets `cleaned_up` 1. The row stays.
-- kanthord runs no automatic cleanup of evidence or of unpublished objects.
+- An execution submission names an attempt of 1 or more, and its `attempt` equals the open attempt of the claim. Evidence whose node is a task names a current task of the claimed objective.
+- The provenance of an execution submission is that execution. An evidence has no natural key, so a repeat after a restart creates a second row.
+- A submission writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
+- `content` of an asset holds the RFC 8785 canonical JSON of the shape that `kind` names. A repository shape holds `bindingId` and `commit`. A produced shape holds `mediaType`, `sha256` and canonical base64 `data` of at most 5 MiB decoded, and `sha256` equals the digest of those bytes. An object shape holds `location`, `size`, `mediaType`, `storageBindingId` of the pinned storage binding row, `objectVersion` when the store returns one, and an optional `sha256`. A platform shape holds `kind`, `resourceIdentity` and the fields of its kind.
+- `bindingId` of a repository shape names a repository binding row of the project in every context. For the evidence of an objective or a task, and for a landed commit, it equals the repository binding of the pinned revision, or, for a success override while the attempt reads 0, the binding of the revision current at the act. For the tested input of an initiative, the list holds one address for each distinct repository binding of its current objectives.
+- A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` 1 hour after the submission. The complete checks the size and the optional checksum, then sets `published_at`. An asset whose `expired_at` has passed never completes.
+- An evidence is published when every asset of it holds `published_at`. An unpublished evidence joins no evidence set.
+- An object is at most 5 GiB. Without a storage binding, the Mission Service accepts no object asset.
+- A row is append-only, except `end_state` of a request and a human delete.
+- A human delete removes the content first and the row after it. `mission.evidence.asset.delete` deletes one asset and keeps the evidence row. `mission.evidence.delete` deletes every asset and the evidence row, and it removes the identity from every `evidence_ids` set and from `mission_delivery_admission.evidence_id`. Both need a terminal state of the node and of every ancestor, unless a human forces the delete with a reason. No row records the remover, the reason or the time.
+- kanthord runs no automatic delete and no cleanup process of evidence or of unpublished objects.
 - `attempt` is 1 or more, except the landed-commit evidence of a success override on a node whose attempt reads 0.
-- `corrects_evidence_id` names evidence of the same node.
-- An accepted `expected` landing observation appends its landed commits to the evidence set. This page maps each landed commit to a published evidence row of the repository address kind, with the service actor as provenance and the attempt of the observation.
+- An `expected` result of a repository request writes each landed commit as its own evidence row with one `repository` asset, the provenance `{ kind: "service", service: "mission" }` and the attempt of the request.
 - A success override with a landed commit inserts a published evidence row with the human actor as provenance, and the outcome names it.
+- `verification` holds `testedInput` and `results` of the run of the verifications of the pinned revision.
+- No index serves the lookup of delivery admission. It compares `content` of the `platform` assets.
 
 ### Mission Service: assessments
 
@@ -312,28 +276,29 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `node_revision` of an assessment equals the revision that its attempt pins. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
 - `child_node_ids` equals the current child set of the node at the acceptance. Each child outcome names a node of that set. `evidence_ids`, `child_outcome_ids` and `child_node_ids` are sets.
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
+- A success assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification, each with `exitCode` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
 - For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
 - `sequence` is the acceptance order of the assessments of one content owner, from 1 with no gap. The order check of the currency reads it.
-- Assessments accumulate. The Mission Service overwrites none and deletes none.
+- Assessments accumulate. The Mission Service overwrites none and deletes none. A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment row.
 
 ### Mission Service: outcomes
 
 - `node_revision` of an outcome equals the revision that its attempt pins, or the revision current at the act when the attempt reads 0.
 - The basis is one of two variants. An assessment basis holds `assessment_id`, and the other basis columns are null. A human-assertion basis holds `basis_actor` and `decision`, and the assessment columns are null.
-- The context of an assessment basis is the immutable assessment row that `assessment_id` names, so the outcome copies none of it.
+- The context of an assessment basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
 - Only an assessment basis asserts `criterion-not-met`. A human block and a human discard assert `undetermined`.
 - A submitted task outcome and its paired task assessment commit in one transaction. The outcome holds `closing_event` `task-assessment`, the result of that assessment and an assessment basis that names it, and its evidence includes the accepted task commit.
 - A closure that a human override, discard or block causes fills an outcome for each current task that holds no current outcome of the closed attempt. The filled outcome asserts `undetermined`, holds the basis of the node outcome and the closing event as `closing_event` and `stopping_reason`, and carries the accepted task evidence of that task in the attempt.
-- An outcome that an `External.Failed` observation closes keeps the passing assessment as its basis, asserts `undetermined` and holds `observation_id`. That observation names the same node and attempt and holds `end_state` `other`.
-- An outcome is immutable. A correction appends an outcome that names `previous_outcome_id` of the same node and attempt. No correction reaches a node in a terminal state.
+- An outcome whose closing event is `External.Failed` keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
+- An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome that names `previous_outcome_id` of the same node and attempt. No correction reaches a node in a terminal state.
 
-### Mission Service: external objects and observations
+### Mission Service: requests
 
-- The action performer submits an external object under a live evaluation claim, for the open attempt of the claim. `action_key` and `binding_id` equal a required external action of that attempt.
-- `reuses_external_object_id` names an external object of an earlier attempt of the same node, with the same action and binding, and the new object keeps its `address`.
-- An observation names an external object through `external_object_id`. Its node, its attempt and its action key are those of that object, and its expected end state is that of the `FrozenAction` of that attempt. Its writer is the observer, the `service` actor `scheduler`, so the row stores no observer.
-- An `expected` observation of a repository action holds a nonempty `landed_commits`. Every other observation holds an empty list.
-- The Mission Service reads `end_state` alone and never `detail`.
+- The action performer submits a request evidence under a live evaluation claim, for the open attempt of the claim. `requirement_key` equals the key of a required external action of that attempt, and the evidence holds exactly one `platform` asset.
+- `mission_evidence` has a unique index on `(node_id, attempt, requirement_key)` over the rows with a non-null `requirement_key`, so one attempt holds at most one request for each required external action.
+- A reuse is a request evidence of a later attempt of the same node whose `platform` asset holds the same `content` as a request of an earlier attempt with the same `requirement_key`.
+- Delivery admission and a human check set `end_state` once, to `expected` or `other`, and refuse a later conclusive result. A result that establishes no end state writes nothing.
+- A request evidence is deleted only with force. A forced delete of a request of the open attempt holds the node in the same transaction.
 
 ## Cross-group references
 
@@ -347,6 +312,5 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `scheduler_execution.node_id` | `mission_node.id` | Reference, no FK. |
 | `scheduler_execution.credentials` | `credential.id` | Reference in JSON, no FK. Custody appends each pinned revision through `pinCredential`. |
 | `scheduler_execution.trace_id`, `root_span_id` | Tracking trace and span | Correlation value in [ERD 4](04-tracking.md). |
-| `mission_evidence.execution_id` and every execution actor | `scheduler_execution.id` | Reference, no FK. |
-| `mission_evidence.address` (`bindingId`, `storageBindingId`) | `project_binding.id` | Reference in JSON, no FK. |
-| `mission_external_object.binding_id` | `project_binding.id` | Reference, no FK. |
+| Every execution actor, `mission_evidence.provenance` included | `scheduler_execution.id` | Reference in JSON, no FK. |
+| `mission_evidence_asset.content` (`bindingId`, `storageBindingId`) | `project_binding.id` | Reference in JSON, no FK. |

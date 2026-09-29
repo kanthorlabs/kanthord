@@ -17,8 +17,8 @@ The schema has four functional views. Their order is the order of delivery.
 | View | Scope | Tables of the owners |
 | --- | --- | --- |
 | [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, the mission plan and the work queue. | Custody, Project, Worker, Mission, Scheduler |
-| [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence, assessments, outcomes, external objects and observations. | Worker, Scheduler, Mission |
-| [ERD 3: External acquisition and observation](03-integration.md) | Acquisition grants, subscriptions, deliveries, delivery admission and observation obligations. | Project, Intake, Scheduler |
+| [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence and its assets, assessments and outcomes. | Worker, Scheduler, Mission |
+| [ERD 3: External acquisition and observation](03-integration.md) | Acquisition grants, subscriptions, deliveries and delivery admission. | Project, Intake, Mission |
 | [ERD 4: Telemetry](04-tracking.md) | Traces, spans, records and telemetry texts. | Tracking |
 
 A view holds the canonical definition of each of its tables.
@@ -42,12 +42,12 @@ flowchart TB
         subgraph v2["ERD 2: Execution"]
             w2["Worker: instance"]
             s2["Scheduler: execution"]
-            m2["Mission: attempt, evidence, assessment, outcome, external object, observation"]
+            m2["Mission: attempt, evidence, evidence asset, assessment, outcome"]
         end
         subgraph v3["ERD 3: External acquisition and observation"]
             p3["Project: acquisition grant"]
             i3["Intake: subscription, delivery"]
-            s3["Scheduler: delivery admission, observation obligation"]
+            m3["Mission: delivery admission"]
         end
     end
     subgraph db2["tracking.db"]
@@ -61,13 +61,12 @@ flowchart TB
     s2 -.->|claim of binding| p1
     s2 -.->|execution pins credential revision| c1
     m2 -.->|records of node| m1
-    m2 -.->|evidence and object name binding| p1
+    m2 -.->|evidence assets name binding| p1
 
     p3 -.->|grant of source binding| p1
     p3 -.->|grant names| c1
     i3 -.->|subscription of source binding| p1
-    s3 -.->|obligation of external object| m2
-    s3 -.->|observation names| m2
+    m3 -.->|admission names request evidence| m2
 
     t4 -.->|trace of execution| s2
     s2 -.->|trace and root span| t4
@@ -84,8 +83,8 @@ flowchart TB
     class c1 custody
     class p1,p3 project
     class w1,w2 worker
-    class m1,m2 mission
-    class s1,s2,s3 scheduler
+    class m1,m2,m3 mission
+    class s1,s2 scheduler
     class i3 intake
     class t4 tracking
 ```
@@ -95,8 +94,8 @@ flowchart TB
 | View | Needs | Adds |
 | --- | --- | --- |
 | ERD 1 | Nothing. | An environment and a plan. The work queue is here because the Mission Service writes it in its own transaction, and no later migration of the Scheduler Service can read Mission rows. Agent enablement is here because a native worker binding write validates it. |
-| ERD 2 | ERD 1. | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because only the observer writes an observation. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
-| ERD 3 | ERD 1 and ERD 2. | The source binding and its subscriptions, deliveries, and the observer. A node in `External.Requested` reaches its end state. Only GitHub is ruled. |
+| ERD 2 | ERD 1. | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because the check of the Intake Service sets the end state of its request evidence. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
+| ERD 3 | ERD 1 and ERD 2. | The source binding and its subscriptions, deliveries, and delivery admission. A node in `External.Requested` reaches its end state. Only GitHub is ruled. |
 | ERD 4 | Nothing in its store. Every service calls the no-op interface of the Tracking Service from ERD 1. | The stored telemetry. |
 
 ## Stores

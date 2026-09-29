@@ -6,10 +6,10 @@ title: "ERD 3: External acquisition and observation"
 
 ## Scope
 
-This view holds the tables that receive the deliveries of an external platform and turn them into observations.
+This view holds the tables that receive the deliveries of an external platform and turn them into end states of request evidence.
 After this group, a human binds a delivery source and manages its subscriptions.
-The Intake Service acquires deliveries through a webhook, a poll or a stream, and hands each delivery to the delivery admission of the Scheduler Service.
-The observer of the Scheduler Service reads the external object and writes the observation to the Mission Service, so a node in `External.Requested` reaches its end state.
+The Intake Service acquires deliveries through a webhook, a poll or a stream, and hands each delivery to the delivery admission of the Mission Service.
+Delivery admission calls the check of the Intake Service and sets the end state of the request evidence, so a node in `External.Requested` reaches its end state.
 
 The [README](README.md) holds the conventions, the colors and the map of every group.
 
@@ -40,11 +40,8 @@ erDiagram
     project_binding {
         text id PK "binding_ + ULID, kind source, ERD 1"
     }
-    mission_external_object {
-        text id PK "external_object_ + ULID, ERD 2"
-    }
-    mission_observation {
-        text id PK "observation_ + ULID, ERD 2"
+    mission_evidence {
+        text id PK "evidence_ + ULID, ERD 2"
     }
 
     project_acquisition_grant {
@@ -86,32 +83,19 @@ erDiagram
         blob payload "bounded bytes, null after its retention"
         text headers "JSON of the exact headers, null after its retention"
         text status "pending | dispatched | accepted | refused | parked"
-        text disposition "Scheduler answer or null"
+        text disposition "Mission answer or null"
         integer handoff_attempt_count "0 or more"
         integer resolved_at "Unix ms or null"
     }
 
-    scheduler_delivery_admission {
+    mission_delivery_admission {
         text delivery_id PK "Intake delivery identity"
         text project_id
         text content_digest
         text disposition "accepted as an observation | accepted as a human act | refused | duplicate"
-        text reason "refusal reason or null"
-        text external_object_id "resolved object or null"
+        text reason "refusal reason, ambiguous included, or null"
+        text evidence_id FK "request evidence or null"
         integer created_at "Unix ms"
-    }
-
-    scheduler_observation_obligation {
-        text id PK "observation_obligation_ + ULID"
-        text project_id
-        text external_object_id
-        text delivery_id FK "admission that created it, unique"
-        integer accepted_at "Unix ms"
-        integer expires_at "lease, Unix ms or null"
-        integer renewed_at "Unix ms or null"
-        integer loss_declared_at "Unix ms or null"
-        integer completed_at "Unix ms or null"
-        text observation_id "Mission observation or null"
     }
 
     project_project ||..o{ project_acquisition_grant : "FK project_id"
@@ -122,25 +106,20 @@ erDiagram
     project_binding ||..o{ intake_subscription : "ref source_binding_id, no FK"
     intake_subscription ||..o{ intake_delivery : "FK subscription_id"
 
-    intake_delivery ||--o| scheduler_delivery_admission : "ref delivery_id, no FK"
-    scheduler_delivery_admission ||..o| scheduler_observation_obligation : "FK delivery_id, unique"
-    mission_external_object |o..o{ scheduler_delivery_admission : "ref, no FK"
-    mission_external_object ||..o{ scheduler_observation_obligation : "ref, no FK"
-    mission_observation |o..o{ scheduler_observation_obligation : "ref observation_id, no FK"
+    intake_delivery ||--o| mission_delivery_admission : "ref delivery_id, no FK"
+    mission_evidence |o..o{ mission_delivery_admission : "FK evidence_id, null after a delete"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
-    classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
     classDef intake fill:#e8daef,stroke:#6c3483,color:#212529
     classDef stub stroke-dasharray:4 3
 
     class credential custody
     class project_project,project_binding,project_acquisition_grant project
-    class mission_external_object,mission_observation mission
-    class credential,project_project,project_binding,mission_external_object,mission_observation stub
+    class mission_evidence,mission_delivery_admission mission
+    class credential,project_project,project_binding,mission_evidence stub
     class intake_subscription,intake_delivery intake
-    class scheduler_delivery_admission,scheduler_observation_obligation scheduler
 ```
 
 ## Tables
@@ -150,8 +129,7 @@ erDiagram
 | `project_acquisition_grant` | Project Service | Ruled: [the acquisition grant](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-acquisition-grant). |
 | `intake_subscription` | Intake Service | Derived from [subscriptions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#subscriptions); the column `last_verified_receipt_at` is ruled in [the resource healthcheck](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-resource-healthcheck). The subscription store is open in [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#intake-service). |
 | `intake_delivery` | Intake Service | Derived from [deliveries](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#deliveries) and [handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff). The delivery store is open in HANDOFF. |
-| `scheduler_delivery_admission` | Scheduler Service | Derived: admission records its decision durably before it answers, keyed by the delivery identity, under [the Scheduler identities](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#the-identities-of-the-scheduler-service). |
-| `scheduler_observation_obligation` | Scheduler Service | Derived from the `ObservationObligation` record of [the Scheduler operation contracts](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#operation-contracts). |
+| `mission_delivery_admission` | Mission Service | Derived: admission records its decision durably before it answers, keyed by the delivery identity, under [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record). |
 
 The source binding is a `project_binding` row of kind `source` in [ERD 1](01-setup.md). Its configuration holds `webhookSecretRotation`, and the verification secret derives from `masterKey`, so no table holds a webhook secret.
 
@@ -193,26 +171,21 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `status` starts as `pending`. A handoff sets `dispatched`. A disposition `accepted as an observation` or `accepted as a human act` sets `accepted`, and `refused` sets `refused`. A `duplicate` disposition also ends the handoff and stops the retries. Its status spelling is open. `resolved_at` records the end of the handoff for every disposition.
 - A declared failure or an indeterminate result increments `handoff_attempt_count`. After a bounded count, the delivery takes `parked`. The value of the bound is open.
 - A parked delivery never expires. An unresolved delivery and its payload are never removed.
-- The row of a resolved delivery stays with its identity, because `scheduler_delivery_admission.delivery_id` references it. After a bounded retention, the Intake Service sets `payload` and `headers` to null. The value of that retention is open.
+- The row of a resolved delivery stays with its identity, because `mission_delivery_admission.delivery_id` references it. After a bounded retention, the Intake Service sets `payload` and `headers` to null. The value of that retention is open.
 - The count of unresolved deliveries has a bound, and its value is open.
 
-### Scheduler Service
+### Mission Service
 
-- Admission inserts its `scheduler_delivery_admission` row before it answers.
+- Admission inserts its `mission_delivery_admission` row before it answers.
 - `project_id` is the project of the source binding of the delivery. `content_digest` is the digest of the delivery content.
 - A repeat with the same `delivery_id` and the same `content_digest` returns the recorded disposition. A repeat with another digest is refused.
 - A refusal is terminal and holds its `reason`. A refusal and a duplicate admit no effect.
-- `external_object_id` names an external object of the project. Admission resolves it by the repository binding and the address of the object, never by the newest attempt alone.
-- An acceptance as an observation inserts exactly one `scheduler_observation_obligation` row in the admission transaction, and every other disposition inserts none. `delivery_id` of the obligation has a unique index. `project_id` and `external_object_id` of the obligation equal those of the admission.
-- `external_object_id` of an admission is null when the admission refuses the delivery before it resolves an external object.
-- The Scheduler deduplicates effects per project and per external object across subscription kinds and redeliveries. The deduplication key of an observation is the open item C3 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#mission-service-1), so this page states no index for it.
-- An acceptance as a human act invokes the Mission operation under the linked human identity before the admission row commits, and it creates no obligation.
-- An obligation holds no claim and no claimant. The observer holds its lease while it reads the external object.
-- The lease columns are all null before an observer holds the lease. A held lease has `expires_at`. `renewed_at` and `loss_declared_at` need `expires_at`.
-- Renewal, loss declaration and completion of an obligation serialize with each other.
-- `observation_id` names an accepted observation of the same external object, and so of the same project, node and attempt.
-- The observer writes the observation to the Mission Service, then sets `observation_id` and `completed_at` on the obligation. The recovery of an obligation whose observer is lost before the observation is the open item C1 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#scheduler-service).
-- The retention of a completed obligation is open.
+- `evidence_id` names a request evidence of an open attempt of the project that holds no end state. Admission finds it by the canonical JSON of its `platform` asset, never by the newest attempt alone, and more than one match refuses the delivery with the reason `ambiguous`.
+- `evidence_id` is null when admission refuses the delivery before it resolves a request, and a forced delete of the evidence sets it to null.
+- Admission calls the check of the Intake Service before its transaction. The transaction writes the admission row, `end_state` of the request and the landed-commit evidence together. A failed check answers a retryable failure and writes no row.
+- The Mission Service deduplicates effects per project and per request evidence across subscription kinds, redeliveries and checks. The deduplication key of an unchanged state is the open item C3 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#mission-service-1), so this page states no index for it.
+- An acceptance as a human act invokes the Mission operation under the linked human identity before the admission row commits.
+- A human check writes no admission row.
 
 ## Cross-group references
 
@@ -221,6 +194,4 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 | `project_acquisition_grant.subscription_id` | `intake_subscription.id` | Reference, no FK. |
 | `project_acquisition_grant.credential_id` | `credential.id` | Reference, no FK. |
 | `intake_subscription.source_binding_id` | `project_binding.id` | Reference, no FK. |
-| `scheduler_delivery_admission.delivery_id` | `intake_delivery.id` | Reference, no FK. |
-| `scheduler_delivery_admission.external_object_id`, `scheduler_observation_obligation.external_object_id` | `mission_external_object.id` | Reference, no FK. |
-| `scheduler_observation_obligation.observation_id` | `mission_observation.id` | Reference, no FK. |
+| `mission_delivery_admission.delivery_id` | `intake_delivery.id` | Reference, no FK. |
