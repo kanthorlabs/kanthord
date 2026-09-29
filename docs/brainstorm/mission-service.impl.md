@@ -379,6 +379,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
   A later move of the task changes no stored outcome.
 - Task outcomes accumulate like node outcomes.
   A correction names `previousOutcomeId`, and the corrected outcome names the same task and attempt.
+- The service records the acceptance order of the outcomes of one content owner, from 1 with no gap.
+  The current outcome of a node in an attempt is its outcome of that attempt and content owner that the service accepted last.
+  The current outcome of an initiative or an objective is its outcome that the service accepted last.
+  Neither `createdAt` nor the outcome identity decides that order.
 - `task-result submit` writes the task assessment and the task outcome in one transaction.
   The outcome holds `closingEvent: task-assessment`, the `stoppingReason` of the assertion and the `result` of the paired assessment.
   It holds a `basis` of kind `assessment` that names that assessment, and the `evidenceIds` of the assertion.

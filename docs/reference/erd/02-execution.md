@@ -123,6 +123,7 @@ erDiagram
         text id PK "outcome_ + ULID"
         text node_id FK "node or task"
         text content_owner_id FK "objective for a task outcome"
+        integer sequence "acceptance order in the content owner"
         integer attempt "0 or more"
         integer node_revision
         text closing_event
@@ -185,7 +186,7 @@ erDiagram
 | `mission_evidence` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content), [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record) and [evidence retention](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-retention). `content_owner_id` is derived from the outcome record, so a task move changes no stored row. |
 | `mission_evidence_asset` | Mission Service | Derived from [evidence content](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#evidence-content) and [object evidence](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#object-evidence). `content` holds the canonical JSON of the shape that `kind` names. |
 | `mission_assessment` | Mission Service | Derived from [the assessment](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-assessment). `sequence` is derived: the order check selects the latest admitted assessment, and neither a timestamp nor an identity establishes that order. |
-| `mission_outcome` | Mission Service | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). |
+| `mission_outcome` | Mission Service | Derived from [the outcome record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-outcome-record). `sequence` is derived: the current outcome is the outcome with the greatest `sequence`, and neither a timestamp nor an identity establishes that order. |
 
 ## Keys and relationship notation
 
@@ -283,6 +284,8 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 ### Mission Service: outcomes
 
 - `node_revision` of an outcome equals the revision that its attempt pins, or the revision current at the act when the attempt reads 0.
+- `sequence` is the acceptance order of the outcomes of one content owner, from 1 with no gap.
+- The current outcome of a node in an attempt is its outcome of `(node_id, content_owner_id, attempt)` with the greatest `sequence`. The current outcome of an initiative or an objective is its outcome with the greatest `sequence`.
 - The basis is one of two variants. An assessment basis holds `assessment_id`, and the other basis columns are null. A human-assertion basis holds `basis_actor` and `decision`, and the assessment columns are null.
 - The context of an assessment basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
 - Only an assessment basis asserts `criterion-not-met`. A human block and a human discard assert `undetermined`.
