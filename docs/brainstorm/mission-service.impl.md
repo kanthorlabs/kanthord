@@ -220,6 +220,7 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - At acceptance the service records `childNodeIds`, the current child set of the node at that moment, on the assessment. `evidenceIds`, `childOutcomeIds` and `childNodeIds` are duplicate-free sets, and the service refuses a child outcome whose node is outside `childNodeIds` with HTTP 400 and an issue list.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
+- The read derives `workerVersion` from the worker of the binding row that the execution of the actor pins.
 
 ## The request record
 

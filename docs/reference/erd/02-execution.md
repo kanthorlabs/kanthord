@@ -31,6 +31,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - The credential handover is an API answer. The pin of a credential revision is the `credentials` list of `scheduler_execution`.
 - The currency of an assessment is computed at each read, not stored.
 - The closing event of an outcome is derived at each read, not stored.
+- The worker version of an assessment is derived at each read, not stored.
 - The `worker` application and an external harness hold no table of the server.
 
 ## Diagram
@@ -115,7 +116,6 @@ erDiagram
         text child_node_ids "JSON set, recorded at acceptance"
         text tested_input "JSON TestedInput"
         text default_standard_findings "JSON list or null"
-        text worker_version
         text actor "JSON Actor, execution"
         integer created_at "Unix ms"
     }
