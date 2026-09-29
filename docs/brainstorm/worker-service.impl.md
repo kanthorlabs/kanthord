@@ -381,6 +381,7 @@ The tool answers `{ toolName: "repository-action-request", items: ActionResultIt
 `key` is the `FrozenAction.key` of the attempt, and `bindingId` is the repository binding of the action, under [the attempt](mission-service.impl.md#the-attempt).
 The first version produces no `awaiting-prerequisite` item, because a repository strategy holds at most one action and its `follows` is null.
 The answer holds no release instruction, because [B9 items A3, W1, W4 and PR2](HANDOFF.md#worker-and-project-services) own what follows a failure or an uncertainty.
+The action performer answers 409 `worker.action_performer.claim_not_evaluation` under a steps claim, 409 `worker.action_performer.assessment_not_current` without a current passing assessment of the attempt, and 409 `worker.action_performer.snapshot_absent` when that assessment names no repository snapshot of the binding of the action.
 
 ## MCP server
 
