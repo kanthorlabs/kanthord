@@ -31,7 +31,7 @@ For both harnesses, every ending at each node produces an outcome.
 An outcome can record that evidence establishes that the results do not meet the criterion or the default standard.
 It can also record that available evidence cannot establish whether the results meet the criterion.
 Neither assessment establishes success.
-The outcome records the stopping reason separately from the assessment of evidence.
+The outcome records its basis separately from its asserted result.
 Stopping execution does not by itself satisfy the outcome requirement.
 
 A human reaches kanthord through the [Gateway Service](gateway-service.md), which authenticates the human and establishes a [human identity](overview.vocabulary.md#human-identity).

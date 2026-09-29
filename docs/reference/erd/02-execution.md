@@ -30,6 +30,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - A workspace is a directory of the state directory, not a row.
 - The credential handover is an API answer. The pin of a credential revision is the `credentials` list of `scheduler_execution`.
 - The currency of an assessment is computed at each read, not stored.
+- The closing event of an outcome is derived at each read, not stored.
 - The `worker` application and an external harness hold no table of the server.
 
 ## Diagram
@@ -126,8 +127,6 @@ erDiagram
         integer sequence "acceptance order in the content owner"
         integer attempt "0 or more"
         integer node_revision
-        text closing_event
-        text stopping_reason
         text result "success | criterion-not-met | undetermined"
         text basis_kind "assessment | human-assertion"
         text assessment_id FK "assessment basis"
@@ -287,9 +286,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - The basis is one of two variants. An assessment basis holds `assessment_id`, and the other basis columns are null. A human-assertion basis holds `basis_actor` and `decision`, and the assessment columns are null.
 - The context of an assessment basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
 - Only an assessment basis asserts `criterion-not-met`. A human block and a human discard assert `undetermined`.
-- A submitted task outcome and its paired task assessment commit in one transaction. The outcome holds `closing_event` `task-assessment`, the result of that assessment and an assessment basis that names it, and its evidence includes the accepted task commit.
-- A closure that a human override, discard or block causes fills an outcome for each current task that holds no current outcome of the closed attempt. The filled outcome asserts `undetermined`, holds the basis of the node outcome and the closing event as `closing_event` and `stopping_reason`, and carries the accepted task evidence of that task in the attempt.
-- An outcome whose closing event is `External.Failed` keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
+- A submitted task outcome and its paired task assessment commit in one transaction. The outcome holds the result of that assessment and an assessment basis that names it, and its evidence includes the accepted task commit.
+- A closure that a human override, discard or block causes fills an outcome for each current task that holds no current outcome of the closed attempt. The filled outcome asserts `undetermined`, holds the basis of the node outcome, and carries the accepted task evidence of that task in the attempt. The closure writes the node outcome before the filled task outcomes.
+- The outcome of an `External.Failed` closure keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
 - An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome of the same node and attempt. No correction reaches a node in a terminal state.
 
 ### Mission Service: requests

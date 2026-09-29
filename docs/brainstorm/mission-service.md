@@ -519,7 +519,6 @@ Evidence owns the record of the landed commit identities.
 An outcome record holds these fields.
 
 - The node and the attempt.
-- The closing event and the stopping reason, separately from the asserted result.
 - The asserted result: success, the results do not meet the criterion or the default standard, or nothing is established.
 - The basis: an assessment or a human assertion.
 - The assessment and its evaluation context, when the basis is an assessment.
@@ -533,7 +532,7 @@ A success override carries an optional landed commit identity.
 A discard writes an outcome whose basis is a human assertion and whose asserted result is that nothing is established.
 A discarded node satisfies no dependency.
 The end state other of a request evidence ends the attempt with an outcome whose basis names the passing assessment.
-That outcome records the stopping reason of the external action and asserts that nothing is established, because the expected end state is absent.
+That outcome asserts that nothing is established, because the expected end state is absent.
 
 ### Task outcomes
 
@@ -542,7 +541,6 @@ A task outcome carries the commit of that task inside the branch of the objectiv
 The readiness condition enforces the task-outcome obligation on the ordinary path.
 Every attempt closure owes the outcome of each task of the node.
 At the closure, the Mission Service writes the task outcomes that do not exist.
-It uses the closing event as the stopping reason.
 
 ### State transitions
 
@@ -707,7 +705,7 @@ Outcome and completion owns the block of a node that holds no attempt.
 
 A block writes no separate block record.
 The closure writes the outcome of the node and the task outcomes that Outcome and completion owes.
-The outcome names the condition through its closing event, its stopping reason and its basis.
+The outcome names the condition through its basis and its asserted result.
 A block cancels no live request of the closed attempt, and the next attempt reads that request through its request evidence.
 
 A block changes the state of no other node.
@@ -815,7 +813,7 @@ Criterion and authority owns that rule.
 
 A client reads the blocked nodes of a mission.
 For each node, the read returns the outcome of the closed attempt.
-That outcome names its closing event, so the read never infers a cause from the order of the records.
+The read derives the cause from the basis and the results of that outcome, never from the order of the records.
 The read returns the request evidence of every external action that the attempt requests, with the end state of each one.
 A node whose attempt requests no external action returns none.
 

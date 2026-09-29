@@ -169,7 +169,7 @@ The term names no closed set.
 Take "Add password reset" while the `tdd@1` instance executes it in Execution 1 under attempt 1.
 A human discards the objective.
 The Mission Service closes attempt 1 by force and ends Execution 1.
-It writes the outcome and the task outcomes that do not exist, with the closing event as the stopping reason.
+It writes the outcome and the task outcomes that do not exist.
 The records of attempt 1 remain records of that attempt.
 
 ## state of a node
@@ -209,7 +209,7 @@ The set is closed and it holds three values.
 
 ## asserted result
 
-The result that an outcome asserts, separately from its stopping reason.
+The result that an outcome asserts, separately from its basis.
 The set is closed and it holds three values.
 
 - **success**
@@ -217,15 +217,6 @@ The set is closed and it holds three values.
 - **nothing is established**
 
 The asserted result of a discard is that nothing is established.
-
-## stopping reason
-
-The reason that an outcome records for the ending, separately from its asserted result.
-The term names no closed set.
-
-A human discards "Add password reset" because the project no longer requires password authentication.
-The outcome names the human discard as the closing event and the removal of that requirement as the stopping reason.
-Its basis names the human assertion, and its asserted result is that nothing is established.
 
 ## readiness condition
 

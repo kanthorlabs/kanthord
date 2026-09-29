@@ -357,14 +357,19 @@ kanthord runs no automatic evidence delete and no cleanup process.
   `--attempt 0` selects the records that the service writes while the attempt reads 0.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
   For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
-- The service writes these `closingEvent` spellings:
-  - `success-override` for a human override that asserts success.
-  - `human-discard` for a human discard.
-  - `human-block` for a human block.
-  - `task-assessment` for a task outcome that a steps execution submits.
+- An outcome stores no closing event. The read derives `closingEvent` in this order:
+  - `task-assessment` for a task outcome with an assessment basis.
+  - For a task outcome with a human basis, the closing event of the node outcome of the same content owner and attempt that the service accepted last before it.
+  - `success-override` for a human basis with `result: success`.
+  - `human-discard` for a human basis with `result: undetermined` that is the current outcome of a `Discarded` node.
+  - `human-block` for every other human basis.
+  - `assessment-not-passed` for an assessment basis whose assessment result is not `success`.
+  - `external-failed` for an assessment basis whose assessment result is `success`, with `result: undetermined`.
+  - `assessment-passed` for an assessment basis with `result: success`, when the attempt requires no external action.
+  - `external-success` for an assessment basis with `result: success`, when the attempt requires an external action.
 
-  An outcome with attempt 0 uses one of the first three.
-  `closingEvent` stays `Text`; these spellings form no closed set.
+  An outcome with attempt 0 holds a human basis.
+  The required external actions derive from the pinned revision of the attempt, so an evidence delete changes no derived closing event.
 - The outcome of a human block or a human discard asserts `undetermined`.
   Its basis is a human assertion, and only an assessment basis asserts `criterion-not-met`.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
@@ -384,14 +389,14 @@ kanthord runs no automatic evidence delete and no cleanup process.
   The current outcome of an initiative or an objective is its outcome that the service accepted last.
   Neither `createdAt` nor the outcome identity decides that order.
 - `task-result submit` writes the task assessment and the task outcome in one transaction.
-  The outcome holds `closingEvent: task-assessment`, the `stoppingReason` of the assertion and the `result` of the paired assessment.
+  The outcome holds the `result` of the paired assessment.
   It holds a `basis` of kind `assessment` that names that assessment, and the `evidenceIds` of the assertion.
 - A `result` that differs from the paired assessment answers 400 `mission.task_result.result_mismatch`.
   The `evidenceIds` set must include the accepted task commit evidence of that task in the attempt.
   An omission answers 400 `mission.task_result.commit_missing`.
 - A closure that a human override, discard or block causes fills each missing task outcome.
   It covers each current task that holds no current outcome of the closed attempt.
-  The filled outcome holds the closing event of the act as `closingEvent` and as `stoppingReason`.
+  The service writes the node outcome before the filled task outcomes.
   It holds `result: undetermined`, even under a success override, and the `basis` of the node outcome.
   Its evidence set holds the accepted evidence records of that task in the closed attempt.
   The set is empty when no such record exists.
@@ -579,7 +584,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests commit the task assessment and the task outcome together or not at all.
 - Tests reject a result mismatch with `mission.task_result.result_mismatch` and a missing task commit with `mission.task_result.commit_missing`.
 - Tests fill task outcomes on an override, a discard and a human block.
-  They assert the closing event as the stopping reason, `undetermined`, the node basis and the task evidence of the attempt.
+  They assert `undetermined`, the node basis, the task evidence of the attempt and the derived closing event of the act.
+- Tests derive each closing event of the outcome record, also after a forced delete of a request evidence.
 - Tests keep `contentOwnerId` after a task move.
 - Tests fill no task outcome on a closure that follows the evaluation.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
