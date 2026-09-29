@@ -354,7 +354,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
   It also covers the landed-commit evidence that a success override supplies on such a node.
 - A human act on a node whose attempt reads 0 writes its human assessment and the node outcome.
   It closes no attempt.
-- An outcome stores no revision. The read derives `nodeRevision` from the assessment that the outcome names.
+- An outcome stores no revision and no attempt. The read derives `nodeRevision` and `attempt` from the assessment that the outcome names.
 - The initiative-only objective read resolves a child objective to the `nodeRevision` of its current outcome.
 - An execution submission always names an attempt of 1 or more, because a claim exists only under an open attempt.
 - An omitted `attempt` filter selects every authorized record of the node.

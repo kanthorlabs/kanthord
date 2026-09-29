@@ -122,7 +122,6 @@ erDiagram
         text id PK "outcome_ + ULID"
         text node_id FK "initiative or objective"
         integer sequence "acceptance order in the node"
-        integer attempt "0 or more"
         text result "success | criterion-not-met | undetermined"
         text assessment_id FK "basis, required"
         text evidence_ids "JSON set"
@@ -143,10 +142,10 @@ erDiagram
     project_binding |o..o{ mission_evidence_asset : "ref bindingId, storageBindingId in content, no FK"
 
     mission_node ||..o{ mission_assessment : "FK node_id"
+    mission_attempt |o..o{ mission_assessment : "ref (node_id, attempt), validated"
     scheduler_execution |o..o{ mission_assessment : "ref execution_id, no FK"
 
     mission_node ||..o{ mission_outcome : "FK node_id"
-    mission_attempt |o..o{ mission_outcome : "ref (node_id, attempt), validated"
     mission_assessment ||..o{ mission_outcome : "FK assessment_id"
 
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
@@ -235,7 +234,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A human ready act opens attempt 1 when the node holds none, sets `Waiting` and inserts the evaluation job in one transaction.
 - A resume takes `target` `Available` or `Waiting`. A requested external action of the attempt takes precedence over the target. `Waiting` needs the readiness condition and the dependency closure. `Available` routes to `Pending` when the closure does not hold.
 - An attempt closure sets `closed_at` and the node state, and writes the outcome of the node, in one transaction. A closed attempt never reopens.
-- A human block, discard or success override on a node whose attempt reads 0 writes its human assessment and the node outcome with `attempt` 0. It closes no attempt.
+- A human block, discard or success override on a node whose attempt reads 0 writes its human assessment with `attempt` 0 and the node outcome that names it. It closes no attempt.
 - An unblock is one transaction: the content revision when the act carries a change, the attempt that it opens with the human as `opened_by` and the revision that the act leaves current as `node_revision`, and the routing to `Pending` or `Available`. An unblock while the attempt reads 0 opens no attempt and writes no row.
 
 ### Mission Service: evidence
@@ -271,9 +270,9 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 ### Mission Service: outcomes
 
-- An outcome stores no revision. Its revision is `node_revision` of the assessment that `assessment_id` names.
+- An outcome stores no revision and no attempt. Its revision and its attempt are `node_revision` and `attempt` of the assessment that `assessment_id` names.
 - `sequence` is the acceptance order of the outcomes of one node, from 1 with no gap.
-- The current outcome of a node in an attempt is its outcome of `(node_id, attempt)` with the greatest `sequence`. The current outcome of a node is its outcome with the greatest `sequence`.
+- The current outcome of a node in an attempt is its outcome with the greatest `sequence` among the outcomes whose assessment names that attempt. The current outcome of a node is its outcome with the greatest `sequence`.
 - `assessment_id` is required. The kind of the basis is the kind of the actor of that assessment, and the read derives it.
 - The context of the basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
 - Only an execution assessment supports `criterion-not-met`. A human block and a human discard assert `undetermined`.
