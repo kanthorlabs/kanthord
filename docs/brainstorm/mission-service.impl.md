@@ -241,6 +241,16 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - `mission.node.check` uses `POST /api/mission/node/:nodeId/check` with `human` access and names `expectedMissionVersion`. It calls the Intake check for each request evidence of the open attempt with no end state, commits each result in its own transaction, writes no admission record and answers `{ results: { evidenceId, requirementKey, resolution }[], failures: { evidenceId, error }[] }`. A node with no unresolved request answers 409 `mission.node.no_unresolved_request`.
 - This record decides no order of contradictory results, no reversal of an accepted platform state and no request for which no end state arrives. The B9 Mission items of [HANDOFF.md](HANDOFF.md#mission-service-1) own the open recovery rules.
 
+## The release admission
+
+- The Mission Service routes a release inside the release transaction of the Scheduler Service, and it checks the release predicate before the terminal write. The node state fixes the kind of the release: `Executing` for a steps release and `Evaluating` for a reviewer release.
+- A steps release with `furtherWork: false` requires a published evidence of the open attempt whose provenance is the releasing execution. For an objective, that evidence holds one `repository` asset whose `bindingId` equals the repository binding of the pinned revision. For an initiative, it holds one `produced` asset.
+- A steps release with `furtherWork: true` carries the checkpoint and push obligation of [worker-service.impl.md](worker-service.impl.md#stop-and-budget), and the service checks no record for it.
+- A reviewer release requires a current passing assessment of the attempt and no required external action of the attempt that is eligible and unrequested. An action is eligible under [worker-service.md](worker-service.md#evaluation-and-required-external-actions): it is unrequested in the attempt, and it follows no action or its predecessor reached its expected end state.
+- A release that fails the predicate answers 409 `mission.release.obligation_unmet` with `details: { obligation }`, where `obligation` is `evidence`, `assessment` or `request`. The refusal writes no execution row, no node state and no job, and the execution stays `running`.
+- The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
+- Tests release a steps claim on an objective with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `furtherWork: true` checks no record.
+
 ## Evidence content
 
 Inline evidence holds at most 5 MiB of decoded content.
@@ -389,6 +399,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - The context of the basis is the assessment that it names: its node revision, the evidence that it names, the child set of the child outcomes that it names and those child outcomes.
 - The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
 - An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.
+- `evidenceIds` of an outcome holds the evidence that its assessment does not hold: the landed-commit evidence of the attempt and the landed commit of a success override. The read answers the union of that set and `evidenceIds` of the assessment.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
 
 ## Node ready
@@ -563,6 +574,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
 - Tests resolve a child objective with an attempt-0 outcome to the revision current at the act.
 - Tests derive each closing event of the outcome record, also after a forced delete of a request evidence.
+- Tests store only the landed-commit evidence and the override landed commit in `evidenceIds` of an outcome, and answer the union with the assessment set on the read.
 - Tests write a human assessment and its outcome in one transaction for an override, a discard and a block, and keep every human assessment out of the order check.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
   They also admit an objective whose attempt reads 0, with or without current tasks.

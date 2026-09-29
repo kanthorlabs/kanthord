@@ -19,6 +19,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - An objective whose attempt requests a required external action stops in `External.Requested`. Delivery admission in [ERD 3](03-integration.md) or a human check sets the end state of its request evidence.
 - A success override and a discard do not end that attempt, because a node reaches a terminal state only when no external action of its open attempt is unresolved. A human pauses the node, blocks it and unblocks it. The next attempt reads the binding row that its pinned revision names.
 - An action that the attempt requires but has not requested is not unresolved, so it prevents no terminal transition.
+- The kind of an ended execution of an externally hosted worker derives from the records that name it: an assessment proves an evaluation claim, and a work evidence proves a steps claim. An execution that no record names holds no kind.
 - The action performer holds no durable dispatch record. That record is the open item B9 W2 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#worker-and-project-services).
 
 ## Records without a table
@@ -85,7 +86,7 @@ erDiagram
         text id PK "evidence_ + ULID"
         text node_id FK "initiative or objective"
         integer attempt "0 only for override landed commit"
-        text subject "label of a request"
+        text subject "nonblank Text"
         text requirement_key "FrozenAction key, request only, else null"
         text end_state "expected | other, request only, null until resolved"
         text verification "JSON Verification or null"
@@ -213,7 +214,8 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A work pull is idempotent by `runtime_identity`. Before admission, the claim transaction settles an expired unsettled execution of the pulling runtime identity, then reads its `running` row. When one exists, the pull answers that row and inserts nothing. After that row ends, a pull of the instance selects new work.
 - The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.releaseReserve`, under [Scheduler configuration](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/scheduler-service.impl.md#configuration). The effective `wallTimeMs` comes from the worker binding row that `worker_binding_id` pins. The deadline never moves, including at a registration resume. A later configuration change affects only later claims.
 - Every execution mutation repeats the full proof in its write transaction: the claimant, a null `ended_at` and time before `expired_at`. This includes release, evidence and assessment submissions, and every operation that requires a live execution. The transaction reads the clock once at its start, and a terminal write uses that reading as `ended_at`. Equality with `expired_at` is a loss. A failed check answers 409 `scheduler.execution.not_running`. The invocation-chain proof before the handler stays in place. Of two terminal writes, only one wins, and only the winner routes the Mission Service.
-- A release sets `ended_at` and answers `{ executionId, endedAt }`. The Mission Service reads the `ExecutionRelease.furtherWork` input in that transaction, and nothing stores it. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
+- The Mission Service checks the release predicate of [the release admission](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-release-admission) in the release transaction, before the terminal write. A steps release with no further work requires a published evidence of the open attempt, submitted by the releasing execution, that holds for an objective one `repository` asset whose `bindingId` equals the repository binding of the pinned revision, and for an initiative one `produced` asset. A reviewer release requires a current passing assessment of the attempt and no eligible unrequested required action. A failed check answers 409 `mission.release.obligation_unmet` with `details.obligation` in `evidence`, `assessment` and `request`, and it changes no execution row, no node state and no job.
+- An admitted release sets `ended_at` and answers `{ executionId, endedAt }`. The Mission Service reads the `ExecutionRelease.furtherWork` input in that transaction, and nothing stores it. A release retry after the end meets the refusal of the proof. After a lost release answer, the worker reads `claim get`, which shows `finished`. No stored release receipt exists.
 - The Mission Service routes a steps release in the same transaction. With no further work, it sets `Waiting` and inserts an evaluation job when the readiness condition holds. With further work, it sets `Available` and inserts a new steps job only when the node is claimable.
 - The Mission Service routes a reviewer release after a request in the same transaction: it sets `External.Requested` and inserts no job. The transaction that makes the continuation condition hold inserts the evaluation job.
 - A current passing assessment of an evaluation claim on a node that requires no external action closes the attempt with `Completed` and ends the claim. A current assessment that does not pass closes the attempt with `Blocked` and ends the claim.
@@ -265,18 +267,19 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
 - A success execution assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification of the node and, for an objective, of each current task of the pinned revision, each with `exitCode` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
 - For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
-- `sequence` is the acceptance order of the assessments of one node, from 1 with no gap. The order check of the currency reads it over the execution assessments only.
+- `sequence` is the acceptance order of the assessments of one node, from 1 with no gap. The order check of the currency reads it over the execution assessments only. `mission_assessment` has a unique index on `(node_id, sequence)`.
 - Assessments accumulate. The Mission Service overwrites none and deletes none. A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment row.
 
 ### Mission Service: outcomes
 
 - An outcome stores no revision and no attempt. Its revision and its attempt are `node_revision` and `attempt` of the assessment that `assessment_id` names.
-- `sequence` is the acceptance order of the outcomes of one node, from 1 with no gap.
+- `sequence` is the acceptance order of the outcomes of one node, from 1 with no gap. `mission_outcome` has a unique index on `(node_id, sequence)`.
 - The current outcome of a node in an attempt is its outcome with the greatest `sequence` among the outcomes whose assessment names that attempt. The current outcome of a node is its outcome with the greatest `sequence`.
 - `assessment_id` is required. The kind of the basis is the kind of the actor of that assessment, and the read derives it.
 - The context of the basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
 - Only an execution assessment supports `criterion-not-met`. A human block and a human discard assert `undetermined`.
 - The outcome of an `External.Failed` closure keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
+- `evidence_ids` of an outcome holds the evidence that its assessment does not hold: the landed-commit evidence of the attempt and the landed commit of a success override. The read answers the union of that set and `evidence_ids` of the assessment.
 - An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome of the same node and attempt. No correction reaches a node in a terminal state.
 
 ### Mission Service: requests
