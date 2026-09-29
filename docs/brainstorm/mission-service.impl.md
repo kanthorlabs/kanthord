@@ -407,6 +407,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
   The readiness condition requires every current task outcome before `Waiting` admits an evaluation claim.
 - This section states no rule for a task assessment that does not pass when the execution releases without further work.
   The B9 item of the Mission Service owns that path.
+- An outcome stores no basis kind. The read derives `basis.kind` from the set column of `assessmentId` and the basis actor.
 - The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
 - The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
 - An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.

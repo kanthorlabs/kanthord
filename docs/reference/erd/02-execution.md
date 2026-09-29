@@ -128,7 +128,6 @@ erDiagram
         integer attempt "0 or more"
         integer node_revision
         text result "success | criterion-not-met | undetermined"
-        text basis_kind "assessment | human-assertion"
         text assessment_id FK "assessment basis"
         text basis_actor "JSON Actor, human assertion"
         text decision "human assertion"
@@ -283,7 +282,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - `node_revision` of an outcome equals the revision that its attempt pins, or the revision current at the act when the attempt reads 0.
 - `sequence` is the acceptance order of the outcomes of one content owner, from 1 with no gap.
 - The current outcome of a node in an attempt is its outcome of `(node_id, content_owner_id, attempt)` with the greatest `sequence`. The current outcome of an initiative or an objective is its outcome with the greatest `sequence`.
-- The basis is one of two variants. An assessment basis holds `assessment_id`, and the other basis columns are null. A human-assertion basis holds `basis_actor` and `decision`, and the assessment columns are null.
+- The basis is one of two variants, and exactly one of `assessment_id` and `basis_actor` is set. An assessment basis holds `assessment_id`. A human-assertion basis holds a human `basis_actor` and `decision`. The read derives the kind from the set column.
 - The context of an assessment basis is the assessment row that `assessment_id` names, so the outcome copies none of it.
 - Only an assessment basis asserts `criterion-not-met`. A human block and a human discard assert `undetermined`.
 - A submitted task outcome and its paired task assessment commit in one transaction. The outcome holds the result of that assessment and an assessment basis that names it, and its evidence includes the accepted task commit.
