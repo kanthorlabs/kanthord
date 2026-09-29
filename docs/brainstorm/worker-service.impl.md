@@ -237,10 +237,12 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `resourceIdentity` and `workerName`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
+- A registration whose answer is indeterminate stops the start with `worker.start.registration_indeterminate`.
 - `SIGINT` and `SIGTERM` stop further startup and further work pulls.
 - The application deregisters only a registration whose runtime identity it knows.
 - The application deregisters at a stop only when no execution is live. An upgrade stops the old process before it starts the new one.
 - It exits 0 after a successful deregistration or after the 404 that ends its registration. Any other deregistration or cleanup failure exits 1 without a retry.
+- A stop during a live execution exits 1 with `worker.stop.execution_live`. A deregistration whose answer is indeterminate exits 1 with `worker.stop.deregistration_indeterminate`.
 - A 10-second watchdog applies only when no execution is live and no registration or work pull waits for its answer.
 - `SIGHUP` reopens nothing.
 - B9 owns shutdown during a live execution, a registration or a work pull with no answer, and a stop deadline in those cases.
@@ -302,6 +304,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - The `worker` application holds no `masterKey`.
 - An absent or invalid `clientSecret` stops the start of `kanthord serve worker` with `worker.start.client_secret_absent` or `worker.start.client_secret_invalid`.
 - A `clientSecret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
+- A handover envelope that the handover key does not open ends the execution with `worker.handover.decryption_failed`.
 
 ## Evidence upload
 
@@ -309,8 +312,10 @@ The `worker` application serves `evidence upload` locally for a file on its host
 The server and the harness extension serve the same helper on their own hosts.
 The helper safely opens the path inside the execution workspace.
 It refuses path traversal, symbolic-link escapes and path replacement races.
+A refused path answers `worker.evidence_upload.path_refused`, whose `details.reason` is `outside_workspace`, `symbolic_link`, `not_regular` or `replaced`.
 It calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list, where the file is an `object` asset with its size, media type and optional SHA-256.
 It sends the file directly to the presigned PUT destination of that asset, then calls `mission.evidence.asset.complete`.
+A failed transfer answers `worker.evidence_upload.transfer_failed`, and its message holds no URL and no header.
 It follows [the object evidence contract](mission-service.impl.md#object-evidence) for all placements and co-locations.
 It returns the evidence identity, the asset identity and the `s3://` URI to the agent.
 A reader's component obtains a presigned GET through the content read operation.
