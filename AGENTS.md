@@ -91,9 +91,14 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A table-named binding column, for example `scheduler_execution.project_binding_id`. A binding column names the binding kind that it requires: `worker_binding_id`, `storage_binding_id`, `source_binding_id`.
 - A stored claim kind on `scheduler_execution` or `scheduler_job`. While a claim is live, the node state `Executing` or `Evaluating` fixes its kind.
 - A durable Scheduler request record (`scheduler_request`, `WorkPull.requestId`, `scheduler.request.scope_mismatch`). A work pull is idempotent by the runtime identity: it returns the live execution of its instance. A worker crash or a server restart ends the runtime identity, and B9 owns recovery.
-- A renewal of a Scheduler execution, or an execution-renewal request identifier or record (`scheduler_renewal`, `renewal_request_id`, `scheduler.execution.renewal_superseded`, `renew-lease`). An execution deadline is fixed at the claim. The renewal of an observation-obligation lease is unchanged.
+- A renewal of a Scheduler execution, or an execution-renewal request identifier or record (`scheduler_renewal`, `renewal_request_id`, `scheduler.execution.renewal_superseded`, `renew-lease`). An execution deadline is fixed at the claim.
 - A merge of the runtime identity and the client identity, or a new runtime identity at a worker restart. A restarted program gets its live registration back, and a server restart ends no registration.
 - A soft delete (`deleted_at` or another marker) or a recoverable delete. A delete removes the row. A later audit record supports the regret of a human.
+- A `mission_external_object` table, a `mission_observation` table or a separate confirmation row (`confirms_evidence_id`, `confirmation_evidence_id`). A request is a `mission_evidence` row with `requirement_key` and a write-once `end_state`.
+- An observation obligation, its lease or an observer processor. Delivery admission and the human check call the Intake check inline, and the Intake delivery carries the retry.
+- A natural key or a digest of an evidence submission (`observation_key`, `submission_digest`), a stored confirmation time or an aggregate detail text. A repeat after a restart creates a second record.
+- A cleanup process of expired uploads. A human deletes an expired asset.
+- Custody that performs a platform call, a model call or a presign. Custody releases the material, and the holder performs its own operation.
 
 ## Contracts
 
