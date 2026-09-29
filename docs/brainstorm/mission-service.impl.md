@@ -219,7 +219,8 @@ The Mission Service answers `mission.assessment.verification_failed` when an ass
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
 
-- At acceptance the service records `childNodeIds`, the current child set of the node at that moment, on the assessment. `evidenceIds`, `childOutcomeIds` and `childNodeIds` are duplicate-free sets, and the service refuses a child outcome whose node is outside `childNodeIds` with HTTP 400 and an issue list.
+- At acceptance `childOutcomeIds` names the current outcome of each current child of the node, and no other outcome. The service refuses every other set with HTTP 400 and an issue list. `evidenceIds` and `childOutcomeIds` are duplicate-free sets.
+- The read derives `childNodeIds` from the nodes of `childOutcomeIds`.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
 - The read derives `workerVersion` from the worker of the binding row that the execution of the actor pins.
@@ -408,7 +409,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - This section states no rule for a task assessment that does not pass when the execution releases without further work.
   The B9 item of the Mission Service owns that path.
 - An outcome stores no basis kind. The read derives `basis.kind` from the set column of `assessmentId` and the basis actor.
-- The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set recorded at its acceptance and the child outcomes that it names.
+- The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set of the child outcomes that it names and those child outcomes.
 - The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
 - An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.

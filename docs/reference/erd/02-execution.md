@@ -113,7 +113,6 @@ erDiagram
         text rationale "nonblank"
         text evidence_ids "JSON set"
         text child_outcome_ids "JSON set"
-        text child_node_ids "JSON set, recorded at acceptance"
         text tested_input "JSON TestedInput"
         text default_standard_findings "JSON list or null"
         text execution_id "execution_ + ULID"
@@ -270,7 +269,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 - A task assessment names the steps execution of its objective in `execution_id`. A reviewer assessment names the execution of its evaluation claim in `execution_id`. The read derives the `Actor` of the execution form from it. An evaluation attempt is one reviewer execution and holds no row of its own.
 - An assessment stores no revision. Its revision is the pin of `mission_attempt` at `(content_owner_id, attempt)`, because an assessment always names an attempt of 1 or more. Its evidence, its tested input and its child outcomes belong to the node and to the context of that attempt.
-- `child_node_ids` equals the current child set of the node at the acceptance. Each child outcome names a node of that set. `evidence_ids`, `child_outcome_ids` and `child_node_ids` are sets.
+- `child_outcome_ids` names the current outcome of each current child of the node at the acceptance, and no other outcome. The child set of the assessment is the set of nodes of those outcomes. `evidence_ids` and `child_outcome_ids` are sets.
 - A failed or unrun verification gives `criterion-not-met`, with a rationale that names the verification. A success with a failed or unrun verification is refused with `mission.assessment.verification_failed`.
 - A success assessment names exactly one evidence with a `verification` whose `results` hold one entry per verification, each with `exitCode` 0. An assessment that names an unpublished evidence is refused with `mission.assessment.evidence_unpublished`.
 - For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
