@@ -215,6 +215,7 @@ The result follows this order:
 
 Only the first case permits an empty judgement.
 The judgement is absent in that case; the rationale is never absent.
+The rationale names each default-standard violation. An assessment holds no separate list of findings.
 The Mission Service answers `mission.assessment.verification_failed` when an assessment asserts success with a failed or unrun verification.
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).

@@ -114,7 +114,6 @@ erDiagram
         text evidence_ids "JSON set"
         text child_outcome_ids "JSON set"
         text tested_input "JSON TestedInput"
-        text default_standard_findings "JSON list or null"
         text execution_id "execution_ + ULID"
         integer created_at "Unix ms"
     }
