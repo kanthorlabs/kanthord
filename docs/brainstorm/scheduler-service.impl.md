@@ -49,7 +49,9 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   The Mission Service reads `furtherWork` for routing in the release transaction, and nothing stores it.
   The answer is `{ executionId, endedAt }`.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
-- `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only, ordered by `attempt` ascending, then `createdAt` ascending. A `nodeId` that the project does not hold answers an empty page.
+- `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only. A `nodeId` that the project does not hold answers an empty page.
+- `scheduler.execution.list` accepts the optional query field `attempt`, a positive integer, only with `nodeId`. `attempt` without `nodeId` answers HTTP 400 `gateway.request.validation_failed`. With both, the list holds the executions of that attempt only. An attempt that the node does not hold answers an empty page.
+- Every mode of `scheduler.execution.list` orders by `executionId` descending under the shared pagination rule.
 
 ## Durable requests
 
