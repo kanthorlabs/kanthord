@@ -22,6 +22,7 @@ It disables the discovery of user extensions, skills, prompt templates and theme
 It uses an in-memory session manager.
 It disables the version check, the install telemetry and the provider catalog refresh.
 It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` at 0.86.0.
+An execution of an externally hosted worker has no native agent, and a read of its native setup answers 409 `worker.execution.no_native_agent`.
 A pi version bump affects the workers that run on it and the credential shape of the handover.
 Every runtime setup call carries an abort signal with a deadline.
 
@@ -232,7 +233,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup resolves the client configuration, checks `clientSecret`, checks the server package version and registers the instance, in that order.
+- Startup resolves the client configuration, checks `clientSecret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them.
 - After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `resourceIdentity` and `workerName`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -285,7 +286,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - Every native inference call, including compaction and retries, resolves auth through the [custody execution store](custody.impl.md#the-credential-store-of-an-execution).
 - The view exposes only the credential that the effective agent provider names, at the revision that the execution pins, under the pi adapter id.
 - `read(providerId)` answers `undefined` for every other id.
-- The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed.
+- The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed with `worker.runtime.setup_refused`, whose `details.reason` is `model_unknown`, `reasoning_effort_unsupported`, `credential_absent` or `credential_revision_mismatch`.
 - The store holds the credential of one execution, so no credential crosses executions.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 

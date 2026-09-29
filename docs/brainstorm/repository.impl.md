@@ -47,6 +47,7 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - Its abort plugin binds to the `Context` of the caller.
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
 - `simple-git` kills the `git` process and not the `ssh` child of that process.
+- A git operation of the connector that fails, is aborted or reaches its deadline answers `repository.connector.git_failed`, and the message names the operation.
 
 ## The SSH environment
 
