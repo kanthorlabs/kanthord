@@ -69,6 +69,7 @@ The value is any signed safe integer, from -9007199254740991 through 90071992547
 An absent priority reads 0.
 The service answers HTTP 400 with an issue list for a fraction, a nonnumber or an unsafe integer.
 The act requires a nonterminal node with no live claim.
+A live claim on the node answers 409 `mission.node.claim_live` with `details: { nodeId, executionId }`, and a dependency addition that meets a live claim on the dependent or on a node of its subtree answers the same code.
 An import carries no priority.
 
 ## The attempt
@@ -170,6 +171,8 @@ The service derives it from the policy of the `project_binding` row that the pin
 - The refused states are `Waiting`, `Evaluating`, `External.Requested`, `External.Success`, `External.Failed`, `Completed` and `Discarded`.
 - The commit rechecks the rule.
 - The import keeps the import condition.
+- A human control or a record list that names a task answers 400 `mission.node.control_task` with `details: { nodeId }`.
+- A human control whose `expectedState` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
 
 ## The verifications
 
@@ -277,6 +280,7 @@ Repository evidence remains an address, not an upload of repository content.
 - For the evidence of an objective, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
 - For the tested input of an initiative, the list holds one address per distinct repository binding of its current objectives.
 - The landed commit of a success override follows the same form and binding rule.
+- A repository address whose `bindingId` is not the binding that its context requires, or a landed commit on an initiative, answers 400 `mission.evidence.binding_mismatch` with `details: { bindingId }`.
 - `mediaType` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
 - A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidenceId` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
 
@@ -388,6 +392,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   The execution of that claim is the opener of that attempt.
+- A discard or a success override that meets a requested external action of the open attempt with no end state answers 409 `mission.node.action_unresolved` with `details: { requirementKeys }`, because a node reaches a terminal state only when no external action of its open attempt is unresolved.
 - A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
   A mismatch answers 409 `mission.node.state_conflict`, with the current `state` and `attempt` in `details`.
   An `Unblock` whose `blockedAttempt` differs from the current attempt answers the same code.
