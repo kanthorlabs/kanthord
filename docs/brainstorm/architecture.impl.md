@@ -100,6 +100,8 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The table `migration(service, version, applied_at)` records each migration that ran.
 - The migrations run at startup, in a fixed order of the services.
 - One file gives a write of two services one transaction, because a transaction across attached files holds no atomic commit in WAL mode.
+- A delete removes the row, and a deleted row is gone and not recoverable.
+- No table declares a `deleted_at` column or another soft-delete marker.
 
 ## The connection and the transaction
 

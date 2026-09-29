@@ -93,6 +93,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - A durable Scheduler request record (`scheduler_request`, `WorkPull.requestId`, `scheduler.request.scope_mismatch`). A work pull is idempotent by the runtime identity: it returns the live execution of its instance. A worker crash or a server restart ends the runtime identity, and B9 owns recovery.
 - A renewal of a Scheduler execution, or an execution-renewal request identifier or record (`scheduler_renewal`, `renewal_request_id`, `scheduler.execution.renewal_superseded`, `renew-lease`). An execution deadline is fixed at the claim. The renewal of an observation-obligation lease is unchanged.
 - A merge of the runtime identity and the client identity, or a new runtime identity at a worker restart. A restarted program gets its live registration back, and a server restart ends no registration.
+- A soft delete (`deleted_at` or another marker) or a recoverable delete. A delete removes the row. A later audit record supports the regret of a human.
 
 ## Contracts
 
