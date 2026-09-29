@@ -90,6 +90,7 @@ The service derives it from the policy of the `project_binding` row that the pin
   Its input holds `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
   Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
+- A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirementKey` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resourceIdentity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirementKey }`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
 
 ## Configuration
 
@@ -283,6 +284,7 @@ Repository evidence remains an address, not an upload of repository content.
 - A repository address whose `bindingId` is not the binding that its context requires, or a landed commit on an initiative, answers 400 `mission.evidence.binding_mismatch` with `details: { bindingId }`.
 - `mediaType` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
 - A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidenceId` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
+- A content read of a `platform` asset answers 409 `mission.evidence.content_platform` with `evidenceId` and the address in `details`, after the same checks, and it fetches no external content.
 
 ## Object evidence
 
@@ -295,7 +297,7 @@ The file path is local input, not an evidence address.
 1. The component calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list. An `object` asset declares `mediaType`, `size` and an optional `sha256`.
    This operation requires execution access and a live claim for the node or its task.
    The server checks the live claim, the storage binding of the pinned revision and the 5 GiB single-object limit.
-   A node without a storage binding refuses the upload.
+   A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
    It creates the evidence and one pending asset for each `object` asset, with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence asset id>`.
    The asset pins that storage binding revision in `storageBindingId` of its `ObjectAddress`.
    The Intake Service signs a presigned PUT for that key with a lifetime of 1 hour through `intake.storage.put`, with the material that custody releases.
@@ -546,6 +548,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `Text` is a nonblank JSON string of at most `mission.textMaxBytes` UTF-8 bytes. A larger value answers HTTP 400 with an issue list. The rule applies to every text field of a node and to every item of `verifications`.
 - A stale expected revision answers 409 `mission.revision.conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version.conflict` with the current value in `details`.
 - An absent mission answers 404 `mission.mission.not_found`. An absent node answers 404 `mission.node.not_found`. An absent record answers 404 `mission.record.not_found`.
+- An execution submission whose route node, `executionId`, `attempt` or `nodeRevision` differs from the proven claim answers 409 `mission.execution.context_mismatch` with `details: { field }`. An assessment or a request under a steps claim answers 409 `mission.execution.claim_not_evaluation`. An execution-scoped revision read above the pinned revision answers 404 `mission.execution.revision_above_pin`.
 - `graph get` answers at most 10 MiB. A larger graph answers 413 `mission.graph.too_large`.
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 

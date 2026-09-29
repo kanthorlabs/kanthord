@@ -25,6 +25,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` is a `client` mutation of `unary` lifetime.
 - `scheduler.claim.get` at `GET /api/scheduler/claim/:executionId` is a `client` read of `unary` lifetime with no body.
 - `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
+- `scheduler.execution.get` and `scheduler.claim.get` answer 404 `scheduler.execution.not_found` for an execution identity that no row holds.
 - A field bound of a schema is declared with that schema, and the body limit bounds nothing at the field level.
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
@@ -42,7 +43,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` before a terminal write.
     A null `endedAt` alone establishes no liveness.
   - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service: 32 and 16 lower-case hexadecimal characters under the [trace model](tracking-service.impl.md#trace-model). Before the tracer of the Tracking Service exists, the Scheduler mints both values at the claim through the `TraceIdentity` dependency that its `contract.ts` declares, and the composition root injects that stand-in.
-- `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity` and `runtimeIdentity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity.
+- `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity` and `runtimeIdentity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity. A mismatch of either field answers 403 `scheduler.work.claimant_mismatch`.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean.
   `false` states that the execution of the attempt requires no further work.
