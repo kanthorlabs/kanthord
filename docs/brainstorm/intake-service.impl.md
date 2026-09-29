@@ -8,7 +8,7 @@ This file holds the implementation rulings for the mechanisms that realize [inta
 This file is not a design document, and `intake-service.md` stays the single source of truth.
 A mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
-This sibling holds the acquisition and resource healthcheck mechanisms.
+This sibling holds the acquisition, outbound operation, check and resource healthcheck mechanisms.
 The subscription store, the delivery store and the handoff follow with the Intake Service item of [HANDOFF.md](HANDOFF.md).
 
 ## The service identity
@@ -39,6 +39,19 @@ The subscription store, the delivery store and the handoff follow with the Intak
 - The stream opens with the material of the grant and holds the connection for the session. The Intake Service writes the resume position with each stored message.
 - A close by the platform reconnects with backoff under the same grant until the grant ends. A close by revocation or by capacity ends the session.
 
+## Outbound operations and checks
+
+- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility of the Project Service authorizes that caller, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component and drops the material in `finally`.
+- The handler builds its platform client for one call and caches no client and no token.
+- `intake.action.perform` is a `client` operation under the forwarded execution identity. It serves `pull_request` and `merge_push`, and it answers the `PlatformAddress` or the result class of the Repository component.
+- For `merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the network git write and removes the clone after the call. A `merge_push` answers the pushed commit in its `PlatformAddress`.
+- `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ endState, landedCommits }` that the platform implementation folds.
+- `intake.action.read` is a `client` operation under the forwarded execution identity. It serves the MCP read tools `github-pull-request-get` and `github-pull-request-review-comment-list`, and it returns the platform body unchanged.
+- `intake.storage.put` and `intake.storage.check` are `client` operations. The Mission Service calls them in `mission.evidence.submit` and `mission.evidence.asset.complete` with the identity of the execution.
+- `intake.storage.get` is a `human` operation and `intake.execution.storage.get` is a `client` operation. Each signs a presigned GET at the recorded object version.
+- `intake.storage.delete` is a `human` operation. The Mission Service calls it in `mission.evidence.asset.delete` and `mission.evidence.delete` with the identity of the human.
+- The operations make no Mission record and decide no end state beyond the fold of the platform implementation.
+
 ## The resource healthcheck
 
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The subscription check follows them like every other check.
@@ -63,3 +76,4 @@ The subscription store, the delivery store and the handoff follow with the Intak
 - A test covers an indeterminate webhook registration followed by a read that finds the registration, and it asserts no second registration.
 - A test covers a poll batch whose store fails, and it asserts an unchanged checkpoint.
 - A test asserts that no store row and no log record of the Intake Service holds acquisition material.
+- Tests assert that every outbound operation and check forwards the caller identity, refuses another node before custody releases a secret, drops the material after a success and after a failure, and leaves no clone after a `merge_push`.

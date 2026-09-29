@@ -88,7 +88,7 @@ The import set holds `add-password-reset.md`, the objective, and `add-reset-toke
 
 Evidence is what execution records about the results, and what evaluation assesses against the criterion.
 The term names no closed set.
-The landing observation of the objective "Add password reset" appends the landed commit identities to its evidence set.
+The expected end state of the pull request of the objective "Add password reset" appends the landed commit identities to its evidence set.
 
 ## outcome
 
@@ -122,7 +122,7 @@ A human unblocks "Add password reset" into its next attempt.
 
 Landing is the observed expected end state of every configured repository action of a node.
 The term names no closed set.
-A passing assessment of "Add password reset" precedes the request of its pull request. A human merges that pull request. An observer records the landing.
+A passing assessment of "Add password reset" precedes the request of its pull request. A human merges that pull request. Delivery admission records the landing.
 
 ## worker
 
@@ -172,7 +172,7 @@ A `reviewer@1` execution evaluates the node with `re@1`.
 
 A human participant is a person responsible for carrying out steps as the WHO.
 The term names no closed set.
-A human merges the pull request of "Add password reset", and an observer records the landing.
+A human merges the pull request of "Add password reset", and delivery admission records the landing.
 
 ## human identity
 

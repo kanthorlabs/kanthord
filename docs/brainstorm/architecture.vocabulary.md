@@ -135,7 +135,7 @@ An operational record of what the system did.
 What authenticates an operation on a resource that a project uses.
 `architecture.md` names two credentials in its relations.
 
-- **a repository credential**, which an execution and the observer of the Scheduler Service use
+- **a repository credential**, which the Intake Service uses for an execution and for the Mission Service
 - **a provider credential**, which the Worker Service uses
 
 The type of a credential is a separate matter, and no approved page closes that set.

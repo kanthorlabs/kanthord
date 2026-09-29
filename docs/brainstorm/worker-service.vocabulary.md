@@ -210,13 +210,13 @@ A second invocation under the same claim dispatches nothing when the first dispa
 A return class identifies one kind of item that the action performer returns.
 The set is closed and holds four values.
 
-- **submitted external objects**
-- **actions that await a prerequisite**, with the observation that each one follows
+- **submitted request evidence**
+- **actions that await a prerequisite**, with the request evidence that each one follows
 - **actions whose request fails before any effect**, with the refusal
 - **actions whose effect or recording is uncertain**
 
-For "Add password reset", the action performer submits pull request 42 as an external object and returns that external object.
-For "Add password reset", a second action awaits the merge observation of pull request 42, and the action performer returns that action with its prerequisite.
+For "Add password reset", the action performer submits pull request 42 as a request evidence and returns that request evidence.
+For "Add password reset", a second action awaits the expected end state of pull request 42, and the action performer returns that action with its prerequisite.
 For "Add password reset", the platform refuses an action for authorization before any effect, and the action performer returns the refusal.
 For "Add password reset", the platform response fails to arrive after dispatch, and the action performer returns the action with an uncertain effect.
 

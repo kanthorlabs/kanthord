@@ -9,7 +9,7 @@ title: Worker Service
 This document describes the Worker Service.
 It describes the workers and their agents, the worker instances and how they host an execution, the lifecycle of an execution, the performance of a required external action and the owner of memory.
 For a required external action, it describes the configured repository action only.
-The Worker Service uses the [Repository component](repository.md) for repository and platform operations.
+The Worker Service uses the [Repository component](repository.md) for repository operations and the [Intake Service](intake-service.md#outbound-operations-and-checks) for platform operations.
 It describes the MCP server through which a native agent and an external harness reach the server tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
 It describes no mechanism of another service.
@@ -50,11 +50,11 @@ A worker that kanthord hosts declares the base prompt and the agent prompt of ea
 [Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies the model [connector](architecture.vocabulary.md#connector) for a model inference call.
-An execution and its agent reach a git platform through the [Repository component](repository.md#boundary) alone.
+An execution and its agent reach a git platform through the [Repository component](repository.md#boundary) for git transport and through the Intake Service for platform reads, and through nothing else.
 A native agent reaches a provider through the model connector alone.
 The model connector resolves the binding through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the requester's identity.
 For each native model inference call, the Worker Service resolves the agent's [effective configuration](worker-service.vocabulary.md#effective-configuration).
-The model connector uses that configuration through [custody](custody.md#secret-use-and-handover).
+The model connector uses that configuration with the material that [custody](custody.md#secret-use-and-handover) releases or hands over.
 An execution honours every value of the effective configuration of its agent.
 A local git operation runs in the workspace and passes through no connector.
 An agent holds no repository credential.
@@ -270,7 +270,7 @@ The agent stops when its turn count or wall time reaches the budget.
 
 An execution reads the [node revision](mission-service.md#mission-structure-and-nodes) that its attempt pins.
 After an unblock, it performs the reads that the [unblock rules](mission-service.md#the-unblock) of the Mission Service require.
-It fetches the external content that the external objects reference through the [Repository component](repository.md#platform-connector-and-platform-implementations).
+It fetches the external content that the request evidence addresses through `intake.action.read` of the [Intake Service](intake-service.md#outbound-operations-and-checks).
 
 A workspace is a host-local working directory of one execution.
 The method of the execution determines whether the workspace holds a repository checkout, and which snapshot.
@@ -459,21 +459,20 @@ For both callers, the action performer checks that the claim of the execution id
 It checks that the claim is an evaluation claim.
 It checks that a current passing assessment of the attempt stands.
 The action performer obtains every operand from the records and the evidence snapshot.
-The action performer calls the [configured-action write](repository.md#write-operations) of the Repository component.
-When an action needs a network git write, the action performer makes its own checkout through the Repository component.
+The action performer calls `intake.action.perform` of the [Intake Service](intake-service.md#outbound-operations-and-checks), which calls the [configured-action write](repository.md#write-operations) of the Repository component.
 It depends on no workspace of a hosted execution.
 The action performer serializes the invocations of one execution identity.
 It never dispatches an action whose earlier dispatch is unresolved, across callers and invocations.
 
 The action performer returns items in four [return classes](worker-service.vocabulary.md#return-class).
 
-- Submitted external objects.
-- Actions that await a prerequisite, with the observation that each one follows.
+- Submitted request evidence.
+- Actions that await a prerequisite, with the request evidence that each one follows.
 - Actions whose request fails before any effect, with the refusal.
 - Actions whose effect or recording is uncertain.
 
 This page states no release rule for a request failure or an uncertain effect or recording.
-Every write that fulfils a configured action belongs to the action performer, with transport through the Repository component.
+Every write that fulfils a configured action belongs to the action performer, and the Intake Service performs it through the Repository component.
 The [Repository component](repository.md#result-classes) defines platform result classes and retry rules.
 
 The server runs one [MCP server](worker-service.vocabulary.md#mcp-server).
@@ -483,17 +482,17 @@ A native agent presents the execution identity of the execution that hosts it.
 An external harness authenticates with the credential of its [client identity](project-service.vocabulary.md#client-identity), which the [Gateway Service](gateway-service.md#machine-identities) rules.
 It presents the execution identity of its claim.
 The MCP server refuses a call whose execution identity belongs to no live claim of that client identity.
-Each tool maps to one method of a [platform implementation](repository.vocabulary.md#platform-implementation) of the Repository component or to the action performer.
+Each tool maps to one read method of a [platform implementation](repository.vocabulary.md#platform-implementation), which the Intake Service performs through `intake.action.read`, or to the action performer.
 The MCP server makes no decision of its own.
 The Gateway Service authenticates the client identity, the Scheduler Service establishes the live claim, and the owning component performs every operation.
 
-The MCP server exposes a list of resource-scoped read methods of the platform implementations and the tool of the action performer.
+The MCP server exposes a list of resource-scoped read methods, which the Intake Service performs, and the tool of the action performer.
 The Worker Service permits each read method individually.
 The MCP server exposes no other write to a native agent or to an external harness.
 It exposes the same tools to every client, and no state of a claim or of an assessment changes the list.
 The tool of the action performer takes no parameter beyond the execution identity.
 It returns the four return classes of the action performer.
-A native agent reaches the permitted read methods of the Repository component as tools through the MCP server.
+A native agent reaches the permitted read methods of the Intake Service as tools through the MCP server.
 
 The action performer and the MCP server are server components of the Worker Service.
 The [trust boundary](worker-service.vocabulary.md#trust-boundary) of this page is their only containment.
@@ -502,7 +501,7 @@ The [Repository component](repository.md#placement) defines its placement.
 ## Evaluation and required external actions
 
 The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and the current child outcomes.
-A reviewer that reads removed content judges without it and names it in its rationale.
+A reviewer judges the assets that the evidence still holds.
 The child outcomes of an objective are its task outcomes, and the child outcomes of an initiative are its objective outcomes.
 For an objective, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
 It uses the [Repository component](repository.md#repository-connector).
@@ -515,7 +514,7 @@ An initiative whose objectives name no repository keeps the evidence-placement r
 For an objective whose evidence names no repository snapshot, the reviewer also uses that rule.
 Under that rule, the reviewer places the produced evidence of the attempt in its workspace.
 The reviewer execution code, never the agent, runs the verifications of the pinned revision from the workspace root.
-The execution records the machine-check results as produced evidence bound to the tested input and the pinned revision.
+The execution records the results as an evidence with a `verification`, bound to the tested input and the pinned revision.
 The assessment names that evidence in its evidence set.
 A failed or unrun verification causes the reviewer execution to write an assessment that does not pass, without a judgement.
 Its required rationale names that verification.
@@ -528,32 +527,32 @@ A reviewer execution that claims from `External.Requested` performs no evaluatio
 When the node requires no external action, the passing assessment ends the claim, and the reviewer execution performs nothing more.
 Otherwise, on both paths, the reviewer execution invokes the action performer after a current passing assessment stands.
 The action performer reads the required external actions of the attempt.
-It reads the external objects of the node across every attempt.
+It reads the request evidence of the node across every attempt.
 A required action is eligible when it is unrequested in the attempt and it follows no other action.
 A required action that follows another action is eligible when it is unrequested in the attempt and its predecessor reached its expected end state.
 The action performer requests each eligible action for the reviewer execution until no action is eligible.
-A request of a repository action uses the [configured-action write](repository.md#write-operations) of the Repository component.
-The action performer derives every operand from the records of the attempt, the evidence snapshot and the external object.
+A request of a repository action calls `intake.action.perform`, and the Intake Service uses the [configured-action write](repository.md#write-operations) of the Repository component.
+The action performer derives every operand from the records of the attempt, the evidence snapshot and the request evidence.
 The agent supplies no operand, and an external harness supplies none.
 
-Before it performs a request, the action performer reads the external objects of the node.
-The request reuses the remote thing of an external object of an earlier attempt when three conditions hold.
-The external object names the same external action and the same repository binding.
+Before it performs a request, the action performer reads the request evidence of the node.
+The request reuses the external object of a request evidence of an earlier attempt when three conditions hold.
+That request evidence names the same requirement key.
 The remote thing fulfils the operands of the current request.
 The remote thing is open: the platform still accepts on it the network git write that the action requires.
 An end state of the earlier action does not close the remote thing by itself.
-A reuse performs the network git write that the action requires and no platform write.
-Otherwise the action performer performs the action through the Repository component.
-In both cases the action performer submits the request to the Mission Service as the external object of the attempt.
-It uses the address that the platform implementation resolves, or the address of the external object that the request reuses.
+A reuse performs, through the Intake Service, the network git write that the action requires and no platform write.
+Otherwise the action performer requests the action through the Intake Service.
+In both cases the action performer submits the request to the Mission Service through `mission.evidence.request`, as the request evidence of the attempt.
+It uses the `PlatformAddress` that the Intake Service answers, or the address of the request evidence that the request reuses.
 That submission is the accepted request of the action.
-The address correlates the external objects of one remote thing across attempts.
+The address correlates the request evidence of one external object across attempts.
 
 The action performer performs these requests inside the evaluation method for a reviewer execution of kanthord's own harness.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.
 Both paths run the same eligibility, operand and reuse rules.
 
-The reviewer execution releases after its requests when the return of the action performer holds only submitted external objects and actions that await a prerequisite.
+The reviewer execution releases after its requests when the return of the action performer holds only submitted request evidence and actions that await a prerequisite.
 That rule holds for a reviewer execution of an external harness after the tool of the action performer returns.
 The [Mission Service](mission-service.md#continuation-condition) owns the continuation condition, and the transaction that makes it hold inserts the evaluation job.
 
@@ -567,7 +566,7 @@ sequenceDiagram
     participant S as Scheduler Service
     participant M as Mission Service
     participant RG as Repository component (repository connector)
-    participant PG as Repository component (platform connector)
+    participant IN as Intake Service
     participant G as Git platform
 
     rect rgb(214, 234, 248)
@@ -580,7 +579,7 @@ sequenceDiagram
         R->>R: run the verifications of the pinned revision
     end
     rect rgb(212, 237, 218)
-        R->>M: produced evidence: the machine-check result bound to the tested input and the pinned revision
+        R->>M: evidence with the verification bound to the tested input and the pinned revision
     end
     rect rgb(248, 215, 218)
         R->>R: the agent judges the evidence against the criterion
@@ -599,25 +598,25 @@ sequenceDiagram
     rect rgb(212, 237, 218)
         AP->>M: read the current passing assessment
         M-->>AP: a current passing assessment stands
-        AP->>M: read the required external actions of the attempt and the external objects of the node
-        M-->>AP: required external action, no external object to reuse
+        AP->>M: read the required external actions of the attempt and the request evidence of the node
+        M-->>AP: required external action, no request evidence to reuse
     end
     rect rgb(248, 215, 218)
-        AP->>PG: platform action: open a pull request for the node branch
+        AP->>IN: intake.action.perform: open a pull request for the node branch (execution identity)
     end
     rect rgb(226, 227, 229)
-        PG->>G: open the pull request
-        G-->>PG: the pull request
+        IN->>G: open the pull request
+        G-->>IN: the pull request
     end
     rect rgb(248, 215, 218)
-        PG-->>AP: the address of the pull request
+        IN-->>AP: the PlatformAddress of the pull request
     end
     rect rgb(212, 237, 218)
-        AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
-        M-->>AP: accepted external object
+        AP->>M: mission.evidence.request: requirement key, subject, PlatformAddress
+        M-->>AP: the request evidence
     end
     rect rgb(248, 215, 218)
-        AP-->>R: the submitted external object, no action unrequested
+        AP-->>R: the submitted request evidence, no action unrequested
     end
     rect rgb(214, 234, 248)
         R->>S: release after the request
@@ -633,7 +632,7 @@ sequenceDiagram
     participant S as Scheduler Service
     participant R as Reviewer instance and its execution
     participant AP as Action performer
-    participant PG as Repository component (platform connector)
+    participant IN as Intake Service
     participant G as Git platform
 
     Note over M,S: the first action reached its expected end state, and the following action is unrequested
@@ -649,26 +648,26 @@ sequenceDiagram
         S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
-        AP->>M: read the current passing assessment, the required external actions and the external objects
+        AP->>M: read the current passing assessment, the required external actions and the request evidence
         M-->>AP: current passing assessment, predecessor at its expected end state, following action unrequested
     end
     rect rgb(248, 215, 218)
-        AP->>PG: platform action: perform the following action
+        AP->>IN: intake.action.perform: perform the following action (execution identity)
     end
     rect rgb(226, 227, 229)
-        PG->>G: perform the following action
-        G-->>PG: accepted
+        IN->>G: perform the following action
+        G-->>IN: accepted
     end
     rect rgb(248, 215, 218)
-        PG-->>AP: the address of the remote thing of the following action
+        IN-->>AP: the PlatformAddress of the external object of the following action
     end
     rect rgb(212, 237, 218)
-        AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
-        M-->>AP: accepted external object
-        Note over AP,M: the following action awaits its observation
+        AP->>M: mission.evidence.request: requirement key, subject, PlatformAddress
+        M-->>AP: the request evidence
+        Note over AP,M: the following action awaits its end state
     end
     rect rgb(248, 215, 218)
-        AP-->>R: the submitted external object, no action unrequested
+        AP-->>R: the submitted request evidence, no action unrequested
     end
     rect rgb(214, 234, 248)
         R->>S: release after the request
@@ -684,21 +683,21 @@ sequenceDiagram
     participant M as Mission Service
     participant E as Execution (steps method)
     participant RG as Repository component (repository connector)
-    participant PG as Repository component (platform connector)
+    participant IN as Intake Service
     participant R as Reviewer execution
     participant AP as Action performer
     participant S as Scheduler Service
     participant G as Git platform
 
     rect rgb(212, 237, 218)
-        Note over M,G: an observation records a change request on the pull request, the attempt closes and the node blocks
+        Note over M,G: a change request on the pull request sets the end state other, the attempt closes and the node blocks
         Note over M: the block cancels no live request, the pull request stays open
         H->>M: unblock with a content change, a new attempt opens with a new revision
     end
     rect rgb(248, 215, 218)
         E->>M: read the new revision and perform the unblock reads
-        E->>PG: fetch the change request of the pull request through the external object
-        PG-->>E: the change request
+        E->>IN: intake.action.read: fetch the change request with the address of the request evidence
+        IN-->>E: the change request
         E->>RG: reuse the workspace of the objective and its repository binding, same node branch
         loop for each task
             alt the outcome of the closed attempt asserts success, the task and the repository binding are unchanged
@@ -724,31 +723,32 @@ sequenceDiagram
         S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
-        AP->>M: read the current passing assessment, the required external actions and the external objects
-        M-->>AP: current passing assessment, required external action, external object of the closed attempt
+        AP->>M: read the current passing assessment, the required external actions and the request evidence
+        M-->>AP: current passing assessment, required external action, request evidence of the closed attempt
     end
     rect rgb(248, 215, 218)
-        AP->>PG: read the pull request through the external object
-        PG-->>AP: pull request state, node branch and base branch
+        AP->>IN: intake.action.read: read the pull request with the address of the request evidence
+        IN-->>AP: pull request state, node branch and base branch
         AP->>AP: check that the pull request is open and fulfils the operands
         Note over AP,G: the request reuses the pull request through a network git write, with no platform write
-        AP->>RG: create an independent checkout of the evidence snapshot through a network git read
-        RG-->>AP: checkout
-        AP->>RG: network git write for the pull request
+        AP->>IN: intake.action.perform: push the evidence snapshot to the node branch of the pull request
+        IN->>RG: fresh clone of the evidence snapshot through a network git read
+        IN->>RG: network git write for the pull request
     end
     rect rgb(226, 227, 229)
         RG->>G: push the node branch
         G-->>RG: accepted
     end
     rect rgb(248, 215, 218)
-        RG-->>AP: network git write complete
+        RG-->>IN: network git write complete, and the Intake Service removes the clone
+        IN-->>AP: the PlatformAddress of the reused pull request
     end
     rect rgb(212, 237, 218)
-        AP->>M: submit the request as the external object of the attempt with the address of the pull request
-        M-->>AP: accepted external object
+        AP->>M: mission.evidence.request with the PlatformAddress of the reused pull request
+        M-->>AP: the request evidence
     end
     rect rgb(248, 215, 218)
-        AP-->>R: the submitted external object, no action unrequested
+        AP-->>R: the submitted request evidence, no action unrequested
     end
     rect rgb(214, 234, 248)
         R->>S: release after the request
@@ -767,7 +767,7 @@ sequenceDiagram
     participant P as Project Service
     participant M as Mission Service
     participant S as Scheduler Service
-    participant PG as Repository component (platform connector)
+    participant IN as Intake Service
     participant G as Git platform
 
     rect rgb(248, 215, 218)
@@ -790,30 +790,30 @@ sequenceDiagram
         S-->>AP: live claim, evaluation claim
     end
     rect rgb(212, 237, 218)
-        AP->>M: read the current passing assessment, the required external actions and the external objects
+        AP->>M: read the current passing assessment, the required external actions and the request evidence
         M-->>AP: current passing assessment, required external action, no external object to reuse
     end
     rect rgb(248, 215, 218)
-        AP->>PG: platform action: open a pull request for the node branch
+        AP->>IN: intake.action.perform: open a pull request for the node branch (execution identity)
     end
     rect rgb(255, 243, 205)
-        PG->>P: resolve the repository binding under the execution identity
-        P-->>PG: authorized, custody follows the check
+        IN->>P: authorize the forwarded execution identity for the repository binding
+        P-->>IN: authorized, custody releases the material
     end
     rect rgb(226, 227, 229)
-        PG->>G: open the pull request
-        G-->>PG: the pull request
+        IN->>G: open the pull request
+        G-->>IN: the pull request
     end
     rect rgb(248, 215, 218)
-        PG-->>AP: the address of the pull request
+        IN-->>AP: the PlatformAddress of the pull request
     end
     rect rgb(212, 237, 218)
-        AP->>M: submit the request as the external object of the attempt: action, repository binding, address, label
-        M-->>AP: accepted external object
+        AP->>M: mission.evidence.request: requirement key, subject, PlatformAddress
+        M-->>AP: the request evidence
     end
     rect rgb(248, 215, 218)
-        AP-->>MS: the submitted external object, no action unrequested
-        MS-->>H: the submitted external object, no action unrequested
+        AP-->>MS: the submitted request evidence, no action unrequested
+        MS-->>H: the submitted request evidence, no action unrequested
     end
     rect rgb(214, 234, 248)
         H->>S: release the claim
@@ -837,13 +837,14 @@ A later execution never depends on the retained agent context of an earlier exec
 The [Project Service](project-service.md) owns bindings, their entries and configured counts, system authorization and repository strategy.
 [Custody](custody.md) owns resource credentials and suitability.
 The [Scheduler Service](scheduler-service.md) owns the work queue, claim, execution record, fixed deadline and live-execution accounting.
-The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the external object and the readiness and continuation conditions.
+The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the request evidence and the readiness and continuation conditions.
 The Worker Service owns the workers and their agents, the runtime identity, the pool and the hosting of an execution.
 It owns the healthcheck, the compatibility declarations, the workspace, the model connector and the prompt composer.
 It owns the action performer, the MCP server and the exposure of its tools.
 It owns the lifecycle of an execution between the claim and the release.
-It owns the performance of a required external action and its idempotency across attempts.
+It owns the decision of a required external action and its idempotency across attempts, and the Intake Service performs it.
 It owns memory.
 The [Repository component](repository.md#placement) owns the transport.
+The [Intake Service](intake-service.md#outbound-operations-and-checks) performs every platform operation.
 The [Tracking Service](tracking-service.md#scope) holds the telemetry of every execution.
 An agent transcript is telemetry, unless an execution submits it as evidence under the rules of the Mission Service.

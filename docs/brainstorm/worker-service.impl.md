@@ -108,7 +108,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - Its route is `POST /api/worker/provider/check`, and its input is only `{ credential }`.
 - It accepts an `openai-compatible` credential and reads `baseUrl` from metadata through custody.
 - No raw key reaches a Worker operation.
-- Custody attaches the authorization header inside `use`, caches nothing and records the call against the credential record.
+- The Worker Service performs the call with the material that custody releases, caches nothing and drops the material after the call.
 - `GET <baseUrl>/models` has a 10 s deadline.
 - HTTP 200 holds `connection` with one of these values:
   - `ok`: the remote returns the OpenAI list shape.
@@ -307,19 +307,19 @@ The `worker` application serves `evidence upload` locally for a file on its host
 The server and the harness extension serve the same helper on their own hosts.
 The helper safely opens the path inside the execution workspace.
 It refuses path traversal, symbolic-link escapes and path replacement races.
-It calls `mission.evidence.upload.begin` with execution context, evidence metadata, size, media type and optional SHA-256.
-It sends the file directly to the presigned PUT destination, then calls `mission.evidence.upload.complete`.
+It calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list, where the file is an `object` asset with its size, media type and optional SHA-256.
+It sends the file directly to the presigned PUT destination of that asset, then calls `mission.evidence.asset.complete`.
 It follows [the object evidence contract](mission-service.impl.md#object-evidence) for all placements and co-locations.
-It returns the evidence identity and `s3://` URI to the agent.
+It returns the evidence identity, the asset identity and the `s3://` URI to the agent.
 A reader's component obtains a presigned GET through the content read operation.
 No storage credential enters the credential handover.
 The presigned URL is an API answer, not a handover field, tool result or agent-context value.
 The MCP server exposes no upload write.
 
 - Tests exercise local file access at every placement and refuse an out-of-workspace path or unsafe open.
-- Tests assert begin, direct PUT and complete order, with publication only after the checks pass.
+- Tests assert submit, direct PUT and asset complete order, with publication only after the checks pass.
 - Tests keep the storage credential and presigned URL out of the handover and agent context.
-- Tests return only the evidence identity and object URI to the agent.
+- Tests return only the evidence identity, the asset identity and the object URI to the agent.
 - Tests keep the MCP write set unchanged.
 
 ## Tool table
@@ -344,7 +344,7 @@ A test checks duplicate removal, discarded objectives, base-branch heads and one
 A test checks the evidence-placement rule when an initiative's objectives name no repository.
 Tests prove that execution code, never the agent, runs verifications before judgement.
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
-Tests require a reviewer to judge without removed content and name it in its rationale.
+Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
 Budget-end tests assert a failed task assessment without judgement when a verification fails or remains unrun.
 Tests permit judgement only after every verification passes.
@@ -366,14 +366,13 @@ The evaluation method of `reviewer@1` and the MCP tool both call that function.
 A per-execution-identity mutex serializes invocations inside the server.
 The mutex establishes the no-redispatch invariant inside one server process only.
 A durable dispatch record that survives a server restart is the B9 item W2, and it is an epic decision.
-The action performer creates a fresh clone through the [Repository component](repository.impl.md#repository-connector) for a network git write.
-It removes that checkout after the call.
+The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
 
 The tool answers `{ toolName: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.
 
-- `submitted` holds `externalObject`, the `ExternalObject` record that the Mission Service accepted, in the schema that `mission.externalObject.get` answers.
-- `awaiting-prerequisite` holds `action: { key, bindingId }`, the waiting action, and `prerequisite: { key, externalObjectId }`, the requested action it follows and its external object.
+- `submitted` holds `evidence`, the request evidence that `mission.evidence.request` answers.
+- `awaiting-prerequisite` holds `action: { key, bindingId }`, the waiting action, and `prerequisite: { key, evidenceId }`, the requested action it follows and its request evidence.
 - `failed-before-effect` holds `action: { key, bindingId }` and `refusal: { class, code, message }`, where `class` is `confirmed_failure`, `retryable_refusal` or `final_refusal`. A final refusal declines the request before any write. `code` and `message` come from the [Repository component](repository.impl.md): the platform implementation for a platform action, the repository connector for a network git write.
 - `uncertain` holds `action: { key, bindingId }`, `uncertainty: "effect" | "recording" | "both"` and an optional `address`, present when the remote returned the address and the Mission submission stayed uncertain. An `unknown_outcome` result class produces `effect`.
 

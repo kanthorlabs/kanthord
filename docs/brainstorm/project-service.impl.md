@@ -212,25 +212,25 @@ A human pastes a new value at the platform for every source binding.
 ## Authorization integration
 
 The Project Service supplies system authorization to [custody's protected facility](custody.impl.md#the-protected-facility).
-It permits the Scheduler Service to read an external object and the Intake Service to use acquisition grants.
-External-object resolution reaches the repository binding, project and node through authoritative records, never caller-supplied associations.
+It permits the Mission Service to check a request evidence and the Intake Service to use acquisition grants.
+The resolution of a request evidence reaches the repository binding, project and node through authoritative records, never caller-supplied associations.
 
 ## Presigned storage grants
 
-Custody mints a presigned storage grant inside `use` after the protected facility authorizes the operation.
-Custody derives the endpoint, bucket and credential from the storage binding.
+The Intake Service signs a presigned storage grant with the material that custody releases, after the protected facility authorizes the operation.
+The Intake Service derives the endpoint and the bucket from the storage binding, and custody releases its credential.
 The Mission Service supplies the server-generated object key, never an agent-selected destination.
 A PUT grant authorizes one object upload and expires after 1 hour.
-It requires the checksum header only when begin supplies a SHA-256.
-Custody also provides the object metadata check for complete and a presigned GET for an authorized reader's kanthord component.
+It requires the checksum header only when the submission supplies a SHA-256.
+The Intake Service also performs the object metadata check for complete and signs a presigned GET for an authorized reader's kanthord component.
 The GET addresses the recorded version when one exists.
 Each grant authorizes one operation on one object for a bounded time.
 The API answer carries the URL directly to the component, never through the credential handover.
-The storage credential stays in server custody at every placement and every co-location.
+The storage credential stays inside the server process at every placement and every co-location.
 The component keeps the grant outside the context of an agent.
 kanthord cannot prove that a harness keeps it out of the model context; the single-object scope bounds that risk.
 
-Tests assert authorization before custody use and derive the destination only from the checked binding and server-generated key.
+Tests assert authorization before the release of the credential and derive the destination only from the checked binding and server-generated key.
 Tests assert the 1 hour PUT expiry, optional checksum header and authorized GET for the recorded object version.
 Tests assert that no storage credential or presigned URL enters the handover, logs or agent context.
 Tests refuse grants for unauthorized readers or executions without a live claim.
@@ -300,7 +300,7 @@ The signature of the platform over the exact bytes stays the proof of authentici
 The function names no requester identity, and it returns a boolean and no secret.
 A valid HMAC proves the possession of the secret alone.
 It authenticates no other header, it establishes no repository, and it detects no replay.
-The GitHub implementation of the [Repository component](repository.impl.md#platform-connector-and-platform-implementations) associates the payload with its repository, and the Scheduler Service owns the duplicate effect of a repeated delivery.
+The GitHub implementation of the [Repository component](repository.impl.md#platform-connector-and-platform-implementations) associates the payload with its repository, and the Mission Service owns the duplicate effect of a repeated delivery.
 This sibling states no replay window.
 
 ## Repository layout, build, test and release

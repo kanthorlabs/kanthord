@@ -82,7 +82,7 @@ The set has these values.
 - **agent**
 - **agent enablement**
 - **client identity**
-- **external object**
+- **evidence**
 - **repository**
 
 ## producer

@@ -54,7 +54,7 @@ The repository [capabilities](project-service.vocabulary.md#capability) distingu
 A repository address is an SSH address.
 A network git read and a network git write use the SSH configuration of the hosting application, so neither operation requires a credential reference.
 A platform action requires an API key of the platform.
-Every repository binding holds one credential reference, and that reference serves every platform action of the binding, including the read of an external object by the observer.
+Every repository binding holds one credential reference, and that reference serves every platform action of the binding, including the check of an external object for the Mission Service.
 At the write of a repository binding, the Project Service performs one network git read through the [Repository component](repository.md#repository-connector).
 A failed read refuses the write.
 A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
@@ -97,12 +97,12 @@ A credential reaches an operation through its responsible entity, never through 
 Every operation names the identity that requests it.
 An execution presents its execution identity.
 An instance of an external harness presents its client identity and, for an execution operation, the execution identity of its claim.
-The observer of the Scheduler Service presents its service identity.
+The Mission Service presents its service identity for the check of a request evidence.
 The protected facility resolves that identity to the project and to the node of the request.
 An execution identity resolves to the node of its claim, and the facility refuses an operation that names another node.
-The facility resolves the service identity of the observer through the external object of the request.
+The facility resolves that service identity through the request evidence of the check.
 That resolution reaches the repository binding, the project and the node.
-The facility permits a service identity one operation class, the read of an external object.
+The facility permits the service identity of the Mission Service one operation class, the check of a request evidence.
 It permits the service identity of the Intake Service the acquisition classes on a source binding through an [acquisition grant](project-service.vocabulary.md#acquisition-grant).
 The facility resolves that acquisition request through the source binding to its project.
 

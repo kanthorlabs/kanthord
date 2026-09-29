@@ -144,9 +144,9 @@ The external harness holds no credential of a resource.
 
 A service identity is the identity that a service presents for its own authorized operations.
 
-The observer reads pull request 42 of "Add password reset" under its service identity.
-The facility resolves that identity through the external object to the repository binding, the project and the node.
-The observer performs no operation class other than the read of an external object.
+The Mission Service checks pull request 42 of "Add password reset" under its service identity.
+The facility resolves that identity through the request evidence to the repository binding, the project and the node.
+The Mission Service performs no operation class other than the check of a request evidence under that identity.
 The Intake Service presents its own service identity for an [acquisition grant](project-service.vocabulary.md#acquisition-grant) on the source binding of `kanthord-web`.
 
 ## acquisition grant
