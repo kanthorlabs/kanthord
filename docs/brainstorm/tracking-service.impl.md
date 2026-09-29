@@ -20,6 +20,7 @@ Every other service plugs that interface into its implementation.
 A working implementation follows in a later phase.
 The implementation reuses attribute names that the semantic conventions define.
 A kanthord identity takes the `kanthord.` prefix.
+A trace identity is 16 random bytes and a span identity is 8 random bytes, each written as lower-case hexadecimal under the W3C Trace Context representation, and the all-zero value is invalid.
 
 ## Primary store
 

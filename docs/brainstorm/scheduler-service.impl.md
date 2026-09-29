@@ -41,7 +41,7 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
   - `expiredAt` is the fixed deadline, stored as `expired_at` under [Configuration](#configuration).
   - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` before a terminal write.
     A null `endedAt` alone establishes no liveness.
-  - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service.
+  - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service: 32 and 16 lower-case hexadecimal characters under the [trace model](tracking-service.impl.md#trace-model). Before the tracer of the Tracking Service exists, the Scheduler mints both values at the claim through the `TraceIdentity` dependency that its `contract.ts` declares, and the composition root injects that stand-in.
 - `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity` and `runtimeIdentity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
 - `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean.
