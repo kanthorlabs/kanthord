@@ -96,7 +96,7 @@ An outcome is an assessment from evaluation of evidence against the criterion, o
 The term names no closed set.
 The [Mission Service Vocabulary](mission-service.vocabulary.md#assessment) owns the three values that an assessment establishes.
 A human override of the outcome of "Add password reset" produces a new outcome that carries the human assertion.
-kanthord keeps the previous outcome as a reference.
+kanthord keeps the previous outcome, and the new outcome becomes the current outcome.
 A human discard of "Add password reset" produces an outcome whose asserted result establishes nothing.
 
 ## attempt

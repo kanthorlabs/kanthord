@@ -378,7 +378,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
   Its `contentOwnerId` names that objective at the time of the write.
   A later move of the task changes no stored outcome.
 - Task outcomes accumulate like node outcomes.
-  A correction names `previousOutcomeId`, and the corrected outcome names the same task and attempt.
+  A correction is a later outcome of the same task and attempt.
 - The service records the acceptance order of the outcomes of one content owner, from 1 with no gap.
   The current outcome of a node in an attempt is its outcome of that attempt and content owner that the service accepted last.
   The current outcome of an initiative or an objective is its outcome that the service accepted last.

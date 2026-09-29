@@ -39,7 +39,7 @@ Every act of a human carries that identity.
 
 Only a human can override an outcome to make a bypass exception.
 A human override produces a new outcome that carries the human assertion.
-kanthord keeps the previous outcome as a reference.
+kanthord keeps the previous outcome, and the new outcome becomes the current outcome.
 A terminal state never reopens and never repeats.
 A human override never reaches a terminal node, and follow-up work is a new node.
 This authority differs from the human role that carries out steps as the WHO.

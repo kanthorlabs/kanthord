@@ -134,7 +134,6 @@ erDiagram
         text basis_actor "JSON Actor, human assertion"
         text decision "human assertion"
         text evidence_ids "JSON set"
-        text previous_outcome_id FK "correction"
         integer created_at "Unix ms"
     }
 
@@ -160,7 +159,6 @@ erDiagram
     mission_node ||..o{ mission_outcome : "FK content_owner_id"
     mission_attempt |o..o{ mission_outcome : "ref (content_owner_id, attempt), validated"
     mission_assessment |o..o{ mission_outcome : "FK assessment_id"
-    mission_outcome |o..o| mission_outcome : "FK previous_outcome_id"
 
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
@@ -292,7 +290,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A submitted task outcome and its paired task assessment commit in one transaction. The outcome holds `closing_event` `task-assessment`, the result of that assessment and an assessment basis that names it, and its evidence includes the accepted task commit.
 - A closure that a human override, discard or block causes fills an outcome for each current task that holds no current outcome of the closed attempt. The filled outcome asserts `undetermined`, holds the basis of the node outcome and the closing event as `closing_event` and `stopping_reason`, and carries the accepted task evidence of that task in the attempt.
 - An outcome whose closing event is `External.Failed` keeps the passing assessment as its basis and asserts `undetermined`. Its cause is the request evidence of its attempt whose `end_state` is `other`.
-- An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome that names `previous_outcome_id` of the same node and attempt. No correction reaches a node in a terminal state.
+- An outcome is immutable, except that a human delete of an evidence removes its identity from `evidence_ids`. A correction appends an outcome of the same node and attempt. No correction reaches a node in a terminal state.
 
 ### Mission Service: requests
 

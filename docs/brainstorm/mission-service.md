@@ -525,7 +525,6 @@ An outcome record holds these fields.
 - The assessment and its evaluation context, when the basis is an assessment.
 - The actor and the human decision, when the basis is a human assertion.
 - The evidence set that the outcome carries.
-- The previous outcome, when the outcome corrects one.
 
 An absent assessment reference means that the basis carries none, and it never means that an evaluation is pending.
 An outcome that asserts that the results do not meet the criterion or the default standard names an assessment as its basis.
