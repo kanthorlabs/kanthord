@@ -188,9 +188,9 @@ No result claims that an unrun item ran.
 The start refuses a host without bash.
 No execution identity infers a verification from prose.
 
-The Mission Service refuses an assessment that asserts success with a failed or unrun verification.
-It answers `mission.assessment.verification_failed` for both a task assessment and a reviewer assessment.
+The Mission Service refuses an assessment that asserts success with a failed or unrun verification, and it answers `mission.assessment.verification_failed`.
 A success assessment names exactly one evidence that holds a `verification`, and that run must pass; otherwise the service answers the same code.
+For an objective, the `results` of that run hold one entry for each verification of the objective and of each current task of the pinned revision; otherwise the service answers the same code.
 Judgement decides success only after every verification of the pinned content passes.
 
 ## The assessment
@@ -199,8 +199,7 @@ An assessment holds one `result` and one required, nonblank `rationale`.
 It holds the evidence identities, child outcome identities and tested input.
 It holds no `method` field and no separate criterion result.
 The actor identifies who judged.
-The actor of a task assessment is the steps execution of its objective.
-The actor of a reviewer assessment is the execution of its evaluation claim.
+The actor of an assessment is the execution of its evaluation claim.
 An assessment stores `executionId`, and the read derives the `Actor` of the execution form from it.
 An external harness assessment identifies the client identity of its harness worker.
 A human writes no assessment.
@@ -216,11 +215,12 @@ The result follows this order:
 Only the first case permits an empty judgement.
 The judgement is absent in that case; the rationale is never absent.
 The rationale names each default-standard violation. An assessment holds no separate list of findings.
+The rationale of an objective assessment also names each current task whose criterion is unmet.
 The Mission Service answers `mission.assessment.verification_failed` when an assessment asserts success with a failed or unrun verification.
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
 
-- At acceptance `childOutcomeIds` names the current outcome of each current child of the node, and no other outcome. The service refuses every other set with HTTP 400 and an issue list. `evidenceIds` and `childOutcomeIds` are duplicate-free sets.
+- At acceptance `childOutcomeIds` of an initiative names the current outcome of each current objective, and no other outcome. `childOutcomeIds` of an objective is empty. The service refuses every other set with HTTP 400 and an issue list. `evidenceIds` and `childOutcomeIds` are duplicate-free sets.
 - The read derives `childNodeIds` from the nodes of `childOutcomeIds`.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
@@ -255,14 +255,14 @@ Repository evidence remains an address, not an upload of repository content.
 - `mission.evidence.submit` takes the full asset list and writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
 - An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
-- `requirement_key` holds only the key of a `FrozenAction`; a task commit stays evidence without a requirement key.
+- `requirement_key` holds only the key of a `FrozenAction`; every other evidence holds no requirement key.
 - An evidence has no natural key. A repeat after a server restart or after the replay window of the Gateway creates a new evidence, and the service accepts that duplicate.
 
 - A repository address holds `bindingId` and `commit`.
 - `commit` is the full git object name in lower-case hexadecimal: 40 characters for a SHA-1 repository or 64 characters for a SHA-256 repository, the two object formats of git. An abbreviation, upper-case or a ref name answers HTTP 400 with an issue list.
 - The service checks the form alone and never the repository.
 - `bindingId` names a repository binding revision of the project in every context.
-- For the evidence of an objective or a task, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
+- For the evidence of an objective, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
 - For the tested input of an initiative, the list holds one address per distinct repository binding of its current objectives.
 - The landed commit of a success override follows the same form and binding rule.
 - `mediaType` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
@@ -350,8 +350,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
   A record that the Mission Service writes while the attempt of its node reads 0 holds `attempt: 0`.
   This rule covers the outcome of a human override, discard or block on such a node.
   It also covers the landed-commit evidence that a success override supplies on such a node.
-- A human act on a node whose attempt reads 0 writes the node outcome only.
-  It closes no attempt and writes no task outcome.
+- A human act on a node whose attempt reads 0 writes the node outcome.
+  It closes no attempt.
 - Every outcome carries `nodeRevision`, which the service authors.
   When the attempt is 1 or more, `nodeRevision` is the revision that the attempt pins.
   When the attempt is 0, `nodeRevision` is the node revision current at the act.
@@ -363,8 +363,6 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
   For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
 - An outcome stores no closing event. The read derives `closingEvent` in this order:
-  - `task-assessment` for a task outcome with an assessment basis.
-  - For a task outcome with a human basis, the closing event of the node outcome of the same content owner and attempt that the service accepted last before it.
   - `success-override` for a human basis with `result: success`.
   - `human-discard` for a human basis with `result: undetermined` that is the current outcome of a `Discarded` node.
   - `human-block` for every other human basis.
@@ -383,32 +381,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
   A mismatch answers 409 `mission.node.state_conflict`, with the current `state` and `attempt` in `details`.
   An `Unblock` whose `blockedAttempt` differs from the current attempt answers the same code.
-- A task outcome is an outcome whose `nodeId` names the task.
-  Its `attempt` names the attempt of its objective.
-  Its `contentOwnerId` names that objective at the time of the write.
-  A later move of the task changes no stored outcome.
-- Task outcomes accumulate like node outcomes.
-  A correction is a later outcome of the same task and attempt.
-- The service records the acceptance order of the outcomes of one content owner, from 1 with no gap.
-  The current outcome of a node in an attempt is its outcome of that attempt and content owner that the service accepted last.
-  The current outcome of an initiative or an objective is its outcome that the service accepted last.
+- The service records the acceptance order of the outcomes of one node, from 1 with no gap.
+  The current outcome of a node in an attempt is its outcome of that attempt that the service accepted last.
+  The current outcome of a node is its outcome that the service accepted last.
   Neither `createdAt` nor the outcome identity decides that order.
-- `task-result submit` writes the task assessment and the task outcome in one transaction.
-  The outcome holds the `result` of the paired assessment.
-  It holds a `basis` of kind `assessment` that names that assessment, and the `evidenceIds` of the assertion.
-- A `result` that differs from the paired assessment answers 400 `mission.task_result.result_mismatch`.
-  The `evidenceIds` set must include the accepted task commit evidence of that task in the attempt.
-  An omission answers 400 `mission.task_result.commit_missing`.
-- A closure that a human override, discard or block causes fills each missing task outcome.
-  It covers each current task that holds no current outcome of the closed attempt.
-  The service writes the node outcome before the filled task outcomes.
-  It holds `result: undetermined`, even under a success override, and the `basis` of the node outcome.
-  Its evidence set holds the accepted evidence records of that task in the closed attempt.
-  The set is empty when no such record exists.
-- A closure that follows the evaluation fills no task outcome on the ordinary path.
-  The readiness condition requires every current task outcome before `Waiting` admits an evaluation claim.
-- This section states no rule for a task assessment that does not pass when the execution releases without further work.
-  The B9 item of the Mission Service owns that path.
 - An outcome stores no basis kind. The read derives `basis.kind` from the set column of `assessmentId` and the basis actor.
 - The context of an assessment basis is the assessment that the basis names: the revision that its attempt pins, the evidence that it names, the child set of the child outcomes that it names and those child outcomes.
 - The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
@@ -421,11 +397,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `node ready` requires `expectedState: Available` and an `expectedAttempt` equal to the attempt of the node.
   A mismatch answers 409 `mission.node.state_conflict`.
 - When the attempt reads 0, the readiness condition reads no attempt-scoped record.
-  An objective is ready only when it holds no current task.
   An initiative is ready only when every current objective holds a terminal state.
   No action is unresolved, because no attempt requested one.
 - A node that is not ready answers 409 `mission.node.not_ready`.
-  Its `details` hold `tasksWithoutOutcome: NodeId[]`, `objectivesNotTerminal: NodeId[]`, `unresolvedActions: Key[]` and `unsatisfiedIds: NodeId[]`.
+  Its `details` hold `objectivesNotTerminal: NodeId[]`, `unresolvedActions: Key[]` and `unsatisfiedIds: NodeId[]`.
   `unsatisfiedIds` names the dependencies of the closure that are not `Completed`.
   Each array is empty when it does not apply.
   The refusal opens no attempt, changes no state and writes no job.
@@ -433,10 +408,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
   The transaction pins the current node revision.
   It sets `Waiting` and inserts the evaluation job.
   The service wakes the Scheduler after the commit.
-  The act writes no assessment, no outcome and no task outcome.
+  The act writes no assessment and no outcome.
 - A ready act on an open attempt sets `Waiting` the same way, with no opening.
 - The answer is `ControlResult` with the node in `Waiting` and the opened or open attempt.
-  It holds `outcome: null` and `taskOutcomeIds: []`.
+  It holds `outcome: null`.
 
 ## Node resume
 
@@ -580,26 +555,18 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - Tests write `attempt: 0` for an override, a discard and a block while the attempt reads 0.
   They also write `attempt: 0` for the landed-commit evidence of a success override on such a node.
-  They keep the attempt at 0 and write no task outcome.
+  They keep the attempt at 0.
 - Tests return the block outcome from the blocked read while the attempt reads 0.
   They return no request evidence.
 - Tests block and unblock a node while its attempt reads 0, then claim attempt 1.
   They assert 404 from `execution cleared-outcome get` and the execution as `opened_by` of attempt 1.
 - Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
 - Tests resolve a child objective with an attempt-0 outcome to the revision current at the act.
-- Tests commit the task assessment and the task outcome together or not at all.
-- Tests reject a result mismatch with `mission.task_result.result_mismatch` and a missing task commit with `mission.task_result.commit_missing`.
-- Tests fill task outcomes on an override, a discard and a human block.
-  They assert `undetermined`, the node basis, the task evidence of the attempt and the derived closing event of the act.
 - Tests derive each closing event of the outcome record, also after a forced delete of a request evidence.
-- Tests keep `contentOwnerId` after a task move.
-- Tests fill no task outcome on a closure that follows the evaluation.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
-  They also admit an objective whose attempt reads 0 with no current task.
+  They also admit an objective whose attempt reads 0, with or without current tasks.
   They open attempt 1 with the pinned revision.
   They reach `Waiting` with a job in the same transaction.
-- Tests refuse `node ready` with `mission.node.not_ready` on an objective whose attempt reads 0 with a current task.
-  They name the tasks in `details` and leave the attempt at 0 with no job.
 - Tests refuse a state or attempt mismatch of `node ready` with `mission.node.state_conflict`.
 
 - Tests accept both signed safe-integer limits, negative values and zero as priority on initiatives and objectives.
@@ -711,7 +678,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A test stops at the first nonzero exit and records no result for a later item.
 - Tests assert each recorded command, its exit code and the overall exit code for success and failure.
 - A start test refuses a host without bash.
-- Tests refuse success with a failed or unrun item under `mission.assessment.verification_failed` for tasks and reviewers.
+- Tests refuse success with a failed or unrun item under `mission.assessment.verification_failed`.
+- Tests refuse the success of an objective whose verification `results` miss a verification of the objective or of a current task under `mission.assessment.verification_failed`.
 - A test permits judgement only after every verification passes; zero exits alone never establish success.
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.

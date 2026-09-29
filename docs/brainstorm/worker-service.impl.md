@@ -346,7 +346,8 @@ Tests prove that execution code, never the agent, runs verifications before judg
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
-Budget-end tests assert a failed task assessment without judgement when a verification fails or remains unrun.
+Budget-end tests end the task work and release with no further work when a task verification fails or remains unrun.
+Steps tests run every task verification at the head of the node branch at the start of an execution, and skip each task that passes.
 Tests permit judgement only after every verification passes.
 
 ## Workspace

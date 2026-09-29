@@ -63,7 +63,7 @@ A node names the bindings that its kind permits, and each binding kind states ho
 An initiative names no repository binding.
 A task names no repository binding, and a task acts on the repository that its objective names.
 An initiative or an objective names at most one storage binding, and its uploads use that binding.
-A task names no storage binding, and its uploads use the storage binding of its objective.
+A task names no storage binding.
 Two objectives name the same binding or different bindings.
 An objective names any repository binding that its project holds.
 An execution of an initiative derives its repositories from the objectives of that initiative, for its verifications too.
@@ -168,7 +168,7 @@ This rule covers a create, an update and a retirement of a task.
 A containment move reads the condition on the moved node, the old parent and the new parent.
 A dependency edit follows the condition of Mission structure and nodes, and it never reads the node that the dependency names.
 A human who stops the work of a node discards that node.
-The discard closes the attempt, and the closure writes the outcome and the task outcomes that it owes.
+The discard closes the attempt, and the closure writes the outcome of the node.
 A human who also releases the dependents edits each dependent and removes the dependency.
 That edit is a modification of the dependent, so the import condition governs it.
 A node that started work stays in the graph, and a discarded node keeps its records.
@@ -228,6 +228,8 @@ An import records the actor that submits it.
 That record establishes attribution, and it establishes no authorship and no approval.
 
 Every node holds a criterion and at least one verification.
+A task is a final-state requirement of its objective, not a transient step.
+Its criterion and its verifications hold at the head of the node branch.
 The verifications are an ordered list in the node content, and an import carries them.
 A human writes their value.
 No execution identity infers a verification from prose.
@@ -275,9 +277,8 @@ Stored content stays retrievable until a human deletes it.
 An address resolves while its repository holds the content.
 
 Evidence durability differs by node.
-A task commit is an internal check, and it has meaning while a worker instance executes its objective.
-The outcome of an objective represents the outcomes of its tasks after that objective lands.
-The system guarantees no resolution of a task commit after that point.
+A task commit is an internal step of the execution of its objective, and no record names it.
+The outcome of an objective represents its tasks.
 An initiative reads the outcome of each objective and the evidence set that the outcome carries.
 A landed commit is a commit identity that the expected end state of a repository request appends or that a success override carries, and it is the durable repository evidence of an objective.
 An objective that a success override completes without a landed commit identity, and an objective whose evidence no repository holds, carry no landed commit, so their outcomes stand on the human assertion or on the stored content.
@@ -290,7 +291,8 @@ An external action that is not a repository action adds no commit identities.
 No assessment weighs the landed snapshot.
 
 The Mission Service sets the end state of a request after the execution releases, so no execution sets it.
-An execution submits the evidence of its own node and the evidence of the tasks of that node.
+An execution submits the evidence of its own node.
+A task holds no evidence.
 Each submission carries a valid execution identity.
 A late submission never becomes current because it arrives last.
 
@@ -340,13 +342,13 @@ The Mission Service supplies the criterion and the evidence.
 Under kanthord's own harness the executing worker never chooses the reviewer, and it never shapes the instructions of the reviewer.
 Under an external harness the orchestrator of the harness chooses its reviewer, and kanthord does not verify that separation.
 That separation is a separation of duties, and it is not independent verification.
-The execution of an objective writes the assessment of each task of that objective.
-A task assessment carries no separation of duties.
-A task assessment names the node revision of its objective, because a task holds no revision of its own.
+A task holds no assessment and no outcome.
+The reviewer of an objective judges each current task of the pinned revision against its criterion.
 The independent review sits at the node whose outcome persists.
 
 The scope of an evaluation differs by node kind.
-The evaluation of an objective weighs the child outcomes and the tested input.
+The evaluation of an objective weighs the tested input and the criterion of each current task.
+The evaluation of an initiative weighs the child outcomes and the tested input.
 A model judgement transcript is evidence of its invocation, and it is not an assessment.
 The boundary is authority, and it is not a file format.
 
@@ -360,13 +362,14 @@ Only this case permits an empty judgement.
 The assessment of an execution whose worker declares a base prompt also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
 A worker that an external harness hosts declares no base prompt, so its assessment weighs the criterion alone.
 An assessment that finds a violation of the default standard does not pass.
-It names the current outcome of each current child, and it weighs each one.
+An assessment of an initiative names the current outcome of each current objective, and it weighs each one.
 It names the actor that performs it.
 An assessment holds no method field.
 Its actor and evaluation fields identify who judged.
 A human writes no assessment.
 The execution code, never the agent, runs the verifications before the judgement.
 A success assessment names exactly one evidence that holds the verification of the pinned revision, and it names no evidence with a pending asset.
+For an objective, that verification covers the verifications of the objective and of each current task of the pinned revision.
 
 Currency needs three checks.
 Context asks whether an assessment matches the evidence that it names, the node revision that its attempt pins, the structure and the selected child outcomes.
@@ -469,8 +472,7 @@ A human unblock therefore returns the node to `Available` or to `Pending`, and n
 `Waiting` means released, and it does not mean claimable.
 The readiness condition admits an evaluation claim when the child rule and the external action rule hold.
 It also admits the human assertion of `Available -> Waiting`.
-For an objective, every current task holds a current outcome of the open attempt of that objective.
-The condition reads the existence of a current child outcome, and never its result.
+For an objective, the child rule always holds, because a task holds no outcome.
 For an initiative, every current objective holds a terminal state.
 No external action of the open attempt is unresolved.
 The condition reads the current children of the node, and a retirement removes a node from that set.
@@ -533,14 +535,6 @@ A discard writes an outcome whose basis is a human assertion and whose asserted 
 A discarded node satisfies no dependency.
 The end state other of a request evidence ends the attempt with an outcome whose basis names the passing assessment.
 That outcome asserts that nothing is established, because the expected end state is absent.
-
-### Task outcomes
-
-An execution of an objective writes the outcome of each task alongside the task assessment that Evaluation and assessment requires.
-A task outcome carries the commit of that task inside the branch of the objective as its evidence.
-The readiness condition enforces the task-outcome obligation on the ordinary path.
-Every attempt closure owes the outcome of each task of the node.
-At the closure, the Mission Service writes the task outcomes that do not exist.
 
 ### State transitions
 
@@ -704,7 +698,7 @@ A block is the closure of an attempt on one of the three conditions that Outcome
 Outcome and completion owns the block of a node that holds no attempt.
 
 A block writes no separate block record.
-The closure writes the outcome of the node and the task outcomes that Outcome and completion owes.
+The closure writes the outcome of the node.
 The outcome names the condition through its basis and its asserted result.
 A block cancels no live request of the closed attempt, and the next attempt reads that request through its request evidence.
 

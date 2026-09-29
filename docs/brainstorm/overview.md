@@ -26,8 +26,9 @@ Success has three separate parts:
 The verifications supply a machine-run result, and the criterion needs judgement.
 Completing an execution does not establish success, because evaluation assesses the evidence against the WHAT.
 
-Every initiative, objective, and task must have an outcome.
-For both harnesses, every ending at each node produces an outcome.
+Every initiative and every objective must have an outcome.
+A task has no outcome of its own, and the outcome of its objective covers it.
+For both harnesses, every ending at each initiative or objective produces an outcome.
 An outcome can record that evidence establishes that the results do not meet the criterion or the default standard.
 It can also record that available evidence cannot establish whether the results meet the criterion.
 Neither assessment establishes success.
@@ -67,7 +68,7 @@ The execution is the unit of work that the Scheduler Service records, and it rep
 The Worker Service hosts the executions of kanthord's own harness.
 The instance executes the steps that achieve the WHAT of that node.
 
-An execution is responsible for producing the outcome of the node that it takes, and the outcome of every task of that node.
+An execution is responsible for producing the outcome of the node that it takes.
 An execution ends when the current outcome is successful, an assessment does not pass, a human pauses the node, or a human discards the node.
 An execution also ends on a resource limit or when the execution cannot progress.
 An assessment that does not pass ends the execution and blocks the node.

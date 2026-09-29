@@ -162,7 +162,7 @@ The execution record holds these fields.
 
 The claim response returns these fields.
 Every execution operation presents that execution identity, and the claim precedes every execution operation on the node.
-This covers evidence, task assessments, task outcomes, evaluation assessments and invoked repository actions.
+This covers evidence, evaluation assessments and invoked repository actions.
 A work pull from an instance that holds a `running` execution returns that execution and selects nothing.
 A retry after a lost response creates no second execution or count.
 The operation reads the `running` execution of the runtime identity before admission, under the settlement rule of [Liveness](#liveness).

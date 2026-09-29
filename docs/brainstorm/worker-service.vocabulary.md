@@ -321,13 +321,13 @@ A revision of the objective that names another repository binding starts a new n
 
 The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
 Task "Add reset token expiry" of "Add password reset" ends with two commits on the node branch: the commit of the first task work and the commit of the revision after the first verification failed, and the second one is the task commit.
-That commit is the evidence of the task outcome, and the task assessment names it with the tested input that the verification ran against.
+No record of the Mission Service names that commit.
 
 ## checkpoint commit
 
 A checkpoint commit is the commit of the task work in progress that the execution makes before a release with further work.
 The resource budget of Execution 1 ends while task "Add reset token expiry" is half done, so the execution commits the changed files as a checkpoint commit, pushes the node branch and releases with further work.
-Execution 2 continues the task from that commit, and the task holds no outcome until Execution 2 records one.
+Execution 2 runs the task verifications at the head of the node branch and continues the task from that commit.
 
 ## resource budget
 

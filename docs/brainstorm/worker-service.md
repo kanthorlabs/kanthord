@@ -302,33 +302,27 @@ For each task the agent performs the steps in the workspace, and the execution c
 The task commit is the head of the node branch after the last commit of the task work in the attempt that executed the task.
 The execution code, never the agent, runs the verifications of the task against the task commit.
 It discards every change that the verifications make.
-A failed verification leads the agent to revise the task within the resource budget before the execution records the task assessment.
+A failed verification leads the agent to revise the task within the resource budget.
 The execution commits a revision as a new commit and runs the verifications again.
 The agent judges the result against the criterion only after every verification passes.
-A failed or unrun verification at the end of the budget produces a task assessment that does not pass, without a judgement.
-Its required rationale names that verification.
-The execution writes the task assessment and the task outcome.
-The task assessment names the task commit and the [tested input](mission-service.vocabulary.md#tested-input) of the verifications.
-The task outcome carries the task commit as its evidence.
+A task is complete when its verifications pass and the agent judges its criterion met.
+The execution writes no evidence, no assessment and no outcome for a task.
 
-In an attempt after the first, the execution reads the outcome of the cleared attempt for each task.
-The execution checks whether that outcome asserts success, the task content is unchanged between the pinned revisions, and the repository binding is unchanged.
-If all conditions hold, it runs the verifications again against the head of the node branch.
-The same revise-first and judgement rules apply.
-It writes a new task assessment and a new task outcome.
-It executes every other task.
-Inside one attempt, a task that holds a current task outcome of the attempt is complete, and the execution skips it.
+At its start, every execution runs the verifications of each task of the pinned revision against the head of the node branch.
+A task whose verifications pass and whose criterion the agent judges met is complete, and the execution skips it.
+The execution executes every other task.
+No record of an earlier execution or an earlier attempt decides that a task is complete.
 
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
-When every task of the revision holds a current task outcome of the attempt, the execution releases with no further work.
-A recorded task assessment that does not pass ends the task work, and the execution releases with no further work.
-Otherwise, when the resource budget ends before every task holds a task outcome, the agent stops and the execution performs cleanup.
+When every task of the revision is complete, the execution releases with no further work.
+A task whose verification fails or remains unrun at the end of the resource budget ends the task work, and the execution releases with no further work.
+Otherwise, when the resource budget ends before every task is complete, the agent stops and the execution performs cleanup.
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
 Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
 The [Mission Service](mission-service.md#state-transitions) routes each release.
 
-The sequence diagram below shows the steps method on an objective with a native agent, on the path where every task assessment passes.
+The sequence diagram below shows the steps method on an objective with a native agent, on the path where every task passes its verifications.
 
 ```mermaid
 sequenceDiagram
@@ -368,9 +362,6 @@ sequenceDiagram
         rect rgb(248, 215, 218)
             A-->>E: steps done in the workspace, revised within the resource budget
             E->>E: task commit, run the verifications against it, discard their changes, the agent judges
-        end
-        rect rgb(212, 237, 218)
-            E->>M: task assessment (task commit and tested input) and task outcome (task commit)
         end
     end
     rect rgb(248, 215, 218)
@@ -500,9 +491,10 @@ The [Repository component](repository.md#placement) defines its placement.
 
 ## Evaluation and required external actions
 
-The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and the current child outcomes.
+The reviewer execution reads the criterion of the pinned revision, the evidence set of the attempt and, for an initiative, the current child outcomes.
 A reviewer judges the assets that the evidence still holds.
-The child outcomes of an objective are its task outcomes, and the child outcomes of an initiative are its objective outcomes.
+The child outcomes of an initiative are its objective outcomes, and an objective holds no child outcomes.
+The reviewer of an objective runs the verifications of the objective and of each current task of the pinned revision, and it judges each task criterion.
 For an objective, the reviewer makes a clean isolated checkout of the repository snapshot that the evidence names.
 It uses the [Repository component](repository.md#repository-connector).
 For an initiative, the reviewer derives the repository bindings of the current objectives and removes duplicates.
@@ -574,9 +566,9 @@ sequenceDiagram
         S-->>R: claim response, execution identity
     end
     rect rgb(248, 215, 218)
-        R->>M: read the criterion of the pinned revision, the evidence set, the task outcomes of the attempt
+        R->>M: read the criterion of the pinned revision, its tasks and the evidence set
         R->>RG: clean isolated checkout of the repository snapshot in a fresh workspace
-        R->>R: run the verifications of the pinned revision
+        R->>R: run the verifications of the objective and of each current task of the pinned revision
     end
     rect rgb(212, 237, 218)
         R->>M: evidence with the verification bound to the tested input and the pinned revision
@@ -700,12 +692,11 @@ sequenceDiagram
         IN-->>E: the change request
         E->>RG: reuse the workspace of the objective and its repository binding, same node branch
         loop for each task
-            alt the outcome of the closed attempt asserts success, the task and the repository binding are unchanged
-                E->>E: run the verifications again against the head of the node branch, judge again
+            alt the verifications of the task pass at the head of the node branch and the agent judges its criterion met
+                E->>E: skip the task
             else
                 E->>E: execute the task, new task commit
             end
-            E->>M: new task assessment and new task outcome of the new attempt
         end
         E->>RG: push the node branch
         E->>M: evidence: the head commit

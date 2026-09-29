@@ -113,7 +113,7 @@ The import creates the objective with no attempt, and its attempt reads 0.
    The first claim opens attempt 1, and Execution 1 starts.
    Attempt 1 requires one external action, a pull request that must merge, from the repository strategy of the binding row that its pinned revision names.
 2. The instance executes a RED-GREEN-REFACTOR loop for each task, on a branch, with one commit for each task.
-   It writes each task assessment and task outcome.
+   It writes no record for a task.
 3. The instance releases with the evidence of Execution 1, and the execution of the attempt requires no further work.
    Execution 1 ends, and the node reaches `Waiting`.
    Attempt 1 stays open.
@@ -136,8 +136,6 @@ A node whose attempt never opened holds no attempt, and its attempt reads 0.
 The attempt of the objective above reads 1 for every record in the attempt example.
 The import condition requires `Pending` or `Available` and an attempt that reads 0.
 A task modification reads the state and the attempt of its objective.
-Attempt identity is a necessary eligibility check of a task outcome in objective readiness.
-The task outcome belongs to the open attempt of the objective.
 Attempt identity establishes no currency by itself.
 
 ## evaluation attempt
@@ -169,7 +167,7 @@ The term names no closed set.
 Take "Add password reset" while the `tdd@1` instance executes it in Execution 1 under attempt 1.
 A human discards the objective.
 The Mission Service closes attempt 1 by force and ends Execution 1.
-It writes the outcome and the task outcomes that do not exist.
+It writes the outcome of the objective.
 The records of attempt 1 remain records of that attempt.
 
 ## state of a node
@@ -220,13 +218,13 @@ The asserted result of a discard is that nothing is established.
 
 ## readiness condition
 
-The condition over current task outcomes, current objective terminal states and unresolved external actions that admits an evaluation claim.
+The condition over current objective terminal states and unresolved external actions that admits an evaluation claim.
 The term names no closed set.
 [Readiness condition](mission-service.md#readiness-condition) states the rule.
 
 Take the objective "Add password reset" with the tasks "Add reset token expiry" and "Add reset email".
-The objective reaches `Waiting`, and both tasks hold current outcomes of its open attempt.
-The outcome of "Add reset email" states that its results do not meet its criterion.
+The steps execution releases with no further work, and the objective reaches `Waiting`.
+Neither task holds an outcome, because a task holds no record.
 No external action of the open attempt is unresolved.
 The readiness condition admits an evaluation claim.
 
@@ -293,9 +291,8 @@ That set is closed and it holds three values.
 
 Take the objective "Add password reset" above.
 A `reviewer@1` instance evaluates that objective, and it writes one assessment.
-That assessment names the evidence set of the objective, the node revision pinned by the attempt, and the outcome record of each task.
+That assessment names the evidence set of the objective and the node revision pinned by the attempt, and its rationale names each task whose criterion is unmet.
 It names the reviewer execution as the actor and holds no method field.
-Its evaluation identity distinguishes it from a task assessment.
 An external harness assessment identifies the client identity of the harness worker.
 A human writes no assessment.
 The assessment names the tested input of the verifications of the pinned revision.
@@ -326,7 +323,7 @@ The tested input never names the produced evidence that records the verification
 A later addition to the evidence set changes no earlier tested input.
 
 Take the objective "Add password reset" above.
-Its evidence names the task commit of the attempt, so the tested input is that repository snapshot.
+Its evidence names the head commit of the node branch, so the tested input is that repository snapshot.
 
 Take the initiative "Account recovery" with current objectives on `api-repo` and `web-repo`.
 The reviewer removes duplicate bindings, even when several objectives name `api-repo`.
@@ -513,7 +510,7 @@ A modification covers the record of the node, its parent link, its dependency ed
 A containment move reads the condition on the moved node, the old parent and the new parent.
 A dependency edit reads the condition on the dependent node, and never on the node that the dependency names.
 A human who stops the work of a node discards that node.
-The discard closes the attempt, and the closure writes the outcome and the task outcomes that it owes.
+The discard closes the attempt, and the closure writes the outcome of the node.
 A human who also releases the dependents edits each dependent and removes the dependency.
 That edit is a modification of the dependent, so the import condition governs it.
 A node that started work stays in the graph, and a discarded node keeps its records.

@@ -80,7 +80,7 @@ A `tdd@1` instance claims the objective "Add password reset". A `reviewer@1` ins
 
 ## task
 
-A task is a node of WHAT that belongs to an objective and has its own criterion and outcome.
+A task is a node of WHAT that belongs to an objective and has its own criterion, but no outcome of its own.
 The term names no closed set.
 The import set holds `add-password-reset.md`, the objective, and `add-reset-token-expiry.md`, a task of that objective.
 
