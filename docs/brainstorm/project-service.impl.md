@@ -214,6 +214,7 @@ A human pastes a new value at the platform for every source binding.
 The Project Service supplies system authorization to [custody's protected facility](custody.impl.md#the-protected-facility).
 It permits the Mission Service to check a request evidence and the Intake Service to use acquisition grants.
 The resolution of a request evidence reaches the repository binding, project and node through authoritative records, never caller-supplied associations.
+A broken chain of a model inference credential answers 403 `project.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
 
 ## Presigned storage grants
 

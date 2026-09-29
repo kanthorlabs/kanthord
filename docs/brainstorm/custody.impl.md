@@ -162,6 +162,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - The collaboration appends the row identity to `scheduler_execution.credentials`.
 - A later use of that name in the execution reads the pinned revision.
 - A use of a revoked revision answers 409 `credential.revision.revoked`.
+- A refresh report that fails its tag, its envelope form or its schema, that names a revision that the execution does not pin, or whose credential type differs from the secret shape of the platform, answers 400 `custody.handover.report_invalid`.
 - The drain check calls `liveExecutionsPinning(tx, credentialId)` for each live revision that is not the newest, and it drains a revision that no live execution pins.
 - Custody runs the drain check at each pin, rotation, revoke and credential read.
 - The list stays in the execution record after the execution ends.
