@@ -246,7 +246,7 @@ The Intake Service redesigns this section with the delivery source under [HANDOF
 - The code fixes the maximum lifetime at 24 hours from `issued_at`, and a sweep every minute ends an expired grant.
 - A grant ends through `project.acquisition_grant_end`, a `unary` mutation under the `service` policy. The Intake Service calls it with the grant identity when its session ends, and the facility writes `session_end`.
 - The facility revokes a grant when a binding set edit commits a disablement or removal of its source binding. It also revokes the grant when the material of its credential record changes and at its expiry. The revocation writes `ended_at` and `end_reason` in the same transaction as the cause where one exists. After the commit, the facility calls `intake.grant_revoked` of the Intake Service with the grant identity and the reason. That operation is a `unary` mutation under the `service` policy. The facility retries a lost answer with backoff until the Intake Service acknowledges, because the Intake Service closes the acquisition at once on receipt.
-- The facility refuses `use` for an acquisition grant, because the Intake Service performs its acquisition itself with the material.
+- The facility refuses `release` for an acquisition grant, because the answer of the acquisition grant already carries its material.
 - A registration of a webhook, a poll and a stream open each consume one grant of their kind. A subscription holds at most one open grant at a time.
 
 ## The network git operations

@@ -10,7 +10,7 @@ This file is not a design document, and `custody.md` stays the single source of 
 ## custody
 
 The protection of resource credential material behind a protected facility.
-For a GitHub read, custody uses the key that repository binding `kanthord-repo` references after authorization passes.
+For a GitHub read, custody releases the key that repository binding `kanthord-repo` references after authorization passes, and the Intake Service performs the read.
 
 ## credential store
 

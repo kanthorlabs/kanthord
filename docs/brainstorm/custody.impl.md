@@ -98,7 +98,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A module-private `WeakSet` records each frozen grant, so a caller cannot fabricate one.
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
-- Acquisition grants follow [their own contract](project-service.impl.md#the-acquisition-grant) and cannot enter `use`.
+- Acquisition grants follow [their own contract](project-service.impl.md#the-acquisition-grant) and cannot enter `release`.
 - Human and machine identities pass the checks of [Gateway identity verification](gateway-service.impl.md#the-jwt).
 - A service identity passes `isServiceIdentity` of the kernel.
 - An execution identity resolves through the Scheduler Service to the node of its live claim.
@@ -109,22 +109,20 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A break in that chain refuses the operation before ciphertext access.
 - A model inference call resolves through the worker binding and selected agent provider, never a credential relationship with a project.
 
-## The use of a secret
+## The release of a secret
 
-- Custody exposes `use(grant, request)`.
-- The request names the operation and its parameters, not a destination.
-- Custody derives the destination from the authorized entity.
-- It performs the operation and returns its result, never material.
+- Custody exposes `release(grant)`.
+- It checks and consumes the grant, resolves the pinned or the newest live revision, checks suitability, decrypts the revision and returns `Material` inside the process.
+- The holder of `Material` performs its own operation, and custody performs no operation of a service.
+- A release is a call of the shared custody component inside the server process, so `Material` crosses no adapter.
 - A server-owned child process remains inside the server boundary.
-- Material enters no log, workspace file, transcript, tool result or error body.
+- Material enters no log, workspace file, transcript, tool result or error body, and this rule binds every holder of `Material`.
 - `pino` redacts material paths; tests assert each path.
-- Custody clears its plaintext buffer when the operation returns.
-- This cleanup cannot clear parsed strings or cached tokens that outlive the buffer.
+- The holder clears the buffer of `Material` through `drop()` in a `finally` block when its operation returns.
+- This cleanup cannot clear parsed strings or cached tokens that outlive the buffer, so a holder builds its platform client for one call and caches no client and no token.
 - The [host trust boundary](worker-service.impl.md#trust-boundary) includes each worker application.
 - Custody protects system records, not a host that an adversary controls.
-- For a platform action, custody attaches the API key in the `Authorization` header inside `use`.
-- It returns no header, mints no token and caches no token for that action.
-- A remote refusal fails the operation closed and records the failure against the credential record.
+- The holder of the material reports a remote refusal to custody, and custody records it against the credential record.
 
 ## The credential store of an execution
 
@@ -228,6 +226,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision.conflict`. A test covers the same case for two metadata edits.
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, the metadata copy and replacement at rotation, and a `baseUrl` change at rotation alone.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
+- Tests assert that `release` refuses a consumed, a fabricated and an acquisition grant, and that `drop()` clears the buffer after a success and after a failure.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.

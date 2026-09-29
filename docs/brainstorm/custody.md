@@ -8,6 +8,8 @@ title: Custody
 
 [Custody](custody.vocabulary.md#custody) is a shared component that every service uses, not a service.
 It owns resource credentials and their protection.
+Custody manages credentials: it stores them, validates them with its platform probe, refreshes them and releases their material.
+It performs no operation of a service.
 The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization.
 Custody grants no authority through possession of a credential reference.
 
@@ -60,9 +62,10 @@ Custody grants no authority through possession of a credential reference.
 
 - The protected facility checks authorization before custody reads secret material.
 - An execution identity under a live claim proves liveness, not authority for an operation.
-- Custody checks a model inference call through the worker binding of the claim and its effective agent provider.
+- Custody releases the material of a model inference call through the worker binding of the claim and its effective agent provider.
 - The [Worker Service](worker-service.md#agent-configuration) resolves that selection.
 - A refusal reaches no secret material.
+- Custody releases the material of an authorized grant inside the server process, and the holder performs its own operation.
 - A credential leaves the server only through a [credential handover](custody.vocabulary.md#credential-handover) to a kanthord worker application.
 - The handover lasts for the execution.
 - The worker application reports a refreshed credential to custody.

@@ -729,6 +729,7 @@ Both adapters implement one transport-neutral value and error contract.
 - No result carries a live object, a transaction or a runtime resource.
 - Only the [credential handover](custody.impl.md#the-credential-handover) and [acquisition grant](project-service.impl.md#the-acquisition-grant) carry credential material in operation results.
 - The handover is encrypted under a key derived from the client secret on either adapter; the acquisition grant carries plaintext through the direct adapter alone.
+- A [credential release](custody.impl.md#the-release-of-a-secret) is a call of the shared custody component inside the process and no operation result, so it crosses no adapter.
 - A client returns `Completed`, `Failure` or `Indeterminate`.
 - An indeterminate result appears on either adapter because one caller implementation runs in every application.
 
