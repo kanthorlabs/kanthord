@@ -308,7 +308,7 @@ The workspace of Execution 1 on "Add password reset" is a checkout of `kanthorla
 Execution 3 of the same objective under the same repository binding reuses it.
 The Worker Service removes it after the fixed retention period.
 The reviewer execution of the objective uses a fresh workspace with a clean checkout of the repository snapshot, and the Worker Service removes it at the release.
-The execution of "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
+The steps execution of "Account recovery" uses a workspace with no checkout, and its agent writes the report there.
 
 ## node branch
 
