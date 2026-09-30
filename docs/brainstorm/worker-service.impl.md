@@ -152,7 +152,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## The identities of the Worker Service
 
 - A runtime identity is `worker_instance_<ulid>`.
-- The output schema of `POST /api/worker/register` returns it under `runtimeIdentity`.
+- The output schema of `POST /api/worker/register` returns it under `runtimeIdentity`, beside `resourceIdentity` from the verified machine identity and `workerName` from the worker binding row that the registration transaction reads.
 - The machine identity of [gateway-service.impl.md](gateway-service.impl.md#the-forwarding-contract) names it for a live registration.
 - It is no JWT claim.
 - [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules the form.
@@ -318,6 +318,8 @@ It sends the file directly to the presigned PUT destination of that asset, then 
 A failed transfer answers `worker.evidence_upload.transfer_failed`, and its message holds no URL and no header.
 It follows [the object evidence contract](mission-service.impl.md#object-evidence) for all placements and co-locations.
 It returns the evidence identity, the asset identity and the `s3://` URI to the agent.
+At the `worker` placement the agent calls the helper through the host tool `evidence-upload`, whose one argument is the workspace-relative `path`; the subject of the evidence is that path, and the media type is `application/octet-stream`.
+A failed upload answers a tool error with the code and the message alone.
 A reader's component obtains a presigned GET through the content read operation.
 No storage credential enters the credential handover.
 The presigned URL is an API answer, not a handover field, tool result or agent-context value.
@@ -331,13 +333,16 @@ The MCP server exposes no upload write.
 
 ## Tool table
 
-The tool table of a native agent holds three sources.
+The tool table of a native agent holds four sources.
 The first source is the pi built-in tools: `swe@1` enables read, edit, write, grep, find, ls and bash, and `re@1` enables read, grep, find and ls.
 The second source is kanthord's own tools, which the server serves through its MCP server.
 An external harness reaches the same MCP server, and pi reaches it as a tool source.
 The third source is the other tools that a project adds, including other MCP servers.
+The fourth source is the host-supplied tools that the `worker` application serves in its own process.
+An agent declaration names its host tools: `swe@1` holds `evidence-upload`, and `re@1` holds none.
+`worker.agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
-The tool register and the abstraction layer for tool instances manage the three sources.
+The tool register and the abstraction layer for tool instances manage the four sources.
 
 The [Repository implementation](repository.impl.md#platform-connector-and-platform-implementations) owns platform methods, result schemas and payload decoders.
 
@@ -353,7 +358,7 @@ Tests prove that execution code, never the agent, runs verifications before judg
 Reviewer tests assert a failed assessment without judgement for a failed or unrun verification; the rationale names that verification.
 Tests require a reviewer to judge the assets that the evidence still holds.
 Steps tests revise after a failed verification within the resource budget, commit anew and rerun the verifications.
-Budget-end tests end the task work and release with no further work when a task verification fails or remains unrun.
+Budget-end tests end the task work and release with no further work when the run of a task commit failed or left an item unrun and no later task work exists; they checkpoint and release with further work when the budget ends before a task commit or during a judgement.
 Steps tests run every task verification at the head of the node branch at the start of an execution, and skip each task that passes.
 Tests permit judgement only after every verification passes.
 
@@ -471,6 +476,7 @@ The [Repository implementation](repository.impl.md#repository-connector) states 
 The execution enforces the turn budget on pi turn events and aborts the agent when either budget ends.
 The bash timeout of an agent command stays below the remaining wall-time budget.
 After the agent stops at budget end, the execution code, not the agent, writes the checkpoint commit, pushes and releases with further work.
+The boundary is the task commit: work that the budget ends before its task commit, or during the judgement of a passing run, takes the checkpoint; a task commit whose run failed or left an item unrun, with no later task work, takes the head-commit evidence and the release with no further work.
 Every cleanup command, including the push, is bounded by `expired_at`, not by the remaining budget.
 
 ## Trust boundary

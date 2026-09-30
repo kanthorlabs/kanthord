@@ -71,7 +71,7 @@ That route declares the client access policy, and the verification of the JWT se
 The request nominates no project, no resource identity, no subject and no kind, and the server takes all four from the verified JWT.
 The Worker Service creates the registration and checks the instance count of the binding inside one transaction, so two concurrent requests oversubscribe no binding.
 A client identity holds at most one live registration, and a registration of a client identity that holds one answers that registration, so a restarted program keeps its runtime identity.
-The route answers with the runtime identity of the registration and no token.
+The route answers with the runtime identity of the registration, the resource identity of the machine identity and the worker name of the binding, and no token.
 
 - A repeat of the idempotency key under the same client identity replays the recorded answer within one process and the TTL.
 - The registration must remain live for that replay.
@@ -363,7 +363,7 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - A project-scoped resource name of the Project Service is its binding name.
 - An Intake Service resource name is `<source binding name>/<subscription kind>`.
 - A global resource name of the Worker Service is `<agent name>/<provider name>` for an agent provider.
-- A project-scoped resource name of the Worker Service is `<worker binding name>/<runtime identity>` for a registered instance.
+- A project-scoped resource name of the Worker Service is `<worker binding name>/<runtime identity>` for a registered instance. Its target is `registration:<runtime identity>`. The Worker Service takes the project name and the binding name from the Project Service through the binding read of the registration, and reads no Project table.
 - Each name segment uses percent encoding, including any literal `/` or `%`, so distinct names remain distinct.
 - No entry name, capability or error detail holds secret material or a private endpoint URL with credentials.
 

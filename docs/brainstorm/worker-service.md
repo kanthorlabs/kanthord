@@ -315,8 +315,9 @@ No record of an earlier execution or an earlier attempt decides that a task is c
 
 Before every release with no further work, the execution submits the head commit of the node branch as the evidence of the objective, whatever the task results establish.
 When every task of the revision is complete, the execution releases with no further work.
-A task whose verification fails or remains unrun at the end of the resource budget ends the task work, and the execution releases with no further work.
-Otherwise, when the resource budget ends before every task is complete, the agent stops and the execution performs cleanup.
+The boundary of the budget end is the task commit.
+A task commit whose verification run failed or left an item unrun, with no later task work when the resource budget ends, ends the task work, and the execution releases with no further work.
+Otherwise, when the resource budget ends before the task commit of the current task work or during the judgement of a passing run, the agent stops and the execution performs cleanup.
 The execution code, not the stopped agent, writes the checkpoint commit, pushes and releases with further work.
 Every cleanup command is bounded by `expired_at`, not by the remaining resource budget.
 A checkpoint commit establishes no completion and no verification result, and the next execution continues the task.
