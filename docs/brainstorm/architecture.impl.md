@@ -951,3 +951,9 @@ The import boundaries follow the public files.
 - `main.ts` installs the fatal handlers and dispatches to the `cli` application.
 - [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the composition root order.
 - Tests sit beside their source as `*.test.ts`.
+
+## Unwired collaborations
+
+- The composition root owns each temporary `unwired(seam)` stand-in for a required collaboration that a later plan implements.
+- An unwired collaboration throws `CodedError` with code `system.composition.unwired` and message `<seam name> is not wired.` before performing work.
+- This code is internal. The Gateway maps it to HTTP 500 `gateway.invocation.unknown` with message `Internal server error.` for a remote caller.
