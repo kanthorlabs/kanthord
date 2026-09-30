@@ -86,8 +86,8 @@ The service derives it from the policy of the `project_binding` row that the pin
 - A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
 - An initiative requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
-- `mission.evidence.request` is a `client` operation under the execution of the live evaluation claim. It checks the node, the open attempt of the claim, the required external action and its binding.
-  Its input holds `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The Mission Service writes the address as the one `platform` asset of the request evidence.
+- `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:nodeId/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
+  Its input holds `executionId`, `attempt`, `nodeRevision`, `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
   Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
 - A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirementKey` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resourceIdentity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirementKey }`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
@@ -184,7 +184,7 @@ The verification records one result `{ command, exitCode, signal, timedOut }` pe
 `Verification` holds `testedInput` and `results`, and the evidence that records the run holds it in `verification`.
 `exitCode` is the exit status or null.
 `signal` is the POSIX signal name that ended the process or null.
-`timedOut` is true when the timeout of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that timeout.
+`timedOut` is true when the deadline of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that deadline.
 Both `exitCode` and `signal` are null for a process that the execution started and could not observe.
 An item passes only with `exitCode: 0`; every other result fails, and an unstarted item has no result.
 A run passes when `results` hold one entry per verification and every entry has `exitCode` 0.
@@ -205,7 +205,7 @@ It holds no `method` field and no separate criterion result.
 The actor identifies who judged.
 An execution assessment names the execution of its evaluation claim: it stores `executionId`, and the read derives the `Actor` of the execution form from it.
 An external harness assessment identifies the client identity of its harness worker.
-A human assessment stores the human `actor`, holds a null `executionId` and a null `testedInput`, and names no child outcome. Its evidence set is optional.
+A human assessment stores the human `actor`, holds a null `executionId` and a null `testedInput`, and names no child outcome. Its evidence set is optional. The read answers `currency: null` for a human assessment.
 A human writes an assessment only through a success override, a discard or a block, and that act writes the assessment and the outcome that names it in one transaction.
 Every other rule of this section binds an execution assessment only.
 The execution code, never the agent, runs the verifications before the judgement.
@@ -231,6 +231,12 @@ The execution behaviour follows [worker-service.md](worker-service.md#evaluation
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
 - A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
 - The read derives `workerVersion` from the worker of the binding row that the execution of the actor pins.
+- The service computes the currency of an execution assessment at each read, and it stores no currency.
+- Take an execution assessment A of node N and attempt k. `contextMatches` is true exactly when all three conditions hold: `nodeRevision` of A equals the revision that attempt k of N pins; each identity of `evidenceIds` of A names an evidence of N; for an initiative, the nodes of `childOutcomeIds` of A equal the current objectives of N, and each named outcome is the current outcome of its objective.
+- The current outcome of a node is its outcome with the greatest `sequence`.
+- `authorityAdmits` is true exactly when no human assessment of N and attempt k has a greater `sequence` than A.
+- `orderSelected` is true exactly when A holds the greatest `sequence` among the execution assessments of N and attempt k that pass the context check and the authority check.
+- `current` is true exactly when all three checks admit A. `reasons` holds one named constant text for each failed check.
 
 ## The request record
 

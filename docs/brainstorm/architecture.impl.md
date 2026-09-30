@@ -82,8 +82,8 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
-- `workspaces/<objective identity>/<repository binding identity>/` of the state directory, the workspace of a steps execution, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
-- `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `workspaces/<objective identity>/<repository binding identity>/` of the state directory, the workspace of a steps execution on an objective, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
+- `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution or of a steps execution on an initiative, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - The index holds no row for the local store of an external harness, because that store sits on the machine of the harness and in no directory of the server.
 
 ## The operational database
@@ -599,6 +599,7 @@ The public interfaces have three kinds.
 - `project.create` commits through the Project Service tables and calls the Mission collaboration `createMission` inside the same transaction, so every project holds exactly one mission. This collaboration co-locates the Project Service and the Mission Service.
 - The Project Service offers `entriesOfAgent(tx, agentName)` for entries of every binding whose worker references the agent.
 - The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement.
+- The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. A removal or an unavailability of a worker binding and the end of its live registrations commit in the transaction of the binding-set write.
 - The Project Service offers `bindingsNaming(tx, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential removal and its dependency check are atomic, so both run in the transaction of the removal.
 - These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
 - They co-locate the Project Service and Worker Service in one process on one database.
@@ -696,6 +697,9 @@ A handler separates asynchronous work from its commit.
 - A store transaction is synchronous and spans no `await`.
 - A handler runs asynchronous work first, including every client call.
 - A handler performs one `caller.commit` at the end on the declared store.
+- Before that commit, a `wait` handler can run its commit write in a probe transaction on the declared store. The handler always rolls back a probe transaction.
+- A probe and its collaborations write only through the probe transaction. A probe calls no client, starts no timer and sends no wakeup.
+- The handler performs its `caller.commit` after the deciding probe with no `await` between them. The committed result supplies the answer.
 - A handler calls a peer mutation before its own commit.
 - Two operations compose no atomic unit.
 - The owning design page states the outcome when the peer completes and the initiating operation fails.
@@ -762,7 +766,7 @@ A process split retains these boundaries.
 - Each service directory is a candidate package.
 - `contract.ts` is a publishable contract.
 - The kernel is a shared package whose version is a compatibility surface.
-- The `worker` application invokes registration, heartbeat, work pull, credential handover and credential report through their owners' `contract.ts` imports. It also invokes evidence write, telemetry ingestion and MCP stream operations through their owners' `contract.ts` imports.
+- The `worker` application invokes registration, heartbeat, work pull, credential handover and credential report through their owners' `contract.ts` imports. It also invokes evidence write, action request, telemetry ingestion and MCP stream operations through their owners' `contract.ts` imports.
 
 ## The CLI configuration commands
 

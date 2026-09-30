@@ -21,11 +21,11 @@ A mechanism here never overrides a rule there.
 - A login checks the name at start and at commit.
 - The write code keeps one platform for every row of a name.
 - The newest live revision is the row of the name with the greatest `revision` and a null `ended_at`.
-- A rotation inserts the next revision in one transaction. It copies the metadata of the newest live revision unless the request replaces it, and the older revisions stay live.
+- A rotation inserts the next revision in one transaction. It copies the metadata of the newest live revision unless the request replaces it, and after the insert it drains every older live revision that no live execution pins in the same transaction.
 - A drain and a revoke set `ended_at`.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
-- A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live.
+- A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
 - A rotation and a metadata edit name `expectedRevision`, the newest live revision that the human read. A stale value answers 409 `credential.revision.conflict` with the current value in `details`.
 - Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
@@ -140,8 +140,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 ## The credential handover
 
 - [Worker handover operations](worker-service.impl.md#the-credential-handover) transport the envelope and refresh report.
-- The payload is canonical JSON of the platform key and provider credential that the execution requires.
-- Each item holds the record identity, pi adapter id or git platform, and pi-ai credential.
+- The payload is canonical JSON containing only the credential of the effective agent provider of the execution.
+- Its sole item holds the record identity, the pi adapter id and the pi-ai credential.
 - AES-256-GCM uses the key of its direction, a random 12-byte nonce and a 16-byte tag. A handover uses the handover key, and a refresh report uses the refresh-report key.
 - Additional authenticated data concatenates the length-prefixed execution identity and runtime identity.
 - The worker application holds the client secret of its machine JWT and derives the same two keys. Custody derives the client secret again from the verified `sub`.

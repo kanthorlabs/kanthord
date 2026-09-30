@@ -22,6 +22,10 @@ The identities follow the identity convention of [architecture.impl.md](architec
 
 - Every Scheduler route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging), the [default 30 s timeout](gateway-service.impl.md#cancellation) and the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits) unless a row below says otherwise.
 - `scheduler.work.pull` at `POST /api/scheduler/work/pull` is a `client` mutation of `wait` lifetime. Its route timeout is 120 s and its wait window is 90 s. Cancellation ends the wait and no accepted claim.
+  - The handler runs the full claim in a [probe transaction](architecture.impl.md#the-operation-and-its-two-entry-adapters) at the start and after each wait. The probe and the commit that follows it use one `now` value.
+  - A probe or a commit that reaches admission takes its own instance healthcheck.
+  - The handler commits after a probe that finds a `running` execution, a new claim, a failed healthcheck or a loss settlement, and at the end of the wait window.
+  - The commit runs the full claim again. After quiescence starts, the commit settles losses and claims nothing.
 - `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` is a `client` mutation of `unary` lifetime.
 - `scheduler.claim.get` at `GET /api/scheduler/claim/:executionId` is a `client` read of `unary` lifetime with no body.
 - `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.

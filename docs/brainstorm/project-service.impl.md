@@ -103,6 +103,7 @@ The outcomes of the comparison by binding name are below.
 - A name that the submission omits takes a tombstone, and the transaction keeps its rows.
 - A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set increments the version and changes no binding.
+- A worker group whose latest row after the edit is a tombstone or holds `instanceCount: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
 
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
@@ -131,6 +132,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
 - A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
+- The exact `projectPrompt` value `-` disables the project prompt layer under [prompt composition](worker-service.impl.md#prompt-composition).
 - Every repository binding names exactly one `credential` of its platform. An absent credential refuses the write.
 - An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
@@ -331,6 +333,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
+- A test covers a removal, a removal by omission and a revision to `instanceCount: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.

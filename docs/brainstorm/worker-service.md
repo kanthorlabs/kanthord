@@ -291,7 +291,7 @@ The MCP server exposes no upload write.
 
 The rules of the four paragraphs below hold for the steps method on an objective.
 The steps method uses one node branch for each objective and repository binding, and it continues that branch across attempts.
-The node branch takes its name from the node identity.
+The node branch takes its name from the node identity, in the form `kanthord/<node identity>`.
 The first execution on that branch creates it from the base branch that the [repository strategy](project-service.md#repository-configuration-and-policy) names.
 The execution never rewrites a commit that it pushed or that a record of the Mission Service names.
 Every commit that the execution makes is attributable to its task and its attempt.
@@ -541,7 +541,7 @@ It uses the `PlatformAddress` that the Intake Service answers, or the address of
 That submission is the accepted request of the action.
 The address correlates the request evidence of one external object across attempts.
 
-The action performer performs these requests inside the evaluation method for a reviewer execution of kanthord's own harness.
+For a reviewer execution of kanthord's own harness, the evaluation method invokes the action performer through `worker.action.request`.
 An external harness invokes the tool of the action performer through the MCP server for its reviewer execution.
 Both paths run the same eligibility, operand and reuse rules.
 

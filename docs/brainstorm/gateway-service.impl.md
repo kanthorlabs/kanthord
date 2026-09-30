@@ -299,6 +299,7 @@ The default timeout is 30 s. Human verification and worker registration each tak
 `GET /api/healthcheck` takes 120 s.
 The work pull route takes 120 s, and its wait window is 90 s, so the handler answers before the timeout.
 A route of the MCP prefix takes 900 s, because a call of the MCP server runs a tool of the Worker Service.
+`worker.action.request` takes 900 s, because it runs the action performer.
 `hono/timeout` returns 504 and cancels no work, so a mutation route is idempotent or it completes.
 [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the four shutdown phases.
 

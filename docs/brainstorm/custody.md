@@ -26,7 +26,7 @@ Custody grants no authority through possession of a credential reference.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
 - An OAuth credential enters only through a [login session](custody.vocabulary.md#login-session) on the server.
 - Creation and rotation make no remote call.
-- A rotation adds the next revision under the same name and keeps the older revisions live.
+- A rotation adds the next revision under the same name and, in the same transaction, drains every older live revision that no live execution pins. A pinned older revision stays live until custody drains it or a human revokes it.
 - A reference names the credential by its name and never a revision.
 - An execution pins the newest live revision at its first use of a credential and uses that revision until the execution ends.
 - An operation outside an execution uses the newest live revision.

@@ -18,11 +18,13 @@ The native agent `swe@1` of `general@1` runs `@earendil-works/pi-coding-agent` a
 The adapter builds the runtime with `ModelRuntime.create({ credentials })` over the credential store of the execution and the session with `createAgentSession({ modelRuntime })`.
 The first version supports a native agent at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
+Before the first import of `@earendil-works/pi-coding-agent`, it sets `PI_OFFLINE=1` and sets `PI_CODING_AGENT_DIR` to `pi/` of the state directory, so pi downloads no tool binary.
+The adapter persists no settings file and no session file in that directory or in `~/.pi`.
 It disables the discovery of user extensions, skills, prompt templates and themes.
 It uses an in-memory session manager.
 It disables the version check, the install telemetry and the provider catalog refresh.
 It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` at 0.86.0.
-An execution of an externally hosted worker has no native agent, and a read of its native setup answers 409 `worker.execution.no_native_agent`.
+An execution of an externally hosted worker has no native agent, and a read of its [execution setup](#the-execution-setup) answers 409 `worker.execution.no_native_agent`.
 A pi version bump affects the workers that run on it and the credential shape of the handover.
 Every runtime setup call carries an abort signal with a deadline.
 
@@ -173,6 +175,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
 - The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.
 - A registration that ends by expiry frees the slot of its binding.
+- The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. It ends every live registration of the group in the transaction of the caller and opens no transaction. A removed or unavailable worker binding holds no live registration.
 - A registration of a binding with no free slot, or of an unavailable binding, answers 409 `worker.instance.slot_unavailable`, the code of the resume.
 - The same client identity registers again with a fresh idempotency key, after an expiry or after its deregistration.
 - The expiry proves no stop, and physical stop and capacity reuse are the B9 items SC5 and W5.
@@ -180,7 +183,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## Inspection operations
 
 - Five `human` operations expose the published worker contract, the agent declaration and enablement, and the runtime-only instance record. Each one is `unary`, declares `mutation: false`, uses the default 30 s timeout and reads no table of another service.
-- `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in descending order. An item holds `name`, `host` (`kanthord` or `external-harness`), `declaredNodeStates` and `requiredNodeFormat`. The answer lists the supplied workers; a registration adds no entry.
+- `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in ascending alphabetical order, and the next page reads the names that are greater than the cursor. An item holds `name`, `host` (`kanthord` or `external-harness`), `declaredNodeStates` and `requiredNodeFormat`. The answer lists the supplied workers; a registration adds no entry.
 - `worker.catalog.get` is `GET /api/worker/catalog/:workerName`.
   The answer holds the item fields and `resourceBudget` for every worker.
   It also holds `harness` for an externally hosted worker, or `method` and `agentName` for a worker that kanthord hosts.
@@ -229,11 +232,11 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 `kanthord serve worker` starts the `worker` application, which hosts one native instance at the `worker` placement.
 
 - The command declares `--endpoint` and `--token` only, and it refuses `--config`.
-- The binding, the worker, the agent configuration and the instance count come from the server through the project and the resource identity that the machine token names.
+- The binding, the worker, the agent configuration and the instance count come from the server through the project and the resource identity that the machine token names. The worker application reads the setup of one execution through `worker.execution.setup.get`.
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup resolves the client configuration, checks `clientSecret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them.
+- Startup resolves the client configuration, checks `clientSecret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 0.86.0 selects `fd` first.
 - After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `resourceIdentity` and `workerName`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -248,11 +251,37 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - B9 owns shutdown during a live execution, a registration or a work pull with no answer, and a stop deadline in those cases.
 - Tests cover the option resolution, the refusal of `--config`, the startup order, each startup failure, the ready record, deregistration before exit, a failed deregistration and the watchdog of a settled state.
 
+## The execution setup
+
+`worker.execution.setup.get` is a `client` read of `unary` lifetime at `GET /api/worker/execution/:executionId/setup` that requires a live execution.
+
+- It declares `mutation: false`, no body and the default 30 s timeout. It has no CLI leaf.
+- The invocation chain proves the path identity, and the server derives the setup from the proven claim.
+- The answer is `{ executionId, workerName, agentName, effectiveConfiguration, credentialId, metadata, resourceBudget, repositories, globalPrompt }`.
+- `workerName` comes from the worker binding revision that the claim pins, and `agentName` comes from the declaration of that worker.
+- The resolution reads the pinned worker binding revision, its entry, the current enablement and the metadata of the pinned credential revision from one snapshot.
+- The credential revision is the revision that the handover of the execution pins for the credential name of the effective configuration. The read creates no pin and selects no other revision.
+- An execution that pins no revision of that name answers 409 `worker.execution.credential_not_pinned`. A revoked pinned revision answers 409 `credential.revision.revoked`.
+- The model and reasoning-effort validation use the metadata of the pinned credential revision.
+- `credentialId` is the row identity of the pinned revision. `metadata` holds `baseUrl` and `models` of its metadata for an `openai-compatible` provider, and it is null for every other provider.
+- `resourceBudget` is the override of the pinned worker binding revision, or the default of the worker.
+- Each entry of `repositories` holds `{ bindingId, name, address, strategy: { baseBranch }, projectPrompt }`.
+- For an objective, `repositories` holds the repository binding that the pinned node revision names.
+- For an initiative, `repositories` holds one row per resource identity of the repository bindings of its current objectives, discarded objectives included, at the greatest revision.
+- `globalPrompt` is the configured source of the global prompt as the server resolves it with the reader of the composer: `{ state: "absent" }`, `{ state: "disabled" }`, `{ state: "present", path, text }` or `{ state: "invalid", path, reason }`.
+- The agent file sources of the global prompt stay the files of the host that runs the agent.
+- An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `worker.agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
+- The read answers no secret.
+- The application calls the read after the handover and before the first inference call.
+- The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credentialId` of the handover item differs from the `credentialId` of the answer.
+- Tests cover each source, the pinned revision after a rotation, the validation against the pinned metadata, an absent pin, a revoked pin, each other refusal, the proof of the path identity, the absence of a secret and the absence of a new pin.
+
 ## Configuration
 
 - The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
 - `worker.globalPrompt` holds the path of a Markdown file, as a string, and it defaults to an empty string.
 - An empty value means the global prompt source is absent and the composer moves to the next source.
+- The exact value `-` disables the global prompt layer, and the composer reads no source of it. A file named `-` takes the path `./-`.
 - A relative path resolves against the data directory.
 - The loader of the composer reads that file under the same rules as every agent file.
 - `worker.heartbeatWindow` holds the window of a registration heartbeat in seconds, as a positive safe integer, and it defaults to `300`.
@@ -261,6 +290,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 The prompt composer resolves the global prompt from the file that `worker.globalPrompt` names, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
 It resolves the project prompt from the repository binding, then `AGENTS.md` of the workspace root, then `CLAUDE.md` of the workspace root.
+A `projectPrompt` of the exact value `-` disables the project prompt layer, and an empty or absent `projectPrompt` is an absent source.
 For an evaluation method that resolution stops at the repository binding, and the composer reads no agent file of the workspace.
 It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
 It rejects a path of the workspace that a link resolves outside the workspace.
@@ -294,12 +324,14 @@ It proves that a reviewer execution takes no agent file of the workspace.
 
 ## The credential handover
 
-- `worker.handover` is a `client` operation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes an empty body and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
+- `worker.handover` is a `client` secret mutation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes the body `{ executionId }` and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
+- While its idempotency record remains in memory within the TTL, a repeat of the key answers 409 without the envelope. The application recovers a lost answer with a new key, which reads the pinned revision again.
 - The `worker` application calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
 - It decrypts the envelope with the handover key that it derives from its own `clientSecret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
-- `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. The application calls it after each refresh that pi-ai performs and once at the release.
+- `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ executionId, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204. The application calls it after each refresh that pi-ai performs and once at the release.
+- For both operations, the invocation chain proves the execution that the body field `executionId` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
-- A platform action runs through the MCP tool of the server.
+- A platform action runs through the action performer of the server.
 - The `worker` application reads `clientSecret` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
 - The `worker` application holds no `masterKey`.
 - An absent or invalid `clientSecret` stops the start of `kanthord serve worker` with `worker.start.client_secret_absent` or `worker.start.client_secret_invalid`.
@@ -365,8 +397,8 @@ Tests permit judgement only after every verification passes.
 ## Workspace
 
 - The workspace root is `workspaces/` of the state directory of [architecture.impl.md](architecture.impl.md#the-directories-of-the-server).
-- The workspace of a steps execution is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
-- The workspace of an evaluation execution is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
+- The workspace of a steps execution on an objective is `workspaces/<objective identity>/<repository binding identity>/`, keyed as [worker-service.md](worker-service.md#executions) states.
+- The workspace of an evaluation execution and of a steps execution on an initiative is `workspaces/<execution identity>/`, and the Worker Service removes it at the release.
 - A directory under the root holds mode `0700`, and the permissions audit of the start covers the root and no entry under it.
 - The workspace retention period of [worker-service.md](worker-service.md#executions) is 7 days from the end of the last execution of the objective.
 - A sweep at the start and every hour removes an expired workspace.
@@ -375,13 +407,29 @@ Tests permit judgement only after every verification passes.
 ## Action performer
 
 One internal function implements the action performer.
-The evaluation method of `reviewer@1` and the MCP tool both call that function.
+The evaluation method of `reviewer@1` at the `worker` placement calls that function through `worker.action.request`, and the MCP tool calls the same function.
+`worker.action.request` is a `client` mutation of `unary` lifetime at `POST /api/worker/execution/:executionId/action/request` that requires a live execution.
+It takes no body and no query field and uses the operational store.
+It takes a 900 s timeout and answers 200 with the result below.
+It serves a reviewer execution of every harness under the same admission, and no CLI command calls it.
 A per-execution-identity mutex serializes invocations inside the server.
-The mutex establishes the no-redispatch invariant inside one server process only.
+An in-memory dispatch reservation, keyed by the node, the attempt and the requirement key, protects each action across the executions of one attempt.
+The action performer takes the reservation directly after the admission snapshot, with no `await` between them, and before its first Intake call for that action.
+Only the invocation that took the reservation settles it.
+A contender of an in-flight reservation answers `uncertain` with `uncertainty: "effect"`, changes nothing and does not wait.
+A contender of an uncertain reservation answers the stored item and changes nothing.
+An uncertain result stays in the reservation with its uncertainty and its known address.
+A failure of `intake.action.read` removes the reservation, because the read writes nothing.
+A failure of `intake.action.perform` that proves that no write started removes the reservation.
+Every other failure of `intake.action.perform`, an unclassified exception included, keeps the reservation as `uncertain` with `uncertainty: "effect"`.
+Before a failure propagates, the invocation removes its other reservations of actions that it did not dispatch.
+A request evidence of the same attempt removes the reservation of its requirement key, and a request evidence of an earlier attempt removes none.
+Inside one server process, the mutex and the reservation prevent a redispatch within one attempt.
 A durable dispatch record that survives a server restart is the B9 item W2, and it is an epic decision.
+B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, across attempts included.
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
 
-The tool answers `{ toolName: "repository-action-request", items: ActionResultItem[] }`.
+The operation and the tool answer `{ toolName: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.
 
 - `submitted` holds `evidence`, the request evidence that `mission.evidence.request` answers.
@@ -417,6 +465,7 @@ An external harness connects over HTTP with the machine JWT of its client identi
 - The server supports no WebSocket transport and no deprecated HTTP+SSE transport.
 
 This revision projects no tool to a REST route, and it gives the CLI no command that calls a tool.
+`worker.action.request` calls the action performer and projects no tool.
 A tool is reached through the MCP server.
 
 - The endpoint path is `/api/worker/mcp`.
@@ -462,6 +511,8 @@ The carrier of that attribution is an epic decision.
 - `wallTimeMs` and any declared `turns` are positive safe integers, including in overrides.
 - A turn is one `turn_end` event of the pi agent loop.
 - Wall time runs from `created_at` of the execution.
+- A verification item runs under the deadline `min(created_at + wallTimeMs, expired_at)` of its execution.
+- An item whose deadline arrived does not start and has no result. A started item that the deadline ends records `timedOut: true`.
 - Tests cover native and external-harness defaults, overrides for every worker binding, and positive safe integers.
   They cover turn events, wall time from `created_at`, and cleanup bounded by `expired_at`, not by the remaining budget.
 

@@ -94,7 +94,7 @@ An execution requests a GitHub read for another node, so the facility refuses it
 ## credential handover
 
 The encrypted transfer of execution credentials to the kanthord worker application that hosts the execution.
-An execution on `build-02` receives the credential of its effective agent provider and its repository platform key.
+An execution on `build-02` receives the credential of its effective agent provider.
 The application reports refreshed OAuth material and discards the credentials at execution end.
 
 ## login session
