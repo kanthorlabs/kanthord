@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Make a fresh clone ready to work in.
 #
-# It checks the prerequisites, initializes both submodules, puts them on main,
+# It checks the prerequisites, initializes all submodules, puts them on main,
 # copies the root commit identity down, installs every dependency, and
 # generates the daemon configuration and database. It is idempotent, so it is
 # also the repair command when a checkout drifts.

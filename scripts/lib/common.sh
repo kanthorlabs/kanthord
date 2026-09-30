@@ -11,19 +11,34 @@ WORKTREE_DIR="$ROOT/.worktree"
 ENGINE_PORT=${ENGINE_PORT:-31415}
 WEB_PORT=${WEB_PORT:-27182}
 
-SUBMODULES="engine apps"
+# Aliases, not paths: aliases are also used in sync-state and worktree names.
+SUBMODULES="engine apps webhook"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*"; }
 warn() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die() { warn "$*"; exit 1; }
 
-# repo_dir <engine|apps|parent> -> absolute path
-repo_dir() {
+# repo_path <engine|apps|webhook|parent> -> repository-relative path
+repo_path() {
+	[ "$#" -eq 1 ] || die "repo_path needs one repository alias"
+	[ -n "$1" ] || die "repository alias is empty"
 	case "$1" in
-	engine) printf '%s' "$ENGINE_DIR" ;;
-	apps) printf '%s' "$APP_DIR" ;;
-	parent | .) printf '%s' "$ROOT" ;;
+	engine | apps) printf '%s' "$1" ;;
+	webhook) printf '%s' 'platforms/webhook' ;;
+	parent | .) printf '%s' '.' ;;
 	*) die "unknown repository $1" ;;
+	esac
+}
+
+# repo_dir <engine|apps|webhook|parent> -> absolute path
+repo_dir() {
+	[ -d "$ROOT" ] || die "repository root does not exist: $ROOT"
+	case "$ROOT" in /*) ;; *) die "repository root is not absolute: $ROOT" ;; esac
+	local path
+	path=$(repo_path "$@") || return 1
+	case "$path" in
+	.) printf '%s' "$ROOT" ;;
+	*) printf '%s/%s' "$ROOT" "$path" ;;
 	esac
 }
 

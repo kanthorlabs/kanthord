@@ -4,3 +4,6 @@
 [submodule "apps"]
 	path = apps
 	url = git@kanthorlabs.github.com:kanthorlabs/kanthord-apps.git
+[submodule "webhook"]
+	path = platforms/webhook
+	url = git@kanthorlabs.github.com:kanthorlabs/webhook.git

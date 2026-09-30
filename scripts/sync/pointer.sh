@@ -6,10 +6,12 @@ SCRIPT_NAME=sync-pointer
 . "$(dirname "$0")/lib.sh"
 
 bumped=""
+bumped_paths=()
 for name in $SUBMODULES; do
 	dir=$(repo_dir "$name")
-	recorded=$(git -C "$ROOT" rev-parse --verify --quiet "HEAD:$name") || die "$name has no recorded gitlink"
-	indexed=$(git -C "$ROOT" ls-files --stage -- "$name" | awk '{print $2}')
+	path=$(repo_path "$name")
+	recorded=$(git -C "$ROOT" rev-parse --verify --quiet "HEAD:$path") || die "$name has no recorded gitlink"
+	indexed=$(git -C "$ROOT" ls-files --stage -- "$path" | awk '{print $2}')
 	actual=$(git -C "$dir" rev-parse HEAD)
 
 	if [ "$indexed" != "$recorded" ] && [ "$indexed" != "$actual" ]; then
@@ -22,8 +24,9 @@ for name in $SUBMODULES; do
 	fi
 
 	if git -C "$dir" merge-base --is-ancestor "$recorded" "$actual" 2>/dev/null; then
-		git -C "$ROOT" add -- "$name" || die "$name could not be staged"
+		git -C "$ROOT" add -- "$path" || die "$name could not be staged"
 		bumped="$bumped $name"
+		bumped_paths+=("$path")
 		log "$name pointer moves forward to $(git -C "$dir" rev-parse --short "$actual")"
 		continue
 	fi
@@ -36,8 +39,9 @@ for name in $SUBMODULES; do
 			log "$name checkout fast-forwarded to the recorded pointer"
 			;;
 		bump)
-			git -C "$ROOT" add -- "$name" || die "$name could not be staged"
+			git -C "$ROOT" add -- "$path" || die "$name could not be staged"
 			bumped="$bumped $name"
+			bumped_paths+=("$path")
 			warn "$name pointer moves BACKWARD to $(git -C "$dir" rev-parse --short "$actual")"
 			;;
 		abort) die "$name checkout is behind the recorded pointer. Set ON_POINTER_BEHIND=forward or bump" ;;
@@ -48,8 +52,9 @@ for name in $SUBMODULES; do
 
 	case "${ON_POINTER_UNRELATED:-abort}" in
 	actual)
-		git -C "$ROOT" add -- "$name" || die "$name could not be staged"
+		git -C "$ROOT" add -- "$path" || die "$name could not be staged"
 		bumped="$bumped $name"
+		bumped_paths+=("$path")
 		warn "$name pointer takes the checkout over an unrelated recorded commit"
 		;;
 	recorded)
@@ -66,5 +71,5 @@ if [ -z "$bumped" ]; then
 	exit 0
 fi
 message="chore: bump$(printf '%s' "$bumped" | sed 's/^ //;s/ /, /g' | sed 's/^/ /')"
-git -C "$ROOT" commit -m "$message" -- $bumped >/dev/null || die "the bump commit failed"
+git -C "$ROOT" commit -m "$message" -- "${bumped_paths[@]}" >/dev/null || die "the bump commit failed"
 log "committed$bumped in the parent"

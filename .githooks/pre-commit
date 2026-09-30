@@ -13,12 +13,12 @@ fi
 
 root=$(git rev-parse --show-toplevel)
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
-paths="engine apps"
+paths="engine apps platforms/webhook"
 failed=0
 
 for path in $paths; do
 	dir="$root/$path"
-	staged=$(git -C "$root" ls-files --stage -- "$path" | awk '{print $2}')
+	staged=$(git -C "$root" ls-files --stage -- "$path" | awk '$1 == "160000" {print $2}')
 	[ -n "$staged" ] || continue
 
 	branch=$(git -C "$dir" symbolic-ref --quiet --short HEAD || true)

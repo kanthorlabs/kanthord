@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# The commit identity lives in this repository. Both submodules copy it.
+# The commit identity lives in this repository. All submodules copy it.
 #
 # Only the root needs a local user section. This script applies that section to
-# engine and apps, so the three repositories always commit under one identity.
+# every submodule, so all repositories commit under one identity.
 # CHECK=1 reports only, and fails when a submodule does not match.
 SCRIPT_NAME=git-author
 . "$(dirname "$0")/../lib/common.sh"

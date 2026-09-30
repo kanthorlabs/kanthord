@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Create a worktree that is ready to work in.
 #
-#   REPO=engine|apps BRANCH=name scripts/tree/new.sh
+#   REPO=engine|apps|webhook BRANCH=name scripts/tree/new.sh
 #
 # A new branch always starts from the freshly fetched origin/main. The tree
 # then gets the ignored local files listed in .worktreeinclude, links the
@@ -12,9 +12,9 @@ SCRIPT_NAME=tree-new
 
 REPO=${REPO:-}
 BRANCH=${BRANCH:-}
-[ -n "$REPO" ] || die "pass REPO=engine or REPO=apps"
+[ -n "$REPO" ] || die "pass REPO=engine, REPO=apps, or REPO=webhook"
 [ -n "$BRANCH" ] || die "pass BRANCH=name"
-case "$REPO" in engine | apps) ;; *) die "REPO must be engine or apps" ;; esac
+case "$REPO" in engine | apps | webhook) ;; *) die "REPO must be engine, apps, or webhook" ;; esac
 
 source_dir=$(repo_dir "$REPO")
 target="$WORKTREE_DIR/$REPO/$BRANCH"
@@ -24,12 +24,13 @@ target="$WORKTREE_DIR/$REPO/$BRANCH"
 # checkouts. A linked worktree is nested more deeply, so recreate that sibling
 # relationship beside it. Keep this list explicit as more shared directories
 # are introduced.
-PARENT_DIRS="docs"
+PARENT_DIRS=""
+case "$REPO" in engine | apps) PARENT_DIRS="docs" ;; esac
 for directory in $PARENT_DIRS; do
 	[ -d "$ROOT/$directory" ] || die "parent directory $ROOT/$directory does not exist"
 done
 
-# The root identity is the only one to set. It is applied to both submodules.
+# The root identity is the only one to set. It is applied to all submodules.
 author_report=$("$ROOT/scripts/git/author.sh" 2>&1) || {
 	printf '%s\n' "$author_report" >&2
 	exit 1
@@ -50,7 +51,8 @@ else
 	log "branched $BRANCH from the fetched origin/main"
 fi
 
-# Code in either submodule can continue to resolve ../docs from its worktree.
+# Engine and apps can continue to resolve ../docs from their worktrees.
+# Webhook is standalone and receives no parent links.
 # Multiple branches with the same prefix share this link.
 target_parent=$(dirname "$target")
 for directory in $PARENT_DIRS; do
@@ -90,6 +92,7 @@ fi
 case "$REPO" in
 engine) TARGET="$target" "$ROOT/scripts/engine/install.sh" || die "engine setup failed" ;;
 apps) TARGET="$target" "$ROOT/scripts/app/install.sh" || die "apps setup failed" ;;
+webhook) log "webhook is documentation-only; no runtime setup is needed" ;;
 esac
 
 log "ready at $target, as $(git -C "$source_dir" config --local user.name) <$(git -C "$source_dir" config --local user.email)>"

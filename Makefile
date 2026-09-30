@@ -18,8 +18,8 @@ export WEB_PORT ?= 27182
 	engine-up engine-down engine-logs engine-migrate engine-install \
 	app-up app-down app-logs app-install \
 	tree-new tree-list tree-clean \
-	sync sync-all sync-status sync-engine sync-apps sync-parent \
-	contract-sync git-author
+	sync sync-all sync-status sync-engine sync-apps sync-webhook sync-parent \
+	contract-sync git-author test-submodules
 
 help:
 	@echo "Kanthord. Three scenarios. Copy a block and run it."
@@ -39,8 +39,9 @@ help:
 	@echo "  make status"
 	@echo ""
 	@echo "  Only this repository needs the identity. repo-bootstrap copies it"
-	@echo "  into engine and apps, installs every dependency, attaches both"
-	@echo "  submodules to main, and migrates the database."
+	@echo "  into engine, apps, and webhook; it attaches all submodules to main."
+	@echo "  It installs engine/apps dependencies and migrates the database."
+	@echo "  Webhook at platforms/webhook is currently documentation-only."
 	@echo "  Run repo-bootstrap again whenever a checkout drifts. It repairs."
 	@echo ""
 	@echo "  daemon    http://127.0.0.1:$(ENGINE_PORT)"
@@ -100,7 +101,7 @@ help-targets:
 	@echo "                   Prerequisites, submodules, branches, identity,"
 	@echo "                   dependencies, daemon configuration and database"
 	@echo "                   It is idempotent, so it also repairs a drifted checkout"
-	@echo "  repo-attach      Put both submodules back on main"
+	@echo "  repo-attach      Put all submodules back on main"
 	@echo "                   A clone leaves them detached, and sync refuses that"
 	@echo ""
 	@echo "dev. The daily loop"
@@ -126,10 +127,10 @@ help-targets:
 	@echo "  app-logs         Follow the dashboard log"
 	@echo ""
 	@echo "tree. Worktrees under .worktree/<repo>/<branch>"
-	@echo "  tree-new         REPO=engine|apps BRANCH=name"
+	@echo "  tree-new         REPO=engine|apps|webhook BRANCH=name"
 	@echo "                   Branches from a freshly fetched origin/main, copies the"
-	@echo "                   ignored local files, links parent docs, installs, configures,"
-	@echo "                   opens a shell"
+	@echo "                   ignored local files, and opens a shell. Engine/apps also"
+	@echo "                   link parent docs and install; webhook stays standalone"
 	@echo "  tree-list        Every worktree, with its tree, merge and pull request state"
 	@echo "  tree-clean       Report the finished worktrees"
 	@echo "                   APPLY=1 removes the merged ones and the gone ones"
@@ -138,10 +139,11 @@ help-targets:
 	@echo "                   NO_PR=1 asserts there is none when gh cannot read the repo"
 	@echo ""
 	@echo "sync. Local and origin/main on the same commit"
-	@echo "  sync-status      Drift table for the parent and both submodules"
+	@echo "  sync-status      Drift table for the parent and all submodules"
 	@echo "  sync-all         The whole tree, in a safe order. 'sync' is an alias"
 	@echo "  sync-engine      The engine submodule only"
 	@echo "  sync-apps        The apps submodule only"
+	@echo "  sync-webhook     The webhook submodule at platforms/webhook only"
 	@echo "  sync-parent      This repository only, gitlinks untouched"
 	@echo "                   ON_DIRTY=stash|commit|abort   MSG=\"...\" for commit"
 	@echo "                   ON_UNTRACKED=add|skip  add is the default, so a new"
@@ -153,9 +155,10 @@ help-targets:
 	@echo "  contract-sync    Publish the engine contract into apps, and commit it"
 	@echo ""
 	@echo "git"
-	@echo "  git-author       Apply the root commit identity to both submodules"
+	@echo "  git-author       Apply the root commit identity to all submodules"
 	@echo "                   Only this repository needs a local user section"
 	@echo "                   CHECK=1 reports only, and fails on a mismatch"
+	@echo "  test-submodules  Test nested submodule tooling in disposable local repos"
 
 repo-bootstrap:
 	@$(S)/repo/bootstrap.sh
@@ -215,6 +218,8 @@ sync-engine:
 	@$(S)/sync/repo.sh engine
 sync-apps:
 	@$(S)/sync/repo.sh apps
+sync-webhook:
+	@$(S)/sync/repo.sh webhook
 sync-parent:
 	@$(S)/sync/repo.sh parent
 
@@ -223,3 +228,6 @@ contract-sync:
 
 git-author:
 	@$(S)/git/author.sh
+
+test-submodules:
+	@$(S)/test/submodules.sh

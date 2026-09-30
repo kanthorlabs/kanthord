@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Bring the parent and both submodules level with origin/main.
+# Bring the parent and all submodules level with origin/main.
 #
 # The parent integrates BEFORE the pointers are decided. The reverse order
 # lets a parent fast-forward overwrite the gitlinks that were just chosen.
 # Submodules are pushed BEFORE the parent, and every outgoing gitlink is
 # proven reachable on its submodule remote before the parent is published.
 SCRIPT_NAME=sync-all
+set -o pipefail
 . "$(dirname "$0")/../lib/common.sh"
 . "$(dirname "$0")/lib.sh"
 
@@ -30,13 +31,23 @@ integrate_repo parent
 # P3. Gitlinks that unpushed parent commits already name.
 log "phase 3: enumerate the outgoing gitlinks"
 outgoing_gitlinks() {
-	target=$1
-	for commit in $(git -C "$ROOT" rev-list "$(pinned parent)..HEAD"); do
-		git -C "$ROOT" rev-parse --verify --quiet "$commit:$target" 2>/dev/null
+	[ "$#" -eq 1 ] || die "outgoing_gitlinks needs one submodule alias"
+	[ "$1" != "parent" ] && [ "$1" != "." ] || die "the parent is not a submodule"
+	local target base commits commit entry
+	target=$(repo_path "$1") || return 1
+	base=$(pinned parent) || return 1
+	commits=$(git -C "$ROOT" rev-list --max-count=10001 "$base..HEAD") || return 1
+	set -- $commits
+	[ "$#" -le 10000 ] || die "more than 10000 outgoing parent commits; publish a smaller reviewed batch"
+	# Before conversion, this path can name a regular directory. Its tree
+	# object is not a submodule commit and must not enter the guard set.
+	for commit in "$@"; do
+		entry=$(git -C "$ROOT" ls-tree "$commit" -- "$target") || return 1
+		printf '%s\n' "$entry" | awk '$1 == "160000" {print $3}'
 	done | sort -u
 }
 for name in $SUBMODULES; do
-	guards=$(outgoing_gitlinks "$name" | tr '\n' ' ')
+	guards=$(outgoing_gitlinks "$name" | tr '\n' ' ') || die "$name gitlink enumeration failed"
 	printf '%s' "$guards" >"$SYNC_STATE/$name.guards"
 	[ -n "$guards" ] && log "$name is named by unpushed parent commits: $guards"
 done
@@ -61,9 +72,8 @@ for name in $SUBMODULES; do
 	dir=$(repo_dir "$name")
 	git -C "$dir" fetch --prune origin >/dev/null 2>&1 || die "$name re-fetch failed"
 	published=$(git -C "$dir" rev-parse --verify origin/main)
-	for commit in $(git -C "$ROOT" rev-list "$(pinned parent)..HEAD" | while read -r rev; do
-		git -C "$ROOT" rev-parse --verify --quiet "$rev:$name" 2>/dev/null
-	done | sort -u); do
+	commits=$(outgoing_gitlinks "$name") || die "$name gitlink enumeration failed"
+	for commit in $commits; do
 		git -C "$dir" merge-base --is-ancestor "$commit" "$published" 2>/dev/null ||
 			die "$name commit $commit is named by an outgoing parent commit but is not on origin/main. The parent stays unpushed"
 	done
@@ -82,7 +92,7 @@ for name in parent $SUBMODULES; do
 	[ "$state" = "synced" ] || die "$name is $state after the sync"
 done
 for name in $SUBMODULES; do
-	[ "$(git -C "$ROOT" rev-parse "HEAD:$name")" = "$(git -C "$(repo_dir "$name")" rev-parse HEAD)" ] ||
+	[ "$(git -C "$ROOT" rev-parse "HEAD:$(repo_path "$name")")" = "$(git -C "$(repo_dir "$name")" rev-parse HEAD)" ] ||
 		die "$name pointer and checkout disagree after the sync"
 done
 
@@ -92,4 +102,4 @@ for name in parent $SUBMODULES; do restore_repo "$name"; done
 
 trap - EXIT
 rm -f "$SYNC_STATE/published"
-log "all three repositories are level with origin/main"
+log "the parent and all submodules are level with origin/main"

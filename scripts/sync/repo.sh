@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Sync one repository with its origin/main. Pass engine, apps, or parent.
+# Sync one repository with its origin/main. Pass engine, apps, webhook, or parent.
 # It never touches the gitlinks. Use sync-all for the whole tree.
 SCRIPT_NAME=sync-repo
 . "$(dirname "$0")/../lib/common.sh"
 . "$(dirname "$0")/lib.sh"
 
-name=${1:-} && [ -n "$name" ] || die "pass engine, apps, or parent"
+name=${1:-} && [ -n "$name" ] || die "pass engine, apps, webhook, or parent"
 SCRIPT_NAME="sync-$name"
 
 sync_state_reset

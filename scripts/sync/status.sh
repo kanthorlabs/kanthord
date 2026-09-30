@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Drift table for the parent and both submodules. Writes nothing but the
+# Drift table for the parent and all submodules. Writes nothing but the
 # remote-tracking refs that a fetch updates. NOFETCH=1 reads the cached refs.
 SCRIPT_NAME=sync-status
 . "$(dirname "$0")/../lib/common.sh"
@@ -23,7 +23,7 @@ for name in parent $SUBMODULES; do
 done
 
 for name in $SUBMODULES; do
-	recorded=$(git -C "$ROOT" rev-parse --verify --quiet "HEAD:$name") || continue
+	recorded=$(git -C "$ROOT" rev-parse --verify --quiet "HEAD:$(repo_path "$name")") || continue
 	actual=$(git -C "$(repo_dir "$name")" rev-parse HEAD)
 	[ "$recorded" = "$actual" ] && continue
 	printf 'pointer %s: parent records %s, checkout is %s\n' \
