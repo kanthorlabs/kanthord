@@ -26,7 +26,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
   - Next session 2026-09-25: open with external-action publication.
-- [ ] Added 2026-09-25 from the no-attempt ruling. A human override, discard or block on an objective whose attempt reads 0 writes the node outcome only. Define whether a task of that objective ever holds an outcome.
 - [ ] Added 2026-09-28 from the attempt simplification. The consecutive-loss count reads every `scheduler_execution` row of the node, because the rules forbid a non-unique index. Decide whether that scan stands.
 - [ ] POSTPONED 2026-09-28 by Ulrich until budgets or agent limits land. Design the handoff from one execution to the next execution of a node. `mission_run_output` is dropped on 2026-09-28; the human direction stays in the node revision, and the checkpoint commit stays the only carrier inside an attempt.
 - [ ] POSTPONED 2026-09-29 by Ulrich until a need for redaction arises. Design the redaction of evidence content and how an asset states it.
@@ -39,6 +38,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Intake Service
 
+- [ ] RULED 2026-09-30 by Ulrich. Reimplement push notifications in the Intake Service using Kukuroo only as a reference for its logic and ideas. Install no Kukuroo package and deploy no Kukuroo relay. The temporary proposal and its debate review live at `.dev/intake-push-notifications-plan.md`; the native push mechanism awaits its design ruling.
 - [ ] RULED 2026-09-26 by Ulrich, redesign pending. The Project Service holds no `source` binding kind; its binding kinds are `repository`, `worker` and `storage`. The Intake Service designs the delivery source. A source carries every value that its acquisition needs by itself, for example its platform, its remote resource and its credential, and references no binding, although these values repeat values of a binding. The redesign moves the acquisition grant, the verification secret and the delivery verification that the Project pages hold for a source binding, and covers webhook subscriptions and a Slack source with human identity mapping. The `source secret get` command also awaits its display, redaction and cache contract.
 - [ ] Added 2026-09-24. Declare the subscription store, the delivery store and the handoff in `intake-service.impl.md`. The webhook receipt route of the `intake` group waits for them.
 - [ ] Added 2026-09-24 from `engine/docs/cli/intake.md`. Subscription and delivery commands await their entity prefix declarations.
@@ -70,7 +70,7 @@ After the first native-agent worker runs the acceptance path.
 ### Tracking Service
 
 - [ ] POSTPONED 2026-09-29 by Ulrich until the audit action is added. Added 2026-09-29 from the evidence redesign. Design the audit record of a human act, for example a content removal or a pending cleanup, so that a human who regrets a delete reads what it removed. A delete removes the row, and `architecture.impl.md` bans a soft delete.
-- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await trace, span, text and record identity contracts, OpenTelemetry mapping and the canonical identity-attribute registry. Execution identity validation awaits the Scheduler contract.
+- [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Tracking commands await text and record identity contracts, OpenTelemetry mapping and the canonical identity-attribute registry. Execution identity validation awaits the Scheduler contract.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. `telemetry ingest` awaits conflicting-record and repeated-value rules, status finalization, structural refusal codes and batch-failure boundaries. Operation contracts also need timeouts and partial acknowledgement schemas.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Ingestion and reads await byte and count limits, execution bounds, local-log and segment bounds, and `fsync` bounds. Large transcript and chunk contracts also remain open.
 - [ ] Added 2026-09-24 from `engine/docs/cli/tracking.md`. Read and query commands await projections, expiry behavior, and unresolved-reference representation.
@@ -101,7 +101,6 @@ Folded from the Worker Service section on 2026-09-18 by Ulrich, to be designed w
 
 #### Mission Service
 
-- [ ] Define the task outcomes of the tasks that an execution did not execute when a recorded task assessment does not pass, their basis and evidence, and how the readiness condition treats the release. `worker-service.md` releases with no further work and writes no outcome for those tasks.
 - [ ] **B2:** Define recovery and its budget when the currency check rejects a completed assessment as stale.
 - [ ] **B4 / B5:** Settle exhaustion-notice precedence after an accepted assessment and during a human override that asserts failure.
 - [ ] **C3:** Define the deduplication key for an observation of an unchanged external state.
