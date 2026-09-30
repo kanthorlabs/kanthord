@@ -1,352 +1,329 @@
-# Minimal Cloudflare webhook implementation plan
+# Reusable Cloudflare implementation and deployment plan
 
-Status: proposed implementation plan, researched on 2026-09-30. Documentation only; no Cloudflare resources, DNS records, credentials, or application code have been changed.
+Revised 2026-09-30. This plan targets a standalone checkout of the Webhook repository and any deployer's Cloudflare account. Names, domains, accounts, JWT issuer/audience, and secrets are deployment configuration. No original developer environment or superrepository is required.
 
-Use **one Cloudflare Worker deployment with a SQLite-backed Durable Object class**, published at **`webhook.kanthorlabs.com`**. The Worker is the HTTP gateway. Each webhook inbox uses one Durable Object and its embedded SQLite database. No separate D1 database, queue, bucket, or server is needed.
+Use **one Worker deployment and one SQLite-backed Durable Object instance**. The Worker exposes signed platform-aware receive, JWT-protected global scan, and JWT-protected range prune. Platform adapters are ordinary application code. No D1, R2, queue, user database, or separate gateway service is needed.
 
-This choice is for correctness and simplicity, not scale: the database owner can allocate an ordered event ID and insert the event in one synchronous transaction. That is harder with separate, concurrent Worker instances generating IDs before a D1 write.
+This is documentation, not implemented code or permission to deploy. Reference links and platform allowances were checked on 2026-09-30 and must be rechecked before deployment.
 
-## 1. Scope and authority
+## 1. Scope and ownership
 
-Ulrich's constraints:
+- [PRD](../../docs/PRD.md) owns behavior; [API](../../docs/API.md) owns exact routes, JWT verification, challenge responses, pruning, errors, and bounds; [vocabulary](../../docs/PRD.vocabulary.md) owns field names.
+- Work from `cloudflare/` in a standalone checkout. A superrepository can mount the same project elsewhere without changing its files or requiring parent scripts.
+- Baseline workload: one operator and about 1,000 accepted receive requests per day across all sources. Challenges and retries count too. This is a sizing example, not an account restriction.
+- Target Cloudflare Free without automatically enabling paid products. The design does not pursue horizontal scale.
+- The proposed no-skipped-appends invariant applies deployment-wide and survives explicit pruning. It does not prevent an authorized human from deleting unread events.
 
-- Implementation root: `platforms/webhook/cloudflare`.
-- Cloudflare Free, one person, approximately 1,000 received events per day across the application.
-- An existing domain, `kanthorlabs.com`; use a dedicated subdomain rather than replace its website.
-- Use the installed `cf` command. Choose the fewest components needed for receive and scan.
-- Plan the implementation now. Do not provision or deploy it in this task.
+## 2. Minimal components
 
-Owning documents:
-
-- [PRD](../../docs/PRD.md): product requirements and proposed completion defaults.
-- [API contract](../../docs/API.md): exact HTTP behavior, fields, errors, and limits.
-- [Vocabulary](../../docs/PRD.vocabulary.md): `id`, `event`, `cursor`, `limit`, and the error envelope.
-
-The parents remain review drafts. This plan implements their proposed behavior without treating the unanswered ordering question as an approved ruling. It does not amend their contract. In particular, provider compatibility changes must land in those documents first.
-
-No daemon services, daemon schema, `engine`, or `apps` changes are required.
-
-## 2. Components
-
-| Component | Responsibility | Why it is needed |
+| Component | Responsibility | Why needed |
 | --- | --- | --- |
-| Cloudflare Worker, proposed name `kanthor-webhook` | Public HTTP entry point, route and UUID validation, dispatch, response headers, and mapping infrastructure failures to contract errors where possible. | Replaces an API server and a separate API gateway. |
-| `WebhookInbox` Durable Object class, exported by the same Worker | Own the receive and scan handlers for one inbox, strict body validation, ordered append, and reads. | Provides one storage owner and a synchronous transaction boundary. It also keeps payload parsing out of the gateway's small Free CPU budget. |
-| SQLite storage attached to each `WebhookInbox` | Persist immutable event records and their primary keys. | This is the database, not a cache. It supports ordered range queries and atomic writes without another service. |
-| Worker Custom Domain `webhook.kanthorlabs.com` | Map the hostname to the Worker and provision its DNS and HTTPS certificate. | Uses the existing domain without a machine, origin IP, tunnel, or separate TLS service. |
-| `cf`, its generated Vite setup, and local tests | Build, simulate, type-check, and deploy the Worker. | Development tooling only; Vite is not a production web server or another Cloudflare component. |
-
-Request path:
+| One Worker, name chosen by deployer | Route requests, validate cheap path bounds, verify JWTs for GET/DELETE, dispatch through a private binding. | Public HTTP gateway with no origin server. |
+| Durable Object class `WebhookLog`, instance `global` | Receive validation, platform adapters, ordered append, scans, and atomic pruning. | One owner coordinates event IDs and durable mutations without distributed coordination. |
+| Its embedded SQLite database | Retained event records plus one durable ordering-state row. | Range reads/deletes and atomic append/state updates; no second storage service. |
+| Platform adapters | Verify native raw-body signatures, then select challenge versus ordinary acknowledgement by `platform`. | Normal receive behavior, not external services or SDKs. |
+| Worker secret and configuration bindings | Required `masterKey`, optional platform signing-key overrides, and expected JWT issuer/audience. | Purpose-separated derivation and stateless verification; no credential database or issued-token store. |
+| Custom Domain chosen by deployer | Public hostname, DNS, and TLS certificate. | No tunnel, machine, origin IP, or separate certificate service. |
+| `cf`, generated Vite tooling, local tests | Build, simulate, validate, and deploy. | Development tools, not production components. |
 
 ```text
-GitHub / Jira / compatible JSON sender / audit-reader
-  -> HTTPS webhook.kanthorlabs.com
-  -> kanthor-webhook Worker
-  -> INBOXES binding, keyed by normalized webhook UUID
-  -> WebhookInbox + its private SQLite database
+Providers -> POST /api/webhook/{platform}/{webhook_id}
+Operator  -> GET /api/webhook/events + JWT
+Operator  -> DELETE /api/webhook/events?from=...&to=... + JWT
+                         |
+                   Worker gateway
+              [JWT verification on GET/DELETE]
+                         |
+             EVENT_LOG.getByName("global")
+                         |
+             WebhookLog + one SQLite database
+              [provider verification before append]
 ```
 
-One class and one namespace serve all inboxes. A different UUID selects a different logical inbox automatically; no per-inbox deployment or management API exists. Both POST and GET must resolve the same normalized UUID to the same object.
+Use one fixed object name for the whole deployment. Do not partition by webhook UUID, platform, JWT subject, or user. Independent inbox objects would require discovery, read merging, and coordination to preserve a global cursor. The fixed object is the simpler personal-use design.
 
-### Alternatives considered
+### Alternatives not selected
 
-| Option | Useful advantage | Why it is not selected here |
+| Alternative | Advantage | Additional cost or mismatch |
 | --- | --- | --- |
-| Worker + D1 | Familiar centralized SQL administration and export tooling. D1's workload allowance easily covers this volume. | D1 transactions do not make a prior JavaScript ULID allocation atomic. Correct allocation would need a conditional-write protocol or another coordinator. Free also limits each D1 database to 500 MB. |
-| Workers KV | Simple key-value API and inexpensive cached reads. | Eventual consistency cannot promise that a scan sees an acknowledged event. It also lacks the required multi-operation append transaction. |
-| R2 | Better suited to large payload archives. | Adds a second persistence operation and still needs ordered metadata. Existing payloads fit SQLite's row bound. |
-| Worker + Durable Object + D1 | Separates coordination from centralized storage. | Two storage services solve no requirement that the Durable Object's own SQLite cannot solve. |
+| Worker + D1 | Familiar centralized SQL management and export. | JavaScript ULID allocation plus a separate insert needs conditional-write coordination. Free caps each D1 database at 500 MB. |
+| Workers KV | Simple cached key-value reads. | Eventual consistency and missing multi-operation append transactions do not meet the read-after-acknowledgement contract. |
+| R2 | Larger payload/archive storage. | Requires separate ordered metadata and another persistence operation. |
+| Durable Object + D1 | Separates coordination and SQL management. | The object's own SQLite already provides both. |
 
-Do not add Queues, Cron Triggers, alarms, Workflows, Access login, API Shield, a framework router, a dashboard, or a custom rate-limiter database. There is no asynchronous processing requirement. A queue acknowledgement is not the contract's durable, immediately scannable append.
+Do not add Queues, Cron Triggers, alarms, Workflows, provider SDKs, an ORM, external authentication, browser Access login, or a custom rate-limit database. Pruning is an explicit authenticated API operation, not a cleanup daemon.
 
-## 3. Free-plan fit and finite capacity
+## 3. Portable deployment configuration
 
-The following are published limits checked on 2026-09-30, not a measurement of this account's remaining allowance. Workers Free and the zone's Free plan are separate settings; verify both before deployment. Other applications share account allowances.
+The implementation must read deployment-specific values rather than ship the author's account or domain.
 
-| Resource | Published Free allowance or relevant bound | Planning consequence |
+| Setting | Supplied by deployer | Notes |
 | --- | --- | --- |
-| Worker requests | 100,000/day | Includes POST, GET, failed requests, and polling. |
-| Gateway CPU and memory | 10 ms CPU/request; 128 MB/isolate | Keep the gateway thin and pass through request/response streams. |
-| Durable Object requests | 100,000/day | One object request per valid API request. |
-| Durable Object duration | 13,000 GB-s/day | No timers, WebSockets, or background polling inside the object. Let it become idle. |
-| SQLite rows read | 5 million/day | Indexed cursor scans, not full-history scans. |
-| SQLite rows written | 100,000/day | Roughly one event insert per delivery, plus index/internal overhead. Measure actual accounting. |
-| SQLite storage | 5 GB total/account | Free storage is finite, even at a low daily event count. |
-| Per-object storage | Budget conservatively for 1 GB on Free | The current limits page's general table says 10 GB, but its storage-full FAQ says 1 GB on Free. Do not promise 10 GB; verify the effective Free limit before deployment. |
-| SQLite row size | 2 MB | Store the validated input JSON text without expanding its numeric spelling, plus the bounded outer fields; test worst-case escaping. |
-| Durable Object CPU | Its limits page lists a 30-second default per invocation | This is distinct from the thin gateway's Free 10 ms budget. Confirm on the deployed Free account and test maximum requests. |
+| Cloudflare account/profile | The intended account and `cf` authentication profile. | Deployment credentials never become runtime JWT keys. |
+| Worker name | A unique name in that account. | Reuse the same value in the Worker definition and its Durable Object binding. |
+| Public hostname | An unused hostname in a zone the deployer controls, for example `webhook.example.com`. | Example only; no domain is shipped as a mandatory default. |
+| `masterKey` | 32 cryptographically random bytes encoded in base64. | The only required secret; derive operational keys instead of using it directly. |
+| `WEBHOOK_SIGNING_KEY_GITHUB` | Optional GitHub secret override. | Exact text; absence selects derivation. |
+| `WEBHOOK_SIGNING_KEY_SLACK` | Optional Slack secret override. | Native Slack needs its app-issued secret here; a derived key cannot match Slack's own signatures. |
+| `WEBHOOK_SIGNING_KEY_JIRA` | Optional signed-Jira secret override. | Exact text; absence selects derivation. |
+| `WEBHOOK_JWT_ISSUER` | Expected standard JWT issuer. | Shared with humans generating tokens; not a stored user. |
+| `WEBHOOK_JWT_AUDIENCE` | Expected standard JWT audience. | Shared by scan and prune. |
+| Compatibility date | A date verified against the deployed runtime. | Pin in the deployment configuration; initial development reference is `2026-09-30`. |
 
-Sources: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), [Durable Objects limits](https://developers.cloudflare.com/durable-objects/platform/limits/), and [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+Keep class `WebhookLog`, binding `EVENT_LOG`, and object name `global` stable once deployed. Worker/account changes can select a different namespace and therefore a different log; do not present a rename or account move as a data-preserving operation.
 
-### Working budget
+The repository must provide a sanitized configuration template and instructions for supplying these values. Provision `masterKey` and any overrides as private Worker secret bindings; local values live in ignored files. Cloudflare reads these names from the Worker environment bindings, not a required Node `process.env` API. There must be no dependency on a parent repository, its Makefile, its SSH aliases, or the original author's global package installation.
 
-Recommend `audit-reader` poll each active inbox every 30 seconds when caught up, with `limit=100`. This is client behavior, not a server timer or a contract restriction.
+### Key derivation and selection
 
-- One inbox: 2,880 idle polls/day + 1,000 POSTs = about 3,880 Worker requests and 3,880 Durable Object requests/day, before catch-up pages and failures.
-- Three inboxes: 8,640 idle polls/day + 1,000 POSTs total = about 9,640 requests/day at each layer.
-- One-second polling of even one inbox would use 86,400 GETs/day. It is unnecessary and leaves little headroom.
-- If an object is active for a conservative 100 ms per request, 3,880 requests use about 50 GB-s at 0.128 GB. This is an estimate, not a latency promise; slow streaming clients keep objects active longer.
-- The scan design reads up to one ID row and one payload row per returned event. Even reading each of 1,000 daily events through several consumers remains far below the daily row allowance. Dashboard measurements, not returned-row counts alone, settle actual usage.
+Follow the [API key profile](../../docs/API.md#25-key-derivation-and-platform-overrides) exactly. Use WebCrypto HKDF-SHA256 with decoded 32-byte master material, an empty salt, UTF-8 `info`, and 256 output bits. This is the same standard derivation pattern as Custody, but this standalone deployment has its own master key and no runtime dependency on the daemon.
 
-### Retention is the main capacity constraint
+- `webhook/jwt-hs256/v1`: use the 32 output bytes directly with the JWT library. Human signing uses the identical derivation; it never signs with master bytes or their base64 text.
+- `webhook/signature/<platform>/v1`: encode the 32 output bytes as lowercase hex text and use that text's UTF-8 bytes as the default provider HMAC key. One key serves all UUIDs of the validated platform.
+- If `WEBHOOK_SIGNING_KEY_<PLATFORM>` is present, select its exact UTF-8 text instead. Do not trim, decode, or derive it again. Reject empty, whitespace-only, or non-string values; do not mistake invalid for absent.
+- A signature mismatch never triggers a retry with the derived key, an older key, or another platform's key. A platform override never changes JWT verification.
+- Keep operational keys only in memory; do not add a credential table, secret HTTP endpoint, or encrypted-secret store. Never pass the master or JWT key to a provider.
 
-The PRD says no automatic expiry. Preserve that rule. Do not quietly add a 7-day or 30-day cleanup job to make Free appear unlimited.
+Missing/invalid `masterKey` disables all operations, including overridden platforms. Invalid issuer/audience settings disable GET/DELETE; an invalid platform override disables only that platform's receive. Fail with `503 webhook.unavailable` before storage access. Deployment preflight should catch these configuration errors before publication.
 
-Raw payload estimates for 1,000 events/day concentrated in one inbox:
+Master-key replacement changes every derived key and invalidates old JWTs, but explicit overrides stay unchanged. Setting, replacing, or removing an override affects only its platform; removal resumes derivation. Document the required sender reconfiguration and JWT regeneration. Do not implement old/new key overlap or silent fallback.
 
-| Average stored event size | Approximate growth/day | Approximate days to 1 GB, before database overhead |
-| --- | --- | --- |
-| 10 KiB | 10.24 MB | 98 |
-| 50 KiB | 51.2 MB | 20 |
-| 100 KiB | 102.4 MB | 10 |
+## 4. Routing and standard JWT verification
 
-These sizes are examples, not claimed GitHub, Slack, or Jira averages. Measure representative payloads. Keys, query metadata, SQLite pages, and indexes shorten these estimates.
+Routes:
 
-At capacity, return `503 webhook.unavailable` for writes where the application can catch the failure; keep existing records and preserve reads where the platform permits. Daily quota exhaustion can also prevent reads, and Cloudflare can return its own error before application code runs. A storage-full error does not clear at midnight.
+- `POST /api/webhook/{platform}/{webhook_id}`.
+- `GET /api/webhook/events?cursor=event_<ulid>&limit=100`.
+- `DELETE /api/webhook/events?from=event_<ulid>&to=event_<ulid>`.
 
-For this minimal version, the operator checks usage in the dashboard and can export events using the existing scan API to a private local file. An export does not free storage. If remaining capacity becomes insufficient, stop intake until the owner rules a retention change or a different storage budget. No automatic eviction, paid upgrade, or archive pipeline belongs in this plan.
+Match the fixed global collection path explicitly. Only GET and DELETE operate there; receive paths accept POST. Removed UUID-only routes have no aliases.
 
-## 4. Gateway and domain
+For receive, check platform/UUID syntax, master-key configuration, and request-target bounds at the gateway, then pass the unmodified body stream and required signature headers through the private binding. In the object, select the one platform key, read at most 1 MiB, and verify the native signature before JSON parsing, challenge handling, ID allocation, or storage. Enforce media/encoding bounds without transforming the body. Perform subsequent strict JSON/query and challenge validation there so the thin Free gateway does not parse large bodies twice. Receive and challenges do not require the operator JWT.
 
-Proposed public base URL:
+For GET and DELETE:
 
-```text
-https://webhook.kanthorlabs.com
-```
+1. Require complete verifier configuration. Missing/invalid configuration returns `503 webhook.unavailable`, never public access.
+2. Read `Authorization: Bearer <JWT>` and verify using a maintained WebCrypto-compatible JWT library, such as `jose`.
+3. Configure HS256 and the derived JWT key bytes, required `sub`, `iss`, `aud`, `exp`, and the expected issuer/audience. Use standard library validation for signature, expiry, `nbf`, audience strings/arrays, and other applicable JWT behavior. No handwritten decoder-as-verifier, ignored claims, non-expiring-token mode, or custom clock semantics.
+4. Reject invalid or expired tokens with `401 webhook.unauthorized` and `WWW-Authenticate: Bearer`, before any database access. Humans generate replacement tokens themselves; no refresh endpoint exists.
+5. Validate the operation's query parameters, then dispatch to `EVENT_LOG.getByName("global")`.
 
-Keep exactly:
+The subject is carried by the signed token, not looked up in a user database. A valid token permits both global reads and pruning. Store no JWT, user, subject, token issuance record, or per-user role. Do not use claims to partition or filter the event log. Verification occurs at request acceptance, not on every streamed row.
 
-- `POST /api/webhook/{id}`
-- `GET /api/webhook/{id}?cursor=event_<ulid>&limit=100`
+Never use token-supplied URLs, keys, or platform overrides instead of the derived JWT key. JWT verification settings are normal library configuration, not an application-specific token dialect. Master-key replacement invalidates old-key JWTs once active; expired tokens are regenerated by humans without changing event cursors or prune bounds.
 
-Use a Worker **Custom Domain**, not a route that forwards to an origin. Cloudflare manages the DNS record and certificate. Before attaching it, confirm the zone is active in the deployment account and that the hostname is unused. Do not overwrite an existing DNS record or change the apex website.
+Source: the [parent JWT contract](../../docs/API.md#23-standard-jwt-authentication-for-scan-and-prune).
 
-The gateway performs cheap path, method, request-target length, and UUID checks, then forwards the original body stream to the inbox. Put bounded body reading, strict JSON validation, and event construction in the Durable Object. Do not call `request.json()` in both places or buffer the response in the gateway.
+## 5. SQLite and durable ID allocation
 
-Production configuration must disable the alternate `workers.dev` hostname and preview URLs. Keep `Cache-Control: no-store`; use neither the Cache API nor a cache-everything rule. Do not place browser challenges or an Access login in front of provider callbacks. Do not disable security for the whole domain to fix one callback.
+### Logical storage
 
-Sources: [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) and [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
-
-## 5. Database and ordered append
-
-### Logical storage layout
-
-Inside each inbox's private SQLite database, propose one event table:
-
-| Private column | Meaning |
+| Private storage | Contents |
 | --- | --- |
-| `id` | The exact public `event_<ulid>` value, primary key, with binary text comparison. |
-| `record_json` | Serialized JSON of the complete public event record, including `id`, `event`, and literal custom query fields. |
+| Event table | `id` as a binary-comparison primary key; `record_json` with all public fields and custom query metadata. |
+| Singleton ordering-state row | `last_event_id`, the greatest event ID ever committed, independent of retained rows. |
 
-Construct `record_json` from JSON-encoded outer fields and the already validated original body text as the `event` value. Never insert unvalidated text. Do not parse and reserialize the payload merely to store it: a short number such as `1e20` can expand substantially under `JSON.stringify`, pushing an otherwise valid 1 MiB request beyond SQLite's 2 MB row bound. Keeping the validated JSON text bounds the stored body to the accepted input size. Query encoding expansion and the small outer envelope must also be included in the row-size test. Preserving spelling here is an internal choice, not a new public raw-body guarantee.
+The event envelope includes exact `id`, `webhook_id`, `platform`, and `event`. Store the latter route metadata in every record; a global object no longer supplies per-inbox identity implicitly.
 
-`record_json` is a private serialization column, not an API field or a renamed `event`. No adapter aliases are introduced. No public `webhookId`, `params`, timestamp, or continuation envelope is added. The owning vocabulary remains unchanged.
+Build `record_json` from JSON-encoded fixed/custom fields plus the already validated original body text as `event`. Never concatenate unvalidated payload text. Avoid parsing/reserializing merely to store: repeated short numbers such as `1e20` can expand a valid input beyond the 2 MB SQLite row bound under `JSON.stringify`. Keeping validated input text bounds the body portion by received size. Test envelope/query escaping too.
 
-The Durable Object identity already scopes the inbox, so no webhook table, registry, credential table, or repeated webhook UUID column is required. Use the primary key for ascending range scans and for finding the greatest ID. Declare no SQL `CHECK` constraints and no non-unique indexes. Keep schema versioning in SQLite's schema-version metadata rather than introduce another application entity.
+Use only primary keys. No SQL `CHECK`, non-unique indexes, source-filter columns, webhook registry, user table, challenge table, token table, or consumer-checkpoint table is necessary. The ordering-state row is private metadata, not a second event or an audit record. Initialize it with the schema before receives; do not recreate it from remaining rows after pruning.
 
-This is a proposed logical layout, not a ruled repository ERD. Do not populate `docs/reference/erd/` from this draft.
+This is proposed logical storage, not a ruled superrepository ERD. The eventual implementation owns its migrations and schema tests within this standalone repository.
 
-### Receive sequence
+### Append transaction
 
-1. Validate the path and request target at the gateway, then select the inbox by normalized UUID.
-2. Inside the inbox, read at most the permitted body size, rejecting invalid UTF-8, invalid JSON, duplicate JSON members, and non-finite numeric results. Apply the exact query projection and collision rules from the API document.
-3. Enter `ctx.storage.transactionSync`. Read the greatest stored event ID using the primary key.
-4. Allocate a canonical ULID greater than that ID and insert the complete event record in the same synchronous callback. Perform no `await`, network call, or asynchronous randomness operation between the read and insert.
-5. Finish the transaction and await `ctx.storage.sync()`. Keep Cloudflare's output gates enabled; never use `allowUnconfirmed` or `waitUntil()` to acknowledge the write early.
-6. Return `201` with the committed record. On failure, expose no partial record and use the existing error contract where possible.
+1. Verify the native signature with the selected platform key over bounded raw bytes. Then validate JSON/query input and the platform's response behavior before writing.
+2. Enter `ctx.storage.transactionSync` and read `last_event_id`.
+3. If no ID has ever been issued, create a randomized ULID at the current millisecond. If time has advanced past the saved timestamp, use that time with a new random suffix. Otherwise keep the saved timestamp and increment its 80-bit suffix.
+4. Insert the complete event and update `last_event_id` in the same synchronous transaction. Do not `await` between allocation and either write. Refuse suffix exhaustion rather than wrap or spin.
+5. Commit and await `ctx.storage.sync()` with output gates enabled. Return the adapter-selected response only after durability.
 
-The strict JSON requirement means plain `JSON.parse()` is not sufficient by itself: duplicate object members are otherwise discarded before validation. Use one reviewed, bounded parser or duplicate-key validation pass. Do not build provider-specific schemas.
+Both writes commit or neither does. No independent per-webhook generator or in-memory-only counter exists. An ID cannot be reused after deleting its event. The high-water mark survives restarts, clock rollback, and pruning that empties the event table.
 
-### ULID allocation
+Do not acknowledge through `waitUntil()` or `allowUnconfirmed`. Forbid ordinary-operation changes to namespace/object identity, direct row updates, or restoration behind the durable high-water mark. Such maintenance requires an explicit migration procedure, not automatic recovery code.
 
-Use the persisted greatest event ID as the ordering state, not a module global that resets on eviction.
+Source: [SQLite-backed Durable Object storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/).
 
-- If the inbox is empty, generate a normal cryptographically randomized ULID for the current millisecond.
-- If the wall-clock millisecond exceeds the last ID's timestamp, generate a new randomized ULID at that millisecond.
-- Otherwise, retain the last ID's timestamp and increment its 80-bit suffix. This covers same-millisecond deliveries and clock rollback.
-- If that suffix cannot be incremented, fail the append with `503 webhook.unavailable`; do not spin, wrap, or silently issue a smaller ID.
-- Format the exact `event_` prefix and canonical uppercase ULID required by the API.
+## 6. Platform adapters
 
-The synchronous transaction prevents another append in that object from separating allocation from insertion. Durable storage and output gates prevent a consumer from observing a successful response before persistence. Reading the greatest persisted ID on each append also handles object eviction and restart without a second state table.
+Implement a small enum and dispatch table inside the same application. No dynamic registration service or unsigned `generic` fallback is allowed. The [API adapter contract](../../docs/API.md#44-platform-adapter-contract) owns exact header syntax, timestamp bounds, and refusals.
 
-Forbid deleting or rewriting event rows, renaming the deployed object namespace, changing its UUID-to-object mapping, or restoring it behind a consumer's saved cursor during ordinary operation. Those actions invalidate the append history. They require a separate owner-approved maintenance procedure, not an automatic recovery mechanism in this version.
-
-Source: [SQLite-backed Durable Object storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/), including synchronous transactions, `sync()`, and output gates.
-
-## 6. Scan without buffering a potentially huge page
-
-The API permits 1,000 records per page and a 1 MiB body per event. A fully buffered page could approach 1 GiB, far above the isolate's 128 MB memory limit. Low daily volume does not remove this acceptance case. Do not silently reduce the contract's `limit` or add a response-byte cutoff.
-
-Use a small ID snapshot and a streamed JSON array:
-
-1. Validate the GET controls exactly as declared in the API. Reject unknown or repeated controls and a nonempty body.
-2. In one synchronous SQL query, select only up to `limit` event IDs in ascending order, strictly greater than `cursor` when supplied. Fully consume this small ID cursor before any `await`.
-3. Await storage synchronization before emitting a response, so selected IDs cannot represent an unconfirmed write.
-4. Stream `[` followed by the selected records and separators, then `]`. Read one stored `record_json` by primary key per stream pull, completing each SQL cursor synchronously before yielding. Use backpressure and release each row buffer before reading the next.
-5. Pass the response stream through the gateway unchanged. Stop work on cancellation; never pre-enqueue the whole page.
-
-The captured ID list is the request's fixed result set. Records are immutable and never deleted, so later reads of those same IDs reconstruct the same committed view even if new events arrive. New IDs do not enter that page. This preserves the contract's per-request read view without a long-lived SQL transaction or another cursor field.
-
-Cloudflare explicitly warns that a SQL cursor held across an `await` has no stable snapshot guarantee. Do not stream directly from an open, large SQL cursor. The ID list is at most 1,000 short strings; the active payload is roughly one event, not one whole page.
-
-If storage fails or the connection ends after streaming starts, abort the stream. The server cannot replace an already-started `200` with a JSON error. `audit-reader` must treat an incomplete JSON array as a failed page and keep its prior checkpoint. Checkpoint only fully parsed, successfully processed records.
-
-Test maximum pages on the actual Free runtime. Streaming solves memory growth, not unlimited CPU or wall time. Do not claim contract acceptance if the documented maxima consistently hit a platform limit; report that limitation before changing the parent bounds.
-
-## 7. Provider compatibility
-
-The application is a JSON inbox, not a verified provider integration. A URL secret authorizes both writing and reading. It does not prove that a request came from GitHub, Slack, or Jira.
-
-| Source | Minimal setup | Compatibility limit |
+| Adapter | Verification before body parsing | Receive behavior after verification/validation |
 | --- | --- | --- |
-| GitHub webhook | Set Payload URL to the inbox URL; choose `application/json`. A custom parameter such as `provider=github` can label stored events. | Do not choose form encoding. The GitHub signature secret is not this URL UUID. This version neither verifies signatures nor stores headers such as the delivery ID or event-name header. Test ping and real deliveries. |
-| Jira webhook | Use HTTPS with the JSON body included; for admin webhooks do not enable “Exclude body”. | Test the chosen Jira webhook mode against the contract's `201` response. Jira documents `200` in its response-code guidance; do not assert universal `201` compatibility or silently change the API. Registration renewal for some Jira modes remains provider setup, not a new server component. |
-| Slack Events API over HTTP | Its event callbacks contain JSON that can be stored unchanged. | **Direct subscription setup is blocked by the current API response contract.** Slack first requires a URL-verification challenge response. Generic `201` plus an event record does not satisfy that handshake. |
-| Slack slash commands or interactivity | Not part of this version. | These commonly use form encoding and response-specific semantics outside the JSON-only contract. |
+| `github` | `X-Hub-Signature-256`, HMAC-SHA256 of raw body bytes. | JSON deliveries and ping are ordinary. Configure `application/json` and the selected secret at GitHub. |
+| `slack` | `X-Slack-Signature`, HMAC-SHA256 of `v0:<timestamp>:` plus raw body bytes; require `X-Slack-Request-Timestamp` within 300 seconds in either direction. Native Slack needs its issued key in `WEBHOOK_SIGNING_KEY_SLACK`. | For an object with `type: "url_verification"`, require a nonempty string `challenge`; store first, then return HTTP `200` with `{"challenge":"<received challenge>"}`. Other valid bodies are ordinary. |
+| `jira` | `X-Hub-Signature`, HMAC-SHA256 of raw body bytes. Only the `sha256=` profile is supported. | Signed JSON delivery is ordinary. Configure the selected secret and test this Jira mode's acceptance of `201`. No Connect JWT or unsigned-mode claim is made. |
 
-GitHub, Jira, and Slack can send duplicate deliveries or payloads larger than the contract permits. Store each accepted retry as a separate event. Keep the 1 MiB rejection behavior; do not claim support for every possible provider payload. Select only the provider events needed for this personal inbox.
+Use standard WebCrypto HMAC verification on the decoded 32-byte digest. Reject missing, duplicated/coalesced, malformed, or mismatched headers with `403 webhook.signature_invalid`; stale Slack timestamps use the same error. Do not compare signature strings with ordinary equality, trust legacy body tokens, choose an arbitrary digest algorithm, or include a computed HMAC in errors. Do not decode, parse, normalize, or reserialize body bytes before verification.
 
-### First provider decision: Slack URL verification
+The path selects the adapter and key. A correctly signed Slack-shaped body on `github` is ordinary. Query fields named `type` or `challenge` remain unsigned metadata. GitHub/Jira signatures provide no replay window here; Slack's timestamp bounds age, not duplicate delivery. A copied valid signature can target another UUID on the same platform. Do not claim that signatures authenticate our query/path metadata or deduplicate events.
 
-Recommendation: if direct Slack Events API subscriptions are required for the first release, approve a narrow receive-response exception for Slack URL verification in the parent contract. Keep it in the same Worker/DO deployment; no relay, queue, socket server, or provider SDK is needed.
+Adapters do not rewrite the payload, remove provider tokens, follow challenge URLs, or treat the platform label alone as verified sender identity. Persistent header capture, form-encoded commands, GET challenges, outbound verification, and other provider modes remain outside this contract. A future adapter's signature scheme and response belong in the API before code enables it.
 
-A proposed exception would persist the verification request normally, but reply with HTTP `200` and `{"challenge":"<received challenge>"}` instead of `201` and the event record. Ordinary deliveries would keep the existing response. The parent contract must define its exact recognition rule before coding it; an arbitrary payload field must not silently change generic receive behavior.
+Sources: [GitHub signatures](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries), [Slack signatures](https://docs.slack.dev/authentication/verifying-requests-from-slack/), [Slack HTTP URLs](https://docs.slack.dev/apis/events-api/using-http-request-urls/), [Jira webhooks](https://developer.atlassian.com/cloud/jira/platform/webhooks/).
 
-Alternative: keep the exact current contract and exclude direct Slack subscription setup from the first release. This avoids a provider exception but cannot be described as native Slack Events API support.
+## 7. Bounded global scans and concurrent pruning
 
-This plan does not implement or approve the exception. Also validate Jira's acknowledgement behavior before promising that integration; any required status change belongs in the parent contract.
+The API allows 1,000 events with bodies up to 1 MiB. Materializing a whole page can approach 1 GiB, above the isolate's 128 MB bound. Do not silently lower `limit`.
 
-Provider references:
+1. After JWT verification and control validation, select up to `limit` global IDs with `id > cursor`, ascending, or start from the beginning when no cursor is supplied.
+2. Fully consume that bounded ID-only cursor synchronously before any `await`. Await storage synchronization before responding.
+3. Stream the JSON array by loading one selected `record_json` per pull, finishing each point-query cursor synchronously and releasing each payload buffer before continuing. Preserve backpressure and cancellation.
+4. If a selected row has been pruned before it is loaded, abort the response. Do not skip it, replace it with `null`, or finish a shorter successful array.
+5. Pass the stream through the gateway unchanged. On any incomplete page, the consumer keeps its prior checkpoint and retries against the remaining log.
 
-- [GitHub: creating webhooks](https://docs.github.com/en/webhooks/using-webhooks/creating-webhooks).
-- [Slack: HTTP request URLs and URL verification](https://docs.slack.dev/apis/events-api/using-http-request-urls/).
-- [Jira Cloud: webhooks](https://developer.atlassian.com/cloud/jira/platform/webhooks/).
+Retained rows never change, so a fully completed page represents the selected committed view even if some rows are pruned after their bytes are read. A prune cannot recall bytes already sent. The only new concurrent-mutation case is a missing selected row, which fails the scan instead of inventing a different successful snapshot. There is no reader registry or prune lock held by slow clients.
 
-## 8. Secrets, logs, and errors
+Cloudflare warns that SQL cursors crossing an `await` lack stable snapshot guarantees. Capture only IDs synchronously; do not hold an open result cursor while streaming. There is no snapshot across different requests.
 
-- Generate UUIDv4 inbox secrets locally with a cryptographically secure generator. Do not use example UUIDs for production.
-- Keep full callback URLs out of git, shell history, screenshots, and committed provider fixtures. Do not collect real payloads as repository fixtures.
-- Disable Worker invocation logs, traces, and automatic request logging for production. Newly created Workers enable observability by default; query-string redaction alone does not hide the secret in the path.
-- Start with `observability.enabled: false` and use aggregate dashboard request/error/storage metrics. Do not enable live tailing on real webhook URLs. Use synthetic inboxes for diagnostics.
-- Never log the request object, URL, headers, body, raw database errors, or custom query values. Platform control-plane access still sees sensitive resources; restrict Cloudflare account access.
-- Do not configure optional Logpush, tracing, analytics exports, or cache rules that capture the callback URL. Cloudflare remains a trusted processor and can retain platform/security telemetry outside application control; application settings cannot promise zero provider-side logging.
-- Map caught storage-full, unavailable, or object-overload failures to `503 webhook.unavailable`; unexpected internal defects use `500 webhook.internal_error`. Reuse all parent validation errors unchanged.
-- Do not introduce a `429` service merely because the API documents that response. If admission limiting is later enabled, it must include the required `Retry-After` behavior. Cloudflare-generated quota failures can have a different status or body, as the API already allows for intermediary failures.
-- UUID possession does not prevent strangers from addressing new UUIDs and exhausting the account's quota. Accept that limitation of the no-registration contract for this personal deployment; do not promise abuse-proof free operation or secretly add an inbox allowlist.
+Streaming bounds memory, not unlimited CPU. Test the published request maxima on the actual Free runtime before claiming compatibility.
 
-Source: [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/), especially default observability and invocation URLs.
+## 8. Atomic range pruning
 
-## 9. Implementation files and `cf` workflow
+Use the same JWT guard as global scan. Validate only `from` and `to`, each at most once, using the parent contract. `to` is mandatory; supplied bounds are canonical event IDs and must satisfy `from <= to`. Bounds are inclusive and need not exist.
 
-The installed CLI was inspected, not used to change the account:
+Inside one synchronous transaction, delete event rows with `id <= to` and, when supplied, `id >= from`. Obtain the affected-row count without materializing deleted payloads. Leave the ordering-state row unchanged. After durable synchronization return `200` with `deleted_count`.
 
-- `cf --version`: `1.0.0-beta.5`.
-- `cf init workers --help`: scaffolding, `--package-manager`, and `--no-install` are available.
-- `cf deploy --help`: `--dry-run` builds and checks without uploading the Worker.
-- The installed README and `@cloudflare/config` declarations confirm `cloudflare.config.ts`, the Vite scaffold, SQLite Durable Object exports, bindings, and Custom Domains.
+No matches returns zero. Repeating a completed request with no intervening matching arrivals returns zero; later matching arrivals can make a subsequent request delete more rows. A future upper bound is not a standing deletion rule. Atomic failure never becomes a partial success, and a lost response is safe to retry.
 
-Use that native configuration format rather than assume that `cf` is an alias for Wrangler. The package is beta; pin the tested tooling versions and inspect generated types before relying on a later CLI release.
+Pruning is global, including stored challenges, and does not consult consumer progress. The human must choose a safe bound or accept deletion of unread events. Do not add soft deletion, an undo API, or a background prune worker.
 
-Proposed file layout:
+A large delete consumes row-write allowance and must fit the platform's transaction/CPU limits. If it cannot, fail rather than silently commit a partial range; the human can request narrower ranges. Deleted pages may be reusable by SQLite without immediately shrinking the database's reported file size or provider billing. Do not promise instant physical-size reduction or erasure of external copies/backups.
+
+## 9. Free-plan budget and retention
+
+Published reference limits, not a claim about a particular account's available allowance:
+
+| Resource | Free allowance / bound | Consequence |
+| --- | --- | --- |
+| Worker requests | 100,000/day | Includes receives, scans, pruning, failures, and polling. |
+| Gateway CPU/memory | 10 ms CPU/request; 128 MB/isolate | Keep routing/JWT verification thin; pass streams through. |
+| Object requests | 100,000/day | Includes receive verification failures after dispatch; unauthorized scans/prunes do not dispatch. |
+| Object duration | 13,000 GB-s/day | No timers, sockets, or background polling; allow idle eviction. |
+| SQLite reads | 5 million rows/day | Indexed ranges and point lookups, not full-history scans. |
+| SQLite writes | 100,000 rows/day | Append writes an event and ordering state; pruning counts deleted rows as writes. Include index/internal accounting. |
+| Account SQLite storage | 5 GB total | Shared account allowance, not necessarily usable in this one object. |
+| Per-object storage | Conservatively budget 1 GB on Free | The limits page's table says 10 GB but its storage-full FAQ says 1 GB on Free. Verify the effective limit before launch. |
+| SQLite row size | 2 MB | Preserve validated input text plus bounded envelope as described above. |
+| Object CPU | Documented default 30 seconds/invocation | Verify on the actual Free account; distinct from gateway CPU. |
+
+At one global poll every 30 seconds: 2,880 polls + 1,000 receives is about 3,880 requests/day at each layer, plus pruning/catch-up/failures. Extra platforms add no polling loops. An illustrative 100 ms of object activity per request gives about 50 GB-s/day at 0.128 GB, not a latency guarantee.
+
+Raw growth before overhead at 1,000 events/day is about 10.24 MB/day for 10 KiB events, 51.2 MB/day for 50 KiB, and 102.4 MB/day for 100 KiB. A 1 GB budget fills in roughly 98, 20, or 10 days respectively. These are examples, not measured provider averages.
+
+No automatic event expiry is added. An operator may export through the authenticated scan, verify the private export, and explicitly prune a safe range. An export alone frees no storage. At capacity, refuse new writes without automatic eviction or upgrade; preserve reads and prune where Cloudflare permits. Daily quota exhaustion can affect all operations, and storage-full does not reset at midnight.
+
+Sources: [Workers limits](https://developers.cloudflare.com/workers/platform/limits/), [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/), [Durable Objects limits](https://developers.cloudflare.com/durable-objects/platform/limits/), [D1 limits](https://developers.cloudflare.com/d1/platform/limits/).
+
+## 10. Secret handling and public hostname
+
+Use a Custom Domain for an unused hostname in the deployer's active zone. Cloudflare manages DNS and TLS. Never overwrite an existing record or modify the apex website implicitly. Disable the alternate `workers.dev` hostname and preview URLs in production.
+
+Keep `Cache-Control: no-store`; do not use the Cache API or cache-everything rules. Do not put browser login or challenges in front of provider callbacks, and do not weaken the whole zone to accommodate one path.
+
+Disable automatic invocation logs/traces in production; new Workers enable observability by default. Query-string redaction alone leaves UUID secrets in receive paths. Do not log JWTs, claims, the master key, derived keys, override values, Authorization/signature headers, computed HMACs, URLs, bodies, raw database errors, or scan responses containing receive UUIDs. Use aggregate dashboard metrics and synthetic diagnostics.
+
+A JWT permits deletion and reading; a JWT-key leak also permits minting JWTs. A platform-key leak permits forged receives on that platform, not JWT issuance. A master-key leak compromises all derived keys, but not an independently supplied override. Rotation cannot undo deleted records or already disclosed receive secrets. No stored authentication users are needed, but unchanged provider payloads can contain user data.
+
+Cloudflare remains a trusted processor and can retain platform/security telemetry and backups outside application control. No zero-logging or instant-erasure claim is made. Outsiders can still send invalid requests and consume verification quota, but they cannot store events merely by choosing a fresh UUID. A holder of a platform's signing key can sign receives for any UUID on that platform; there is no UUID registration database.
+
+Sources: [Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) and [Workers Logs](https://developers.cloudflare.com/workers/observability/logs/workers-logs/).
+
+## 11. Project files and reproducible tooling
+
+Reference tooling inspected during planning: `cf@1.0.0-beta.5` with `@cloudflare/config@0.20.0`. These are research versions, not a dependency on a globally installed binary. The implemented project must pin its tested versions, package-manager version, and lockfile and document installation for a fresh checkout.
 
 ```text
-platforms/webhook/cloudflare/
-  docs/IMPLEMENTATION.md
-  cloudflare.config.ts
-  vite.config.ts
-  package.json
-  pnpm-lock.yaml
-  tsconfig.json
-  .gitignore
-  src/
-    index.ts           # Thin gateway; export WebhookInbox.
-    inbox.ts           # SQLite initialization, append, and scan.
-    contract.ts        # Exact validation, projection, and error definitions.
-    event-id.ts        # Persisted-state ULID advancement.
-  test/
-    contract.test.ts
-    inbox.test.ts
-    streaming.test.ts
+webhook-repository/
+  docs/                       # Product, API, and vocabulary.
+  cloudflare/
+    docs/IMPLEMENTATION.md
+    cloudflare.config.ts      # Sanitized deployer-configurable template.
+    vite.config.ts
+    package.json
+    pnpm-lock.yaml
+    tsconfig.json
+    .gitignore
+    src/
+      index.ts                # Gateway and WebhookLog export.
+      auth.ts                 # Standard library JWT verification.
+      keys.ts                 # Master validation, HKDF profile, platform overrides.
+      log.ts                  # SQLite events, high-water state, append/scan/prune.
+      platforms.ts            # Native signature verification and challenge handling.
+      contract.ts             # Domain/query validation and errors.
+      event-id.ts             # High-water-based global ULID advancement.
+    test/
+      auth.test.ts
+      keys.test.ts
+      contract.test.ts
+      platforms.test.ts
+      log.test.ts
+      streaming.test.ts
+      prune.test.ts
 ```
 
-Use TypeScript, the generated Worker types, and Cloudflare's local runtime tests. No Hono, ORM, provider SDK, frontend, or dependency-injection framework is required. A reviewed ULID utility and strict JSON validation dependency are justified only if they reduce custom parsing code. Keep the project independent of the daemon and dashboard workspaces.
+Use generated Worker types, TypeScript, a maintained JWT library, and Cloudflare local-runtime tests. Avoid unnecessary frameworks and provider SDKs. Keep strict JSON duplicate-member detection: plain `JSON.parse()` alone discards duplicates before validation.
 
-### Configuration intent
+Native `cf` configuration intent, rather than Wrangler's snake-case keys:
 
-These are the installed `cf` configuration names, not Wrangler's snake-case keys:
-
-| Setting | Planned value |
+| Setting | Value |
 | --- | --- |
-| `name` | `kanthor-webhook` |
-| `entrypoint` | `./src/index.ts` |
-| `compatibilityDate` | Pin a date verified by local and deployed tests; initially `2026-09-30`. |
-| `domains` | `["webhook.kanthorlabs.com"]`, only after checking ownership and DNS conflicts. |
-| `workersDev` / `previewUrls` | `false` / `false` in production. |
+| `name` | The deployer's Worker name. |
+| `entrypoint` | `./src/index.ts`. |
+| `compatibilityDate` | Tested, pinned date. |
+| `domains` | The deployer's hostname list, checked for ownership/conflicts. |
+| `workersDev`, `previewUrls` | `false` in production. |
 | `observability.enabled` | `false` in production. |
-| `exports.WebhookInbox` | Declare with `exports.durableObject({ storage: "sqlite" })`. Never select the legacy KV backend, which is not available on Free. |
-| `env.INBOXES` | Bind with `bindings.durableObject({ worker: "kanthor-webhook", exportName: "WebhookInbox" })`. |
+| `exports.WebhookLog` | `exports.durableObject({ storage: "sqlite" })`. |
+| `env.EVENT_LOG` | `bindings.durableObject({ worker: workerName, exportName: "WebhookLog" })`, using the same configured Worker name. |
+| Secret bindings | Required `masterKey` plus optional `WEBHOOK_SIGNING_KEY_<PLATFORM>` values, using exact vocabulary names. |
+| JWT settings | Deployer-selected issuer and audience; no independently configured JWT key. |
 
-Use the generated `defineConfig`/`defineWorker` structure and its type checker. Inspect the build output's namespace creation/migration before deployment. Cloudflare class migration and application table initialization are different operations; both must be repeatable without deleting event data.
+Use generated `defineConfig`/`defineWorker` types and inspect namespace migration in build output. Cloudflare class migration differs from application table initialization; both must preserve events and the high-water mark. Do not create a KV-backed namespace, which is not available on Free.
 
-### Scaffold safely
+### First scaffold during implementation
 
-`cloudflare/` already contains `docs/`. In the installed CLI, `cf init` on a nonempty directory runs existing-project autoconfiguration, not the empty-directory hello-world scaffold. Do not assume `cf init .` will produce the desired new project here.
-
-During implementation, generate into an empty temporary directory:
+`cloudflare/` already contains documentation. The inspected `cf init` treats a nonempty directory as an existing project. Generate the initial scaffold in an empty temporary directory, then review and copy only the required files without replacing docs:
 
 ```sh
-scaffold="$(mktemp -d "${TMPDIR:-/tmp}/kanthor-webhook.XXXXXX")"
+scaffold="$(mktemp -d "${TMPDIR:-/tmp}/webhook.XXXXXX")"
 cf init workers "$scaffold" --package-manager pnpm --no-install
 ```
 
-Review and copy only the scaffold files into the implementation root, preserving `docs/`. Install project-local dependencies, keep the lockfile, and pin the tested CLI and package manager. Do not initialize another git repository or modify the root Makefile for this standalone project.
+This is an implementation-author step, not something every deployer repeats. After implementation, a deployer clones the repository and installs the locked project instead of scaffolding it again. Local secret files must be ignored. No parent repository bootstrap is required.
 
-### Build and deploy sequence
+## 12. Deployment runbook
 
-Run from `platforms/webhook/cloudflare` after implementation:
+After implementation, any deployer follows the same workflow:
 
-```sh
-cf dev
-# In a separate terminal: run the project's typecheck and test scripts.
-cf build
-cf deploy --dry-run
-```
+1. Clone the Webhook repository directly, enter `cloudflare/`, install the documented runtime/package manager and locked dependencies, and use the project's pinned CLI. No organization-specific SSH alias is required; use the clone URL available to that deployer.
+2. Authenticate `cf` to the intended account/profile. Verify Workers Free and the active zone. Choose an unused Worker name and hostname; fill the sanitized configuration and standard JWT issuer/audience values.
+3. Generate a private 32-byte master key and encode it in base64. Supply optional exact-text platform overrides only where needed, including Slack's app secret for native Slack. Use separate ignored local credentials and local simulated storage for `cf dev`; do not bind development tests to production.
+4. Run typecheck/tests, `cf build`, and `cf deploy --dry-run` with the pinned CLI. Review that only the intended Worker, SQLite namespace, Custom Domain, and settings change. No paid product or existing DNS record may be changed implicitly.
+5. With the deployer's explicit approval, provision `masterKey` and any overrides through the CLI's private secret input and run `cf deploy`. If the Worker must exist before setting secrets, all three operations remain disabled without a valid master key; GET/DELETE also require valid issuer/audience settings. Never expose an unsigned or unauthenticated interval.
+6. Wait for TLS. Derive the JWT key using the documented profile and generate a standard JWT with matching `sub`, `iss`, `aud`, and future `exp`. Exercise correctly signed synthetic receive and Slack challenge, forged/stale signature refusal, override precedence, mixed-source scan, invalid/expired-token refusal, and pruning on disposable events only.
+7. Verify redeploy persistence, prune-to-empty followed by append, logging settings, actual Free limits, and the hostname before installing real callbacks. Configure each provider with its selected key; supply Slack's native secret through its override. Document local derivation/token generation without logging secrets, fresh JWT generation after expiry, and key-change effects.
 
-These lines describe separate steps; stop the development server when finished. `cf dev` uses local simulated storage unless explicitly configured otherwise. Test data must never use a production binding.
+These are future deployment steps, not commands executed by this document. `cf deploy --dry-run` is documented to check/build without uploading; real `cf deploy` can change resources and DNS.
 
-For remote launch, after explicit deployment approval:
+For version-dependent commands, use anonymous discovery queries such as `cf cli search "set worker secret"`, then inspect the chosen command's help. Do not include domains, account IDs, JWTs, UUIDs, or signing keys in discovery searches.
 
-1. Confirm the intended `cf` authentication profile, account, active zone, Workers Free subscription, and unused hostname. Do not print tokens or persist credentials in the repository.
-2. Review the dry-run output: only the intended Worker, SQLite Durable Object namespace, and Custom Domain may be created or changed. No paid products or existing DNS records may be altered implicitly.
-3. Run `cf deploy` from the implementation root. This is the step that can mutate Cloudflare resources and DNS; it has **not** been run while writing this plan.
-4. Wait for the domain certificate, then exercise POST, GET, cursor continuation, and errors using a new disposable UUID and synthetic bodies.
-5. Confirm persistence after a redeploy and inspect secret-handling settings before installing real provider callbacks.
+Sources: [cf repository](https://github.com/cloudflare/cf) and [CLI README](https://github.com/cloudflare/cf/tree/main/packages/cli). Recheck beta configuration APIs against the implemented project's pinned versions.
 
-If CLI commands change, discover them with anonymous action/resource queries, for example `cf cli search "deploy worker project"`, then read the selected command's help. Never put the domain, UUIDs, account identifiers, or tokens in discovery searches.
+## 13. Delivery and verification
 
-Tooling references: [cf repository](https://github.com/cloudflare/cf) and [cf package README](https://github.com/cloudflare/cf/tree/main/packages/cli). Local inspection used `cf@1.0.0-beta.5` and its bundled `@cloudflare/config@0.20.0` declarations. Configuration details must be rechecked against the locked project dependencies when implemented.
-
-## 10. Delivery steps and verification
-
-This is an implementation sequence for the standalone platform, not daemon implementation epics and not permission to deploy now. Commit each completed, verified step using only its exact paths.
-
-| Step | Deliverable | Acceptance before proceeding |
+| Step | Deliverable | Acceptance |
 | --- | --- | --- |
-| 1. Local skeleton | Generated `cf`/Vite configuration, Worker export, SQLite object binding, and TypeScript/test setup. | Build and dry-run succeed without account mutations. Only SQLite-backed storage is declared. No unrelated workspace or DNS changes. |
-| 2. Generic receive | Strict request validation, safe query projection, atomic append, persisted-state ULID allocation, and durable `201`. | Cover PRD A1–A7, A11–A14, and relevant A15 boundaries. Invalid input writes nothing; concurrent same-millisecond requests and restart cannot reorder visible IDs. |
-| 3. Generic scan | ID selection and bounded streamed array response. | Cover A2–A3, A8–A13, A15, and A17. Cursor is exclusive; no cross-inbox leakage; no cursor survives an `await`; large pages do not buffer whole payload sets. |
-| 4. Platform safety | Error mapping, no-cache behavior, logging configuration, cancellation, and quota/storage-full handling. | Cover A14–A16. Fault injection proves no false durable acknowledgement, no silent eviction, and no URL/payload logging. Measure CPU and memory with maximum accepted input and page size. |
-| 5. Approved deployment | Custom Domain and production binding on the confirmed Free account. | Explicit approval, synthetic smoke tests, persistence after redeploy, and dashboard checks. Verify effective storage/CPU limits, not just documentation tables. |
-| 6. Provider setup | One real callback at a time, starting with a compatible JSON sender. | GitHub ping and real event pass. Jira's selected mode accepts the acknowledgement. Slack setup proceeds only after its parent-contract exception is ruled and tested. |
+| 1 | Portable configuration, singleton SQLite binding, types, local tests. | Fresh standalone checkout builds without author-specific settings or parent tooling. |
+| 2 | Key derivation/selection, standard JWT guard, routes, common validation. | PRD A3–A6, A10, A13, A16, A20–A22, A32–A36. Deterministic purpose separation, strict override precedence, standard claims, no stored users. |
+| 3 | Native verification, atomic append, high-water state, and platform adapters. | A1, A7, A11–A12, A14, A18–A19, A28–A31, A35. Signature refusal precedes parsing/storage; ordinary/challenge successes follow durable commit. |
+| 4 | Global streamed scan and atomic range prune. | A2, A8–A10, A15, A17, A23–A27. Inclusive bounds, correct counts, high-water preservation, and honest concurrent-prune failures. |
+| 5 | Platform error mapping, no-secret logging, resource tests, sanitized deployment guide. | No public protected endpoint, false acknowledgement, implicit eviction, or custom JWT behavior. |
+| 6 | Deployer-approved launch and provider setup. | Synthetic smoke tests and disposable-data prune pass before real callbacks. Test the selected Jira mode's ordinary acknowledgement. |
 
-Additional concurrency and streaming checks:
+Explicitly test: deterministic HKDF vectors, purpose/platform separation, raw-versus-text key encodings, omitted/valid/empty/invalid overrides, no second-key retry, master/override rotation isolation, native provider vectors, signature tampering, raw whitespace/Unicode differences, duplicate/malformed headers, Slack's exact timestamp boundaries, signed malformed JSON, and unsigned challenges. Provider HMAC unit vectors with non-JSON bodies test only the verifier; they do not bypass endpoint JSON validation.
 
-- Pause validation of request A; commit request B; then complete A. IDs must follow append order, not network arrival order.
-- Force a clock rollback, evict/restart the object, and append again. Compare against persisted IDs, not the old process's memory.
-- Inject a transaction failure and a persistence failure; neither may produce a readable partial event or successful receive response.
-- Start a slow scan, then append. Its captured ID list stays fixed, with no uncommitted rows and no extra late arrivals.
-- Seed maximum-sized records locally and request the maximum page. Verify backpressure, bounded resident memory, and cancellation. Reconfirm resource behavior with a controlled deployed test before claiming full Free-plan compatibility.
-- Test malformed UTF-8, percent escapes, duplicate JSON members, `__proto__`, repeated custom keys, reserved names, and encoding expansion at the storage-row boundary.
-- Test database-full handling without deleting retained records. A retryable code is not permission to retry forever when capacity is permanently exhausted.
+Also test: wrong JWT key/algorithm/issuer/audience, missing required claims, expired tokens, future `nbf`, audience arrays, fresh replacement tokens, same-millisecond mixed-source appends, rollback/restart, transaction failures, duplicate JSON members, prototype-like keys, maximum bounds, streaming cancellation, prune during scan, prune retries, future/nonexistent bounds, and empty-log appends after pruning with clock rollback.
 
-Definition of done: the two generic operations satisfy the parent acceptance criteria on the verified Free runtime, using only the selected components. Provider-specific support is reported separately and honestly. No test or deployment result is claimed by this planning document.
+No runtime test, deployment, or implementation success is claimed here. Completion means the three operations satisfy the parent acceptance criteria on a verified Free runtime and the deployment guide works independently of the original developer's environment.
