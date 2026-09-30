@@ -202,7 +202,7 @@ The reviewer execution of `reviewer@1` evaluates "Add password reset" with agent
 Its evaluation method passes only the execution identity to the action performer, which opens pull request 42 through the [Repository component](repository.md#write-operations).
 The reviewer execution of external harness `claude-code` invokes the same action performer through its MCP tool for "Add password reset".
 It passes only its execution identity.
-The action performer derives node branch `kanthord/obj-7f3a` and base branch `main` from the records, without operands from either caller.
+The action performer derives node branch `kanthord/node_01ARZ3NDEKTSV4RRFFQ69G5FAV` and base branch `main` from the records, without operands from either caller.
 A second invocation under the same claim dispatches nothing when the first dispatch remains unresolved.
 
 ## return class
