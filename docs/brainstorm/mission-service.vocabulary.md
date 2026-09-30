@@ -399,8 +399,8 @@ An attempt closure scopes a record to its own attempt.
 A pause and a resume never invalidate a passing assessment by themselves.
 An assessment is current only when all three checks admit it.
 The record order answers the order check alone.
-A `reviewer@1` instance writes one assessment of "Add password reset".
-A new outcome record of one task then fails the context check of that assessment.
+A `reviewer@1` instance assesses the initiative "Account recovery" and names an outcome of its objective "Add password reset".
+The context check fails when that assessment names an outcome other than the current outcome of "Add password reset".
 That assessment is not current, and it stays in the record.
 
 ## edge kind
