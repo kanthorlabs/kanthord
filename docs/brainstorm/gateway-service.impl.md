@@ -154,7 +154,7 @@ A human then runs `kanthord jwt generate` again for each human token and each ma
 It uses the signing-key derivation and token contract above, with the configured lifetime.
 Without `--project` and `--binding` it generates a human JWT with the selected username as `sub`.
 With `--project` and `--binding` it generates a machine JWT with a fresh client identity as `sub`, the project as `project_id` and `worker:kanthord:<binding name>` as `resource_identity`, and it rejects a `username` argument.
-The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` and `--project` without `--binding` are errors.
+The command derives the resource identity from the binding name, so a human never enters it. `--binding` without `--project` fails with `cli.jwt.binding_without_project`. `--project` without `--binding` fails with `cli.jwt.project_without_binding`. A `--project` value that is not a canonical `project_<ulid>` identity fails with `cli.jwt.invalid_project`.
 Mint one machine token for each concurrent instance. An instance reuses its token across restarts while the token is valid.
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
 It prints only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
