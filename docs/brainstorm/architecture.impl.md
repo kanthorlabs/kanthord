@@ -695,6 +695,7 @@ Caller propagation carries identity per call.
 A handler separates asynchronous work from its commit.
 
 - A store transaction is synchronous and spans no `await`.
+- A handler may open a synchronous transaction on the declared store for reads before `caller.commit`; it performs no write and does not replace the final `caller.commit`.
 - A handler runs asynchronous work first, including every client call.
 - A handler performs one `caller.commit` at the end on the declared store.
 - Before that commit, a `wait` handler can run its commit write in a probe transaction on the declared store. The handler always rolls back a probe transaction.
