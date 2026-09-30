@@ -40,7 +40,7 @@ The Gateway Service verifies its signature, expiry and subject and establishes t
 What the Gateway Service establishes from the credential of a machine, and what it passes to the service that the request targets.
 
 An instance of the worker binding `claude-main` presents the JWT of the client identity `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`.
-That JWT holds `sub` = `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`, `name` = `Claude Code on ulrich-mbp`, `kind` = `client`, `binding` = the identity of `claude-main`, and `iat`, `exp` and `jti`.
+That JWT holds `sub` = `client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X6`, `name` = `Claude Code on ulrich-mbp`, `kind` = `client`, `project_id` = the identity of the project, `resource_identity` = `worker:kanthord:claude-main`, and `iat`, `exp` and `jti`.
 The Gateway Service verifies that JWT and establishes the machine identity, which names the client identity, the worker binding `claude-main`, the project `Billing` and the runtime identity of its live registration.
 The Project Service receives that value, and it takes no association from the caller.
 
@@ -48,7 +48,7 @@ The Project Service receives that value, and it takes no association from the ca
 
 The secret that the server derives for one machine JWT and that the `worker` application holds in `cli.yaml`.
 
-`kanthord jwt generate --binding tdd-main` prints `token: eyJhbGciOi...` and `clientSecret: 3q2+7wAAAAC1...`.
+`kanthord jwt generate --project project_01J8Z3N5K7Q2W4E6R8T0Y2V4X5 --binding tdd-main` prints `token: eyJhbGciOi...` and `clientSecret: 3q2+7wAAAAC1...`.
 The worker of `tdd-main` derives the handover key from that client secret. No other worker opens its handover.
 
 ## JWT claim set
@@ -64,7 +64,7 @@ A non-secret decoded human payload:
 A non-secret decoded machine payload:
 
 ```json
-{"sub":"client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X7","name":"Claude Code on ulrich-mbp","kind":"client","binding":"binding_01J8Z3N5K7Q2W4E6R8T0Y2V4X8","iat":1758700000,"exp":1790236000,"jti":"01J8Z3N5K7Q2W4E6R8T0Y2V4X9"}
+{"sub":"client_identity_01J8Z3N5K7Q2W4E6R8T0Y2V4X7","name":"Claude Code on ulrich-mbp","kind":"client","project_id":"project_01J8Z3N5K7Q2W4E6R8T0Y2V4X8","resource_identity":"worker:kanthord:claude-main","iat":1758700000,"exp":1790236000,"jti":"01J8Z3N5K7Q2W4E6R8T0Y2V4X9"}
 ```
 
 A token with an `aud` claim or without `jti` fails verification.
