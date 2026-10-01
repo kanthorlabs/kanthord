@@ -916,6 +916,7 @@ Each service module exposes its contract and composition entry.
 - `src/project/contract.ts` holds `ProjectBindings`.
 - The Gateway adds public `client.ts` for `httpClient`.
 - Its `index.ts` exports `GatewayService`, `createInvocation` and `directClient`.
+- Custody exposes `client.ts` for its execution credential store. `apps/worker` may import this entry.
 - Gateway authentication holds `resolveMachine` with two injected read-only lookups.
 - Gateway authentication performs no worker registration.
 - The Worker Service binds its own operations through `declare(registry)`.
@@ -943,6 +944,7 @@ The import boundaries follow the public files.
 - `contract.ts` imports the kernel and `zod` only.
 - `apps/server` imports the kernel and `index.ts` plus `contract.ts` of every service.
 - `apps/cli` and `apps/worker` import the kernel, `contract.ts` of any service and `src/gateway/client.ts`.
+- `apps/worker` also imports `src/custody/client.ts` for the execution credential store.
 - Only applications import `src/config/index.ts`.
 - A service needing global configuration types imports `src/config/global.ts` alone.
 - `eslint-plugin-boundaries` enforces these imports.

@@ -127,6 +127,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 ## The credential store of an execution
 
 - Custody implements `CredentialStore` of `@earendil-works/pi-ai` at 0.86.0.
+- `src/custody/client.ts` exports `executionCredentialStore`, `ExecutionStoreError` and `ExecutionCredentials`; handover schemas remain in `contract.ts`.
 - The methods are `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
 - The [Worker Service](worker-service.impl.md#the-credential-store-of-an-execution) defines the selection and visibility of the execution view.
 - `list()` returns the selected non-secret pair of adapter id and credential type, and custody derives that type from the platform of the record.
