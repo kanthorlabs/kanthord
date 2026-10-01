@@ -145,3 +145,17 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test checks the shared error envelope, the timeout, the lifetime and the body limit of every Scheduler route.
 - A test asserts that no sweep deletes an execution record, and that an ended execution stays readable through `execution get` after a restart.
 - A test asserts that `queue list` returns no job of a node that left the claimable state.
+
+## Execution CLI validation
+
+The claim and execution CLI commands refuse invalid arguments locally with the following codes.
+These declarations match the error table of `engine/docs/cli/scheduler.md`.
+
+| HTTP  | Code                                                   | Condition                                                                     |
+| ----- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| local | `cli.scheduler.claim.get.invalid_execution_id`         | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |
+| local | `cli.scheduler.execution.get.invalid_execution_id`     | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |
+| local | `cli.scheduler.execution.release.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |
+| local | `cli.scheduler.execution.list.invalid_project_id`      | The `<project-id>` argument is not a canonical `project_<ulid>` identity.     |
+| local | `cli.scheduler.execution.list.invalid_node_id`         | The `--node` value is not a canonical `node_<ulid>` identity.                 |
+| local | `cli.scheduler.execution.list.invalid_attempt`         | The `--attempt` value is not a positive safe integer.                         |
