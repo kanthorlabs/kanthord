@@ -78,13 +78,13 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - The root is an object with `additionalProperties: false`.
 - All five properties below are required; none carries `default`, and the schema holds no `options`.
 
-| Property | Schema |
-| --- | --- |
-| `agentProvider` | `string`; the name of an agent provider of the enablement |
-| `provider` | `string`, enum `github-copilot`, `anthropic`, `openai-compatible` |
-| `credential` | `string`; a credential name |
-| `modelIdentifier` | `string` |
-| `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` |
+| Property          | Schema                                                            |
+| ----------------- | ----------------------------------------------------------------- |
+| `agentProvider`   | `string`; the name of an agent provider of the enablement         |
+| `provider`        | `string`, enum `github-copilot`, `anthropic`, `openai-compatible` |
+| `credential`      | `string`; a credential name                                       |
+| `modelIdentifier` | `string`                                                          |
+| `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
 
 - The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
 - It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
@@ -546,3 +546,17 @@ The handover and the report enter no transcript telemetry.
 The acceptance path is the `general@1` loop, the commit and the verification, the push, the release, the independent `reviewer@1` evaluation, the configured repository action, the authoritative observation of its end state, and the `Completed` outcome.
 A scripted fake provider runs it deterministically.
 A bounded real-provider smoke run proves the real configuration.
+
+## Instance CLI validation
+
+The instance CLI commands refuse invalid arguments locally with the following codes.
+These declarations match the error table of `engine/docs/cli/worker.md`.
+
+| HTTP  | Code                                                      | Condition                                                                               |
+| ----- | --------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| local | `cli.worker.instance.list.invalid_project_id`             | The `--project` value is not a canonical `project_<ulid>` identity.                     |
+| local | `cli.worker.instance.list.invalid_binding_name`           | The `--binding` value is not a binding name.                                            |
+| local | `cli.worker.instance.list.binding_without_project`        | `--binding` is given without `--project`.                                               |
+| local | `cli.worker.instance.get.invalid_runtime_identity`        | The `<runtime-identity>` argument is not a canonical `worker_instance_<ulid>` identity. |
+| local | `cli.worker.instance.deregister.invalid_runtime_identity` | The `<runtime-identity>` argument is not a canonical `worker_instance_<ulid>` identity. |
+| local | `cli.worker.instance.resume.invalid_runtime_identity`     | The `<runtime-identity>` argument is not a canonical `worker_instance_<ulid>` identity. |
