@@ -723,3 +723,34 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A test asserts 404 `mission.mission.not_found` for an absent mission, 404 `mission.node.not_found` for an absent node and 404 `mission.record.not_found` for an absent record.
 - A test checks `graph get` at 10 MiB and above that bound.
 - It asserts 413 `mission.graph.too_large` above the bound, with the node count and both paged reads in `details`.
+
+## Execution CLI validation
+
+The Mission execution CLI validates these arguments and enforces these content boundaries locally. These declarations match the command associations and conditions in `engine/docs/cli/mission.md`.
+
+| HTTP  | Code                                                                    | Condition                                                                      |
+| ----- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| local | `cli.mission.assessment.submit.invalid_node_id`                         | The `<node-id>` argument is not a canonical `node_<ulid>` identity.            |
+| local | `cli.mission.evidence.asset.content.get.invalid_asset_id`               | The `<asset-id>` argument is not a canonical `evidence_asset_<ulid>` identity. |
+| local | `cli.mission.evidence.asset.delete.invalid_asset_id`                    | The `<asset-id>` argument is not a canonical `evidence_asset_<ulid>` identity. |
+| local | `cli.mission.evidence.asset.delete.invalid_expected_mission_version`    | The `--expected-mission-version` value is not a positive safe integer.         |
+| local | `cli.mission.evidence.delete.invalid_evidence_id`                       | The `<evidence-id>` argument is not a canonical `evidence_<ulid>` identity.    |
+| local | `cli.mission.evidence.delete.invalid_expected_mission_version`          | The `--expected-mission-version` value is not a positive safe integer.         |
+| local | `cli.mission.evidence.get.invalid_evidence_id`                          | The `<evidence-id>` argument is not a canonical `evidence_<ulid>` identity.    |
+| local | `cli.mission.evidence.list.invalid_node_id`                             | The `<node-id>` argument is not a canonical `node_<ulid>` identity.            |
+| local | `cli.mission.evidence.list.invalid_attempt`                             | The `--attempt` value is not a nonnegative safe integer.                       |
+| local | `cli.mission.evidence.submit.invalid_node_id`                           | The `<node-id>` argument is not a canonical `node_<ulid>` identity.            |
+| local | `cli.mission.evidence.submit.object_asset`                              | The file holds an `object` asset; the host helper serves an object.            |
+| local | `cli.mission.execution.pinned_revision.get.invalid_execution_id`        | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.revision.list.invalid_execution_id`              | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.revision.get.invalid_execution_id`               | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.revision.get.invalid_revision`                   | The `<revision>` argument is not a positive safe integer.                      |
+| local | `cli.mission.execution.evidence.list.invalid_execution_id`              | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.evidence.asset.content.get.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.evidence.asset.content.get.invalid_asset_id`     | The `<asset-id>` argument is not a canonical `evidence_asset_<ulid>` identity. |
+| local | `cli.mission.execution.evidence.asset.content.get.object_content`       | The answer is object content; the reader's component keeps the presigned URL.  |
+| local | `cli.mission.execution.objective.list.invalid_execution_id`             | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.objective.outcome.list.invalid_execution_id`     | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.objective.evidence.list.invalid_execution_id`    | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.execution.cleared_outcome.get.invalid_execution_id`        | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity.  |
+| local | `cli.mission.node.check.invalid_node_id`                                | The `<node-id>` argument is not a canonical `node_<ulid>` identity.            |
