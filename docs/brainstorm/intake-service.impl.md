@@ -8,40 +8,86 @@ This file holds the implementation rulings for the mechanisms that realize [inta
 This file is not a design document, and `intake-service.md` stays the single source of truth.
 A mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
-This sibling holds the acquisition, outbound operation, check and resource healthcheck mechanisms.
-The subscription store, the delivery store and the handoff follow with the Intake Service item of [HANDOFF.md](HANDOFF.md).
+This sibling holds the inbound store, the event store, the acquisition, the handoff, the outbound operation, the check and the resource healthcheck mechanisms.
 
 ## The service identity
 
-- The composition root mints the service identity of the Intake Service, which [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. The reconciler and every acquisition call a peer through the direct adapter with that identity in `ClientOptions.identity`.
+- The composition root mints the service identity of the Intake Service, which [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) rules. Every acquisition and the dispatcher call a peer through the direct adapter with that identity in `ClientOptions.identity`.
 
-## The acquisition grant
+## The credential release of an inbound
 
-- The reconciler obtains a grant through `project.acquisition_grant` of the Project Service when it moves a subscription toward `active`. [project-service.impl.md](project-service.impl.md#the-acquisition-grant) holds that mechanism.
-- The reconciler holds the grant identity and the acquisition material in a module-private `Map` keyed by the subscription identity. It writes neither to any store. It calls `project.acquisition_grant_end` when the session ends.
-- `intake.grant_revoked` is a `unary` mutation under the `service` policy that the Project Service alone calls. Its handler closes the acquisition of the subscription at once and drops the material. It sets the observed state `failed` with the reason of the revocation and answers 204.
-- The reconciler obtains a new grant on the next reconciliation when the desired state is still `active` and the source binding is available.
+- Each remote call of an inbound takes one single-use operation grant from the [protected facility](custody.impl.md#the-protected-facility) under the service identity of the Intake Service.
+- The inbound operations are `webhook-register`, `webhook-read`, `webhook-deregister` and `poll`.
+- The facility checks that the requester is the Intake service identity and that the operation is an inbound operation. It needs no Project decision, because the human configuration of the inbound authorizes the release.
+- The Intake Service supplies the inbound facts from its own row: the inbound identity, the credential name, the platform and the resource. At a create, the facts come from the validated input before the insert.
+- Custody resolves the newest live revision of the credential name, checks the platform suitability and releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret).
+- The handler builds its platform client for one call, caches no client and no token, and drops the material in `finally`.
+
+## The inbound store
+
+- `intake_inbound` of [ERD 3](../reference/erd/03-integration.md) holds the inbounds. `id` is `inbound_` and a ULID.
+- `configuration` is JSON text. The Intake Service validates it per `(kind, platform)` with a `zod` schema in code before the write. It holds `resource` and the options of the kind and the platform. Every property name is snake_case.
+- `checkpoint` is JSON text whose shape the platform implementation validates.
+- The table holds no unique index other than its key.
+- The create validates the input, then performs the remote validation of its kind: a registration for a registered webhook, one request for a poll, nothing for a passive webhook.
+- The insert transaction checks that the credential name exists and that its platform suits the inbound. A credential removal calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and a removal never interleave.
+- A delete of a registered webhook first refuses with 409 `intake.inbound.events_pending` when a pending event exists. Then it deregisters at the platform, and a not-found answer counts as done. Then one transaction checks the pending events again, deletes the events of the inbound and deletes the row. A pending event at that check refuses the delete, and the next delete finds the registration absent.
+- A create or a delete answers its platform refusal and changes no row. Each failure writes a span of the Tracking Service with its reason.
 
 ## The webhook acquisition
 
-- The registration, the read of the registrations and the deregistration of a GitHub webhook use the [GitHub platform implementation of the Repository component](repository.impl.md#platform-connector-and-platform-implementations). The calls use the material of the grant, and each call carries a deadline.
-- The registration names the webhook address `/hooks/<binding id>` that [project-service.impl.md](project-service.impl.md#the-verification-of-a-delivery) rules and the current verification secret that the Project Service returns.
-- An indeterminate registration result makes the reconciler read the registrations before any retry. It adopts an existing registration that names the same address.
-- A passive webhook subscription obtains no grant and registers nothing.
+- The registration, the read and the deregistration of a GitHub webhook use the [GitHub platform implementation of the Repository component](repository.impl.md#platform-connector-and-platform-implementations). Each call carries a deadline.
+- The registration names the address `/hooks/<inbound id>` inside the path group that [gateway-service.impl.md](gateway-service.impl.md#ingress) reserves, the verification secret and the events that `configuration` names.
+- An indeterminate registration answer makes the create read the registrations before it answers. It adopts the registration that names the same address and inserts the row with its identity.
+
+### The verification secret
+
+- The Intake Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt from `masterKey`, which [architecture.impl.md](architecture.impl.md) holds.
+- `HKDF(masterKey, info = "webhook/<inbound id>")` is the verification secret of one webhook inbound. The Intake Service derives it when it needs it, so no store holds a webhook secret.
+- A new secret is a new inbound, because the identity enters the derivation.
+- A manual replacement of `masterKey` invalidates every derived webhook secret, and a human creates a new inbound for every webhook.
+- `intake.inbound.get` returns the address and the secret of a webhook inbound to a human. A `GET` is no mutation, so the idempotency middleware of the Gateway Service records no secret.
+
+### The receipt
+
+- The `/hooks/<inbound id>` handler passes the exact bytes and headers to the Intake Service, under [gateway-service.impl.md](gateway-service.impl.md#delivery-bytes-and-body-limits).
+- An unknown inbound identity answers 404, and a poll inbound answers 404.
+- For a GitHub event, the verification requires exactly one `X-Hub-Signature-256` header. It rejects a missing header, a duplicate header, a value without the `sha256=` prefix, a value that is not hexadecimal and a value of another length, before any comparison.
+- It computes the HMAC with `crypto.createHmac` and SHA-256 over the exact bytes, and it compares two 32-byte digests with `timingSafeEqual`.
+- A failed verification answers 401 and stores nothing.
+- A valid HMAC proves the possession of the secret alone. It authenticates no other header, it establishes no repository, and it detects no replay.
+- The insert stores `event_id` from `X-GitHub-Delivery`, the exact body in `event` and `{ "event": <X-GitHub-Event> }` in `metadata`. A repeated `event_id` inside the inbound inserts nothing and answers 2xx.
+- The handler answers 2xx after the commit. Beyond the capacity bound, it answers 503 and stores nothing.
 
 ## The poll acquisition
 
-- The poll runs on an interval of 60 seconds per subscription with the material of the grant. Each request carries a deadline, and the checkpoint advances in the transaction that stores every delivery of the batch.
-- The poll pauses beyond the capacity bound that [intake-service.md](intake-service.md#capacity-and-retention) states. It resumes when the count of unresolved deliveries falls below that bound.
+- The poll runs on an interval of 60 seconds per inbound with a release per request. Each request carries a deadline.
+- The GitHub poll reads the events of the resource with `If-None-Match` set to the ETag of `checkpoint`. A 304 answer stores nothing.
+- Each event inserts `event_id` from the event `id`, the event JSON in `event` and `{ "event": <type> }` in `metadata`.
+- The transaction that stores the batch also writes `checkpoint`. It discards the batch when the inbound row no longer exists.
+- The poll pauses beyond the capacity bound that [intake-service.md](intake-service.md#capacity-and-retention) states. It resumes when the count of pending events falls below that bound.
+- A failed request writes a span with its reason and leaves `checkpoint` unchanged.
 
-## The stream acquisition
+## The handoff
 
-- The stream opens with the material of the grant and holds the connection for the session. The Intake Service writes the resume position with each stored message.
-- A close by the platform reconnects with backoff under the same grant until the grant ends. A close by revocation or by capacity ends the session.
+- The dispatcher reads pending events in the order of `id` and hands each one to the `consumer` of its inbound through the direct adapter under the service identity of the Intake Service.
+- A module-private `Set` holds the identity of every event whose handoff runs. The dispatcher adds the identity before the consumer call and removes it after the write of the answer, so one event never has two handoffs at once.
+- An answer of the consumer sets `succeeded` with an update conditional on `pending`.
+- A declared failure or an indeterminate result sets `failed` with an update conditional on `pending`. The same update appends `{ code, message, created_at }` to the JSON array `error`. The array is bounded in bytes and holds no credential material.
+- The dispatcher retries nothing and holds no backoff. At a start, it hands every pending event over.
+- `intake.inbound.event.retry` is a `human` operation. It turns a failed event to `pending`. A pending event answers its current state, and a succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
+- `intake.inbound.event.discard` is a `human` operation. It turns a pending or a failed event to `discarded`. A pending event whose identity is in the in-flight set answers 409 `intake.inbound.event.in_flight`. A succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
+
+## The event delete
+
+- `intake.inbound.event.delete` is a `human` operation. Its input holds a state with a ULID range of `id`, or a list of exact event identities.
+- An input without a filter answers 400. A state filter of `pending` answers 400.
+- An exact list that names a pending event answers 409 `intake.inbound.event.state_conflict` and deletes nothing.
+- The delete removes the matching events in one transaction and answers their count.
 
 ## Outbound operations and checks
 
-- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility of the Project Service authorizes that caller, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component and drops the material in `finally`.
+- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component and drops the material in `finally`.
 - The handler builds its platform client for one call and caches no client and no token.
 - `intake.action.perform` is a `client` operation under the forwarded execution identity. It serves `pull_request` and `merge_push`, and it answers the `PlatformAddress` or the result class of the Repository component.
 - For `merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the network git write and removes the clone after the call. A `merge_push` answers the pushed commit in its `PlatformAddress`.
@@ -54,26 +100,30 @@ The subscription store, the delivery store and the handoff follow with the Intak
 
 ## The resource healthcheck
 
-- The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The subscription check follows them like every other check.
-- The acquisition window is 180 s, three poll intervals of 60 s.
-- The poll capability is `poll acquisition`. The stream capability is `open stream`.
-- The registered and passive webhook capability is `verified receipt since enabling`.
-- Poll and stream evidence stays in memory, keyed by the acquisition grant identity of the session. Evidence from an earlier grant never counts.
-- After a restart, the check reports `unknown` until the first answer of the new session.
-- The webhook evidence is `last_verified_receipt_at` on the subscription row. Each change of the desired state to `enabled` resets it.
-- That evidence survives the retention of resolved deliveries.
-- The evidence is acquisition state, not a check result. No store holds a check result.
+- The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The inbound check follows them like every other check.
+- The check runs only inside a health report that a human calls.
+- A registered GitHub webhook reads the hook `registration_id` with a release for `webhook-read`. A missing hook, `active` false or a `last_response.code` outside 2xx reports `unhealthy`. A hook with no delivery reports `unknown`. Every other hook reports `healthy`. The capability is `registered webhook`.
+- A poll performs one request with a release for `poll` and with the ETag of `checkpoint`. A 200 or a 304 answer reports `healthy`, and any other result reports `unhealthy`. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
+- A passive webhook reports `unknown` with the capability `passive webhook`.
+- No store holds a check result.
 
 ## Tests
 
-- Tests cover both sides of the poll acquisition window and a failed poll request.
-- Tests cover an open stream and a failed connect attempt.
-- A test asserts that a forged post fails verification and leaves the webhook resource status unchanged.
-- A test asserts that a restart reports `unknown` until the first answer of the new session.
-- A test asserts that evidence from a replaced acquisition grant session does not count.
-- A test asserts that the check requests no acquisition grant, makes no remote call and changes no subscription state.
-- A test covers a grant revocation that arrives during an open stream. It asserts the close, the dropped material and the observed state `failed` with the reason.
-- A test covers an indeterminate webhook registration followed by a read that finds the registration, and it asserts no second registration.
+- A test covers a create of a registered webhook whose registration answer is lost, followed by a read that finds the registration, and it asserts one registration and one row.
+- A test covers a create whose registration the platform refuses, and it asserts no row.
+- A test covers a create of a poll whose first request fails, and it asserts no row.
+- A test covers a credential removal concurrent with an inbound create that names it, and it asserts that one of the two fails and that no row names a removed credential.
+- A test covers a delete of a registered webhook with a pending event, and it asserts the 409 and the registration at the platform unchanged.
+- A test covers a deregistration that answers not-found, and it asserts the delete of the row.
+- Tests cover a missing, a duplicate, a malformed and a wrong-length signature, and a valid signature over the exact bytes.
+- A test asserts that a post with a failed verification stores nothing and answers 401.
+- A test covers a repeated `X-GitHub-Delivery` inside one inbound, and it asserts one row.
 - A test covers a poll batch whose store fails, and it asserts an unchanged checkpoint.
-- A test asserts that no store row and no log record of the Intake Service holds acquisition material.
+- A test covers a poll batch whose inbound is deleted before the commit, and it asserts that no event is stored.
+- A test covers a handoff whose answer is lost at a restart, and it asserts one more handoff with the same identity and content.
+- A test covers a discard during a handoff, and it asserts the 409 and the state that the handoff writes.
+- A test covers two failures and one retry, and it asserts two items in `error`.
+- Tests cover an event delete without a filter, with the state `pending` and with an exact list that names a pending event.
+- A test asserts that the healthcheck runs no request outside a health report and changes no inbound.
+- A test asserts that no store row and no log record of the Intake Service holds credential material.
 - Tests assert that every outbound operation and check forwards the caller identity, refuses another node before custody releases a secret, drops the material after a success and after a failure, and leaves no clone after a `merge_push`.

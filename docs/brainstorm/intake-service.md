@@ -7,125 +7,123 @@ title: Intake Service
 ## Scope
 
 This document describes the Intake Service.
-It describes the subscription and the delivery.
-It describes acquisition through a webhook, a poll or a stream, the outbound operation and the check.
-It describes the handoff of a delivery to its consumer and the capacity of the service.
-It describes no business effect of a delivery and no mechanism of another service.
+It describes the inbound and the inbound event.
+It describes acquisition through a webhook or a poll, the outbound operation and the check.
+It describes the handoff of an inbound event to its consumer and the capacity of the service.
+It describes no business effect of an inbound event and no mechanism of another service.
 
 ## Boundary
 
 The Intake Service performs every operation of kanthord on an external platform, inbound and outbound.
 It performs an outbound operation or a check on the request of the service that owns its effect, and it decides no business meaning.
-It decides nothing about the meaning of a delivery.
+It decides nothing about the meaning of an inbound event.
 It interprets no payload field for a business meaning.
-It reads a payload only to identify a delivery and to acknowledge it.
+It reads a payload only to identify an inbound event and to acknowledge it.
 A platform operation establishes no Mission outcome by itself.
 
 The Intake Service owns the connection lifetime of every acquisition.
-It receives a webhook, runs a poll and opens and closes a stream.
+It receives a webhook and runs a poll.
 It holds the transport knowledge of a platform.
-That knowledge identifies the signature header and the field that carries the platform delivery identity.
-It defines the meaning of a poll checkpoint and the protocol and acknowledgement of a stream.
+That knowledge identifies the signature header, the field that carries the platform event identity and the metadata of an event.
+It defines the meaning of a poll checkpoint.
 The [Repository component](repository.md#platform-connector-and-platform-implementations) owns platform implementations and payload decoders.
-The Intake Service calls a platform implementation of that component for every platform operation, with the material of an acquisition grant or of a credential release.
+The Intake Service calls a platform implementation of that component for every platform operation, with the material of a credential release.
 
 The Intake Service reaches a peer through an [operation](architecture.md#invocation) only.
-It declares no collaboration.
+It declares one collaboration, `inboundsNaming`, which [custody](custody.md#credential-records) calls in the transaction of a credential removal.
 No atomic invariant spans the Intake Service and another service.
 It acts under its own [service identity](project-service.vocabulary.md#service-identity).
-It obtains acquisition material only through an [acquisition grant](project-service.vocabulary.md#acquisition-grant) of the [Project Service](project-service.md#authorization-and-credential-custody).
-It obtains no acquisition material from a store.
-It holds acquisition material in memory for the session and persists none.
+It obtains the material of an inbound call through a custody release for that call.
+The human configuration of an inbound authorizes that release.
+It obtains no credential material from a store, and it holds that material for the call only.
 An outbound operation or a check forwards the identity of its caller.
-The Project Service authorizes that caller, custody releases the material, and the Intake Service performs the call.
-It holds that material for the call only.
+The service that owns the entity of the operation authorizes that caller, custody releases the material, and the Intake Service performs the call.
 The Intake Service performs the control operations of a platform.
 The bytes of an object and the git transport of an execution travel directly, through a presigned URL or the SSH configuration of the host.
-The Intake Service performs the operations on a platform that a project binding names.
+The Intake Service performs the operations on a platform that an inbound or a project binding names.
 A model inference call and the provider check belong to the model connector of the Worker Service.
-A passive webhook needs no grant.
-The Intake Service never verifies a delivery.
-It submits the body, the headers and the candidate source binding to the verification operation of the Project Service.
+The Intake Service verifies the signature of a webhook event with a secret that it derives, and it stores no secret.
 One server holds one Intake Service that serves every project.
 
-## Subscriptions
+## Inbounds
 
-The Intake Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a subscription.
+An [inbound](intake-service.vocabulary.md#inbound) belongs to one project.
+It has one [inbound kind](intake-service.vocabulary.md#inbound-kind).
+It names its platform and its [consumer](intake-service.vocabulary.md#consumer).
+It names its credential by its name, except a [passive webhook](intake-service.vocabulary.md#passive-webhook).
+Its configuration holds the remote resource and the options of its kind and platform.
+No field of its configuration changes after its insert, and a change is a new inbound.
+A human creates an inbound to start its acquisition and deletes it to stop the acquisition.
+A project holds any number of inbounds, and two inbounds can name the same resource, so a duplicate serves a rotation.
 
-- The check reads only the state of the Intake Service. It makes no remote call, obtains no acquisition grant and uses no acquisition material.
-- A disabled desired state reports [unknown](architecture.vocabulary.md#resource-status). A failed observed state reports unhealthy.
-- An enabled subscription with observed state inactive, registering or retiring reports unknown. An active subscription reports the evidence of its subscription kind.
-- Evidence counts only for the current acquisition session.
-- This means the current acquisition grant or, for a passive webhook, the time since its desired state last changes to enabled.
-- Evidence from an earlier session never counts.
-- A poll reports healthy when its last completed request succeeds inside the [acquisition window](intake-service.vocabulary.md#acquisition-window).
-- A poll reports unhealthy when its last completed request fails at the platform.
-- A poll reports unknown with no completed request in the session or a success older than the acquisition window.
-- A stream reports healthy while the connection of its session is open. It reports unhealthy when its last connect attempt fails.
-- A stream reports unknown otherwise.
-- A registered or passive webhook reports healthy when a verified delivery arrives in its session. It reports unknown otherwise.
-- A webhook never reports unhealthy from a failed verification: any caller can post to its address.
-- The webhook resource status confirms a past receipt, not a current acquisition.
+The store is the single source of truth, and a row exists only for a validated inbound.
+The create validates the inbound before its insert.
+The create of a registered webhook registers the address of the inbound at the platform, then inserts the row with the registration identity.
+An uncertain registration result makes the create read the registrations at the platform.
+The create adopts the registration that names the same address, or it inserts nothing.
+A lost answer creates no second registration.
+The create of a poll performs one request with the credential before the insert.
+A passive webhook names no credential, and kanthord registers nothing for it.
+A human sets its address and its secret at the platform.
+A passive webhook is the one exception to the validation before the insert, and its create validates the project, the platform and the configuration only.
+
+A delete of a registered webhook deregisters at the platform before the row goes.
+A refused deregistration keeps the row.
+A delete of a passive webhook or of a poll calls no platform.
+An error after the insert produces a span of the [Tracking Service](tracking-service.md), and a human traces the error there.
+An inbound row holds no state of its acquisition health.
+
+A webhook inbound holds the registration identity that the platform returns.
+A poll inbound holds its [checkpoint](intake-service.vocabulary.md#checkpoint).
+A poll runs on a fixed interval while its inbound exists, and every poll is permanent.
+A poll checkpoint advances only with the commit that stores every event of the batch.
+A poll discards its batch when its inbound no longer exists at the commit.
+
+The Intake Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of an inbound.
+
+- The check runs only when a human calls the healthcheck.
+- The check of a registered webhook reads the registration at the platform.
+- A missing or inactive registration, or a failed last delivery of the platform, reports unhealthy.
+- A registration that delivered nothing reports unknown, and every other registration reports healthy.
+- The check of a poll performs one fetch at the platform. A success reports healthy, and a failure reports unhealthy.
+- A passive webhook reports [unknown](architecture.vocabulary.md#resource-status).
+- The check changes no inbound and stores no result.
 - The [implementation](intake-service.impl.md#the-resource-healthcheck) defines the values of the check.
 
-A [subscription](intake-service.vocabulary.md#subscription) belongs to one [source binding](project-service.vocabulary.md#source-binding).
-It has one [subscription kind](intake-service.vocabulary.md#subscription-kind).
-A source binding holds at most one subscription per kind.
-A subscription holds a [desired state](intake-service.vocabulary.md#desired-state) that a human sets.
-It holds an [observed state](intake-service.vocabulary.md#observed-state) that the Intake Service writes.
-A [reconciler](intake-service.vocabulary.md#reconciler) of the Intake Service moves the observed state toward the desired state.
-It never moves the desired state toward the observed state.
+## Inbound events
 
-A subscription holds the kind-specific state of its acquisition.
-A webhook subscription holds the registration identity that the platform returns.
-A poll subscription holds its [checkpoint](intake-service.vocabulary.md#checkpoint).
-A stream subscription holds its [resume position](intake-service.vocabulary.md#resume-position).
-That state survives a disable.
-Enabling a subscription obtains any required grant and registers or opens the acquisition.
-Successful enabling sets the observed state active.
-Disabling a webhook subscription deregisters it at the platform and keeps the registration identity.
-Disabling a poll keeps its checkpoint.
-Disabling a stream closes it.
+An [inbound event](intake-service.vocabulary.md#inbound-event) is one unit that an inbound receives from its platform.
+It names its inbound, its [platform event identity](intake-service.vocabulary.md#platform-event-identity) and its creation time.
+It holds the bounded content of the event and the metadata that the platform implementation fills.
+Through its inbound it belongs to exactly one project.
+The webhook address carries the inbound identity, and that identity selects the verification secret.
 
-The [Project Service](project-service.md#authorization-and-credential-custody) owns the session scope, lifetime and revocation of an acquisition grant.
-When that service revokes a grant, the Intake Service closes the acquisition at once.
-It sets the observed state failed with the reason.
-Revocation for a source binding disablement disables every subscription under that binding.
-An uncertain registration result requires the Intake Service to read the registrations at the platform before any retry.
-A lost answer creates no second registration.
-A poll checkpoint advances only with the commit that stores every delivery of the batch.
-
-## Deliveries
-
-A [delivery](intake-service.vocabulary.md#delivery) is one unit received from a platform.
-It names its subscription, its [platform delivery identity](intake-service.vocabulary.md#platform-delivery-identity), its received time and its verification result.
-It holds a bounded payload.
-Through its subscription it names one source binding and therefore one project.
-Every delivery belongs to exactly one project when the Intake Service stores it.
-The webhook address carries the source binding identity.
-That identity selects the verification secret that the Project Service uses.
-
-For a webhook delivery, verification precedes durable storage.
+For a webhook event, verification precedes durable storage.
 Durable storage precedes acknowledgement to the platform.
-A stream message follows the same order.
-The Intake Service acknowledges only a delivery that it stores durably.
-It deduplicates within one subscription by platform delivery identity.
-The [Mission Service](mission-service.md#delivery-admission-and-check) owns effect deduplication across kinds and redeliveries.
-A delivery holds no credential.
+A webhook post that fails verification is refused, and no row records it.
+The Intake Service acknowledges only an event that it stores durably.
+It deduplicates within one inbound by the platform event identity.
+The [Mission Service](mission-service.md#delivery-admission-and-check) owns effect deduplication across inbounds and redeliveries.
+An inbound event holds no credential.
 
 ## Handoff
 
-The consumer of every delivery is the [delivery admission](mission-service.vocabulary.md#delivery-admission) operation of the [Mission Service](mission-service.md#delivery-admission-and-check).
-The Intake Service hands a delivery over at least once.
-It retries a declared failure and an indeterminate result with backoff.
-A repeat carries the same delivery identity and the same content.
-The Intake Service records the [disposition](intake-service.vocabulary.md#disposition) that the consumer answers.
-Acceptance and duplication end the handoff.
-A refusal ends the handoff and remains visible to a human.
-After a bounded count of failed handoff attempts, the Intake Service parks the delivery.
-A parked delivery remains visible to a human and never expires.
-The [delivery status](intake-service.vocabulary.md#delivery-status) records handoff progress.
-After acceptance, the Intake Service asks nothing further about that delivery.
+The consumer of an inbound event is the [delivery admission](mission-service.vocabulary.md#delivery-admission) operation that its inbound names.
+The [inbound event state](intake-service.vocabulary.md#inbound-event-state) records the outcome of the handoff.
+
+- A stored event starts as pending.
+- The Intake Service hands a pending event over once, and it retries nothing by itself.
+- An answer of the consumer sets succeeded. The [disposition](mission-service.vocabulary.md#disposition) stays in the record of the consumer.
+- A declared failure or an indeterminate result sets failed and appends the error to the event.
+- A restart hands every pending event over, because its handoff received no answer.
+- A repeat carries the same event identity and the same content, and the consumer is idempotent by that identity.
+- A human retry turns a failed event back to pending.
+- A human discard turns a pending or a failed event to discarded, when no human needs that event.
+- Discarded is terminal.
+- A discard of a pending event is refused while its handoff runs.
+- Every write of the state is conditional on the state that the write expects.
+
+After success, the Intake Service asks nothing further about that event.
 The [admission contract](mission-service.md#delivery-admission-and-check) assigns every effect to the consumer.
 
 ## Outbound operations and checks
@@ -139,20 +137,20 @@ Each operation serves one caller kind, and [intake-service.impl.md](intake-servi
 
 ## Capacity and retention
 
-The Intake Service bounds the count of unresolved deliveries.
-Beyond the bound, a webhook receives a retryable refusal.
-A poll pauses beyond the bound.
-A stream closes beyond the bound with the observed state failed and the reason capacity.
-The Intake Service never acknowledges a delivery and drops it.
-It keeps the record of a resolved delivery with its identity, because the Mission Service references that identity.
-It bounds the retention of the payload of a resolved delivery.
-It never removes an unresolved delivery or its payload.
-It promises the durability of every accepted delivery.
+The Intake Service bounds the count of pending events.
+Beyond the bound, a webhook receives a retryable refusal, and a poll pauses.
+The Intake Service never acknowledges an event and drops it.
+It removes no event by itself.
+A human deletes events with a filter: a state with a range of event identities, or a list of exact event identities.
+A delete without a filter is refused.
+A delete removes succeeded, failed and discarded events, and no delete removes a pending event.
+A delete of an inbound removes its events, and the delete is refused while the inbound holds a pending event.
+The Intake Service promises the durability of every acknowledged event.
 It promises no receipt of every update that a platform produces.
 
 ## Authority
 
-Every authenticated human holds authority to create, enable, disable and retire a subscription of any source binding.
+Every authenticated human holds authority to create and delete an inbound, and to retry, discard and delete an inbound event.
 The [Gateway Service](gateway-service.md#human-authority) owns that human authority rule.
-A subscription names its consumer from the closed set of [admission operations](mission-service.vocabulary.md#delivery-admission).
+An inbound names its consumer from the closed set of [admission operations](mission-service.vocabulary.md#delivery-admission).
 It names no arbitrary operation.
