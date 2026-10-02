@@ -81,7 +81,7 @@ The fairness bound survives a noisy project that competes with quiet projects.
 Two properties have bounds and measurements.
 Discovery lag measures the interval from the commit of an accepted change to the handling of its wakeup.
 Claim latency measures the interval from a work pull to a claim when work exists.
-The [Intake Service](intake-service.md#capacity-and-retention) owns delivery capacity.
+The [Intake Service](intake-service.md#capacity-and-retention) owns the capacity of inbound events.
 This document names no value for a bound.
 The pool size and the limits follow the workload and the measurements.
 The [Tracking Service](tracking-service.md#writing-telemetry) holds these measurements and decides nothing.
@@ -124,7 +124,7 @@ The Scheduler bounds waiting-request counts and timeouts separately from claim h
 An empty work pull opens no attempt, creates no execution and counts no live execution.
 A no-work result ends the request.
 An instance retries with backoff, never with tight polling.
-A Mission write, an accepted delivery or an ended execution of the binding triggers a recheck for a waiting pull.
+A Mission write, an accepted inbound event or an ended execution of the binding triggers a recheck for a waiting pull.
 The Scheduler rechecks every admission condition before it satisfies that pull.
 A [disablement](project-service.md#execution-configuration-and-instance-count) of the binding takes effect while a request waits.
 
@@ -169,7 +169,7 @@ The operation reads the `running` execution of the runtime identity before admis
 A pull from another instance never receives that execution.
 After the execution ends, a pull of the instance selects new work.
 An acknowledgement of an ended claim restores no authority.
-A replayed delivery revives no claim.
+A replayed inbound event revives no claim.
 
 A worker declares the node states that its instances consume, and the [Mission Service](mission-service.md#state-transitions) owns the states that admit a claim: `Available`, `Waiting` and `External.Requested`.
 For an otherwise eligible node, the Scheduler admits a claim only when the worker of the pulling instance declares the state of the node at admission.

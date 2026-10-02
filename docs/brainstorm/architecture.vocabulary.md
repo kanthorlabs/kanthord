@@ -58,7 +58,7 @@ The result that a resource healthcheck reports. The set is closed and holds thre
 The grouping of a resource inside its owning service in the health report. The set is closed and holds two values.
 
 - **global**: a server-wide resource; a credential store record or an agent provider of a global enablement.
-- **project**: a binding, or its subscription or registered instance, under its project.
+- **project**: a binding, an inbound or a registered instance, under its project.
 
 ## actor
 

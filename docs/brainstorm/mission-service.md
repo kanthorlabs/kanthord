@@ -815,35 +815,35 @@ A node whose attempt requests no external action returns none.
 
 ## Delivery admission and check
 
-The [delivery admission](mission-service.vocabulary.md#delivery-admission) operation receives one [delivery](intake-service.vocabulary.md#delivery) from the [Intake Service](intake-service.md#handoff).
+The [delivery admission](mission-service.vocabulary.md#delivery-admission) operation receives one [inbound event](intake-service.vocabulary.md#inbound-event) from the [Intake Service](intake-service.md#handoff).
 The operation has a unary lifetime: one request and one answer.
 Admission records its decision durably before it answers.
-Admission is idempotent by the delivery identity.
-A repeat with the same identity and content returns the recorded [disposition](intake-service.vocabulary.md#disposition).
+Admission is idempotent by the inbound event identity.
+A repeat with the same identity and content returns the recorded [disposition](mission-service.vocabulary.md#disposition).
 A repeat with different content receives a refusal.
 A refusal is terminal and names its reason.
-Acceptance means the Mission Service owes every effect of the delivery.
+Acceptance means the Mission Service owes every effect of the inbound event.
 Acceptance promises no execution.
 Admission operates when a project has no live worker instance.
 Processing occurs at least once and produces idempotent effects.
-The Mission Service deduplicates effects per project and per request evidence across subscription kinds, redeliveries and checks.
+The Mission Service deduplicates effects per project and per request evidence across inbounds, redeliveries and checks.
 The deduplication key of an unchanged state is the open item C3 of [HANDOFF](HANDOFF.md#mission-service-1).
 The Mission Service bounds admission processing separately from its other operations.
 It retries no unauthorized request.
 
-Admission resolves the project from the [source binding](project-service.vocabulary.md#source-binding) of the delivery.
+Admission resolves the project from the [inbound](intake-service.vocabulary.md#inbound) of the event.
 It invokes the decoding of the [platform implementation](repository.vocabulary.md#platform-implementation) of the [Repository component](repository.md#platform-connector-and-platform-implementations), which answers the address of the external object.
 Admission interprets no platform payload.
 It finds the request evidence of that address among the requests of an open attempt of the project that hold no end state.
-More than one match refuses the delivery as ambiguous.
-A matching pull request identifier never attaches a delivery to the newest attempt by itself.
+More than one match refuses the inbound event as ambiguous.
+A matching pull request identifier never attaches an inbound event to the newest attempt by itself.
 The address correlates the request evidence of one remote thing across attempts, and correlation never depends on the continued existence of the originating instance.
 
 Acceptance as an observation calls the check of the [Intake Service](intake-service.md#boundary) for the request evidence before the admission transaction.
 The check reads the platform under the [service identity](project-service.vocabulary.md#service-identity) of the Mission Service and answers the end state.
 The admission transaction then writes the admission record, the end state and the landed-commit evidence together.
 A result that establishes no end state writes only the admission record.
-A failed check answers a retryable failure, and the Intake Service hands the delivery over again and parks it after its bound.
+A failed check answers a retryable failure. The Intake Service marks the inbound event failed, and a human retries it.
 Acceptance as a human act invokes the Mission operation under the [linked human identity](mission-service.vocabulary.md#linked-human-identity).
 Refusal admits no effect.
 A duplicate creates no second effect.
@@ -858,11 +858,11 @@ The [external input](mission-service.vocabulary.md#external-input) identifies th
 A request for new WHAT creates no node and receives no acceptance as a scheduling request.
 [Criterion and authority](#criterion-and-authority) owns node writes and their authority.
 The [unblock](#the-unblock) requires human authority.
-Delivery acceptance alone creates no claim, unblocks no node and starts no execution.
+The acceptance of an inbound event alone creates no claim, unblocks no node and starts no execution.
 A change request produces an end state that is not the expected end state.
 [State transitions](#state-transitions) own the resulting block, and the unblock opens the next attempt.
 The Scheduler Service serves the node after that unblock.
 
-Receiving a delivery is inbound, requesting an external action is outbound, and the Intake Service performs both.
+The receipt of an inbound event is inbound, the request of an external action is outbound, and the Intake Service performs both.
 The [boundary](#boundary) assigns the performance of the request of a required external action and its idempotency to the Worker Service.
 A platform signature grants no authority to write WHAT, execute a node or override an outcome.

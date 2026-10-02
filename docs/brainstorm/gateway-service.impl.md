@@ -362,7 +362,7 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 - `capability` is a nonempty string that names the capability of the check, not a claim about other capabilities.
 - A Custody resource name is its credential name.
 - A project-scoped resource name of the Project Service is its binding name.
-- An Intake Service resource name is `<source binding name>/<subscription kind>`.
+- An Intake Service resource name is its inbound identity.
 - A global resource name of the Worker Service is `<agent name>/<provider name>` for an agent provider.
 - A project-scoped resource name of the Worker Service is `<worker binding name>/<runtime identity>` for a registered instance. Its target is `registration:<runtime identity>`. The Worker Service takes the project name and the binding name from the Project Service through the binding read of the registration, and reads no Project table.
 - Each name segment uses percent encoding, including any literal `/` or `%`, so distinct names remain distinct.
@@ -503,7 +503,7 @@ The operator adds the public hostname of the ingress to the host allowlist.
 
 The work pull and the registration of a worker instance are registered routes.
 The MCP server of the Worker Service occupies the path `/api/worker/mcp`, and [worker-service.impl.md](worker-service.impl.md#mcp-server) declares its three operations.
-A webhook delivery enters through a registered route whose handler passes it to the [Intake Service](intake-service.md#deliveries).
+A webhook delivery enters through a registered route whose handler passes it to the [Intake Service](intake-service.md#inbound-events).
 Each operation declares its own access policy; a path prefix grants no policy.
 `GET /api/liveness` and the OpenAPI routes declare the `public` policy.
 `GET /api/healthcheck` declares the `human` policy.

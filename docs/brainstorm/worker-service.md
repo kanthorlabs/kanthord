@@ -826,7 +826,7 @@ A later execution never depends on the retained agent context of an earlier exec
 
 ## Boundary
 
-The [Project Service](project-service.md) owns bindings, their entries and configured counts, system authorization and repository strategy.
+The [Project Service](project-service.md) owns bindings, their entries and configured counts and repository strategy.
 [Custody](custody.md) owns resource credentials and suitability.
 The [Scheduler Service](scheduler-service.md) owns the work queue, claim, execution record, fixed deadline and live-execution accounting.
 The [Mission Service](mission-service.md) owns the node states, the node revision, the evidence record, the assessment record, the outcome record, the request evidence and the readiness and continuation conditions.

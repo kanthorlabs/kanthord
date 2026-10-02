@@ -18,7 +18,7 @@ It describes no mechanism of another service.
 - The CLI is a client of the same RESTful API. No separate entry path exists.
 - The Gateway Service publishes a machine-readable contract of the RESTful API, and every client derives from that contract.
 - The work pull, the registration of a worker instance and the MCP server sit behind the Gateway Service.
-- A webhook delivery of an external platform enters through the Gateway Service, which passes it to the [Intake Service](intake-service.md#deliveries).
+- A webhook delivery of an external platform enters through the Gateway Service, which passes it to the [Intake Service](intake-service.md#inbound-events).
 
 ## Health report and liveness answer
 
@@ -77,7 +77,7 @@ It describes no mechanism of another service.
 
 ## Boundary
 
-- The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization.
+- The service that owns an operation enforces its system authorization, under [architecture.md](architecture.md#invocation).
 - [Custody](custody.md) owns resource credentials.
 - The [Mission Service](mission-service.md#criterion-and-authority) owns node writes and their authority.
 - The [Scheduler Service](scheduler-service.md#work-pulls) owns claim and scheduling.

@@ -652,11 +652,17 @@ When a human retires `add-recovery-codes.md` through the node API, the set holds
 
 ## delivery admission
 
-Delivery admission is the Mission operation that durably decides the disposition and the owed effects of one delivery.
+Delivery admission is the Mission operation that durably decides the [disposition](#disposition) and the owed effects of one [inbound event](intake-service.vocabulary.md#inbound-event).
 The closed set of admission operations holds delivery admission alone.
-The Intake Service submits the delivery about pull request 42 of "Add password reset" to delivery admission.
+The Intake Service submits the inbound event about pull request 42 of "Add password reset" to delivery admission.
 Admission calls the Intake check, records acceptance as an observation and sets the expected end state on the request evidence.
 A repeat returns that recorded disposition.
+
+## disposition
+
+A disposition is the answer that delivery admission records for one inbound event.
+The closed set holds `accepted as an observation`, `accepted as a human act`, `refused` and `duplicate`.
+Delivery admission records `accepted as an observation` for the merge of pull request 42.
 
 ## external input
 
@@ -666,9 +672,9 @@ The closed set of human acts holds an unblock, a pause, a resume, an edit and an
 
 ## linked human identity
 
-The [human identity](overview.vocabulary.md#human-identity) that a delivery links to.
+The [human identity](overview.vocabulary.md#human-identity) that an inbound event links to.
 The Mission Service invokes the human act on a node under that identity.
 The term names no closed set.
 
-A delivery from the GitHub webhook source links to the account `ulrich`.
+An inbound event of the GitHub webhook inbound `inbound_01J9QK3T` links to the account `ulrich`.
 Delivery admission invokes the Mission operation under the linked human identity of `ulrich`.

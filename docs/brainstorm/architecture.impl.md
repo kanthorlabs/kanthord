@@ -302,7 +302,7 @@ This sibling declares the fields below.
 - The derivation is `crypto.hkdfSync` with SHA-256, an empty salt and one label for each purpose.
 - A label is unique across the server.
 - The implementation sibling of a service names a label of that service, and this sibling names a label of a server-wide mechanism.
-- The Gateway Service derives its JWT signing key, and the Project Service derives every webhook secret of a source binding.
+- The Gateway Service derives its JWT signing key, and the Intake Service derives every webhook secret of an inbound.
 - The server derives the record cipher key of the `credential` table, because the envelope of that table is a server-wide mechanism.
 
 ## The field index
@@ -732,8 +732,8 @@ Both adapters implement one transport-neutral value and error contract.
 - Its output conforms to the output schema.
 - The direct adapter isolates values as HTTP does.
 - No result carries a live object, a transaction or a runtime resource.
-- Only the [credential handover](custody.impl.md#the-credential-handover) and [acquisition grant](project-service.impl.md#the-acquisition-grant) carry credential material in operation results.
-- The handover is encrypted under a key derived from the client secret on either adapter; the acquisition grant carries plaintext through the direct adapter alone.
+- Only the [credential handover](custody.impl.md#the-credential-handover) carries credential material in operation results.
+- The handover is encrypted under a key derived from the client secret on either adapter.
 - A [credential release](custody.impl.md#the-release-of-a-secret) is a call of the shared custody component inside the process and no operation result, so it crosses no adapter.
 - A client returns `Completed`, `Failure` or `Indeterminate`.
 - An indeterminate result appears on either adapter because one caller implementation runs in every application.
@@ -809,7 +809,7 @@ A process split retains these boundaries.
 - A test covers the removed login and logout commands and asserts a non-zero exit without creating or changing client configuration.
 - A test runs one operation through the direct adapter and through the HTTP adapter.
 - It asserts the same result, failure value and replay within the TTL of the idempotency component.
-- A conformance test runs every operation except a `service` operation through both adapters, including a malformed value and a lost answer. It asserts that no answer holds credential material, and it exempts the credential handover and the acquisition grant by name.
+- A conformance test runs every operation except a `service` operation through both adapters, including a malformed value and a lost answer. It asserts that no answer holds credential material, and it exempts the credential handover by name.
 - A test asserts that the `worker` application refuses to start when its package version differs from the version the server publishes.
 - A test asserts that `quiesce()` leaves the handlers of a service available to a peer during the drain.
 - It asserts that `stop()` after the drain releases the resources of the service.
