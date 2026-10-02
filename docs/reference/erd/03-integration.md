@@ -127,7 +127,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - A webhook event is verified before it is stored, and it is stored before its acknowledgement. An event that fails verification is stored nowhere.
 - A stored row keeps `event` and `metadata` unchanged, so every handoff of the event carries the same identity and the same content.
 - `state` starts as `pending`. The one handoff sets `succeeded` on an answer of the consumer, and `failed` on a declared failure or an indeterminate result. A human retry sets `pending` on a `failed` event. A human discard sets `discarded` on a `pending` or a `failed` event, and it is refused while the handoff of that event runs. `discarded` is terminal. Every write of `state` is conditional on its expected state.
-- `error` is null until the first failure. Each failure appends `{ code, message, created_at }`. The array has a bound in bytes, and its value is open.
+- `error` is null until the first failure. Each failure appends `{ code, message, created_at }`. The array has a bound in bytes, and its value is open. An append beyond the bound drops the oldest items.
 - No process deletes an event by itself. A human delete names a state with a range of `id`, or a list of exact identities. It removes `succeeded`, `failed` and `discarded` events, and it never removes a `pending` event.
 - The count of pending events has a bound, and its value is open.
 

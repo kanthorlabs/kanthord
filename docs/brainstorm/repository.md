@@ -14,7 +14,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 ## Boundary
 
 - The component holds no authority.
-- Every service calls it for its own purpose after the [Project Service](project-service.md#authorization-and-credential-custody) authorizes the operation.
+- Every service calls it for its own purpose after the service that owns the entity of the operation authorizes it, under [architecture.md](architecture.md#invocation).
 - The repository connector resolves the binding through the Project Service for each operation, under the requester's identity.
 - [Custody](custody.md#secret-use-and-handover) owns the credential boundary and follows the authorization check.
 - The Project Service calls the repository connector for a network git read at a repository binding write.
@@ -42,9 +42,9 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The platform connector selects the platform implementation by that field.
 - A platform implementation derives the resource of a call from the binding or from the inbound.
 - A caller supplies no resource selector.
-- Every platform API call names the requester's identity and the binding that it acts on.
-- The platform implementation resolves the binding through the Project Service for each API call.
-- For a call of an inbound, it takes the facts that the Intake Service supplies from the row of that inbound.
+- Every platform API call names the requester's identity and the binding or the inbound that it acts on.
+- For a call on a binding, the platform implementation resolves the binding through the Project Service.
+- For a call of an inbound, it takes the facts that the Intake Service supplies: the validated input at a create, and the row of the inbound otherwise. It requires no Project decision.
 - A platform implementation fills the platform event identity and the metadata of an inbound event at its receipt and at its poll.
 - A platform implementation decodes an inbound event into the event types of its platform.
 - A payload decoder is pure and performs no API operation.

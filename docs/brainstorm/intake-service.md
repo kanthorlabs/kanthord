@@ -61,7 +61,8 @@ The create validates the inbound before its insert.
 The create of a registered webhook registers the address of the inbound at the platform, then inserts the row with the registration identity.
 An uncertain registration result makes the create read the registrations at the platform.
 The create adopts the registration that names the same address, or it inserts nothing.
-A lost answer creates no second registration.
+A lost answer inside the create creates no second registration.
+A crash between the registration and the insert leaves a registration without a row, and a human removes it at the platform.
 The create of a poll performs one request with the credential before the insert.
 A passive webhook names no credential, and kanthord registers nothing for it.
 A human sets its address and its secret at the platform.

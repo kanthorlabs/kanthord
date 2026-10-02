@@ -255,8 +255,8 @@ flowchart TB
 | Component                  | Ownership and location                                                                                                                                                    |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Operational store          | Owns the SQLite connection, exclusive lock and migration runner for `kanthord.db`. Services own their tables; peers call interfaces rather than reading peer tables.      |
-| Credential custody         | Project owns credential access. Its protected records use authenticated encryption derived from the installation's master key. Credentials are not evidence or telemetry. |
-| Delivery store             | Intake requires durable inbounds and inbound events. Its physical table/file layout remains an open implementation decision; no database assignment is implied here.     |
+| Credential custody         | Custody owns credential access, and the service that owns the entity of a release authorizes it. Its protected records use authenticated encryption derived from the installation's master key. Credentials are not evidence or telemetry. |
+| Delivery store             | Intake owns `intake_inbound` and `intake_inbound_event` in `kanthord.db`, under [ERD 3](../reference/erd/03-integration.md).     |
 | Tracking store             | Tracking owns `tracking.db`, independent migrations and telemetry retention. The no-op tracer phase creates no telemetry file.                                            |
 | Configuration files        | The XDG configuration directory holds `kanthord.yaml` and client `cli.yaml`. The server never reads the client configuration.                                             |
 | State files                | The XDG state directory holds operational logs and execution workspaces. A native worker's workspace lives on its execution host.                                         |

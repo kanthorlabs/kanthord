@@ -30,8 +30,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `checkpoint` is JSON text whose shape the platform implementation validates.
 - The table holds no unique index other than its key.
 - The create validates the input, then performs the remote validation of its kind: a registration for a registered webhook, one request for a poll, nothing for a passive webhook.
-- The insert transaction checks that the credential name exists and that its platform suits the inbound. A credential removal calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and a removal never interleave.
-- A delete of a registered webhook first refuses with 409 `intake.inbound.events_pending` when a pending event exists. Then it deregisters at the platform, and a not-found answer counts as done. Then one transaction checks the pending events again, deletes the events of the inbound and deletes the row. A pending event at that check refuses the delete, and the next delete finds the registration absent.
+- The insert transaction checks that the credential name has a live revision and that its platform suits the inbound. When the insert refuses after a registration, the create deregisters with the material that it still holds, then answers the refusal. A credential removal calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and a removal never interleave.
+- A delete of a registered webhook first refuses with 409 `intake.inbound.events_pending` when a pending event exists. Then it deregisters at the platform, and a not-found answer counts as done. Then one transaction checks the pending events again, deletes the events of the inbound and deletes the row. A pending event that arrives during the deregistration refuses that transaction. The inbound then stays without its registration, and a later delete completes it.
 - A create or a delete answers its platform refusal and changes no row. Each failure writes a span of the Tracking Service with its reason.
 
 ## The webhook acquisition
@@ -62,6 +62,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 ## The poll acquisition
 
 - The poll runs on an interval of 60 seconds per inbound with a release per request. Each request carries a deadline.
+- One poll request per inbound runs at a time. The next interval starts after the previous request ends, so no older answer commits its checkpoint after a newer one.
 - The GitHub poll reads the events of the resource with `If-None-Match` set to the ETag of `checkpoint`. A 304 answer stores nothing.
 - Each event inserts `event_id` from the event `id`, the event JSON in `event` and `{ "event": <type> }` in `metadata`.
 - The transaction that stores the batch also writes `checkpoint`. It discards the batch when the inbound row no longer exists.
@@ -72,8 +73,9 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 - The dispatcher reads pending events in the order of `id` and hands each one to the `consumer` of its inbound through the direct adapter under the service identity of the Intake Service.
 - A module-private `Set` holds the identity of every event whose handoff runs. The dispatcher adds the identity before the consumer call and removes it after the write of the answer, so one event never has two handoffs at once.
+- The dispatcher re-reads the state of one event and adds its identity to the set in one synchronous step, with no await between them. It starts the handoff only for an event that is still `pending`. A discard reads the set and writes its conditional update in one synchronous step. `node:sqlite` `DatabaseSync` and the single event loop serialize the two steps.
 - An answer of the consumer sets `succeeded` with an update conditional on `pending`.
-- A declared failure or an indeterminate result sets `failed` with an update conditional on `pending`. The same update appends `{ code, message, created_at }` to the JSON array `error`. The array is bounded in bytes and holds no credential material.
+- A declared failure or an indeterminate result sets `failed` with an update conditional on `pending`. The same update appends `{ code, message, created_at }` to the JSON array `error`. The array is bounded in bytes and holds no credential material. When an append exceeds the bound, the update drops the oldest items until the array fits. A message beyond its own bound is cut at that bound.
 - The dispatcher retries nothing and holds no backoff. At a start, it hands every pending event over.
 - `intake.inbound.event.retry` is a `human` operation. It turns a failed event to `pending`. A pending event answers its current state, and a succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
 - `intake.inbound.event.discard` is a `human` operation. It turns a pending or a failed event to `discarded`. A pending event whose identity is in the in-flight set answers 409 `intake.inbound.event.in_flight`. A succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
@@ -128,7 +130,11 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - A test covers a create of a registered webhook whose registration answer is lost, followed by a read that finds the registration, and it asserts one registration and one row.
 - A test covers a create whose registration the platform refuses, and it asserts no row.
 - A test covers a create of a poll whose first request fails, and it asserts no row.
-- A test covers a credential removal concurrent with an inbound create that names it, and it asserts that one of the two fails and that no row names a removed credential.
+- A test covers a credential removal between the registration and the insert of a create that names it, and it asserts that the insert refuses and that no row and no registration remain.
+- A test covers a pending event that arrives during the deregistration of a delete, and it asserts the refusal, the kept row and the completion by a later delete.
+- A test covers a discard after the dispatcher selects an event and before it starts the handoff, and it asserts that no handoff starts.
+- A test covers an append to a full `error` array, and it asserts that the oldest item goes and the state becomes `failed`.
+- A test covers a slow poll request, and it asserts that no second request of that inbound starts before it ends.
 - A test covers a delete of a registered webhook with a pending event, and it asserts the 409 and the registration at the platform unchanged.
 - A test covers a deregistration that answers not-found, and it asserts the delete of the row.
 - Tests cover a missing, a duplicate, a malformed and a wrong-length signature, and a valid signature over the exact bytes.
