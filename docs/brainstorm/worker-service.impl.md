@@ -329,6 +329,7 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - The `worker` application calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
 - It decrypts the envelope with the handover key that it derives from its own `clientSecret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ executionId, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204. The application calls it after each refresh that pi-ai performs and once at the release.
+- The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `executionId` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - A platform action runs through the action performer of the server.
