@@ -30,6 +30,7 @@ A mechanism here never overrides a rule there.
 - Every answer includes metadata and excludes the secret.
 - Removal checks every dependent, including agent providers, in the transaction of the commit.
 - Removal calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
+- Removal calls the Intake collaboration `inboundsNaming(tx, credentialName)` in that transaction. It answers every inbound that names the credential.
 - Removal revokes every live revision of the name and keeps the rows, because an execution record references them.
 - A refusal lists the dependents.
 - Creation and rotation validate the local schema and make no remote call.
@@ -89,16 +90,16 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - The info of the handover key is `handover/server-to-worker/v1`, and the info of the refresh-report key is `handover/worker-to-server/v1`.
 - A manual replacement of `masterKey` makes stored credentials unreadable.
 - A human enters each secret again into its existing record; entity references stay valid.
-- [Delivery verification](project-service.impl.md#the-verification-of-a-delivery) owns the webhook secret derivation.
+- [The verification secret](intake-service.impl.md#the-verification-secret) of the Intake Service owns the webhook secret derivation.
 
 ## The protected facility
 
-- The facility consumes the authorization result of the [Project Service](project-service.md#authorization-and-credential-custody).
+- The facility consumes the authorization result of the service that owns the entity of the release.
 - Its authorization function accepts requester identity, entity and requested operation, and returns a grant or refusal.
 - A module-private `WeakSet` records each frozen grant, so a caller cannot fabricate one.
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
-- Acquisition grants follow [their own contract](project-service.impl.md#the-acquisition-grant) and cannot enter `release`.
+- A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `webhook-register`, `webhook-read`, `webhook-deregister` or `poll`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
 - Human and machine identities pass the checks of [Gateway identity verification](gateway-service.impl.md#the-jwt).
 - A service identity passes `isServiceIdentity` of the kernel.
 - An execution identity resolves through the Scheduler Service to the node of its live claim.
@@ -228,7 +229,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision.conflict`. A test covers the same case for two metadata edits.
 - Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, the metadata copy and replacement at rotation, and a `baseUrl` change at rotation alone.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
-- Tests assert that `release` refuses a consumed, a fabricated and an acquisition grant, and that `drop()` clears the buffer after a success and after a failure.
+- Tests assert that `release` refuses a consumed grant, a fabricated grant and an inbound operation under another service identity, and that `drop()` clears the buffer after a success and after a failure.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
 - Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
 - A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.

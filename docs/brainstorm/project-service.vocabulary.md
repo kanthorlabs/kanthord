@@ -147,26 +147,7 @@ A service identity is the identity that a service presents for its own authorize
 The Mission Service checks pull request 42 of "Add password reset" under its service identity.
 The facility resolves that identity through the request evidence to the repository binding, the project and the node.
 The Mission Service performs no operation class other than the check of a request evidence under that identity.
-The Intake Service presents its own service identity for an [acquisition grant](project-service.vocabulary.md#acquisition-grant) on the source binding of `kanthord-web`.
-
-## acquisition grant
-
-An acquisition grant authorizes one acquisition session for one subscription under the service identity of the Intake Service.
-The grant names its source binding and its kind.
-The closed set of kinds holds `webhook-register`, `poll` and `stream-open`.
-The Project Service grants `webhook-register` for the subscription of the GitHub source binding of `kanthord-web`.
-The Intake Service uses that grant to register the webhook for `kanthorlabs/kanthord`.
-
-## source binding
-
-The Intake Service redesigns the delivery source, and the Project Service holds no `source` binding kind. The entry stays until that redesign.
-
-The binding of a delivery source that a project accepts.
-
-The project binds the GitHub webhook source of its repository.
-The binding holds the verification secret behind custody.
-The Project Service verifies each delivery as its own operation.
-The binding holds the [subscriptions](intake-service.vocabulary.md#subscription) that the Intake Service uses to acquire its deliveries.
+The Intake Service presents its own service identity for the credential release of the inbound `inbound_01J9QK3T` of `kanthord-web`.
 
 ## resolution
 

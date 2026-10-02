@@ -10,7 +10,8 @@ title: Custody
 It owns resource credentials and their protection.
 Custody manages credentials: it stores them, validates them with its platform probe, refreshes them and releases their material.
 It performs no operation of a service.
-The [Project Service](project-service.md#authorization-and-credential-custody) owns system authorization.
+The service that owns the entity of a release enforces its [system authorization](project-service.vocabulary.md#system-authorization).
+The human configuration of an [inbound](intake-service.vocabulary.md#inbound) authorizes the release of its credential, and the [Intake Service](intake-service.md#boundary) performs that release.
 Custody grants no authority through possession of a credential reference.
 
 ## Credential records
@@ -36,6 +37,7 @@ Custody grants no authority through possession of a credential reference.
 - Each revision holds its own metadata. A rotation copies the metadata of the newest live revision, and the human can replace it in that rotation. A metadata edit inserts the next revision and copies the secret.
 - Custody refuses removal while dependents exist and lists those dependents in the refusal.
 - Dependents include every agent provider that names the record.
+- Dependents include every inbound that names the record.
 - Dependents include every binding revision that names the record and that no tombstone follows, while it is the latest revision of its binding or a node that is not terminal and not retired pins it. A binding edit that names another credential leaves a pinned older revision a dependent.
 - The dependency check and removal are atomic.
 - Every record answer contains metadata and no secret.
@@ -44,7 +46,7 @@ Custody grants no authority through possession of a credential reference.
 
 - [System authorization](project-service.vocabulary.md#system-authorization) is what kanthord permits an identity to access.
 - [Credential authority](custody.vocabulary.md#credential-authority) is what the remote permits any holder.
-- The Project Service enforces system authorization, and custody records credential authority.
+- The service that owns the entity of an operation enforces system authorization, and custody records credential authority.
 - The boundary is the authorization of an operation, not the custody of bytes.
 - An agent that never reads a key still uses an authenticated tool.
 - One API key authorizes a whole account.
@@ -74,7 +76,7 @@ Custody grants no authority through possession of a credential reference.
 - No credential reaches an external harness, agent context, tool result, log record or workspace file.
 - An execution holds no credential itself.
 - The [execution store view](custody.impl.md#the-credential-store-of-an-execution) supplies the native runtime.
-- The [Project Service](project-service.impl.md#the-acquisition-grant) owns acquisition grants.
+- The [Intake Service](intake-service.impl.md#the-credential-release-of-an-inbound) takes one release for each remote call of an inbound.
 - The [Project Service](project-service.impl.md#presigned-storage-grants) owns presigned storage grants.
 
 ## Login sessions

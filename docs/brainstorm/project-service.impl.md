@@ -198,23 +198,10 @@ A resolution authorizes one operation, so the next operation resolves the chain 
 
 - The Project Service offers `getBindingRevision(tx, bindingRevisionId)` to the Mission Service through its `contract.ts`. It answers the binding revision with its `projectId`, so the Mission Service checks the project ownership of a rebind target directly.
 
-## The webhook key
-
-The Intake Service redesigns this section with the delivery source under [HANDOFF](HANDOFF.md#intake-service), because the Project Service holds no `source` binding kind.
-
-[architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file, the rule that a service derives its keys from it and never uses it directly, and the cipher key of the `credential` table.
-The Project Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt.
-
-- `HKDF(masterKey, info = "webhook/<binding id>/<rotation>")` is the verification secret of one source binding.
-
-It derives that secret at the moment that it needs one, so no webhook secret sits in the store.
-A manual replacement of `masterKey` invalidates every derived webhook secret.
-A human pastes a new value at the platform for every source binding.
-
 ## Authorization integration
 
 The Project Service supplies system authorization to [custody's protected facility](custody.impl.md#the-protected-facility).
-It permits the Mission Service to check a request evidence and the Intake Service to use acquisition grants.
+It permits the Mission Service to check a request evidence.
 The resolution of a request evidence reaches the repository binding, project and node through authoritative records, never caller-supplied associations.
 A broken chain of a model inference credential answers 403 `project.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
 
@@ -237,20 +224,6 @@ Tests assert authorization before the release of the credential and derive the d
 Tests assert the 1 hour PUT expiry, optional checksum header and authorized GET for the recorded object version.
 Tests assert that no storage credential or presigned URL enters the handover, logs or agent context.
 Tests refuse grants for unauthorized readers or executions without a live claim.
-
-## The acquisition grant
-
-The Intake Service redesigns this section with the delivery source under [HANDOFF](HANDOFF.md#intake-service), because the Project Service holds no `source` binding kind.
-
-- The operation is `project.acquisition_grant`, a `unary` mutation under the `service` access policy, reachable through the direct adapter alone. Its input holds the source binding identity, the kind from `webhook-register`, `poll` and `stream-open`, and the subscription identity. Its caller is the service identity of the Intake Service, and the facility refuses every other service identity for this operation.
-- The facility resolves the source binding to its project and credential record. The source binding configuration names that record for its platform. The facility checks the disablement of the binding and refuses a disabled or removed binding.
-- The answer holds the grant identity `acquisition_grant_<ulid>`, the acquisition material, the platform and the expiry. The acquisition material is the record's pi-ai credential value or platform token. The value contract of [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) names this operation as one of the two whose answer carries credential material. [intake-service.md](intake-service.md#boundary) requires that material in the memory of the Intake Service. For `webhook-register`, the answer also holds the current verification secret of the source binding. The log and the idempotency component redact the answer, and no HTTP route reaches the operation.
-- The table `project_acquisition_grant(id, project_id, source_binding_id, subscription_id, kind, service, credential_id, issued_at, expires_at, ended_at, end_reason)` records every grant. `end_reason` is one of `session_end`, `binding_disabled`, `binding_removed`, `credential_rotated`, `expired`. The row holds no material.
-- The code fixes the maximum lifetime at 24 hours from `issued_at`, and a sweep every minute ends an expired grant.
-- A grant ends through `project.acquisition_grant_end`, a `unary` mutation under the `service` policy. The Intake Service calls it with the grant identity when its session ends, and the facility writes `session_end`.
-- The facility revokes a grant when a binding set edit commits a disablement or removal of its source binding. It also revokes the grant when the material of its credential record changes and at its expiry. The revocation writes `ended_at` and `end_reason` in the same transaction as the cause where one exists. After the commit, the facility calls `intake.grant_revoked` of the Intake Service with the grant identity and the reason. That operation is a `unary` mutation under the `service` policy. The facility retries a lost answer with backoff until the Intake Service acknowledges, because the Intake Service closes the acquisition at once on receipt.
-- The facility refuses `release` for an acquisition grant, because the answer of the acquisition grant already carries its material.
-- A registration of a webhook, a poll and a stream open each consume one grant of their kind. A subscription holds at most one open grant at a time.
 
 ## The network git operations
 
@@ -281,30 +254,6 @@ The Project Service holds no table of client identities and no secret of a clien
 [gateway-service.impl.md](gateway-service.impl.md#the-jwt) generates the client identity inside a machine JWT, and its verification asks the Project Service whether the worker binding of that JWT exists and is available.
 The JWT names one binding group by `project_id` and `resource_identity`, and no revision.
 The answer reads the latest row of that group. It refuses a disabled or removed binding, and a token whose `iat` is before the latest tombstone of the group.
-
-## The verification of a delivery
-
-The Intake Service redesigns this section with the delivery source under [HANDOFF](HANDOFF.md#intake-service), because the Project Service holds no `source` binding kind.
-
-The delivery route is `/hooks/<binding id>`, inside the path group that [gateway-service.impl.md](gateway-service.impl.md) reserves.
-The path names the binding, because a signature does not say which source sent the delivery, and a binding identity is unique across the server.
-The path holds no secret.
-
-Custody exposes `verifyDelivery(sourceBindingId, bytes, headers)`.
-The function derives the verification secret of that source binding, and it reads no stored secret.
-The configuration of the source binding holds one integer, `webhookSecretRotation`, which enters the derivation.
-An increment of that integer produces a new secret and creates a revision of the binding, and a human pastes the new value at the platform.
-A `GET` route of the source binding returns the current secret, so a human reads it again at any time. `GET` is no mutation, so the idempotency middleware of the Gateway Service records no secret.
-For a GitHub delivery the function requires exactly one `X-Hub-Signature-256` header.
-It rejects a missing header, a duplicate header, a value without the `sha256=` prefix, a value that is not hexadecimal and a value of another length, before any comparison.
-It computes the HMAC with `crypto.createHmac` and SHA-256 over the exact bytes, and it compares two 32-byte digests with `timingSafeEqual`.
-The signature of the platform over the exact bytes stays the proof of authenticity of a delivery, which [gateway-service.impl.md](gateway-service.impl.md) requires of an untrusted ingress.
-[gateway-service.impl.md](gateway-service.impl.md) states that the Gateway Service passes the exact bytes, so the function re-serializes nothing.
-The function names no requester identity, and it returns a boolean and no secret.
-A valid HMAC proves the possession of the secret alone.
-It authenticates no other header, it establishes no repository, and it detects no replay.
-The GitHub implementation of the [Repository component](repository.impl.md#platform-connector-and-platform-implementations) associates the payload with its repository, and the Mission Service owns the duplicate effect of a repeated delivery.
-This sibling states no replay window.
 
 ## Repository layout, build, test and release
 
@@ -341,14 +290,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose binding group is not the binding group of the claim.
 - A test covers a repository binding whose network git read fails. It asserts that the Project Service refuses the write with its error code.
 - A test covers a worker binding that is absent, removed or unavailable, and it asserts that the verification of a machine JWT that names it fails.
-- A test covers a missing, a duplicate, a malformed and a wrong-length delivery signature, and a valid signature over the exact bytes.
-- A test covers an increment of `webhookSecretRotation`, and it asserts that a delivery signed with the previous secret fails.
 - A test asserts that no log record and no error body holds secret material.
-- A test covers an acquisition grant for a disabled source binding, and it asserts the refusal.
-- A test covers a binding set edit that disables a source binding with an open grant. It asserts the `binding_disabled` row and the revocation call.
-- A test covers a grant beyond 24 hours, and it asserts the `expired` row and the revocation call.
-- A test asserts that the answer of `project.acquisition_grant` reaches no HTTP route and appears redacted in every log record.
-- A test covers a call of `project.acquisition_grant` under the service identity of the Scheduler Service, and it asserts the refusal.
 
 ## Open decisions of an epic
 

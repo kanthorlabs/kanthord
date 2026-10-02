@@ -91,7 +91,8 @@ The credential of a client identity authenticates the instance and authorizes no
 ## Authorization and credential custody
 
 The entity that performs an operation holds the credential reference that permits it.
-The Project Service enforces [system authorization](project-service.vocabulary.md#system-authorization).
+The Project Service enforces [system authorization](project-service.vocabulary.md#system-authorization) for its own operations and for a machine identity against its binding.
+The service that owns the entity of every other operation enforces its system authorization, under [architecture.md](architecture.md#invocation).
 [Custody](custody.md) owns credentials, secret protection and [suitability](custody.vocabulary.md#suitability).
 A credential reaches an operation through its responsible entity, never through a direct relationship with a project.
 Every operation names the identity that requests it.
@@ -103,16 +104,7 @@ An execution identity resolves to the node of its claim, and the facility refuse
 The facility resolves that service identity through the request evidence of the check.
 That resolution reaches the repository binding, the project and the node.
 The facility permits the service identity of the Mission Service one operation class, the check of a request evidence.
-It permits the service identity of the Intake Service the acquisition classes on a source binding through an [acquisition grant](project-service.vocabulary.md#acquisition-grant).
-The facility resolves that acquisition request through the source binding to its project.
-
-An acquisition grant serves one session of one [subscription](intake-service.vocabulary.md#subscription).
-It ends with the session.
-It ends with a disablement of the source binding.
-It ends with a rotation of its credential record.
-It ends at its maximum lifetime.
-The Project Service revokes an open grant into the [Intake Service](intake-service.md#subscriptions).
-The Project Service records every grant with the service identity, the source binding, the kind and the time.
+The human configuration of an inbound authorizes the release of its credential to the service identity of the Intake Service, under [custody](custody.md#scope).
 
 A human presents a [human identity](overview.vocabulary.md#human-identity).
 The facility recognizes every authenticated human identity as authorized for the operation, under the [human authority policy](gateway-service.md#human-authority) of the Gateway Service.
@@ -127,11 +119,8 @@ It reaches a kanthord component and never the context of an agent.
 The Project Service reads the claim state of an execution from the Scheduler Service.
 [Coverage](project-service.vocabulary.md#coverage) requires a credential reference for each repository capability that needs one.
 The Project Service consumes custody's suitability result after coverage passes.
-The operation record names the execution identity, service identity or source binding appropriate to its requester.
+The operation record names the execution identity or the service identity of its requester.
 [Custody](custody.md#secret-use-and-handover) governs secret use and handover.
-
-The Intake Service redesigns the delivery source, its verification secret and its delivery verification under [HANDOFF](HANDOFF.md#intake-service).
-Until that redesign, the acquisition grant of this page names a source binding.
 
 The diagram shows the order of one authorization.
 It shows that a refusal never reaches custody.

@@ -18,7 +18,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The repository connector resolves the binding through the Project Service for each operation, under the requester's identity.
 - [Custody](custody.md#secret-use-and-handover) owns the credential boundary and follows the authorization check.
 - The Project Service calls the repository connector for a network git read at a repository binding write.
-- The [Intake Service](intake-service.md#boundary) calls every platform implementation method, with the material of an acquisition grant or of a credential release.
+- The [Intake Service](intake-service.md#boundary) calls every platform implementation method, with the material of a credential release.
 - The Intake Service calls the platform connector to check the external object of a request evidence for the [Mission Service](mission-service.md#delivery-admission-and-check), and the platform implementation folds the platform state into an end state.
 - The Mission Service calls the payload decoders, and the GitHub decoding of a delivery answers the `PlatformAddress` of its pull request or of its push.
 - The [Worker execution](worker-service.md#executions) calls the repository connector for node-branch transport.
@@ -40,11 +40,13 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The set of platform implementations is open.
 - A binding that reaches an external platform names its [platform](custody.vocabulary.md#platform).
 - The platform connector selects the platform implementation by that field.
-- A platform implementation derives the resource of a call from the binding.
+- A platform implementation derives the resource of a call from the binding or from the inbound.
 - A caller supplies no resource selector.
 - Every platform API call names the requester's identity and the binding that it acts on.
 - The platform implementation resolves the binding through the Project Service for each API call.
-- A platform implementation decodes a delivery into the event types of its platform.
+- For a call of an inbound, it takes the facts that the Intake Service supplies from the row of that inbound.
+- A platform implementation fills the platform event identity and the metadata of an inbound event at its receipt and at its poll.
+- A platform implementation decodes an inbound event into the event types of its platform.
 - A payload decoder is pure and performs no API operation.
 - Another git platform requires one platform implementation, its permitted read methods, a platform value and the required action performer behaviour.
 - It changes no other rule.
