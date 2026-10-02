@@ -560,3 +560,11 @@ These declarations match the error table of `engine/docs/cli/worker.md`.
 | local | `cli.worker.instance.get.invalid_runtime_identity`        | The `<runtime-identity>` argument is not a canonical `worker_instance_<ulid>` identity. |
 | local | `cli.worker.instance.deregister.invalid_runtime_identity` | The `<runtime-identity>` argument is not a canonical `worker_instance_<ulid>` identity. |
 | local | `cli.worker.instance.resume.invalid_runtime_identity`     | The `<runtime-identity>` argument is not a canonical `worker_instance_<ulid>` identity. |
+
+## Handover CLI validation
+
+The `worker handover` command refuses an invalid argument locally, matching `engine/docs/cli/worker.md`.
+
+| HTTP | Code | Condition |
+| --- | --- | --- |
+| local | `cli.worker.handover.invalid_execution_id` | The `<execution-id>` argument is not a canonical `execution_<ulid>` identity. |
