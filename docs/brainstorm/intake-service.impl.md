@@ -85,6 +85,22 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - An exact list that names a pending event answers 409 `intake.inbound.event.state_conflict` and deletes nothing.
 - The delete removes the matching events in one transaction and answers their count.
 
+## Error codes
+
+| HTTP | Code | Condition |
+| --- | --- | --- |
+| 400 | `intake.inbound.event.filter_invalid` | An event delete names no filter, both filters or the state `pending`. |
+| 401 | `intake.inbound.event.signature_invalid` | A webhook post fails verification. |
+| 404 | `intake.inbound.not_found` | No inbound has that identity, or a webhook post names a poll inbound. |
+| 404 | `intake.inbound.project_not_found` | The project of a create does not exist. |
+| 404 | `intake.inbound.event.not_found` | No inbound event has that identity. |
+| 409 | `intake.inbound.events_pending` | A delete names an inbound that holds a pending event. |
+| 409 | `intake.inbound.event.in_flight` | A discard names a pending event whose handoff runs. |
+| 409 | `intake.inbound.event.state_conflict` | The state of the event permits no such transition, or a delete list names a pending event. |
+| 422 | `intake.inbound.credential_invalid` | The credential name does not exist, or its platform does not suit the inbound. |
+| 422 | `intake.inbound.platform_refused` | The platform refuses a registration, a poll request or a deregistration. |
+| 503 | `intake.inbound.event.capacity_exceeded` | The count of pending events is at its bound. |
+
 ## Outbound operations and checks
 
 - Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component and drops the material in `finally`.
