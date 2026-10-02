@@ -101,6 +101,13 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - Custody that performs a platform call, a model call or a presign. Custody releases the material, and the holder performs its own operation.
 - A human-assertion basis on an outcome (`basis_actor`, `decision`) or a revision column on `mission_outcome`. A human act writes a human assessment, and every outcome names an assessment.
 - A task record in `mission_evidence`, `mission_assessment` or `mission_outcome`, a `content_owner_id` column or a `task-result submit`. The reviewer of an objective runs and judges every task.
+- An acquisition grant for an inbound (`project_acquisition_grant`, `project.acquisition_grant`, `intake.grant_revoked`). A webhook registration and a poll take a custody release per call.
+- A Project decision for an inbound release, or an `intake.inbound.resolve` read. The human configuration of an inbound authorizes its release.
+- An enable or a disable of an inbound, a desired state, a session counter or an edit of its configuration. A human creates an inbound and deletes it.
+- A unique index on the configuration of an inbound. A duplicate inbound serves a rotation.
+- A poll that ends at an event of its resource (`stop_condition`, the state `ended`). Every poll is permanent.
+- An automatic handoff retry, a backoff, an attempt bound or a handoff window for an inbound event. The dispatcher hands an event over once, and a human retries it.
+- An automatic retention or a delete without a filter of inbound events.
 
 ## Contracts
 
@@ -118,7 +125,8 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - Never declare an index that is not a unique index.
 - The schema lives in `docs/reference/erd/` and records only ruled design. Keep HANDOFF items out of it.
 - `project_id` is the second key column only in project-scoped tables.
-- A resolved Intake delivery keeps its row. Only its payload expires.
+- Write every column name and every property name inside a JSON column in snake_case.
+- An Intake inbound event stays until a human deletes it. No automatic retention exists.
 - A rename of a table or a column also updates the map in `docs/reference/erd/README.md`.
 - `docs/viewer.html` pins mermaid 11.17.2. Never pin a version below 11, because the ERD views use `classDef` in an `erDiagram`.
 
