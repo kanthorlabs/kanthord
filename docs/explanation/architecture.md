@@ -4,7 +4,7 @@
 
 This view expands services into individual named components. **A container owns its contents. An arrow names a collaboration, call or record flow.** It does not mean “build the entire source service first.” The [implementation order](#interfaces-that-determine-implementation-order) handles cyclic dependencies through joint implementation slices.
 
-Mission Service is embedded in the Project boundary because a mission is intrinsic to its project. It is not a repository, provider, worker or source binding. This containment does not remove Mission's separate authority over its records.
+Mission Service is embedded in the Project boundary because a mission is intrinsic to its project. It is not a repository, provider, worker or inbound. This containment does not remove Mission's separate authority over its records.
 
 > **Design scope:** The complete component map includes planned work. On the documentation site, the diagram fits a wide panel and shows its full height. Zoom in for detail and scroll horizontally when enlarged.
 
@@ -256,7 +256,7 @@ flowchart TB
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Operational store          | Owns the SQLite connection, exclusive lock and migration runner for `kanthord.db`. Services own their tables; peers call interfaces rather than reading peer tables.      |
 | Credential custody         | Project owns credential access. Its protected records use authenticated encryption derived from the installation's master key. Credentials are not evidence or telemetry. |
-| Delivery store             | Intake requires durable subscriptions and deliveries. Its physical table/file layout remains an open implementation decision; no database assignment is implied here.     |
+| Delivery store             | Intake requires durable inbounds and inbound events. Its physical table/file layout remains an open implementation decision; no database assignment is implied here.     |
 | Tracking store             | Tracking owns `tracking.db`, independent migrations and telemetry retention. The no-op tracer phase creates no telemetry file.                                            |
 | Configuration files        | The XDG configuration directory holds `kanthord.yaml` and client `cli.yaml`. The server never reads the client configuration.                                             |
 | State files                | The XDG state directory holds operational logs and execution workspaces. A native worker's workspace lives on its execution host.                                         |
