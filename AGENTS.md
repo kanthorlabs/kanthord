@@ -109,6 +109,7 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - An automatic handoff retry, a backoff, an attempt bound or a handoff window for an inbound event. The dispatcher hands an event over once, and a human retries it.
 - An automatic retention or a delete without a filter of inbound events.
 - A removal of the passive webhook. A webhook inbound without a credential is the named exception to the validation before the insert.
+- A stored handshake, a handshake record or a check that a handshake runs once. A platform implementation answers a verified handshake from the request alone.
 
 ## Contracts
 

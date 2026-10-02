@@ -46,6 +46,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - For a call on a binding, the platform implementation resolves the binding through the Project Service.
 - For a call of an inbound, it takes the facts that the Intake Service supplies: the validated input at a create, and the row of the inbound otherwise. It requires no Project decision.
 - A platform implementation fills the platform event identity and the metadata of an inbound event at its receipt and at its poll.
+- A platform implementation declares its handshakes and their answers.
 - A platform implementation decodes an inbound event into the event types of its platform.
 - A payload decoder is pure and performs no API operation.
 - Another git platform requires one platform implementation, its permitted read methods, a platform value and the required action performer behaviour.

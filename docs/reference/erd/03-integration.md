@@ -124,7 +124,7 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - No row holds credential material or a webhook secret.
 - A delete of an inbound is refused while the inbound holds a pending event. A registered webhook deregisters at the platform before the delete. One transaction deletes the events of the inbound and the row.
 - `intake_inbound_event` has a unique index on `(inbound_id, event_id)`, so a redelivery inside one inbound creates no second row.
-- A webhook event is verified before it is stored, and it is stored before its acknowledgement. An event that fails verification is stored nowhere.
+- A webhook event is verified before it is stored, and it is stored before its acknowledgement. An event that fails verification is stored nowhere. A verified handshake stores no row.
 - A stored row keeps `event` and `metadata` unchanged, so every handoff of the event carries the same identity and the same content.
 - `state` starts as `pending`. The one handoff sets `succeeded` on an answer of the consumer, and `failed` on a declared failure or an indeterminate result. A human retry sets `pending` on a `failed` event. A human discard sets `discarded` on a `pending` or a `failed` event, and it is refused while the handoff of that event runs. `discarded` is terminal. Every write of `state` is conditional on its expected state.
 - `error` is null until the first failure. Each failure appends `{ code, message, created_at }`. The array has a bound in bytes, and its value is open. An append beyond the bound drops the oldest items.

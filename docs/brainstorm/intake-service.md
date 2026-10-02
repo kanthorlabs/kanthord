@@ -102,6 +102,9 @@ The webhook address carries the inbound identity, and that identity selects the 
 For a webhook event, verification precedes durable storage.
 Durable storage precedes acknowledgement to the platform.
 A webhook post that fails verification is refused, and no row records it.
+A platform implementation classifies a verified request as a [handshake](intake-service.vocabulary.md#handshake).
+The Intake Service answers a handshake from the request alone.
+A handshake stores no event, takes no place in the capacity bound and reaches no consumer.
 The Intake Service acknowledges only an event that it stores durably.
 It deduplicates within one inbound by the platform event identity.
 The [Mission Service](mission-service.md#delivery-admission-and-check) owns effect deduplication across inbounds and redeliveries.

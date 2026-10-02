@@ -32,6 +32,11 @@ An inbound event is one unit that an inbound receives from its platform.
 GitHub delivers the merge of pull request 42 for "Add password reset" to the webhook inbound `inbound_01J9QK3T`.
 That inbound belongs to `kanthord-web`.
 
+## handshake
+
+A handshake is a verified request through which a platform tests a webhook address.
+GitHub sends a `ping` to `/hooks/inbound_01J9QK3T` when the hook is created, and the Intake Service answers it without a stored event.
+
 ## platform event identity
 
 A platform event identity is the identity that a platform assigns to an event.

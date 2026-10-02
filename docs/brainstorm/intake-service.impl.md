@@ -55,6 +55,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - For a GitHub event, the verification requires exactly one `X-Hub-Signature-256` header. It rejects a missing header, a duplicate header, a value without the `sha256=` prefix, a value that is not hexadecimal and a value of another length, before any comparison.
 - It computes the HMAC with `crypto.createHmac` and SHA-256 over the exact bytes, and it compares two 32-byte digests with `timingSafeEqual`.
 - A failed verification answers 401 and stores nothing.
+- After the verification, the platform implementation classifies the request. A GitHub request with `X-GitHub-Event: ping` is a handshake and answers 204. A Slack `url_verification` follows the same rule with the answer `{ "challenge": <challenge> }` when the Slack platform lands.
+- A handshake stores no event, skips the capacity bound, reaches no consumer and writes one span of the Tracking Service. A repeat gets the same answer, so no record enforces a single handshake.
 - A valid HMAC proves the possession of the secret alone. It authenticates no other header, it establishes no repository, and it detects no replay.
 - The insert stores `event_id` from `X-GitHub-Delivery`, the exact body in `event` and `{ "event": <X-GitHub-Event> }` in `metadata`. A repeated `event_id` inside the inbound inserts nothing and answers 2xx.
 - The handler answers 2xx after the commit. Beyond the capacity bound, it answers 503 and stores nothing.
@@ -140,6 +142,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - Tests cover a missing, a duplicate, a malformed and a wrong-length signature, and a valid signature over the exact bytes.
 - A test asserts that a post with a failed verification stores nothing and answers 401.
 - A test covers a repeated `X-GitHub-Delivery` inside one inbound, and it asserts one row.
+- A test covers a signed GitHub `ping`, at the capacity bound and below it, and it asserts the 204, no row and no handoff. A test covers an unsigned `ping`, and it asserts the 401.
 - A test covers a poll batch whose store fails, and it asserts an unchanged checkpoint.
 - A test covers a poll batch whose inbound is deleted before the commit, and it asserts that no event is stored.
 - A test covers a handoff whose answer is lost at a restart, and it asserts one more handoff with the same identity and content.
