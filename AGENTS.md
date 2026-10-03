@@ -121,6 +121,7 @@ The pages record only the decision. Do not propose these alternatives again. Add
 - Never use a shortened alias, for example `deps` for `dependencies`. Never rename a field in an adapter.
 - Diff every key of a new contract against the vocabulary sibling of the owning page.
 - A divergence from the model is an explicit locked decision, never a naming convenience.
+- A human override action takes the CLI flag `--force` and the body field `force: true`. No other flag or field name accepts a risk or bypasses a check.
 - Every error code that the engine answers stands on the owning design page and on the `engine/docs/cli/` page of its command group.
 - Every command page of `engine/docs/cli/` holds an error-code table with the HTTP status, the code and the condition of each code that its commands answer.
 
