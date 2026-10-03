@@ -87,7 +87,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - An initiative requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
 - `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:nodeId/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
-  Its input holds `executionId`, `attempt`, `nodeRevision`, `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
+  Its input holds `executionId`, `attempt`, `nodeRevision`, `requirementKey`, `subject`, `scope` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
   Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
 - A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirementKey` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resourceIdentity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirementKey }`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
@@ -275,6 +275,8 @@ Repository evidence remains an address, not an upload of repository content.
 - An evidence asset holds `kind` and `content`. `content` is the RFC 8785 canonical JSON of the shape that `kind` names: `RepositoryAddress` for `repository`, the produced shape `{ mediaType, sha256, data }` for `produced`, `ObjectAddress` for `object` and `PlatformAddress` for `platform`.
 - The produced shape holds canonical base64 `data` of at most 5 MiB decoded, and a content read answers `ContentBytes` from it. The service derives `ProducedAddress` and `ObjectAddress` from `content`.
 - `mission.evidence.submit` takes the full asset list and writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
+- Every evidence holds `scope`, a `Text` that states what part of its node the evidence covers. `mission.evidence.submit` and `mission.evidence.request` require it, and an absent value answers HTTP 400 with an issue list. The service stores the value unchanged in `mission_evidence.scope`, never interprets it and answers it on every evidence read.
+- The Mission Service writes `scope: "landed commit"` on the evidence of each landed commit, from a request and from a success override.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
 - An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
 - `requirement_key` holds only the key of a `FrozenAction`; every other evidence holds no requirement key.
@@ -414,6 +416,13 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.
 - `evidenceIds` of an outcome holds the evidence that its assessment does not hold: the landed-commit evidence of the attempt and the landed commit of a success override. The read answers the union of that set and `evidenceIds` of the assessment.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
+
+## The node read
+
+- A node read of an initiative or an objective holds `dependsOn`: the node identities that the dependency edges of the node name, as a duplicate-free list in ascending order. A task read omits it, because a task carries no dependency edge.
+- `dependsOn` of a node read holds node identities. `dependsOn` of a plan file holds plan file names.
+- No operation reads the [dependency closure](mission-service.md#mission-structure-and-nodes) of one node.
+  A client composes the closure from node reads: it follows `parentId` from the node to its initiative and takes the union of `dependsOn` of each node on that path. The state of each member comes from its own node read.
 
 ## Node ready
 
@@ -620,6 +629,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests prove that execution code runs verifications before judgement.
 - Tests permit judgement only after every verification of the current tested input passes.
 - Tests turn success into `criterion-not-met` for a default-standard violation only when the worker declares a base prompt.
+- Tests require a `scope` on an evidence submission and on a request, refuse an absent or blank value, store the value unchanged and write `landed commit` on each landed-commit evidence.
 - Tests accept inline content at 5 MiB decoded and refuse one byte more with 413 `mission.evidence.too_large`.
 - Tests require canonical base64, media type and the correct SHA-256, and assert no truncation.
 - Tests refuse object uploads of a node without a storage binding and preserve inline evidence and repository addresses.
@@ -706,6 +716,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject repeated repository names on an objective because its list requires exactly one entry.
 - Tests keep identity, kind, revision, state, attempt, priority and edges outside content.
+- Tests answer `dependsOn` on the node read of an initiative and of an objective after a dependency add, a dependency remove, an import and a forced retirement, and omit it on a task read.
 - A test keeps task content inside the objective revision.
 - Tests accept verification kinds outside the guidance for each node kind.
 - A test runs verifications serially in list order through `bash -c` from the execution workspace root.
