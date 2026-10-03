@@ -29,6 +29,7 @@ The identities follow the identity convention of [architecture.impl.md](architec
 - `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` is a `client` mutation of `unary` lifetime.
 - `scheduler.claim.get` at `GET /api/scheduler/claim/:executionId` is a `client` read of `unary` lifetime with no body.
 - `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
+- `scheduler.eligibility.get` at `GET /api/scheduler/project/:projectId/eligibility/:nodeId` is a `human` read of `unary` lifetime with no body, under [The eligibility report](#the-eligibility-report).
 - `scheduler.execution.get` and `scheduler.claim.get` answer 404 `scheduler.execution.not_found` for an execution identity that no row holds.
 - A field bound of a schema is declared with that schema, and the body limit bounds nothing at the field level.
 
@@ -57,6 +58,50 @@ Every timestamp composes the shared millisecond scalar, every identity composes 
 - `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only. A `nodeId` that the project does not hold answers an empty page.
 - `scheduler.execution.list` accepts the optional query field `attempt`, a positive integer, only with `nodeId`. `attempt` without `nodeId` answers HTTP 400 `gateway.request.validation_failed`. With both, the list holds the executions of that attempt only. An attempt that the node does not hold answers an empty page.
 - Every mode of `scheduler.execution.list` orders by `executionId` descending under the shared pagination rule.
+- `scheduler.queue.list` orders by the order of the [work queue](scheduler-service.md#topology-and-work-queue): `priority` descending, then `jobId` ascending. This order replaces the primary-key order of the shared pagination rule.
+  The cursor encodes `priority` and `jobId` of the last job of a page, and the next page reads the jobs after that pair in the same order.
+  The server defines the order across all pages, and a client never re-sorts a page.
+
+## The eligibility report
+
+The eligibility report states whether the Mission state and the work queue admit a claim of one node.
+It answers only the admission checks that need no claimant.
+It predicts no claim, because a work pull rechecks every admission condition at the claim.
+
+- `EligibilityReport` holds `projectId`, `nodeId`, `state`, `claimable` and `checks`.
+  - `state` is the Mission state of the node at the read.
+  - `checks` holds four `EligibilityCheck` objects in this order: `node-state`, `mission-condition`, `queue-job` and `no-live-claim`.
+  - `claimable` is true exactly when no check holds `failed`.
+- `EligibilityCheck` holds `name`, `result` and `condition`.
+  - `result` is `passed`, `failed` or `not-applicable`.
+  - `condition` is `initiative-steps`, `readiness`, `continuation` or `null`. Only the `mission-condition` check holds a value other than `null`.
+- `node-state` passes when the node is not retired and holds `Available`, `Waiting` or `External.Requested`.
+- `mission-condition` reads the Mission condition of that state.
+  - `Available` on an initiative reads the [initiative steps condition](mission-service.md#initiative-steps-condition) as `initiative-steps`.
+  - `Waiting` reads the [readiness condition](mission-service.md#readiness-condition) as `readiness`.
+  - `External.Requested` reads the [continuation condition](mission-service.md#continuation-condition) as `continuation`.
+  - `Available` on an objective reads no condition, and the check holds `not-applicable` with `condition: null`.
+  - When `node-state` fails, the check holds `not-applicable` with `condition: null`.
+- `queue-job` passes when the work queue of the project holds a job of the node.
+- `no-live-claim` passes when no execution of the node holds the claim state `running`.
+- The handler reads the node state and the Mission condition through the Mission collaboration, and the job and the executions of the node from its own tables, in one read transaction.
+  It writes nothing, and it moves no job.
+
+The report never answers a check that needs a selected claimant:
+
+- the availability of a worker binding and its instance count;
+- the declared node states of a worker;
+- the count of a claimant;
+- the instance healthcheck;
+- the compatibility match of the exact worker name and the required node format.
+
+The report takes no instance healthcheck and reads no registration.
+It names no worker binding, no instance and no claimant.
+The instance healthcheck stays out of every human inspection command under [worker-service.impl.md](worker-service.impl.md#inspection-operations).
+
+- An absent project, an absent node or a node of another project answers 404 `scheduler.eligibility.node_not_found`.
+- A task answers 400 `scheduler.eligibility.node_task` with `details: { nodeId }`, because a task is never a unit of scheduling.
+- A path identity that is no canonical prefixed identity answers 400 `gateway.request.validation_failed`.
 
 ## Durable requests
 
@@ -145,6 +190,10 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test checks the shared error envelope, the timeout, the lifetime and the body limit of every Scheduler route.
 - A test asserts that no sweep deletes an execution record, and that an ended execution stays readable through `execution get` after a restart.
 - A test asserts that `queue list` returns no job of a node that left the claimable state.
+- A test pages `queue list` with a limit of 1 over jobs of several priorities and asserts the order of the work queue across the pages.
+- Tests read the eligibility report of a node in each of the twelve states, under each Mission condition that holds and that fails, with and without a job, and with a `running`, a `lost` and a `finished` execution. They assert each check result, `claimable` and no write.
+- Tests assert 404 `scheduler.eligibility.node_not_found` for an absent project, an absent node and a node of another project, and 400 `scheduler.eligibility.node_task` for a task.
+- A test asserts that the eligibility report takes no instance healthcheck and holds no binding, instance or claimant field.
 
 ## Execution CLI validation
 
