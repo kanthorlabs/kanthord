@@ -643,7 +643,7 @@ An operation declares its execution contract.
 - The close of the connection is no domain cancellation.
 - The access policy of the operation selects authentication.
 - The delivery policy mints no caller identity.
-- The acknowledgement of a delivery follows the commit of the delivery record of the Intake Service.
+- The acknowledgement of a delivery follows the commit of the inbound event that the Intake Service stores.
 - An operation declares whether it requires a live execution.
 - For such an operation the invocation chain proves the execution identity of the input once, before the handler runs.
 - The chain resolves that identity through the authorization of the Project Service, which reads the claim state from the Scheduler Service.
@@ -665,7 +665,7 @@ An operation serves one caller kind.
 - An operation under the `service` policy is reachable through the direct adapter alone.
 - The Gateway registers no HTTP route for it, and the OpenAPI emitter excludes it.
 - The conformance test of both adapters exempts a `service` operation.
-- The delivery admission of the Scheduler Service is a `service` operation.
+- `mission.delivery.admit`, the delivery admission of the Mission Service, is a `service` operation. The Intake Service calls it under its service identity.
 - The `service` policy alone grants no operation, and the owning service authorizes the calling service by name.
 - No operation accepts both a human and a machine.
 - No handler shapes its result by the kind of the caller identity.
