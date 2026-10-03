@@ -3,6 +3,14 @@
 Open work as of 2026-09-24.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
+## Blocking: engine merge
+
+- [ ] BLOCKING, added 2026-10-03 by Ulrich. Merge every engine worktree branch below before any other work continues. Wait until the pi session in `engine/.agents/plan/erd-02-execution/` is done, then merge.
+  - `engine/.dev/contract-declarations`, branch `docs/contract-declarations`. It mirrors the eligibility report, the queue list order, the binding set, the derived evidence scope and `dependsOn` in `docs/cli`.
+  - `engine/.dev/queue-list-order`, branch `feat/queue-list-order`. It pages `scheduler.queue.list` by priority descending, then job identity ascending.
+
+  The branch that merges second removes the queue-order clause from the "Declared, not implemented" note of `docs/cli/scheduler.md`, so that the note names only `eligibility get`. Remove each worktree with `git worktree remove` after its branch merges. The root branch `docs/contract-declarations` and the apps branch `feat/shadcn-design` merged on 2026-10-03.
+
 ## Phase 2
 
 Every item below waits for the completion of the design set. Ulrich moved them here on 2026-09-20.
