@@ -63,7 +63,7 @@ flowchart TB
     m2 -.->|evidence assets name binding| p1
 
     i3 -.->|inbound and outbound request of project| p1
-    i3 -.->|inbound names credential| c1
+    i3 -.->|inbound and outbound request name credential| c1
     m3 -.->|admission names request evidence| m2
 
     t4 -.->|trace of execution| s2

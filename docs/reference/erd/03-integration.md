@@ -75,6 +75,7 @@ erDiagram
         text project_id
         text operation "for example github.pull_request"
         text request_key "derived by the caller, unique per operation"
+        text credential "credential name, null for git.merge_push"
         text state "pending | succeeded | failed | discarded"
         text result "JSON, bounded 2xx answer, or null"
         text error "JSON array of errors or null"
@@ -95,6 +96,7 @@ erDiagram
     credential |o..o{ intake_inbound : "ref by name, no FK"
     intake_inbound ||--o{ intake_inbound_event : "FK inbound_id"
     project_project ||..o{ intake_outbound_request : "ref project_id, no FK"
+    credential |o..o{ intake_outbound_request : "ref by name, no FK"
 
     intake_inbound_event ||..o| mission_delivery_admission : "ref inbound_event_id, no FK"
     mission_evidence |o..o{ mission_delivery_admission : "FK evidence_id, null after a delete"
@@ -149,6 +151,7 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 - The count of pending events has a bound, and its value is open.
 - `intake_outbound_request.project_id` names the project of the binding that the caller resolved.
 - `operation` holds a value of the closed set of outbound operations in code, named `<platform>.<operation>`.
+- `credential` holds the name of the credential that custody released for the write. `git.merge_push` holds null, because it uses the SSH configuration of the host.
 - `intake_outbound_request` has a unique index on `(operation, request_key)`, so a repeat of a key finds the first request and calls the write no second time. The caller derives `request_key` from its durable intent, and the key holds every operand that can change under that intent.
 - The Intake Service authorizes the write and obtains its release before the insert. A refusal inserts no row.
 - `state` starts as `pending`, and the insert commits before the call. The call sets `succeeded` on a 2xx answer or a CLI exit code 0, and `failed` on every other result, with a write conditional on `pending`.
@@ -178,4 +181,5 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 | `intake_inbound.project_id` | `project_project.id` | Reference, no FK. |
 | `intake_inbound.credential` | `credential.name` | Reference by name, no FK. |
 | `intake_outbound_request.project_id` | `project_project.id` | Reference, no FK. |
+| `intake_outbound_request.credential` | `credential.name` | Reference by name, no FK. |
 | `mission_delivery_admission.inbound_event_id` | `intake_inbound_event.id` | Reference, no FK. |
