@@ -105,6 +105,15 @@ The outcomes of the comparison by binding name are below.
 - A submission equal to the stored set increments the version and changes no binding.
 - A worker group whose latest row after the edit is a tombstone or holds `instanceCount: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
 
+The binding set has one read route and one write route, and both serve the whole set.
+
+- `project.bindingSet.get` at `GET /api/project/:projectId/binding-set` and `project.bindingSet.write` at `PUT /api/project/:projectId/binding-set` are `human` operations of `unary` lifetime.
+- `BindingSet` holds `version` and `bindings`. `version` is the binding-set version. `bindings` is the object keyed by binding name, and each value holds `kind` and `config`.
+- The read answers the current binding set as `BindingSet`. It holds no secret material.
+- The write takes `BindingSet` as its body, and `version` names the version that the client read. A stale `version` answers 409 `project.binding_set.version_conflict` with the current version in `error.details`.
+- The write answers the committed binding set as `BindingSet` at its new version.
+- No route writes one field or one binding. An `instanceCount` of 0 disables a worker binding, and `available: false` disables a repository binding or a storage binding.
+
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
 ## Revision, disablement and rotation
@@ -273,5 +282,4 @@ The `kanthord` bin of `package.json` releases it.
 
 ## Open decisions of an epic
 
-- The shape of the RESTful API of the binding set, which [gateway-service.impl.md](gateway-service.impl.md) registers as routes.
 - The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
