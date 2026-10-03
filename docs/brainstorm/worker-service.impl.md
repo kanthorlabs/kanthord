@@ -321,6 +321,8 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed with `worker.runtime.setup_refused`, whose `details.reason` is `model_unknown`, `reasoning_effort_unsupported`, `credential_absent` or `credential_revision_mismatch`.
 - The store holds the credential of one execution, so no credential crosses executions.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
+- The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
+- A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
 
 ## The credential handover
 
@@ -426,9 +428,10 @@ Every other failure of `intake.action.perform`, an unclassified exception includ
 Before a failure propagates, the invocation removes its other reservations of actions that it did not dispatch.
 A request evidence of the same attempt removes the reservation of its requirement key, and a request evidence of an earlier attempt removes none.
 Inside one server process, the mutex and the reservation prevent a redispatch within one attempt.
-A durable dispatch record that survives a server restart is the B9 item W2, and it is an epic decision.
+The outbound request of the [Intake Service](intake-service.md#outbound-requests) is the durable dispatch record.
 B9 items A3, W1, W4 and PR2 own the reconciliation of an uncertain result, across attempts included.
 The action performer calls `intake.action.perform` for every configured action, and it makes no clone of its own.
+It passes the request key `<node id>/<attempt>/<FrozenAction.key>`, and it appends the snapshot commit for `merge_push`, for example `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6`.
 
 The operation and the tool answer `{ toolName: "repository-action-request", items: ActionResultItem[] }`.
 `ActionResultItem` is discriminated on `kind`, with one value per return class.
@@ -483,7 +486,7 @@ A tool is reached through the MCP server.
 - A native agent at the `server` placement reaches the MCP server in-process under its hosted execution. Its proof reads the claim state and skips the registration comparison. A native agent at the `worker` placement and an external harness reach it over HTTP with their machine JWT.
 - Protocol messages such as `initialize` and `tools/list` need the live registration, or the hosted execution for a native agent at the `server` placement, and no execution identity argument.
 - A tool runs under a session context. A disconnect ends the response stream only and cancels no accepted tool execution. The Gateway cancels the session contexts in shutdown phase 1.
-- The action performer holds the idempotency of its one write. A restart before its dispatch record stays B9 W2.
+- The action performer derives the request key of its one write, and the Intake outbound request holds the idempotency of that key.
 - Every client receives the same static list: `github-pull-request-get`, `github-pull-request-review-comment-list` and `repository-action-request`. No client kind, claim kind or assessment state changes it. The MCP server reads no Mission record for `tools/list`.
 - A read tool requires a live claim of any kind. The action tool under a steps claim answers `isError: true` with `worker.action_performer.claim_not_evaluation`. Under an evaluation claim with no current passing assessment it answers `isError: true` with `worker.action_performer.assessment_not_current`.
 - The evaluation method of `reviewer@1` calls the action performer. A tool call by a native agent meets the same checks. The action performer serializes calls of one execution identity and never dispatches an action twice.

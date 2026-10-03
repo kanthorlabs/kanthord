@@ -53,3 +53,31 @@ An inbound event state records the outcome of the handoff of an inbound event.
 The closed set holds `pending`, `succeeded`, `failed` and `discarded`.
 The event of the merge of pull request 42 is `succeeded` when the Mission Service answers, whatever its disposition.
 A human sets `discarded` on the `failed` event of pull request 42 after a check of the node replaces its handoff.
+
+## outbound operation
+
+An outbound operation names one operation of a platform that the Intake Service performs for a caller, as `<platform>.<operation>`.
+The action `pull_request` of the GitHub binding `kanthord-repo` maps to `github.pull_request`, and the action `merge_push` maps to `git.merge_push`.
+
+## outbound request
+
+An outbound request records one write that the Intake Service performs on a platform for a caller.
+The action performer of attempt 2 of "Add password reset" asks for `github.pull_request`, and the Intake Service records the outbound request `outbound_request_01JA4M2QX7` before it opens pull request 42.
+
+## request key
+
+A request key is the identity that a caller derives from the durable intent of an outbound write.
+The action performer derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request` for attempt 2.
+It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6` for the merge of snapshot commit `d4e5f6`.
+
+## outbound request state
+
+An outbound request state records the outcome of an outbound write.
+The closed set holds `pending`, `succeeded`, `failed` and `discarded`.
+A 2xx answer or a CLI exit code 0 sets `succeeded`, and every other result sets `failed`.
+GitHub creates pull request 42 and its answer times out, so the request stays `failed` until a read-back finds pull request 42.
+
+## read-back
+
+A read-back is one read call that checks whether the write of an outbound request took effect.
+A repeat of the `failed` request of pull request 42 lists the open pull requests from the node branch into `main` and finds pull request 42.

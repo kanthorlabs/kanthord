@@ -354,7 +354,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Force without a reason answers HTTP 400 with a validation issue list.
 - The reason is optional without force.
 - The service deletes the content first and the row after it. It deletes inline content with the row, and it deletes an object through `intake.storage.delete` with the storage binding revision that the asset pins, at the recorded version when one exists.
-- A failed content delete keeps the row, and a repeat deletes again.
+- A failed content delete keeps the row. The request key of the object delete is the asset identity. A repeat after a failed delete runs the read-back, and a human deletes the outbound request to send the delete again.
 - A disabled or removed storage binding refuses the object delete, and `force` bypasses no binding authorization.
 - The Tracking span of the delete records the human, the reason and the time, and the Mission Service stores none of them.
 - A request evidence is deleted only with `force`, in every node state. Without `force`, the delete answers 409 `mission.evidence.request_force_required`.
@@ -545,6 +545,14 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - It also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
 - A write with no structure or content change answers the current mission version with empty arrays.
 - A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit or an objective move, or the actor and the reason of a retirement that inserts no node revision. `retired_at` keeps the time of every retirement.
+
+## Authorization integration
+
+- The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence and an evidence asset.
+- For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
+- For a human identity, it follows the evidence asset to its storage binding revision.
+- It takes no association from the caller.
+- A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled` or `binding_removed`.
 
 ## Operation contracts
 

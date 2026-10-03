@@ -200,30 +200,9 @@ A resolution authorizes one operation, so the next operation resolves the chain 
 
 ## Authorization integration
 
-The Project Service supplies system authorization to [custody's protected facility](custody.impl.md#the-protected-facility).
-It permits the Mission Service to check a request evidence.
-The resolution of a request evidence reaches the repository binding, project and node through authoritative records, never caller-supplied associations.
-A broken chain of a model inference credential answers 403 `project.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
-
-## Presigned storage grants
-
-The Intake Service signs a presigned storage grant with the material that custody releases, after the protected facility authorizes the operation.
-The Intake Service derives the endpoint and the bucket from the storage binding, and custody releases its credential.
-The Mission Service supplies the server-generated object key, never an agent-selected destination.
-A PUT grant authorizes one object upload and expires after 1 hour.
-It requires the checksum header only when the submission supplies a SHA-256.
-The Intake Service also performs the object metadata check for complete and signs a presigned GET for an authorized reader's kanthord component.
-The GET addresses the recorded version when one exists.
-Each grant authorizes one operation on one object for a bounded time.
-The API answer carries the URL directly to the component, never through the credential handover.
-The storage credential stays inside the server process at every placement and every co-location.
-The component keeps the grant outside the context of an agent.
-kanthord cannot prove that a harness keeps it out of the model context; the single-object scope bounds that risk.
-
-Tests assert authorization before the release of the credential and derive the destination only from the checked binding and server-generated key.
-Tests assert the 1 hour PUT expiry, optional checksum header and authorized GET for the recorded object version.
-Tests assert that no storage credential or presigned URL enters the handover, logs or agent context.
-Tests refuse grants for unauthorized readers or executions without a live claim.
+The Project Service supplies system authorization to [custody's protected facility](custody.impl.md#the-protected-facility) for its own entities only.
+The Mission Service authorizes a request evidence, a configured action and an evidence asset, and the Worker Service authorizes a model inference credential.
+The Project resolution checks the disablement and the removal of a binding revision for those services.
 
 ## The network git operations
 

@@ -398,7 +398,7 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), [custod
 - The operation registry declares a route as a mutation.
 - The idempotency component runs on mutation routes alone.
 - The three operations `worker.mcp.message`, `worker.mcp.listen` and `worker.mcp.close` are exempt: they declare `mutation: false`, because an MCP client carries no `Idempotency-Key`.
-- A tool call that writes carries its idempotency in the action performer under [worker-service.impl.md](worker-service.impl.md#mcp-server), and the durable dispatch record stays B9 W2.
+- A tool call that writes carries its idempotency in the request key of the Intake outbound request, which the action performer derives under [worker-service.impl.md](worker-service.impl.md#action-performer).
 - Both entry adapters enter the same invocation chain, as [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) describes.
 - Both adapters reserve the same key, meet the same 409 and replay the same recorded answer.
 - The idempotency component runs in memory inside the invocation chain.

@@ -47,6 +47,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - For a call of an inbound, it takes the facts that the Intake Service supplies: the validated input at a create, and the row of the inbound otherwise. It requires no Project decision.
 - A platform implementation fills the platform event identity and the metadata of an inbound event at its receipt and at its poll.
 - A platform implementation declares its handshakes and their answers.
+- A platform implementation declares the read-back of each write operation, its correlation and the result of a match, or it declares none.
 - A platform implementation decodes an inbound event into the event types of its platform.
 - A payload decoder is pure and performs no API operation.
 - Another git platform requires one platform implementation, its permitted read methods, a platform value and the required action performer behaviour.
@@ -64,7 +65,8 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - No generic push exists.
 - A push of the steps execution targets the node branch of its objective only.
 - A merge or a push into the base branch is a configured repository action.
-- The [action performer](worker-service.md#evaluation-and-required-external-actions) owns eligibility, operand derivation, serialization and idempotency for a configured action.
+- The [action performer](worker-service.md#evaluation-and-required-external-actions) owns eligibility, operand derivation, serialization and the request key for a configured action.
+- The [Intake Service](intake-service.md#outbound-requests) holds one outbound request for each request key.
 
 ## Placement
 

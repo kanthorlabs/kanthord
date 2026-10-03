@@ -77,7 +77,7 @@ Custody grants no authority through possession of a credential reference.
 - An execution holds no credential itself.
 - The [execution store view](custody.impl.md#the-credential-store-of-an-execution) supplies the native runtime.
 - The [Intake Service](intake-service.impl.md#the-credential-release-of-an-inbound) takes one release for each remote call of an inbound.
-- The [Project Service](project-service.impl.md#presigned-storage-grants) owns presigned storage grants.
+- The Mission Service authorizes a presigned storage grant, and the [Intake Service](intake-service.impl.md#presigned-storage-grants) signs it.
 
 ## Login sessions
 

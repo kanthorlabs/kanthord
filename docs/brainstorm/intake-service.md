@@ -8,7 +8,7 @@ title: Intake Service
 
 This document describes the Intake Service.
 It describes the inbound and the inbound event.
-It describes acquisition through a webhook or a poll, the outbound operation and the check.
+It describes acquisition through a webhook or a poll, the outbound operation, the outbound request and the check.
 It describes the handoff of an inbound event to its consumer and the capacity of the service.
 It describes no business effect of an inbound event and no mechanism of another service.
 
@@ -138,6 +138,48 @@ It checks the state of the external object of a request evidence for the Mission
 It reads a pull request and its review comments for an execution.
 It signs a presigned PUT or GET, checks an uploaded object and deletes an object of a storage binding for the Mission Service.
 Each operation serves one caller kind, and [intake-service.impl.md](intake-service.impl.md) declares the operations.
+An [outbound operation](intake-service.vocabulary.md#outbound-operation) is named `<platform>.<operation>` with the full name of the operation, for example `github.pull_request` and `git.merge_push`.
+The Intake Service maps a catalog action of the Project Service and the platform of its binding to one outbound operation through a declared table.
+It refuses an action without a row in that table.
+
+## Outbound requests
+
+An [outbound request](intake-service.vocabulary.md#outbound-request) records one outbound write, a call with a remote effect.
+A read, a check, a presign and an inbound control call record no outbound request.
+An outbound write runs inside the operation of its caller, and no dispatcher sends an outbound request.
+The Intake Service authorizes a write and obtains its credential release before the insert, and a refusal records no request.
+
+The caller derives the [request key](intake-service.vocabulary.md#request-key) of an outbound write from its durable intent.
+A request key holds every operand that can change under its intent, so the Intake Service holds no digest of the operands.
+The Intake Service treats the key as opaque.
+One request exists for each operation and request key, so a repeat finds the first request and makes no second call.
+
+The [outbound request state](intake-service.vocabulary.md#outbound-request-state) records the outcome of the write.
+
+- The insert commits the request as pending before the call.
+- A 2xx answer or a CLI exit code 0 sets succeeded with the bounded result.
+- Every other result sets failed and appends its error. A failed request proves no absence of the effect.
+- A deadline aborts the call, so a late answer writes nothing.
+- A call that ends without a write of its state, for example at a crash, leaves pending.
+- Only a [read-back](intake-service.vocabulary.md#read-back) moves pending or failed to succeeded.
+- A human discard turns a pending request to discarded, and it is refused while the call runs.
+- Succeeded and discarded are terminal.
+- Every write of the state is conditional on the state that the write expects.
+
+A repeat with the same key never calls the write again.
+
+- A repeat of a succeeded request answers its result.
+- A repeat of a pending request with no running call, or of a failed request, runs the read-back once.
+- A repeat of a running request or of a discarded request is refused.
+
+A read-back is one read call to the platform that checks whether the write of a request took effect.
+It runs only inside a repeat, under the authorization and the release path of the write.
+No timer, no restart and no background process starts a read-back.
+A read-back that finds the effect sets succeeded with its result, and a read-back that finds nothing changes no state.
+The [Repository component](repository.md#platform-connector-and-platform-implementations) declares the read-back of each write operation, or declares none.
+An operation without a read-back leaves pending or failed only through a human discard.
+
+A caller tracks its request by a repeat with the same key, and no caller operation reads a request.
 
 ## Capacity and retention
 
@@ -152,9 +194,13 @@ A delete of an inbound removes its events, and the delete is refused while the i
 The Intake Service promises the durability of every acknowledged event.
 It promises no receipt of every update that a platform produces.
 
+No process deletes an outbound request.
+A human deletes outbound requests with a filter and with force, and the human accepts that a repeat of a deleted key calls the write again.
+A delete removes succeeded, failed and discarded requests, and no delete removes a pending request.
+
 ## Authority
 
-Every authenticated human holds authority to create and delete an inbound, and to retry, discard and delete an inbound event.
+Every authenticated human holds authority to create and delete an inbound, to retry, discard and delete an inbound event, and to list, read, discard and delete an outbound request.
 The [Gateway Service](gateway-service.md#human-authority) owns that human authority rule.
 An inbound names its consumer from the closed set of [admission operations](mission-service.vocabulary.md#delivery-admission).
 It names no arbitrary operation.

@@ -8,7 +8,7 @@ This file holds the implementation rulings for the mechanisms that realize [inta
 This file is not a design document, and `intake-service.md` stays the single source of truth.
 A mechanism here never overrides a rule there.
 A ruling that names a package, a product or a version is deliberate.
-This sibling holds the inbound store, the event store, the acquisition, the handoff, the outbound operation, the check and the resource healthcheck mechanisms.
+This sibling holds the inbound store, the event store, the acquisition, the handoff, the outbound operation, the outbound record, the CLI transport, the check and the resource healthcheck mechanisms.
 
 ## The service identity
 
@@ -94,29 +94,113 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 | HTTP | Code | Condition |
 | --- | --- | --- |
 | 400 | `intake.inbound.event.filter_invalid` | An event delete names no filter, both filters or the state `pending`. |
+| 400 | `intake.outbound.request.filter_invalid` | An outbound request delete names no filter, both filters or the state `pending`. |
+| 400 | `intake.outbound.request.force_required` | An outbound request delete omits `force: true`. |
 | 401 | `intake.inbound.event.signature_invalid` | A webhook post fails verification. |
 | 404 | `intake.inbound.not_found` | No inbound has that identity, or a webhook post names a poll inbound. |
 | 404 | `intake.inbound.project_not_found` | The project of a create does not exist. |
 | 404 | `intake.inbound.event.not_found` | No inbound event has that identity. |
+| 404 | `intake.outbound.request.not_found` | No outbound request has that identity. |
 | 409 | `intake.inbound.events_pending` | A delete names an inbound that holds a pending event. |
 | 409 | `intake.inbound.event.in_flight` | A discard names a pending event whose handoff runs. |
 | 409 | `intake.inbound.event.state_conflict` | The state of the event permits no such transition, or a delete list names a pending event. |
+| 409 | `intake.outbound.request.discarded` | A repeat names a discarded request. |
+| 409 | `intake.outbound.request.in_flight` | A repeat or a discard names a request whose call runs. |
+| 409 | `intake.outbound.request.state_conflict` | A discard names a request that is not `pending`, or a delete list names a pending request. |
 | 422 | `intake.inbound.credential_invalid` | The credential name does not exist, or its platform does not suit the inbound. |
 | 422 | `intake.inbound.platform_refused` | The platform refuses a registration, a poll request or a deregistration. |
+| 422 | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table. |
 | 503 | `intake.inbound.event.capacity_exceeded` | The count of pending events is at its bound. |
+| 503 | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version. |
 
 ## Outbound operations and checks
 
 - Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component and drops the material in `finally`.
 - The handler builds its platform client for one call and caches no client and no token.
-- `intake.action.perform` is a `client` operation under the forwarded execution identity. It serves `pull_request` and `merge_push`, and it answers the `PlatformAddress` or the result class of the Repository component.
-- For `merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the network git write and removes the clone after the call. A `merge_push` answers the pushed commit in its `PlatformAddress`.
+- `intake.action.perform` is a `client` operation under the forwarded execution identity. It takes the configured action and its request key, maps the action to its outbound operation, and answers the `PlatformAddress` or the result class of the Repository component.
+- The action table maps `pull_request` on a `github` binding to `github.pull_request`, and `merge_push` on a git binding to `git.merge_push`. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
+- For `git.merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the network git write and removes the clone after the call. A `git.merge_push` answers the pushed commit in its `PlatformAddress`.
 - `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ endState, landedCommits }` that the platform implementation folds.
 - `intake.action.read` is a `client` operation under the forwarded execution identity. It serves the MCP read tools `github-pull-request-get` and `github-pull-request-review-comment-list`, and it returns the platform body unchanged.
 - `intake.storage.put` and `intake.storage.check` are `client` operations. The Mission Service calls them in `mission.evidence.submit` and `mission.evidence.asset.complete` with the identity of the execution.
 - `intake.storage.get` is a `human` operation and `intake.execution.storage.get` is a `client` operation. Each signs a presigned GET at the recorded object version.
-- `intake.storage.delete` is a `human` operation. The Mission Service calls it in `mission.evidence.asset.delete` and `mission.evidence.delete` with the identity of the human.
+- `intake.storage.delete` is a `human` operation. The Mission Service calls it in `mission.evidence.asset.delete` and `mission.evidence.delete` with the identity of the human and the evidence asset identity as the request key. Its outbound operation is `s3.delete_object`.
 - The operations make no Mission record and decide no end state beyond the fold of the platform implementation.
+
+### The authorization of each operation
+
+- `github.pull_request` and `git.merge_push`: the Mission Service authorizes the forwarded execution identity through its live evaluation claim, the node, the open attempt, the `FrozenAction` and the pinned binding revision. The Project resolution checks that revision for disablement and removal.
+- `github.pull_request` takes a custody release of the credential of the pinned repository binding revision, and custody pins that revision to the execution at its first use. `git.merge_push` takes no release and uses the SSH configuration of the server host.
+- `s3.delete_object`: the Mission Service authorizes the forwarded human identity through the evidence asset and its storage binding revision, and custody releases the storage binding credential.
+- `intake.action.check`, `intake.action.read`, the presigned PUT and GET and the object check: the Mission Service authorizes the caller through the request evidence or the evidence asset. These operations record no outbound request.
+- A native push send and a CLI write declare their authorization with their designs.
+
+### Presigned storage grants
+
+The Intake Service signs a presigned storage grant with the material that custody releases, after the Mission Service authorizes the operation through the protected facility.
+The Intake Service derives the endpoint and the bucket from the storage binding, and custody releases its credential.
+The Mission Service supplies the server-generated object key, never an agent-selected destination.
+A PUT grant authorizes one object upload and expires after 1 hour.
+It requires the checksum header only when the submission supplies a SHA-256.
+The Intake Service also performs the object metadata check for complete and signs a presigned GET for an authorized reader's kanthord component.
+The GET addresses the recorded version when one exists.
+Each grant authorizes one operation on one object for a bounded time.
+The API answer carries the URL directly to the component, never through the credential handover.
+The storage credential stays inside the server process at every placement and every co-location.
+The component keeps the grant outside the context of an agent.
+kanthord cannot prove that a harness keeps it out of the model context; the single-object scope bounds that risk.
+
+Tests assert authorization before the release of the credential and derive the destination only from the checked binding and server-generated key.
+Tests assert the 1 hour PUT expiry, optional checksum header and authorized GET for the recorded object version.
+Tests assert that no storage credential or presigned URL enters the handover, logs or agent context.
+Tests refuse grants for unauthorized readers or executions without a live claim.
+
+## The outbound record
+
+- `intake_outbound_request` of [ERD 3](../reference/erd/03-integration.md) holds the outbound requests. `id` is `outbound_request_` and a ULID.
+- `project_id` names the project of the binding that the caller resolved. `operation` holds a value of the closed set of outbound operations in code. `request_key` holds the key that the caller derives.
+- A unique index covers `(operation, request_key)`.
+- `result` is JSON text that holds the bounded body of the 2xx answer, for example the `PlatformAddress`, or null. `error` holds the shape and the byte bound of `error` of an inbound event. Every property name is snake_case.
+- In one invocation, the handler authorizes, obtains the release, inserts the request as `pending`, commits, and only then performs the call.
+- An insert that meets the unique index reads the existing request and answers the repeat rule of [intake-service.md](intake-service.md#outbound-requests).
+- A module-private `Set` holds the identity of every request whose call runs. The handler adds the identity in the synchronous step of its insert, and it removes the identity after the write of the answer. A repeat and a discard read the set and write their conditional update in one synchronous step.
+- The deadline of the operation aborts the call through an `AbortController`. The handler then sets `failed` with `timeout`, and a late answer writes nothing.
+- The call sets `succeeded` with `result`, or `failed` with an appended `{ code, message, created_at }`, through an update conditional on `pending`. `code` holds the result class of the Repository component, the HTTP status, `timeout` or `cli.exit_<n>`.
+- A read-back match sets `succeeded` with `result` through an update conditional on `pending` or `failed`.
+- A repeat of `succeeded` answers `result`. A repeat of a running request answers 409 `intake.outbound.request.in_flight`, and a repeat of `discarded` answers 409 `intake.outbound.request.discarded`.
+- A repeat of a `pending` request with no running call, or of a `failed` request, runs the read-back once. A match answers the result. Otherwise a `pending` request answers the result class `unknown_outcome`, and a `failed` request answers its newest error.
+- A start runs nothing for an outbound request, and a `pending` request that a crash leaves keeps its state.
+
+### The read-backs
+
+- `github.pull_request` lists the open pull requests with the node branch as `head` and the base branch as `base`. GitHub keeps at most one. A match answers its `PlatformAddress`.
+- `git.merge_push` fetches the base branch and checks that the snapshot commit of the key is an ancestor of it. A match answers the oldest first-parent commit of the base branch that contains the snapshot commit.
+- `s3.delete_object` reads the recorded object version, and a not-found answer is a match.
+- A pull request that a human merges before the repeat leaves the request `failed`. The merge reaches the Mission Service through its inbound event.
+
+### The human operations
+
+- `intake.outbound.request.list` is a `human` operation. It answers a bounded page in the order of `id`, optionally filtered by project, state and operation.
+- `intake.outbound.request.get` is a `human` operation. It answers one request with its state, `result` and `error`.
+- `intake.outbound.request.discard` is a `human` operation. It turns a `pending` request with no running call to `discarded`. A running request answers 409 `intake.outbound.request.in_flight`, and every other state answers 409 `intake.outbound.request.state_conflict`.
+- `intake.outbound.request.delete` is a `human` operation. Its input holds `force` and either a state with a ULID range of `id` or a list of exact request identities.
+- A delete without `force: true` answers 400 `intake.outbound.request.force_required` and deletes nothing. A delete without a filter, with both filters or with the state `pending` answers 400 `intake.outbound.request.filter_invalid`.
+- An exact list that names a pending request answers 409 `intake.outbound.request.state_conflict` and deletes nothing. The delete removes the matching requests in one transaction and answers their count.
+- No `client` or `service` operation reads a request.
+
+## The CLI transport
+
+- The binary of a CLI operation is a host prerequisite with a configured absolute path and a pinned minimum version, and kanthord installs nothing. A missing binary or an older version answers 503 `intake.outbound.request.cli_unavailable` before the insert.
+- The platform implementation builds the argument list from a closed table for each operation. The child runs with no shell, and no caller supplies an argument string.
+- The child environment holds only an allowlist and the one credential variable of the operation, for example `CLOUDFLARE_API_TOKEN`. It inherits no other server variable, `SSH_AUTH_SOCK` included.
+- A CLI login flow is forbidden, and custody supplies an API token only.
+- The child runs in a fresh 0700 directory `<state dir>/intake/cli/<outbound request id>/`, which also holds its `HOME`, `XDG_CONFIG_HOME` and `XDG_CACHE_HOME`. The handler removes the directory in `finally`, and a start-up sweep removes the directories that a crash left.
+- The deadline kills the process group and sets `failed` with `timeout`.
+- stdout and stderr are bounded in bytes, and the handler replaces every occurrence of the credential value before any store or log.
+- Exit code 0 stores the bounded JSON output in `result`. Another exit code appends `cli.exit_<n>` with the bounded tail of stderr to `error`.
+- Where the CLI separates the build from the deploy, only the deploy receives the credential.
+- A platform implementation prefers the HTTP API when the platform offers the operation.
+- These measures reduce exposure, and they prove no containment.
 
 ## The resource healthcheck
 
@@ -151,4 +235,11 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - Tests cover an event delete without a filter, with the state `pending` and with an exact list that names a pending event.
 - A test asserts that the healthcheck runs no request outside a health report and changes no inbound.
 - A test asserts that no store row and no log record of the Intake Service holds credential material.
-- Tests assert that every outbound operation and check forwards the caller identity, refuses another node before custody releases a secret, drops the material after a success and after a failure, and leaves no clone after a `merge_push`.
+- Tests assert that every outbound operation and check forwards the caller identity, refuses another node before custody releases a secret, drops the material after a success and after a failure, and leaves no clone after a `git.merge_push`.
+- A test covers a write whose answer times out after the platform applies it, and it asserts `failed`, then a repeat whose read-back sets `succeeded` with one platform write.
+- A test covers a crash after the insert of a request, and it asserts `pending` after the restart and no call at the start.
+- A test covers two concurrent calls with one key, and it asserts one platform write and one 409 `intake.outbound.request.in_flight`.
+- A test covers a repeat of a `failed` request whose read-back finds nothing, and it asserts no second write and the recorded error.
+- A test covers an unmapped action, and it asserts the 422 and no request.
+- Tests cover a discard of a running request, a delete without `force`, and a delete list that names a pending request.
+- A test covers a CLI child, and it asserts the fresh `HOME`, the environment allowlist, the removal of its directory and the kill of its process group at the deadline.
