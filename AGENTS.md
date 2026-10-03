@@ -59,7 +59,7 @@ Rules for every agent that works in the kanthord repository. Ulrich is the human
 
 ### Rejected proposals
 
-The pages record only the decision. Do not propose these alternatives again. When a new ruling rejects an alternative, add it here.
+The pages record only the decision. Do not propose these alternatives again. Add an alternative that no page names, as one line with a link to the page section that holds the decision.
 
 - An SSH key in custody or a kanthord ssh-agent. SSH transport uses the SSH configuration of the host user.
 - A proxy for the remote runtime. Custody hands credentials to the `worker` app encrypted under keys derived from its client secret.
@@ -110,6 +110,10 @@ The pages record only the decision. Do not propose these alternatives again. Whe
 - An automatic retention or a delete without a filter of inbound events.
 - A removal of the passive webhook. A webhook inbound without a credential is the named exception to the validation before the insert.
 - A stored handshake, a handshake record or a check that a handshake runs once. A platform implementation answers a verified handshake from the request alone.
+- A `recorded`, `dispatched` or `uncertain` outbound request state. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
+- An execution-scoped request key or a `caller_service` column. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
+- A new attempt at a resume to `Available` to fix the operands of one request key. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
+- An `intake_outbound` configuration table. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
 
 ## Contracts
 
