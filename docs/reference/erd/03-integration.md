@@ -30,6 +30,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - The set of outbound requests whose call runs stays in the memory of the Intake Service.
 - A read, a check, a presign and an inbound control call write no row.
 - An error of an inbound after its insert is a span of the Tracking Service.
+- The disposition of delivery admission and its refusal reason are a span of the Tracking Service. No table records an admission.
 - No store holds a resource healthcheck result.
 
 ## Diagram
@@ -82,24 +83,13 @@ erDiagram
         integer created_at "Unix ms"
     }
 
-    mission_delivery_admission {
-        text inbound_event_id PK "Intake inbound event identity"
-        text project_id
-        text content_digest
-        text disposition "accepted as an observation | accepted as a human act | refused | duplicate"
-        text reason "refusal reason, ambiguous included, or null"
-        text evidence_id FK "request evidence or null"
-        integer created_at "Unix ms"
-    }
-
     project_project ||..o{ intake_inbound : "ref project_id, no FK"
     credential |o..o{ intake_inbound : "ref by name, no FK"
     intake_inbound ||--o{ intake_inbound_event : "FK inbound_id"
     project_project ||..o{ intake_outbound_request : "ref project_id, no FK"
     credential |o..o{ intake_outbound_request : "ref by name, no FK"
 
-    intake_inbound_event ||..o| mission_delivery_admission : "ref inbound_event_id, no FK"
-    mission_evidence |o..o{ mission_delivery_admission : "FK evidence_id, null after a delete"
+    intake_inbound_event |o..o{ mission_evidence : "ref inbound_event_id in provenance, no FK"
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
@@ -109,7 +99,7 @@ erDiagram
 
     class credential custody
     class project_project project
-    class mission_evidence,mission_delivery_admission mission
+    class mission_evidence mission
     class credential,project_project,mission_evidence stub
     class intake_inbound,intake_inbound_event,intake_outbound_request intake
 ```
@@ -121,7 +111,6 @@ erDiagram
 | `intake_inbound` | Intake Service | Ruled: [inbounds](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbounds) and [the inbound store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-inbound-store). |
 | `intake_inbound_event` | Intake Service | Ruled: [inbound events](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbound-events), [handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff) and [the handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-handoff). |
 | `intake_outbound_request` | Intake Service | Ruled: [outbound requests](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#outbound-requests) and [the outbound record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-outbound-record). |
-| `mission_delivery_admission` | Mission Service | Derived: admission records its decision durably before it answers, keyed by the inbound event identity, under [the request record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-request-record). |
 
 The verification secret of a webhook inbound derives from `masterKey` and the inbound identity, so no table holds a webhook secret.
 
@@ -158,21 +147,19 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 - A read-back sets `succeeded` on `pending` or `failed`, and it runs only inside a repeat of the caller. A read-back that finds nothing changes no row.
 - A human discard sets `discarded` on a `pending` request whose call does not run. `succeeded` and `discarded` are terminal.
 - `result` holds the bounded body of the 2xx answer. `error` follows the rules of `error` of an inbound event.
-- No row holds credential material, the operands of the write or a digest of the operands.
+- No row holds credential material, the operands of the write or a digest of the operands. A credential removal is not refused by an outbound request that names it.
 - No process deletes an outbound request. A human delete names a state with a range of `id`, or a list of exact identities, and requires force. It removes `succeeded`, `failed` and `discarded` requests, and it never removes a `pending` request.
 
 ### Mission Service
 
-- Admission inserts its `mission_delivery_admission` row before it answers.
-- `project_id` is the project of the inbound of the event. `content_digest` is the digest of the content of the event and of its metadata.
-- A repeat with the same `inbound_event_id` and the same `content_digest` returns the recorded disposition. A repeat with another digest is refused.
-- A refusal is terminal and holds its `reason`. A refusal and a duplicate admit no effect.
-- `evidence_id` names a request evidence of an open attempt of the project that holds no end state. Admission finds it by the canonical JSON of its `platform` asset, never by the newest attempt alone, and more than one match refuses the event with the reason `ambiguous`.
-- `evidence_id` is null when admission refuses the event before it resolves a request, and a forced delete of the evidence sets it to null.
-- Admission calls the check of the Intake Service before its transaction. The transaction writes the admission row, `end_state` of the request and the landed-commit evidence together. A failed check answers a retryable failure and writes no row.
+- Delivery admission writes only ERD 2 rows: `end_state` of a request evidence and the landed-commit evidence.
+- Admission resolves the project from the inbound of the event. It finds the request evidence among the requests of an open attempt of the project that hold no end state, by the canonical JSON of its `platform` asset, never by the newest attempt alone. More than one match refuses the event with the reason `ambiguous`.
+- Admission is idempotent through the write-once `end_state`. A repeat that finds the end state of its request set answers `duplicate` and writes nothing.
+- Admission calls the check of the Intake Service before its transaction. The transaction writes `end_state` of the request and the landed-commit evidence together. A failed check answers a retryable failure and writes nothing.
+- A landed-commit evidence that admission writes holds `inbound_event_id` in its `provenance`. A human check writes the provenance without it.
+- A refusal and a `none` result write nothing.
 - The Mission Service deduplicates effects per project and per request evidence across inbounds, redeliveries and checks. The deduplication key of an unchanged state is the open item C3 of [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#mission-service-1), so this page states no index for it.
-- An acceptance as a human act invokes the Mission operation under the linked human identity before the admission row commits.
-- A human check writes no admission row.
+- An acceptance as a human act invokes the Mission operation under the linked human identity.
 
 ## Cross-group references
 
@@ -182,4 +169,4 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 | `intake_inbound.credential` | `credential.name` | Reference by name, no FK. |
 | `intake_outbound_request.project_id` | `project_project.id` | Reference, no FK. |
 | `intake_outbound_request.credential` | `credential.name` | Reference by name, no FK. |
-| `mission_delivery_admission.inbound_event_id` | `intake_inbound_event.id` | Reference, no FK. |
+| `mission_evidence.provenance.inbound_event_id` | `intake_inbound_event.id` | Reference in JSON, no FK. |

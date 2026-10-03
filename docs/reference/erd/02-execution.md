@@ -250,10 +250,10 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 - An evidence is published when every asset of it holds `published_at`. An unpublished evidence joins no evidence set.
 - An object is at most 5 GiB. Without a storage binding, the Mission Service accepts no object asset.
 - A row is append-only, except `end_state` of a request and a human delete.
-- A human delete removes the content first and the row after it. `mission.evidence.asset.delete` deletes one asset and keeps the evidence row. `mission.evidence.delete` deletes every asset and the evidence row, and it removes the identity from every `evidence_ids` set and from `mission_delivery_admission.evidence_id`. Both need a terminal state of the node and of every ancestor, unless a human forces the delete with a reason. No row records the remover, the reason or the time.
+- A human delete removes the content first and the row after it. `mission.evidence.asset.delete` deletes one asset and keeps the evidence row. `mission.evidence.delete` deletes every asset and the evidence row, and it removes the identity from every `evidence_ids` set. Both need a terminal state of the node and of every ancestor, unless a human forces the delete with a reason. No row records the remover, the reason or the time.
 - kanthord runs no automatic delete and no cleanup process of evidence or of unpublished objects.
 - `attempt` is 1 or more, except the landed-commit evidence of a success override on a node whose attempt reads 0.
-- An `expected` result of a repository request writes each landed commit as its own evidence row with one `repository` asset, the provenance `{ kind: "service", service: "mission" }` and the attempt of the request.
+- An `expected` result of a repository request writes each landed commit as its own evidence row with one `repository` asset, the provenance `{ kind: "service", service: "mission" }` and the attempt of the request. When delivery admission writes it, the provenance also holds `inbound_event_id`, the identity of the inbound event of ERD 3.
 - A success override with a landed commit inserts a published evidence row with the human actor as provenance, and the outcome names it.
 - `verification` holds `testedInput` and `results` of the run of the verifications of the pinned revision.
 - No index serves the lookup of delivery admission. It compares `content` of the `platform` assets.

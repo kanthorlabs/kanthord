@@ -817,11 +817,10 @@ A node whose attempt requests no external action returns none.
 
 The [delivery admission](mission-service.vocabulary.md#delivery-admission) operation receives one [inbound event](intake-service.vocabulary.md#inbound-event) from the [Intake Service](intake-service.md#handoff).
 The operation has a unary lifetime: one request and one answer.
-Admission records its decision durably before it answers.
-Admission is idempotent by the inbound event identity.
-A repeat with the same identity and content returns the recorded [disposition](mission-service.vocabulary.md#disposition).
-A repeat with different content receives a refusal.
+Admission is idempotent through the write-once end state of the request evidence.
+A repeat that finds the end state of its request set answers the [disposition](mission-service.vocabulary.md#disposition) duplicate and writes nothing.
 A refusal is terminal and names its reason.
+No table records an admission, and the span of the admission holds its disposition and its reason.
 Acceptance means the Mission Service owes every effect of the inbound event.
 Acceptance promises no execution.
 Admission operates when a project has no live worker instance.
@@ -841,8 +840,9 @@ The address correlates the request evidence of one remote thing across attempts,
 
 Acceptance as an observation calls the check of the [Intake Service](intake-service.md#boundary) for the request evidence before the admission transaction.
 The check reads the platform under the [service identity](project-service.vocabulary.md#service-identity) of the Mission Service and answers the end state.
-The admission transaction then writes the admission record, the end state and the landed-commit evidence together.
-A result that establishes no end state writes only the admission record.
+The admission transaction then writes the end state and the landed-commit evidence together.
+The landed-commit evidence names the inbound event in its provenance.
+A result that establishes no end state writes nothing.
 A failed check answers a retryable failure. The Intake Service marks the inbound event failed, and a human retries it.
 Acceptance as a human act invokes the Mission operation under the [linked human identity](mission-service.vocabulary.md#linked-human-identity).
 Refusal admits no effect.
@@ -850,7 +850,7 @@ A duplicate creates no second effect.
 
 A human requests the check of a node.
 The check calls the Intake check for each request evidence of the open attempt that holds no end state.
-Each result commits in its own transaction and writes no admission record.
+Each result commits in its own transaction.
 A node with no unresolved request refuses the check.
 The Mission Service decides the end state from the folded result and never from platform content.
 

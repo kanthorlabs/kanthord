@@ -114,6 +114,7 @@ The pages record only the decision. Do not propose these alternatives again. Add
 - An execution-scoped request key or a `caller_service` column. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
 - A new attempt at a resume to `Available` to fix the operands of one request key. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
 - An `intake_outbound` configuration table. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
+- A delivery admission record (`mission_delivery_admission`). See [delivery admission and check](docs/brainstorm/mission-service.md#delivery-admission-and-check).
 
 ## Contracts
 

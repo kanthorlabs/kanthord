@@ -158,7 +158,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 ## The outbound record
 
 - `intake_outbound_request` of [ERD 3](../reference/erd/03-integration.md) holds the outbound requests. `id` is `outbound_request_` and a ULID.
-- `project_id` names the project of the binding that the caller resolved. `operation` holds a value of the closed set of outbound operations in code. `request_key` holds the key that the caller derives. `credential` holds the name of the credential that custody released for the write, and `git.merge_push` holds null.
+- `project_id` names the project of the binding that the caller resolved. `operation` holds a value of the closed set of outbound operations in code. `request_key` holds the key that the caller derives. `credential` holds the name of the credential that custody released for the write, and `git.merge_push` holds null. A credential removal is not refused by an outbound request that names it.
 - A unique index covers `(operation, request_key)`.
 - `result` is JSON text that holds the bounded body of the 2xx answer, for example the `PlatformAddress`, or null. `error` holds the shape and the byte bound of `error` of an inbound event. Every property name is snake_case.
 - In one invocation, the handler authorizes, obtains the release, inserts the request as `pending`, commits, and only then performs the call.

@@ -117,7 +117,7 @@ The [inbound event state](intake-service.vocabulary.md#inbound-event-state) reco
 
 - A stored event starts as pending.
 - The Intake Service hands a pending event over once, and it retries nothing by itself.
-- An answer of the consumer sets succeeded. The [disposition](mission-service.vocabulary.md#disposition) stays in the record of the consumer.
+- An answer of the consumer sets succeeded. The [disposition](mission-service.vocabulary.md#disposition) stays in the span of the consumer.
 - A declared failure or an indeterminate result sets failed and appends the error to the event.
 - A restart hands every pending event over, because its handoff received no answer.
 - A repeat carries the same event identity and the same content, and the consumer is idempotent by that identity.

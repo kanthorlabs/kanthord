@@ -652,17 +652,17 @@ When a human retires `add-recovery-codes.md` through the node API, the set holds
 
 ## delivery admission
 
-Delivery admission is the Mission operation that durably decides the [disposition](#disposition) and the owed effects of one [inbound event](intake-service.vocabulary.md#inbound-event).
+Delivery admission is the Mission operation that decides the [disposition](#disposition) and the owed effects of one [inbound event](intake-service.vocabulary.md#inbound-event).
 The closed set of admission operations holds delivery admission alone.
 The Intake Service submits the inbound event about pull request 42 of "Add password reset" to delivery admission.
-Admission calls the Intake check, records acceptance as an observation and sets the expected end state on the request evidence.
-A repeat returns that recorded disposition.
+Admission calls the Intake check, accepts the event as an observation and sets the expected end state on the request evidence.
+A repeat finds that end state set and answers `duplicate`.
 
 ## disposition
 
-A disposition is the answer that delivery admission records for one inbound event.
+A disposition is the answer that delivery admission gives for one inbound event.
 The closed set holds `accepted as an observation`, `accepted as a human act`, `refused` and `duplicate`.
-Delivery admission records `accepted as an observation` for the merge of pull request 42.
+Delivery admission answers `accepted as an observation` for the merge of pull request 42.
 
 ## external input
 
