@@ -87,7 +87,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - An initiative requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
 - `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:nodeId/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
-  Its input holds `executionId`, `attempt`, `nodeRevision`, `requirementKey`, `subject`, `scope` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
+  Its input holds `executionId`, `attempt`, `nodeRevision`, `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
   Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
 - A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirementKey` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resourceIdentity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirementKey }`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
@@ -275,8 +275,7 @@ Repository evidence remains an address, not an upload of repository content.
 - An evidence asset holds `kind` and `content`. `content` is the RFC 8785 canonical JSON of the shape that `kind` names: `RepositoryAddress` for `repository`, the produced shape `{ mediaType, sha256, data }` for `produced`, `ObjectAddress` for `object` and `PlatformAddress` for `platform`.
 - The produced shape holds canonical base64 `data` of at most 5 MiB decoded, and a content read answers `ContentBytes` from it. The service derives `ProducedAddress` and `ObjectAddress` from `content`.
 - `mission.evidence.submit` takes the full asset list and writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
-- Every evidence holds `scope`, a `Text` that states what part of its node the evidence covers. `mission.evidence.submit` and `mission.evidence.request` require it, and an absent value answers HTTP 400 with an issue list. The service stores the value unchanged in `mission_evidence.scope`, never interprets it and answers it on every evidence read.
-- The Mission Service writes `scope: "landed commit"` on the evidence of each landed commit, from a request and from a success override.
+- The scope of an evidence is its node and its attempt. The service derives it from `node_id` and `attempt` of the evidence row, and an evidence read answers it as `nodeId` and `attempt`. No input carries a scope, and a `scope` field in an input answers HTTP 400 with an issue list.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
 - An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
 - `requirement_key` holds only the key of a `FrozenAction`; every other evidence holds no requirement key.
@@ -629,7 +628,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests prove that execution code runs verifications before judgement.
 - Tests permit judgement only after every verification of the current tested input passes.
 - Tests turn success into `criterion-not-met` for a default-standard violation only when the worker declares a base prompt.
-- Tests require a `scope` on an evidence submission and on a request, refuse an absent or blank value, store the value unchanged and write `landed commit` on each landed-commit evidence.
+- Tests check that the scope of each evidence read equals the node and the attempt of its record, and refuse a `scope` field in an evidence submission and in a request with HTTP 400 and an issue list.
 - Tests accept inline content at 5 MiB decoded and refuse one byte more with 413 `mission.evidence.too_large`.
 - Tests require canonical base64, media type and the correct SHA-256, and assert no truncation.
 - Tests refuse object uploads of a node without a storage binding and preserve inline evidence and repository addresses.

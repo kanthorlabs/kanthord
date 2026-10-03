@@ -241,6 +241,7 @@ It proves nothing about test adequacy, about coverage or about a suppressed fail
 ## Evidence
 
 An evidence record carries one or more assets, a subject, a provenance and a scope.
+The scope of an evidence record is its node and its attempt.
 An evidence record is separate from the content that its assets address.
 An asset identifies the accepted content, and it establishes nothing about its claims.
 Two executions with identical output produce two records.

@@ -87,7 +87,6 @@ erDiagram
         text node_id FK "initiative or objective"
         integer attempt "0 only for override landed commit"
         text subject "nonblank Text"
-        text scope "nonblank Text"
         text requirement_key "FrozenAction key, request only, else null"
         text end_state "expected | other, request only, null until resolved"
         text verification "JSON Verification or null"
@@ -244,7 +243,6 @@ A remote effect never commits with a SQLite transaction. A row that records a re
 
 - An execution submission names an attempt of 1 or more, and its `attempt` equals the open attempt of the claim. Its `node_id` equals the claimed node.
 - The provenance of an execution submission is that execution. An evidence has no natural key, so a repeat after a restart creates a second row.
-- `scope` holds the scope that the submission or the request carries, unchanged. The Mission Service writes `landed commit` in `scope` of each landed-commit row.
 - A submission writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
 - `content` of an asset holds the RFC 8785 canonical JSON of the shape that `kind` names. A repository shape holds `bindingId` and `commit`. A produced shape holds `mediaType`, `sha256` and canonical base64 `data` of at most 5 MiB decoded, and `sha256` equals the digest of those bytes. An object shape holds `location`, `size`, `mediaType`, `storageBindingId` of the pinned storage binding row, `objectVersion` when the store returns one, and an optional `sha256`. A platform shape holds `kind`, `resourceIdentity` and the fields of its kind.
 - `bindingId` of a repository shape names a repository binding row of the project in every context. For the evidence of an objective, and for a landed commit, it equals the repository binding of the pinned revision, or, for a success override while the attempt reads 0, the binding of the revision current at the act. For the tested input of an initiative, the list holds one address for each distinct repository binding of its current objectives.
