@@ -18,7 +18,7 @@ The schema has four functional views. Their order is the order of delivery.
 | --- | --- | --- |
 | [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, the mission plan and the work queue. | Custody, Project, Worker, Mission, Scheduler |
 | [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence and its assets, assessments and outcomes. | Worker, Scheduler, Mission |
-| [ERD 3: External acquisition and observation](03-integration.md) | Inbounds, inbound events and delivery admission. | Intake, Mission |
+| [ERD 3: External integration](03-integration.md) | Inbounds, inbound events, outbound requests and delivery admission. | Intake, Mission |
 | [ERD 4: Telemetry](04-tracking.md) | Traces, spans, records and telemetry texts. | Tracking |
 
 A view holds the canonical definition of each of its tables.
@@ -44,8 +44,8 @@ flowchart TB
             s2["Scheduler: execution"]
             m2["Mission: attempt, evidence, evidence asset, assessment, outcome"]
         end
-        subgraph v3["ERD 3: External acquisition and observation"]
-            i3["Intake: inbound, inbound event"]
+        subgraph v3["ERD 3: External integration"]
+            i3["Intake: inbound, inbound event, outbound request"]
             m3["Mission: delivery admission"]
         end
     end
@@ -62,7 +62,7 @@ flowchart TB
     m2 -.->|records of node| m1
     m2 -.->|evidence assets name binding| p1
 
-    i3 -.->|inbound of project| p1
+    i3 -.->|inbound and outbound request of project| p1
     i3 -.->|inbound names credential| c1
     m3 -.->|admission names request evidence| m2
 
@@ -93,7 +93,7 @@ flowchart TB
 | --- | --- | --- |
 | ERD 1 | Nothing. | An environment and a plan. The work queue is here because the Mission Service writes it in its own transaction, and no later migration of the Scheduler Service can read Mission rows. Agent enablement is here because a native worker binding write validates it. |
 | ERD 2 | ERD 1. | Execution and the human controls. A requested external action of an attempt stays unresolved until ERD 3, because the check of the Intake Service sets the end state of its request evidence. The node cannot reach a terminal state through that attempt. A human can still pause the node, block it and unblock it into a next attempt. A frozen action that the attempt has not requested prevents no terminal transition. |
-| ERD 3 | ERD 1 and ERD 2. | The inbounds, their inbound events and delivery admission. A node in `External.Requested` reaches its end state. Only GitHub is ruled. |
+| ERD 3 | ERD 1 and ERD 2. | The inbounds, their inbound events, the outbound requests and delivery admission. A node in `External.Requested` reaches its end state. Only GitHub and the storage delete are ruled. |
 | ERD 4 | Nothing in its store. Every service calls the no-op interface of the Tracking Service from ERD 1. | The stored telemetry. |
 
 ## Stores
