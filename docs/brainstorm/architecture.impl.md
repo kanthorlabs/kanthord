@@ -503,7 +503,7 @@ A fatal error runs as below.
 - The recovery of the remaining work belongs to the owning service.
 - The idempotency component holds no durable record, as [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) describes.
 - A retry after a restart runs the handler again.
-- Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service, whose repeat after a restart creates a second record.
+- Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service and an inbound create of the Intake Service, whose repeat after a restart creates a second record.
 - The server restarts nothing, and the process manager of the operator owns a restart.
 
 ## Secret material and the diagnostic contract
@@ -719,7 +719,7 @@ The invocation chain holds idempotency in memory.
 - No store holds a replay record.
 - A replay holds inside one process and inside the TTL.
 - A retry after a restart runs the handler again.
-- Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service, whose repeat after a restart creates a second record.
+- Every mutation handler is idempotent by a natural key of its own, except an evidence submission of the Mission Service and an inbound create of the Intake Service, whose repeat after a restart creates a second record.
 - [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) holds the mechanism.
 - The telemetry sink uses a client of a Tracking operation with a lossy guarantee and a handler idempotent by a natural key.
 - The Tracking Service keeps `tracking.db` separate because telemetry and operational records grow fast.
