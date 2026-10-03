@@ -313,7 +313,7 @@ A route of the MCP prefix takes 900 s, because a call of the MCP server runs a t
 `GET /api/liveness` carries the [liveness answer](gateway-service.md#health-report-and-liveness-answer).
 The [entry paths](gateway-service.impl.md#entry-paths) declare its access policy.
 The server owns the shared `HealthRegistry` and passes it to the Gateway Service.
-Each service and shared component registers one map under its name: `server`, `gateway`, `custody`, `scheduler`, `worker`, `repository`, `project` and `mission`.
+Each service and shared component registers one map under its name: `server`, `gateway`, `custody`, `scheduler`, `worker`, `repository`, `project`, `mission` and `intake`.
 
 - The `server` map contains `gateway`, `store` and `log`.
 - The `store` probe checks the SQLite database with `SELECT 1`.
@@ -322,10 +322,10 @@ Each service and shared component registers one map under its name: `server`, `g
 - Its map contains `listener`, `authentication`, `idempotency`, `registry` and `invocation`.
 - The `gateway` component of `server` summarizes that map.
 - The `idempotency` probe checks the in-memory component of the invocation chain, not a database table.
-- A domain map reads in-process state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings` and `mission` holds `operations`.
+- A domain map reads in-process state only: `custody` holds `credential`, `scheduler` holds `queue`, `worker` holds `registrations`, `project` holds `bindings`, `mission` holds `operations` and `intake` holds `events`. The `events` probe reports the dispatcher of the running Intake Service.
 - The `repository` map holds `toolchain`, which runs the version commands of the required tools without blocking the event loop.
 
-The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200}}}`.
+The success body is `{"status":"ok","services":{"server":{"gateway":200,"store":200,"log":200},"gateway":{"listener":200,"authentication":200,"idempotency":200,"registry":200,"invocation":200},"custody":{"credential":200},"scheduler":{"queue":200},"worker":{"registrations":200},"repository":{"toolchain":200},"project":{"bindings":200},"mission":{"operations":200},"intake":{"events":200}}}`.
 A component code of `200` means healthy, and `503` means unavailable.
 HTTP 200 requires a nonempty, entirely healthy map from each owner.
 An unavailable component produces HTTP 503 with code `gateway.liveness.unhealthy` through the shared error envelope.
@@ -408,7 +408,7 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), [custod
 - A replay holds inside one process and inside the TTL.
 - A restart empties the component.
 - A retry after a restart runs the handler again.
-- Every mutation handler is idempotent by a natural key of its own, for example a registration by its client identity, except an evidence submission of the Mission Service, whose repeat after a restart creates a second record.
+- Every mutation handler is idempotent by a natural key of its own, for example a registration by its client identity, except an evidence submission of the Mission Service and an inbound create of the Intake Service, whose repeat after a restart creates a second record.
 - The `caller` field holds the account of a human or the client identity of a machine.
 - The component compares the verified caller with that field before it replays.
 - A repeat under another caller reserves its own record and runs the handler.
