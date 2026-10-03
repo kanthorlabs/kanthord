@@ -21,7 +21,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - Acceptance as a human act needs a linked human identity. The mapping from a platform account to a human identity is open.
 - A request for new WHAT receives no acceptance. The inbound request contract is POSTPONED in HANDOFF.
 - The outbound operations are `github.pull_request`, `git.merge_push` and `s3.delete_object`. A native push send and a CLI write wait for their designs.
-- The Intake Service is extractable in principle: it declares one collaboration with custody, and no foreign key crosses its boundary. It still runs in the server process and in `kanthord.db`. Its peers reach it through `service`-policy operations, which the direct adapter alone serves, and the cross-process identity contract is POSTPONED.
+- The Intake Service is extractable in principle: it declares one collaboration with custody, and no foreign key crosses its boundary. It still runs in the server process and in `kanthord.db`. Its peers reach it through the `client`, `human` and `service` operations that [intake-service.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#outbound-operations-and-checks) declares. Only the direct adapter serves a `service` operation, and the cross-process identity contract is POSTPONED.
 
 ## Records without a table
 
@@ -152,7 +152,7 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 
 ### Mission Service
 
-- Delivery admission writes only ERD 2 rows: `end_state` of a request evidence and the landed-commit evidence.
+- Delivery admission writes `end_state` of a request evidence and the landed-commit evidence of ERD 2. The same transaction writes the node transition and the attempt closure that the end state rules in the [state transitions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.md#state-transitions).
 - Admission resolves the project from the inbound of the event. It finds the request evidence among the requests of an open attempt of the project that hold no end state, by the canonical JSON of its `platform` asset, never by the newest attempt alone. More than one match refuses the event with the reason `ambiguous`.
 - Admission is idempotent through the write-once `end_state`. A repeat that finds the end state of its request set answers `duplicate` and writes nothing.
 - Admission calls the check of the Intake Service before its transaction. The transaction writes `end_state` of the request and the landed-commit evidence together. A failed check answers a retryable failure and writes nothing.
