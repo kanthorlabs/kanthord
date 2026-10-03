@@ -26,7 +26,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Mission Service
 
-- [ ] Added 2026-10-02 from the debate of the Intake redesign. A human-act admission invokes the Mission operation under the linked human identity before its admission row commits. A crash between the two lets a repeat of the same inbound event repeat the human act. Decide how the human act becomes idempotent by the event identity.
+- [ ] Added 2026-10-02 from the debate of the Intake redesign. A human-act admission invokes the Mission operation under the linked human identity, and since 2026-10-03 no admission row exists. A crash after the act lets a repeat of the same inbound event repeat the human act. Decide how the human act becomes idempotent by the event identity.
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
   - Next session 2026-09-25: open with external-action publication.
