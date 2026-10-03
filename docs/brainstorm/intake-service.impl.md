@@ -77,7 +77,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - A module-private `Set` holds the identity of every event whose handoff runs. The dispatcher adds the identity before the consumer call and removes it after the write of the answer, so one event never has two handoffs at once.
 - The dispatcher re-reads the state of one event and adds its identity to the set in one synchronous step, with no await between them. It starts the handoff only for an event that is still `pending`. A discard reads the set and writes its conditional update in one synchronous step. `node:sqlite` `DatabaseSync` and the single event loop serialize the two steps.
 - An answer of the consumer sets `succeeded` with an update conditional on `pending`.
-- A declared failure or an indeterminate result sets `failed` with an update conditional on `pending`. The same update appends `{ code, message, created_at }` to the JSON array `error`. The array is bounded in bytes and holds no credential material. When an append exceeds the bound, the update drops the oldest items until the array fits. A message beyond its own bound is cut at that bound.
+- A declared failure or an indeterminate result sets `failed` with an update conditional on `pending`. The same update appends `{ code, message, created_at }` to the JSON array `error`. A declared failure appends its error code, and an indeterminate result appends the code `indeterminate`. The array is bounded in bytes and holds no credential material. When an append exceeds the bound, the update drops the oldest items until the array fits. A message beyond its own bound is cut at that bound.
 - The dispatcher retries nothing and holds no backoff. At a start, it hands every pending event over.
 - `intake.inbound.event.retry` is a `human` operation. It turns a failed event to `pending`. A pending event answers its current state, and a succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
 - `intake.inbound.event.discard` is a `human` operation. It turns a pending or a failed event to `discarded`. A pending event whose identity is in the in-flight set answers 409 `intake.inbound.event.in_flight`. A succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
@@ -107,6 +107,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 | 409 | `intake.outbound.request.discarded` | A repeat names a discarded request. |
 | 409 | `intake.outbound.request.in_flight` | A repeat or a discard names a request whose call runs. |
 | 409 | `intake.outbound.request.state_conflict` | A discard names a request that is not `pending`, or a delete list names a pending request. |
+| 409 | `intake.storage.object_mismatch` | The object check finds no object, or its size or SHA-256 differs from the asset. |
 | 422 | `intake.inbound.credential_invalid` | The credential name does not exist, or its platform does not suit the inbound. |
 | 422 | `intake.inbound.platform_refused` | The platform refuses a registration, a poll request or a deregistration. |
 | 422 | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table. |

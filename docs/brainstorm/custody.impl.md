@@ -78,6 +78,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 
 - The use request is `{ credential, platform }`.
 - Custody compares the record platform with the requested platform before any remote call.
+- A differing platform answers 400 `credential.platform.mismatch`.
 - It compares no metadata and reads no secret for this comparison.
 - Remote validation uses the record's own platform validator.
 - The use check performs no remote validation at creation or rotation.

@@ -560,7 +560,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
 - For a human identity, it follows the evidence asset to its storage binding revision.
 - It takes no association from the caller.
-- A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled` or `binding_removed`.
+- A broken chain answers 403 `mission.authorization.refused` with `details: { reason }`, where `reason` is `claim_not_live`, `node_mismatch`, `attempt_closed`, `binding_disabled`, `binding_removed` or `service_mismatch`.
+- A `service` operation of the Mission Service authorizes its caller by name. `mission.delivery.admit` admits only the Intake Service, and the authorization of a request evidence for `intake.action.check` admits only the Mission Service. Another service identity answers `service_mismatch`.
 
 ## Operation contracts
 
