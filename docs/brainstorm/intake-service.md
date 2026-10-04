@@ -50,7 +50,7 @@ One server holds one Intake Service that serves every project.
 An [inbound](intake-service.vocabulary.md#inbound) belongs to one project.
 It has one [inbound kind](intake-service.vocabulary.md#inbound-kind).
 It names its platform and its [consumer](intake-service.vocabulary.md#consumer).
-It names its credential by its name, except a [passive webhook](intake-service.vocabulary.md#passive-webhook).
+A poll names its credential by its name, and a webhook names no credential.
 Its configuration holds the remote resource and the options of its kind and platform.
 No field of its configuration changes after its insert, and a change is a new inbound.
 A human creates an inbound to start its acquisition and deletes it to stop the acquisition.
@@ -58,23 +58,16 @@ A project holds any number of inbounds, and two inbounds can name the same resou
 
 The store is the single source of truth, and a row exists only for a validated inbound.
 The create validates the inbound before its insert.
-The create of a registered webhook registers the address of the inbound at the platform, then inserts the row with the registration identity.
-An uncertain registration result makes the create read the registrations at the platform.
-The create adopts the registration that names the same address, or it inserts nothing.
-A lost answer inside the create creates no second registration.
-A crash between the registration and the insert leaves a registration without a row, and a human removes it at the platform.
 The create of a poll performs one request with the credential before the insert.
-A passive webhook names no credential, and kanthord registers nothing for it.
-A human sets its address and its secret at the platform.
-A passive webhook is the one exception to the validation before the insert, and its create validates the project, the platform and the configuration only.
+kanthord registers no webhook at a platform.
+A human sets the address and the secret of a webhook inbound at the platform.
+A webhook inbound is the one exception to the validation before the insert, and its create validates the project, the platform and the configuration only.
 
-A delete of a registered webhook deregisters at the platform before the row goes.
-A refused deregistration keeps the row.
-A delete of a passive webhook or of a poll calls no platform.
+A delete calls no platform.
+A human removes the webhook at the platform after the delete of its webhook inbound.
 An error after the insert produces a span of the [Tracking Service](tracking-service.md), and a human traces the error there.
 An inbound row holds no state of its acquisition health.
 
-A webhook inbound holds the registration identity that the platform returns.
 A poll inbound holds its [checkpoint](intake-service.vocabulary.md#checkpoint).
 A poll runs on a fixed interval while its inbound exists, and every poll is permanent.
 A poll checkpoint advances only with the commit that stores every event of the batch.
@@ -83,11 +76,8 @@ A poll discards its batch when its inbound no longer exists at the commit.
 The Intake Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of an inbound.
 
 - The check runs only when a human calls the healthcheck.
-- The check of a registered webhook reads the registration at the platform.
-- A missing or inactive registration, or a failed last delivery of the platform, reports unhealthy.
-- A registration that delivered nothing reports unknown, and every other registration reports healthy.
 - The check of a poll performs one fetch at the platform. A success reports healthy, and a failure reports unhealthy.
-- A passive webhook reports [unknown](architecture.vocabulary.md#resource-status).
+- A webhook inbound reports [unknown](architecture.vocabulary.md#resource-status).
 - The check changes no inbound and stores no result.
 - The [implementation](intake-service.impl.md#the-resource-healthcheck) defines the values of the check.
 

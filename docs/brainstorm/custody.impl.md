@@ -112,7 +112,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A module-private `WeakSet` records each frozen grant, so a caller cannot fabricate one.
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
-- A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `webhook-register`, `webhook-read`, `webhook-deregister` or `poll`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
+- A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `poll`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
 - Human and machine identities pass the checks of [Gateway identity verification](gateway-service.impl.md#the-jwt).
 - A service identity passes `isServiceIdentity` of the kernel.
 - An execution identity resolves through the Scheduler Service to the node of its live claim.

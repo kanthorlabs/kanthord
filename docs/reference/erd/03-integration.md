@@ -53,9 +53,8 @@ erDiagram
         text kind "webhook | poll"
         text platform "for example github"
         text consumer "mission.delivery.admit"
-        text credential "credential name, null for a passive webhook"
+        text credential "credential name for a poll, null for a webhook"
         text configuration "JSON per kind and platform, holds resource"
-        text registration_id "registered webhook, platform value or null"
         text checkpoint "poll cursor, JSON per platform, or null"
         integer created_at "Unix ms"
     }
@@ -117,7 +116,7 @@ The verification secret of a webhook inbound derives from `masterKey` and the in
 ## Constraints
 
 The owning service enforces every rule below in the transaction of its write.
-A remote effect never commits with a SQLite transaction. An inbound row that records a registration follows that registration. An outbound request commits as `pending` before its call. `succeeded` commits only after a 2xx answer, a CLI exit code 0 or a read-back match.
+A remote effect never commits with a SQLite transaction. An outbound request commits as `pending` before its call. `succeeded` commits only after a 2xx answer, a CLI exit code 0 or a read-back match.
 
 ### Intake Service
 
@@ -125,12 +124,12 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 - No column of an inbound changes after its insert, except `checkpoint`, which a poll writes. A change of the configuration is a new inbound.
 - `intake_inbound` holds no unique index other than its key, because a duplicate inbound serves a rotation.
 - `kind` and `consumer` hold values of closed sets in code. The Intake Service validates `configuration` per `(kind, platform)` in code, and the platform implementation validates `checkpoint`. Every property name inside a JSON column is snake_case.
-- `credential` holds a credential name. A webhook with a null `credential` is a passive webhook. A poll names a credential. The insert transaction checks that the name exists and that its platform suits the inbound. A credential archive calls `inboundsNaming` in its own transaction and is refused while an inbound names the credential.
-- The create of a registered webhook registers at the platform before the insert, and `registration_id` holds the answer of the platform. A passive webhook and a poll hold a null `registration_id`.
+- `credential` holds a credential name. A poll names a credential, and a webhook holds a null `credential`. The insert transaction checks that the name exists and that its platform suits the inbound. A credential archive calls `inboundsNaming` in its own transaction and is refused while an inbound names the credential.
+- kanthord registers no webhook at a platform. A human sets the address and the secret of a webhook inbound at the platform.
 - The create of a poll performs one request with the credential before the insert.
 - A poll advances `checkpoint` in the transaction that stores every event of the batch. A batch whose inbound no longer exists is discarded.
 - No row holds credential material or a webhook secret.
-- A delete of an inbound is refused while the inbound holds a pending event. A registered webhook deregisters at the platform before the delete. One transaction deletes the events of the inbound and the row.
+- A delete of an inbound is refused while the inbound holds a pending event. A delete calls no platform. One transaction deletes the events of the inbound and the row.
 - `intake_inbound_event` has a unique index on `(inbound_id, event_id)`, so a redelivery inside one inbound creates no second row.
 - A webhook event is verified before it is stored, and it is stored before its acknowledgement. An event that fails verification is stored nowhere. A verified handshake stores no row.
 - A stored row keeps `event` and `metadata` unchanged, so every handoff of the event carries the same identity and the same content.

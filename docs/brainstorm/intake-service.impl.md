@@ -17,8 +17,8 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 ## The credential release of an inbound
 
 - Each remote call of an inbound takes one single-use operation grant from the [protected facility](custody.impl.md#the-protected-facility) under the service identity of the Intake Service.
-- The inbound operations are `webhook-register`, `webhook-read`, `webhook-deregister` and `poll`.
-- The facility checks that the requester is the Intake service identity and that the operation is an inbound operation. It needs no Project decision, because the human configuration of the inbound authorizes the release.
+- The one inbound operation is `poll`.
+- The facility checks that the requester is the Intake service identity and that the operation is `poll`. It needs no Project decision, because the human configuration of the inbound authorizes the release.
 - The Intake Service supplies the inbound facts from its own row: the inbound identity, the credential name, the platform and the resource. At a create, the facts come from the validated input before the insert.
 - Custody resolves the newest live revision of the credential name, checks the platform suitability and releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret).
 - The handler builds its platform client for one call, caches no client and no token, and drops the material in `finally`.
@@ -29,16 +29,15 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `configuration` is JSON text. The Intake Service validates it per `(kind, platform)` with a `zod` schema in code before the write. It holds `resource` and the options of the kind and the platform. Every property name is snake_case.
 - `checkpoint` is JSON text whose shape the platform implementation validates.
 - The table holds no unique index other than its key.
-- The create validates the input, then performs the remote validation of its kind: a registration for a registered webhook, one request for a poll, nothing for a passive webhook.
-- The insert transaction checks that the credential name has a live revision and that its platform suits the inbound. When the insert refuses after a registration, the create deregisters with the material that it still holds, then answers the refusal. A credential archive calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and an archive never interleave.
-- A delete of a registered webhook first refuses with 409 `intake.inbound.events_pending` when a pending event exists. Then it deregisters at the platform, and a not-found answer counts as done. Then one transaction checks the pending events again, deletes the events of the inbound and deletes the row. A pending event that arrives during the deregistration refuses that transaction. The inbound then stays without its registration, and a later delete completes it.
+- The create validates the input, then performs the remote validation of its kind: one request for a poll, nothing for a webhook.
+- The insert transaction checks that the credential name has a live revision and that its platform suits the inbound. A credential archive calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and an archive never interleave.
+- A delete refuses with 409 `intake.inbound.events_pending` when a pending event exists. Otherwise one transaction deletes the events of the inbound and deletes the row. A delete calls no platform.
 - A create or a delete answers its platform refusal and changes no row. Each failure writes a span of the Tracking Service with its reason.
 
 ## The webhook acquisition
 
-- The registration, the read and the deregistration of a GitHub webhook use the [GitHub platform implementation of the Repository component](repository.impl.md#platform-connector-and-platform-implementations). Each call carries a deadline.
-- The registration names the address `/hooks/<inbound id>` inside the path group that [gateway-service.impl.md](gateway-service.impl.md#ingress) reserves, the verification secret and the events that `configuration` names.
-- An indeterminate registration answer makes the create read the registrations before it answers. It adopts the registration that names the same address and inserts the row with its identity.
+- The address of a webhook inbound is `/hooks/<inbound id>` inside the path group that [gateway-service.impl.md](gateway-service.impl.md#ingress) reserves.
+- A human sets the address under the public origin of the ingress, the verification secret and the events at the platform. kanthord calls no platform for a webhook inbound.
 
 ### The verification secret
 
@@ -109,7 +108,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 | 409 | `intake.outbound.request.state_conflict` | A discard names a request that is not `pending`, or a delete list names a pending request. |
 | 409 | `intake.storage.object_mismatch` | The object check finds no object, or its size or SHA-256 differs from the asset. |
 | 422 | `intake.inbound.credential_invalid` | The credential name does not exist, or its platform does not suit the inbound. |
-| 422 | `intake.inbound.platform_refused` | The platform refuses a registration, a poll request or a deregistration. |
+| 422 | `intake.inbound.platform_refused` | The platform refuses the first request of a poll create. |
 | 422 | `intake.outbound.request.action_unmapped` | A configured action has no row in the action table. |
 | 503 | `intake.inbound.event.capacity_exceeded` | The count of pending events is at its bound. |
 | 503 | `intake.outbound.request.cli_unavailable` | The binary of a CLI operation is missing or below its minimum version. |
@@ -208,23 +207,18 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The inbound check follows them like every other check.
 - The check runs only inside a health report that a human calls.
 - The inventory answers one entry per inbound with its `projectId` in place of a project name. The composition root resolves the name under the [health report](gateway-service.impl.md#the-resource-healthcheck-report). The Intake Service reads no Project table and calls no Project collaboration.
-- A registered GitHub webhook reads the hook `registration_id` with a release for `webhook-read`. A missing hook, `active` false or a `last_response.code` outside 2xx reports `unhealthy`. A hook with no delivery reports `unknown`. Every other hook reports `healthy`. The capability is `registered webhook`.
 - A poll performs one request with a release for `poll` and with the ETag of `checkpoint`. A 200 or a 304 answer reports `healthy`, and any other result reports `unhealthy`. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
-- A passive webhook reports `unknown` with the capability `passive webhook`.
+- A webhook inbound reports `unknown` with the capability `webhook`.
 - No store holds a check result.
 
 ## Tests
 
-- A test covers a create of a registered webhook whose registration answer is lost, followed by a read that finds the registration, and it asserts one registration and one row.
-- A test covers a create whose registration the platform refuses, and it asserts no row.
 - A test covers a create of a poll whose first request fails, and it asserts no row.
-- A test covers a credential archive between the registration and the insert of a create that names it, and it asserts that the insert refuses and that no row and no registration remain.
-- A test covers a pending event that arrives during the deregistration of a delete, and it asserts the refusal, the kept row and the completion by a later delete.
+- A test covers a credential archive between the first request and the insert of a poll create that names it, and it asserts that the insert refuses and that no row remains.
 - A test covers a discard after the dispatcher selects an event and before it starts the handoff, and it asserts that no handoff starts.
 - A test covers an append to a full `error` array, and it asserts that the oldest item goes and the state becomes `failed`.
 - A test covers a slow poll request, and it asserts that no second request of that inbound starts before it ends.
-- A test covers a delete of a registered webhook with a pending event, and it asserts the 409 and the registration at the platform unchanged.
-- A test covers a deregistration that answers not-found, and it asserts the delete of the row.
+- A test covers a delete of an inbound with a pending event, and it asserts the 409 and the kept row.
 - Tests cover a missing, a duplicate, a malformed and a wrong-length signature, and a valid signature over the exact bytes.
 - A test asserts that a post with a failed verification stores nothing and answers 401.
 - A test covers a repeated `X-GitHub-Delivery` inside one inbound, and it asserts one row.

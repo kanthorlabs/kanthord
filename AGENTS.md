@@ -108,7 +108,7 @@ The pages record only the decision. Do not propose these alternatives again. Add
 - A poll that ends at an event of its resource (`stop_condition`, the state `ended`). Every poll is permanent.
 - An automatic handoff retry, a backoff, an attempt bound or a handoff window for an inbound event. The dispatcher hands an event over once, and a human retries it.
 - An automatic retention or a delete without a filter of inbound events.
-- A removal of the passive webhook. A webhook inbound without a credential is the named exception to the validation before the insert.
+- A registered webhook, or a platform call at the create or the delete of a webhook inbound. A human registers every webhook at its platform. See [inbounds](docs/brainstorm/intake-service.md#inbounds).
 - A stored handshake, a handshake record or a check that a handshake runs once. A platform implementation answers a verified handshake from the request alone.
 - A `recorded`, `dispatched` or `uncertain` outbound request state. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).
 - An execution-scoped request key or a `caller_service` column. See [outbound requests](docs/brainstorm/intake-service.md#outbound-requests).

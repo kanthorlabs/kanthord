@@ -16,9 +16,7 @@ The GitHub webhook inbound `inbound_01J9QK3T` of `kanthord-web` receives the eve
 An inbound kind names the way an inbound acquires its events.
 The closed set holds `webhook` and `poll`.
 
-## passive webhook
-
-A passive webhook is a webhook inbound that names no credential and that kanthord does not register at its platform.
+A webhook inbound names no credential, and kanthord does not register it at its platform.
 A human pastes the address `/hooks/inbound_01J9Y3PL` and its secret into the webhook settings of `kanthorlabs/kanthord` on GitHub.
 
 ## consumer
