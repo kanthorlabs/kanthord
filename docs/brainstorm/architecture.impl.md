@@ -695,9 +695,11 @@ Caller propagation carries identity per call.
 A handler separates asynchronous work from its commit.
 
 - A store transaction is synchronous and spans no `await`.
-- A handler may open a synchronous transaction on the declared store for reads before `caller.commit`; it performs no write and does not replace the final `caller.commit`.
-- A handler runs asynchronous work first, including every client call.
-- A handler performs one `caller.commit` at the end on the declared store.
+- A handler may open a synchronous transaction on the declared store for reads before `caller.commit`. It writes nothing in that transaction, except a ruled write of the index below.
+- A ruled write commits in a synchronous transaction that the handler owns, before, between or after asynchronous steps, at the point that the owning sibling rules. The owning sibling states the state that the write leaves when the handler fails after it.
+- The index of ruled writes: the `pending` insert and the `failed` write of an [outbound request](intake-service.impl.md#the-outbound-record), the pin and the drain of a [custody release](custody.impl.md#the-release-of-a-secret) before a remote call, and the per-result commit of [`mission.node.check`](mission-service.impl.md#the-request-record).
+- A handler completes its asynchronous work, including every client call, before its final `caller.commit`.
+- A handler that answers a result performs one `caller.commit` at the end on the declared store. An error exit requires no additional `caller.commit`. A failure before or inside the final `caller.commit` undoes no ruled write that committed earlier.
 - Before that commit, a `wait` handler can run its commit write in a probe transaction on the declared store. The handler always rolls back a probe transaction.
 - A probe and its collaborations write only through the probe transaction. A probe calls no client, starts no timer and sends no wakeup.
 - The handler performs its `caller.commit` after the deciding probe with no `await` between them. The committed result supplies the answer.

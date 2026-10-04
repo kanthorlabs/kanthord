@@ -128,6 +128,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Custody exposes `release(grant)`.
 - It checks and consumes the grant, resolves the pinned or the newest live revision, checks suitability, decrypts the revision and returns `Material` inside the process.
 - The holder of `Material` performs its own operation, and custody performs no operation of a service.
+- When a handler releases material before a remote call, it commits any pin and drain of that release in its transaction before the call. Custody writes through the supplied transaction and commits none. A later failure of the handler keeps the pin and the drain.
 - A release is a call of the shared custody component inside the server process, so `Material` crosses no adapter.
 - A server-owned child process remains inside the server boundary.
 - Material enters no log, workspace file, transcript, tool result or error body, and this rule binds every holder of `Material`.
