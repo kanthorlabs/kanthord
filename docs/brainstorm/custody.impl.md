@@ -185,6 +185,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - `credential.login` obtains a record of a platform whose secret shape is `oauth`.
 - `credential.rotate` adds a revision without a remote call.
 - `credential.revoke` ends one revision at once.
+- `credential.remove` checks every dependent, revokes every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
 - `credential.get` and `credential.list` return metadata and no secret.
 - The resource healthcheck validates a record on demand.
 
@@ -233,6 +234,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
 - The create form lists every platform. An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
 - Revoke sits on the revision list of the record and needs a confirmation.
+- Remove sits on the detail of the record and needs a confirmation.
 
 ## Tests
 
