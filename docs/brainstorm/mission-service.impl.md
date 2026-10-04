@@ -458,7 +458,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
   A node that is not ready answers 409 `mission.node.not_ready` with the `details` of [Node ready](#node-ready).
   The refusal changes no state and writes no job.
 - `target: Available` moves the node to `Available` when the dependency closure holds, and to `Pending` when it does not hold.
-- A resume opens no attempt and resets no loss count.
+- A resume with `target: Waiting` opens the attempt when the node holds none, as the ready act does. Every other resume opens no attempt. A resume resets no loss count.
 - The answer is `ControlResult` with the node in the selected state and the open attempt.
 
 ## Node override
@@ -695,7 +695,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
 - Tests assert that a loss below `mission.consecutiveLossLimit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
-- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfiedIds` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
+- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfiedIds` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
 - Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.

@@ -593,7 +593,7 @@ A forced delete of the request evidence of the open attempt holds the node, and 
 | `Blocked -> Pending` | Human unblock; closure does not hold | Next attempt opens when the cleared attempt exists | Unblock record |
 | `Blocked -> Completed` | Human override asserts success | No open attempt | Outcome |
 | `Blocked -> Discarded` | Human discards the node | No open attempt | Outcome |
-| `Paused -> Waiting` | Human resumes the node with target Waiting; readiness condition and closure hold | Stays open | None |
+| `Paused -> Waiting` | Human resumes the node with target Waiting; readiness condition and closure hold | Opens the attempt when the node holds none; stays open otherwise | None |
 | `Paused -> Available` | Human resumes the node with target Available; closure holds | Stays open | None |
 | `Paused -> Pending` | Human resumes the node with target Available; closure does not hold | Stays open | None |
 | `Paused -> External.Requested` | Human resumes the node; resume precedence selects External.Requested | Stays open | None |
