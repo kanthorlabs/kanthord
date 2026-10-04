@@ -28,10 +28,12 @@ A mechanism here never overrides a rule there.
 - A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
 - A rotation and a metadata edit name `expectedRevision`, the newest live revision that the human read. A stale value answers 409 `credential.revision.conflict` with the current value in `details`.
 - Every answer includes metadata and excludes the secret.
-- Removal checks every dependent, including agent providers, in the transaction of the commit.
-- Removal calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
-- Removal calls the Intake collaboration `inboundsNaming(tx, credentialName)` in that transaction. It answers every inbound that names the credential.
-- Removal revokes every live revision of the name and keeps the rows, because an execution record references them.
+- An archive checks every dependent, including agent providers, in the transaction of the commit.
+- An archive calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
+- An archive calls the Intake collaboration `inboundsNaming(tx, credentialName)` in that transaction. It answers every inbound that names the credential.
+- An archive sets `ended_at` on every live revision of the name and keeps the rows, because an execution record references them.
+- A name with no live revision is archived. A drain and a revoke never end the newest live revision, so only an archive produces that state.
+- An archive is final. An archived name takes no rotation, metadata edit or second archive, answers 409 `credential.credential.archived`, and stays taken.
 - A refusal lists the dependents.
 - Creation and rotation validate the local schema and make no remote call.
 - Custody logs a human creation or update with the human identity and row identity, never the secret.
@@ -185,7 +187,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - `credential.login` obtains a record of a platform whose secret shape is `oauth`.
 - `credential.rotate` adds a revision without a remote call.
 - `credential.revoke` ends one revision at once.
-- `credential.remove` checks every dependent, revokes every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
+- `credential.archive` checks every dependent, ends every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
+- `credential.list` leaves out an archived name unless the query `includeArchived` is `true`. `credential.get` answers an archived name.
 - `credential.get` and `credential.list` return metadata and no secret.
 - The resource healthcheck validates a record on demand.
 
@@ -234,14 +237,15 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
 - The create form lists every platform. An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
 - Revoke sits on the revision list of the record and needs a confirmation.
-- Remove sits on the detail of the record and needs a confirmation.
+- Archive sits on the detail of the record and needs a confirmation.
+- The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers only Revisions.
 
 ## Tests
 
 - Tests cover duplicate names at creation, login start and login commit, including creation retry after restart.
 - Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and platform-only suitability.
 - Tests assert no remote call on creation or rotation, and no secret in record answers.
-- Tests cover model and credential removal with dependents and concurrent changes.
+- Tests cover a model removal and a credential archive with dependents and concurrent changes.
 - Tests cover every platform probe, S3 status mapping, expired OAuth, forbidden probes and attribution without stored results.
 - Tests preserve names and binding references across rotation.
 - A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision.conflict`. A test covers the same case for two metadata edits.

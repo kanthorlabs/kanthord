@@ -30,7 +30,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `checkpoint` is JSON text whose shape the platform implementation validates.
 - The table holds no unique index other than its key.
 - The create validates the input, then performs the remote validation of its kind: a registration for a registered webhook, one request for a poll, nothing for a passive webhook.
-- The insert transaction checks that the credential name has a live revision and that its platform suits the inbound. When the insert refuses after a registration, the create deregisters with the material that it still holds, then answers the refusal. A credential removal calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and a removal never interleave.
+- The insert transaction checks that the credential name has a live revision and that its platform suits the inbound. When the insert refuses after a registration, the create deregisters with the material that it still holds, then answers the refusal. A credential archive calls `inboundsNaming(tx, credentialName)` in its own transaction, and the collaboration answers every inbound that names the credential. SQLite runs one write transaction at a time, so a create and an archive never interleave.
 - A delete of a registered webhook first refuses with 409 `intake.inbound.events_pending` when a pending event exists. Then it deregisters at the platform, and a not-found answer counts as done. Then one transaction checks the pending events again, deletes the events of the inbound and deletes the row. A pending event that arrives during the deregistration refuses that transaction. The inbound then stays without its registration, and a later delete completes it.
 - A create or a delete answers its platform refusal and changes no row. Each failure writes a span of the Tracking Service with its reason.
 
@@ -217,7 +217,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 - A test covers a create of a registered webhook whose registration answer is lost, followed by a read that finds the registration, and it asserts one registration and one row.
 - A test covers a create whose registration the platform refuses, and it asserts no row.
 - A test covers a create of a poll whose first request fails, and it asserts no row.
-- A test covers a credential removal between the registration and the insert of a create that names it, and it asserts that the insert refuses and that no row and no registration remain.
+- A test covers a credential archive between the registration and the insert of a create that names it, and it asserts that the insert refuses and that no row and no registration remain.
 - A test covers a pending event that arrives during the deregistration of a delete, and it asserts the refusal, the kept row and the completion by a later delete.
 - A test covers a discard after the dispatcher selects an event and before it starts the handoff, and it asserts that no handoff starts.
 - A test covers an append to a full `error` array, and it asserts that the oldest item goes and the state becomes `failed`.

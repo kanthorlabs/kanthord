@@ -35,11 +35,12 @@ Custody grants no authority through possession of a credential reference.
 - A human [revokes](custody.vocabulary.md#revoke) a revision to end it at once, and every pinned use of that revision is refused.
 - Custody refuses a revoke of the newest live revision.
 - Each revision holds its own metadata. A rotation copies the metadata of the newest live revision, and the human can replace it in that rotation. A metadata edit inserts the next revision and copies the secret.
-- Custody refuses removal while dependents exist and lists those dependents in the refusal.
+- A human archives a credential to end it for good. An archive ends every live revision, keeps the rows and is final.
+- Custody refuses an archive while dependents exist and lists those dependents in the refusal.
 - Dependents include every agent provider that names the record.
 - Dependents include every inbound that names the record.
 - Dependents include every binding revision that names the record and that no tombstone follows, while it is the latest revision of its binding or a node that is not terminal and not retired pins it. A binding edit that names another credential leaves a pinned older revision a dependent.
-- The dependency check and removal are atomic.
+- The dependency check and the archive are atomic.
 - Every record answer contains metadata and no secret.
 
 ## Suitability and authority

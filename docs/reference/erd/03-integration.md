@@ -125,7 +125,7 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 - No column of an inbound changes after its insert, except `checkpoint`, which a poll writes. A change of the configuration is a new inbound.
 - `intake_inbound` holds no unique index other than its key, because a duplicate inbound serves a rotation.
 - `kind` and `consumer` hold values of closed sets in code. The Intake Service validates `configuration` per `(kind, platform)` in code, and the platform implementation validates `checkpoint`. Every property name inside a JSON column is snake_case.
-- `credential` holds a credential name. A webhook with a null `credential` is a passive webhook. A poll names a credential. The insert transaction checks that the name exists and that its platform suits the inbound. A credential removal calls `inboundsNaming` in its own transaction and is refused while an inbound names the credential.
+- `credential` holds a credential name. A webhook with a null `credential` is a passive webhook. A poll names a credential. The insert transaction checks that the name exists and that its platform suits the inbound. A credential archive calls `inboundsNaming` in its own transaction and is refused while an inbound names the credential.
 - The create of a registered webhook registers at the platform before the insert, and `registration_id` holds the answer of the platform. A passive webhook and a poll hold a null `registration_id`.
 - The create of a poll performs one request with the credential before the insert.
 - A poll advances `checkpoint` in the transaction that stores every event of the batch. A batch whose inbound no longer exists is discarded.
@@ -147,7 +147,7 @@ A remote effect never commits with a SQLite transaction. An inbound row that rec
 - A read-back sets `succeeded` on `pending` or `failed`, and it runs only inside a repeat of the caller. A read-back that finds nothing changes no row.
 - A human discard sets `discarded` on a `pending` request whose call does not run. `succeeded` and `discarded` are terminal.
 - `result` holds the bounded body of the 2xx answer. `error` follows the rules of `error` of an inbound event.
-- No row holds credential material, the operands of the write or a digest of the operands. A credential removal is not refused by an outbound request that names it.
+- No row holds credential material, the operands of the write or a digest of the operands. A credential archive is not refused by an outbound request that names it.
 - No process deletes an outbound request. A human delete names a state with a range of `id`, or a list of exact identities, and requires force. It removes `succeeded`, `failed` and `discarded` requests, and it never removes a `pending` request.
 
 ### Mission Service

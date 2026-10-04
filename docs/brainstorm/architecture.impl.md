@@ -600,7 +600,7 @@ The public interfaces have three kinds.
 - The Project Service offers `entriesOfAgent(tx, agentName)` for entries of every binding whose worker references the agent.
 - The Worker Service offers `validateEntry(tx, workerName, entry)` for the merge and validation against agent enablement.
 - The Worker Service offers `endRegistrations(tx, projectId, resourceIdentity, now)` to the Project Service. A removal or an unavailability of a worker binding and the end of its live registrations commit in the transaction of the binding-set write.
-- The Project Service offers `bindingsNaming(tx, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential removal and its dependency check are atomic, so both run in the transaction of the removal.
+- The Project Service offers `bindingsNaming(tx, credentialName)` to custody, and the Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service. A credential archive and its dependency check are atomic, so both run in the transaction of the archive.
 - These Kind 2 collaborations enforce valid effective configurations and dependency-safe writes in the transaction of the commit.
 - They co-locate the Project Service and Worker Service in one process on one database.
 - [Worker configuration validation](worker-service.impl.md#agent-configuration-validation) defines the checks and refusals.

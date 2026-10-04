@@ -30,7 +30,7 @@ The [Repository component](repository.md#platform-connector-and-platform-impleme
 The Intake Service calls a platform implementation of that component for every platform operation, with the material of a credential release.
 
 The Intake Service reaches a peer through an [operation](architecture.md#invocation) only.
-It declares one collaboration, `inboundsNaming`, which [custody](custody.md#credential-records) calls in the transaction of a credential removal.
+It declares one collaboration, `inboundsNaming`, which [custody](custody.md#credential-records) calls in the transaction of a credential archive.
 No atomic invariant spans the Intake Service and another service.
 It acts under its own [service identity](project-service.vocabulary.md#service-identity).
 It obtains the material of an inbound call through a custody release for that call.
