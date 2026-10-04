@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 	repo-bootstrap repo-attach \
 	up down restart status logs \
 	dev-up dev-down dev-restart dev-status dev-logs \
-	engine-up engine-down engine-logs engine-migrate engine-install \
+	engine-up engine-down engine-logs engine-install \
 	app-up app-down app-logs app-install \
 	tree-new tree-list tree-clean \
 	sync sync-all sync-status sync-engine sync-apps sync-webhook sync-parent \
@@ -40,7 +40,7 @@ help:
 	@echo ""
 	@echo "  Only this repository needs the identity. repo-bootstrap copies it"
 	@echo "  into engine, apps, and webhook; it attaches all submodules to main."
-	@echo "  It installs engine/apps dependencies and migrates the database."
+	@echo "  It installs engine/apps dependencies."
 	@echo "  Webhook at platforms/webhook is currently documentation-only."
 	@echo "  Run repo-bootstrap again whenever a checkout drifts. It repairs."
 	@echo ""
@@ -116,7 +116,6 @@ help-targets:
 	@echo "engine. The daemon on http://127.0.0.1:$(ENGINE_PORT)"
 	@echo "  engine-up        Start it. FRESH=1 deletes the daemon home first"
 	@echo "  engine-down      Stop it. CLEAN=1 also removes the log"
-	@echo "  engine-migrate   Apply the pending database migrations"
 	@echo "  engine-install   Install the dependencies, generate a configuration"
 	@echo "  engine-logs      Follow the daemon log"
 	@echo ""
@@ -188,8 +187,6 @@ engine-down:
 	@$(S)/engine/down.sh
 engine-logs:
 	@$(S)/engine/logs.sh
-engine-migrate:
-	@$(S)/engine/migrate.sh
 engine-install:
 	@$(S)/engine/install.sh
 

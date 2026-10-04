@@ -22,17 +22,16 @@ if [ "${FRESH:-0}" = "1" ]; then
 	fi
 fi
 
-cd "$ENGINE_DIR" || exit 1
-node src/main.ts db migrate >"$LOG" 2>&1 || {
-	warn "migrate failed"
-	tail -20 "$LOG" >&2
-	exit 1
+probe() {
+	[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$ENGINE_PORT/api/liveness" 2>/dev/null)" = "200" ]
 }
-nohup node src/main.ts serve >>"$LOG" 2>&1 &
+
+cd "$ENGINE_DIR" || exit 1
+nohup node src/main.ts serve >"$LOG" 2>&1 &
 echo $! >"$PID"
 printf '%s: starting' "$SCRIPT_NAME"
 for _ in $(seq 1 30); do
-	grep -q "kanthord: ready" "$LOG" 2>/dev/null && break
+	probe && break
 	kill -0 "$(cat "$PID")" 2>/dev/null || {
 		printf ' died\n'
 		tail -20 "$LOG" >&2
@@ -42,7 +41,7 @@ for _ in $(seq 1 30); do
 	printf '.'
 	sleep 1
 done
-if grep -q "kanthord: ready" "$LOG" 2>/dev/null; then
+if probe; then
 	printf ' ready on http://127.0.0.1:%s\n' "$ENGINE_PORT"
 else
 	printf ' timeout\n'

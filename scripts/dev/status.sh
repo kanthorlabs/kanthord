@@ -13,10 +13,8 @@ report() {
 }
 
 report engine
-token=$(sed -n 's/.*"token": "\([^"]*\)".*/\1/p' "$ENGINE_DIR/kanthord.config.json" 2>/dev/null)
-code=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: localhost:$ENGINE_PORT" \
-	-H "Authorization: Bearer $token" "http://127.0.0.1:$ENGINE_PORT/v1/health" 2>/dev/null)
-printf 'engine: GET /v1/health -> %s\n' "${code:-no answer}"
+code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$ENGINE_PORT/api/liveness" 2>/dev/null)
+printf 'engine: GET /api/liveness -> %s\n' "${code:-no answer}"
 
 report app
 holder=$(lsof -nP -iTCP:"$WEB_PORT" -sTCP:LISTEN -t 2>/dev/null | head -1)

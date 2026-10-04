@@ -44,12 +44,10 @@ step "4/6 dependencies"
 "$ROOT/scripts/engine/install.sh" || exit 1
 "$ROOT/scripts/app/install.sh" || exit 1
 
-step "5/6 daemon configuration and database"
+step "5/6 daemon configuration"
 if [ -f "$ENGINE_DIR/.envrc" ] && command -v direnv >/dev/null; then
 	direnv allow "$ENGINE_DIR" >/dev/null 2>&1 && log "allowed engine/.envrc"
 fi
-"$ROOT/scripts/engine/migrate.sh" >/dev/null || die "the database migration failed"
-log "database migrated"
 
 # Identity is last. A fresh clone has none, and that must not stop the install.
 step "6/6 commit identity"
