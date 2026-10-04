@@ -49,12 +49,10 @@ Rules for every agent that works in the kanthord repository. Ulrich is the human
 1. Run `/explain` on the item.
 2. Take the ruling from Ulrich.
 3. Write the ruling into `docs/brainstorm/HANDOFF.md` under the owning component.
-4. Delegate the edits to pi with the exact old text and the exact new text.
+4. Apply the edits yourself with the exact old text and the exact new text.
 5. Verify the diff yourself.
 
-- Batch the mechanical items that need no ruling into one pi run.
-- Start a `/debate` round only when Ulrich asks for it.
-- Before you build a `/debate` block, write every ruling of the conversation into HANDOFF. The debate engine sees only the files that the block inlines.
+- Batch the mechanical items that need no ruling into one edit pass.
 - After each ruling, grep the pages that you already wrote for sentences that touch the same actors. A rule phrased as "who performs an action" changes its meaning when a later ruling changes the actor. Re-check every earlier fix against the new ruling.
 
 ### Rejected proposals
@@ -156,33 +154,6 @@ Several agents edit the same working tree in parallel, for example `docs/brainst
   - `refactor`: a change to production code that keeps the behavior, for example a variable rename.
   - `test`: a new test or a refactor of a test. No production code change.
   - `chore`: a change to build tasks or tooling. No production code change.
-
-## Delegation
-
-### Pi
-
-- Pi satisfies the literal acceptance check, not its intent. It reports false passes and leaves counts and cross-references stale.
-- State acceptance criteria as intent, not as a string match. Always read the produced file yourself.
-- Do a change in a single file with fewer than 10 edited rows yourself. Never delegate it to pi.
-- When `/pi` fails twice (timeout, abort, or output that fails your read), do not retry pi and do not ask:
-  - For an implementation task, spawn an Agent with `model: "opus"`, the same packet and the working-tree state.
-  - For a document task, write the content yourself.
-- Say in the report who produced the result.
-
-### Debate in a sub-agent
-
-- A sub-agent often skips the debate with a false excuse. In the prompt, name these calls:
-  1. `~/.claude/skills/debate/scripts/run.sh --check`.
-  2. The Write of the args file.
-  3. `run.sh <args-path>` with a Bash timeout of 600000 ms.
-- Read the DEBATE line of each report. Send back any report with zero rounds.
-- Never accept a pushback of a sub-agent without a check against the code.
-
-### Debate engine short reply
-
-- `run.sh` reports `DEBATE ENGINE FAILED ... reply too short` for a final reply under 1000 bytes.
-- When that happens, read the newest `~/.kanthorlabs/debate/*-reply.txt`. A complete verdict with `AGREE` and `=== END ===` is a valid review. Tell Ulrich so.
-- Ask the engine to "cite source lines" to keep replies above the minimum.
 
 ## Repository tooling
 
