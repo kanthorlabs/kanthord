@@ -663,8 +663,9 @@ An operation serves one caller kind.
 
 - The `human` policy serves a human, the `client` policy serves a machine, and the `service` policy serves a service identity.
 - An operation under the `service` policy is reachable through the direct adapter alone.
-- The Gateway registers no HTTP route for it, and the OpenAPI emitter excludes it.
-- The conformance test of both adapters exempts a `service` operation.
+- A `human` or `client` operation that only a server component of a peer calls, with the identity that it forwards, declares `direct: true`. It is reachable through the direct adapter alone, and its access policy and its execution proof apply to the forwarded identity.
+- The Gateway registers no HTTP route for a `service` operation or a `direct: true` operation, and the OpenAPI emitter excludes both.
+- The conformance test of both adapters exempts a `service` operation. It runs a `direct: true` operation through the direct adapter alone.
 - `mission.delivery.admit`, the delivery admission of the Mission Service, is a `service` operation. The Intake Service calls it under its service identity.
 - The `service` policy alone grants no operation, and the owning service authorizes the calling service by name.
 - No operation accepts both a human and a machine.
@@ -811,15 +812,15 @@ A process split retains these boundaries.
 - A test covers the removed login and logout commands and asserts a non-zero exit without creating or changing client configuration.
 - A test runs one operation through the direct adapter and through the HTTP adapter.
 - It asserts the same result, failure value and replay within the TTL of the idempotency component.
-- A conformance test runs every operation except a `service` operation through both adapters, including a malformed value and a lost answer. It asserts that no answer holds credential material, and it exempts the credential handover by name.
+- A conformance test runs every operation except a `service` operation, including a malformed value and a lost answer. It runs a `direct: true` operation through the direct adapter alone and every other operation through both adapters. It asserts that no answer holds credential material, and it exempts the credential handover by name.
 - A test asserts that the `worker` application refuses to start when its package version differs from the version the server publishes.
 - A test asserts that `quiesce()` leaves the handlers of a service available to a peer during the drain.
 - It asserts that `stop()` after the drain releases the resources of the service.
 - A lint test rejects an import of a private module of a peer.
 - It rejects an import of `caller-mint.ts` outside `src/gateway/` and `src/kernel/test-identity.ts`, and an import of `service-mint.ts` outside `src/apps/server/`.
 - It rejects an import of `test-identity.ts` from a file that is not a `*.test.ts` file.
-- A test covers a `service` operation through the HTTP adapter.
-- It asserts 404 and no route in the emitted OpenAPI directory.
+- A test covers a `service` operation and a `direct: true` operation through the HTTP adapter.
+- It asserts 404 and no route in the emitted OpenAPI directory for each.
 - A test covers a service identity calling an operation without authorization from its owning service, and it asserts the refusal.
 - A test covers a mutation whose answer the caller loses, and it asserts the indeterminate result.
 - A test covers a caller that supplies an identity value that no authority minted, and it asserts the refusal.

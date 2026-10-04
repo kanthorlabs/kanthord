@@ -49,7 +49,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ### The receipt
 
-- The `/hooks/<inbound id>` handler passes the exact bytes and headers to the Intake Service, under [gateway-service.impl.md](gateway-service.impl.md#delivery-bytes-and-body-limits).
+- The receipt is the `delivery` operation `intake.inbound.event.receive` at `POST /hooks/:inboundId`. Its handler passes the exact bytes and headers to the Intake Service, under [gateway-service.impl.md](gateway-service.impl.md#delivery-bytes-and-body-limits).
 - An unknown inbound identity answers 404, and a poll inbound answers 404.
 - For a GitHub event, the verification requires exactly one `X-Hub-Signature-256` header. It rejects a missing header, a duplicate header, a value without the `sha256=` prefix, a value that is not hexadecimal and a value of another length, before any comparison.
 - It computes the HMAC with `crypto.createHmac` and SHA-256 over the exact bytes, and it compares two 32-byte digests with `timingSafeEqual`.
@@ -126,6 +126,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `intake.storage.get` is a `human` operation and `intake.execution.storage.get` is a `client` operation. Each signs a presigned GET at the recorded object version.
 - `intake.storage.delete` is a `human` operation. The Mission Service calls it in `mission.evidence.asset.delete` and `mission.evidence.delete` with the identity of the human and the evidence asset identity as the request key. Its outbound operation is `s3.delete_object`.
 - The operations make no Mission record and decide no end state beyond the fold of the platform implementation.
+- `intake.action.perform`, `intake.action.read`, `intake.storage.put`, `intake.storage.check`, `intake.storage.get`, `intake.execution.storage.get` and `intake.storage.delete` declare `direct: true`. The action performer, the MCP server and the Mission Service call them through the direct adapter, and no HTTP route reaches them.
 
 ### The authorization of each operation
 

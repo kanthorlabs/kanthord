@@ -41,7 +41,7 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 Every registered operation declares one access policy value: `human`, `client`, `public`, `delivery` or `service`.
 Registration throws at startup when an operation declares none.
 A request that matches no route returns 404.
-A `service` operation has no route, so a request for it returns 404.
+A `service` operation and a `direct: true` operation have no route, so a request for either returns 404.
 The policy value lives in the operation registry, so one declaration drives the authentication middleware and the emitted contract.
 
 ## Identity on the wire

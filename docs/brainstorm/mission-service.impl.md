@@ -558,7 +558,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 ## Authorization integration
 
-- The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence and an evidence asset.
+- The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence, an evidence asset and the presigned PUT of a new asset. The Mission Service authorizes the presigned PUT inside `mission.evidence.submit`, before the asset row exists: it checks the live claim and the storage binding of the pinned revision, refuses an asset identity that an asset row holds, and derives the object key from the claim and the asset identity that the submission allocates.
 - For an execution identity, it follows the live claim through the Scheduler Service to the node, the open attempt and the `FrozenAction` or the evidence. It resolves the pinned binding revision through the Project Service.
 - For a human identity, it follows the evidence asset to its storage binding revision.
 - It takes no association from the caller.

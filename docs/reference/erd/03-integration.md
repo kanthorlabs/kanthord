@@ -21,7 +21,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 - Acceptance as a human act needs a linked human identity. The mapping from a platform account to a human identity is open.
 - A request for new WHAT receives no acceptance. The inbound request contract is POSTPONED in HANDOFF.
 - The outbound operations are `github.pull_request`, `git.merge_push` and `s3.delete_object`. A native push send and a CLI write wait for their designs.
-- The Intake Service is extractable in principle: it declares one collaboration with custody, and no foreign key crosses its boundary. It still runs in the server process and in `kanthord.db`. Its peers reach it through the `client`, `human` and `service` operations that [intake-service.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#outbound-operations-and-checks) declares. Only the direct adapter serves a `service` operation, and the cross-process identity contract is POSTPONED.
+- The Intake Service is extractable in principle: it declares one collaboration with custody, and no foreign key crosses its boundary. It still runs in the server process and in `kanthord.db`. Its peers reach it through the `client`, `human` and `service` operations that [intake-service.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#outbound-operations-and-checks) declares. Only the direct adapter serves these operations, and the cross-process identity contract is POSTPONED.
 
 ## Records without a table
 
