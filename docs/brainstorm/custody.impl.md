@@ -137,7 +137,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - This cleanup cannot clear parsed strings or cached tokens that outlive the buffer, so a holder builds its platform client for one call and caches no client and no token.
 - The [host trust boundary](worker-service.impl.md#trust-boundary) includes each worker application.
 - Custody protects system records, not a host that an adversary controls.
-- The holder of the material reports a remote refusal to custody, and custody records it against the credential record.
+- The holder of the material writes a remote refusal into the span of its operation, with the credential name and revision. Custody stores no refusal.
 
 ## The credential store of an execution
 
