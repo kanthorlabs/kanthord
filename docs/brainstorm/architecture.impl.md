@@ -324,6 +324,7 @@ This sibling declares the fields below.
 - `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.releaseReserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `mission.consecutiveLossLimit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
+- `mission.textMaxBytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log
