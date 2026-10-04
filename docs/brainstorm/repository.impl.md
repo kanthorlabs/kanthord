@@ -50,6 +50,7 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 - `simple-git` performs every git operation of the connector by spawning the `git` binary of the host.
 - The SSH host resolution is no git operation. The connector runs `ssh -G -- <host>` through `execFile` of `node:child_process`, bound by the deadline and the `Context` of the caller.
 - The resolution reads the `hostname` line of the output.
+- A resolution that fails, is aborted or reaches its deadline answers `repository.connector.ssh_resolve_failed`. The Project Service maps it to `project.bindings.repository.address_invalid`.
 - Its timeout plugin bounds each operation by the remaining resource budget that the caller supplies.
 - Its abort plugin binds to the `Context` of the caller.
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
