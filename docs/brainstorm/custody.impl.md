@@ -66,6 +66,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - An expired `openai-codex` access token reports `unknown` without a remote call, and the probe refreshes nothing.
 - The `openai-codex` probe maps a reply to `healthy`, 401 or 403 to `unhealthy`, and every other failure to `unknown`.
 - The `openai-codex` probe builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. The store lives for the call, and nothing writes back to custody.
+- A pi call with an OAuth credential carries no `apiKey` option. pi takes the API key path whenever the options hold the `apiKey` key, even with a `null` value.
 - A probe that reports `unknown` or `unhealthy` logs the failure reason without material.
 - An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
 - The LLM platform validators implement one interface, and the platform of a record selects the implementation.
