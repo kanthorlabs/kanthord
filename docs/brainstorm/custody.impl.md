@@ -70,7 +70,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - `openai-compatible.baseUrl` uses `https` or `http`, with no query, no fragment and no trailing slash.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it fails, and a rotation can set a new one.
 - The first revision of an `openai-compatible` credential starts with `models: []`.
-- Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`.
+- Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`. An `id` is unique inside `models`.
 - An omitted value takes the default of pi 0.86.0: `contextWindow` `128000`, `maxTokens` `16384` and `reasoningLevels` `["off"]`.
 - `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
 - A metadata edit adds approved models to the next revision after the [provider check](worker-service.impl.md#the-provider-check).
