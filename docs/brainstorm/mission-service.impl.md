@@ -175,6 +175,7 @@ The service derives it from the policy of the `project_binding` row that the pin
 - The import keeps the import condition.
 - A human control or a record list that names a task answers 400 `mission.node.control_task` with `details: { nodeId }`.
 - A human control whose `expectedState` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
+- A human control on a node in a terminal state answers `mission.node.terminal` before it checks `expectedState`, `expectedAttempt` or the admitted states. `mission.node.state_conflict` comes next, and `mission.node.control_refused` comes last.
 
 ## The verifications
 
