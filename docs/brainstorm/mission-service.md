@@ -849,6 +849,7 @@ The landed-commit evidence names the inbound event in its provenance.
 A result that establishes no end state writes nothing.
 A failed check answers a retryable failure. The Intake Service marks the inbound event failed, and a human retries it.
 A live claim on the node of the request answers a retryable failure in the same way when the check establishes an end state, because the end state follows the release.
+A human check answers the same failure for that request.
 Acceptance as a human act invokes the Mission operation under the [linked human identity](mission-service.vocabulary.md#linked-human-identity).
 Refusal admits no effect.
 A duplicate creates no second effect.
