@@ -76,7 +76,7 @@ The pages record only the decision. Read the owning page section before you prop
 - Never declare an index that is not a unique index.
 - The schema lives in `docs/reference/erd/` and records only ruled design. Keep HANDOFF items out of it.
 - `project_id` is the second key column only in project-scoped tables.
-- Write every column name and every property name inside a JSON column in snake_case.
+- Write every table name, every column name and every property name inside a JSON column in snake_case. The name of an external library or protocol is no exception. Only a ruling of Ulrich that names the external requirement permits another case.
 - An Intake inbound event stays until a human deletes it. No automatic retention exists.
 - A rename of a table or a column also updates the map in `docs/reference/erd/README.md`.
 - `docs/viewer.html` pins mermaid 11.17.2. Never pin a version below 11, because the ERD views use `classDef` in an `erDiagram`.
