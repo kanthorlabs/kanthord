@@ -40,9 +40,9 @@ An execution assessment is the exception: it stores the execution identity, and 
 - `requirement` is nonblank text.
 - `criterion` is nonblank text that can hold several checkable statements.
 - `verifications` is a nonempty ordered list of nonblank bash command strings.
-- `bindings` is a list of binding names of the project.
+- `bindings` is a list of binding identities of the project. A read answers the pinned identities, and a node write and an unblock content change take identities. A plan file names each binding by its name.
 
-The write resolves each binding name to the identity of the latest revision of that binding, pins that revision and checks the rule table.
+The write resolves each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding, pins that revision and checks the rule table.
 The node kind determines the column.
 A new binding kind adds a row.
 
@@ -711,8 +711,8 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests reject absent and empty verifications with `mission.node.verifications_missing`.
 - Tests reject nonlist verifications and blank or nontext items with `mission.node.content_invalid`.
 - A test accepts `true` for a node with no verification need.
-- Tests resolve project binding names to the identities of their latest revisions at the write.
-- Tests reject absent or nonlist bindings and unknown or foreign-project names with `mission.node.bindings_invalid`.
+- Tests resolve project binding identities, and the binding names of a plan file, to the identities of their latest revisions at the write.
+- Tests reject absent or nonlist bindings and unknown or foreign-project identities and names with `mission.node.bindings_invalid`.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject repeated repository names on an objective because its list requires exactly one entry.
 - Tests keep identity, kind, revision, state, attempt, priority and edges outside content.

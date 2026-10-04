@@ -10,8 +10,9 @@ This file is not a design document, and `mission-service.md` stays the single so
 
 ## bindings of a node
 
-The bindings of a node are the project binding names in its content.
-The write resolves those names to identities and checks these counts.
+The bindings of a node are the project binding identities in its content.
+A plan file names each binding by its name.
+The write resolves each identity or name to the latest revision of its binding and checks these counts.
 A new binding kind adds a row.
 
 | Binding kind | Initiative | Objective | Task |
