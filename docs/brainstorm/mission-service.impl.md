@@ -43,6 +43,7 @@ An execution assessment is the exception: it stores the execution identity, and 
 - `bindings` is a list of binding identities of the project. A read answers the pinned identities, and a node write and an unblock content change take identities. A plan file names each binding by its name.
 
 The write resolves each binding identity, or each binding name of a plan file, to the identity of the latest revision of that binding, pins that revision and checks the rule table.
+The write accepts the identity of a revision of the current binding of that resource. An identity from before a removal of that binding answers `mission.node.bindings_invalid`, also when a binding of the same resource exists again.
 The node kind determines the column.
 A new binding kind adds a row.
 
