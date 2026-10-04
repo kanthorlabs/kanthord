@@ -101,7 +101,6 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - The model carries `api: "openai-responses"`, `contextWindow`, `maxTokens` and the established reasoning levels.
 - The model builder applies the defaults of pi 0.86.0 to each value that the metadata omits: `contextWindow` `128000`, `maxTokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
 - Input defaults to `["text"]`, and all cost rates are zero.
-- An official OpenAI record uses this provider with `baseUrl` `https://api.openai.com/v1`.
 - The model list enters `createProvider`, and `setProvider` registers the provider.
 - The adapter builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
 - Provider construction performs no write-time remote call.

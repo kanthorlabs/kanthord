@@ -35,7 +35,7 @@ erDiagram
     credential {
         text id PK "credential_ + ULID, one revision"
         text name "group key, 1-63 chars, never changes"
-        text platform "github | github-copilot | openai-codex | anthropic | openai-compatible | openrouter | s3"
+        text platform "closed custody platform set"
         integer revision "unique with name, starts at 1"
         blob nonce "12 bytes, AES-256-GCM"
         blob ciphertext "secret material + 16-byte tag"

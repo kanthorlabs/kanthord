@@ -57,20 +57,22 @@ Repository binding `kanthord-repo` and agent provider `openai-org` each name the
 ## platform
 
 The external system at which a credential authenticates.
-The set is closed:
+The set is closed and the [platform table](custody.impl.md#platform-validators) holds it:
 
 - `github`
-- `github-copilot`
-- `openai-codex`
-- `anthropic`
-- `openai-compatible`
-- `openrouter`
 - `s3`
+- `openai-compatible`
+- every `KnownProvider` of `@earendil-works/pi-ai` at 0.86.0, for example `openai`, `anthropic`, `github-copilot` and `groq`
 
 A repository binding names `github` explicitly; an address proves no platform.
 Each provider of an agent provider maps to one platform.
 The pi adapter id `openai-compatible` names no platform.
 The credential's platform and metadata identify the external system.
+
+## platform kind
+
+The group of a platform in the platform list: `git`, `llm` or `storage`.
+`github` is a `git` platform, `s3` is a `storage` platform, and `groq` is an `llm` platform.
 
 ## platform validator
 

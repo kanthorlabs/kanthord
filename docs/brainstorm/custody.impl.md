@@ -58,10 +58,21 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 | `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
 | `openai-compatible` | `api_key` | `baseUrl`, `models` | `GET <baseUrl>/models` |
 | `openrouter` | `api_key` | None | `GET https://openrouter.ai/api/v1/key` |
+| `openai` | `api_key` | None | `GET https://api.openai.com/v1/models` |
+| `amazon-bedrock` | `api_key` | `region` | None |
+| `google-vertex` | `api_key` | `project`, `location` | None |
+| `azure-openai-responses` | `api_key` | `resource_name` | None |
+| `cloudflare-workers-ai` | `api_key` | `account_id` | None |
+| `cloudflare-ai-gateway` | `api_key` | `account_id`, `gateway_id` | None |
 | `s3` | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
 
+- Every other `KnownProvider` of pi-ai 0.86.0 is a platform with `api_key`, no metadata and no validation: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `opencode-go`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams` and `xiaomi-token-plan-sgp`.
 - Every other platform refuses a record.
-- An official OpenAI record is an `openai-compatible` record with `baseUrl` `https://api.openai.com/v1`.
+- A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform that no page names yet.
+- The `api_key` of `amazon-bedrock` is a Bedrock bearer token, and the `api_key` of `google-vertex` is a Google Cloud API key.
+- A platform that authenticates through the host, for example an AWS profile or Google ADC, takes no credential record.
+- Each metadata field of `amazon-bedrock`, `google-vertex`, `azure-openai-responses`, `cloudflare-workers-ai` and `cloudflare-ai-gateway` is a required nonblank string.
+- An official OpenAI record is an `openai` record.
 - The `openai-codex` probe is the only platform validator that makes a model call, and Ulrich accepts its token cost.
 - An expired `openai-codex` access token reports `unknown` without a remote call, and the probe refreshes nothing.
 - The `openai-codex` probe maps a reply to `healthy`, 401 or 403 to `unhealthy`, and every other failure to `unknown`.
@@ -85,6 +96,17 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - [Storage configuration](project-service.impl.md#storage-configuration) owns work destinations.
 - `HeadBucket` maps 200 to `ok`, 404 to a missing bucket and 403 to `unknown`.
 - A write-only key can work despite a 403 from `HeadBucket`.
+
+## The platform list
+
+- `credential.platform_list` answers the platforms of the [platform table](#platform-validators). No second constant holds the set.
+- Its route is `GET /api/credential/platform`. It uses `human` access, takes no input and has no pagination.
+- The static path takes precedence over `/:credentialName`, so custody refuses the name `platform`.
+- The answer is `{ items: [{ kind, platforms: [{ platform, secretShape, loginModes, metadataFields, verifiable }] }] }`.
+- `kind` is `git` for `github`, `storage` for `s3`, and `llm` for every other platform. The items keep this order.
+- `loginModes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
+- `metadataFields` lists the required string fields of the metadata schema. `openai-compatible` answers `["baseUrl"]`, because `models` starts as `[]`.
+- `verifiable` is true when the validation of the platform makes a remote call.
 
 ## Suitability
 
@@ -239,7 +261,10 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 
 - A credential row holds its own actions: Verify, Rotate, Edit metadata for a platform with metadata, and Revisions. No action covers every record at once.
 - Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
-- The create form lists every platform. An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
+- The create form and the list filter read the [platform list](#the-platform-list). They offer every platform in a searchable list, grouped by kind, and the filter offers `All platforms` first.
+- The create form renders one text input for each name of `metadataFields`.
+- Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
+- An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
 - The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
@@ -249,6 +274,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 ## Tests
 
 - Tests cover duplicate names at creation, login start and login commit, including creation retry after restart.
+- Tests assert the platform list against the platform table, and the refusal of the name `platform`.
 - Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and platform-only suitability.
 - Tests assert no remote call on creation or rotation, and no secret in record answers.
 - Tests cover a model removal and a credential archive with dependents and concurrent changes.
