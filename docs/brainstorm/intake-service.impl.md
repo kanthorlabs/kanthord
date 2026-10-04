@@ -78,6 +78,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - An answer of the consumer sets `succeeded` with an update conditional on `pending`.
 - A declared failure or an indeterminate result sets `failed` with an update conditional on `pending`. The same update appends `{ code, message, created_at }` to the JSON array `error`. A declared failure appends its error code, and an indeterminate result appends the code `indeterminate`. The array is bounded in bytes and holds no credential material. When an append exceeds the bound, the update drops the oldest items until the array fits. A message beyond its own bound is cut at that bound.
 - The dispatcher retries nothing and holds no backoff. At a start, it hands every pending event over.
+- Each handoff calls the consumer with a fresh ULID idempotency key. A human retry starts a new handoff with the same event identity and content.
 - `intake.inbound.event.retry` is a `human` operation. It turns a failed event to `pending`. A pending event answers its current state, and a succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
 - `intake.inbound.event.discard` is a `human` operation. It turns a pending or a failed event to `discarded`. A pending event whose identity is in the in-flight set answers 409 `intake.inbound.event.in_flight`. A succeeded or a discarded event answers 409 `intake.inbound.event.state_conflict`.
 

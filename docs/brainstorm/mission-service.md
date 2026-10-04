@@ -837,6 +837,8 @@ It invokes the decoding of the [platform implementation](repository.vocabulary.m
 Admission interprets no platform payload.
 It finds the request evidence of that address among the requests of an open attempt of the project that hold no end state.
 More than one match refuses the inbound event as ambiguous.
+If no unresolved request of an open attempt matches, admission answers duplicate when a resolved request of the project matches, and otherwise refuses the event as unmatched.
+If the platform implementation answers no address of an external object, admission refuses the event as undecodable.
 A matching pull request identifier never attaches an inbound event to the newest attempt by itself.
 The address correlates the request evidence of one remote thing across attempts, and correlation never depends on the continued existence of the originating instance.
 
@@ -846,6 +848,7 @@ The admission transaction then writes the end state and the landed-commit eviden
 The landed-commit evidence names the inbound event in its provenance.
 A result that establishes no end state writes nothing.
 A failed check answers a retryable failure. The Intake Service marks the inbound event failed, and a human retries it.
+A live claim on the node of the request answers a retryable failure in the same way when the check establishes an end state, because the end state follows the release.
 Acceptance as a human act invokes the Mission operation under the [linked human identity](mission-service.vocabulary.md#linked-human-identity).
 Refusal admits no effect.
 A duplicate creates no second effect.
