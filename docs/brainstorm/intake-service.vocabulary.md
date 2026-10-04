@@ -67,6 +67,7 @@ The action performer of attempt 2 of "Add password reset" asks for `github.pull_
 A request key is the identity that a caller derives from the durable intent of an outbound write.
 The action performer derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.pull_request` for attempt 2.
 It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/2/kanthord-repo.merge_push/d4e5f6` for the merge of snapshot commit `d4e5f6`.
+It derives `node_01ARZ3NDEKTSV4RRFFQ69G5FAV/3/kanthord-repo.pull_request/42/e7f8a9` when attempt 3 reuses pull request 42 with snapshot commit `e7f8a9`.
 
 ## outbound request state
 

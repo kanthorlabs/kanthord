@@ -174,10 +174,11 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 ### The read-backs
 
-- `github.pull_request` lists the open pull requests with the node branch as `head` and the base branch as `base`. GitHub keeps at most one. A match answers its `PlatformAddress`.
+- The create of a `github.pull_request` lists the open pull requests with the node branch as `head` and the base branch as `base`. GitHub keeps at most one. A match answers its `PlatformAddress`.
+- The reuse of a `github.pull_request` fetches the node branch and checks that the snapshot commit of the call is an ancestor of it. A match answers the `PlatformAddress` of the reused pull request. The open state of the pull request is no condition of the match. This rule serves a repeat that carries the reuse operands, and it defines no reconciliation after a merge.
 - `git.merge_push` fetches the base branch and checks that the snapshot commit of the key is an ancestor of it. A match answers the oldest first-parent commit of the base branch that contains the snapshot commit.
 - `s3.delete_object` reads the recorded object version, and a not-found answer is a match.
-- A pull request that a human merges before the repeat leaves the request `failed`. The merge reaches the Mission Service through its inbound event.
+- A pull request that a human merges before the repeat of its create leaves the request `failed`. The merge reaches the Mission Service through its inbound event.
 
 ### The human operations
 

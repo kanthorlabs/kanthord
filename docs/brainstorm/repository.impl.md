@@ -39,7 +39,7 @@ The check method folds the state of an external object into `expected`, `other` 
 The [retry rules](repository.md#result-classes) use the deadline that the caller supplies.
 The platform implementation decides whether a request waits for a reply of the platform or returns after the platform accepts it.
 An epic decides that form for each platform.
-The read-back of `github.pull_request` calls `GET /repos/{owner}/{repo}/pulls` with `state=open`, `head=<owner>:<node branch>` and `base=<base branch>`.
+The read-back of the create of `github.pull_request` calls `GET /repos/{owner}/{repo}/pulls` with `state=open`, `head=<owner>:<node branch>` and `base=<base branch>`. The read-back of its reuse fetches the node branch through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <node branch>`.
 The read-back of `git.merge_push` fetches the base branch through the repository connector and runs `git merge-base --is-ancestor <snapshot commit> <base branch>`.
 
 ## Repository connector
