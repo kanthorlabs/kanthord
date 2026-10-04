@@ -61,6 +61,7 @@ The set is closed:
 
 - `github`
 - `github-copilot`
+- `openai-codex`
 - `anthropic`
 - `openai-compatible`
 - `openrouter`

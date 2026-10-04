@@ -82,7 +82,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 | Property          | Schema                                                            |
 | ----------------- | ----------------------------------------------------------------- |
 | `agentProvider`   | `string`; the name of an agent provider of the enablement         |
-| `provider`        | `string`, enum `github-copilot`, `anthropic`, `openai-compatible`, `openrouter` |
+| `provider`        | `string`, enum `github-copilot`, `openai-codex`, `anthropic`, `openai-compatible`, `openrouter` |
 | `credential`      | `string`; a credential name                                       |
 | `modelIdentifier` | `string`                                                          |
 | `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |

@@ -151,6 +151,7 @@ For example, `{ name: "openai-org", provider: "openai-compatible", credential: "
 The closed provider set is:
 
 - `github-copilot`
+- `openai-codex`
 - `anthropic`
 - `openai-compatible`
 - `openrouter`

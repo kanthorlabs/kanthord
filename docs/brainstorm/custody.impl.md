@@ -52,6 +52,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 | --- | --- | --- | --- |
 | `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
 | `github-copilot` | `oauth` | None | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token |
+| `openai-codex` | `oauth` | None | None |
 | `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
 | `openai-compatible` | `api_key` | `baseUrl`, `models` | `GET <baseUrl>/models` |
 | `openrouter` | `api_key` | None | `GET https://openrouter.ai/api/v1/key` |
@@ -205,7 +206,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A remote browser can return its redirect URL or code through `credential.login_code` when its loopback callback fails.
 - Device mode needs no listener; pi-ai polls until success, failure or expiry.
 - Custody permits at most one pending session per platform and human identity; another start answers 409.
-- `CustodyComponent` takes a required `store`, an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot provider, and an optional `now` clock.
+- `CustodyComponent` takes a required `store`, an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot and OpenAI Codex providers, and an optional `now` clock.
+- Custody keeps `refresh`, `access` and `expires` of a pi OAuth credential and drops every other field before validation. The OpenAI Codex login adds `accountId`, and the runtime derives it from the access token.
 - Completion writes the credential inside the pi-ai `CredentialStore.modify` call. The transaction checks the session state again, so an expired or failed session stores nothing. The session ends only after the commit.
 - The session record holds no token, and a failed or expired session stores nothing.
 - The login flow proves the OAuth record; no extra validation call follows it.
