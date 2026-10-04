@@ -371,8 +371,9 @@ The actor of an assessment is an execution or a human.
 A human writes an assessment only through a human act on the node: a success override, a discard or a block.
 A human assessment weighs no verification, names no tested input and names no child outcome.
 The execution code, never the agent, runs the verifications before the judgement.
-A success assessment names exactly one evidence that holds the verification of the pinned revision, and it names no evidence with a pending asset.
+A success assessment names exactly one evidence whose verification covers every verification of the pinned revision, and it names no evidence with a pending asset.
 For an objective, that verification covers the verifications of the objective and of each current task of the pinned revision.
+A named evidence with a partial verification does not count.
 
 Currency needs three checks.
 Context asks whether an assessment matches the evidence that it names, the node revision that its attempt pins, the structure and the selected child outcomes.

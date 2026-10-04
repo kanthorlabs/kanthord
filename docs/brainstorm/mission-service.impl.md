@@ -193,7 +193,7 @@ The start refuses a host without bash.
 No execution identity infers a verification from prose.
 
 The Mission Service refuses an assessment that asserts success with a failed or unrun verification, and it answers `mission.assessment.verification_failed`.
-A success assessment names exactly one evidence that holds a `verification`, and that run must pass; otherwise the service answers the same code.
+A success assessment names exactly one evidence whose `verification` covers every required command of the pinned revision, and that run must pass; otherwise the service answers the same code. A named evidence whose `verification` covers only part of the required commands does not count.
 For an objective, the `results` of that run hold one entry for each verification of the objective and of each current task of the pinned revision; otherwise the service answers the same code.
 Judgement decides success only after every verification of the pinned content passes.
 
