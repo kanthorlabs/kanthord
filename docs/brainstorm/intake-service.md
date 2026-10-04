@@ -27,7 +27,8 @@ It holds the transport knowledge of a platform.
 That knowledge identifies the signature header, the field that carries the platform event identity and the metadata of an event.
 It defines the meaning of a poll checkpoint.
 The [Repository component](repository.md#platform-connector-and-platform-implementations) owns platform implementations and payload decoders.
-The Intake Service calls a platform implementation of that component for every platform operation, with the material of a credential release.
+The Intake Service calls a platform implementation of that component for every git platform operation, with the material of a credential release.
+It calls the [Storage component](storage.md) for every object storage operation in the same way.
 
 The Intake Service reaches a peer through an [operation](architecture.md#invocation) only.
 It declares one collaboration, `inboundsNaming`, which [custody](custody.md#credential-records) calls in the transaction of a credential archive.

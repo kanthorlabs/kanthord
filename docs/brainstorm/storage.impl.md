@@ -1,0 +1,27 @@
+---
+title: Storage Implementation
+---
+
+# Storage Implementation
+
+This file holds the mechanisms that realize [storage.md](storage.md).
+This file is not a design document, and `storage.md` stays the single source of truth.
+A mechanism here never overrides a rule there.
+
+## The S3 implementation
+
+The S3 implementation uses `@aws-sdk/client-s3` at 3.1139.0.
+
+- A presigned PUT and a presigned GET sign locally and answer no result class.
+- The object metadata read calls `HeadObject`, and the object delete calls `DeleteObject`, each at the recorded version when one exists.
+- The read-back of `s3.delete_object` reads the recorded object version, and a not-found answer is a match.
+- A result class that an operation answers as its error is HTTP 502 `storage.platform.s3.<class>` with `details: { status }`. `status` holds the HTTP status of the store when the failure carries one, and null otherwise, for example for a lost answer or for a returned stored error that keeps no status.
+
+A platform implementation is a TypeScript module with its own method signatures and no shared interface.
+Every method returns a discriminated union: the success with the result of the operation, or the result class.
+The [retry rules](storage.md#result-classes) use the deadline that the caller supplies.
+
+## Tests
+
+- Tests cover the presigned PUT and GET at the recorded version, the metadata read, the delete and the not-found read-back.
+- Tests map a store failure with a status and a lost answer to `storage.platform.s3.<class>` with the status or null.

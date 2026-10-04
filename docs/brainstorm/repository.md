@@ -33,7 +33,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 
 ## Platform connector and platform implementations
 
-- The platform connector performs every operation on the API of an external platform.
+- The platform connector performs every operation on the API of an external git platform.
 - It holds one [platform implementation](repository.vocabulary.md#platform-implementation) for each platform.
 - A platform implementation exposes its platform's operations under that platform's names and parameters.
 - No common operation interface exists across platform implementations.
@@ -53,7 +53,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - Another git platform requires one platform implementation, its permitted read methods, a platform value and the required action performer behaviour.
 - It changes no other rule.
 - A platform with a different resource model requires its binding kind, its authorization and its action semantics.
-- No page defines those rules.
+- The [Storage component](storage.md) owns object storage. No page defines those rules for another platform.
 
 ## Write operations
 

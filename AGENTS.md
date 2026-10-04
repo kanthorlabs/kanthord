@@ -32,7 +32,7 @@ Rules for every agent that works in the kanthord repository. Ulrich is the human
 - A submodule owns the documents that detail its own code. `engine/docs/cli/` holds the command table of each service group.
 - A submodule document never overrides a page or a sibling. A conflict is a defect of the submodule document.
 - An index row holds a path plus the sibling that owns the declaration. Never strip a declaration from its owner to centralize it.
-- Custody and the Repository component are shared components with their own pages. No service owns them.
+- Custody, the Repository component and the Storage component are shared components with their own pages. No service owns them.
 - Delete the HANDOFF item that carried the reasoning once its answer lands in a page. The page is the rule, and git history is the record.
 
 ### HANDOFF queue

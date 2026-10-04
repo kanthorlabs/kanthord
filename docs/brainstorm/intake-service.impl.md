@@ -116,7 +116,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ## Outbound operations and checks
 
-- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component and drops the material in `finally`.
+- Each operation forwards the identity of its caller in `ClientOptions.identity`. The protected facility consumes the authorization result of the service that owns the entity of the operation, custody releases the material under [custody.impl.md](custody.impl.md#the-release-of-a-secret), and the handler performs the call through the Repository component or the [Storage component](storage.md) and drops the material in `finally`.
 - The handler builds its platform client for one call and caches no client and no token.
 - `intake.action.perform` is a `client` operation under the forwarded execution identity. It takes the configured action and its request key, maps the action to its outbound operation, and answers the `PlatformAddress` or the result class of the Repository component.
 - The action table maps `pull_request` on a `github` binding to `github.pull_request`, and `merge_push` on a git binding to `git.merge_push`. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
@@ -139,7 +139,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ### Presigned storage grants
 
-The Intake Service signs a presigned storage grant with the material that custody releases, after the Mission Service authorizes the operation through the protected facility.
+The Intake Service signs a presigned storage grant through the [Storage component](storage.impl.md#the-s3-implementation) with the material that custody releases, after the Mission Service authorizes the operation through the protected facility.
 The Intake Service derives the endpoint and the bucket from the storage binding, and custody releases its credential.
 The Mission Service supplies the server-generated object key, never an agent-selected destination.
 A PUT grant authorizes one object upload and expires after 1 hour.

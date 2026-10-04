@@ -95,7 +95,8 @@ It routes each request to the service or shared component that owns the requeste
 
 [Custody](custody.md) is a shared component used by every service, not a service.
 Its [design](custody.md#scope) defines credential ownership and protection.
-The [Repository component](repository.md) is a shared component for repository transport, platform operations and payload decoders.
+The [Repository component](repository.md) is a shared component for repository transport, git platform operations and payload decoders.
+The [Storage component](storage.md) is a shared component for object storage operations.
 
 ## Service diagram
 
