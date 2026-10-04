@@ -3,14 +3,6 @@
 Open work as of 2026-09-24.
 Read the owning design document before taking an item, and remove the item once its answer or change is documented.
 
-## Blocking: engine merge
-
-- [ ] BLOCKING, added 2026-10-03 by Ulrich. Merge every engine worktree branch below before any other work continues. Wait until the pi session in `engine/.agents/plan/erd-02-execution/` is done, then merge.
-  - `engine/.dev/contract-declarations`, branch `docs/contract-declarations`. It mirrors the eligibility report, the queue list order, the binding set, the derived evidence scope and `dependsOn` in `docs/cli`.
-  - `engine/.dev/queue-list-order`, branch `feat/queue-list-order`. It pages `scheduler.queue.list` by priority descending, then job identity ascending.
-
-  The branch that merges second removes the queue-order clause from the "Declared, not implemented" note of `docs/cli/scheduler.md`, so that the note names only `eligibility get`. Remove each worktree with `git worktree remove` after its branch merges. The root branch `docs/contract-declarations` and the apps branch `feat/shadcn-design` merged on 2026-10-03.
-
 ## Phase 2
 
 Every item below waits for the completion of the design set. Ulrich moved them here on 2026-09-20.
@@ -50,6 +42,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Intake Service
 
+- [ ] Added 2026-10-04 from the TODO fixture end-to-end test. When the Intake Service replaces its stand-in, run the `External.Success` and `External.Failed` rows of the state transition table for an objective, with a repository action. `node check` answers `system.operation.unknown` today, so those rows and every row after them are untested. The scripts and the matrix live in `.dev/e2e/261004-todo-mission/`.
+- [ ] Added 2026-10-04 from the credential end-to-end test. The engine has no Intake Service, so `src/apps/server/index.ts` wires `inboundsNaming` as a stand-in that answers `[]`. An inbound cannot refuse a credential archive until the Intake Service replaces the stand-in.
 - [ ] Added 2026-10-02 from the snake_case rule of AGENTS.md. Rename the camelCase properties of the JSON columns in the ERD and the pages: `default_configuration` (`agentProvider`, `modelIdentifier`, `reasoningEffort`), the `change` JSON (`previousRevision`, `changedFields`), `project_binding.config` (`instanceCount`, `baseUrl`), the `provenance` of `mission_evidence` (`executionId`), `mission_evidence_asset.content` (`bindingId`, `storageBindingId`, `mediaType`) and `verification` (`testedInput`), and the custody `metadata` (`baseUrl`, `contextWindow`, `maxTokens`, `reasoningLevels`). Check every JSON shape on the pages, not only these.
 - [ ] RULED 2026-09-30 by Ulrich. Reimplement push notifications in the Intake Service using Kukuroo only as a reference for its logic and ideas. Install no Kukuroo package and deploy no Kukuroo relay. The temporary proposal and its debate review live at `.dev/intake-push-notifications-plan.md`; the native push mechanism awaits its design ruling.
 - [ ] RULED 2026-09-26 by Ulrich. The inbound replaces the source binding. A Slack inbound with human identity mapping waits for its platform design. That design also declares the source of the Slack signing secret, which Slack issues and kanthord cannot derive, so a passive Slack webhook needs it from custody. A platform whose challenge arrives as an unsigned `GET`, for example Meta or Twitter, needs a `GET` receipt route in its own platform design. The secret display of `intake.inbound.get` awaits its display, redaction and cache contract.
