@@ -103,7 +103,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Its route is `GET /api/credential/platform`. It uses `human` access, takes no input and has no pagination.
 - The static path takes precedence over `/:credentialName`, so custody refuses the name `platform`.
 - The answer is `{ items: [{ kind, platforms: [{ platform, secretShape, loginModes, metadataFields, verifiable }] }] }`.
-- `kind` is `git` for `github`, `storage` for `s3`, and `llm` for every other platform. The items keep this order.
+- `kind` is `git` for `github`, `storage` for `s3`, and `llm` for every other platform. The items come in the order `git`, `storage`, `llm`.
 - `loginModes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
 - `metadataFields` lists the required string fields of the metadata schema. `openai-compatible` answers `["baseUrl"]`, because `models` starts as `[]`.
 - `verifiable` is true when the validation of the platform makes a remote call.
