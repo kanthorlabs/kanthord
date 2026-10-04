@@ -63,6 +63,7 @@ The set is closed:
 - `github-copilot`
 - `anthropic`
 - `openai-compatible`
+- `openrouter`
 - `s3`
 
 A repository binding names `github` explicitly; an address proves no platform.

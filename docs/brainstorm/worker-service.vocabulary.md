@@ -153,6 +153,7 @@ The closed provider set is:
 - `github-copilot`
 - `anthropic`
 - `openai-compatible`
+- `openrouter`
 
 Each value maps to the same-named [platform](custody.vocabulary.md#platform).
 
