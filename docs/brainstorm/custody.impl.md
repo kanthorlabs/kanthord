@@ -227,6 +227,13 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Custody records each probe against the credential store record and stores no check result.
 - The GitHub rate-limit probe reports `rate-limit read` and spends no rate limit.
 
+## The dashboard surface
+
+- A credential row holds its own actions: Verify, Rotate, Edit metadata for a platform with metadata, and Revisions. No action covers every record at once.
+- Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
+- The create form lists every platform. An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
+- Revoke sits on the revision list of the record and needs a confirmation.
+
 ## Tests
 
 - Tests cover duplicate names at creation, login start and login commit, including creation retry after restart.
