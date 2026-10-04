@@ -207,6 +207,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The inbound check follows them like every other check.
 - The check runs only inside a health report that a human calls.
+- The inventory answers one entry per inbound with its `projectId` in place of a project name. The composition root resolves the name under the [health report](gateway-service.impl.md#the-resource-healthcheck-report). The Intake Service reads no Project table and calls no Project collaboration.
 - A registered GitHub webhook reads the hook `registration_id` with a release for `webhook-read`. A missing hook, `active` false or a `last_response.code` outside 2xx reports `unhealthy`. A hook with no delivery reports `unknown`. Every other hook reports `healthy`. The capability is `registered webhook`.
 - A poll performs one request with a release for `poll` and with the ETag of `checkpoint`. A 200 or a 304 answer reports `healthy`, and any other result reports `unhealthy`. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
 - A passive webhook reports `unknown` with the capability `passive webhook`.

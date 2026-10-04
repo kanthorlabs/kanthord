@@ -373,7 +373,8 @@ HTTP 503 uses the shared error envelope with code `gateway.healthcheck.inventory
 Its `error.details` holds `{"missingInventories":["<owner>"]}`, with each owner that cannot supply its inventory.
 
 - The Gateway Service collects the inventories before it starts the checks.
-- The composition root hands the Gateway Service `collectInventories()`. It reads the three inventories in one transaction and answers `{ entries, missingInventories }`, so the Gateway Service holds no transaction capability.
+- The composition root hands the Gateway Service `collectInventories()`. It reads the inventories of the Project Service, the Intake Service, the Worker Service and custody in one transaction and answers `{ entries, missingInventories }`, so the Gateway Service holds no transaction capability.
+- The composition root supplies the Intake inventory callback. In the collection transaction, the callback resolves the `projectId` of each Intake entry to the project name through `projectNameOf(tx, projectId)` of the Project Service. A failed resolution throws inside the callback, so the collection reports `intake` in `missingInventories`.
 - An owner failure adds that owner to `missingInventories`. A failure of the transaction itself is an ordinary invocation failure.
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
 - The request runs at most 32 checks concurrently across all owners.

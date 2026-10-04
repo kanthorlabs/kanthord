@@ -237,6 +237,7 @@ The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) b
 - The target rule permits one read per repository address in a request.
 - The network git operation follows the [Repository attribution rule](repository.impl.md#the-ssh-environment).
 - The call record holds no check result.
+- `projectNameOf(tx, projectId)` answers the name of a project in the collection transaction of the health report. The Intake inventory callback of the composition root is its only consumer. It opens no transaction, and an absent project throws.
 
 [Custody](custody.impl.md#the-resource-healthcheck) owns credential checks.
 The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns agent provider checks.
