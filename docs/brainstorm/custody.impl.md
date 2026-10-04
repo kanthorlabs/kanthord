@@ -67,7 +67,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - The LLM platform validators implement one interface, and the platform of a record selects the implementation.
 - The Copilot probe writes no minted token back to the record.
 - The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
-- `openai-compatible.baseUrl` uses `https` or `http`, with no query and no fragment.
+- `openai-compatible.baseUrl` uses `https` or `http`, with no query, no fragment and no trailing slash.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it fails, and a rotation can set a new one.
 - The first revision of an `openai-compatible` credential starts with `models: []`.
 - Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`.
@@ -75,7 +75,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
 - A metadata edit adds approved models to the next revision after the [provider check](worker-service.impl.md#the-provider-check).
 - A metadata edit or a rotation that drops a model fails while a default configuration or an entry names it.
-- The dependency check and metadata update commit in one transaction; a refusal lists the dependents.
+- The dependency check and metadata update commit in one transaction; a refusal lists the dependents in `details` as `{ models: [{ model, agents }] }`.
 - S3 metadata serves the healthcheck, not work destinations.
 - [Storage configuration](project-service.impl.md#storage-configuration) owns work destinations.
 - `HeadBucket` maps 200 to `ok`, 404 to a missing bucket and 403 to `unknown`.
