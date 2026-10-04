@@ -216,6 +216,7 @@ The Project resolution checks the disablement and the removal of a binding revis
 ## The network git operations
 
 - A repository address has the form `git@<host>:<owner>/<repository>.git`. The host starts with a letter or a digit and holds only letters, digits, `.` and `-`.
+- The dashboard checks only that form, and it derives the identity without the host. The server runs the host resolution.
 - At every repository binding write, the repository connector first resolves the host of the address through `ssh -G -- <host>`.
 - A resolved `hostname` outside the SSH host set of the binding platform refuses the write with 400 `project.bindings.repository.address_invalid`. A failed resolution refuses it with the same code.
 - After the resolution, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
