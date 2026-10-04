@@ -14,6 +14,10 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the receiving-side authentication contract of a forwarded caller identity. The identity value is process-local and the JWT stays in the Gateway Service, so a split that forwards a caller identity to another process needs a contract that no page holds.
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the temporal validity of a cross-service precondition of a handler. A handler reads a fact of a peer through a client, awaits, then commits, and the fact can change during the wait: the Scheduler reads that a node is available and a human blocks it before the claim commits. Parked candidate: every cross-service precondition declares itself as a frozen snapshot, read before the commit and recorded with the effect, or as a commit-time condition, read through a collaboration inside the transaction while the two services are co-located, so a client read never satisfies a commit-time condition. This adds a second admissible case of a collaboration beside the atomic invariant, and it names the service pairs that no composition change alone can split. Not needed while every service runs in one process, because the complexity outweighs the benefit there.
 
+### Custody component
+
+- [ ] RULED 2026-10-04 by Ulrich. Rename the `openai-compatible` metadata keys `baseUrl`, `contextWindow`, `maxTokens` and `reasoningLevels` to snake_case, with a migration of stored revisions. The Worker Service maps the stored keys to the pi-ai option names.
+
 ### Repository component
 
 - [ ] Added 2026-09-26 from the responsibility audit of Project, Worker and Intake. The `ls-remote` of a binding write and of the repository healthcheck runs with the SSH configuration of the server host. It proves no reachability from the host of a `worker` application. Decide whether a check covers the worker host.
@@ -53,6 +57,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 ### Worker Service
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
+
+- [ ] Added 2026-10-04 from the platform list. The `provider` enum of an agent provider holds only `github-copilot`, `openai-codex`, `anthropic`, `openai-compatible` and `openrouter`. A credential of another `llm` platform, for example `openai` or `groq`, serves no agent. Decide which platforms an agent provider accepts.
 
 #### Next phase
 
