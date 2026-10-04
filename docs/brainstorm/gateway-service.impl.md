@@ -57,7 +57,7 @@ The Gateway Service verifies the signature using its key derived from `masterKey
 The server creates no human account row and generates, hashes and stores no human password. It exposes no password-login route.
 The local `kanthord jwt generate` command is the only token issuance entry point. For a human it accepts an optional username argument and defaults to the constant when it is omitted.
 Server startup issues and displays no human token. The CLI exposes no human login or logout command.
-A request that carries a missing or an invalid credential on a route that requires one returns 401 before the handler runs.
+A request that carries a missing or an invalid credential on a route that requires one returns 401 before request validation and before the handler runs.
 `GET /api/auth/verify` declares the human access policy and returns the verified JWT's business properties as `{"kind":"human","sub":"<username>","name":"<display name>"}` with HTTP 200. Property names and values are preserved from the JWT; the response adds no aliases.
 It uses the same verification chain as every human-only operation, including signature, expiry and username checks. A machine token fails this route with HTTP 401.
 The response contains no raw JWT, signing key or token metadata (`iat`, `exp`, `jti`) and writes no record.
