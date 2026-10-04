@@ -65,6 +65,8 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - The `openai-codex` probe is the only platform validator that makes a model call, and Ulrich accepts its token cost.
 - An expired `openai-codex` access token reports `unknown` without a remote call, and the probe refreshes nothing.
 - The `openai-codex` probe maps a reply to `healthy`, 401 or 403 to `unhealthy`, and every other failure to `unknown`.
+- The `openai-codex` probe builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. The store lives for the call, and nothing writes back to custody.
+- A probe that reports `unknown` or `unhealthy` logs the failure reason without material.
 - An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
 - The LLM platform validators implement one interface, and the platform of a record selects the implementation.
 - The Copilot probe writes no minted token back to the record.
@@ -236,6 +238,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - A credential row holds its own actions: Verify, Rotate, Edit metadata for a platform with metadata, and Revisions. No action covers every record at once.
 - Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
 - The create form lists every platform. An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
+- The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers only Revisions.
