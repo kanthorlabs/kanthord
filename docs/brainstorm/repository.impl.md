@@ -26,7 +26,7 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 - `nextCursor` is null when no `rel="next"` link exists.
 - Tool discovery embeds each endpoint's dereferenced response schema under `result`.
 - The build extracts those schemas from `@octokit/openapi` at 23.0.2.
-- A result class answers `repository.platform.github.<class>` with the HTTP status and GitHub message.
+- A result class answers 502 `repository.platform.github.<class>` with `details: { status }` and the GitHub message. `status` holds the HTTP status of GitHub when the failure carries one, and null otherwise.
 - The embedded schema is large; a harness that sends `outputSchema` to its model spends tokens on it.
 - Tests assert unchanged bodies, pagination bounds, cursor page-size refusal, schema extraction and result-class details.
 
