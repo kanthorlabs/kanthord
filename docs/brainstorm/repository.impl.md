@@ -14,6 +14,9 @@ The implementation uses `simple-git` at 3.36.0.
 
 The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
 
+- The GitHub SSH host set is `github.com` and `ssh.github.com`.
+- Every platform implementation declares its SSH host set.
+
 - Pull request read calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`.
 - Review comment list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
 - Both return the response body unchanged.
@@ -45,6 +48,8 @@ The start requires git 2.40 or later, OpenSSH 9.0 or later and bash on the host.
 It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 
 - `simple-git` performs every git operation of the connector by spawning the `git` binary of the host.
+- The SSH host resolution is no git operation. The connector runs `ssh -G -- <host>` through `execFile` of `node:child_process`, bound by the deadline and the `Context` of the caller.
+- The resolution reads the `hostname` line of the output.
 - Its timeout plugin bounds each operation by the remaining resource budget that the caller supplies.
 - Its abort plugin binds to the `Context` of the caller.
 - The `git` child inherits the [SSH environment](#the-ssh-environment) of the user that runs the hosting application.
@@ -55,6 +60,7 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 
 - Custody supplies no material for git.
 - The inherited environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
+- The SSH host resolution reads the same `~/.ssh/config`, so it resolves an alias host as the `ssh` child of git resolves it.
 - The connector sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
 - The connector passes no credential inside a URL and no secret on the command line of a child.
 - The command line of a process is readable by every user of the host.

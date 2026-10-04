@@ -72,14 +72,14 @@ A binding identity and a project identity follow the identity convention of [arc
 A per-kind function derives it from the binding configuration on every write, so a human enters it never and it disagrees with that configuration never.
 The values of the first version are below.
 
-- `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`.
+- `repository:github:kanthorlabs/kanthord` for the repository binding with the SSH address `git@github.com:kanthorlabs/kanthord.git`, and for the address `git@kanthorlabs.github.com:kanthorlabs/kanthord.git` of an SSH alias.
 - `worker:kanthord:general-main` for the worker binding with the binding name `general-main`.
 - `storage:s3:s3.eu-central-1.amazonaws.com/atlas-evidence` for the storage binding of the bucket `atlas-evidence` at that endpoint.
 
 A submission carries `kind`, and the write uses it to select the configuration schema and the derivation. A read derives `kind` from the first part, and the validation refuses a first part outside the closed set of binding kinds.
 Normalization decides whether a change stays in its group or starts a replacement.
 
-- A repository identity derives from its SSH address alone.
+- A repository identity derives from the binding platform and from the owner and the repository of its SSH address. The SSH host of the address takes no part in it.
 - A worker identity derives from its binding name alone.
 - A storage identity derives from the host of its endpoint and its bucket alone.
 
@@ -215,9 +215,12 @@ The Project resolution checks the disablement and the removal of a binding revis
 
 ## The network git operations
 
-- At every repository binding write, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
-- The read precedes the `BEGIN IMMEDIATE` transaction.
-- A deadline of 30 s bounds that read.
+- A repository address has the form `git@<host>:<owner>/<repository>.git`. The host starts with a letter or a digit and holds only letters, digits, `.` and `-`.
+- At every repository binding write, the repository connector first resolves the host of the address through `ssh -G -- <host>`.
+- A resolved `hostname` outside the SSH host set of the binding platform refuses the write with 400 `project.bindings.repository.address_invalid`. A failed resolution refuses it with the same code.
+- After the resolution, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
+- The resolution and the read precede the `BEGIN IMMEDIATE` transaction.
+- A deadline of 30 s bounds the resolution and the read together.
 - A failed or timed-out read refuses the write with 422 `project.bindings.repository.ssh_unreachable`.
 - The [Repository implementation](repository.impl.md#the-ssh-environment) defines the SSH environment.
 
@@ -226,7 +229,8 @@ The Project resolution checks the disablement and the removal of a binding revis
 The [resource healthcheck rule](architecture.md#resource-healthcheck) governs the checks that the Project Service owns.
 The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) bounds the checks and groups their entries.
 
-- A repository binding runs the SSH read of [the network git operations](project-service.impl.md#the-network-git-operations).
+- A repository binding runs the host resolution and the SSH read of [the network git operations](project-service.impl.md#the-network-git-operations).
+- A failed resolution answers `project.bindings.repository.address_invalid`.
 - That read answers `project.bindings.repository.ssh_unreachable` on failure and reports the capability `network git read`.
 - The resource healthcheck deadline replaces the binding-write deadline for this read.
 - The target rule permits one read per repository address in a request.
@@ -259,6 +263,7 @@ The `kanthord` bin of `package.json` releases it.
 - Tests assert `validateEntry` inside the write transaction and refusal when an agent lacks enabled enablement.
 - Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.
 - A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
+- A test covers an SSH alias that resolves to `ssh.github.com`, an alias that resolves to a host outside the GitHub SSH host set, and a host that starts with `-`. The alias address and the `github.com` address of one repository derive the same identity.
 - A test asserts that the repository check names no credential store record in its attribution.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
 - A test covers the project prompt bound in UTF-8 bytes and its error code.
