@@ -98,7 +98,7 @@ The pages record only the decision. Do not propose these alternatives again. Add
 - An observation obligation, its lease or an observer processor. Delivery admission and the human check call the Intake check inline, and the Intake delivery carries the retry.
 - A natural key or a digest of an evidence submission (`observation_key`, `submission_digest`), a stored confirmation time or an aggregate detail text. A repeat after a restart creates a second record.
 - A cleanup process of expired uploads. A human deletes an expired asset.
-- Custody that performs a platform call, a model call or a presign. Custody releases the material, and the holder performs its own operation.
+- Custody that performs a platform call, a model call or a presign for an operation of a service. Custody releases the material, and the holder performs its own operation. See the [`openai-codex` validator](docs/brainstorm/custody.impl.md#platform-validators) for the one probe exception.
 - A human-assertion basis on an outcome (`basis_actor`, `decision`) or a revision column on `mission_outcome`. A human act writes a human assessment, and every outcome names an assessment.
 - A task record in `mission_evidence`, `mission_assessment` or `mission_outcome`, a `content_owner_id` column or a `task-result submit`. The reviewer of an objective runs and judges every task.
 - An acquisition grant for an inbound (`project_acquisition_grant`, `project.acquisition_grant`, `intake.grant_revoked`). A webhook registration and a poll take a custody release per call.

@@ -52,7 +52,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 | --- | --- | --- | --- |
 | `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
 | `github-copilot` | `oauth` | None | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token |
-| `openai-codex` | `oauth` | None | None |
+| `openai-codex` | `oauth` | None | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
 | `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
 | `openai-compatible` | `api_key` | `baseUrl`, `models` | `GET <baseUrl>/models` |
 | `openrouter` | `api_key` | None | `GET https://openrouter.ai/api/v1/key` |
@@ -60,6 +60,9 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 
 - Every other platform refuses a record.
 - An official OpenAI record is an `openai-compatible` record with `baseUrl` `https://api.openai.com/v1`.
+- The `openai-codex` probe is the only platform validator that makes a model call, and Ulrich accepts its token cost.
+- An expired `openai-codex` access token reports `unknown` without a remote call, and the probe refreshes nothing.
+- The `openai-codex` probe maps a reply to `healthy`, 401 or 403 to `unhealthy`, and every other failure to `unknown`.
 - An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
 - The LLM platform validators implement one interface, and the platform of a record selects the implementation.
 - The Copilot probe writes no minted token back to the record.
