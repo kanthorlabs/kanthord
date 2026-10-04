@@ -954,6 +954,11 @@ The import boundaries follow the public files.
 - [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the composition root order.
 - Tests sit beside their source as `*.test.ts`.
 
+## The dashboard navigation
+
+- The dashboard sidebar lists only a route that has a screen.
+- A planned screen joins the sidebar in the change that adds its route.
+
 ## Unwired collaborations
 
 - The composition root owns each temporary `unwired(seam)` stand-in for a required collaboration that a later plan implements.

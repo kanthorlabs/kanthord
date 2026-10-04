@@ -243,6 +243,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers only Revisions.
+- An archived row shows its archive time, the latest `endedAt` of its revisions.
 
 ## Tests
 

@@ -532,6 +532,11 @@ Worker registration presents the machine JWT that this order resolves, and it sa
 Human verification accepts a human JWT alone, and a machine JWT fails it with HTTP 401.
 A client sends the `Host` header of its endpoint, so an endpoint outside `gateway.allowedHosts` fails the check of the host allowlist.
 
+## The dashboard sign-in
+
+- The sign-in form of the dashboard fills the Endpoint field with the default daemon endpoint `http://localhost:31415` as a value, not as a placeholder.
+- A human replaces the value to reach another daemon.
+
 ## Repository layout, build, test and release
 
 The Gateway Service source sits under `src/gateway/` of the `engine` repository.
