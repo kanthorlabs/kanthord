@@ -232,7 +232,8 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credentialId` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resourceBudget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ bindingId, name, address, strategy: { baseBranch }, projectPrompt }`.
+- Each entry of `repositories` holds `{ bindingId, name, address, sshIdentity, strategy: { baseBranch }, projectPrompt }`.
+- `sshIdentity` is the metadata `{ host, hostname, port, identity_file }` of the `ssh` record of the binding. The worker application runs the [`ssh` validation](repository.impl.md#platform-validators) with it before each clone, fetch and push.
 - For an objective, `repositories` holds the repository binding that the pinned node revision names.
 - For an initiative, `repositories` holds one row per resource identity of the repository bindings of its current objectives, discarded objectives included, at the greatest revision.
 - `globalPrompt` is the configured source of the global prompt as the server resolves it with the reader of the composer: `{ state: "absent" }`, `{ state: "disabled" }`, `{ state: "present", path, text }` or `{ state: "invalid", path, reason }`.
