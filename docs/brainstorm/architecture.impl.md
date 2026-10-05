@@ -1004,7 +1004,7 @@ The import boundaries follow the public files.
 
 - The dashboard holds one section for each component under the group Connections: LLM, Repositories and Storage.
 - Each section reads only the route group of its component.
-- A credential row holds its own actions: Verify, Rotate, Edit metadata for a platform with metadata, and Revisions. No action covers every record at once.
+- A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
 - Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
 - The create form renders one text input for each name of `metadataFields`.
@@ -1014,7 +1014,7 @@ The import boundaries follow the public files.
 - The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
-- The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers only Revisions.
+- The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers no row action. The row still opens its detail.
 - An archived row shows its archive time, the latest `endedAt` of its revisions.
 - The detail of a Repositories record lists the bindings that name it. Each binding links to the Bindings tab of its project.
 
