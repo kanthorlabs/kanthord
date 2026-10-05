@@ -26,6 +26,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 - The `ssh` validation refuses a resolution with `identitiesonly` other than `yes` or with a number of `identityfile` lines other than 1. The code is 400 `repository.credential.ssh_identity_ambiguous`.
 - The `ssh` validation refuses a resolved `hostname`, `port` or `identityfile` that differs from the metadata. The code is 400 `repository.credential.ssh_drift`, and `details` names each differing key.
 - Create, rotation and metadata edit of an `ssh` record run the `ssh` validation. `ssh -G` is a local process and no remote call.
+- The record verify and the resource healthcheck of an `ssh` record run the `ssh` validation. A refusal answers `unhealthy`.
 - Tests cover the GitHub probe, the refusal of a platform of another component and the `bindings` list of a get.
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
 
@@ -40,7 +41,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 - An unreadable `~/.ssh/config` answers 422 `repository.credential.ssh_config_unreadable`.
 - The engine creates an `ssh` record only on a human create. It creates none at start.
 - The Repository credentials screen of the dashboard holds `Import from ~/.ssh/config`. The dialog calls `repository.credential.ssh_discover` and shows one row for each alias with its state and its reason.
-- The dialog offers a checkbox only for a `ready` alias. Create calls `repository.credential.create` once for each ticked alias, with the alias as the record name and the discovered values as metadata.
+- The dialog offers a checkbox only for a `ready` alias. Create calls `repository.credential.create` once for each ticked alias, with the discovered values as metadata. The record name is the alias in lower case, with each character outside `[a-z0-9-]` replaced by `-`, a prefix `ssh-` before a leading non-letter, and at most 63 characters.
 - `repository.credential.get` answers the record with `bindings`, the list of `{ projectId, projectName, bindingId, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
 
 ## Platform connector and platform implementations
