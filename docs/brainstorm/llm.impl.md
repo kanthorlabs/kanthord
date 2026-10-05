@@ -53,6 +53,8 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `LlmProvider` is a TypeScript interface with one method, `check(secret, metadata, context, observe)`. `observe` is optional and receives the failure reason without material.
 - `check` answers `{ connection, models }`. `connection` is `ok`, `unauthorized`, `unreachable` or `invalid_response`. `models` is a list of `{ id, ownedBy, created }`, or null when the call reads no model list. `ownedBy` and `created` are null when the remote leaves them out.
 - The check of `openai-compatible` and of `openai` answers `models` from the OpenAI list shape of `GET /models`. Every other check answers `models: null`.
+- Each LLM provider declares its capability: `copilot token read` for `github-copilot`, `model call` for `openai-codex` and `opencode-go`, `model-list read` for `anthropic`, `openai-compatible` and `openai`, and `key read` for `openrouter`. A platform without an LLM provider has the capability `none`.
+- The LLM component answers the capability of the LLM provider of a credential to the agent provider healthcheck.
 - `LLM_PROVIDERS` maps a platform to its `LlmProvider`. The map holds exactly the platforms with a check in the [platform table](#platform-validators), and a platform outside the map has no implementation.
 - `verifiable` of the [platform list](architecture.impl.md#the-platform-list) is true exactly for a platform in `LLM_PROVIDERS`.
 - `check` maps a reply to `ok`, 401 or 403 to `unauthorized`, a network failure or the deadline to `unreachable`, and every other answer to `invalid_response`.

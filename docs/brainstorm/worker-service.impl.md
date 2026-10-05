@@ -97,6 +97,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The check calls the [check of the LLM provider](llm.impl.md#the-llm-provider) of its credential and reports provider readiness.
 - It groups calls by credential and attributes the result to each agent provider.
 - A credential whose platform has no LLM provider reports `unknown`.
+- Its `capability` is the [capability of the LLM provider](llm.impl.md#the-llm-provider) of its credential, which the LLM component answers.
 - The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
 - [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden calls, unavailable calls and OAuth expiry without refresh.
 - Shared probe code changes no owner.
