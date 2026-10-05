@@ -346,7 +346,7 @@ This sibling declares the fields below.
 - At least one component follows the namespace. A deeper location adds component parts from the broadest to the most specific, so the code identifies where the failure happens.
 - The final part names the failure condition, not another component.
 - Each part uses lower-case words, with underscores between words. Dots separate parts, and no part is empty.
-- A CLI code of one command names that command: `cli.<group>.<command word>[.<command word>...].<condition>`. A hyphen inside a command word becomes an underscore, for example `cli.credential.login_code.indeterminate` and `cli.mission.node.retire.preview.invalid_node_id`.
+- A CLI code of one command names that command: `cli.<group>.<command word>[.<command word>...].<condition>`. A hyphen inside a command word becomes an underscore, for example `cli.llm.credential.login_code.indeterminate` and `cli.mission.node.retire.preview.invalid_node_id`.
 - A condition that a shared CLI helper detects for every command takes one code: `cli.file.<condition>` for the file that `--file` names, `cli.option.duplicate` for a repeated single-use option, `cli.pagination.limit_invalid` and `cli.pagination.limit_out_of_range` for `--limit`, and `cli.idempotency_key.invalid` for `--idempotency-key`.
 
 Examples:
