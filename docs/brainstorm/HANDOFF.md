@@ -9,6 +9,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Architecture
 
+- [ ] Added 2026-10-05 by Ulrich. Rebuild the `Context` implementation of `engine/src/kernel/context.ts` on the Node-native `AbortController`, `AbortSignal` and `AsyncLocalStorage`.
+
 - [ ] RULED 2026-10-02 by Ulrich, from the Intake redesign. Each service enforces system authorization for its own operations and entities, and the protected facility consumes the authorization result of the service that owns the entity of the release. The design pages hold the moves since 2026-10-03. Remaining: `engine/docs/cli/worker.md` renames `project.authorization.refused` to `worker.authorization.refused`, and the `engine/docs/cli/` page of each Mission command that answers `mission.authorization.refused` adds that code. Ulrich sent the rulings to the pi session of `engine/.agents/plan/erd-02-execution/` on 2026-10-03.
 
 - [ ] POSTPONED 2026-09-23 by Ulrich until a service moves into a separate process. Declare the receiving-side authentication contract of a forwarded caller identity. The identity value is process-local and the JWT stays in the Gateway Service, so a split that forwards a caller identity to another process needs a contract that no page holds.
