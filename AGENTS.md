@@ -81,6 +81,11 @@ The pages record only the decision. Read the owning page section before you prop
 - A rename of a table or a column also updates the map in `docs/reference/erd/README.md`.
 - `docs/viewer.html` pins mermaid 11.17.2. Never pin a version below 11, because the ERD views use `classDef` in an `erDiagram`.
 
+## Dashboard design
+
+- A list row of a revisioned record shows its effective revision as `(v<revision>)` next to its name or identity.
+- Show one revision per row. Never show a second revision field beside it.
+
 ## Shared working tree and commits
 
 Several agents edit the same working tree in parallel, for example `docs/brainstorm/HANDOFF.md` and `engine/docs/cli/*`.
