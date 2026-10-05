@@ -17,9 +17,15 @@ The component owns a dedicated platform validator for every platform of the Repo
 | Platform | Secret shape | Metadata | Validation |
 | --- | --- | --- | --- |
 | `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
+| `ssh` | `none` | `{ host, hostname, port, identity_file }` | `ssh -G -- <host>` |
 
 - A second shape for GitHub is another platform, for example `github-app`.
 - The GitHub rate-limit probe reports `rate-limit read` and spends no rate limit.
+- An `ssh` record pins the SSH identity of a repository binding. It holds no secret material and belongs to no git platform.
+- The `ssh` validation runs `ssh -G -- <host>` through the repository connector. The record reports `ssh identity`.
+- The `ssh` validation refuses a resolution with `identitiesonly` other than `yes` or with a number of `identityfile` lines other than 1. The code is 400 `repository.credential.ssh_identity_ambiguous`.
+- The `ssh` validation refuses a resolved `hostname`, `port` or `identityfile` that differs from the metadata. The code is 400 `repository.credential.ssh_drift`, and `details` names each differing key.
+- Create, rotation and metadata edit of an `ssh` record run the `ssh` validation. `ssh -G` is a local process and no remote call.
 - Tests cover the GitHub probe, the refusal of a platform of another component and the `bindings` list of a get.
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
 
@@ -27,6 +33,14 @@ The component owns a dedicated platform validator for every platform of the Repo
 
 - The component declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) under the prefix `repository`.
 - `repository.credential.create` accepts a record of every platform of the component.
+- `repository.credential.ssh_discover` reads the SSH aliases at `GET /api/repository/credential/ssh/discover`. It is a read under `human` access and writes nothing.
+- It reads the `Host` lines of the top-level `~/.ssh/config` and follows no `Include`. It skips each pattern that holds `*`, `?` or `!`.
+- It runs `ssh -G -- <host>` for each alias and keeps the aliases whose resolved `hostname` contains `github` or `gitlab`. The keyword set is an enum in code.
+- It answers `{ host, hostname, port, identity_file, state, reason }` for each alias. `state` is `ready`, `refused` or `present`. `present` means that a live `ssh` record holds the host, and `reason` holds the refusal code of a `refused` alias.
+- An unreadable `~/.ssh/config` answers 422 `repository.credential.ssh_config_unreadable`.
+- The engine creates an `ssh` record only on a human create. It creates none at start.
+- The Repository credentials screen of the dashboard holds `Import from ~/.ssh/config`. The dialog calls `repository.credential.ssh_discover` and shows one row for each alias with its state and its reason.
+- The dialog offers a checkbox only for a `ready` alias. Create calls `repository.credential.create` once for each ticked alias, with the alias as the record name and the discovered values as metadata.
 - `repository.credential.get` answers the record with `bindings`, the list of `{ projectId, projectName, bindingId, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
 
 ## Platform connector and platform implementations
@@ -66,6 +80,7 @@ The read-back of `git.merge_push` fetches the base branch through the repository
 The start requires git 2.40 or later, OpenSSH 9.0 or later and bash on the host.
 It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 
+- Before each network git operation, the connector runs the `ssh` validation of the `sshCredential` of the binding. A refusal stops the operation with the code of the validation.
 - `simple-git` performs every git operation of the connector by spawning the `git` binary of the host.
 - The SSH host resolution is no git operation. The connector runs `ssh -G -- <host>` through `execFile` of `node:child_process`, bound by the deadline and the `Context` of the caller.
 - The resolution reads the `hostname` line of the output.
@@ -78,10 +93,11 @@ It refuses a host without a required tool with `repository.connector.tool_missin
 
 ## The SSH environment
 
-- Custody supplies no material for git.
+- Custody supplies no secret material for git.
+- The `ssh` record of the binding pins the SSH host, the resolved hostname, the port and the one identity file that git uses.
 - The inherited environment includes `SSH_AUTH_SOCK`, and SSH uses the host files `~/.ssh/config` and `~/.ssh/known_hosts`.
 - The SSH host resolution reads the same `~/.ssh/config`, so it resolves an alias host as the `ssh` child of git resolves it.
 - The connector sets no `GIT_SSH_COMMAND` and no `GIT_SSH`.
 - The connector passes no credential inside a URL and no secret on the command line of a child.
 - The command line of a process is readable by every user of the host.
-- A network git operation has no attribution to a credential record.
+- A network git operation names the `ssh` record of its binding in its attribution.

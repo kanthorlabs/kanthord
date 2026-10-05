@@ -28,6 +28,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 ## Repository connector
 
 - The repository connector performs a network git read and a network git write.
+- A credential record of platform `ssh` pins the SSH identity of each network git operation.
 - It performs no platform action.
 - Its writes follow the [write operations](#write-operations) below.
 
