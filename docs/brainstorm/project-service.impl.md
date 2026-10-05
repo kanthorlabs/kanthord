@@ -255,6 +255,13 @@ The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns age
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores no result.
 
+## The binding check
+
+- `project.binding.check` checks an unsaved repository configuration at `POST /api/project/:projectId/binding/check`. It is a read under `human` access. It takes the body `{ kind: "repository", config }` and no mutation key.
+- It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, `ssh_host_mismatch`, and the custody suitability of `sshCredential` and `credential`.
+- Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, sshCredential, credential }`.
+- It stores nothing. An absent project answers 404 `project.project.not_found`.
+
 ## The client identity
 
 The Project Service holds no table of client identities and no secret of a client identity.
@@ -272,6 +279,7 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The credential field of a repository binding is a searchable list of the live Repository credential records of the binding platform. It reads `repository.credential.list` and hides an archived record. A name outside the list cannot be entered.
 - The credential field holds `New credential` and `Rotate`. `New credential` opens the create form of the Repository component and selects the new record after the save. `Rotate` opens the rotation of the selected record. Both keep the binding draft.
 - The row of a repository binding holds a Verify icon. It calls `project.binding.verify` and shows one badge for the address, one for the SSH credential and one for the credential.
+- The form of a repository binding holds Verify on the left of its action row. It calls `project.binding.check` with the draft configuration and shows the same three badges. A change of the platform, the address, the SSH credential, the credential or the action resets the badges.
 
 ## Repository layout, build, test and release
 
