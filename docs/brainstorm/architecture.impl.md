@@ -978,7 +978,7 @@ The import boundaries follow the public files.
 - It answers the health entry `{ status, capability }`, the same type as an entry of the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
 - It runs the same check code as the health report and stores no result.
 - An archived record answers 409 `credential.credential.archived`. A platform with `verifiable: false` answers 400 `credential.check.unsupported`. A name of another component answers 404 `credential.credential.not_found`.
-- The release of the material follows the [release rules](custody.impl.md#the-release-of-a-secret), and the check drops the material after the call.
+- Custody decrypts the newest live revision for the check, as the health report does, and the check drops the material after the call. The verify takes no grant, writes no pin and drains no revision.
 
 ### The pre-save check
 
