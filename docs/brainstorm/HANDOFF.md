@@ -20,7 +20,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### LLM component
 
-- [ ] Added 2026-10-05 from the component split. `worker.provider.check` reads the `baseUrl` metadata of an `openai-compatible` credential and calls `GET <baseUrl>/models`, but the LLM component now holds every fact about an LLM platform. Decide whether the check moves to the LLM component, and its route. The model membership check of the Worker configuration also reads the `models` metadata through `compatibleMetadataSchema` in `worker/contract.ts`, and it moves with the same decision.
+- [ ] POSTPONED 2026-10-05 by Ulrich until Ulrich holds an active OpenCode Go subscription. Verify the success case of the `opencode-go` check with `deepseek-v4-flash` through the scratchpad e2e call. The e2e key answers 403 "An active OpenCode Go subscription is required" today, so only the refusal case is verified. The model membership check of the Worker configuration also reads the `models` metadata through `compatibleMetadataSchema` in `worker/contract.ts`, and it moves with the same decision.
 
 ### Repository component
 

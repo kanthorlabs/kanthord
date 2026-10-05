@@ -50,13 +50,13 @@ Each platform validator declares its secret shape, metadata schema and validatio
 
 ## The LLM provider
 
-- `LlmProvider` is a TypeScript interface with one method, `check(secret, metadata, context)`.
-- `check` answers `{ connection, models }`. `connection` is `ok`, `unauthorized`, `unreachable` or `invalid_response`. `models` is a list of `{ id, ownedBy, created }`, or null when the call reads no model list.
+- `LlmProvider` is a TypeScript interface with one method, `check(secret, metadata, context, observe)`. `observe` is optional and receives the failure reason without material.
+- `check` answers `{ connection, models }`. `connection` is `ok`, `unauthorized`, `unreachable` or `invalid_response`. `models` is a list of `{ id, ownedBy, created }`, or null when the call reads no model list. `ownedBy` and `created` are null when the remote leaves them out.
 - The check of `openai-compatible` and of `openai` answers `models` from the OpenAI list shape of `GET /models`. Every other check answers `models: null`.
 - `LLM_PROVIDERS` maps a platform to its `LlmProvider`. The map holds exactly the platforms with a check in the [platform table](#platform-validators), and a platform outside the map has no implementation.
 - `verifiable` of the [platform list](architecture.impl.md#the-platform-list) is true exactly for a platform in `LLM_PROVIDERS`.
 - `check` maps a reply to `ok`, 401 or 403 to `unauthorized`, a network failure or the deadline to `unreachable`, and every other answer to `invalid_response`.
-- A model call through pi-ai calls no `onResponse` on a refused request. The check of a model call reads the HTTP status from the `<status>:` prefix of the `errorMessage` of the pi-ai reply.
+- A model call through pi-ai calls no `onResponse` on a refused request. The check of a model call reads the HTTP status from the `<status>:` or `<status> ` prefix of the `errorMessage` of the pi-ai reply. A failed model call without a status maps to `unreachable`.
 - The `opencode-go` check passes a session id, so that pi-ai sends the header `x-opencode-session`. OpenCode Go refuses a call without it with 400 `MissingSessionID`.
 - Each model that a check calls is a named constant in `src/llm/`, for example the constants of `gpt-5.6-luna` for `openai-codex` and `deepseek-v4-flash` for `opencode-go`. No code compares or sends a model name as a raw string.
 - The credential healthcheck, the agent provider healthcheck and the provider check call `check`. A healthcheck maps `ok` to `healthy`, `unauthorized` to `unhealthy`, and `unreachable` and `invalid_response` to `unknown`.
@@ -70,6 +70,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The component calls `check` with the material that custody releases, caches nothing and drops the material after the call.
 - Each call of `check` has a 10 s deadline.
 - HTTP 200 holds the answer of `check`, `{ connection, models }`.
+- The route declares an open body, and the handler validates `{ credential }`, so that invalid input answers `llm.provider.invalid_input` and not a Gateway code.
 - HTTP 400 `llm.provider.invalid_input` reports invalid input. HTTP 404 `llm.provider.credential_not_found` reports an unknown credential or a credential of another component.
 - The answer holds no key and pre-fills model ids, not limits or reasoning levels.
 - A human approves models through a [credential metadata revision](#platform-validators).
