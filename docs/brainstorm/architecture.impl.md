@@ -1016,7 +1016,8 @@ The import boundaries follow the public files.
 - A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
 - Verify calls `<component>.credential.verify` for its record. It never reads `GET /api/healthcheck`.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
-- The create form renders one text input for each name of `metadataFields`.
+- The create form renders one text input for each name of `metadataFields`. The label is the name in Title Case, for example `Base URL` for `baseUrl` and `Account ID` for `account_id`.
+- Every field label of the create form, the rotate form and the metadata form is in Title Case.
 - The create form holds a check icon for every platform with a secret shape other than `oauth`. It calls the pre-save check with the typed secret and shows the same badge as Verify, before the save. For a platform with `verifiable: false`, the icon is disabled with the tooltip of Verify.
 - Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
 - An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
