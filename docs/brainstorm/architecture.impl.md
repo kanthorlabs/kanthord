@@ -1008,7 +1008,7 @@ The import boundaries follow the public files.
 - Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
 - The create form renders one text input for each name of `metadataFields`.
-- The create form holds a check icon for a platform with `verifiable: true` and a secret shape other than `oauth`. It calls the pre-save check with the typed secret and shows the same badge as Verify, before the save.
+- The create form holds a check icon for every platform with a secret shape other than `oauth`. It calls the pre-save check with the typed secret and shows the same badge as Verify, before the save. For a platform with `verifiable: false`, the icon is disabled with the tooltip of Verify.
 - Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
 - An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
 - The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
