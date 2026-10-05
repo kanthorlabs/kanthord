@@ -49,6 +49,7 @@ The repository strategy names the base branch of the repository: the branch from
 A [policy](project-service.vocabulary.md#policy) on a binding configures an external action for the nodes of the project.
 A policy states what its action follows: the passing assessment of the node, or the expected end state of another configured action of the same node.
 The repository strategy is the policy of the repository binding.
+A repository binding holds its connection, which is the address, the platform and the credential reference, and its repository policy, which is the repository strategy and the project prompt.
 A node requires the action of a policy when the node names the binding that holds the policy.
 An external action states its expected end state on its platform.
 The repository [capabilities](project-service.vocabulary.md#capability) distinguish authenticated operations from local work.

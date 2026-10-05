@@ -249,6 +249,11 @@ The Project Service holds no table of client identities and no secret of a clien
 The JWT names one binding group by `project_id` and `resource_identity`, and no revision.
 The answer reads the latest row of that group. It refuses a disabled or removed binding, and a token whose `iat` is before the latest tombstone of the group.
 
+## The binding screen of the dashboard
+
+- The form of a repository binding holds two sections. `Repository` holds the connection. `Project policy` holds the base branch, the action, `follows` and the project prompt.
+- The row of a repository binding shows only the connection: the address, the platform and the credential.
+
 ## Repository layout, build, test and release
 
 The Project Service source sits under `src/project/` of the `engine` repository.
