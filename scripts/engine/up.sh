@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the daemon. FRESH=1 deletes the daemon home and the database first.
+# Start the daemon. FRESH=1 deletes the database first and keeps the configuration.
 SCRIPT_NAME=engine-up
 . "$(dirname "$0")/../lib/common.sh"
 
@@ -14,13 +14,7 @@ fi
 
 [ -d "$ENGINE_DIR/node_modules" ] || "$(dirname "$0")/install.sh" || exit 1
 
-if [ "${FRESH:-0}" = "1" ]; then
-	home=$(node -p "require('$ENGINE_DIR/kanthord.config.json').home" 2>/dev/null) || home=""
-	if [ -n "$home" ] && [ -d "$home" ]; then
-		rm -rf "$home"
-		log "removed the daemon home $home"
-	fi
-fi
+[ "${FRESH:-0}" = "1" ] && engine_remove_data
 
 probe() {
 	[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$ENGINE_PORT/api/liveness" 2>/dev/null)" = "200" ]

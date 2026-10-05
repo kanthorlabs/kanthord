@@ -16,8 +16,8 @@ else
 fi
 log "dependencies installed in $target"
 
-if [ ! -f "$target/kanthord.config.json" ]; then
-	node "$ENGINE_DIR/src/main.ts" config generate \
-		--home "$target/.data/.kanthord" --output "$target" || die "config generate failed"
-	log "generated kanthord.config.json in $target"
+config_file=$(engine_config_file)
+if [ ! -f "$config_file" ]; then
+	node "$ENGINE_DIR/src/main.ts" config init || die "config init failed"
+	log "generated $config_file"
 fi

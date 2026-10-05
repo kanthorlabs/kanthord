@@ -118,3 +118,27 @@ pr_count() {
 	slug=$(repo_slug "$1") || return 1
 	gh pr list --repo "$slug" --head "$2" --state all --json number --jq 'length' 2>/dev/null
 }
+
+engine_xdg_dir() {
+	case "${1:-}" in
+	/*) printf '%s/kanthord' "$1" ;;
+	*) printf '%s/%s/kanthord' "$HOME" "$2" ;;
+	esac
+}
+
+engine_config_file() {
+	printf '%s' "${KANTHORD_CONFIG:-$(engine_xdg_dir "${XDG_CONFIG_HOME:-}" .config)/kanthord.yaml}"
+}
+
+engine_remove_data() {
+	local target
+	for target in \
+		"$(engine_xdg_dir "${XDG_DATA_HOME:-}" .local/share)" \
+		"$(engine_xdg_dir "${XDG_STATE_HOME:-}" .local/state)" \
+		"$(engine_xdg_dir "${XDG_CACHE_HOME:-}" .cache)"; do
+		if [ -e "$target" ]; then
+			rm -rf "$target"
+			log "removed $target"
+		fi
+	done
+}

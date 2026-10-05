@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the daemon and the dashboard. FRESH=1 starts from a clean state:
-# a new daemon home and cleared web build caches.
+# an empty database and cleared web build caches.
 SCRIPT_NAME=dev-up
 . "$(dirname "$0")/../lib/common.sh"
 
