@@ -47,7 +47,6 @@ erDiagram
     project_project {
         text id PK "project_ + ULID"
         text name UK "binding-name form"
-        integer binding_set_version "starts at 1"
         integer created_at "Unix ms"
     }
 
@@ -204,7 +203,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `instanceCount: 0` for a worker binding.
 - A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, and a tombstone after the pinned row refuses the use.
 - Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store) rules.
-- Every committed binding-set write increments `binding_set_version`, including a write equal to the stored set. A write that names another version is refused.
+- The binding-set version is 1 plus the number of `project_binding` rows of the project. A write that names another version is refused. A write equal to the stored set inserts no row and keeps the version.
 - No sweep deletes a removed binding or a revision.
 - A write derives `resource_identity` from the configuration of the binding. A human never enters it.
 - A write compares each submitted binding with the current binding of the same name. An unchanged configuration inserts no row. A changed configuration of the same resource inserts the next revision of the group. A changed resource inserts a tombstone in the old group and revision 1 of the new group. A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again. A name that the submission omits takes a tombstone, and its rows stay.

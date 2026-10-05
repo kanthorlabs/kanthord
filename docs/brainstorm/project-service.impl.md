@@ -29,8 +29,8 @@ The Project Service owns its tables in the operational database, and [architectu
 It reads no table of another service.
 The tables are below.
 
-- `project_project(id, name, binding_set_version, created_at)` holds the identity of a project and the version of its binding set.
-- A new project takes binding-set version 1 in `binding_set_version`.
+- `project_project(id, name, created_at)` holds the identity of a project.
+- The binding-set version is 1 plus the number of `project_binding` rows of the project. A new project has binding-set version 1. No row of `project_binding` is ever deleted, so every write that inserts a row raises the version.
 - Its first write names version 1 and commits version 2.
 - `project_binding(id, project_id, name, resource_identity, revision, config, created_at, removed_at)` holds one immutable row for each revision of a binding, and `config` holds the configuration as the canonical JSON that [architecture.impl.md](architecture.impl.md) rules.
 
@@ -87,9 +87,8 @@ Normalization decides whether a change stays in its group or starts a replacemen
 
 A write submits the complete binding set of the project as one object keyed by binding name.
 The submission names the version of the binding set that the client read.
-One `BEGIN IMMEDIATE` transaction holds the read of `project_project.binding_set_version`, the comparison, the difference and every write of the edit.
+One `BEGIN IMMEDIATE` transaction holds the count of the binding-set version, the comparison, the difference and every write of the edit.
 The transaction refuses a submission that names another version with 409 `project.binding_set.version_conflict` and the current version in `error.details`, so two concurrent writes never interleave.
-It increments that column on every write that it commits.
 The transaction spans no `await`, no network call and no nested transaction, because one synchronous connection serves four services.
 The current binding set holds the latest revision of each group of the project that is no tombstone.
 A binding references no other binding.
@@ -102,7 +101,7 @@ The outcomes of the comparison by binding name are below.
 - A new name inserts revision 1 of its group, or the next revision after the tombstone of a group that it binds again.
 - A name that the submission omits takes a tombstone, and the transaction keeps its rows.
 - A worker binding whose worker changed under the same name is refused.
-- A submission equal to the stored set increments the version and changes no binding.
+- A submission equal to the stored set inserts no row and keeps the version.
 - A worker group whose latest row after the edit is a tombstone or holds `instanceCount: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
 
 The binding set has one read route and one write route, and both serve the whole set.
