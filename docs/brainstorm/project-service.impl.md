@@ -242,6 +242,16 @@ The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) b
 The [LLM](llm.impl.md#the-resource-healthcheck), [Repository](repository.impl.md#platform-validators) and [Storage](storage.impl.md#platform-validators) components own the credential checks of their platforms.
 The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns agent provider checks.
 
+## The binding verify
+
+- `project.binding.verify` checks one repository binding at `POST /api/project/:projectId/binding/:bindingId/verify`. It is a read under `human` access. It takes no body and no mutation key.
+- It checks the configuration of the revision that `bindingId` names.
+- It runs the host resolution and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the credential of the binding.
+- It answers `{ address, credential }`. Each value is the health entry `{ status, capability }`. The `address` entry has the capability `network git read`. A failed resolution or a failed read answers `unhealthy`, and a check that exceeds its deadline answers `unknown`.
+- A refusal of the record verify refuses the request with the code of the record verify.
+- A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
+- It stores no result.
+
 ## The client identity
 
 The Project Service holds no table of client identities and no secret of a client identity.
@@ -253,6 +263,7 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 
 - The form of a repository binding holds two sections. `Repository` holds the connection. `Project policy` holds the base branch, the action, `follows` and the project prompt.
 - The row of a repository binding shows only the connection: the address, the platform and the credential.
+- The row of a repository binding holds a Verify icon. It calls `project.binding.verify` and shows one badge for the address and one badge for the credential.
 
 ## Repository layout, build, test and release
 
