@@ -271,6 +271,8 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 
 ## The binding screen of the dashboard
 
+- The header of the Project page shows the project identity and the creation time. It shows no binding-set version.
+- Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a repository binding holds two sections. `Repository` holds the connection. `Project policy` holds the base branch, the action, `follows` and the project prompt.
 - The row of a repository binding shows only the connection: the address, the platform, the identity file of the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows the `host` and the `identity_file` of each record. It holds `New SSH credential`.
