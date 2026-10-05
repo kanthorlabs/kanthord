@@ -24,6 +24,20 @@ Each provider of an agent provider maps to one LLM platform.
 The pi adapter id `openai-compatible` names no platform.
 The platform and the metadata of the credential identify the external system.
 
+## llm provider
+
+The capability of one LLM platform. Today it holds one method, the check.
+The LLM provider of `openai-compatible` checks `compat-main` with `GET <baseUrl>/models` and answers `{ connection: "ok", models: [...] }`.
+The LLM provider of `openai-codex` checks `codex-main` with one model call and answers `{ connection: "ok", models: null }`.
+`groq` has no check, so it has no LLM provider.
+
+The closed `connection` set is:
+
+- `ok`
+- `unauthorized`
+- `unreachable`
+- `invalid_response`
+
 ## login session
 
 One human attempt to obtain an OAuth credential on the server.

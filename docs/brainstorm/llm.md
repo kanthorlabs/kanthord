@@ -33,6 +33,14 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - A failed or expired session stores nothing.
 - A credential answer of the component lists the agent providers that name the credential. The Worker Service answers that read.
 
+## Provider capability
+
+- An [LLM provider](llm.vocabulary.md#llm-provider) declares the capability of one LLM platform. Today the capability holds one method, the check.
+- A platform without a check has no LLM provider.
+- The check answers the connection of a credential and, when its call reads one, the model list.
+- Every LLM healthcheck and the provider check call the check of the LLM provider, so every platform reports one way.
+- The model that a check calls is fixed per platform.
+
 ## Model connector
 
 - The model connector builds the model runtime of one agent provider from a released credential, a model identifier and a reasoning effort.
@@ -49,6 +57,6 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 ## Resource healthcheck
 
 The component owns the [resource healthcheck](architecture.vocabulary.md#resource-healthcheck) of the credential records of its platforms.
-Its platform validator validates a record on demand.
+The check of its LLM provider validates a record on demand.
 The [implementation](llm.impl.md#the-resource-healthcheck) defines each remote probe and its limits.
 A healthcheck changes no credential and authorizes no operation.

@@ -65,12 +65,12 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 - A provider is a member of the [agent provider set](worker-service.vocabulary.md#agent-provider).
 - Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
-- A model identifier belongs to `getBuiltinModels(provider)` or the `models` metadata of an `openai-compatible` credential.
+- A model identifier belongs to `getBuiltinModels(provider)` or to the [approved models](llm.impl.md#the-approved-models) that the LLM component answers for an `openai-compatible` credential.
 - An empty `models` list permits no model selection.
 - The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoningLevels`, which defaults to `["off"]`.
 - A level that no source establishes fails validation.
 - The Worker Service sends `{ credential, platform }` to custody and consumes its suitability result.
-- It reads metadata through custody, never the secret.
+- It reads no metadata and no secret.
 
 ## Configuration schema
 
@@ -91,34 +91,14 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
 - JSON Schema validates no cross-field lookup; the Worker Service enforces it.
 
-## The provider check
-
-- `worker.provider.check` is a server-wide read operation under `human` access, with no project or binding.
-- Its route is `POST /api/worker/provider/check`, and its input is only `{ credential }`.
-- It accepts an `openai-compatible` credential and reads `baseUrl` from metadata through custody.
-- No raw key reaches a Worker operation.
-- The Worker Service performs the call with the material that custody releases, caches nothing and drops the material after the call.
-- `GET <baseUrl>/models` has a 10 s deadline.
-- HTTP 200 holds `connection` with one of these values:
-  - `ok`: the remote returns the OpenAI list shape.
-  - `unauthorized`: the remote returns 401 or 403.
-  - `unreachable`: a network failure or deadline prevents the answer.
-  - `invalid_response`: the answer lacks the OpenAI list shape.
-- An `ok` answer holds `models`, with `id`, `ownedBy` and `created` per model.
-- HTTP 400 reports invalid input or an unsuitable credential; HTTP 404 reports an unknown credential.
-- Error codes use the prefix `worker.provider.*`.
-- The answer holds no key and pre-fills model ids, not limits or reasoning levels.
-- A human approves models through a [credential metadata revision](llm.impl.md#platform-validators).
-
 ## Agent provider healthcheck
 
 - Every agent provider has a report-only resource healthcheck in the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
-- The check reads `GET /models` of its provider with its credential and reports provider readiness.
-- It groups calls by provider endpoint and credential and attributes the result to each agent provider.
-- Its capability is `model-list read`; it spends one request and no inference token.
-- `GET /models` proves model-list access only, not inference readiness or model suitability.
+- The check calls the [check of the LLM provider](llm.impl.md#the-llm-provider) of its credential and reports provider readiness.
+- It groups calls by credential and attributes the result to each agent provider.
+- A credential whose platform has no LLM provider reports `unknown`.
 - The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
-- [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden probes, unavailable probes and OAuth expiry without refresh.
+- [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden calls, unavailable calls and OAuth expiry without refresh.
 - Shared probe code changes no owner.
 
 ## Configuration tests
