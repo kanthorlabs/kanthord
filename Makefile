@@ -15,7 +15,7 @@ export WEB_PORT ?= 27182
 	repo-bootstrap repo-attach \
 	up down restart status logs \
 	dev-up dev-down dev-restart dev-status dev-logs \
-	engine-up engine-down engine-logs engine-install \
+	engine-up engine-down engine-logs engine-install cleanup \
 	app-up app-down app-logs app-install \
 	tree-new tree-list tree-clean \
 	sync sync-all sync-status sync-engine sync-apps sync-webhook sync-parent \
@@ -118,6 +118,8 @@ help-targets:
 	@echo "  engine-down      Stop it. CLEAN=1 also removes the log"
 	@echo "  engine-install   Install the dependencies, generate a configuration"
 	@echo "  engine-logs      Follow the daemon log"
+	@echo "  cleanup          Stop it, then delete its configuration file and its"
+	@echo "                   data, state and cache directories, the database included"
 	@echo ""
 	@echo "app. The dashboard on http://localhost:$(WEB_PORT)"
 	@echo "  app-up           Start it. FRESH=1 clears the build caches first"
@@ -189,6 +191,8 @@ engine-logs:
 	@$(S)/engine/logs.sh
 engine-install:
 	@$(S)/engine/install.sh
+cleanup:
+	@$(S)/engine/cleanup.sh
 
 app-up:
 	@$(S)/app/up.sh
