@@ -961,8 +961,8 @@ The import boundaries follow the public files.
 ## The credential route group of a component
 
 - The LLM, Repository and Storage components each declare one credential route group in their own `contract.ts`.
-- The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credentialName`, `POST /api/<component>/credential/:credentialName/revision`, `PUT /api/<component>/credential/:credentialName/metadata`, `POST /api/<component>/credential/:credentialName/revision/:revision/revoke`, `POST /api/<component>/credential/:credentialName/archive` and `POST /api/<component>/credential/check`.
-- The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive` and `check`.
+- The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credentialName`, `POST /api/<component>/credential/:credentialName/revision`, `PUT /api/<component>/credential/:credentialName/metadata`, `POST /api/<component>/credential/:credentialName/revision/:revision/revoke`, `POST /api/<component>/credential/:credentialName/archive`, `POST /api/<component>/credential/:credentialName/verify` and `POST /api/<component>/credential/check`.
+- The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`.
 - Every route uses the `human` access policy.
 - Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
 - A create of a platform of another component answers 400 `credential.platform.unsupported`.
@@ -970,6 +970,15 @@ The import boundaries follow the public files.
 - The credential name stays unique on the server, because the `credential` table is one table.
 - The record lifecycle codes stay `credential.*`, because custody raises them. A platform rule of a component takes the prefix of that component, for example `llm.metadata.base_url_fixed`.
 - The request and answer bodies keep the fields of the custody record answer. A get adds the dependents list of its component.
+
+### The record verify
+
+- `<component>.credential.verify` checks one stored record. It takes no body and no mutation key.
+- It runs the check of the platform on the newest live revision of the record, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
+- It answers the health entry `{ status, capability }`, the same type as an entry of the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
+- It runs the same check code as the health report and stores no result.
+- An archived record answers 409 `credential.credential.archived`. A platform with `verifiable: false` answers 400 `credential.check.unsupported`. A name of another component answers 404 `credential.credential.not_found`.
+- The release of the material follows the [release rules](custody.impl.md#the-release-of-a-secret), and the check drops the material after the call.
 
 ### The pre-save check
 
@@ -1005,7 +1014,7 @@ The import boundaries follow the public files.
 - The dashboard holds one section for each component under the group Connections: LLM, Repositories and Storage.
 - Each section reads only the route group of its component.
 - A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
-- Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
+- Verify calls `<component>.credential.verify` for its record. It never reads `GET /api/healthcheck`.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
 - The create form renders one text input for each name of `metadataFields`.
 - The create form holds a check icon for every platform with a secret shape other than `oauth`. It calls the pre-save check with the typed secret and shows the same badge as Verify, before the save. For a platform with `verifiable: false`, the icon is disabled with the tooltip of Verify.
