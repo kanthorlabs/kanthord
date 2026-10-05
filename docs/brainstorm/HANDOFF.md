@@ -16,7 +16,11 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Custody component
 
-- [ ] RULED 2026-10-04 by Ulrich. Rename the `openai-compatible` metadata keys `baseUrl`, `contextWindow`, `maxTokens` and `reasoningLevels` to snake_case, with a migration of stored revisions. The Worker Service maps the stored keys to the pi-ai option names.
+- [ ] RULED 2026-10-04 by Ulrich. Rename the `openai-compatible` metadata keys `baseUrl`, `contextWindow`, `maxTokens` and `reasoningLevels` to snake_case, with a migration of stored revisions. The LLM component maps the stored keys to the pi-ai option names.
+
+### LLM component
+
+- [ ] Added 2026-10-05 from the component split. `worker.provider.check` reads the `baseUrl` metadata of an `openai-compatible` credential and calls `GET <baseUrl>/models`, but the LLM component now holds every fact about an LLM platform. Decide whether the check moves to the LLM component, and its route. The model membership check of the Worker configuration also reads the `models` metadata through `compatibleMetadataSchema` in `worker/contract.ts`, and it moves with the same decision.
 
 ### Repository component
 
@@ -71,6 +75,7 @@ After the first native-agent worker runs the acceptance path.
 
 ### Gateway Service
 
+- [ ] Added 2026-10-05 from the component split. `gateway-service.impl.md` says that the `shared` scope of the health report holds exactly `custody` and that its map holds `credential`. The engine fills that entry from the inventories of the LLM, Repository and Storage components. Decide whether `shared` becomes `{ llm, repository, storage }`.
 - [ ] POSTPONED 2026-09-28 by Ulrich until Ulrich rules it. Decide whether `kanthord jwt inspect` verifies the signature, the header and the closed claim set with the server configuration.
 
 ### Tracking Service
