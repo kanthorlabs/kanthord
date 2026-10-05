@@ -75,6 +75,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The route declares an open body, and the handler validates `{ credential }`, so that invalid input answers `llm.provider.invalid_input` and not a Gateway code.
 - HTTP 400 `llm.provider.invalid_input` reports invalid input. HTTP 404 `llm.provider.credential_not_found` reports an unknown credential or a credential of another component.
 - The answer holds no key and pre-fills model ids, not limits or reasoning levels.
+- No raw key reaches `llm.provider.check`. The [pre-save check](architecture.impl.md#the-pre-save-check) is the only credential operation that takes a typed secret, and the LLM component runs it through `LlmProvider.check`.
 - A human approves models through a [credential metadata revision](#platform-validators).
 
 ## The approved models

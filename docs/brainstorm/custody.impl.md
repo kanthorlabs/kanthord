@@ -16,7 +16,7 @@ A mechanism here never overrides a rule there.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - The name is the group key of a credential and never changes. A unique index holds `name` and `revision`, and a new name starts at revision 1.
-- The names `login` and `platform` are refused, because the static segments of the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) hold them.
+- The names `login`, `platform` and `check` are refused, because the static segments of the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) hold them.
 - Creation and login refuse a name that a row holds with 409 `credential.name.conflict` and the identity of its newest revision in `error.details`.
 - A login checks the name at start and at commit.
 - The write code keeps one platform for every row of a name.
@@ -156,7 +156,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 ## Tests
 
 - Tests cover duplicate names at creation and at the commit of a first revision, including creation retry after restart.
-- Tests assert the refusal of the names `login` and `platform`.
+- Tests assert the refusal of the names `login`, `platform` and `check`.
 - Tests assert platform-only suitability, and that a list and a get of one component answer no record of another component.
 - Tests assert no remote call on creation or rotation, and no secret in record answers.
 - Tests cover a credential archive with dependents and concurrent changes.
