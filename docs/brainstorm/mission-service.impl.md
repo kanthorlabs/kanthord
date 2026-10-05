@@ -568,6 +568,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - The Mission tab always offers Import, because an import updates the nodes that it names and creates the others.
 - A successful apply closes the import sheet. A toast confirms the import with the new mission version and the count of new nodes.
+- Each initiative and its objectives sit inside one bordered band. Two bands stand at least 24 px apart.
 - An objective card ends with a `Tasks (<count>)` section. Each task is a row that opens the node sheet. A card without a task shows no section.
 - The Mission tab offers `Export JSON` and `Export Markdown`. `Export Markdown` downloads one zip archive `<project name>-mission-v<mission version>.zip` that holds each plan file under its `filename`.
 
