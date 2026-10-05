@@ -150,10 +150,11 @@ The external system at which a credential authenticates.
 The set is closed. Each platform belongs to exactly one shared component, and that component holds its platform table:
 
 - the [LLM platforms](llm.vocabulary.md#llm-platform) of the LLM component, for example `anthropic`, `github-copilot` and `openai-compatible`
-- `github` of the [Repository component](repository.impl.md#platform-validators)
+- `github` and `ssh` of the [Repository component](repository.impl.md#platform-validators)
+- the git-only platforms `gitlab` and `bitbucket` of the [Repository component](repository.impl.md#git-only-platforms), which a repository binding names and at which no credential authenticates
 - `s3` of the [Storage component](storage.impl.md#platform-validators)
 
-A repository binding names `github` explicitly; an address proves no platform.
+A repository binding names its platform explicitly; an address proves no platform.
 The name `github-copilot` is an LLM platform, so a shared prefix decides no owner.
 
 ## platform validator

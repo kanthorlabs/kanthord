@@ -35,7 +35,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 - `repository.credential.create` accepts a record of every platform of the component.
 - `repository.credential.ssh_discover` reads the SSH aliases at `GET /api/repository/credential/ssh/discover`. It is a read under `human` access and writes nothing.
 - It reads the `Host` lines of the top-level `~/.ssh/config` and follows no `Include`. It skips each pattern that holds `*`, `?` or `!`.
-- It runs `ssh -G -- <host>` for each alias and keeps the aliases whose resolved `hostname` contains `github` or `gitlab`. The keyword set is an enum in code.
+- It runs `ssh -G -- <host>` for each alias and keeps the aliases whose resolved `hostname` contains `github`, `gitlab` or `bitbucket`. The keyword set is an enum in code.
 - It answers `{ host, hostname, port, identity_file, state, reason }` for each alias. `state` is `ready`, `refused` or `present`. `present` means that a live `ssh` record holds the host, and `reason` holds the refusal code of a `refused` alias.
 - An unreadable `~/.ssh/config` answers 422 `repository.credential.ssh_config_unreadable`.
 - The engine creates an `ssh` record only on a human create. It creates none at start.
@@ -49,6 +49,19 @@ The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 20
 
 - The GitHub SSH host set is `github.com` and `ssh.github.com`.
 - Every platform implementation declares its SSH host set.
+
+## Git-only platforms
+
+A git-only platform has an SSH host set and no platform implementation.
+
+| Platform | SSH host set |
+| --- | --- |
+| `gitlab` | `gitlab.com`, `altssh.gitlab.com` |
+| `bitbucket` | `bitbucket.org`, `altssh.bitbucket.org` |
+
+- A repository binding of a git-only platform names no `credential`, because no credential platform exists for it.
+- Its binding permits the action `merge_push` and no action. The action `pull_request` refuses the write with 400 `project.bindings.repository.action_unsupported`.
+- A platform implementation of a git-only platform makes it a full platform. Its credential platform, its validator and its `pull_request` support arrive together.
 
 - Pull request read calls `GET /repos/{owner}/{repo}/pulls/{pull_number}`.
 - Review comment list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.

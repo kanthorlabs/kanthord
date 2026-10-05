@@ -14,6 +14,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `randomBytes` and `timingSafeEqual`.
 It also provides `zod` at 4.4.3 and `ulid`.
 The repository action catalog supports GitHub.
+A repository binding names the platform `github`, `gitlab` or `bitbucket`. The [git-only platforms](repository.impl.md#git-only-platforms) `gitlab` and `bitbucket` support `merge_push` only.
 The [Repository component](repository.impl.md#platform-validators) owns the repository credential platforms.
 The GitHub action catalog holds exactly two actions.
 
@@ -143,6 +144,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - The exact `projectPrompt` value `-` disables the project prompt layer under [prompt composition](worker-service.impl.md#prompt-composition).
 - Every repository binding names exactly one `sshCredential` of platform `ssh`. An absent SSH credential refuses the write.
 - The host of the address equals the `host` of the `sshCredential`. A different host refuses the write with 400 `project.bindings.repository.ssh_host_mismatch`.
+- A repository binding of a git-only platform with a `credential` or with the action `pull_request` refuses the write with 400 `project.bindings.repository.action_unsupported`.
 - A repository binding names at most one `credential` of its platform. The action `pull_request` without a `credential` refuses the write with 400 `project.bindings.repository.credential_required`.
 - An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
@@ -266,6 +268,7 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The row of a repository binding shows only the connection: the address, the platform, the identity file of the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows the `host` and the `identity_file` of each record. It holds `New SSH credential`.
 - The credential field is optional. The form marks a blank credential only when the action is `pull_request`.
+- The `Repository` section holds a platform select with `GitHub`, `GitLab` and `Bitbucket`. For a git-only platform, the form hides the credential field and offers no `Open a pull request`.
 - The credential field of a repository binding is a searchable list of the live Repository credential records of the binding platform. It reads `repository.credential.list` and hides an archived record. A name outside the list cannot be entered.
 - The credential field holds `New credential` and `Rotate`. `New credential` opens the create form of the Repository component and selects the new record after the save. `Rotate` opens the rotation of the selected record. Both keep the binding draft.
 - The row of a repository binding holds a Verify icon. It calls `project.binding.verify` and shows one badge for the address, one for the SSH credential and one for the credential.
@@ -286,7 +289,7 @@ The `kanthord` bin of `package.json` releases it.
 - Tests assert `validateEntry` inside the write transaction and refusal when an agent lacks enabled enablement.
 - Tests assert that `entriesOfAgent` includes every dependent binding, including bindings without explicit entries.
 - A test asserts one SSH read per repository address, its failure code and the resource healthcheck deadline.
-- A test covers an SSH alias that resolves to `ssh.github.com`, an alias that resolves to a host outside the GitHub SSH host set, and a host that starts with `-`. The alias address and the `github.com` address of one repository derive the same identity.
+- A test covers an SSH alias that resolves to `ssh.github.com`, an alias that resolves to a host outside the GitHub SSH host set, an alias that resolves to `gitlab.com` for platform `gitlab`, and a host that starts with `-`. The alias address and the `github.com` address of one repository derive the same identity.
 - A test asserts that the repository check names the `ssh` record of the binding in its attribution and no other credential store record.
 - A test covers integer instance counts from 0 to 64, invalid counts and the error code. It checks that 0 makes the binding unavailable.
 - A test covers the project prompt bound in UTF-8 bytes and its error code.
