@@ -22,6 +22,7 @@ The mission of a project is intrinsic to that project, so no binding allocates i
 A project binds each resource that it uses directly: a repository, a worker and an evidence storage.
 A delivery source is no binding of the Project Service.
 A binding that needs a credential references a [credential store record](custody.vocabulary.md#credential-store-record), and the project names no credential.
+The Project Service answers the bindings that name a credential, for the component that owns the platform of that credential.
 A binding is the group of its revisions.
 Each revision has an identity that is unique across the server, and a record pins one revision by that identity.
 A binding has a [binding name](project-service.vocabulary.md#binding-name) that is unique inside its project. A human chooses it.
@@ -40,7 +41,7 @@ The Project Service [owns the resource healthcheck](architecture.md#resource-hea
 ## Repository configuration and policy
 
 A project binds each repository that it uses.
-A binding that reaches an external platform names its [platform](custody.vocabulary.md#platform).
+A binding that reaches an external platform names its [platform](architecture.vocabulary.md#platform).
 The platform of a binding is a value that the binding holds.
 No service infers it from the repository address.
 The repository strategy states an explicit rule for each repository that requires one.

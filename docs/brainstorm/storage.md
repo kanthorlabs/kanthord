@@ -8,7 +8,7 @@ title: Storage
 
 The [Storage component](storage.vocabulary.md#storage-component) is a [shared component](architecture.md#shared-components), like custody and the [Repository component](repository.md).
 It is no service, and no service owns it.
-It holds the platform implementations of object storage.
+It holds the platform implementations of object storage and the credential records of its platforms.
 
 ## Boundary
 
@@ -26,6 +26,14 @@ It holds the platform implementations of object storage.
 - The platform implementation derives the endpoint and the bucket from the storage binding.
 - A caller supplies the object key and the recorded object version, and no other resource selector.
 - A platform implementation declares the read-back of each write operation, or it declares none.
+
+## Credential records
+
+- The component owns the credential records of its platforms.
+- It stores each record through [custody](custody.md#credential-records), which holds the revisions, the pin, the drain, the revoke and the archive.
+- Each [platform validator](architecture.vocabulary.md#platform-validator) of the component declares the secret shape, the metadata schema and the validation of its platform.
+- The component refuses a record of a platform that it does not own.
+- A credential answer of the component lists the bindings that name the credential. The [Project Service](project-service.md#resource-and-binding-model) answers that read.
 
 ## Write operations
 
@@ -47,5 +55,6 @@ It holds the platform implementations of object storage.
 
 ## Resource healthcheck
 
-[Custody](custody.md) owns the check of an `s3` credential.
-The Storage component owns no external resource of its own.
+The Storage component owns the [resource healthcheck](architecture.vocabulary.md#resource-healthcheck) of the credential records of its platforms.
+Its platform validator validates a record on demand.
+A healthcheck changes no credential and authorizes no operation.

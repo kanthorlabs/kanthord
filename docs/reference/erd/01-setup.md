@@ -35,7 +35,7 @@ erDiagram
     credential {
         text id PK "credential_ + ULID, one revision"
         text name "group key, 1-63 chars, never changes"
-        text platform "closed custody platform set"
+        text platform "closed platform set of the owning component"
         integer revision "unique with name, starts at 1"
         blob nonce "12 bytes, AES-256-GCM"
         blob ciphertext "secret material + 16-byte tag"
@@ -187,12 +187,12 @@ The owning service enforces every rule below in the transaction of its write. A 
 - `credential` holds one row for each revision. `(name, revision)` has a unique index, and a taken name answers 409 `credential.name.conflict`.
 - The write keeps one `platform` for every row of a name. The newest live revision is the greatest `revision` of the name with a null `ended_at`.
 - A rotation inserts the next revision and, in the same transaction, drains every older live revision that no live execution pins. A drain or a revoke sets `ended_at`. Custody refuses a revoke of the newest live revision.
-- The secret shape and the `metadata` schema depend on `platform`, as the [platform validators](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#platform-validators) state.
+- The secret shape and the `metadata` schema depend on `platform`, as the platform validators of the [LLM](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/llm.impl.md#platform-validators), [Repository](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#platform-validators) and [Storage](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/storage.impl.md#platform-validators) components state.
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
 - The `baseUrl` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
 - The additional authenticated data of the envelope is the row identity and the platform.
 - An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision and keeps the rows. A name with no live revision is archived, and an archive is final.
-- A login session is a runtime record of custody, and no table holds it. A failed or expired session stores nothing.
+- A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
 
 ### Project Service
 

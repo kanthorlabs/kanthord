@@ -14,7 +14,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 The installed set provides `node:sqlite` `DatabaseSync`, `node:crypto` `hkdfSync`, `createCipheriv`, `createDecipheriv`, `createHmac`, `createHash`, `randomBytes` and `timingSafeEqual`.
 It also provides `zod` at 4.4.3 and `ulid`.
 The repository action catalog supports GitHub.
-[Custody](custody.impl.md#platform-validators) owns credential platforms.
+The [Repository component](repository.impl.md#platform-validators) owns the repository credential platforms.
 The GitHub action catalog holds exactly two actions.
 
 - `pull_request` opens a pull request from the node branch into the base branch. It requires the platform action capability. Its expected end state is the merge of that pull request.
@@ -239,7 +239,7 @@ The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) b
 - The call record holds no check result.
 - `projectNameOf(tx, projectId)` answers the name of a project in the collection transaction of the health report. The Intake inventory callback of the composition root is its only consumer. It opens no transaction, and an absent project throws.
 
-[Custody](custody.impl.md#the-resource-healthcheck) owns credential checks.
+The [LLM](llm.impl.md#the-resource-healthcheck), [Repository](repository.impl.md#platform-validators) and [Storage](storage.impl.md#platform-validators) components own the credential checks of their platforms.
 The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns agent provider checks.
 
 ## The client identity

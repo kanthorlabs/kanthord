@@ -95,7 +95,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A service owns its own tables, and it reads no table of another service.
 - The name of a table carries the prefix of its service, so no two services collide.
 - A table that more than one service uses carries no prefix. It names one owning service, and every other service reaches a row through that service and never through a read of the table.
-- The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record).
+- The shared `credential` table belongs to [custody](custody.impl.md#the-credential-store-record). The LLM, Repository and Storage components each own the rows of their platforms.
 - [The credential table](#the-credential-table) defines its envelope.
 - The table `migration(service, version, applied_at)` records each migration that ran.
 - The migrations run at startup, in a fixed order of the services.
@@ -204,7 +204,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The credential table
 
-- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, the unique index on `(name, revision)`, platforms, secret shapes and metadata.
+- [Custody](custody.impl.md#the-credential-store-record) owns the table schema, the unique index on `(name, revision)` and the secret shapes. The component that owns a platform owns its metadata schema.
 - Each service reaches a record through custody, so the envelope is a shared mechanism.
 - One row holds one revision of a credential, and the row identity names that revision.
 - The protected facility checks authorization before secret use.
@@ -525,7 +525,7 @@ A fatal error runs as below.
 
 - This sibling specifies the configuration of the server process.
 - This sibling specifies the command surface of the `kanthord` bin. The CLI specification of the engine specifies the command table of each group.
-- [Custody](custody.md) owns resource credentials as a shared component.
+- [Custody](custody.md) owns the protection of resource credentials as a shared component.
 
 ## The command surface
 
@@ -538,7 +538,7 @@ A fatal error runs as below.
 - The second set holds one group for each service of [architecture.md](architecture.md), named by that service in lower case.
 - It holds `project`, `mission`, `scheduler`, `intake`, `worker`, `tracking` and `gateway`.
 - The third set holds one group for each shared component of [architecture.md](architecture.md#shared-components), named by the prefix of its operations.
-- It holds `credential`.
+- It holds `llm`, `repository` and `storage`.
 - The three sets are disjoint, so no group collides with a global command or with another group. A top-level name outside the three sets is a defect.
 - This sibling declares the three sets and the shape of the surface.
 - Each group page in the engine [CLI specification](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/README.md) declares its command table. It declares no top-level name.
@@ -957,6 +957,55 @@ The import boundaries follow the public files.
 - `main.ts` installs the fatal handlers and dispatches to the `cli` application.
 - [architecture.impl.md](architecture.impl.md#the-start-and-the-stop) holds the composition root order.
 - Tests sit beside their source as `*.test.ts`.
+
+## The credential route group of a component
+
+- The LLM, Repository and Storage components each declare one credential route group in their own `contract.ts`.
+- The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credentialName`, `POST /api/<component>/credential/:credentialName/revision`, `PUT /api/<component>/credential/:credentialName/metadata`, `POST /api/<component>/credential/:credentialName/revision/:revision/revoke` and `POST /api/<component>/credential/:credentialName/archive`.
+- The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke` and `archive`.
+- Every route uses the `human` access policy.
+- Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
+- A create of a platform of another component answers 400 `credential.platform.unsupported`.
+- A read or a write of a name whose platform belongs to another component answers 404 `credential.credential.not_found`.
+- The credential name stays unique on the server, because the `credential` table is one table.
+- The record lifecycle codes stay `credential.*`, because custody raises them. A platform rule of a component takes the prefix of that component, for example `llm.metadata.base_url_fixed`.
+- The request and answer bodies keep the fields of the custody record answer. A get adds the dependents list of its component.
+
+### The platform list
+
+- `<component>.credential.platform_list` answers the platforms of the platform table of its component. No second constant holds the set.
+- It takes no input and has no pagination.
+- The static segment `platform` takes precedence over `/:credentialName`, so custody refuses the name `platform`.
+- The answer is `{ items: [{ platform, secretShape, loginModes, metadataFields, verifiable }] }`.
+- `loginModes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
+- `metadataFields` lists the required string fields of the metadata schema. `openai-compatible` answers `["baseUrl"]`, because `models` starts as `[]`.
+- `verifiable` is true when the validation of the platform makes a remote call.
+
+### The credential healthcheck
+
+- The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline and concurrency bounds.
+- The platform validators of each component supply the probes.
+- A supported platform with no remote call reports `unknown`.
+- A forbidden probe proves no invalid credential.
+- The component records each probe against the credential store record and stores no check result.
+- A probe that reports `unknown` or `unhealthy` logs the failure reason without material.
+
+### The credential sections of the dashboard
+
+- The dashboard holds one section for each component under the group Connections: LLM, Repositories and Storage.
+- Each section reads only the route group of its component.
+- A credential row holds its own actions: Verify, Rotate, Edit metadata for a platform with metadata, and Revisions. No action covers every record at once.
+- Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
+- The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
+- The create form renders one text input for each name of `metadataFields`.
+- Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
+- An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
+- The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
+- Revoke sits on the revision list of the record and needs a confirmation.
+- Archive sits on the detail of the record and needs a confirmation.
+- The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers only Revisions.
+- An archived row shows its archive time, the latest `endedAt` of its revisions.
+- The detail of a Repositories record lists the bindings that name it. Each binding links to the Bindings tab of its project.
 
 ## The dashboard navigation
 

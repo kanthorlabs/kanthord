@@ -8,7 +8,7 @@ title: Repository
 
 The [Repository component](repository.vocabulary.md#repository-component) is a [shared component](architecture.md#shared-components), like custody.
 It is no service, and no service owns it.
-It holds the repository connector, the platform connector, its platform implementations and the pure payload decoders of a platform.
+It holds the repository connector, the platform connector, its platform implementations, the pure payload decoders of a platform and the credential records of its platforms.
 The [connector vocabulary](architecture.vocabulary.md#connector) defines the connector set.
 
 ## Boundary
@@ -38,7 +38,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - A platform implementation exposes its platform's operations under that platform's names and parameters.
 - No common operation interface exists across platform implementations.
 - The set of platform implementations is open.
-- A binding that reaches an external platform names its [platform](custody.vocabulary.md#platform).
+- A binding that reaches an external platform names its [platform](architecture.vocabulary.md#platform).
 - The platform connector selects the platform implementation by that field.
 - A platform implementation derives the resource of a call from the binding or from the inbound.
 - A caller supplies no resource selector.
@@ -54,6 +54,14 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - It changes no other rule.
 - A platform with a different resource model requires its binding kind, its authorization and its action semantics.
 - The [Storage component](storage.md) owns object storage. No page defines those rules for another platform.
+
+## Credential records
+
+- The component owns the credential records of its platforms.
+- It stores each record through [custody](custody.md#credential-records), which holds the revisions, the pin, the drain, the revoke and the archive.
+- Each [platform validator](architecture.vocabulary.md#platform-validator) of the component declares the secret shape, the metadata schema and the validation of its platform.
+- The component refuses a record of a platform that it does not own.
+- A credential answer of the component lists the bindings that name the credential. The [Project Service](project-service.md#resource-and-binding-model) answers that read.
 
 ## Write operations
 
@@ -86,4 +94,6 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 
 The [Project Service](project-service.md#resource-and-binding-model) owns the check of a repository binding.
 It calls the repository connector for the network git read of that check.
-The Repository component owns no external resource of its own.
+The Repository component owns the [resource healthcheck](architecture.vocabulary.md#resource-healthcheck) of the credential records of its platforms.
+Its platform validator validates a record on demand.
+A healthcheck changes no credential and authorizes no operation.

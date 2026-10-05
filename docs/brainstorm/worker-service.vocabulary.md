@@ -148,8 +148,8 @@ An absent record denies use like `disabled`.
 One named provider and credential pair inside an agent enablement.
 Its fields are `name`, `provider` and `credential`; it holds no model list.
 For example, `{ name: "openai-org", provider: "openai-compatible", credential: "openai-main" }` belongs to the `swe@1` enablement.
-The closed provider set is every platform of kind `llm` in the [platform list](custody.impl.md#the-platform-list), for example `anthropic`, `openai-compatible` and `groq`.
-Each value maps to the same-named [platform](custody.vocabulary.md#platform).
+The closed provider set is every [LLM platform](llm.vocabulary.md#llm-platform), for example `anthropic`, `openai-compatible` and `groq`.
+Each value maps to the same-named LLM platform.
 
 ## default configuration
 

@@ -94,9 +94,12 @@ It routes each request to the service or shared component that owns the requeste
 ## Shared components
 
 [Custody](custody.md) is a shared component used by every service, not a service.
-Its [design](custody.md#scope) defines credential ownership and protection.
+Its [design](custody.md#scope) defines credential protection.
+The [LLM component](llm.md) is a shared component for model credentials and the model runtime.
 The [Repository component](repository.md) is a shared component for repository transport, git platform operations and payload decoders.
 The [Storage component](storage.md) is a shared component for object storage operations.
+Each [platform](architecture.vocabulary.md#platform) belongs to exactly one of the LLM, Repository and Storage components.
+That component owns the credential records of the platform and stores them through custody.
 
 ## Service diagram
 
@@ -125,7 +128,7 @@ The service or shared component that owns the resource owns its check.
 The inventory has these owners.
 
 - [Project Service](project-service.md#resource-and-binding-model): a repository binding.
-- [Custody](custody.md#resource-healthcheck): a credential store record.
+- The [LLM](llm.md#resource-healthcheck), [Repository](repository.md#resource-healthcheck) and [Storage](storage.md#resource-healthcheck) components: a credential store record of their platforms.
 - [Intake Service](intake-service.md#inbounds): an inbound.
 - [Worker Service](worker-service.md#agent-configuration): an agent provider and a registered instance.
 

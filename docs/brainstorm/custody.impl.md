@@ -16,10 +16,11 @@ A mechanism here never overrides a rule there.
 - The identity is `credential_<ulid>` under the [identity convention](architecture.impl.md#the-identity-and-the-time), and it names one revision.
 - A name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - The name is the group key of a credential and never changes. A unique index holds `name` and `revision`, and a new name starts at revision 1.
-- The name `login` is refused, because the static route `/api/credential/login` holds that path segment.
+- The names `login` and `platform` are refused, because the static segments of the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) hold them.
 - Creation and login refuse a name that a row holds with 409 `credential.name.conflict` and the identity of its newest revision in `error.details`.
 - A login checks the name at start and at commit.
 - The write code keeps one platform for every row of a name.
+- Custody stores the platform value that the owning component supplies, and it validates no platform.
 - The newest live revision is the row of the name with the greatest `revision` and a null `ended_at`.
 - A rotation inserts the next revision in one transaction. It copies the metadata of the newest live revision unless the request replaces it, and after the insert it drains every older live revision that no live execution pins in the same transaction.
 - A drain and a revoke set `ended_at`.
@@ -35,78 +36,14 @@ A mechanism here never overrides a rule there.
 - A name with no live revision is archived. A drain and a revoke never end the newest live revision, so only an archive produces that state.
 - An archive is final. An archived name takes no rotation, metadata edit or second archive, answers 409 `credential.credential.archived`, and stays taken.
 - A refusal lists the dependents.
-- Creation and rotation validate the local schema and make no remote call.
+- Creation and rotation validate the local schema of the owning component and make no remote call.
 - Custody logs a human creation or update with the human identity and row identity, never the secret.
 
-The platform determines the secret shape of a record, and each shape has one secret schema:
+The [platform validator](architecture.vocabulary.md#platform-validator) of the owning component names the secret shape of a record. Custody holds one secret schema for each shape:
 
 - `api_key`: `{ key }`.
 - `oauth`: `{ refresh, access, expires }`; only a login session supplies initial material.
 - `s3_access_key`: `{ accessKeyId, secretAccessKey }`; a session token is invalid.
-
-## Platform validators
-
-Custody owns a dedicated platform validator for every [platform](custody.vocabulary.md#platform), including each LLM platform.
-Each platform validator declares its secret shape, metadata schema and validation. A platform holds exactly one secret shape, and a second shape for the same remote is another platform, for example `anthropic-subscription`, `openai-codex` or `github-app`.
-The platform validators use the credential contracts of `@earendil-works/pi-ai` at 0.86.0.
-
-| Platform | Secret shape | Metadata | Validation |
-| --- | --- | --- | --- |
-| `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
-| `github-copilot` | `oauth` | None | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token |
-| `openai-codex` | `oauth` | None | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
-| `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
-| `openai-compatible` | `api_key` | `baseUrl`, `models` | `GET <baseUrl>/models` |
-| `openrouter` | `api_key` | None | `GET https://openrouter.ai/api/v1/key` |
-| `openai` | `api_key` | None | `GET https://api.openai.com/v1/models` |
-| `amazon-bedrock` | `api_key` | `region` | None |
-| `google-vertex` | `api_key` | `project`, `location` | None |
-| `azure-openai-responses` | `api_key` | `resource_name` | None |
-| `cloudflare-workers-ai` | `api_key` | `account_id` | None |
-| `cloudflare-ai-gateway` | `api_key` | `account_id`, `gateway_id` | None |
-| `s3` | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
-
-- Every other `KnownProvider` of pi-ai 0.86.0 is a platform with `api_key`, no metadata and no validation: `ant-ling`, `google`, `radius`, `nvidia`, `deepseek`, `xai`, `groq`, `cerebras`, `vercel-ai-gateway`, `zai`, `zai-coding-cn`, `mistral`, `minimax`, `minimax-cn`, `moonshotai`, `moonshotai-cn`, `huggingface`, `fireworks`, `together`, `baseten`, `opencode`, `opencode-go`, `kimi-coding`, `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual`, `xiaomi`, `xiaomi-token-plan-cn`, `xiaomi-token-plan-ams` and `xiaomi-token-plan-sgp`.
-- Every other platform refuses a record.
-- A pi-ai provider that accepts an API key is a platform with the secret shape `api_key`. An OAuth login of that provider is a separate platform that no page names yet.
-- The `api_key` of `amazon-bedrock` is a Bedrock bearer token, and the `api_key` of `google-vertex` is a Google Cloud API key.
-- A platform that authenticates through the host, for example an AWS profile or Google ADC, takes no credential record.
-- Each metadata field of `amazon-bedrock`, `google-vertex`, `azure-openai-responses`, `cloudflare-workers-ai` and `cloudflare-ai-gateway` is a required nonblank string.
-- An official OpenAI record is an `openai` record.
-- The `openai-codex` probe is the only platform validator that makes a model call, and Ulrich accepts its token cost.
-- An expired `openai-codex` access token reports `unknown` without a remote call, and the probe refreshes nothing.
-- The `openai-codex` probe maps a reply to `healthy`, 401 or 403 to `unhealthy`, and every other failure to `unknown`.
-- The `openai-codex` probe builds its call through pi-ai as an execution does: it puts the stored OAuth credential into a pi credential store for that one call and lets the pi `openai-codex` provider resolve the authentication. The store lives for the call, and nothing writes back to custody.
-- A pi call with an OAuth credential carries no `apiKey` option. pi takes the API key path whenever the options hold the `apiKey` key, even with a `null` value.
-- A probe that reports `unknown` or `unhealthy` logs the failure reason without material.
-- An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
-- The LLM platform validators implement one interface, and the platform of a record selects the implementation.
-- The Copilot probe writes no minted token back to the record.
-- The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
-- `openai-compatible.baseUrl` uses `https` or `http`, with no query, no fragment and no trailing slash.
-- The base URL is fixed for the life of a revision. A metadata edit that changes it fails, and a rotation can set a new one.
-- The first revision of an `openai-compatible` credential starts with `models: []`.
-- Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`. An `id` is unique inside `models`.
-- An omitted value takes the default of pi 0.86.0: `contextWindow` `128000`, `maxTokens` `16384` and `reasoningLevels` `["off"]`.
-- `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
-- A metadata edit adds approved models to the next revision after the [provider check](worker-service.impl.md#the-provider-check).
-- A metadata edit or a rotation that drops a model fails while a default configuration or an entry names it.
-- The dependency check and metadata update commit in one transaction; a refusal lists the dependents in `details` as `{ models: [{ model, agents }] }`.
-- S3 metadata serves the healthcheck, not work destinations.
-- [Storage configuration](project-service.impl.md#storage-configuration) owns work destinations.
-- `HeadBucket` maps 200 to `ok`, 404 to a missing bucket and 403 to `unknown`.
-- A write-only key can work despite a 403 from `HeadBucket`.
-
-## The platform list
-
-- `credential.platform_list` answers the platforms of the [platform table](#platform-validators). No second constant holds the set.
-- Its route is `GET /api/credential/platform`. It uses `human` access, takes no input and has no pagination.
-- The static path takes precedence over `/:credentialName`, so custody refuses the name `platform`.
-- The answer is `{ items: [{ kind, platforms: [{ platform, secretShape, loginModes, metadataFields, verifiable }] }] }`.
-- `kind` is `git` for `github`, `storage` for `s3`, and `llm` for every other platform. The items come in the order `git`, `storage`, `llm`.
-- `loginModes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
-- `metadataFields` lists the required string fields of the metadata schema. `openai-compatible` answers `["baseUrl"]`, because `models` starts as `[]`.
-- `verifiable` is true when the validation of the platform makes a remote call.
 
 ## Suitability
 
@@ -114,7 +51,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - Custody compares the record platform with the requested platform before any remote call.
 - A differing platform answers 400 `credential.platform.mismatch`.
 - It compares no metadata and reads no secret for this comparison.
-- Remote validation uses the record's own platform validator.
+- Remote validation uses the platform validator of the component that owns the record.
 - The use check performs no remote validation at creation or rotation.
 - Services supply no secret-shape list and no capability wire value.
 
@@ -167,7 +104,7 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - `src/custody/client.ts` exports `executionCredentialStore`, `ExecutionStoreError` and `ExecutionCredentials`; handover schemas remain in `contract.ts`.
 - The methods are `read(providerId)`, `list()`, `modify(providerId, fn)` and `delete(providerId)`.
 - The [Worker Service](worker-service.impl.md#the-credential-store-of-an-execution) defines the selection and visibility of the execution view.
-- `list()` returns the selected non-secret pair of adapter id and credential type, and custody derives that type from the platform of the record.
+- `list()` returns the selected non-secret pair of adapter id and credential type, and custody takes that type from the secret shape that the owning component declares for the platform of the record.
 - The view reads the revision that the execution pins.
 - `modify()` serializes on the pinned revision and writes the pi-ai result in place.
 - The view refuses `delete()`.
@@ -207,86 +144,28 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 
 ## Operations
 
-- Custody declares `credential.*` operations in its own `contract.ts`, under `/api/credential`.
-- Credential management uses the `human` access policy.
-- `credential.create` accepts a record of every platform whose secret shape is not `oauth`.
-- `credential.login` obtains a record of a platform whose secret shape is `oauth`.
-- `credential.rotate` adds a revision without a remote call.
-- `credential.revoke` ends one revision at once.
-- `credential.archive` checks every dependent, ends every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
-- `credential.list` leaves out an archived name unless the query `includeArchived` is `true`. `credential.get` answers an archived name.
-- `credential.get` and `credential.list` return metadata and no secret.
-- The resource healthcheck validates a record on demand.
-
-## The OAuth login
-
-- Custody calls `models.login(providerId, "oauth", interaction)` of pi-ai over its own credential store.
-- The [platform table](#platform-validators) determines whether OAuth is accepted.
-- A login session is a custody runtime record with identity `login_session_<ulid>`.
-- It holds platform, mode, initial human identity, credential name, state, address, code, failure reason and expiry.
-- Expiry falls 15 minutes after start.
-- The interaction adapter answers `select` with `browser` or `device_code`; an unsupported option fails the session.
-- It records `auth_url` as the address and `device_code` as the code and address.
-- It records `info` and `progress` as the last message.
-- The GitHub Copilot login of pi-ai first asks for a GitHub Enterprise domain with the placeholder `company.ghe.com`. While the session holds no address, the adapter answers that one prompt with the empty value, which selects github.com.
-- Every other `manual_code`, `text` or `secret` prompt waits for a supplied value until expiry.
-- `credential.login` is a unary mutation and answers session identity, address, code and expiry.
-- `credential.login_code` is a unary mutation with session identity and value; it answers 409 when no value is awaited.
-- `credential.login_status` is a unary read with session identity; it answers state, last message and failure reason.
-- A platform with one mode ignores the requested mode.
-- A browser callback listener belongs to pi-ai, not the Gateway, and lasts for the session.
-- The server sets no `PI_OAUTH_CALLBACK_HOST` override.
-- A remote browser can return its redirect URL or code through `credential.login_code` when its loopback callback fails.
-- Device mode needs no listener; pi-ai polls until success, failure or expiry.
-- Custody permits at most one pending session per platform and human identity; another start answers 409.
-- `CustodyComponent` takes a required `store`, an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot and OpenAI Codex providers, and an optional `now` clock.
-- Custody keeps `refresh`, `access` and `expires` of a pi OAuth credential and drops every other field before validation. The OpenAI Codex login adds `accountId`, and the runtime derives it from the access token.
-- Completion writes the credential inside the pi-ai `CredentialStore.modify` call. The transaction checks the session state again, so an expired or failed session stores nothing. The session ends only after the commit.
-- The session record holds no token, and a failed or expired session stores nothing.
-- The login flow proves the OAuth record; no extra validation call follows it.
-- Output exposes the address and code that the human needs, never a token.
-
-## The resource healthcheck
-
-- The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline and concurrency bounds.
-- The [platform validators](#platform-validators) supply the probes.
-- A supported platform with no remote call reports `unknown`.
-- A forbidden probe proves no invalid credential.
-- No check refreshes an OAuth record; an expired access token reports `unknown` without a remote call.
-- Credential and agent provider healthchecks share an implementation where appropriate, not ownership.
-- Custody records each probe against the credential store record and stores no check result.
-- The GitHub rate-limit probe reports `rate-limit read` and spends no rate limit.
-
-## The dashboard surface
-
-- A credential row holds its own actions: Verify, Rotate, Edit metadata for a platform with metadata, and Revisions. No action covers every record at once.
-- Verify reads the entry of the record from `GET /api/healthcheck`. The server exposes no per-record probe.
-- The create form and the list filter read the [platform list](#the-platform-list). They offer every platform in a searchable list, grouped by kind, and the filter offers `All platforms` first.
-- The create form renders one text input for each name of `metadataFields`.
-- Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
-- An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
-- The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
-- Revoke sits on the revision list of the record and needs a confirmation.
-- Archive sits on the detail of the record and needs a confirmation.
-- The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers only Revisions.
-- An archived row shows its archive time, the latest `endedAt` of its revisions.
+- Custody declares no route and no operation of its own.
+- Custody exposes the record functions that the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) of each component calls: create, list, get, rotate, metadata edit, revoke and archive.
+- A list and a get take the platform set of the calling component, so a component reads only its own records.
+- `rotate` adds a revision without a remote call.
+- `revoke` ends one revision at once.
+- `archive` checks every dependent, ends every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
+- A list leaves out an archived name unless the query `includeArchived` is `true`. A get answers an archived name.
+- A get and a list return metadata and no secret.
 
 ## Tests
 
-- Tests cover duplicate names at creation, login start and login commit, including creation retry after restart.
-- Tests assert the platform list against the platform table, and the refusal of the name `platform`.
-- Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and platform-only suitability.
+- Tests cover duplicate names at creation and at the commit of a first revision, including creation retry after restart.
+- Tests assert the refusal of the names `login` and `platform`.
+- Tests assert platform-only suitability, and that a list and a get of one component answer no record of another component.
 - Tests assert no remote call on creation or rotation, and no secret in record answers.
-- Tests cover a model removal and a credential archive with dependents and concurrent changes.
-- Tests cover every platform probe, S3 status mapping, expired OAuth, forbidden probes and attribution without stored results.
+- Tests cover a credential archive with dependents and concurrent changes.
 - Tests preserve names and binding references across rotation.
 - A test covers two rotations that name one expected revision, and it asserts that the second one answers 409 `credential.revision.conflict`. A test covers the same case for two metadata edits.
-- Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, the metadata copy and replacement at rotation, and a `baseUrl` change at rotation alone.
+- Tests cover the rotation overlap, the pin at first use, the drain after the last pin, the revoke of a pinned revision, the refusal of a revoke of the newest live revision, and the metadata copy and replacement at rotation.
 - Tests cover the handover round trip, another execution identity, truncated ciphertext and a refresh report without a live execution.
 - Tests assert that `release` refuses a consumed grant, a fabricated grant and an inbound operation under another service identity, and that `drop()` clears the buffer after a success and after a failure.
 - Tests cover store isolation, `undefined` for another adapter id, serialized refresh and refusal of deletion.
-- Tests cover login completion, manual code, conflicting sessions and expiry without stored material.
-- A test runs the built-in pi-ai GitHub Copilot provider offline to its first prompt and asserts the enterprise-domain placeholder.
 - Tests assert no secret in outputs, logs, transcripts or errors.
 
 ## Serialized credential budget
@@ -294,5 +173,5 @@ The platform validators use the credential contracts of `@earendil-works/pi-ai` 
 - For `api_key` and `oauth`, the normalized pi-ai credential occupies at most 48,915 UTF-8 bytes of canonical JSON. This shared shape constraint excludes `s3_access_key`.
 - The budget derives from the 65,536-byte body limit of the [credential report](worker-service.impl.md#the-credential-handover). For `C` credential bytes, the compact report body occupies `97 + 4 × ceil((C + 162) / 3)` bytes: 146 bytes of report metadata and JSON structure, a 16-byte authentication tag, base64 expansion and 97 bytes of outer JSON, execution identity and encoded nonce. A 48,915-byte credential produces 65,533 bytes; one additional credential byte produces 65,537 bytes.
 - Enforce the budget before creation or rotation commits, before OAuth login persistence, during execution-store construction and refresh normalization, and when accepting a decrypted refresh report. An oversized replacement changes neither stored material nor execution-store state.
-- Creation and rotation use HTTP 400 `credential.input.invalid`. OAuth completion follows the existing sanitized failed-session path and stores nothing. Execution-store normalization rejects locally without material in the error. Custody rejects an oversized decrypted report with HTTP 400 `custody.handover.report_invalid`.
+- Creation and rotation use HTTP 400 `credential.input.invalid`. [OAuth completion](llm.impl.md#the-oauth-login) follows the existing sanitized failed-session path and stores nothing. Execution-store normalization rejects locally without material in the error. Custody rejects an oversized decrypted report with HTTP 400 `custody.handover.report_invalid`.
 - Boundary tests cover both credential shapes, aggregate OAuth fields, multibyte UTF-8 and JSON escaping. They prove the maximum admitted credential completes handover and the mandatory release report through HTTP, and the next serialized byte refuses without a write or replacement. Gateway still refuses an oversized HTTP request with 413 before Custody validation.

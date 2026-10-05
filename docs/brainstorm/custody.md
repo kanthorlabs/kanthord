@@ -7,9 +7,11 @@ title: Custody
 ## Scope
 
 [Custody](custody.vocabulary.md#custody) is a shared component that every service uses, not a service.
-It owns resource credentials and their protection.
-Custody manages credentials: it stores them, validates them with its platform probe, refreshes them and releases their material.
-It performs no operation of a service.
+It owns the protection of resource credentials.
+Custody protects credentials: it stores their revisions, refreshes them and releases their material.
+It knows no [platform](architecture.vocabulary.md#platform).
+The component that owns a platform validates its records, under [architecture.md](architecture.md#shared-components).
+Custody performs no operation of a service.
 The service that owns the entity of a release enforces its [system authorization](project-service.vocabulary.md#system-authorization).
 The human configuration of an [inbound](intake-service.vocabulary.md#inbound) authorizes the release of its credential, and the [Intake Service](intake-service.md#boundary) performs that release.
 Custody grants no authority through possession of a credential reference.
@@ -21,11 +23,11 @@ Custody grants no authority through possession of a credential reference.
 - A record belongs to no project and can serve more than one project.
 - A credential reaches an operation through the entity that performs it, never through a direct relationship with a project.
 - That entity holds a [credential reference](custody.vocabulary.md#credential-reference).
-- Each record names its [platform](custody.vocabulary.md#platform), and its name is its only human label.
-- Its platform defines its secret shape, its metadata and its validation. Each platform holds exactly one secret shape, and a second shape for the same remote is another platform.
-- Custody refuses an unsupported platform.
+- Each record names its [platform](architecture.vocabulary.md#platform), and its name is its only human label.
+- The component that owns the platform defines its secret shape, its metadata and its validation. Each platform holds exactly one secret shape, and a second shape for the same remote is another platform.
+- The component refuses a platform that it does not own.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
-- An OAuth credential enters only through a [login session](custody.vocabulary.md#login-session) on the server.
+- An OAuth credential enters only through a [login session](llm.vocabulary.md#login-session) of the LLM component on the server.
 - Creation and rotation make no remote call.
 - A rotation adds the next revision under the same name and, in the same transaction, drains every older live revision that no live execution pins. A pinned older revision stays live until custody drains it or a human revokes it.
 - A reference names the credential by its name and never a revision.
@@ -79,17 +81,3 @@ Custody grants no authority through possession of a credential reference.
 - The [execution store view](custody.impl.md#the-credential-store-of-an-execution) supplies the native runtime.
 - The [Intake Service](intake-service.impl.md#the-credential-release-of-an-inbound) takes one release for each remote call of an inbound.
 - The Mission Service authorizes a presigned storage grant, and the [Intake Service](intake-service.impl.md#presigned-storage-grants) signs it.
-
-## Login sessions
-
-- A login session offers the interaction modes that its platform supports.
-- It states the address and code that the human needs.
-- The human completes the interaction and returns a provider code when necessary.
-- A failed or expired session stores nothing.
-
-## Resource healthcheck
-
-Custody owns the [resource healthcheck](architecture.vocabulary.md#resource-healthcheck) of a credential store record.
-Its [platform validator](custody.vocabulary.md#platform-validator) validates the record on demand.
-The [implementation](custody.impl.md#the-resource-healthcheck) defines each remote probe and its limits.
-A healthcheck changes no credential and authorizes no operation.

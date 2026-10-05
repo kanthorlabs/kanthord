@@ -21,7 +21,7 @@ The store holds one GitHub key that the repository bindings of `atlas` and `beac
 
 One revision of a credential: its secret, platform, metadata, times and revision number.
 Record `credential_01J8Z3N5K7Q2W4E6R8T0Y2V4X6` has name `copilot-login` and platform `github-copilot`.
-Its platform gives it the secret shape `oauth`.
+The LLM component gives that platform the secret shape `oauth`.
 The closed set of secret shapes is:
 
 - `api_key`
@@ -54,31 +54,6 @@ A second creation with name `atlas-github` returns the identity of the record th
 The reference through which an entity reaches a credential store record.
 Repository binding `kanthord-repo` and agent provider `openai-org` each name their own credential.
 
-## platform
-
-The external system at which a credential authenticates.
-The set is closed and the [platform table](custody.impl.md#platform-validators) holds it:
-
-- `github`
-- `s3`
-- `openai-compatible`
-- every `KnownProvider` of `@earendil-works/pi-ai` at 0.86.0, for example `openai`, `anthropic`, `github-copilot` and `groq`
-
-A repository binding names `github` explicitly; an address proves no platform.
-Each provider of an agent provider maps to one platform.
-The pi adapter id `openai-compatible` names no platform.
-The credential's platform and metadata identify the external system.
-
-## platform kind
-
-The group of a platform in the platform list: `git`, `llm` or `storage`.
-`github` is a `git` platform, `s3` is a `storage` platform, and `groq` is an `llm` platform.
-
-## platform validator
-
-The custody part that declares the accepted types, the metadata schema and the validation of one platform.
-The platform validator of `github` accepts `api_key` and validates a record with `GET https://api.github.com/rate_limit`.
-
 ## suitability
 
 Custody's check that the credential platform equals the platform of its use.
@@ -100,22 +75,3 @@ An execution requests a GitHub read for another node, so the facility refuses it
 The encrypted transfer of execution credentials to the kanthord worker application that hosts the execution.
 An execution on `build-02` receives the credential of its effective agent provider.
 The application reports refreshed OAuth material and discards the credentials at execution end.
-
-## login session
-
-One human attempt to obtain an OAuth credential on the server.
-Its closed state set is:
-
-- `pending`
-- `completed`
-- `failed`
-- `expired`
-
-Its closed mode set is:
-
-- `browser`
-- `device`
-
-A platform offers only the modes that it supports.
-Ulrich starts `copilot-login` in device mode and enters code `ABCD-1234` at `https://github.com/login/device`.
-Custody stores the credential when the session completes.

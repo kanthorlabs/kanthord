@@ -67,6 +67,7 @@ An agent holds no repository credential.
 - An absent or disabled enablement denies use.
 - An enablement holds one or more named agent providers and the default configuration that a human selects.
 - Each agent provider pairs a provider with a credential store record.
+- The Worker execution obtains the model runtime of an agent provider from the [LLM component](llm.md#model-connector).
 - Its name is unique inside the enablement, and its provider never changes.
 - Another provider requires another agent provider.
 - A credential change creates a revision.

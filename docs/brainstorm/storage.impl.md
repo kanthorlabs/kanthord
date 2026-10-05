@@ -8,6 +8,29 @@ This file holds the mechanisms that realize [storage.md](storage.md).
 This file is not a design document, and `storage.md` stays the single source of truth.
 A mechanism here never overrides a rule there.
 
+The module lives in `src/storage/`.
+
+## Platform validators
+
+The component owns a dedicated platform validator for every platform of the Storage component.
+
+| Platform | Secret shape | Metadata | Validation |
+| --- | --- | --- | --- |
+| `s3` | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
+
+- The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
+- S3 metadata serves the healthcheck, not work destinations.
+- [Storage configuration](project-service.impl.md#storage-configuration) owns work destinations.
+- `HeadBucket` maps 200 to `ok`, 404 to a missing bucket and 403 to `unknown`.
+- A write-only key can work despite a 403 from `HeadBucket`.
+- The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
+
+## Operations
+
+- The component declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) under the prefix `storage`.
+- `storage.credential.create` accepts a record of every platform of the component.
+- `storage.credential.get` answers the record with `bindings`, the list of `{ projectId, projectName, bindingId, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
+
 ## The S3 implementation
 
 The S3 implementation uses `@aws-sdk/client-s3` at 3.1139.0.
@@ -25,3 +48,4 @@ The [retry rules](storage.md#result-classes) use the deadline that the caller su
 
 - Tests cover the presigned PUT and GET at the recorded version, the metadata read, the delete and the not-found read-back.
 - Tests map a store failure with a status and a lost answer to `storage.platform.s3.<class>` with the status or null.
+- Tests cover the S3 probe and its status mapping.

@@ -28,7 +28,7 @@ The seven services are logical boundaries inside one server.
 A connector is a component through which a caller performs an authenticated operation that the Project Service authorizes.
 The set is closed and it holds three values.
 
-- **model connector**: the Worker Service owns it; it performs a model inference call.
+- **model connector**: the [LLM component](llm.md#model-connector) owns it; it builds the model runtime of an agent provider and performs its model inference calls.
 - **repository connector**: the Repository component owns it; it performs a network git read and a network git write.
 - **platform connector**: the Repository component owns it; it performs every operation on the API of an external platform through the platform implementation of that platform.
 
@@ -143,6 +143,23 @@ The type of a credential is a separate matter, and no approved page closes that 
 
 - an OAuth credential, which does not imply a person
 - an API key, which authorizes a whole account
+
+## platform
+
+The external system at which a credential authenticates.
+The set is closed. Each platform belongs to exactly one shared component, and that component holds its platform table:
+
+- the [LLM platforms](llm.vocabulary.md#llm-platform) of the LLM component, for example `anthropic`, `github-copilot` and `openai-compatible`
+- `github` of the [Repository component](repository.impl.md#platform-validators)
+- `s3` of the [Storage component](storage.impl.md#platform-validators)
+
+A repository binding names `github` explicitly; an address proves no platform.
+The name `github-copilot` is an LLM platform, so a shared prefix decides no owner.
+
+## platform validator
+
+The part of a shared component that declares the secret shape, the metadata schema and the validation of one platform.
+The platform validator of `github` in the Repository component accepts `api_key` and validates a record with `GET https://api.github.com/rate_limit`.
 
 ## container
 

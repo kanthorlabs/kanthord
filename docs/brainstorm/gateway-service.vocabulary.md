@@ -11,7 +11,7 @@ This file is not a design document, and `gateway-service.md` stays the single so
 
 The resource report that the [Gateway Service](gateway-service.md#health-report-and-liveness-answer) answers to a human.
 
-A human requests a health report and reads the entry for `openai-main` under the shared component Custody.
+A human requests a health report and reads the entry for `openai-main` under the shared LLM component.
 
 ## liveness answer
 

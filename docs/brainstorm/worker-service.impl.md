@@ -15,7 +15,7 @@ The workers `claude@1` and `opencode@1` follow with the registration of an exter
 The first version supplies `general@1` with the one agent `swe@1` and `reviewer@1` with the one agent `re@1`.
 `tdd@1` follows when the runtime hosts several agents in one execution.
 The native agent `swe@1` of `general@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
-The adapter builds the runtime with `ModelRuntime.create({ credentials })` over the credential store of the execution and the session with `createAgentSession({ modelRuntime })`.
+The adapter obtains the runtime from the [model connector](llm.impl.md#the-model-connector) of the LLM component over the credential store of the execution, and it builds the session with `createAgentSession({ modelRuntime })`.
 The first version supports a native agent at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
 Before the first import of `@earendil-works/pi-coding-agent`, it sets `PI_OFFLINE=1` and sets `PI_CODING_AGENT_DIR` to `pi/` of the state directory, so pi downloads no tool binary.
@@ -61,7 +61,7 @@ Every runtime setup call carries an abort signal with a deadline.
 - Resolution makes no network call.
 - The instance healthcheck reports whether the effective configuration resolves.
 
-Provider definitions contain no auth types; [custody](custody.impl.md#platform-validators) owns those types and suitability.
+Provider definitions contain no auth types; the [LLM component](llm.impl.md#platform-validators) owns those types, and custody owns suitability.
 
 - A provider is a member of the [agent provider set](worker-service.vocabulary.md#agent-provider).
 - Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
@@ -82,7 +82,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 | Property          | Schema                                                            |
 | ----------------- | ----------------------------------------------------------------- |
 | `agentProvider`   | `string`; the name of an agent provider of the enablement         |
-| `provider`        | `string`, enum of every `llm` platform of the [platform list](custody.impl.md#the-platform-list) |
+| `provider`        | `string`, enum of every platform of the [LLM platform list](llm.impl.md#platform-validators) |
 | `credential`      | `string`; a credential name                                       |
 | `modelIdentifier` | `string`                                                          |
 | `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
@@ -90,20 +90,6 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
 - It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
 - JSON Schema validates no cross-field lookup; the Worker Service enforces it.
-
-## The OpenAI-compatible provider
-
-- The Worker Service builds the pi provider from the credential metadata of the resolved revision.
-- It calls `createProvider` with id `openai-compatible`, the agent provider name and metadata `baseUrl`.
-- It supplies `auth: { apiKey: envApiKeyAuth("<agent provider name> API key", []) }` and `api: openAIResponsesApi()`.
-- The environment-variable list is empty; the execution store supplies the credential.
-- Each metadata model becomes a pi model with provider `openai-compatible` and the metadata base URL.
-- The model carries `api: "openai-responses"`, `contextWindow`, `maxTokens` and the established reasoning levels.
-- The model builder applies the defaults of pi 0.86.0 to each value that the metadata omits: `contextWindow` `128000`, `maxTokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
-- Input defaults to `["text"]`, and all cost rates are zero.
-- The model list enters `createProvider`, and `setProvider` registers the provider.
-- The adapter builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
-- Provider construction performs no write-time remote call.
 
 ## The provider check
 
@@ -122,7 +108,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - HTTP 400 reports invalid input or an unsuitable credential; HTTP 404 reports an unknown credential.
 - Error codes use the prefix `worker.provider.*`.
 - The answer holds no key and pre-fills model ids, not limits or reasoning levels.
-- A human approves models through a [credential metadata revision](custody.impl.md#platform-validators).
+- A human approves models through a [credential metadata revision](llm.impl.md#platform-validators).
 
 ## Agent provider healthcheck
 
@@ -132,7 +118,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 - Its capability is `model-list read`; it spends one request and no inference token.
 - `GET /models` proves model-list access only, not inference readiness or model suitability.
 - The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
-- [Custody healthcheck limits](custody.impl.md#the-resource-healthcheck) govern forbidden probes, unavailable probes and OAuth expiry without refresh.
+- [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden probes, unavailable probes and OAuth expiry without refresh.
 - Shared probe code changes no owner.
 
 ## Configuration tests
@@ -318,15 +304,8 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - Every native inference call, including compaction and retries, resolves auth through the [custody execution store](custody.impl.md#the-credential-store-of-an-execution).
 - The view exposes only the credential that the effective agent provider names, at the revision that the execution pins, under the pi adapter id.
 - `read(providerId)` answers `undefined` for every other id.
-- The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed with `worker.runtime.setup_refused`, whose `details.reason` is `model_unknown`, `reasoning_effort_unsupported`, `credential_absent` or `credential_revision_mismatch`.
+- The adapter passes the model identifier and the reasoning effort of the effective configuration to the [model connector](llm.impl.md#the-model-connector), which maps them onto the pi model and fails closed with `worker.runtime.setup_refused`.
 - The store holds the credential of one execution, so no credential crosses executions.
-- The adapter puts the metadata of the setup into the `env` of the API key credential that the store answers. It maps each metadata field to the pi-ai variable name:
-  - `amazon-bedrock`: `region` to `AWS_REGION`.
-  - `google-vertex`: `project` to `GOOGLE_CLOUD_PROJECT` and `location` to `GOOGLE_CLOUD_LOCATION`.
-  - `azure-openai-responses`: `resource_name` to `AZURE_OPENAI_RESOURCE_NAME`.
-  - `cloudflare-workers-ai`: `account_id` to `CLOUDFLARE_ACCOUNT_ID`.
-  - `cloudflare-ai-gateway`: `account_id` to `CLOUDFLARE_ACCOUNT_ID` and `gateway_id` to `CLOUDFLARE_GATEWAY_ID`.
-- The `env` stays inside the adapter. The custody execution store and a refresh report never carry it.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
 - A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.

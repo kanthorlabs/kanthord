@@ -10,6 +10,25 @@ A mechanism here never overrides a rule there.
 
 The implementation uses `simple-git` at 3.36.0.
 
+## Platform validators
+
+The component owns a dedicated platform validator for every platform of the Repository component.
+
+| Platform | Secret shape | Metadata | Validation |
+| --- | --- | --- | --- |
+| `github` | `api_key` | None | `GET https://api.github.com/rate_limit` |
+
+- A second shape for GitHub is another platform, for example `github-app`.
+- The GitHub rate-limit probe reports `rate-limit read` and spends no rate limit.
+- Tests cover the GitHub probe, the refusal of a platform of another component and the `bindings` list of a get.
+- The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
+
+## Operations
+
+- The component declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) under the prefix `repository`.
+- `repository.credential.create` accepts a record of every platform of the component.
+- `repository.credential.get` answers the record with `bindings`, the list of `{ projectId, projectName, bindingId, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
+
 ## Platform connector and platform implementations
 
 The GitHub implementation uses `octokit` at 5.0.5 with `X-GitHub-Api-Version: 2022-11-28`.
