@@ -1025,6 +1025,7 @@ The import boundaries follow the public files.
 - Archive sits on the detail of the record and needs a confirmation.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers no row action. The row still opens its detail.
 - An archived row shows its archive time, the latest `endedAt` of its revisions.
+- A credential row shows the newest live revision as `(v<revision>)` next to the credential name. An archived row shows no revision.
 - The detail of a Repositories record lists the bindings that name it. Each binding links to the Bindings tab of its project.
 
 ## The dashboard navigation

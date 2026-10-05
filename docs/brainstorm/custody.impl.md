@@ -154,10 +154,6 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - A list leaves out an archived name unless the query `includeArchived` is `true`. A get answers an archived name.
 - A get and a list return metadata and no secret.
 
-## The credential screens of the dashboard
-
-- The LLM, Repository and Storage credential lists show the newest live revision of each row as `(v<revision>)` next to the credential name. An archived row shows no revision.
-
 ## Tests
 
 - Tests cover duplicate names at creation and at the commit of a first revision, including creation retry after restart.
