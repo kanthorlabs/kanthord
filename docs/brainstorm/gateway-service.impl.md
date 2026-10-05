@@ -31,7 +31,7 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts a loopback address only.
 - `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
 - `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
-- `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to an empty array.
+- `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to `http://127.0.0.1:27182` and `http://localhost:27182`, the origins of the dashboard.
 - `gateway.tokenLifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
 - `gateway.tokenVersion` holds the version of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
 - `gateway.idempotencyTtl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
