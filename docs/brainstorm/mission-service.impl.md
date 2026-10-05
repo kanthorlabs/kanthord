@@ -564,6 +564,11 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - A write with no structure or content change answers the current mission version with empty arrays.
 - A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit or an objective move, or the actor and the reason of a retirement that inserts no node revision. `retired_at` keeps the time of every retirement.
 
+## The mission screen of the dashboard
+
+- The Mission tab always offers Import, because an import updates the nodes that it names and creates the others.
+- A successful apply closes the import sheet. A toast confirms the import with the new mission version and the count of new nodes.
+
 ## Authorization integration
 
 - The Mission Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a `FrozenAction`, a request evidence, an evidence asset and the presigned PUT of a new asset. The Mission Service authorizes the presigned PUT inside `mission.evidence.submit`, before the asset row exists: it checks the live claim and the storage binding of the pinned revision, refuses an asset identity that an asset row holds, and derives the object key from the claim and the asset identity that the submission allocates.
