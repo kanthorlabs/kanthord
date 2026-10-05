@@ -82,7 +82,7 @@ Provider definitions contain no auth types; [custody](custody.impl.md#platform-v
 | Property          | Schema                                                            |
 | ----------------- | ----------------------------------------------------------------- |
 | `agentProvider`   | `string`; the name of an agent provider of the enablement         |
-| `provider`        | `string`, enum `github-copilot`, `openai-codex`, `anthropic`, `openai-compatible`, `openrouter` |
+| `provider`        | `string`, enum of every `llm` platform of the [platform list](custody.impl.md#the-platform-list) |
 | `credential`      | `string`; a credential name                                       |
 | `modelIdentifier` | `string`                                                          |
 | `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
@@ -263,7 +263,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The credential revision is the revision that the handover of the execution pins for the credential name of the effective configuration. The read creates no pin and selects no other revision.
 - An execution that pins no revision of that name answers 409 `worker.execution.credential_not_pinned`. A revoked pinned revision answers 409 `credential.revision.revoked`.
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
-- `credentialId` is the row identity of the pinned revision. `metadata` holds `baseUrl` and `models` of its metadata for an `openai-compatible` provider, and it is null for every other provider.
+- `credentialId` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resourceBudget` is the override of the pinned worker binding revision, or the default of the worker.
 - Each entry of `repositories` holds `{ bindingId, name, address, strategy: { baseBranch }, projectPrompt }`.
 - For an objective, `repositories` holds the repository binding that the pinned node revision names.
@@ -320,6 +320,13 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - `read(providerId)` answers `undefined` for every other id.
 - The adapter maps the model identifier and the reasoning effort of the effective configuration onto the pi model and fails closed with `worker.runtime.setup_refused`, whose `details.reason` is `model_unknown`, `reasoning_effort_unsupported`, `credential_absent` or `credential_revision_mismatch`.
 - The store holds the credential of one execution, so no credential crosses executions.
+- The adapter puts the metadata of the setup into the `env` of the API key credential that the store answers. It maps each metadata field to the pi-ai variable name:
+  - `amazon-bedrock`: `region` to `AWS_REGION`.
+  - `google-vertex`: `project` to `GOOGLE_CLOUD_PROJECT` and `location` to `GOOGLE_CLOUD_LOCATION`.
+  - `azure-openai-responses`: `resource_name` to `AZURE_OPENAI_RESOURCE_NAME`.
+  - `cloudflare-workers-ai`: `account_id` to `CLOUDFLARE_ACCOUNT_ID`.
+  - `cloudflare-ai-gateway`: `account_id` to `CLOUDFLARE_ACCOUNT_ID` and `gateway_id` to `CLOUDFLARE_GATEWAY_ID`.
+- The `env` stays inside the adapter. The custody execution store and a refresh report never carry it.
 - Environment hygiene of the pi process belongs to the adapter, and the process inherits no provider environment variable.
 - The Worker Service supplies the authorization function of the [protected facility](custody.impl.md#the-protected-facility) for a model inference credential, through the worker binding of the claim.
 - A broken chain of a model inference credential answers 403 `worker.authorization.refused` with `details: { reason }`, where `reason` is `binding_mismatch`, `binding_removed`, `binding_disabled` or `no_native_agent`.
