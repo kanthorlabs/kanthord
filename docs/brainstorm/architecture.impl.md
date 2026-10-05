@@ -1021,6 +1021,8 @@ The import boundaries follow the public files.
 - Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
 - An OAuth platform runs the login session in place of a secret entry, and the list holds no separate sign-in action.
 - The sign-in mode defaults to the browser mode when the platform offers one. The human can select the headless device mode instead.
+- While a login session is pending, the sign-in panel shows a live status line with a spinner and the last message of the session. The code form stays closed under `The callback failed?`.
+- While a login session is pending, the panel offers no control that ends or leaves the sign-in. A credential create sheet ignores Escape and an outside click, and it shows no close button.
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers no row action. The row still opens its detail.
