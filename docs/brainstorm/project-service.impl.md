@@ -263,6 +263,7 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 
 - The form of a repository binding holds two sections. `Repository` holds the connection. `Project policy` holds the base branch, the action, `follows` and the project prompt.
 - The row of a repository binding shows only the connection: the address, the platform and the credential.
+- The credential field of a repository binding is a searchable list of the live Repository credential records. It reads `repository.credential.list` and hides an archived record. A name outside the list cannot be entered.
 - The row of a repository binding holds a Verify icon. It calls `project.binding.verify` and shows one badge for the address and one badge for the credential.
 
 ## Repository layout, build, test and release
