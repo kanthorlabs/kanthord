@@ -58,8 +58,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] POSTPONED 2026-09-17 by Ulrich. Design the memory of a native agent after a worker and an agent work end to end. `worker-service.md` keeps its Memory section until then.
 
-- [ ] Added 2026-10-04 from the platform list. The `provider` enum of an agent provider holds only `github-copilot`, `openai-codex`, `anthropic`, `openai-compatible` and `openrouter`. A credential of another `llm` platform, for example `openai` or `groq`, serves no agent. Decide which platforms an agent provider accepts.
-
 #### Next phase
 
 After the first native-agent worker runs the acceptance path.
