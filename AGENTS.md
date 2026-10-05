@@ -108,6 +108,8 @@ Several agents edit the same working tree in parallel, for example `docs/brainst
 - `make up` and `make down` start and stop both sides. Pids and logs go to `.dev/`.
 - `make sync-all` publishes the submodules. The `tree-*` targets manage worktrees of the submodules only.
 - The daemon listens on port 31415. The web app listens on port 27182 at `http://localhost:27182`.
+- Check the web app in a browser with the `ego-browser` skill. The `chrome-devtools` MCP server cannot connect, because another Chrome holds port 9222.
+- Emulate a phone width with `page.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })`. Ask Ulrich for a human token when the saved instance refuses its token.
 - Both submodules pin `pnpm@11.24.0`. Keep `minimumReleaseAge` in `.npmrc`.
 - pnpm forwards `--` literally. Write `pnpm run X --flag`, not `pnpm run X -- --flag`.
 - The `.githooks/pre-commit` hook refuses a root commit whose staged gitlink is not on the `origin/main` of that submodule. Move a root pointer only after the submodule commit is pushed.
