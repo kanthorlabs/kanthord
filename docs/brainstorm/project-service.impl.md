@@ -74,6 +74,7 @@ A binding identity and a project identity follow the identity convention of [arc
 - A consumer that finds the directory absent creates it before use.
 - `project.get` and each item of `project.list` answer `workspaceDirectory`, the absolute path of the workspace directory.
 - No table holds the path. A read derives it from the project identity and the state directory.
+- The project details view of the dashboard shows `workspaceDirectory` as an absolute path.
 
 ## The resource identity
 
