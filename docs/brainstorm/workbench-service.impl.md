@@ -46,7 +46,7 @@ Every operation has `human` access.
 
 | Operation ID | Route | Lifetime | Answer |
 | --- | --- | --- | --- |
-| `workbench.session.list` | `GET /api/workbench/session` with `agentName` | `unary` | The session list of the agent. |
+| `workbench.session.list` | `GET /api/workbench/session` with an optional `agentName` | `unary` | The session list of every agent, or of one agent. Each item carries `agentName`. |
 | `workbench.session.create` | `POST /api/workbench/session` with `{ agentName, agentProvider, modelIdentifier, reasoningEffort }` | `unary` | The new session. |
 | `workbench.session.get` | `GET /api/workbench/session/:sessionId` | `unary` | The configuration, the entries of the completed runs and `runActive`. |
 | `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. 409 `workbench.session.run_active` while a run is active. |

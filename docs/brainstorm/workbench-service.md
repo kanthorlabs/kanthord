@@ -32,6 +32,7 @@ It describes no mechanism of another service.
 - The Agent component validates every configuration of a workbench session as a complete [entry](worker-service.vocabulary.md#entry).
 - The working directory of a workbench session is the workbench directory of its agent.
 - The session list of an agent lists the sessions that the runtime stores for that workbench directory.
+- The session list of the Workbench lists the sessions of every agent.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
 ## Prompt
