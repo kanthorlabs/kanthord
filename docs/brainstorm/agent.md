@@ -58,6 +58,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - An agent provider has no independent disablement.
 - The agent page of the dashboard adds an agent provider to an existing enablement. The human names it and picks a credential, and the provider is the platform of that credential.
 - The agent page offers only a credential that no agent provider of the enablement names. With no such credential, it shows only `No credential is left.` and one action to add a credential.
+- The agent page edits the default configuration with the same pickers as a new workbench session. A save keeps the agent providers unchanged.
 - Each agent provider row of the agent page holds Remove behind a confirmation. Remove stays disabled on the last agent provider and on the agent provider of the default configuration.
 - Disablement refuses every later resolution, including a complete entry, so the instance healthcheck fails and no claim follows.
 - The worker binding remains, and disablement recalls no handover in flight.
