@@ -73,9 +73,9 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
 - A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `poll`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
-- A release for a workbench session names the human identity of the message that started the turn as the requester, the workbench session as the entity and `workbench` as the operation.
+- A release for a workbench session names the human identity of the message that started the run as the requester, the workbench session as the entity and `workbench` as the operation.
 - The Workbench Service grants that release while the workbench session exists, the enablement of its agent is enabled and the configuration of the session is valid.
-- A turn whose human identity no longer passes the Gateway checks stops at its next release.
+- A run whose human identity no longer passes the Gateway checks stops at its next release.
 - Human and machine identities pass the checks of [Gateway identity verification](gateway-service.impl.md#the-jwt).
 - A service identity passes `isServiceIdentity` of the kernel.
 - An execution identity resolves through the Scheduler Service to the node of its live claim.

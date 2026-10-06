@@ -13,3 +13,9 @@ An agent session that a human drives with one agent of the catalog, through the 
 The term names no closed set.
 Ulrich picks `swe@1` on the Agents page and starts a workbench session in the chat.
 In that session, `swe@1` pulls "Add password reset" of "Account recovery" and reads the plan of "Billing".
+
+## run
+
+The work of the agent on one human message of a workbench session.
+The term names no closed set.
+Ulrich writes "List the open objectives of Account recovery". The run of `swe@1` on that message holds 3 turns of pi and ends with the list.
