@@ -15,6 +15,9 @@ A mechanism here never overrides a rule there.
 - The list calls `SessionManager.list` of pi with that directory.
 - Each item of the list answers `id`, `name`, `created`, `modified`, `messageCount` and `firstMessage`.
 - A resume opens the session whose `id` the human picks.
+- The `model_change` and `thinking_level_change` entries of pi carry `modelIdentifier` and `reasoningEffort`. pi writes them at each change of the model or of the thinking level.
+- A `custom` entry of pi with `customType` `kanthord.workbench.configuration` carries `{ agentProvider }`. The service appends it at the session create and at each change of `agentProvider`.
+- A resume takes the last entry of each kind, and the Agent component validates the three values as a complete entry.
 - The credential view of a workbench session exposes only the credential of the agent provider that the configuration of the session names.
 
 ## Prompt
