@@ -48,13 +48,14 @@ Every operation has `human` access.
 | --- | --- | --- | --- |
 | `workbench.session.list` | `GET /api/workbench/session` with an optional `agentName` | `unary` | The session list of every agent, or of one agent. Each item carries `agentName`. |
 | `workbench.session.create` | `POST /api/workbench/session` with `{ agentName, agentProvider, modelIdentifier, reasoningEffort }` | `unary` | The new session. |
-| `workbench.session.get` | `GET /api/workbench/session/:sessionId` | `unary` | The configuration, the entries of the completed runs and `runActive`. |
+| `workbench.session.get` | `GET /api/workbench/session/:sessionId` | `unary` | The configuration, the entries of the completed runs, `runActive` and `resumeCommand`. |
 | `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. 409 `workbench.session.run_active` while a run is active. |
 | `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202 with `{ sessionId, runActive: true }`. 409 `workbench.session.run_active` while a run is active. |
 | `workbench.session.approve` | `POST /api/workbench/session/:sessionId/approve` with `{ toolCallId, approved }` | `unary` | `{ sessionId, toolCallId, approved }`. The pending call runs or returns blocked. |
 | `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | `{ sessionId, runActive: false }`. The active run stops. The answer is the same when no run is active. |
 | `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` and `version` | `wait` | The entries after `after` and the snapshot of the active run. |
 
+- `resumeCommand` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` names the id of the last session entry that the client holds.
 - A poll answers the session entries after `after`, and a snapshot of the active run: `streamingMessage`, `pendingToolCalls`, `pendingApproval`, `runActive` and `errorMessage`.
 - Each answer carries `version`, a number that the service raises at each change of the snapshot or of the entries.
