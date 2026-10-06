@@ -13,10 +13,10 @@ It describes no mechanism inside a service.
 ## Container diagram
 
 The container view shows the three [applications](architecture.vocabulary.md#app) of kanthord, with the actors and external systems around them.
-The `server` application runs the seven services.
+The `server` application runs the eight services.
 The `cli` application operates the system on a terminal.
 The `worker` application runs worker instances.
-The seven services are logical boundaries inside the server, not separate containers.
+The eight services are logical boundaries inside the server, not separate containers.
 The design targets one server on one host.
 A `worker` application runs on the host of the server or on another host.
 
@@ -67,13 +67,20 @@ It holds no credential, and it receives the material of a credential release for
 
 ### Worker Service
 
-The Worker Service supplies the workers and the agents.
+The Worker Service supplies the workers.
 It hosts the worker instances that execute a node's steps, and the worker instances that evaluate a node.
 It uses a large language model provider.
 It calls the Intake Service for platform actions and platform reads.
 The [Intake Service](intake-service.md#boundary) owns acquisition transport.
 It supplies the MCP server through which a native agent and an external harness reach the server tools.
 It decides the configured repository action for both harnesses, and the Intake Service performs it.
+
+### Workbench Service
+
+The Workbench Service holds the workbench sessions that a human drives.
+A human drives a workbench session through the chat of the dashboard or through the API.
+It consumes the [Agent component](agent.md) and runs the agent session in the server process.
+It owns no worker, no registration and no claim.
 
 ### Tracking Service
 
@@ -104,7 +111,7 @@ That component owns the credential records of the platform and stores them throu
 
 ## Service diagram
 
-The service view shows the seven services inside the server.
+The service view shows the eight services inside the server.
 It shows the relations that the sections below name.
 
 ## Invocation

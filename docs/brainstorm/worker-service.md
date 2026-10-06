@@ -12,7 +12,6 @@ For a required external action, it describes the configured repository action on
 The Worker Service uses the [Repository component](repository.md) for repository operations and the [Intake Service](intake-service.md#outbound-operations-and-checks) for platform operations.
 It describes the MCP server through which a native agent and an external harness reach the server tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
-It describes the chat session, a temporary worker instance that a human drives through the dashboard.
 It consumes the [Agent component](agent.md) for each native agent of a worker that kanthord hosts.
 It describes no mechanism of another service.
 
@@ -412,22 +411,6 @@ sequenceDiagram
         Note over S: the same path serves a loss declaration after deadline expiry
     end
 ```
-
-## Chat session
-
-- The Worker Service owns the [chat session](worker-service.vocabulary.md#chat-session).
-- A chat session is a consumer of the [Agent component](agent.md).
-- A human drives a chat session through the dashboard.
-- A human picks one agent of the catalog and starts a chat session with that agent.
-- A chat session belongs to one agent and to no project.
-- One chat session can act on several projects.
-- A chat session holds its own configuration: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
-- At the start of a chat session, the dashboard shows the default configuration of the agent. The human confirms it or changes it.
-- The human changes the configuration of a chat session at any time in the chat.
-- The Agent component validates every configuration of a chat session as a complete [entry](worker-service.vocabulary.md#entry).
-- The working directory of a chat session is the chat directory of its agent.
-- The session list of an agent lists the sessions that the runtime stores for that chat directory.
-- A [chat session implementation](worker-service.impl.md#chat-session) declares the chat directory and the list.
 
 ## Action performer and MCP server
 

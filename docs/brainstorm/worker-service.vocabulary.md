@@ -139,13 +139,6 @@ The closed form set is:
 A complete entry names `{ agentProvider: "atlas-llm", modelIdentifier: "qwen3-coder", reasoningEffort: "off" }`.
 An entry holds no `options`.
 
-## chat session
-
-A temporary worker instance that a human drives through the dashboard, with one agent of the catalog.
-The term names no closed set.
-Ulrich picks `swe@1` on the Agents page and starts a chat session.
-In that session, `swe@1` pulls "Add password reset" of "Account recovery" and reads the plan of "Billing".
-
 ## action performer
 
 The action performer requests the required external actions of one attempt for every reviewer execution, whichever harness hosts it.

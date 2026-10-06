@@ -17,11 +17,12 @@ The set is closed and it holds seven values.
 - **Scheduler Service**
 - **Intake Service**
 - **Worker Service**
+- **Workbench Service**
 - **Tracking Service**
 - **Gateway Service**
 
 The server holds no other service.
-The seven services are logical boundaries inside one server.
+The eight services are logical boundaries inside one server.
 
 ## connector
 
@@ -94,7 +95,7 @@ An application of kanthord that a user runs. The set is closed and it holds thre
 
 ## server
 
-The server is one process, and it holds the seven services.
+The server is one process, and it holds the eight services.
 A client reaches it through the API or the CLI.
 The server runs on one host.
 
@@ -166,7 +167,7 @@ The platform validator of `github` in the Repository component accepts `api_key`
 
 What the container view shows. A service is not a container.
 
-- The `server` application is a container, and it holds the seven services.
+- The `server` application is a container, and it holds the eight services.
 - The `cli` application is a container.
 - The `worker` application is a container, and it holds worker instances.
 - A service boundary separates authority inside the server, so it describes no container.

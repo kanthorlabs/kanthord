@@ -73,8 +73,8 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - Custody consumes an operation grant at its first use.
 - A consumed grant authorizes no second operation.
 - A release for an inbound needs no Project decision. The facility checks that the requester is the Intake service identity and that the operation is `poll`, under [intake-service.impl.md](intake-service.impl.md#the-credential-release-of-an-inbound).
-- A release for a chat session names the human identity of the message that started the turn as the requester, the chat session as the entity and `chat` as the operation.
-- The Worker Service grants that release while the chat session exists, the enablement of its agent is enabled and the configuration of the session is valid.
+- A release for a workbench session names the human identity of the message that started the turn as the requester, the workbench session as the entity and `workbench` as the operation.
+- The Workbench Service grants that release while the workbench session exists, the enablement of its agent is enabled and the configuration of the session is valid.
 - A turn whose human identity no longer passes the Gateway checks stops at its next release.
 - Human and machine identities pass the checks of [Gateway identity verification](gateway-service.impl.md#the-jwt).
 - A service identity passes `isServiceIdentity` of the kernel.
@@ -115,7 +115,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - At `server` placement, the view reads custody directly; plaintext stays inside the process.
 - At `worker` placement, the view reads the decrypted handover.
 - Custody drops the view at execution end.
-- A chat view reads the newest live revision and pins no revision.
+- A workbench view reads the newest live revision and pins no revision.
 
 ## The credential handover
 

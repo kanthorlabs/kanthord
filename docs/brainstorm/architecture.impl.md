@@ -82,7 +82,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - `tracking.db` of the data directory, a default expansion that [tracking-service.impl.md](tracking-service.impl.md) declares.
 - `kanthord.log` of the state directory, a default expansion that this sibling declares under the `file` destination of the log.
 - `cli.yaml` of the configuration directory, a default expansion that this sibling declares under the client configuration. The CLI owns that file, and the server reads it never.
-- `chats/<agent name>/` of the state directory, the chat directory of an agent, a path template that [worker-service.impl.md](worker-service.impl.md#chat-session) declares.
+- `workbench/<agent name>/` of the state directory, the workbench directory of an agent, a path template that [workbench-service.impl.md](workbench-service.impl.md#workbench-session) declares.
 - `projects/<project identity>/` of the state directory, the workspace directory of a project, a path template that [project-service.impl.md](project-service.impl.md#the-workspace-directory) declares.
 - `workspaces/<objective identity>/<repository binding identity>/` of the state directory, the workspace of a steps execution on an objective, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
 - `workspaces/<execution identity>/` of the state directory, the workspace of an evaluation execution or of a steps execution on an initiative, a path template that [worker-service.impl.md](worker-service.impl.md#workspace) declares.
@@ -866,8 +866,8 @@ A process split retains these boundaries.
 Imports point downward through four layers.
 
 - `src/kernel/` holds the runtime with no domain authority.
-- `src/<service>/` holds one directory for each of the seven services, as peers.
-- `src/gateway/` is one of the seven services and also the transport.
+- `src/<service>/` holds one directory for each of the eight services, as peers.
+- `src/gateway/` is one of the eight services and also the transport.
 - `src/apps/` holds the composition roots of the `server`, `worker` and `cli` applications.
 
 The configuration module sits above the services and below the applications.
