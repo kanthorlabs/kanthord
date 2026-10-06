@@ -421,6 +421,10 @@ sequenceDiagram
 - A human picks one agent of the catalog and starts a chat session with that agent.
 - A chat session belongs to one agent and to no project.
 - One chat session can act on several projects.
+- A chat session holds its own configuration: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
+- At the start of a chat session, the dashboard shows the default configuration of the agent. The human confirms it or changes it.
+- The human changes the configuration of a chat session at any time in the chat.
+- The Agent component validates every configuration of a chat session as a complete [entry](worker-service.vocabulary.md#entry).
 - The working directory of a chat session is the chat directory of its agent.
 - The session list of an agent lists the sessions that the runtime stores for that chat directory.
 - A [chat session implementation](worker-service.impl.md#chat-session) declares the chat directory and the list.
