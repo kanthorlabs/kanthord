@@ -22,7 +22,7 @@ A mechanism here never overrides a rule there.
 - `agent list` answers one summary per catalog agent: `agentName`, `workerNames` and `enablement`.
 - `agent get` answers the prompts of the declaration, `configurationSchema`, `overridableFields` and `enablement`.
 - `enablement` is null when no record exists.
-- `agent.get` is `GET /api/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `agent.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `agent.get` is `GET /api/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `agent.catalog.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## Agent configuration validation
