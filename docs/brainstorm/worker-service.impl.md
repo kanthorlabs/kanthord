@@ -189,6 +189,8 @@ A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimmi
 pi receives the base prompt and the agent prompt as its system prompt, with the framing that states the layers and their precedence.
 It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
 The path of a source writes the home directory of the host as `~`.
+The working directory that pi states in its system prompt writes the home directory of the host as `~`.
+Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
 The first version supplies one base prompt for `swe@1` and `re@1`, [assets/prompt/base.md](assets/prompt/base.md), and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md).
