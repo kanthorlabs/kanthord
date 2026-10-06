@@ -22,7 +22,7 @@ It describes no mechanism of another service.
 - The Workbench Service owns the [workbench session](workbench-service.vocabulary.md#workbench-session).
 - A human drives a workbench session through the chat of the dashboard or through the API.
 - The chat renders the text of an assistant message as Markdown.
-- While a run is active and no text streams, the chat shows that the agent works, with the seconds since the run started. The draft stays editable, and Send waits for the end of the run.
+- While a run is active and no text streams, the chat shows that the agent works, with the seconds since the run started. The draft stays editable, and Stop takes the place of Send until the run ends.
 - Every action of a workbench session comes from its human.
 - A human picks one agent of the catalog and starts a workbench session with that agent.
 - A workbench session belongs to one agent and to no project.
