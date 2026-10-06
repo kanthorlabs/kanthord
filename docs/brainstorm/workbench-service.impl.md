@@ -26,6 +26,13 @@ A mechanism here never overrides a rule there.
 - pi receives the base prompt, the agent prompt and the workbench prompt as its system prompt, and the global prompt as marked content, as for a worker.
 - The source of the workbench prompt is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
 
+## Tools
+
+- The tool name is the operation ID, and the tool parameters are the input schema of the operation.
+- The tool calls the direct adapter of the operation registry.
+- A mutation takes a new idempotency key for each tool call.
+- A refusal reaches the agent as a tool error that holds the code of the owning service.
+
 ## Operations
 
 Every operation has `human` access.

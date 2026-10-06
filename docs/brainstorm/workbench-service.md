@@ -42,6 +42,13 @@ It describes no mechanism of another service.
 - The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the base prompt or the agent prompt.
 - The agent prompt holds the highest precedence, then the base prompt, then the workbench prompt, then the global prompt.
 
+## Tools
+
+- A workbench session holds the built-in tools that the declaration of its agent enables.
+- It also holds one tool for each `human` operation of the server. The tool invokes the operation under the human identity of the run.
+- The owning service authorizes each call.
+- A workbench session holds no tool of an operation that carries secret material.
+
 ## Operations
 
 - A human sends each message through its own request.
