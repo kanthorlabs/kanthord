@@ -22,6 +22,7 @@ It describes no mechanism of another service.
 - The Workbench Service owns the [workbench session](workbench-service.vocabulary.md#workbench-session).
 - A human drives a workbench session through the chat of the dashboard or through the API.
 - The chat renders the text of an assistant message as Markdown.
+- The chat shows the input of a tool call and a tool result that is a JSON object or array as indented, colored JSON. Other text stays as it is.
 - The chat header copies the pi command that continues the session outside kanthord. That pi uses its own login, its own prompt and its own tools, and a write from both sides forks the session.
 - While a run is active and no text streams, the chat shows that the agent works, with the seconds since the run started. The draft stays editable, and Stop takes the place of Send until the run ends.
 - Every action of a workbench session comes from its human.
