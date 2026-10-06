@@ -28,7 +28,11 @@ Every operation has `human` access.
 | `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. |
 | `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202. 409 `workbench.session.run_active` while a run is active. |
 | `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | The active run stops. |
-| `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` | `wait` | Every held event later than `after`. It waits until such an event exists or its wait ends. |
+| `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` | `wait` | The entries after `after` and the snapshot of the active run. |
 
-- Each event of a session carries a sequence number. `after` names the last sequence number that the client holds.
+- `after` names the id of the last session entry that the client holds.
+- A poll answers the session entries after `after`, and a snapshot of the active run: `streamingMessage`, `pendingToolCalls`, `runActive` and `errorMessage`.
+- A poll answers when the entries or the snapshot change, or when its wait window ends.
+- The route timeout of `workbench.session.events` is 30 s, and its wait window is 25 s.
+- The Workbench Service holds no event of a run.
 - A run starts at the `agent_start` event of pi and ends at its `agent_end` event. One run holds one or more turns of pi.

@@ -37,7 +37,7 @@ It describes no mechanism of another service.
 
 - A human sends each message through its own request.
 - A [run](workbench-service.vocabulary.md#run) is the work of the agent on one human message.
-- A client reads the events of the runs of a session through a long poll. A workbench session uses no `stream` operation.
+- A client reads the entries and the state of the active run of a session through a long poll. A workbench session uses no `stream` operation.
 - A session holds one run at a time.
 - The end of a long poll stops no run.
 - A client that misses events reads the completed runs of the session.

@@ -8,6 +8,11 @@ This file holds the mechanisms that realize [agent.md](agent.md).
 This file is not a design document, and `agent.md` stays the single source of truth.
 A mechanism here never overrides a rule there.
 
+## Runtime reuse
+
+- The runtime is `@earendil-works/pi-coding-agent` at 0.86.0.
+- A design of a consumer starts from the capability of pi that serves it, and it states the gap that kanthord builds.
+
 ## The agent catalog
 
 - The catalog is a static server module that holds one declaration per agent name, with options, a whole-configuration constraint and prompts.

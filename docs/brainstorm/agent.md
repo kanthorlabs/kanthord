@@ -21,6 +21,11 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The agent session of a [workbench session](workbench-service.md#workbench-session) runs in the process of the server.
 - The [LLM component](llm.md#model-connector) builds the model runtime of an agent session.
 
+## Runtime reuse
+
+- The component reuses every capability of its runtime, for example the session, the resume and the session list.
+- The component builds only a capability that the runtime does not serve, or one that cannot fit kanthord.
+
 ## Agent catalog
 
 - The component owns the agent catalog and one declaration per agent name.
