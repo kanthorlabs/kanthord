@@ -265,6 +265,7 @@ The [Tracking Service](tracking-service.md#producer-and-ownership) owns what a s
 Every operation of the execution presents its execution identity under the [liveness rules](scheduler-service.md#liveness) of the Scheduler Service.
 The execution holds a fixed `expired_at` under [Scheduler configuration](scheduler-service.impl.md#configuration).
 A revoked or lost execution stops its agent and performs no further operation under its execution identity.
+The execution identity is the identity of the [agent session](agent.vocabulary.md#agent-session) of the execution.
 
 Every worker declares a default [resource budget](worker-service.vocabulary.md#resource-budget) with `wallTimeMs` for one execution.
 Every worker binding can override it under the [budget contract](worker-service.impl.md#stop-and-budget).

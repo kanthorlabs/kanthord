@@ -28,3 +28,5 @@ It holds the runtime of a native agent and the [agent session](agent.vocabulary.
 - A turn that runs at that end is lost, and the resumed session restores every completed turn.
 - The runtime of the agent stores the agent session in its own session format, on the host that runs the session.
 - kanthord stores no copy of an agent session.
+- The consumer names the identity of each agent session that it opens.
+- A resume opens only the session of that identity.

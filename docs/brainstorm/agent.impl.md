@@ -14,3 +14,5 @@ A mechanism here never overrides a rule there.
 - The session file lives under `sessions/` of the pi agent directory that `PI_CODING_AGENT_DIR` names.
 - pi appends each entry of the session to that file.
 - A resume opens that file through the `SessionManager` of pi.
+- The adapter passes the session identity of the consumer as `id` to `SessionManager.create`.
+- A resume takes the file whose session id equals that identity, and it never calls `continueRecent`.
