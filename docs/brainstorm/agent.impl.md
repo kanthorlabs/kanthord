@@ -68,6 +68,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The list uses the sources of [the validation](#agent-configuration-validation), so every listed pair passes it.
 - An unknown agent answers 404 `agent.catalog.not_found`. An absent enablement answers 404 `agent.enablement.not_found`. An absent provider answers 404 `agent.enablement.provider.not_found`.
 - The dashboard fills the model picker and the reasoning-effort picker of a workbench session from this list.
+- A switch of the agent provider in a picker reloads this list and resets the model to its first model. The effort stays when the new model lists it, else it takes the first listed effort.
 
 ## Configuration schema
 
