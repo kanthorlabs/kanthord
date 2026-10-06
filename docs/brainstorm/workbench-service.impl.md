@@ -10,6 +10,7 @@ A mechanism here never overrides a rule there.
 
 ## Workbench session
 
+- The identity of a workbench session is `workbench_session_<ulid>`. The service passes it to pi as the session `id`.
 - The workbench directory of an agent is `workbench/<agent name>/` of the state directory.
 - The list calls `SessionManager.list` of pi with that directory.
 - Each item of the list answers `id`, `name`, `created`, `modified`, `messageCount` and `firstMessage`.
