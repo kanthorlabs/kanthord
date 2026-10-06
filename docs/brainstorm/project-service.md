@@ -17,6 +17,13 @@ A project has a name that is unique on the server. A human chooses it.
 A resource exists independently of the project that binds it.
 The mission of a project is intrinsic to that project, so no binding allocates it.
 
+## Workspace directory
+
+- Every project holds one [workspace directory](project-service.vocabulary.md#workspace-directory) on the host of the server.
+- The Project Service names it by the project identity.
+- The workspace directory is the central location of the project data and the project operations.
+- [The workspace directory](project-service.impl.md#the-workspace-directory) declares its path.
+
 ## Resource and binding model
 
 A project binds each resource that it uses directly: a repository, a worker and an evidence storage.

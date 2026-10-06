@@ -7,6 +7,12 @@ title: Project Service Vocabulary
 This file holds the values and the examples of the terms that [project-service.md](project-service.md) owns.
 This file is not a design document, and `project-service.md` stays the single source of truth.
 
+## workspace directory
+
+The directory of one project on the host of the server.
+The term names no closed set.
+The workspace directory of "Account recovery" is `~/.local/state/kanthord/projects/project_01JA2Z9V6Q8T0B4N3M5K7H1C2D/`.
+
 ## capability
 
 One class of authenticated operation on a resource.
