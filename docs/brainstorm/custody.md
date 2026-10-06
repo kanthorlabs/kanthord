@@ -24,6 +24,7 @@ Custody grants no authority through possession of a credential reference.
 - A credential reaches an operation through the entity that performs it, never through a direct relationship with a project.
 - That entity holds a [credential reference](custody.vocabulary.md#credential-reference).
 - Each record names its [platform](architecture.vocabulary.md#platform), and its name is its only human label.
+- A dropdown of the dashboard shows a credential as `<name> (<platform>)`.
 - The component that owns the platform defines its secret shape, its metadata and its validation. Each platform holds exactly one secret shape, and a second shape for the same remote is another platform.
 - The component refuses a platform that it does not own.
 - A human enters a credential into custody behind the [protected facility](custody.vocabulary.md#protected-facility).
