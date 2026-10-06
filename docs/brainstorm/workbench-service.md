@@ -48,6 +48,9 @@ It describes no mechanism of another service.
 - It also holds one tool for each `human` operation of the server. The tool invokes the operation under the human identity of the run.
 - The owning service authorizes each call.
 - A workbench session holds no tool of an operation that carries secret material.
+- A tool of a mutation operation runs only after the human approves that call.
+- A tool of a read operation and a built-in tool run without an approval.
+- A rejected call reaches the agent as a blocked call.
 
 ## Operations
 

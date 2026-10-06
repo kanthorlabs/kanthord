@@ -32,6 +32,10 @@ A mechanism here never overrides a rule there.
 - The tool calls the direct adapter of the operation registry.
 - A mutation takes a new idempotency key for each tool call.
 - A refusal reaches the agent as a tool error that holds the code of the owning service.
+- The `beforeToolCall` hook of pi waits for the approval of a mutation tool.
+- The snapshot of a long poll adds `pendingApproval`: `{ toolCallId, operationId, input }`.
+- A rejected call returns `{ block: true, reason: "The human rejected the call." }` to pi.
+- An abort of the run rejects every pending approval.
 
 ## Operations
 
@@ -44,11 +48,12 @@ Every operation has `human` access.
 | `workbench.session.get` | `GET /api/workbench/session/:sessionId` | `unary` | The configuration, the entries of the completed runs and `runActive`. |
 | `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. |
 | `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202. 409 `workbench.session.run_active` while a run is active. |
+| `workbench.session.approve` | `POST /api/workbench/session/:sessionId/approve` with `{ toolCallId, approved }` | `unary` | The pending call runs or returns blocked. |
 | `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | The active run stops. |
 | `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` | `wait` | The entries after `after` and the snapshot of the active run. |
 
 - `after` names the id of the last session entry that the client holds.
-- A poll answers the session entries after `after`, and a snapshot of the active run: `streamingMessage`, `pendingToolCalls`, `runActive` and `errorMessage`.
+- A poll answers the session entries after `after`, and a snapshot of the active run: `streamingMessage`, `pendingToolCalls`, `pendingApproval`, `runActive` and `errorMessage`.
 - A poll answers when the entries or the snapshot change, or when its wait window ends.
 - The route timeout of `workbench.session.events` is 30 s, and its wait window is 25 s.
 - The Workbench Service holds no event of a run.
