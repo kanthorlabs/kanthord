@@ -46,10 +46,10 @@ Every operation has `human` access.
 | `workbench.session.list` | `GET /api/workbench/session` with `agentName` | `unary` | The session list of the agent. |
 | `workbench.session.create` | `POST /api/workbench/session` with `{ agentName, agentProvider, modelIdentifier, reasoningEffort }` | `unary` | The new session. |
 | `workbench.session.get` | `GET /api/workbench/session/:sessionId` | `unary` | The configuration, the entries of the completed runs and `runActive`. |
-| `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. |
-| `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202. 409 `workbench.session.run_active` while a run is active. |
-| `workbench.session.approve` | `POST /api/workbench/session/:sessionId/approve` with `{ toolCallId, approved }` | `unary` | The pending call runs or returns blocked. |
-| `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | The active run stops. |
+| `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. 409 `workbench.session.run_active` while a run is active. |
+| `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202 with `{ sessionId, runActive: true }`. 409 `workbench.session.run_active` while a run is active. |
+| `workbench.session.approve` | `POST /api/workbench/session/:sessionId/approve` with `{ toolCallId, approved }` | `unary` | `{ sessionId, toolCallId, approved }`. The pending call runs or returns blocked. |
+| `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | `{ sessionId, runActive: false }`. The active run stops. The answer is the same when no run is active. |
 | `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` | `wait` | The entries after `after` and the snapshot of the active run. |
 
 - `after` names the id of the last session entry that the client holds.
@@ -58,3 +58,23 @@ Every operation has `human` access.
 - The route timeout of `workbench.session.events` is 30 s, and its wait window is 25 s.
 - The Workbench Service holds no event of a run.
 - A run starts at the `agent_start` event of pi and ends at its `agent_end` event. One run holds one or more turns of pi.
+- `get` during a run answers the entries before the run started.
+
+## Session files
+
+- pi stores the session files of an agent under `pi/sessions/workbench/<agent name>/` of the state directory.
+- pi writes a session file after the first assistant message. The list omits a session until its first reply.
+- A resumed session answers its stored configuration through `get` without validation, so the human sees and repairs a configuration that became invalid. A message and a configure validate it.
+
+## Error codes
+
+| HTTP | Code | Condition |
+| --- | --- | --- |
+| 404 | `workbench.session.not_found` | The session identity names no session. |
+| 404 | `workbench.session.approval_not_found` | The tool call of an approval waits for no approval. |
+| 409 | `workbench.session.run_active` | A message or a configure arrives while a run is active. |
+| 409 | `workbench.session.configuration_invalid` | The stored entries of the session hold no readable configuration. |
+| 409 | `workbench.session.setup_refused` | The runtime refuses the setup of the session. |
+| 403 | `workbench.authorization.refused` | The Workbench Service refuses the credential release of the session. |
+| local | `workbench.lifecycle.stopped` | A stopped service starts again. |
+| 404 | `agent.catalog.not_found` | The agent name of a create or a list is absent from the agent catalog. |
