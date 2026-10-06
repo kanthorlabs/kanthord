@@ -32,3 +32,11 @@ It describes no mechanism of another service.
 - The working directory of a workbench session is the workbench directory of its agent.
 - The session list of an agent lists the sessions that the runtime stores for that workbench directory.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
+
+## Operations
+
+- A human sends each message through its own request.
+- A client reads the events of the turns of a session through a long poll. A workbench session uses no `stream` operation.
+- A session runs one turn at a time.
+- The end of a long poll stops no turn.
+- A client that misses events reads the completed turns of the session.
