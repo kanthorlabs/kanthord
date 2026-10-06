@@ -33,6 +33,7 @@ It describes no mechanism of another service.
 - The working directory of a workbench session is the workbench directory of its agent.
 - The session list of an agent lists the sessions that the runtime stores for that workbench directory.
 - The session list of the Workbench lists the sessions of every agent.
+- The dashboard lists the workbench sessions under Workforce › Workbench, with a filter by agent. A human starts a session there for the agent of the filter, or from the row of the agent in the agent list.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
 ## Prompt
