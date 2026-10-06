@@ -98,6 +98,7 @@ Its [design](custody.md#scope) defines credential protection.
 The [LLM component](llm.md) is a shared component for model credentials and the model runtime.
 The [Repository component](repository.md) is a shared component for repository transport, git platform operations and payload decoders.
 The [Storage component](storage.md) is a shared component for object storage operations.
+The [Agent component](agent.md) is a shared component for the runtime of a native agent and the agent session.
 Each [platform](architecture.vocabulary.md#platform) belongs to exactly one of the LLM, Repository and Storage components.
 That component owns the credential records of the platform and stores them through custody.
 

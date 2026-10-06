@@ -13,6 +13,7 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 - [LLM](llm.md), [vocabulary](llm.vocabulary.md), and [implementation proposals](llm.impl.md)
 - [Repository](repository.md), [vocabulary](repository.vocabulary.md), and [implementation proposals](repository.impl.md)
 - [Storage](storage.md), [vocabulary](storage.vocabulary.md), and [implementation proposals](storage.impl.md)
+- [Agent](agent.md), [vocabulary](agent.vocabulary.md), and [implementation proposals](agent.impl.md)
 - [Mission Service](mission-service.md) and [vocabulary](mission-service.vocabulary.md)
 - [Scheduler Service](scheduler-service.md), [vocabulary](scheduler-service.vocabulary.md), and [implementation proposals](scheduler-service.impl.md)
 - [Intake Service](intake-service.md) and [vocabulary](intake-service.vocabulary.md)

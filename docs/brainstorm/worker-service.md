@@ -12,6 +12,7 @@ For a required external action, it describes the configured repository action on
 The Worker Service uses the [Repository component](repository.md) for repository operations and the [Intake Service](intake-service.md#outbound-operations-and-checks) for platform operations.
 It describes the MCP server through which a native agent and an external harness reach the server tools.
 It describes the prompt of a native agent and the prompt composer that produces it.
+It consumes the [Agent component](agent.md) for each native agent of a worker that kanthord hosts.
 It describes no mechanism of another service.
 
 ## Workers and templates
