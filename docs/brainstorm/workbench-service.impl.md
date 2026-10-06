@@ -28,7 +28,10 @@ A mechanism here never overrides a rule there.
 
 ## Tools
 
-- The tool name is the operation ID, and the tool parameters are the input schema of the operation.
+- The tool name is the operation ID with each `.` replaced by `--`, for example `mission--node--list`. The tool maps the name back to its operation ID.
+- Every tool name matches `^[a-zA-Z0-9_-]{1,64}$`, the form that the model providers accept.
+- The tool parameters are the input schema of the operation.
+- `pendingApproval` names the operation ID.
 - The tool calls the direct adapter of the operation registry.
 - A mutation takes a new idempotency key for each tool call.
 - A refusal reaches the agent as a tool error that holds the code of the owning service.
