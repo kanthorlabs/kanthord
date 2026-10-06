@@ -295,6 +295,13 @@ Tests permit judgement only after every verification passes.
 - A sweep at the start and every hour removes an expired workspace.
 - The state directory holds the workspace because an active workspace holds uncommitted work and unsubmitted evidence that a re-clone cannot rebuild.
 
+## Chat session
+
+- The chat directory of an agent is `chats/<agent name>/` of the state directory.
+- The list calls `SessionManager.list` of pi with that directory.
+- Each item of the list answers `id`, `name`, `created`, `modified`, `messageCount` and `firstMessage`.
+- A resume opens the session whose `id` the human picks.
+
 ## Action performer
 
 One internal function implements the action performer.

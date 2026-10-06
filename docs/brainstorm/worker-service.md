@@ -421,6 +421,9 @@ sequenceDiagram
 - A human picks one agent of the catalog and starts a chat session with that agent.
 - A chat session belongs to one agent and to no project.
 - One chat session can act on several projects.
+- The working directory of a chat session is the chat directory of its agent.
+- The session list of an agent lists the sessions that the runtime stores for that chat directory.
+- A [chat session implementation](worker-service.impl.md#chat-session) declares the chat directory and the list.
 
 ## Action performer and MCP server
 
