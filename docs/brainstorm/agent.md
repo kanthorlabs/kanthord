@@ -18,6 +18,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The consumer supplies every value of that input.
 - The [Worker Service](worker-service.md#executions) is a consumer. A Worker execution opens an agent session for each native agent of its worker.
 - The component runs in the process of its consumer.
+- The agent session of a chat runs in the process of the server.
 - The [LLM component](llm.md#model-connector) builds the model runtime of an agent session.
 
 ## Agent catalog

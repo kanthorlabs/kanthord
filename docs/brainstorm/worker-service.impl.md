@@ -16,7 +16,7 @@ The first version supplies `general@1` with the one agent `swe@1` and `reviewer@
 `tdd@1` follows when the runtime hosts several agents in one execution.
 The native agent `swe@1` of `general@1` runs `@earendil-works/pi-coding-agent` at 0.86.0 in-process behind a kanthord-owned adapter.
 The adapter obtains the runtime from the [model connector](llm.impl.md#the-model-connector) of the LLM component over the credential store of the execution, and it builds the session with `createAgentSession({ modelRuntime })`.
-The first version supports a native agent at the `worker` placement, and no proxy exists.
+The first version supports a native agent of a worker at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
 Before the first import of `@earendil-works/pi-coding-agent`, it sets `PI_OFFLINE=1` and sets `PI_CODING_AGENT_DIR` to `pi/` of the state directory, so pi downloads no tool binary.
 The adapter persists no settings file in that directory or in `~/.pi`.
