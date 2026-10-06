@@ -16,7 +16,7 @@ The schema has four functional views. Their order is the order of delivery.
 
 | View | Scope | Tables of the owners |
 | --- | --- | --- |
-| [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, the mission plan and the work queue. | Custody, Project, Worker, Mission, Scheduler |
+| [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
 | [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence and its assets, assessments and outcomes. | Worker, Scheduler, Mission |
 | [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests. | Intake |
 | [ERD 4: Telemetry](04-tracking.md) | Traces, spans, records and telemetry texts. | Tracking |
@@ -35,7 +35,7 @@ flowchart TB
         subgraph v1["ERD 1: Environment and planning"]
             c1["Custody: credential"]
             p1["Project: project, binding, binding revision"]
-            w1["Worker: agent enablement"]
+            a1["Agent: agent enablement"]
             m1["Mission: mission, node, node revision, dependency"]
             s1["Scheduler: job"]
         end
@@ -72,6 +72,7 @@ flowchart TB
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
     classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
+    classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
     classDef intake fill:#e8daef,stroke:#6c3483,color:#212529
@@ -79,7 +80,8 @@ flowchart TB
 
     class c1 custody
     class p1 project
-    class w1,w2 worker
+    class w2 worker
+    class a1 agent
     class m1,m2 mission
     class s1,s2 scheduler
     class i3 intake
@@ -97,7 +99,7 @@ flowchart TB
 
 ## Stores
 
-- `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services and custody share that file, and one file gives a collaboration of two services one transaction.
+- `kanthord.db` of the data directory holds every table of ERD 1, ERD 2 and ERD 3. The Gateway, Project, Mission, Scheduler, Worker and Intake Services, custody and the Agent component share that file, and one file gives a collaboration of two services one transaction.
 - `tracking.db` of the data directory holds every table of ERD 4. It appears with the working tracer.
 - Each file holds its own `migration(service, version, applied_at)` table, keyed by service and version. It is the only table without the prefix of a service beside the `credential` table of custody.
 - Custody owns the unprefixed `credential` table.
@@ -106,7 +108,7 @@ flowchart TB
 
 - The Gateway Service holds idempotency records in memory. It stores no human account, no password and no client identity.
 - The Repository component is stateless transport.
-- The worker catalog is a static server module.
+- The worker catalog and the agent catalog are static server modules.
 - The `worker` application and an external harness hold no table of the server. A `worker` application runs on the host of the server or on another host.
 
 ## Conventions

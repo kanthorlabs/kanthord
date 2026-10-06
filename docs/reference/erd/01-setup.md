@@ -15,7 +15,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 ## Capability limits
 
 - A project binds the kinds `repository`, `storage` and `worker`.
-- A worker binding of a native worker needs an enabled [agent enablement](#worker-service), because `validateEntry` refuses a binding whose agent has no enabled enablement.
+- A worker binding of a native worker needs an enabled [agent enablement](#agent-component), because `validateEntry` refuses a binding whose agent has no enabled enablement.
 - A worker binding of an externally hosted worker needs no agent enablement.
 - A delivery source is no binding. The Intake Service designs it under [HANDOFF](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/HANDOFF.md#intake-service).
 - The Mission Service accepts the import, the export, the node API, the dependency edits, the criterion set and the priority.
@@ -26,7 +26,7 @@ The [README](README.md) holds the conventions, the colors and the map of every g
 
 - The Gateway Service owns no table. It holds idempotency records in memory. It stores no human account and no client identity. A human `sub` and a `client_identity_<ulid>` appear only as values inside an `actor` column.
 - The Repository component owns no table. It is stateless transport.
-- The worker catalog is a static server module. A worker name and an agent name are keys of that module, not rows.
+- The worker catalog and the agent catalog are static server modules. A worker name and an agent name are keys of those modules, not rows.
 
 ## Diagram
 
@@ -61,7 +61,7 @@ erDiagram
         integer removed_at "Unix ms, set on a tombstone"
     }
 
-    worker_agent_enablement {
+    agent_enablement {
         text id PK "agent_enablement_ + ULID, one revision"
         text agent_name "catalog agent, for example swe@1, group key"
         integer revision "unique with agent_name, starts at 1"
@@ -123,8 +123,8 @@ erDiagram
 
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
-    project_binding }o..o{ worker_agent_enablement : "ref via catalog agents of config.worker, and entry agentProvider, no FK"
-    worker_agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
+    project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agentProvider, no FK"
+    agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
 
     project_project ||..|| mission_mission : "ref, no FK, createMission"
     mission_mission ||..o{ mission_node : "FK mission_id"
@@ -140,13 +140,13 @@ erDiagram
 
     classDef custody fill:#e2e3e5,stroke:#6c757d,color:#212529
     classDef project fill:#fff3cd,stroke:#b8860b,color:#212529
-    classDef worker fill:#f8d7da,stroke:#b02a37,color:#212529
+    classDef agent fill:#fde2c8,stroke:#c0602b,color:#212529
     classDef mission fill:#d4edda,stroke:#2e7d32,color:#212529
     classDef scheduler fill:#d6eaf8,stroke:#1f618d,color:#212529
 
     class credential custody
     class project_project,project_binding project
-    class worker_agent_enablement worker
+    class agent_enablement agent
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job scheduler
 ```
@@ -162,7 +162,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `credential` | Custody | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table). |
 | `project_project` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
 | `project_binding` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
-| `worker_agent_enablement` | Worker Service | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/worker-service.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/worker.md#agent-enablement-record--proposed). |
+| `agent_enablement` | Agent component | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record--proposed). |
 | `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). |
 | `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name). |
 | `mission_node_revision` | Mission Service | Derived from [the revisions](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-revisions). |
@@ -173,7 +173,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 
 - A solid line is an identifying relationship: the primary key of the child contains the primary key of the parent. A dashed line is a non-identifying relationship.
 - `project_binding` holds one row for each revision. The group `(project_id, resource_identity)` is one binding, and its latest row states the binding. A record pins one row by `id`.
-- `worker_agent_enablement` holds one row for each revision. The group `agent_name` is one enablement, and its latest row states the enablement.
+- `agent_enablement` holds one row for each revision. The group `agent_name` is one enablement, and its latest row states the enablement.
 - `mission_node_revision` holds one row for each content revision of an initiative or an objective. The current revision of a node is its row with the greatest `revision`, and the primary key `(node_id, revision)` serves that lookup. A task has no revision row.
 - No pair of tables references each other. The self-reference `parent_id` of `mission_node` inserts the parent first, so no key is deferred. `foreign_keys` is `ON`, as [architecture.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-connection-and-the-transaction) rules.
 
@@ -210,10 +210,10 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A write refuses a change of the worker of an existing worker binding under the same name.
 - `config` holds the configuration of its kind: [repository](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#repository-configuration--proposed-fields), [worker](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#worker-and-agent-configuration--proposed-fields) and [storage](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/project.md#storage-configuration). Every credential reference inside `config` holds a credential name. A worker binding also holds the worker name and, in an entry, an agent name and an agent provider name. SQLite enforces no foreign key inside JSON, so the write validates each reference.
 
-### Worker Service
+### Agent component
 
 - An enablement belongs to no project. `agent_name` is its group key.
-- `worker_agent_enablement` has a unique index on `(agent_name, revision)`.
+- `agent_enablement` has a unique index on `(agent_name, revision)`.
 - A row is immutable. Every change of an enablement, including a change of `state` and a change of a provider credential, inserts the next revision of its group.
 - A removal inserts a tombstone: the next row of the group with `removed_at` set and the last content copied. A later write of the same agent inserts the next revision after the tombstone.
 - `agent_providers` holds one or more items. Each item holds `name`, `provider` and `credential`. `name` is unique inside the row, and `credential` holds a credential name.
@@ -270,8 +270,8 @@ The owning service enforces every rule below in the transaction of its write. A 
 | `mission_mission.project_id` | `project_project.id` | Reference, no FK. |
 | `mission_node_revision.bindings` | `project_binding.id` | Reference in JSON, no FK. Each item pins one row. An objective names exactly one repository binding, and an initiative or an objective names at most one storage binding. |
 | `project_binding.config` | `credential.name` | Reference in JSON by name, no FK. |
-| `project_binding.config` | `worker_agent_enablement.agent_name` | Reference through the catalog agents of the worker, no FK. |
-| `project_binding.config` | `worker_agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK. |
-| `worker_agent_enablement.agent_providers` | `credential.name` | Reference in JSON by name, no FK. |
+| `project_binding.config` | `agent_enablement.agent_name` | Reference through the catalog agents of the worker, no FK. |
+| `project_binding.config` | `agent_enablement.agent_providers` | Reference to an item name in a complete entry, no FK. |
+| `agent_enablement.agent_providers` | `credential.name` | Reference in JSON by name, no FK. |
 | `scheduler_job.node_id` | `mission_node.id` | Reference, no FK. |
 | `scheduler_job.project_id` | `project_project.id` | Reference, no FK. |
