@@ -71,13 +71,14 @@ Each model inference call uses the model [connector](architecture.vocabulary.md#
 ## prompt layer
 
 A prompt layer is one part of the prompt of a native agent, and it has one owner.
-The set is closed and it holds five values.
+The set is closed and it holds six values.
 
 - **global prompt**: the operator of the server owns it.
 - **base prompt**: the worker that declares the agent owns it, and it holds for every agent that uses it.
 - **agent prompt**: the worker that declares the agent owns it.
 - **project prompt**: the project that binds the repository owns it.
 - **work prompt**: the node revision that the attempt pins owns it.
+- **workbench prompt**: the [Workbench Service](workbench-service.md#prompt) owns it, and it holds for every workbench session.
 
 The global prompt of the server states "Every answer is short. A commit message states the change and no reason."
 `general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, which describes a senior software engineer, and its text is `assets/prompt/base.md`.

@@ -33,6 +33,15 @@ It describes no mechanism of another service.
 - The session list of an agent lists the sessions that the runtime stores for that workbench directory.
 - A [workbench session implementation](workbench-service.impl.md#workbench-session) declares the workbench directory and the list.
 
+## Prompt
+
+- The prompt of a workbench session composes the global prompt, the base prompt and the agent prompt of its agent, and the workbench prompt.
+- The composition places the global prompt first, then the base prompt, then the agent prompt, then the workbench prompt.
+- A workbench session takes no project prompt and no work prompt. Each human message is a message of the session.
+- The Workbench Service owns the workbench prompt. It states that a human reads every reply.
+- The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the base prompt or the agent prompt.
+- The agent prompt holds the highest precedence, then the base prompt, then the workbench prompt, then the global prompt.
+
 ## Operations
 
 - A human sends each message through its own request.

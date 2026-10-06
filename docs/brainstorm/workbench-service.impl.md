@@ -17,6 +17,12 @@ A mechanism here never overrides a rule there.
 - A resume opens the session whose `id` the human picks.
 - The credential view of a workbench session exposes only the credential of the agent provider that the configuration of the session names.
 
+## Prompt
+
+- The workbench prompt is [assets/prompt/workbench.md](assets/prompt/workbench.md).
+- pi receives the base prompt, the agent prompt and the workbench prompt as its system prompt, and the global prompt as marked content, as for a worker.
+- The source of the workbench prompt is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
+
 ## Operations
 
 Every operation has `human` access.

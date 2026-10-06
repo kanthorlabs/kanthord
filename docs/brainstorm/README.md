@@ -23,7 +23,7 @@ The former top-level design, vocabulary, implementation-ruling, prompt, and hand
 - [Gateway Service](gateway-service.md), [vocabulary](gateway-service.vocabulary.md), and [implementation proposals](gateway-service.impl.md)
 - [Open work and handoff](HANDOFF.md)
 - [Engine CLI specification](../../engine/docs/cli/README.md): proposed command contracts, with one file per service and one for remaining commands.
-- Draft prompts: [base](assets/prompt/base.md), [swe@1](assets/prompt/swe@1.md), [re@1](assets/prompt/re@1.md)
+- Draft prompts: [base](assets/prompt/base.md), [swe@1](assets/prompt/swe@1.md), [re@1](assets/prompt/re@1.md), [workbench](assets/prompt/workbench.md)
 
 ## Turning discussion into documentation
 
