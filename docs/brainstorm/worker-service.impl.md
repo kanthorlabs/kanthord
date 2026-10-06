@@ -188,6 +188,7 @@ The repository context-file discovery of pi stays disabled, and the composer per
 A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
 pi receives the base prompt and the agent prompt as its system prompt, with the framing that states the layers and their precedence.
 It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
+The path of a source writes the home directory of the host as `~`.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
 The first version supplies one base prompt for `swe@1` and `re@1`, [assets/prompt/base.md](assets/prompt/base.md), and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md).

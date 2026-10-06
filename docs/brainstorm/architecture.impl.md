@@ -62,6 +62,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The state directory is `kanthord` inside `XDG_STATE_HOME`, and that variable defaults to `$HOME/.local/state`.
 - The cache directory is `kanthord` inside `XDG_CACHE_HOME`, and that variable defaults to `$HOME/.cache`.
 - A variable of the specification that holds a relative path is invalid, so the server uses the default of that variable.
+- A path that the server writes into an answer or into a prompt replaces the home directory of the host with `~`, so the answer and the prompt hold no user name. File access uses the absolute path.
 
 ## The kind of file of each directory
 
