@@ -56,6 +56,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Every enablement change creates a revision.
 - Disablement is the only stop switch.
 - An agent provider has no independent disablement.
+- The agent page of the dashboard adds an agent provider to an existing enablement. The human names it and picks a credential, and the provider is the platform of that credential.
 - Disablement refuses every later resolution, including a complete entry, so the instance healthcheck fails and no claim follows.
 - The worker binding remains, and disablement recalls no handover in flight.
 - Removal of an enablement is refused while any worker binding depends on its agent.
