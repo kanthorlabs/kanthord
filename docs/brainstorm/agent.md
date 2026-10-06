@@ -65,6 +65,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) preserves the shared invariants with the Project Service and the Worker Service.
 - Each agent provider has a report-only [resource healthcheck](agent.impl.md#agent-provider-healthcheck).
 - That check belongs to the health report, not the liveness answer or claim path.
+- A human reads the models that an agent provider serves, with the reasoning efforts of each model. The list holds exactly the values that the validation accepts.
 
 ## Agent session
 

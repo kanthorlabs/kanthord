@@ -57,6 +57,16 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - The Agent component sends `{ credential, platform }` to custody and consumes its suitability result.
 - It reads no metadata and no secret.
 
+## Model list
+
+- `agent.enablement.provider.model.list` is `GET /api/agent/enablement/:agentName/provider/:providerName/model`, `human`, `unary`, `mutation: false`.
+- It answers `{ items: [{ modelIdentifier, reasoningEfforts }] }` for the agent provider of the latest enablement row of the agent.
+- A built-in platform answers `getBuiltinModels(provider)` of pi-ai, and `reasoningEfforts` holds `getSupportedThinkingLevels` of each model.
+- An `openai-compatible` provider answers the approved models of its credential, and `reasoningEfforts` holds the `reasoningLevels` of each model.
+- The list uses the sources of [the validation](#agent-configuration-validation), so every listed pair passes it.
+- An unknown agent answers 404 `agent.catalog.not_found`. An absent enablement answers 404 `agent.enablement.not_found`. An absent provider answers 404 `agent.enablement.provider.not_found`.
+- The dashboard fills the model picker and the reasoning-effort picker of a workbench session from this list.
+
 ## Configuration schema
 
 - `configurationSchema` uses JSON Schema draft 2020-12, emitted by `z.toJSONSchema` of `zod` at 4.4.3.
