@@ -301,6 +301,7 @@ Tests permit judgement only after every verification passes.
 - The list calls `SessionManager.list` of pi with that directory.
 - Each item of the list answers `id`, `name`, `created`, `modified`, `messageCount` and `firstMessage`.
 - A resume opens the session whose `id` the human picks.
+- The credential view of a chat session exposes only the credential of the agent provider that the configuration of the session names.
 
 ## Action performer
 

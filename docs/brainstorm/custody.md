@@ -69,6 +69,7 @@ Custody grants no authority through possession of a credential reference.
 - An execution identity under a live claim proves liveness, not authority for an operation.
 - Custody releases the material of a model inference call through the worker binding of the claim and its effective agent provider.
 - The Worker Service resolves that selection through the [Agent component](agent.md#agent-configuration).
+- Custody releases the material of a model inference call of a chat session through the chat session and the agent provider of its configuration, under the human identity of the message that started the turn, inside the server process.
 - A refusal reaches no secret material.
 - Custody releases the material of an authorized grant inside the server process, and the holder performs its own operation.
 - A credential leaves the server only through a [credential handover](custody.vocabulary.md#credential-handover) to a kanthord worker application.
