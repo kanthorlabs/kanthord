@@ -19,9 +19,9 @@ The adapter obtains the runtime from the [model connector](llm.impl.md#the-model
 The first version supports a native agent at the `worker` placement, and no proxy exists.
 The hosting application gives pi its own directories.
 Before the first import of `@earendil-works/pi-coding-agent`, it sets `PI_OFFLINE=1` and sets `PI_CODING_AGENT_DIR` to `pi/` of the state directory, so pi downloads no tool binary.
-The adapter persists no settings file and no session file in that directory or in `~/.pi`.
+The adapter persists no settings file in that directory or in `~/.pi`.
+The [Agent implementation](agent.impl.md#session-file) rules the session file.
 It disables the discovery of user extensions, skills, prompt templates and themes.
-It uses an in-memory session manager.
 It disables the version check, the install telemetry and the provider catalog refresh.
 It pins `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai` and `@earendil-works/pi-agent-core` at 0.86.0.
 An execution of an externally hosted worker has no native agent, and a read of its [execution setup](#the-execution-setup) answers 409 `worker.execution.no_native_agent`.

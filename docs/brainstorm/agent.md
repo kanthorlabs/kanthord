@@ -24,3 +24,7 @@ It holds the runtime of a native agent and the [agent session](agent.vocabulary.
 
 - An agent session runs the agent loop of one agent for one consumer.
 - The component serves the resume of an agent session.
+- A resume restores an agent session after the end of its client or the end of its consumer process.
+- A turn that runs at that end is lost, and the resumed session restores every completed turn.
+- The runtime of the agent stores the agent session in its own session format, on the host that runs the session.
+- kanthord stores no copy of an agent session.

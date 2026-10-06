@@ -18,6 +18,13 @@ One run of the agent loop of one agent for one consumer.
 The term names no closed set.
 Execution 1 opens one agent session of `swe@1` under worker binding `general-main`.
 
+## resume
+
+The reopen of an agent session from the turns that its runtime stored.
+The term names no closed set.
+Execution 1 finishes 40 turns of `swe@1`, and the host of the `worker` application restarts.
+The resumed session of Execution 1 holds the 40 turns, and `swe@1` continues at turn 41.
+
 ## consumer
 
 A service that opens an agent session under its own authority.
