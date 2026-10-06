@@ -43,7 +43,7 @@ The GitHub implementation resolves the binding through the Project Service under
 
 The report on a resource under the [resource healthcheck rule](architecture.md#resource-healthcheck).
 
-The Worker Service checks agent provider `openai-main` of the global `swe@1` enablement.
+The Agent component checks agent provider `openai-main` of the global `swe@1` enablement.
 
 ## resource status
 

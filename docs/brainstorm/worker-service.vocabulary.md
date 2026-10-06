@@ -127,36 +127,6 @@ It takes the work prompt from task "Add reset token expiry".
 It reads no agent file of the workspace, because the repository binding supplies the project prompt.
 The reviewer execution of the same objective composes the project prompt from that repository binding, and it reads no agent file of the workspace.
 
-## in the catalog
-
-The phrase states that the catalog holds an agent declaration; it is no state value.
-`swe@1` is in the catalog when no enablement exists for it.
-
-## agent enablement
-
-The global record keyed by agent name that permits agent use.
-The closed state set is:
-
-- `enabled`
-- `disabled`
-
-The `swe@1` enablement holds agent providers `openai-org` and `atlas-llm`, and one default configuration.
-An absent record denies use like `disabled`.
-
-## agent provider
-
-One named provider and credential pair inside an agent enablement.
-Its fields are `name`, `provider` and `credential`; it holds no model list.
-For example, `{ name: "openai-org", provider: "openai-compatible", credential: "openai-main" }` belongs to the `swe@1` enablement.
-The closed provider set is every [LLM platform](llm.vocabulary.md#llm-platform), for example `anthropic`, `openai-compatible` and `groq`.
-Each value maps to the same-named LLM platform.
-
-## default configuration
-
-The values that a human selects in an agent enablement: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
-For example, the `swe@1` default names `atlas-llm`, approved model `qwen3-coder` and effort `off`.
-A worker declaration supplies none of these values.
-
 ## entry
 
 The optional override of one agent's default configuration inside a worker binding.
@@ -168,22 +138,6 @@ The closed form set is:
 `general-frontier` holds the tuning entry `{ reasoningEffort: "high" }` for `swe@1`.
 A complete entry names `{ agentProvider: "atlas-llm", modelIdentifier: "qwen3-coder", reasoningEffort: "off" }`.
 An entry holds no `options`.
-
-## effective configuration
-
-The configuration that the Worker Service resolves for one agent under one worker binding.
-It holds `agentProvider`, `provider`, `credential`, `modelIdentifier` and `reasoningEffort`.
-Under `general-main`, a complete entry selects `atlas-llm`, which supplies provider `openai-compatible` and credential `atlas-key`.
-The model is `qwen3-coder` and the effort is `off`.
-The closed reasoning-effort set is:
-
-- `off`
-- `minimal`
-- `low`
-- `medium`
-- `high`
-- `xhigh`
-- `max`
 
 ## action performer
 

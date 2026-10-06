@@ -135,7 +135,7 @@ The validation of the whole set runs at the write, and the validation of one bin
 A rejected configuration prevents use, so a resolution that fails validation refuses the operation.
 The write refuses a submission that changes the worker of an existing worker binding under the same binding name with 409 `project.bindings.worker.resource_changed`.
 
-- Worker binding validation calls [Worker configuration validation](worker-service.impl.md#agent-configuration-validation) inside the write transaction.
+- Worker binding validation calls [Agent configuration validation](agent.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
 - The `instanceCount` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
@@ -149,7 +149,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
 - An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
-- For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `worker.agent.configuration.invalid`.
+- For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `agent.configuration.invalid`.
 - A worker binding of a known worker with no declared agent, an external harness, that carries `entries` or `resourceBudget` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
 - A strategy with more than one action refuses the write.
 
@@ -201,7 +201,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 An execution calls the resolution at the moment that it needs the resource.
 One read resolves the pinned revision and its dependency chain.
-For an agent configuration, the Project Service asks the [Worker Service](worker-service.impl.md#agent-configuration-validation).
+For an agent configuration, the Project Service asks the Worker Service, which validates through the [Agent component](agent.impl.md#agent-configuration-validation).
 The Project Service merges no configuration itself.
 It checks the disablement and the removal of every binding of the chain, and a disabled or removed member refuses the operation.
 The resolution records the identity of every revision of the chain, and not the identity of the worker binding revision alone.
@@ -243,7 +243,7 @@ The [Gateway Service](gateway-service.impl.md#the-resource-healthcheck-report) b
 - `projectNameOf(tx, projectId)` answers the name of a project in the collection transaction of the health report. The Intake inventory callback of the composition root is its only consumer. It opens no transaction, and an absent project throws.
 
 The [LLM](llm.impl.md#the-resource-healthcheck), [Repository](repository.impl.md#platform-validators) and [Storage](storage.impl.md#platform-validators) components own the credential checks of their platforms.
-The [Worker Service](worker-service.impl.md#agent-provider-healthcheck) owns agent provider checks.
+The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provider checks.
 
 ## The binding verify
 

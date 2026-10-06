@@ -16,9 +16,9 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The component holds no authority.
 - Every service calls it for its own purpose after the service that owns the entity of the operation authorizes it, under [architecture.md](architecture.md#invocation).
 - [Custody](custody.md#secret-use-and-handover) owns the credential boundary and follows the authorization check.
-- The [Worker Service](worker-service.md#agent-configuration) owns agent enablement, agent providers and the default configuration.
-- The Worker Service selects the agent provider of an execution and reads no metadata key of a credential.
-- The [Worker execution](worker-service.md#executions) obtains the model runtime of its agent provider from the model connector.
+- The [Agent component](agent.md#agent-configuration) owns agent enablement, agent providers and the default configuration.
+- The Agent component selects the agent provider of an agent session and reads no metadata key of a credential.
+- An [agent session](agent.md#agent-session) obtains the model runtime of its agent provider from the model connector.
 
 ## Credential records
 
@@ -31,7 +31,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - It states the address and the code that the human needs.
 - The human completes the interaction and returns a provider code when necessary.
 - A failed or expired session stores nothing.
-- A credential answer of the component lists the agent providers that name the credential. The Worker Service answers that read.
+- A credential answer of the component lists the agent providers that name the credential. The Agent component answers that read.
 
 ## Provider capability
 

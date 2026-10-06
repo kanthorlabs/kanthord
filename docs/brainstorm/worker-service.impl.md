@@ -31,87 +31,8 @@ Every runtime setup call carries an abort signal with a deadline.
 ## The worker template registry
 
 - A worker template is a static server module; the registry maps worker names to templates and loads no runtime plugin.
-- The catalog holds one declaration per agent name, with options, a whole-configuration constraint and prompts.
-- A worker references that declaration and carries no separate configuration version.
-- Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
+- A worker references the declaration of its agent in the [agent catalog](agent.impl.md#the-agent-catalog) and carries no separate configuration version.
 - `general@1` references `swe@1`; `reviewer@1` references `re@1`.
-- Both declare an empty option schema.
-- The declaration supplies no provider, model identifier or reasoning-effort default.
-- `agent list` answers one summary per catalog agent: `agentName`, `workerNames` and `enablement`.
-- `agent get` answers the prompts of the declaration, `configurationSchema`, `overridableFields` and `enablement`.
-- `enablement` is null when no record exists.
-
-## Agent configuration validation
-
-- The Worker Service owns enablement writes, effective configuration resolution and `validateEntry(tx, workerName, entry)`.
-- The [entry forms](worker-service.vocabulary.md#entry) define inheritance and required fields.
-- A write refuses nonempty `options`.
-- Every enablement write, worker binding write and resolution runs the same checks.
-- Every enablement write names `expectedRevision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A stale or absent value answers 409 `worker.agent.enablement.revision_conflict` with the current value in `details`.
-- It checks the override allowlist before the merge, then validates the complete effective configuration.
-- `overridableFields` of `swe@1` and `re@1` is `["agentProvider", "modelIdentifier", "reasoningEffort"]`.
-- `validateEntry` refuses a worker whose agent has no enabled enablement, and names that agent.
-- This refusal occurs inside the worker binding write transaction.
-- An enablement change calls `entriesOfAgent(tx, agentName)` of the Project Service in the transaction of its commit.
-- It validates every dependent worker binding and lists invalid bindings in its refusal.
-- Removal checks all dependents in that same transaction.
-- [The collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) requires co-location of the two owners.
-- A resolution reads the worker binding, entry, enablement and credential metadata from one snapshot, and it records the revisions of the binding, the entry and the enablement.
-- The span of each native model inference call carries the worker binding and the agent enablement as identity attributes. Each value is the row id that the resolution read, so the span records the revisions of the binding, the entry and the enablement.
-- Resolution makes no network call.
-- The instance healthcheck reports whether the effective configuration resolves.
-
-Provider definitions contain no auth types; the [LLM component](llm.impl.md#platform-validators) owns those types, and custody owns suitability.
-
-- A provider is a member of the [agent provider set](worker-service.vocabulary.md#agent-provider).
-- Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
-- A model identifier belongs to `getBuiltinModels(provider)` or to the [approved models](llm.impl.md#the-approved-models) that the LLM component answers for an `openai-compatible` credential.
-- An empty `models` list permits no model selection.
-- The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoningLevels`, which defaults to `["off"]`.
-- A level that no source establishes fails validation.
-- The Worker Service sends `{ credential, platform }` to custody and consumes its suitability result.
-- It reads no metadata and no secret.
-
-## Configuration schema
-
-- `configurationSchema` uses JSON Schema draft 2020-12, emitted by `z.toJSONSchema` of `zod` at 4.4.3.
-- Its source is the effective-configuration schema, not the template's option schema.
-- The root is an object with `additionalProperties: false`.
-- All five properties below are required; none carries `default`, and the schema holds no `options`.
-
-| Property          | Schema                                                            |
-| ----------------- | ----------------------------------------------------------------- |
-| `agentProvider`   | `string`; the name of an agent provider of the enablement         |
-| `provider`        | `string`, enum of every platform of the [LLM platform list](llm.impl.md#platform-validators) |
-| `credential`      | `string`; a credential name                                       |
-| `modelIdentifier` | `string`                                                          |
-| `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
-
-- The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
-- It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
-- JSON Schema validates no cross-field lookup; the Worker Service enforces it.
-
-## Agent provider healthcheck
-
-- Every agent provider has a report-only resource healthcheck in the [health report](gateway-service.impl.md#the-resource-healthcheck-report).
-- The check calls the [check of the LLM provider](llm.impl.md#the-llm-provider) of its credential and reports provider readiness.
-- It groups calls by credential and attributes the result to each agent provider.
-- A credential whose platform has no LLM provider reports `unknown`.
-- Its `capability` is the [capability of the LLM provider](llm.impl.md#the-llm-provider) of its credential, which the LLM component answers.
-- The check belongs to neither the liveness answer nor the claim path; instance healthchecks retain local resolution.
-- [LLM healthcheck limits](llm.impl.md#the-resource-healthcheck) govern forbidden calls, unavailable calls and OAuth expiry without refresh.
-- Shared probe code changes no owner.
-
-## Configuration tests
-
-- Tests cover both entry forms, missing enablement, disablement, complete-entry refusal and the empty option schema.
-- A test covers two enablement writes that name one expected revision, and it asserts that the second one answers 409 `worker.agent.enablement.revision_conflict`. A test covers a `put` without `expectedRevision` for an agent that holds a row.
-- Tests cover override allowlists, model catalogs, established reasoning levels and all five effective-configuration fields.
-- Tests assert schema draft, required properties, absent defaults, absent options and the whole-configuration description.
-- Tests cover transactional changes and removals, dependency lists, snapshot reads and recorded revisions.
-- Tests cover the metadata provider build, per-model base URLs, zero costs and absent environment keys.
-- Tests cover every provider-check answer, status, deadline and the absence of raw keys.
-- Tests cover healthcheck grouping, attribution, report-only behaviour and no inference call.
 
 ## Externally hosted worker
 
@@ -149,19 +70,18 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 ## Inspection operations
 
-- Five `human` operations expose the published worker contract, the agent declaration and enablement, and the runtime-only instance record. Each one is `unary`, declares `mutation: false`, uses the default 30 s timeout and reads no table of another service.
+- Four `human` operations expose the published worker contract and the runtime-only instance record. Each one is `unary`, declares `mutation: false`, uses the default 30 s timeout and reads no table of another service.
 - `worker.catalog.list` is `GET /api/worker/catalog` with `limit` and `cursor` under the [pagination rule](architecture.impl.md#pagination), keyed by worker name in ascending alphabetical order, and the next page reads the names that are greater than the cursor. An item holds `name`, `host` (`kanthord` or `external-harness`), `declaredNodeStates` and `requiredNodeFormat`. The answer lists the supplied workers; a registration adds no entry.
 - `worker.catalog.get` is `GET /api/worker/catalog/:workerName`.
   The answer holds the item fields and `resourceBudget` for every worker.
   It also holds `harness` for an externally hosted worker, or `method` and `agentName` for a worker that kanthord hosts.
   An unknown name answers 404 `worker.catalog.not_found`.
-- `worker.agent.get` is `GET /api/worker/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `worker.agent.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the worker template registry](#the-worker-template-registry) owns the declaration.
 - `worker.instance.list` is `GET /api/worker/instance` with optional `projectId`, `resourceIdentity`, `limit` and `cursor`. `projectId` is a `project_<ulid>` and `resourceIdentity` is `worker:kanthord:<binding name>`. `resourceIdentity` requires `projectId`, and a binding that the project does not hold answers 400 `worker.instance.binding_unknown`. The answer pages live instance records by runtime identity descending. It is a live inventory and no history.
 - `worker.instance.get` is `GET /api/worker/instance/:runtimeIdentity`. An unknown or ended instance answers 404 `worker.instance.not_found`.
 - An instance record holds `runtimeIdentity`, `projectId`, `resourceIdentity`, `workerName`, `host`, `placement` for a kanthord host, `clientId` and `name` for a registered instance, `activity` (`idle`, `pulling` or `executing`), `draining`, `executionId` while executing, and `registered`. It holds no JWT.
 - The reads change no registration, no pool, no configuration and no scheduling state, and they infer no dead process from silence.
-- The instance healthcheck runs before a work pull and before a claim commits, not through a human inspection command. A disabled enablement shows in `worker agent get`; a missing enablement refuses the binding write under [configuration validation](#agent-configuration-validation). The health report covers registration liveness.
-- Tests cover each human read and machine-JWT refusal, each unknown name or identity, the binding-to-project check, and records after registration, during execution and after a drain. They assert null and disabled enablements, no JWT and no pool side effect.
+- The instance healthcheck runs before a work pull and before a claim commits, not through a human inspection command. A disabled enablement shows in `agent get`; a missing enablement refuses the binding write under [configuration validation](agent.impl.md#agent-configuration-validation). The health report covers registration liveness.
+- Tests cover each human read and machine-JWT refusal, each unknown name or identity, the binding-to-project check, and records after registration, during execution and after a drain. They assert no JWT and no pool side effect.
 
 ## Deregistration
 
@@ -238,7 +158,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - For an initiative, `repositories` holds one row per resource identity of the repository bindings of its current objectives, discarded objectives included, at the greatest revision.
 - `globalPrompt` is the configured source of the global prompt as the server resolves it with the reader of the composer: `{ state: "absent" }`, `{ state: "disabled" }`, `{ state: "present", path, text }` or `{ state: "invalid", path, reason }`.
 - The agent file sources of the global prompt stay the files of the host that runs the agent.
-- An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `worker.agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
+- An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
 - The adapter refuses the execution with `worker.runtime.setup_refused`, whose `details.reason` is `credential_revision_mismatch`, when the `credentialId` of the handover item differs from the `credentialId` of the answer.
@@ -343,7 +263,7 @@ An external harness reaches the same MCP server, and pi reaches it as a tool sou
 The third source is the other tools that a project adds, including other MCP servers.
 The fourth source is the host-supplied tools that the `worker` application serves in its own process.
 An agent declaration names its host tools: `swe@1` holds `evidence-upload`, and `re@1` holds none.
-`worker.agent.get` lists a host tool with the source `host`.
+`agent.get` lists a host tool with the source `host`.
 The first version supports MCP v2, https://ts.sdk.modelcontextprotocol.io/v2/.
 The tool register and the abstraction layer for tool instances manage the four sources.
 

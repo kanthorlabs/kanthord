@@ -98,7 +98,7 @@ Its [design](custody.md#scope) defines credential protection.
 The [LLM component](llm.md) is a shared component for model credentials and the model runtime.
 The [Repository component](repository.md) is a shared component for repository transport, git platform operations and payload decoders.
 The [Storage component](storage.md) is a shared component for object storage operations.
-The [Agent component](agent.md) is a shared component for the runtime of a native agent and the agent session.
+The [Agent component](agent.md) is a shared component for the agent catalog, the agent configuration, the runtime of a native agent and the agent session.
 Each [platform](architecture.vocabulary.md#platform) belongs to exactly one of the LLM, Repository and Storage components.
 That component owns the credential records of the platform and stores them through custody.
 
@@ -131,7 +131,8 @@ The inventory has these owners.
 - [Project Service](project-service.md#resource-and-binding-model): a repository binding.
 - The [LLM](llm.md#resource-healthcheck), [Repository](repository.md#resource-healthcheck) and [Storage](storage.md#resource-healthcheck) components: a credential store record of their platforms.
 - [Intake Service](intake-service.md#inbounds): an inbound.
-- [Worker Service](worker-service.md#agent-configuration): an agent provider and a registered instance.
+- [Worker Service](worker-service.md#instances-and-hosting): a registered instance.
+- [Agent component](agent.md#agent-configuration): an agent provider.
 
 The store, the log and the host toolchain are internal components, not external resources.
 
@@ -142,7 +143,7 @@ The store, the log and the host toolchain are internal components, not external 
 - The check runs under the [human identity](overview.vocabulary.md#human-identity) of the caller.
 - One request checks each target once.
 - A credential store record and a repository address are each one target.
-- [Worker provider checks](worker-service.impl.md#agent-provider-healthcheck) define agent provider targets.
+- [Agent provider checks](agent.impl.md#agent-provider-healthcheck) define agent provider targets.
 - Every entry that shares a target reports its one result.
 - The checks run with bounded concurrency, and each check has a deadline.
 - The inventory comes from the owning service, not from the checks.
@@ -208,7 +209,7 @@ Every service that versions a resource follows these rules.
 - A reviewer execution writes the assessment to the Mission Service.
 - An execution acts on the repository through the git platform.
 - The Worker Service reads the permitted workers and the instance counts from the Project Service.
-- The Worker Service resolves agent configuration and uses the selected credential through custody.
+- The Worker Service resolves agent configuration through the Agent component and uses the selected credential through custody.
 - The Worker Service reaches a large language model provider.
 - Every service writes telemetry to the Tracking Service.
 - An instance that an external harness hosts ingests its captured telemetry into the Tracking Service through the Gateway Service.

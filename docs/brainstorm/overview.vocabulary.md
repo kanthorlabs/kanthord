@@ -204,7 +204,7 @@ Its [storage binding](project-service.vocabulary.md#storage-binding) allocates t
 A provider is a large language model provider that serves the models that the agents of a worker use.
 The term names no closed set.
 The Worker Service reaches OpenAI for each model inference call of the `swe@1` agent in "Account recovery".
-Its [agent enablement](worker-service.vocabulary.md#agent-enablement) supplies the provider selection.
+Its [agent enablement](agent.vocabulary.md#agent-enablement) supplies the provider selection.
 
 ## deliverable
 

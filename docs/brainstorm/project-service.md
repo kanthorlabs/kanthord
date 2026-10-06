@@ -68,7 +68,7 @@ The Project Service validates the length of the project prompt against a fixed b
 
 ## Execution configuration and instance count
 
-The [Worker Service](worker-service.md#workers-and-templates) owns worker declarations and agent configuration.
+The [Worker Service](worker-service.md#workers-and-templates) owns worker declarations, and the [Agent component](agent.md#agent-configuration) owns agent configuration.
 A worker binding names one worker.
 The worker that a worker binding names never changes. A project removes the binding and adds another one instead.
 
@@ -76,10 +76,10 @@ The worker that a worker binding names never changes. A project removes the bind
 - An instance count of 0 makes the binding unavailable.
 - A worker binding of a native worker can hold an optional [resource budget](worker-service.vocabulary.md#resource-budget).
 - A worker binding can hold an [entry](worker-service.vocabulary.md#entry) for each agent of its worker.
-- The Project Service holds that entry in the binding and resolves no [effective configuration](worker-service.vocabulary.md#effective-configuration).
+- The Project Service holds that entry in the binding and resolves no [effective configuration](agent.vocabulary.md#effective-configuration).
 - It asks the Worker Service when it needs the current effective configuration.
 - The Worker Service validates an entry during the binding write through the [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters).
-- The [agent enablement rules](worker-service.md#agent-configuration) govern that validation.
+- The [agent enablement rules](agent.md#agent-configuration) govern that validation.
 - A project reaches an agent only through its worker binding and worker.
 
 Each worker binding of one worker holds its own configuration, and two bindings of one worker with equal values are valid.

@@ -21,16 +21,10 @@ The [overview](overview.vocabulary.md) defines a worker, a worker instance, an e
 The Worker Service supplies the workers.
 A worker declares its name, its host, the node states that its instances claim and its required node format.
 A worker that kanthord hosts also declares its method and its agents, at least one.
-It references the catalog declaration of each agent.
+It references the [catalog declaration](agent.md#agent-catalog) of each agent.
 A worker that an external harness hosts declares none of those, because its method is the orchestration skill of the harness.
-An agent name names a role, and no agent name equals a worker name.
-A configuration is named through a worker binding, never through a bare agent name.
 The [Scheduler Service](scheduler-service.md#claims-and-counts) admits a claim from the declared node states.
-The Worker Service owns the catalog and one declaration per agent name.
-Each declaration holds its options, whole-configuration constraint and prompts.
-Every agent of a kanthord-hosted worker is [in the catalog](worker-service.vocabulary.md#in-the-catalog).
-A catalog declaration supplies no provider, model identifier or reasoning effort default.
-A human selects those values through [agent configuration](#agent-configuration).
+Every agent of a kanthord-hosted worker is [in the catalog](agent.vocabulary.md#in-the-catalog) of the [Agent component](agent.md#agent-catalog).
 A worker reads no other project configuration.
 The required node format names the fields of a node that the method requires.
 Compatibility reads the node revision that the [work-pull rules](scheduler-service.md#work-pulls) of the Scheduler Service select.
@@ -54,7 +48,7 @@ The Worker Service supplies the model [connector](architecture.vocabulary.md#con
 An execution and its agent reach a git platform through the [Repository component](repository.md#boundary) for git transport and through the Intake Service for platform reads, and through nothing else.
 A native agent reaches a provider through the model connector alone.
 The model connector resolves the binding through the [Project Service](project-service.md#configuration-lifecycle-and-consistency) for each operation, under the requester's identity.
-For each native model inference call, the Worker Service resolves the agent's [effective configuration](worker-service.vocabulary.md#effective-configuration).
+For each native model inference call, the Worker Service resolves the agent's [effective configuration](agent.vocabulary.md#effective-configuration) through the Agent component.
 The model connector uses that configuration with the material that [custody](custody.md#secret-use-and-handover) releases or hands over.
 An execution honours every value of the effective configuration of its agent.
 A local git operation runs in the workspace and passes through no connector.
@@ -62,40 +56,14 @@ An agent holds no repository credential.
 
 ## Agent configuration
 
-- The Worker Service owns [agent enablement](worker-service.vocabulary.md#agent-enablement), [agent provider](worker-service.vocabulary.md#agent-provider) and [default configuration](worker-service.vocabulary.md#default-configuration).
-- An enablement is global to the server, belongs to no project and is keyed by agent name.
-- A human enables an agent before use.
-- An absent or disabled enablement denies use.
-- An enablement holds one or more named agent providers and the default configuration that a human selects.
-- Each agent provider pairs a provider with a credential store record.
-- The Worker execution obtains the model runtime of an agent provider from the [LLM component](llm.md#model-connector).
-- Its name is unique inside the enablement, and its provider never changes.
-- Another provider requires another agent provider.
-- A credential change creates a revision.
+- The [Agent component](agent.md#agent-configuration) owns the agent enablement, the agent provider, the default configuration and the resolution of the effective configuration.
 - A worker binding holds optional per-agent [entries](worker-service.vocabulary.md#entry).
 - An entry selects only an agent provider of that agent's enablement.
-- The Worker Service resolves the effective configuration when a worker works on a node.
-- It validates the whole configuration at enablement write, worker binding write and resolution.
-- The [validation contract](worker-service.impl.md#agent-configuration-validation) defines these checks.
+- The Worker Service resolves the effective configuration through the Agent component, with the entry of the worker binding, when a worker works on a node.
 - A worker binding write is refused when any agent of its worker has no enabled agent enablement.
 - The refusal names the agent.
-- An enablement change is refused when it invalidates any dependent worker binding.
-- The refusal lists those bindings.
-- The validation of all dependent worker bindings and the enablement change are atomic.
-- Every enablement change creates a revision.
 - A tuning entry follows unchanged fields of the default configuration at its next resolution.
-- Disablement is the only stop switch.
-- An agent provider has no independent disablement.
-- Disablement refuses every later resolution, including a complete entry, so the instance healthcheck fails and no claim follows.
-- The worker binding remains, and disablement recalls no handover in flight.
-- Removal of an enablement is refused while any worker binding depends on its agent.
-- Removal of an agent provider is refused while a default configuration or entry names it.
-- A removal refusal lists its dependents.
-- The check and removal are atomic.
-- The [collaboration contract](architecture.impl.md#the-operation-and-its-two-entry-adapters) preserves the shared invariants with the Project Service.
 - An externally hosted worker declares no agent and needs no agent enablement.
-- Each agent provider has a report-only [resource healthcheck](worker-service.impl.md#agent-provider-healthcheck).
-- That check belongs to the health report, not the liveness answer or claim path.
 
 ## Prompt composition
 
@@ -191,7 +159,7 @@ A live execution of that instance follows the [liveness rules](scheduler-service
 The end of a registration proves no stop of the program.
 The Worker Service [owns the resource healthcheck](architecture.md#resource-healthcheck) of a registered instance.
 It reports the liveness of the registration from server state, distinct from the [instance healthcheck](scheduler-service.vocabulary.md#instance-healthcheck).
-A human reads the contract of every worker, the declaration and the enablement of every agent in the catalog, and the instance record of every instance.
+A human reads the contract of every worker and the instance record of every instance.
 That read changes no instance, no pool and no configuration.
 
 An instance record is runtime-only. The `worker_instance` row holds the durable part of a registered instance.

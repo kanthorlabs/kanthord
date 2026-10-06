@@ -80,7 +80,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 
 ## The approved models
 
-- The LLM component answers the approved models of a credential to the [Worker configuration validation](worker-service.impl.md#agent-configuration-validation): the `models` metadata of an `openai-compatible` credential, with the defaults applied.
+- The LLM component answers the approved models of a credential to the [Agent configuration validation](agent.impl.md#agent-configuration-validation): the `models` metadata of an `openai-compatible` credential, with the defaults applied.
 - The Worker Service reads no metadata key of a credential.
 
 ## Operations
@@ -88,7 +88,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The component declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) under the prefix `llm`.
 - `llm.credential.create` accepts a record of every LLM platform whose secret shape is not `oauth`.
 - `llm.credential.login` obtains a record of an LLM platform whose secret shape is `oauth`.
-- `llm.credential.get` answers the record with `agentProviders`, the list of `{ agent, name }` of every agent provider that names the credential. The Worker Service answers that read.
+- `llm.credential.get` answers the record with `agentProviders`, the list of `{ agent, name }` of every agent provider that names the credential. The Agent component answers that read.
 
 ## The OAuth login
 
