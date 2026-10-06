@@ -21,6 +21,7 @@ It describes no mechanism of another service.
 - The chat of the dashboard is the interface of a workbench session. It is no separate entity.
 - The Workbench Service owns the [workbench session](workbench-service.vocabulary.md#workbench-session).
 - A human drives a workbench session through the chat of the dashboard or through the API.
+- The chat renders the text of an assistant message as Markdown.
 - Every action of a workbench session comes from its human.
 - A human picks one agent of the catalog and starts a workbench session with that agent.
 - A workbench session belongs to one agent and to no project.
