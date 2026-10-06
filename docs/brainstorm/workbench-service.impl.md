@@ -53,11 +53,13 @@ Every operation has `human` access.
 | `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202 with `{ sessionId, runActive: true }`. 409 `workbench.session.run_active` while a run is active. |
 | `workbench.session.approve` | `POST /api/workbench/session/:sessionId/approve` with `{ toolCallId, approved }` | `unary` | `{ sessionId, toolCallId, approved }`. The pending call runs or returns blocked. |
 | `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | `{ sessionId, runActive: false }`. The active run stops. The answer is the same when no run is active. |
-| `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` | `wait` | The entries after `after` and the snapshot of the active run. |
+| `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` and `version` | `wait` | The entries after `after` and the snapshot of the active run. |
 
 - `after` names the id of the last session entry that the client holds.
 - A poll answers the session entries after `after`, and a snapshot of the active run: `streamingMessage`, `pendingToolCalls`, `pendingApproval`, `runActive` and `errorMessage`.
-- A poll answers when the entries or the snapshot change, or when its wait window ends.
+- Each answer carries `version`, a number that the service raises at each change of the snapshot or of the entries.
+- A poll names `version`, the version of the last answer that the client holds. A poll answers at once when entries follow `after` or when its `version` differs from the current version. A poll with no `version` answers at once.
+- Otherwise a poll answers at the next change, or when its wait window ends.
 - The route timeout of `workbench.session.events` is 30 s, and its wait window is 25 s.
 - The Workbench Service holds no event of a run.
 - A run starts at the `agent_start` event of pi and ends at its `agent_end` event. One run holds one or more turns of pi.
