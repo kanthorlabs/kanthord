@@ -44,7 +44,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - An enablement holds one or more named agent providers and the default configuration that a human selects.
 - Each agent provider pairs a provider with a credential store record.
 - An agent session obtains the model runtime of an agent provider from the [LLM component](llm.md#model-connector).
-- Its name is unique inside the enablement, and its provider never changes.
+- Its name and its credential are each unique inside the enablement, and its provider never changes.
 - Another provider requires another agent provider.
 - A credential change creates a revision.
 - The component resolves the [effective configuration](agent.vocabulary.md#effective-configuration) of an agent from its enablement and one optional [entry](worker-service.vocabulary.md#entry) that the consumer supplies.

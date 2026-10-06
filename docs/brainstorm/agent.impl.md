@@ -33,6 +33,7 @@ A mechanism here never overrides a rule there.
 - A write refuses nonempty `options`.
 - Every enablement write, worker binding write and resolution runs the same checks.
 - Every enablement write names `expectedRevision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A stale or absent value answers 409 `agent.enablement.revision_conflict` with the current value in `details`.
+- A `put` or a `provider.add` that names a credential of another agent provider of the same enablement answers 409 `agent.enablement.provider.credential_conflict`. A `provider.add` names the credential and the holding agent provider in `details`.
 - It checks the override allowlist before the merge, then validates the complete effective configuration.
 - `overridableFields` of `swe@1` and `re@1` is `["agentProvider", "modelIdentifier", "reasoningEffort"]`.
 - `validateEntry` refuses a worker whose agent has no enabled enablement, and names that agent.
