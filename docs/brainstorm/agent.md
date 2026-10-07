@@ -95,7 +95,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The server composes the system layer and the agent layer for every consumer. The host that holds the working directory reads the agent files of the working layer.
 - The `Settings` section of the dashboard manages the system layer: its layer switch, its source switches and its custom system prompt. The agent page manages the system layer override, the agent layer and the workbench working layer of its agent.
 - The agent page shows the system layer override as a three-way control with the effective state, for example `Follows server: Off`. While the system layer of a scope is off, its source rows are dimmed and stay editable.
-- Each source row holds its on or off switch. The switch of the last source that is on in the agent layer is disabled, with a tooltip that states the reason.
+- Each source row holds its on or off switch. A switch is disabled, with a tooltip that states the reason, for the last source that is on in the agent layer and for a file source whose state is `absent`.
 - The agent page shows each prompt source as one row, collapsed by default. The title of a row is the path of its file, else the name of the source. A chevron points right when the row is collapsed and down when it is expanded. The expanded row renders the text as markdown in a scrollable panel.
 - Each row with text holds a button that copies the raw markdown. A row with no text is inactive: it holds no chevron and no copy button.
 - `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
