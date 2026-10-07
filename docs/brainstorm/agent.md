@@ -85,6 +85,10 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The agent file of the agent directory is `<agentName>.md`, for example `~/workdir/swe@1.md`.
 - A human edits the custom agent prompt on the dashboard, and the database stores it.
 - Each source of the agent layer holds one on or off switch. A switch change that turns off every source of the agent layer is refused.
+- `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
+- When `kanthord.yaml` names a system file, the host agent file is that file, and the composer runs no discovery.
+- The database holds every switch and every custom text. The dashboard edits a switch or a custom text, and it edits no path.
+- A path change takes effect at the next server start. A switch change or a text change takes effect at the next agent session.
 - The work prompt is the task message of the consumer. It belongs to no layer, it holds no switch, and the composer pins it.
 - An operator override replaces or extends a shipped prompt on one server.
 - An override takes the position and the precedence of the prompt that it replaces or extends.
