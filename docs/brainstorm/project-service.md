@@ -72,6 +72,8 @@ At the write of a repository binding, the Project Service performs one network g
 A failed read refuses the write.
 A repository binding holds an optional [project prompt](worker-service.md#prompt-composition).
 The Project Service validates the length of the project prompt against a fixed bound.
+A repository binding holds the switches of the [working layer](agent.md#prompt-composer) of an execution: one switch per agent file and one switch for the project prompt.
+A switch change creates a binding revision.
 
 ## Execution configuration and instance count
 
