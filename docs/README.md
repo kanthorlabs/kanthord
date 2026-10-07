@@ -13,6 +13,7 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | How do I run the server?                       | [serve](reference/serve.md)                                                                                                       |
 | How do I authenticate?                         | [Human JWT generation](reference/jwt.md) and [verification](reference/gateway/verify.md)                                          |
 | How does the system work?                      | [Service architecture](explanation/architecture.md)                       |
+| How does the native agent work?                | [Native agent explained](explanation/native-agent.md)                                                                             |
 | How do I interpret health reports?             | [Healthchecks explained](explanation/healthchecks.md)                                                                             |
 | What do errors and IDs mean?                   | [Errors](reference/errors.md) and [identities](reference/identities.md)                                                           |
 
