@@ -75,9 +75,9 @@ The pages record only the decision. Read the owning page section before you prop
 
 ## Naming outside the code
 
-- Write every name outside the code in snake_case. This covers a table, a column, a property inside a JSON column, each part of an operation id or an error code, and each key of a configuration file such as `kanthord.yaml` or `cli.yaml`.
-- An identifier inside the code follows the convention of its language.
-- An HTTP payload field keeps the exact field name of its domain entity, under Contracts.
+- Write every name outside the code in snake_case. This covers a table, a column, a property inside a JSON column, a stored key or value name, each part of an operation id or an error code, each key of a configuration file such as `kanthord.yaml` or `cli.yaml`, and each field of an HTTP payload or a CLI output.
+- Write every field of a domain entity schema in the code in snake_case, for example `agent_name`, so that a contract uses that name with no rename.
+- Every other identifier inside the code, for example a local variable, a function or a type, follows the convention of its language.
 
 ## Database design
 
