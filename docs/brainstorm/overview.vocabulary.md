@@ -234,7 +234,8 @@ Each sub-agent has its own agent prompt that defines its responsibilities and co
 
 The default standard is the standard that the base prompt of a worker states as the default of the human.
 An assessment weighs the evidence against it beside the criterion.
-The worker that declares the base prompt owns the default standard, and a change to it is a new worker version, so the worker version of the reviewer fixes the default standard that an assessment applies.
+The base prompt that the reviewer runs with states the default standard that an assessment applies.
+The composition record of the execution names that base prompt by its source and its digest.
 The term names no closed set.
 The base prompt of `swe@1` and `re@1` forbids an abstraction for single-use code.
 The change of task "Add reset token expiry" meets the criterion of "Add password reset".

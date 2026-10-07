@@ -71,6 +71,14 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - That check belongs to the health report, not the liveness answer or claim path.
 - A human reads the models that an agent provider serves, with the reasoning efforts of each model. The list holds exactly the values that the validation accepts.
 
+## Prompt composer
+
+- The component ships one base prompt and one agent prompt for each agent of the catalog.
+- A shipped prompt is the default of its agent.
+- An operator override replaces or extends a shipped prompt on one server.
+- An override takes the position and the precedence of the prompt that it replaces or extends.
+- The composition record names the source and the digest of every prompt that an agent session runs with.
+
 ## Agent session
 
 - An agent session runs the agent loop of one agent for one consumer.

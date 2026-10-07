@@ -77,8 +77,8 @@ A worker declares, for each of its agents, the base prompt that the agent uses a
 A base prompt states what holds for every agent that uses it, and more than one agent uses one base prompt.
 A base prompt describes the engineer that every agent that uses it is, and it states the default standard of the work product that those agents produce and judge.
 An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
-The base prompt and the agent prompt are part of the contract of the worker name.
-A change to either one is a new worker version.
+The shipped base prompt and agent prompt are the defaults of the worker name.
+An operator override replaces or extends them on one server, and the [prompt composer](agent.md#prompt-composer) records the override.
 The project prompt states the programming language, the development style and the coding conventions of the work product of one repository.
 It states no rule about the method, the tools, the repository operations, the assessment or the release.
 The work prompt renders from the node revision that the attempt pins.
@@ -103,7 +103,8 @@ An agent file of the workspace is the work product of the candidate.
 
 The composition states the owner, the source and the precedence of every layer to the agent.
 The agent prompt holds the highest precedence, then the base prompt, then the work prompt, then the project prompt, then the global prompt.
-The base prompt and the agent prompt state the obligations of the worker, and no other layer revokes one.
+The base prompt and the agent prompt, after the operator override, state the obligations of the worker.
+No global prompt, project prompt or work prompt revokes one.
 The agent prompt governs the base prompt, and a base prompt that contradicts the agent prompt that uses it is a defect of the worker.
 An execution performs no conduct that its base prompt or its agent prompt forbids, whatever another layer states.
 A global prompt and a project prompt define no criterion.
