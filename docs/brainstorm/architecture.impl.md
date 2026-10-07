@@ -278,7 +278,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The sections of the file
 
-- The file holds the shared section `log` and the field `masterKey`, and one section for each service, named by that service.
+- The file holds the shared section `log` and the field `masterKey`, and one section for each service or shared component that declares a field, named by its owner.
 - The schema holds no directory field, because the specification and its variables carry that override.
 - This sibling names the fields of the shared section, and the implementation sibling of a service names the fields of the section of that service.
 - This sibling indexes every field of every section, and the owning sibling holds the format and the default of each field that it declares.
@@ -324,7 +324,8 @@ This sibling declares the fields below.
 - `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.tokenVersion`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
-- `worker.globalPrompt`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `agent.prompt.systemFile`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
+- `agent.prompt.agentDirectory`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
 - `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.releaseReserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
 - `mission.consecutiveLossLimit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.

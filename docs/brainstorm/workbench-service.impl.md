@@ -23,7 +23,9 @@ A mechanism here never overrides a rule there.
 ## Prompt
 
 - The workbench prompt is [assets/prompt/workbench.md](assets/prompt/workbench.md).
-- pi receives the base prompt, the agent prompt and the workbench prompt as its system prompt, and the global prompt as marked content, as for a worker.
+- pi receives the system layer and the agent layer as its system prompt, and the working layer as marked content, as for a worker.
+- The working directory of the working layer is the workbench directory of the agent.
+- The workbench prompt is the shipped consumer prompt of the working layer.
 - The source of the workbench prompt is the "Work with Ulrich" rules of `AGENTS.md`, adapted to any human.
 
 ## Tools

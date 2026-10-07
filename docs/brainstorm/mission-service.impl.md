@@ -217,7 +217,7 @@ The result follows this order:
 1. A failed or unrun verification gives `criterion-not-met`, with no judgement.
    The required rationale names that verification.
 2. Otherwise, judgement against the criterion gives `success`, `criterion-not-met` or `undetermined`.
-3. For a worker that declares a base prompt, a default-standard violation turns `success` into `criterion-not-met`.
+3. For a worker that kanthord hosts, a default-standard violation turns `success` into `criterion-not-met`.
 
 Only the first case permits an empty judgement.
 The judgement is absent in that case; the rationale is never absent.
@@ -646,7 +646,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse a success assessment that names no evidence with a `verification`, or whose `results` miss a verification, with `mission.assessment.verification_failed`, and an assessment that names an evidence with a pending asset with `mission.assessment.evidence_unpublished`.
 - Tests prove that execution code runs verifications before judgement.
 - Tests permit judgement only after every verification of the current tested input passes.
-- Tests turn success into `criterion-not-met` for a default-standard violation only when the worker declares a base prompt.
+- Tests turn success into `criterion-not-met` for a default-standard violation only when kanthord hosts the worker.
 - Tests check that the scope of each evidence read equals the node and the attempt of its record, and refuse a `scope` field in an evidence submission and in a request with HTTP 400 and an issue list.
 - Tests accept inline content at 5 MiB decoded and refuse one byte more with 413 `mission.evidence.too_large`.
 - Tests require canonical base64, media type and the correct SHA-256, and assert no truncation.

@@ -167,41 +167,37 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## Configuration
 
 - The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
-- `worker.globalPrompt` holds the path of a Markdown file, as a string, and it defaults to an empty string.
-- An empty value means the global prompt source is absent and the composer moves to the next source.
-- The exact value `-` disables the global prompt layer, and the composer reads no source of it. A file named `-` takes the path `./-`.
-- A relative path resolves against the data directory.
-- The loader of the composer reads that file under the same rules as every agent file.
 - `worker.heartbeatWindow` holds the window of a registration heartbeat in seconds, as a positive safe integer, and it defaults to `300`.
 
 ## Prompt composition
 
-The prompt composer resolves the global prompt from the file that `worker.globalPrompt` names, then `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`.
-It resolves the project prompt from the repository binding, then `AGENTS.md` of the workspace root, then `CLAUDE.md` of the workspace root.
-A `projectPrompt` of the exact value `-` disables the project prompt layer, and an empty or absent `projectPrompt` is an absent source.
-For an evaluation method that resolution stops at the repository binding, and the composer reads no agent file of the workspace.
+The prompt composer resolves the system layer and the agent layer under [agent.impl.md](agent.impl.md#prompt-composer-configuration).
+The working layer of an execution joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workspace root, then the `projectPrompt` of the repository binding.
+It takes each source that the switch of the pinned binding revision turns on.
+An empty or absent `projectPrompt` is an absent source.
+An evaluation takes the `projectPrompt` only, and the composer reads no agent file of the workspace.
 It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
 It rejects a path of the workspace that a link resolves outside the workspace.
 It follows a link of the host location, because the operator manages the dotfiles of the host.
 A deadline bounds every read.
 The repository context-file discovery of pi stays disabled, and the composer performs every load, so one loader holds the order and the provenance.
 A layer digest hashes the UTF-8 encoding of the exact layer text, with no trimming, no newline conversion, no Unicode normalization and no JSON quoting, and [architecture.impl.md](architecture.impl.md) rules the algorithm and the rendering.
-pi receives the base prompt and the agent prompt as its system prompt, with the framing that states the layers and their precedence.
-It receives the global prompt, the project prompt and the work prompt as separate marked content, each one attributed to its source.
+pi receives the system layer and the agent layer as its system prompt, with the framing that states the layers and their precedence.
+It receives the working layer and the work prompt as separate marked content, each source attributed to its origin.
 The path of a source writes the home directory of the host as `~`.
 The working directory that pi states in its system prompt writes the home directory of the host as `~`.
 Every kanthord change to the behaviour of pi is a pi extension handler, one file per hook under `engine/src/agent/hooks/`. `openSession` always adds the home-relative cwd hook first, then the ordered `hooks` list of the consumer.
 The adapter pins the composed layers against the compaction of pi, so every layer survives a compacted context.
 The tool table enforces every obligation that a tool can enforce, and `re@1` holds no write tool.
-The first version supplies one base prompt for `swe@1` and `re@1`, [assets/prompt/base.md](assets/prompt/base.md), and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md).
-The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to the base prompt, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
+The binary ships [assets/prompt/base.md](assets/prompt/base.md) as the default system prompt, and the agent prompts [assets/prompt/swe@1.md](assets/prompt/swe@1.md) and [assets/prompt/re@1.md](assets/prompt/re@1.md).
+The source of the three texts is the ideals file of Ulrich, split by single obligation: a standard of the product and a shared conduct go to `base.md`, the act of producing goes to `swe@1`, the act of judging goes to `re@1`, and a rule that presupposes a human interlocutor is adapted or dropped.
 The recommendation-first format of a confirmation request returns with the clarification interface.
 
-- Every source of the global prompt and of the project prompt holds at most 32768 UTF-8 bytes.
+- Every source of every layer holds at most 32768 UTF-8 bytes. A custom text above the bound refuses its write.
 - A source above the bound is invalid.
-- The layer takes no content from an invalid source.
+- An invalid source adds no text to its layer, and the composer continues with the next source.
 
-The acceptance path proves the configured precedence, an absent source, an invalid source, a disabled layer and a link that leaves the workspace.
+The acceptance path proves the configured precedence, an absent source, an invalid source, a switched-off source and a link that leaves the workspace.
 It proves that a reviewer execution takes no agent file of the workspace.
 
 ## The credential store of an execution

@@ -150,7 +150,7 @@ The write refuses a submission that changes the worker of an existing worker bin
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
 - A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
-- The exact `projectPrompt` value `-` disables the project prompt layer under [prompt composition](worker-service.impl.md#prompt-composition).
+- An empty `projectPrompt` is an absent source. The switch of the project prompt on the binding turns the source off, and the value `-` holds no meaning.
 - Every repository binding names exactly one `sshCredential` of platform `ssh`. An absent SSH credential refuses the write.
 - The host of the address equals the `host` of the `sshCredential`. A different host refuses the write with 400 `project.bindings.repository.ssh_host_mismatch`.
 - A repository binding of a git-only platform with a `credential` or with the action `pull_request` refuses the write with 400 `project.bindings.repository.action_unsupported`.
