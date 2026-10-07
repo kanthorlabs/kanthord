@@ -80,7 +80,9 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The system layer joins its sources in this order: the host agent file, the shipped `base.md`, the custom system prompt.
 - The host agent file is the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists.
 - A human edits the custom system prompt on the dashboard, and the database stores it.
-- Each source of the system layer holds one on or off switch.
+- Each source of the system layer holds one on or off switch. The system layer also holds one layer switch.
+- Each agent name holds a system layer override: `inherit`, `on` or `off`. `inherit` takes the layer switch of the server. `on` and `off` decide the system layer of that agent only.
+- When the system layer of an agent is off, the composer joins no source of the system layer for that agent. When it is on, the source switches decide which sources join.
 - The composer joins every source that is on. No source has a merge or override mode.
 - The agent layer joins its sources in this order: the agent file of the agent directory, the shipped agent prompt, the custom agent prompt.
 - The agent file of the agent directory is `<agentName>.md`, for example `~/workdir/swe@1.md`.
@@ -88,10 +90,12 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Each source of the agent layer holds one on or off switch. A switch change that turns off every source of the agent layer is refused.
 - The working layer joins its sources in this order: `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the working directory, the shipped consumer prompt, the custom working prompt.
 - Each source of the working layer holds one on or off switch. An evaluation reads no agent file of the workspace.
-- The system layer switches belong to the server. The agent layer switches belong to the agent name.
+- The layer switch and the source switches of the system layer belong to the server. The system layer override and the agent layer switches belong to the agent name.
 - The working layer switches belong to the repository binding for a Worker execution, and to the agent name for a workbench session.
 - The server composes the system layer and the agent layer for every consumer. The host that holds the working directory reads the agent files of the working layer.
-- The `Settings` section of the dashboard manages the system layer: its switches and its custom system prompt. The agent page manages the agent layer and the workbench working layer of its agent.
+- The `Settings` section of the dashboard manages the system layer: its layer switch, its source switches and its custom system prompt. The agent page manages the system layer override, the agent layer and the workbench working layer of its agent.
+- The agent page shows the system layer override as a three-way control with the effective state, for example `Follows server: Off`. While the system layer of a scope is off, its source rows are dimmed and stay editable.
+- Each source row holds its on or off switch. The switch of the last source that is on in the agent layer is disabled, with a tooltip that states the reason.
 - The agent page shows each prompt source as one row, collapsed by default. The title of a row is the path of its file, else the name of the source. A chevron points right when the row is collapsed and down when it is expanded. The expanded row renders the text as markdown in a scrollable panel.
 - Each row with text holds a button that copies the raw markdown. A row with no text is inactive: it holds no chevron and no copy button.
 - `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.

@@ -28,7 +28,8 @@ A mechanism here never overrides a rule there.
 ## The prompt answer
 
 - `prompt` holds `layers` and `final`.
-- `layers` holds the system layer, the agent layer and the working layer, in reading order. Each layer holds `{ layer, sources }`.
+- `layers` holds the system layer, the agent layer and the working layer, in reading order. Each layer holds `{ layer, enabled, sources }`. `enabled` is the effective state of the layer: for the system layer, the override of the agent or, under `inherit`, the layer switch of the server; for another layer, always `true`.
+- A source of a layer that is not `enabled` answers the state `off`.
 - Each source answers `{ source, origin, path, enabled, state, digest, text }`.
 - `origin` is one of `binary`, `file` and `database`.
 - `state` is one of `present`, `absent`, `invalid`, `off` and `deferred`. `deferred` marks an agent file of a workspace, which only the worker application reads.
@@ -131,11 +132,15 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ## Prompt settings
 
 - The table `agent_prompt` of [ERD 1](../reference/erd/01-setup.md) holds one row per scope: `system`, then `agent` and `workbench` for each catalog agent.
-- `agent.prompt.put` replaces the `custom_text` of one scope. `agent.prompt.switch` sets one switch of one scope.
+- `agent.prompt.get` is `GET /api/agent/prompt`, `human`, `unary`, `mutation: false`. The query holds `scope` and, for the `agent` and `workbench` scopes, `agentName`. It answers the settings of that scope, the absent row included.
+- `agent.prompt.put` replaces the `custom_text` of one scope. `agent.prompt.switch` sets one switch of one scope, or the system layer override of one `agent` scope.
+- The switches of the `system` scope hold `layer`, the layer switch of the system layer, beside its source switches.
+- The table `agent_prompt` holds the column `system_layer`: `inherit`, `on` or `off` for an `agent` row, `NULL` for any other row. The settings answer it as `system_layer`.
+- `agent.prompt.switch` takes either `switch` with `enabled`, or `system_layer` with the `agent` scope. Any other combination answers 400 `gateway.request.validation_failed`.
 - Both writes take `expectedRevision`. A stale or absent value answers 409 `agent.prompt.revision_conflict` with the current row in `details`.
 - A `custom_text` above 32768 UTF-8 bytes answers 400 `agent.prompt.too_large`.
 - A switch that turns off every source of an `agent` scope answers 409 `agent.prompt.agent_layer_empty`.
-- A write creates the row of its scope at `revision` 1 when none exists. A read of an absent row answers every switch on and an empty `custom_text`.
+- A write creates the row of its scope at `revision` 1 when none exists. A read of an absent row answers every switch on, an empty `custom_text` and, for an `agent` row, `system_layer` `inherit`.
 - The Project Service owns the working switches of a repository binding, in its `config` JSON.
 - Tests cover each scope, each write, each refusal, an absent row and two writes at one `expectedRevision`.
 
