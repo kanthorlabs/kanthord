@@ -20,10 +20,24 @@ A mechanism here never overrides a rule there.
 - `swe@1` and `re@1` declare an empty option schema.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
 - `agent list` answers one summary per catalog agent: `agentName`, `workerNames` and `enablement`.
-- `agent get` answers the prompts of the declaration, `configurationSchema`, `overridableFields` and `enablement`.
+- `agent get` answers `prompt`, `configurationSchema`, `overridableFields` and `enablement`.
 - `enablement` is null when no record exists.
-- `agent.get` is `GET /api/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `basePrompt` when declared, `agentPrompt`, `tools` and `enablement`, the agent enablement or `null`. It composes no prompt and reads no agent file. An unknown agent answers 404 `agent.catalog.not_found`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `agent.get` is `GET /api/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `prompt`, `tools` and `enablement`, the agent enablement or `null`. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
+
+## The prompt answer
+
+- `prompt` holds `layers` and `final`.
+- `layers` holds the system layer, the agent layer and the working layer, in reading order. Each layer holds `{ layer, sources }`.
+- Each source answers `{ source, origin, path, enabled, state, digest, text }`.
+- `origin` is one of `binary`, `file` and `database`.
+- `state` is one of `present`, `absent`, `invalid`, `off` and `deferred`. `deferred` marks an agent file of a workspace, which only the worker application reads.
+- `path` is the home-relative path of a `file` source, else `null`. `digest` and `text` are `null` unless `state` is `present`.
+- `final` holds the framing, then the text of every `present` source, in reading order.
+- The query `view=final` answers `prompt` with `final` only.
+- The optional queries `projectId` and `bindingId` select the working layer of that repository binding. Without them, the working layer is the workbench working layer of the agent.
+- A `bindingId` that names no repository binding of `projectId` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`.
+- Tests cover every origin, every state, `view=final`, the workbench working layer, a binding working layer and each refusal.
 
 ## Agent configuration validation
 

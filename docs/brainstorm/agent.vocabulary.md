@@ -82,6 +82,30 @@ The third layer of the prompt of an agent session. It joins the agent files of t
 The term names no closed set.
 The workspace of `kanthorlabs/kanthord` holds `AGENTS.md`, and its repository binding holds a `projectPrompt`, so the working layer of Execution 1 holds `AGENTS.md` and then that `projectPrompt`.
 
+## prompt origin
+
+The place that holds the text of a prompt source.
+The closed set is:
+
+- `binary`
+- `file`
+- `database`
+
+The shipped `base.md` has origin `binary`, `~/.claude/CLAUDE.md` has origin `file`, and the custom system prompt has origin `database`.
+
+## prompt source state
+
+The result of the read of one prompt source.
+The closed set is:
+
+- `present`
+- `absent`
+- `invalid`
+- `off`
+- `deferred`
+
+With a binding of `kanthorlabs/kanthord`, the `AGENTS.md` of the workspace answers `deferred`, because only the worker application reads the workspace.
+
 ## resume
 
 The reopen of an agent session from the turns that its runtime stored.
