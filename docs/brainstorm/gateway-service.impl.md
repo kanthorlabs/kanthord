@@ -22,6 +22,7 @@ It uses no TLS.
 Every service is a module of one process.
 The Hono router dispatches each request to the handler of the service that owns the requested operation.
 The handler is a module-level function, and each service registers its routes on the Hono application at startup.
+The Gateway registers the routes in specificity order: at the first segment where two paths differ in kind, the static segment comes before the parameter segment. So `GET /api/agent/prompt` matches before `GET /api/agent/:agentName`, whatever order the services declare.
 
 ## Configuration
 
