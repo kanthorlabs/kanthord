@@ -57,7 +57,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Disablement is the only stop switch.
 - An agent provider has no independent disablement.
 - The agent page of the dashboard creates an enablement or adds an agent provider to it. The human names it and picks a credential, and the provider is the platform of that credential.
-- The enable form names the platform in each credential label and shows no separate provider line. After the human picks a credential, it fills the model picker and the reasoning-effort picker from the models of that credential.
+- The enable form names the platform in each credential label and shows no separate provider line. It shows a failure to load the credentials or the models on the field that it concerns. After the human picks a credential, it fills the model picker and the reasoning-effort picker from the models of that credential.
 - The agent page offers only a credential that no agent provider of the enablement names. With no such credential, it shows only `No credential is left.` and one action to add a credential.
 - The agent page edits the default configuration with the same pickers as a new workbench session. A save keeps the agent providers unchanged.
 - Each agent provider row of the agent page holds Remove behind a confirmation. Remove stays disabled on the last agent provider and on the agent provider of the default configuration.
@@ -92,7 +92,8 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The working layer switches belong to the repository binding for a Worker execution, and to the agent name for a workbench session.
 - The server composes the system layer and the agent layer for every consumer. The host that holds the working directory reads the agent files of the working layer.
 - The `Settings` section of the dashboard manages the system layer: its switches and its custom system prompt. The agent page manages the agent layer and the workbench working layer of its agent.
-- The agent page shows each prompt text collapsed by default and renders it as markdown.
+- The agent page shows each prompt source as one row, collapsed by default. The title of a row is the path of its file, else the name of the source. A chevron points right when the row is collapsed and down when it is expanded. The expanded row renders the text as markdown in a scrollable panel.
+- Each row with text holds a button that copies the raw markdown. A row with no text is inactive: it holds no chevron and no copy button.
 - `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
 - When `kanthord.yaml` names a system file, the host agent file is that file, and the composer runs no discovery.
 - The database holds every switch and every custom text. The dashboard edits a switch or a custom text, and it edits no path.
