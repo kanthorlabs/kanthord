@@ -99,12 +99,12 @@ The evaluation method takes the configured source of the project prompt only.
 An agent file of the workspace is the work product of the candidate.
 
 The composition states the owner, the source and the precedence of every layer to the agent.
-The agent prompt holds the highest precedence, then the base prompt, then the work prompt, then the project prompt, then the global prompt.
-The base prompt and the agent prompt, after the operator override, state the obligations of the worker.
-No global prompt, project prompt or work prompt revokes one.
-The agent prompt governs the base prompt, and a base prompt that contradicts the agent prompt that uses it is a defect of the worker.
-An execution performs no conduct that its base prompt or its agent prompt forbids, whatever another layer states.
-A global prompt and a project prompt define no criterion.
+The agent prompt holds the highest precedence, then the system layer, then the work prompt, then the project prompt.
+The system layer and the agent prompt state the obligations of the worker.
+No project prompt and no work prompt revokes one.
+The agent prompt governs the system layer.
+An execution performs no conduct that its system layer or its agent prompt forbids, whatever another layer states.
+A system layer and a project prompt define no criterion.
 An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that the system layer states.
 
 A prompt layer carries instructions, and it authorizes no operation.

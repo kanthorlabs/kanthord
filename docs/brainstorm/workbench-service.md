@@ -49,7 +49,7 @@ It describes no mechanism of another service.
 - A workbench session takes no project prompt and no work prompt. Each human message is a message of the session.
 - The Workbench Service owns the workbench prompt. It states that a human reads every reply.
 - The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the system layer or the agent prompt.
-- The agent prompt holds the highest precedence, then the base prompt, then the workbench prompt, then the global prompt.
+- The agent prompt holds the highest precedence, then the system layer, then the workbench prompt.
 
 ## Tools
 
