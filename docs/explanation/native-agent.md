@@ -88,33 +88,73 @@ The host can have its own pi installation with extensions, skills and settings. 
 
 ## The prompt
 
-The prompt of a native agent is a stack of **layers**. Each layer names its owner and its source, inside a `<prompt-layer>` tag. The system prompt opens with a framing paragraph that states the precedence, from highest to lowest:
+The prompt of a native agent is a stack of **layers**. Each layer names its owner and its source, inside a `<prompt-layer>` tag. For example, the global layer on a host without other configuration reads:
 
-| Precedence | Worker execution | Workbench session |
-| ---------- | ---------------- | ----------------- |
-| 1 | Agent prompt | Agent prompt |
-| 2 | Base prompt | Base prompt |
-| 3 | Work prompt | Workbench prompt |
-| 4 | Project prompt | — |
-| 5 | Global prompt | Global prompt |
+```text
+<prompt-layer name="global prompt" owner="operator of the server" source="agent file of the host: ~/.claude/CLAUDE.md">
+…the text of the file…
+</prompt-layer>
+```
+
+### The order that the model reads
+
+The model receives the layers from top to bottom in this order. The system prompt comes first. The pinned layers follow as messages before the conversation.
+
+| # | Part | Worker execution | Workbench session | Resolves to |
+| - | ---- | ---------------- | ----------------- | ----------- |
+| 1 | System prompt | Framing | Framing | A fixed paragraph that states the precedence, then one line per selected layer with its owner and source |
+| 2 | System prompt | Base prompt | Base prompt | `engine/static/prompt/base.md` |
+| 3 | System prompt | Agent prompt | Agent prompt | `engine/static/prompt/swe@1.md` or `engine/static/prompt/re@1.md` |
+| 4 | System prompt | — | Workbench prompt | `engine/static/prompt/workbench.md` |
+| 5 | Pinned message | Global prompt | Global prompt | The first value that exists, see [global prompt](#global-prompt) |
+| 6 | Pinned message | Project prompt | — | The first value that exists, see [project prompt](#project-prompt) |
+| 7 | Pinned message | Work prompt | — | The node revision that the execution works on |
+| 8 | Conversation | Instructions and replies | Human messages and replies | The turns of the session |
+
+A layer that resolves to nothing is left out, and the rows below it move up.
+
+### Precedence
+
+The position of a layer is not its authority. The framing paragraph states the precedence, from highest to lowest:
+
+- Worker execution: agent prompt, base prompt, work prompt, project prompt, global prompt.
+- Workbench session: agent prompt, base prompt, workbench prompt, global prompt.
 
 A layer of higher precedence governs a layer of lower precedence. No layer revokes an obligation of the agent prompt or of the base prompt. No layer authorizes an operation: the tool set and the authority of the consumer decide what the agent can do.
 
-### Where each layer comes from
+### Global prompt
 
-- **Base prompt** and **agent prompt** ship with KanthorD in `static/prompt/`. The base prompt sets the engineering principles and the writing rules. The agent prompt sets the role: `swe@1` performs the steps of a task, `re@1` judges the evidence of a node.
-- **Workbench prompt** ships with KanthorD. It tells the agent that a human reads every reply, and that it asks one question at a time.
-- **Global prompt** belongs to the operator of the server. The server configuration value `worker.globalPrompt` names a file. Without that value, KanthorD reads `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`. The value `-` disables the layer.
-- **Project prompt** belongs to the project of the repository binding. The binding can hold the text. Without it, KanthorD reads `AGENTS.md`, then `CLAUDE.md`, from the root of the workspace. An evaluation never reads the workspace files, because the candidate under review wrote them.
-- **Work prompt** is the node that the execution works on. It holds the name, the requirement, the criterion and the verification commands of one pinned node revision.
+The global prompt belongs to the operator of the server. KanthorD takes the first value that exists:
 
-KanthorD rejects a file layer that is larger than 32 KiB, that is not UTF-8, that holds control characters, that is not a regular file, that lies outside the workspace, or that takes longer than 10 seconds to read. A rejected layer is left out; the session still opens. The **composition record** lists every selected layer with its SHA-256 digest and every rejected layer with its reason.
+1. The file that `worker.globalPrompt` in `~/.config/kanthord/kanthord.yaml` names. A relative path resolves against `~/.local/share/kanthord`. The value `-` disables the layer, and no fallback follows.
+2. `~/.agents/AGENTS.md`.
+3. `~/.claude/CLAUDE.md`.
+
+The default value of `worker.globalPrompt` is `""`. A host with no `~/.agents/AGENTS.md` therefore uses `~/.claude/CLAUDE.md`. A configured file that does not exist counts as no value, and KanthorD continues with step 2.
+
+### Project prompt
+
+The project prompt belongs to the project of the repository binding. Only a Worker execution on an objective has one. KanthorD takes the first value that exists:
+
+1. The project prompt text of the repository binding. The value `-` disables the layer, and no fallback follows.
+2. `AGENTS.md` at the root of the workspace.
+3. `CLAUDE.md` at the root of the workspace.
+
+An evaluation stops after step 1. It never reads the workspace files, because the candidate under review wrote them.
+
+### Work prompt
+
+The work prompt holds the name, the requirement, the criterion and the verification commands of one pinned node revision, as Markdown. Its owner is that node revision.
+
+### Limits of a file layer
+
+KanthorD rejects a file layer that is larger than 32 KiB, that is not UTF-8, that holds control characters, that is not a regular file, that lies outside the workspace, or that takes longer than 10 seconds to read. A rejected layer is left out, and the session still opens. The **composition record** lists every selected layer with its SHA-256 digest and every rejected layer with its reason.
 
 ### Why some layers are pinned
 
-The base prompt and the agent prompt live in the system prompt. The global, project and work layers are **pinned** instead: before each model call, a pi `context` hook inserts them as messages directly after the system messages. A second guard on the stream function re-inserts any pinned layer that is missing from the request.
+The global, project and work layers are **pinned**. Before each model call, a pi `context` hook inserts them as messages directly after the system prompt. A second guard on the stream function re-inserts any pinned layer that is missing from the request.
 
-Pinning has two effects. A pinned layer survives when pi compacts a long conversation, because KanthorD inserts it again on each call. And the work layer can change between tasks without a new session: each `prompt` or `instruct` call sets the current work, and the next model call carries it.
+Pinning has two effects. A pinned layer survives when pi compacts a long conversation, because KanthorD inserts it again on each call. The work layer can also change between tasks without a new session: each `prompt` or `instruct` call sets the current work, and the next model call carries it.
 
 ## Tools
 
@@ -123,7 +163,23 @@ The agent receives only the tools of its declaration. A tool outside the allowli
 - **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` need `rg` and `fd` on the host; the worker refuses to start without them.
 - **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key from the environment of each command, so a command cannot read the credentials of the agent. In a Worker execution, the timeout of each command is capped at the remaining budget.
 - **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidenceId`, `assetId` and `uri`.
-- **Operation tools** (Workbench only) expose the human operations of KanthorD, for example the project and worker operations. An operation that handles a secret, or that streams, is excluded. Each call runs with the identity of the human who sent the last message.
+- **Operation tools** (Workbench only) expose KanthorD operations. Each call runs with the identity of the human who sent the last message. The [operation tool reference](../reference/workbench/tools.md) lists every tool.
+
+An operation becomes a tool when it meets all of these conditions:
+
+- Its access is `human`. A worker or machine operation is never a tool.
+- It is not a stream.
+- It handles no secret.
+
+The tool name is the operation id with each `.` replaced by `--`, for example `mission--node--create`.
+
+These ten human operations handle a secret, so the agent cannot call them:
+
+- `llm.credential.create`, `llm.credential.rotate`, `llm.credential.check`, `llm.credential.login_code`
+- `repository.credential.create`, `repository.credential.rotate`, `repository.credential.check`
+- `storage.credential.create`, `storage.credential.rotate`, `storage.credential.check`
+
+The agent therefore cannot create a credential, change a secret, or finish an OAuth login. A human does that in the dashboard or the CLI.
 
 A Workbench operation tool that changes state waits for the human. The dashboard shows the pending call, and the human approves or rejects it. A rejection, an abort or the end of the run counts as a rejection. A read operation and a built-in tool run without approval. A Worker execution has no approval step, because no human is present.
 
