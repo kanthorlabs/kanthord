@@ -116,7 +116,7 @@ The outcomes of the comparison by binding name are below.
 
 The binding set has one read route and one write route, and both serve the whole set.
 
-- `project.bindingSet.get` at `GET /api/project/:projectId/binding-set` and `project.bindingSet.write` at `PUT /api/project/:projectId/binding-set` are `human` operations of `unary` lifetime.
+- `project.binding_set.get` at `GET /api/project/:projectId/binding-set` and `project.binding_set.write` at `PUT /api/project/:projectId/binding-set` are `human` operations of `unary` lifetime.
 - `BindingSet` holds `version` and `bindings`. `version` is the binding-set version. `bindings` is the object keyed by binding name, and each value holds `kind` and `config`.
 - The read answers the current binding set as `BindingSet`. It holds no secret material.
 - The write takes `BindingSet` as its body, and `version` names the version that the client read. A stale `version` answers 409 `project.binding_set.version_conflict` with the current version in `error.details`.

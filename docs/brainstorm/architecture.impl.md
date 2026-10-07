@@ -351,6 +351,12 @@ This sibling declares the fields below.
 - The server rotates no file, it deletes no file and it states no retention. The operator owns the rotation and the retention of the log.
 - The log is operational, and telemetry is the product data of the [Tracking Service](tracking-service.md). No record of the log is telemetry, and no telemetry record reaches the log.
 
+## The operation ids
+
+- Every operation id has dot-separated parts: `<owner>.<resource>[.<resource>...].<action>`.
+- Each part uses lower-case words, with underscores between words, as an error code does. For example, `project.binding_set.write` and `llm.credential.login_status`.
+- A route path and a CLI word write the same words with hyphens, for example `/binding-set` and `login-status`.
+
 ## The error codes
 
 - Every error code that the server or its CLI defines has at least three nonempty, dot-separated parts: `<namespace>.<component>[.<component>...].<error>`.
