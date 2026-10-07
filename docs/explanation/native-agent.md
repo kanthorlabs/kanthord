@@ -15,7 +15,7 @@ The agent catalog is static and holds two declarations. An agent name names a ro
 
 `re@1` has no tool that writes a file or runs a command. Its prompt also forbids a change to the repository. The tool set enforces that rule; the prompt only states it.
 
-Each declaration holds a base prompt, an agent prompt and its tool set. A declaration holds no provider, no model and no reasoning effort. A human selects those values.
+Each declaration holds a shipped agent prompt and its tool set. A declaration holds no provider, no model and no reasoning effort. A human selects those values.
 
 ## Two consumers
 
@@ -88,73 +88,80 @@ The host can have its own pi installation with extensions, skills and settings. 
 
 ## The prompt
 
-The prompt of a native agent is a stack of **layers**. Each layer names its owner and its source, inside a `<prompt-layer>` tag. For example, the global layer on a host without other configuration reads:
+The prompt of a native agent has three **layers**: the system layer, the agent layer and the working layer. Each layer joins an ordered list of **sources**. Each source has one on/off switch, and the composer joins every source that is on, present and valid. No source has a merge or override mode: to replace a shipped text, switch it off and switch your own source on.
+
+Each source reaches the model inside a `<prompt-layer>` tag that names the layer, the owner and the source. For example, the host agent file on a host without other configuration reads:
 
 ```text
-<prompt-layer name="global prompt" owner="operator of the server" source="agent file of the host: ~/.claude/CLAUDE.md">
+<prompt-layer name="system layer" owner="operator of the server" source="file ~/.claude/CLAUDE.md">
 …the text of the file…
 </prompt-layer>
 ```
 
+### The three layers and their sources
+
+| Layer | Sources, in order | Origin | Switches belong to |
+| ----- | ----------------- | ------ | ------------------ |
+| System | Host agent file, then the shipped `base.md`, then the custom system prompt | file, binary, database | The server |
+| Agent | `<agentName>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt | file, binary, database | The agent name |
+| Working | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt, then the custom working prompt | file, binary, database | The repository binding or the agent name |
+
+- **Host agent file.** When `agent.prompt.systemFile` in `~/.config/kanthord/kanthord.yaml` names a file, the host agent file is that file. Otherwise KanthorD takes the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists. A relative path resolves against `~/.local/share/kanthord`.
+- **Agent directory.** `agent.prompt.agentDirectory` names a directory, for example `~/workdir`. The agent layer of `swe@1` then reads `~/workdir/swe@1.md`.
+- **Shipped prompts.** `base.md`, `swe@1.md`, `re@1.md` and `workbench.md` are embedded in the binary. No command downloads them, and an upgrade replaces them together with the code that depends on them.
+- **Custom prompts.** A human writes the custom system, agent and workbench prompts through `agent.prompt.put`, and sets a switch through `agent.prompt.switch`. The database table `agent_prompt` holds one row per scope with its switches, its custom text and a revision.
+- **Working directory.** It is the workspace of a Worker execution, or `~/.local/state/kanthord/workbench/<agentName>` for a Workbench session.
+- **Working layer of a Worker execution.** It joins the four files of the workspace, then the `projectPrompt` of the repository binding. It has no shipped prompt. The binding holds its five switches in `working_layer`, and a switch change creates a binding revision.
+- **Working layer of a Workbench session.** It joins the four files of the workbench directory, the shipped `workbench.md`, then the custom workbench prompt.
+
+Every switch defaults to on. On a host with `~/.claude/CLAUDE.md`, the system layer therefore holds that file and the shipped `base.md`. Switch one of them off when the two repeat each other.
+
 ### The order that the model reads
 
-The model receives the layers from top to bottom in this order. The system prompt comes first. The pinned layers follow as messages before the conversation.
+The model reads the prompt from top to bottom:
 
-| # | Part | Worker execution | Workbench session | Resolves to |
-| - | ---- | ---------------- | ----------------- | ----------- |
-| 1 | System prompt | Framing | Framing | A fixed paragraph that states the precedence, then one line per selected layer with its owner and source |
-| 2 | System prompt | Base prompt | Base prompt | `engine/static/prompt/base.md` |
-| 3 | System prompt | Agent prompt | Agent prompt | `engine/static/prompt/swe@1.md` or `engine/static/prompt/re@1.md` |
-| 4 | System prompt | — | Workbench prompt | `engine/static/prompt/workbench.md` |
-| 5 | Pinned message | Global prompt | Global prompt | The first value that exists, see [global prompt](#global-prompt) |
-| 6 | Pinned message | Project prompt | — | The first value that exists, see [project prompt](#project-prompt) |
-| 7 | Pinned message | Work prompt | — | The node revision that the execution works on |
-| 8 | Conversation | Instructions and replies | Human messages and replies | The turns of the session |
+| # | Part | Worker execution | Workbench session |
+| - | ---- | ---------------- | ----------------- |
+| 1 | System prompt | Framing | Framing |
+| 2 | System prompt | System layer | System layer |
+| 3 | System prompt | Agent layer | Agent layer |
+| 4 | Pinned message | Working layer | Working layer |
+| 5 | Pinned message | Work prompt | — |
+| 6 | Conversation | Instructions and replies | Human messages and replies |
 
-A layer that resolves to nothing is left out, and the rows below it move up.
+The framing is a fixed paragraph that states the precedence. The **work prompt** is the task message of a Worker execution: the name, the requirement, the criterion and the verification commands of one pinned node revision. It belongs to no layer and has no switch.
 
 ### Precedence
 
-The position of a layer is not its authority. The framing paragraph states the precedence, from highest to lowest:
+The position of a layer is not its authority. The framing states the precedence, from highest to lowest:
 
-- Worker execution: agent prompt, base prompt, work prompt, project prompt, global prompt.
-- Workbench session: agent prompt, base prompt, workbench prompt, global prompt.
+- Worker execution: agent layer, system layer, work prompt, working layer.
+- Workbench session: agent layer, system layer, working layer.
 
-A layer of higher precedence governs a layer of lower precedence. No layer revokes an obligation of the agent prompt or of the base prompt. No layer authorizes an operation: the tool set and the authority of the consumer decide what the agent can do.
+A layer of higher precedence governs a layer of lower precedence. No layer revokes an obligation of the agent layer or the system layer. The working layer comes last because it comes from the repository, and the candidate under review can write it. No layer authorizes an operation: the tool set and the authority of the consumer decide what the agent can do.
 
-### Global prompt
+### Where each layer is composed
 
-The global prompt belongs to the operator of the server. KanthorD takes the first value that exists:
+The server composes the system layer and the agent layer for every consumer. A Worker execution receives them as `prompt.final` in its execution setup. The worker application reads no home file. It reads only the agent files of its own workspace, with the switches of `repositories[].working_layer`, and adds the `projectPrompt`. An evaluation reads no file of the workspace, because the candidate under review wrote those files.
 
-1. The file that `worker.globalPrompt` in `~/.config/kanthord/kanthord.yaml` names. A relative path resolves against `~/.local/share/kanthord`. The value `-` disables the layer, and no fallback follows.
-2. `~/.agents/AGENTS.md`.
-3. `~/.claude/CLAUDE.md`.
+### Reading the composed prompt
 
-The default value of `worker.globalPrompt` is `""`. A host with no `~/.agents/AGENTS.md` therefore uses `~/.claude/CLAUDE.md`. A configured file that does not exist counts as no value, and KanthorD continues with step 2.
+`agent.get` answers every source of the three layers with its origin (`binary`, `file` or `database`), its path, its switch, its state, its digest and its text, plus the final prompt:
 
-### Project prompt
+- The state is one of `present`, `absent`, `invalid`, `off` and `deferred`.
+- `deferred` marks a workspace file that only the worker application reads.
+- The query `view=final` answers the final prompt only.
+- The queries `projectId` and `bindingId` select the working layer of one repository binding. Without them, the working layer is the workbench working layer of the agent.
 
-The project prompt belongs to the project of the repository binding. Only a Worker execution on an objective has one. KanthorD takes the first value that exists:
+### Limits of a source
 
-1. The project prompt text of the repository binding. The value `-` disables the layer, and no fallback follows.
-2. `AGENTS.md` at the root of the workspace.
-3. `CLAUDE.md` at the root of the workspace.
+KanthorD rejects a source that is larger than 32 KiB, that is not UTF-8, that holds control characters, that is not a regular file, that lies outside its working directory, or that takes longer than 10 seconds to read. A rejected source adds no text, and the composer continues with the next source. The **composition record** lists every selected source with its SHA-256 digest and every rejected source with its reason.
 
-An evaluation stops after step 1. It never reads the workspace files, because the candidate under review wrote them.
+### Why the working layer is pinned
 
-### Work prompt
+The working layer and the work prompt are **pinned**. Before each model call, a pi `context` hook inserts them as messages directly after the system prompt. A second guard on the stream function re-inserts any pinned text that is missing from the request.
 
-The work prompt holds the name, the requirement, the criterion and the verification commands of one pinned node revision, as Markdown. Its owner is that node revision.
-
-### Limits of a file layer
-
-KanthorD rejects a file layer that is larger than 32 KiB, that is not UTF-8, that holds control characters, that is not a regular file, that lies outside the workspace, or that takes longer than 10 seconds to read. A rejected layer is left out, and the session still opens. The **composition record** lists every selected layer with its SHA-256 digest and every rejected layer with its reason.
-
-### Why some layers are pinned
-
-The global, project and work layers are **pinned**. Before each model call, a pi `context` hook inserts them as messages directly after the system prompt. A second guard on the stream function re-inserts any pinned layer that is missing from the request.
-
-Pinning has two effects. A pinned layer survives when pi compacts a long conversation, because KanthorD inserts it again on each call. The work layer can also change between tasks without a new session: each `prompt` or `instruct` call sets the current work, and the next model call carries it.
+Pinning has two effects. A pinned text survives when pi compacts a long conversation, because KanthorD inserts it again on each call. The work prompt can also change between tasks without a new session: each `prompt` or `instruct` call sets the current work, and the next model call carries it.
 
 ## Tools
 
@@ -244,4 +251,4 @@ The human can change the agent provider, the model and the reasoning effort betw
 - **No transcript storage.** The worker hands the transcript of each execution to a transcript sink at the end. The current sink discards it.
 - **No sandbox.** `bash` and the file tools run on the host with the rights of the KanthorD process. The tool set of `re@1` limits what the reviewer can do. The working directory of `swe@1` is only its default location, not a boundary.
 - **No approval in a Worker execution.** Only the Workbench asks a human before a call that changes state.
-- **Static catalog.** A new agent or a change of a prompt or a tool set requires a new KanthorD release.
+- **Static catalog.** A new agent or a change of a tool set requires a new KanthorD release. A prompt change does not: the agent directory and the custom prompts override the shipped text.
