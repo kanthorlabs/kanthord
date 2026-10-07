@@ -78,7 +78,7 @@ erDiagram
         text agent_name "catalog agent, empty for system"
         text switches "JSON map of source to on or off"
         text custom_text "custom prompt of the scope, empty when absent"
-        integer version "compare-and-set, starts at 1"
+        integer revision "compare-and-set, starts at 1"
         integer updated_at "Unix ms"
     }
 
@@ -235,7 +235,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A worker binding depends on every agent that the catalog declares for its worker, whether or not the binding holds an entry for that agent. The catalog is static, so this dependency is no column.
 - A binding write is refused when an agent of a native worker has no enabled enablement. `validateEntry` runs for every agent inside the binding write transaction.
 - `agent_prompt` has a unique index on `(scope, agent_name)`. The `system` row holds an empty `agent_name`.
-- A row holds the current settings of its scope and no history. A write names `expectedVersion`, sets the next `version`, and a stale value answers 409 `agent.prompt.version_conflict`.
+- A row holds the current settings of its scope and no history. A write names `expectedRevision`, sets the next `revision`, and a stale value answers 409 `agent.prompt.revision_conflict`. `revision` counts the writes of the row under [the revision value](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-revision-value), and the row keeps no older revision.
 - The keys of `switches` are the sources of the layer of the scope. `custom_text` holds at most 32768 UTF-8 bytes.
 - The `config` JSON of a repository binding holds `working_layer` with the booleans `agents_md`, `agents_local_md`, `claude_md`, `claude_local_md` and `project_prompt`. A switch change inserts the next binding revision.
 - An enablement change validates every dependent worker binding through `entriesOfAgent` in the transaction of its commit, and a change that invalidates one is refused.
