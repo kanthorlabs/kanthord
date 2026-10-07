@@ -21,7 +21,7 @@ In human mode, `jwt generate` prints only the JWT and a newline to **terminal st
 | `name`    | string                  | Display name, preserved exactly; defaults to `sub` and grants no authority. |
 | `binding` | string, machine only    | Exact worker binding supplied in machine mode; absent for human tokens.     |
 | `iat`     | integer                 | Issued-at time in Unix seconds.                                             |
-| `exp`     | integer                 | Expiry in Unix seconds, using `gateway.tokenLifetime`.                      |
+| `exp`     | integer                 | Expiry in Unix seconds, using `gateway.token_lifetime`.                      |
 | `jti`     | canonical ULID string   | Fresh bare ULID identifying this token issuance.                            |
 
 Invalid inputs, configuration failures, or redirected stdout fail with exit `1` and a [diagnostic](errors.md#cli-diagnostics). The command saves no client file and calls no server.
@@ -87,10 +87,10 @@ The output pastes into `cli.yaml` of the worker host, below `endpoint`:
 
 ```yaml
 token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-clientSecret: 3q2+7wAAAAC1...
+client_secret: 3q2+7wAAAAC1...
 ```
 
-The client secret is `HKDF-SHA256(masterKey, "worker/client-secret/v1/" + sub)`. The server stores it nowhere and derives it again from the verified `sub`. Each machine JWT has its own secret, and a human JWT has none. The worker uses it to open its credential handover, so the worker host holds no `masterKey`.
+The client secret is `HKDF-SHA256(master_key, "worker/client-secret/v1/" + sub)`. The server stores it nowhere and derives it again from the verified `sub`. Each machine JWT has its own secret, and a human JWT has none. The worker uses it to open its credential handover, so the worker host holds no `master_key`.
 
 | Argument / option     | Default / constraints                                                                       | Purpose                                                               |
 | --------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |

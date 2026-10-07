@@ -56,10 +56,10 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - It answers 204.
 - The Worker Service records the time of the last heartbeat with a monotonic clock.
 - The start of the server keeps every live registration and sets its last heartbeat to the start time.
-- The [resource healthcheck](worker-service.md#instances-and-hosting) of an instance reports `healthy` when its last heartbeat is inside `worker.heartbeatWindow`, and `unhealthy` otherwise.
+- The [resource healthcheck](worker-service.md#instances-and-hosting) of an instance reports `healthy` when its last heartbeat is inside `worker.heartbeat_window`, and `unhealthy` otherwise.
 - Its `capability` is `liveness of a registration`.
 - A test checks both sides of the heartbeat window and asserts that the resource healthcheck changes no registration or instance healthcheck.
-- A sweep every 30 s ends every registration whose last heartbeat is older than `worker.heartbeatWindow`.
+- A sweep every 30 s ends every registration whose last heartbeat is older than `worker.heartbeat_window`.
 - A live execution of an ended registration follows the loss rules of the [Scheduler Service](scheduler-service.md#liveness).
 - The idle backoff of an instance stays under the window, and the sibling of the harness extension states its interval.
 - A registration that ends by expiry frees the slot of its binding.
@@ -123,7 +123,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The workspace lives under the XDG state directory of the host, and `cli.yaml` stays in the configuration directory.
 - One process hosts one instance, because a machine token carries one client identity and a client identity holds at most one live registration.
 - N registration slots of a worker binding need N processes with N machine tokens. The instance count limits the live registrations and promises no process count.
-- Startup resolves the client configuration, checks `clientSecret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 0.86.0 selects `fd` first.
+- Startup resolves the client configuration, checks `client_secret`, checks the server package version and registers the instance, in that order. A host on which `rg` or `fd` cannot run stops the start with `worker.start.tool_missing`, because the pi tools `grep` and `find` spawn them. `fdfind` counts as `fd` only when no `fd` command exists on `PATH`, because pi 0.86.0 selects `fd` first.
 - After the registration, the application logs one record `Worker application ready` with `runtimeIdentity`, `resourceIdentity` and `workerName`.
 - The application writes operational log records to stderr as JSON lines. It prints no token and requires no terminal.
 - A startup failure prints its diagnostic, releases what it acquired and exits 1.
@@ -166,7 +166,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 ## Configuration
 
 - The Worker Service owns the section `worker` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
-- `worker.heartbeatWindow` holds the window of a registration heartbeat in seconds, as a positive safe integer, and it defaults to `300`.
+- `worker.heartbeat_window` holds the window of a registration heartbeat in seconds, as a positive safe integer, and it defaults to `300`.
 
 ## Prompt composition
 
@@ -216,16 +216,16 @@ It proves that a reviewer execution takes no agent file of the workspace.
 - `worker.handover` is a `client` secret mutation of `unary` lifetime that requires a live execution. `POST /api/worker/handover` takes the body `{ executionId }` and answers the envelope that [custody.impl.md](custody.impl.md#the-credential-handover) rules.
 - While its idempotency record remains in memory within the TTL, a repeat of the key answers 409 without the envelope. The application recovers a lost answer with a new key, which reads the pinned revision again.
 - The `worker` application calls it once after its claim and before the first inference call. The handover pins each credential revision that it carries.
-- It decrypts the envelope with the handover key that it derives from its own `clientSecret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
+- It decrypts the envelope with the handover key that it derives from its own `client_secret`. It builds an in-memory pi-ai credential store from the payload and holds the plaintext in memory alone.
 - `worker.credential` is a `client` mutation at `POST /api/worker/credential` that requires a live execution. Its body is `{ executionId, nonce, ciphertext }`, where `nonce` and `ciphertext` carry the sealed refresh report, and it answers 204. The application calls it after each refresh that pi-ai performs and once at the release.
 - The credential report request body permits at most 65,536 bytes; [Custody's serialized-credential budget](custody.impl.md#serialized-credential-budget) ensures the compact report fits. The application reports once at release even when the credential is unchanged.
 - For both operations, the invocation chain proves the execution that the body field `executionId` names.
 - The application discards every credential when the execution ends, and it writes none to a file.
 - A platform action runs through the action performer of the server.
-- The `worker` application reads `clientSecret` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
-- The `worker` application holds no `masterKey`.
-- An absent or invalid `clientSecret` stops the start of `kanthord serve worker` with `worker.start.client_secret_absent` or `worker.start.client_secret_invalid`.
-- A `clientSecret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
+- The `worker` application reads `client_secret` from the client configuration file alone, which [gateway-service.impl.md](gateway-service.impl.md#the-client-configuration-file) declares. It accepts no environment variable and no option for it.
+- The `worker` application holds no `master_key`.
+- An absent or invalid `client_secret` stops the start of `kanthord serve worker` with `worker.start.client_secret_absent` or `worker.start.client_secret_invalid`.
+- A `client_secret` that belongs to another machine JWT fails every decryption. The application ends the execution as a cannot-progress condition.
 - A handover envelope that the handover key does not open ends the execution with `worker.handover.decryption_failed`.
 
 ## Evidence upload
@@ -424,7 +424,7 @@ Every cleanup command, including the push, is bounded by `expired_at`, not by th
 ## Trust boundary
 
 The operator provides the trust boundary as a disposable host that the operator trusts, or as an OS container around the server.
-The host of every `worker` application sits inside it because that host holds its `clientSecret` and the credentials of its executions.
+The host of every `worker` application sits inside it because that host holds its `client_secret` and the credentials of its executions.
 
 ## Traces
 

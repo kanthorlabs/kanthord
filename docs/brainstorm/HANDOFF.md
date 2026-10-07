@@ -9,6 +9,8 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Architecture
 
+- [ ] RULED 2026-10-07 by Ulrich. Rename every field of the HTTP payloads, the CLI output and the domain entity schemas of every engine `contract.ts` to snake_case under the Naming outside the code rule of `AGENTS.md`, for example `agentName` to `agent_name`. Rename the camelCase properties of the JSON columns and the stored data with it. Update the design pages, `engine/docs/cli/`, `docs/reference/`, the OpenAPI files and the `apps` consumers, then publish through `make contract-sync`. Run it after the prompt composer implementation, together with the JSON column item of the Intake Service section.
+- [ ] RULED 2026-10-07 by Ulrich. Rename the ten camelCase operation ids to the underscore form of `architecture.impl.md` section The operation ids: `gateway.openapi_file`, `mission.execution.cleared_outcome.get`, `mission.execution.pinned_revision.get`, `mission.external_action.get`, `mission.external_action.list`, `project.agent_configuration.get`, `project.agent_configuration.list`, `project.binding_revision.list`, `project.binding_set.get` and `project.binding_set.write`. Update the engine contracts, `engine/docs/cli/`, `docs/reference/gateway/openapi.md`, the `apps` contract through `make contract-sync`, and regenerate `docs/reference/workbench/tools.md`. Run it after the prompt composer implementation, which edits the same engine tree.
 - [ ] Added 2026-10-05 by Ulrich. Rebuild the `Context` implementation of `engine/src/kernel/context.ts` on the Node-native `AbortController`, `AbortSignal` and `AsyncLocalStorage`.
 
 - [ ] RULED 2026-10-02 by Ulrich, from the Intake redesign. Each service enforces system authorization for its own operations and entities, and the protected facility consumes the authorization result of the service that owns the entity of the release. The design pages hold the moves since 2026-10-03. Remaining: `engine/docs/cli/worker.md` renames `project.authorization.refused` to `worker.authorization.refused`, and the `engine/docs/cli/` page of each Mission command that answers `mission.authorization.refused` adds that code. Ulrich sent the rulings to the pi session of `engine/.agents/plan/erd-02-execution/` on 2026-10-03.
@@ -64,6 +66,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 Added 2026-10-06 by Ulrich, from the evaluation of the agent. The Worker Service and the Workbench Service consume the component.
 
+- [ ] Added 2026-10-07 by Ulrich. Build the prompt screens of `apps` after the snake_case payload rename of the Architecture section: the `Settings` section with the system layer prompt, the layer sections of the agent page with switches, states, custom text and the final prompt, and the working layer switches of the repository binding form. Run `make contract-sync` first.
 - [ ] Give an agent session a budget input that the consumer supplies. `ExecutionBudget` reads `createdAt` and `expiredAt` of the claim.
 - [ ] Move the native agent runtime, the prompt composer and the tool table from the Worker pages to the Agent pages, and split `NativeAgentInput` of `engine/src/worker/native-agent.ts` into a session input that names no execution.
 

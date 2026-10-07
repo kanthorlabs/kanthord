@@ -138,14 +138,14 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 ## Prompt composer configuration
 
-- `agent.prompt.systemFile` holds the path of a Markdown file, as a string, and it defaults to an empty string.
+- `agent.prompt.system_file` holds the path of a Markdown file, as a string, and it defaults to an empty string.
 - An empty value runs host discovery: `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`. The first file that exists is the host agent file.
 - A nonempty value names the host agent file, and the composer runs no discovery.
-- `agent.prompt.agentDirectory` holds the path of a directory, as a string, and it defaults to an empty string.
+- `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to an empty string.
 - An empty value means the agent layer holds no agent file source.
 - A relative path of either field resolves against the data directory.
 - The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
-- Tests cover an empty and a nonempty `systemFile`, each discovery file, an empty and a nonempty `agentDirectory`, and a relative path.
+- Tests cover an empty and a nonempty `system_file`, each discovery file, an empty and a nonempty `agent_directory`, and a relative path.
 
 ## Session file
 

@@ -41,10 +41,10 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ### The verification secret
 
-- The Intake Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt from `masterKey`, which [architecture.impl.md](architecture.impl.md) holds.
-- `HKDF(masterKey, info = "webhook/<inbound id>")` is the verification secret of one webhook inbound. The Intake Service derives it when it needs it, so no store holds a webhook secret.
+- The Intake Service derives its keys with `crypto.hkdfSync`, SHA-256 and an empty salt from `master_key`, which [architecture.impl.md](architecture.impl.md) holds.
+- `HKDF(master_key, info = "webhook/<inbound id>")` is the verification secret of one webhook inbound. The Intake Service derives it when it needs it, so no store holds a webhook secret.
 - A new secret is a new inbound, because the identity enters the derivation.
-- A manual replacement of `masterKey` invalidates every derived webhook secret, and a human creates a new inbound for every webhook.
+- A manual replacement of `master_key` invalidates every derived webhook secret, and a human creates a new inbound for every webhook.
 - `intake.inbound.get` returns the address and the secret of a webhook inbound to a human. A `GET` is no mutation, so the idempotency middleware of the Gateway Service records no secret.
 
 ### The receipt

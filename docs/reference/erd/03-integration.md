@@ -111,7 +111,7 @@ erDiagram
 | `intake_inbound_event` | Intake Service | Ruled: [inbound events](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#inbound-events), [handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#handoff) and [the handoff](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-handoff). |
 | `intake_outbound_request` | Intake Service | Ruled: [outbound requests](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.md#outbound-requests) and [the outbound record](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/intake-service.impl.md#the-outbound-record). |
 
-The verification secret of a webhook inbound derives from `masterKey` and the inbound identity, so no table holds a webhook secret.
+The verification secret of a webhook inbound derives from `master_key` and the inbound identity, so no table holds a webhook secret.
 
 ## Constraints
 

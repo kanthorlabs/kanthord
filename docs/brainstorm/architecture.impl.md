@@ -156,7 +156,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A downgrade needs a consistent backup that a human took before the upgrade.
 - That backup captures the effective configuration file and the whole data directory, with the server stopped, and neither source changes during the capture.
 - A clean close checkpoints the write-ahead log and can remove the sidecar files, and `-shm` is reconstructible. A sequential copy of three live files is not consistent, so the contract names the stopped server and no list of files.
-- The function form serves a data migration that runs cryptography, for example an upgrade of the envelope or of a label under an unchanged `masterKey`, where the old key stays derivable. It implies no rotation of a secret.
+- The function form serves a data migration that runs cryptography, for example an upgrade of the envelope or of a label under an unchanged `master_key`, where the old key stays derivable. It implies no rotation of a secret.
 
 ## The identity and the time
 
@@ -224,7 +224,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - The column `nonce` holds the nonce as 12 bytes, and the column `ciphertext` holds the ciphertext followed by the 16-byte tag. A read that meets another length fails the record.
 - The additional authenticated data is the concatenation of two length-prefixed fields, the row identity and the platform, so the encoding admits no second reading.
 - `createDecipheriv` verifies the tag before any caller reads the plaintext.
-- The cipher key is `HKDF(masterKey, info = "custody/aes-256-gcm/v1")`. The server derives it at startup and holds it for the life of the process.
+- The cipher key is `HKDF(master_key, info = "custody/aes-256-gcm/v1")`. The server derives it at startup and holds it for the life of the process.
 - A nonce is random for each write of a record, and the count of the writes of this server stays far below the birthday bound of a 12-byte nonce.
 - AES-256-GCM detects a modified record and a record moved to another identity. It detects no restoration of an older valid record under the same identity, so the server claims no freshness.
 - The record carries no version of the cipher and no version of the key, because one key and one envelope serve every record. A change of either one re-wraps every row in one transaction at the first start of the new binary, and a tag failure identifies a row that the change did not reach.
@@ -248,7 +248,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A secret field declares no usable default, so no default supplies a secret.
 - The file is the only source of a value, so it is the only source of a secret.
 - An absent secret field stops the start, so no other source supplies a secret silently.
-- One `masterKey` serves one installation: one server. No client holds `masterKey`; a `worker` application holds the client secret of its machine JWT. A `masterKey` that two servers share is an unsupported configuration.
+- One `master_key` serves one installation: one server. No client holds `master_key`; a `worker` application holds the client secret of its machine JWT. A `master_key` that two servers share is an unsupported configuration.
 
 ## The server writes no configuration file
 
@@ -285,14 +285,14 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 ## The sections of the file
 
-- The file holds the shared section `log` and the field `masterKey`, and one section for each service or shared component that declares a field, named by its owner.
+- The file holds the shared section `log` and the field `master_key`, and one section for each service or shared component that declares a field, named by its owner.
 - The schema holds no directory field, because the specification and its variables carry that override.
 - This sibling names the fields of the shared section, and the implementation sibling of a service names the fields of the section of that service.
 - This sibling indexes every field of every section, and the owning sibling holds the format and the default of each field that it declares.
 - This is the configuration of the server process.
   It is not the project configuration that `overview.md` describes.
 - The configuration module lives in `src/config/`, above the services and below the applications.
-- `src/config/global.ts` holds the schema and the type of `log` and `masterKey`.
+- `src/config/global.ts` holds the schema and the type of `log` and `master_key`.
 - Each service exports the `convict` schema fragment of its own section from its `index.ts`.
 - `src/config/index.ts` combines the global set with the fragment of every service into the whole schema.
 - The applications alone import `src/config/index.ts`.
@@ -305,11 +305,11 @@ This sibling declares the fields below.
 
 - `log.level` holds the level of the `pino` logger, as one of `trace`, `debug`, `info`, `warn`, `error` and `fatal`, and it defaults to `info`.
 - `log.destination` holds the destination of the log, as one of `stderr` and `file`, and it defaults to `stderr`.
-- `masterKey` holds 32 bytes encoded in base64, it carries `sensitive: true`, it holds no default, and the format rejects a value that decodes to another length.
+- `master_key` holds 32 bytes encoded in base64, it carries `sensitive: true`, it holds no default, and the format rejects a value that decodes to another length.
 
-`masterKey` is the one secret of the server.
+`master_key` is the one secret of the server.
 
-- A service derives every key that it needs from `masterKey`, and it uses `masterKey` directly for nothing.
+- A service derives every key that it needs from `master_key`, and it uses `master_key` directly for nothing.
 - The derivation is `crypto.hkdfSync` with SHA-256, an empty salt and one label for each purpose.
 - A label is unique across the server.
 - The implementation sibling of a service names a label of that service, and this sibling names a label of a server-wide mechanism.
@@ -321,22 +321,22 @@ This sibling declares the fields below.
 - Every field of the configuration file appears below with the sibling that owns it. A row gives no format and no default.
 - A dotted path determines the nesting of the document, so the index determines the shape of the file.
 - `kanthord config init` writes the whole document with every default, so this sibling holds no example.
-- `masterKey`, which this sibling declares.
+- `master_key`, which this sibling declares.
 - `log.level`, which this sibling declares.
 - `log.destination`, which this sibling declares.
 - `gateway.bind`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.port`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.allowedHosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.allowedOrigins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.tokenLifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.tokenVersion`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
-- `gateway.idempotencyTtl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
-- `agent.prompt.systemFile`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
-- `agent.prompt.agentDirectory`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
-- `worker.heartbeatWindow`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
-- `scheduler.releaseReserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
-- `mission.consecutiveLossLimit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
-- `mission.textMaxBytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
+- `gateway.allowed_hosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.allowed_origins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.token_lifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.token_version`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.idempotency_ttl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
+- `agent.prompt.system_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
+- `agent.prompt.agent_directory`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
+- `worker.heartbeat_window`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
+- `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.
+- `mission.consecutive_loss_limit`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
+- `mission.text_max_bytes`, which [mission-service.impl.md](mission-service.impl.md#configuration) declares.
 - A row that its owning sibling does not declare is a defect, and a declaration without a row is a defect.
 
 ## The log
@@ -424,7 +424,7 @@ The start runs the steps below in this order. Each step names the sibling that o
 
 - Resolve the path of the configuration file, then read that file.
 - Validate the document with `validate({allowed: "strict"})`.
-- Derive the key of each purpose from `masterKey`, where the sibling of a service owns the labels of that service.
+- Derive the key of each purpose from `master_key`, where the sibling of a service owns the labels of that service.
 - Open the destination of the log.
 - Take the write lock of each database file.
 - Run the migrations, in a fixed order of the services.
@@ -529,7 +529,7 @@ A fatal error runs as below.
 
 - A secret of the server is a field of the configuration file and no row of a database.
 - Every secret field carries `sensitive: true`, so `convict.toString()` masks it.
-- The client configuration file of a `worker` application holds `clientSecret`, and the same masking, diagnostic and display rules apply to it.
+- The client configuration file of a `worker` application holds `client_secret`, and the same masking, diagnostic and display rules apply to it.
 - A diagnostic names the path of a field and the reason of the failure, and it prints no value and no excerpt of the file.
 - This contract covers a parse error, a validation error, a failed start, every log record, and the `config validate` and `config show` commands.
 - A display of a secret value requires a terminal on standard output. The check rejects a file and a pipe, and it detects no terminal recorder, so a recorded session is the responsibility of the operator.
@@ -537,7 +537,7 @@ A fatal error runs as below.
 - The exception covers that token display alone, so no diagnostic and no log record holds a secret value. `config init` writes generated secrets to the private configuration file and prints only its path.
 - The CLI holds no rotation command, and the server rotates no secret.
 - A rotation of a secret is a hand edit of the file and a restart of the server.
-- A rotation of `masterKey` invalidates every issued JWT, so a human obtains a newly generated token. It makes every credential store record of custody unreadable, and it makes every derived webhook secret stale.
+- A rotation of `master_key` invalidates every issued JWT, so a human obtains a newly generated token. It makes every credential store record of custody unreadable, and it makes every derived webhook secret stale.
 
 ## Scope
 
@@ -577,7 +577,7 @@ A fatal error runs as below.
 - Such a command opens no database of the server, and it needs no configuration file of the server.
 - A local command of such a group opens no database either. Its command declaration names any file that it reads or writes.
 - The `jwt` group holds `generate` and `inspect`, and a bare `kanthord jwt` prints the help of the group.
-- The CLI provides `kanthord jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `masterKey`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
+- The CLI provides `kanthord jwt generate [username] [--name <display>] [--project <project id> --binding <binding name>] [--output [path]] [--endpoint <url>] [--config <path>]` to generate a JWT. Without `--project` and `--binding` it generates a human JWT, and the optional positional `username` argument defaults to `KANTHORD_AUTH_USERNAME` when omitted. With `--project` and `--binding` it generates a machine JWT for one new client identity of that worker binding, and it rejects a `username` argument. It reads the validated server configuration, derives its signing key from `master_key`, and prints the token using the secret-display rule. It requires no running server, opens no database and writes no account, password or secret. It writes a client configuration file only for a human JWT with `--output`, under [the Gateway Service sibling](gateway-service.impl.md#local-jwt-issuance). This is the only token issuance entry point. The Gateway Service sibling owns the claim validation and the token contract.
 - The CLI provides `kanthord jwt inspect [token]` to decode a JWT locally. It reads no server configuration, verifies no signature and calls no route.
 - The help of a command and the validation of its arguments need no running server.
 - `--config` belongs to `config`, `serve`, and the local `jwt generate` command. Service and shared component commands reject that option, because they use the client configuration. `jwt generate` resolves the path through the same option, environment and default order as the server.
@@ -794,7 +794,7 @@ A process split retains these boundaries.
 ## The CLI configuration commands
 
 - `kanthord config init` builds the document in memory with every default and every generated secret.
-- It generates `masterKey` from 32 bytes of `crypto.randomBytes`, encoded in base64.
+- It generates `master_key` from 32 bytes of `crypto.randomBytes`, encoded in base64.
 - It validates the document before it writes it.
 - The invocation authorizes the creation. It reads no confirmation and requires no terminal.
 - It writes the validated bytes and prints the resolved destination after a successful write, without displaying the configuration or its generated secrets.
@@ -892,7 +892,7 @@ The configuration module sits above the services and below the applications.
 engine/src/
 ├── main.ts
 ├── config/
-│   ├── global.ts          schema and type of `log` and `masterKey`   [services, kernel users]
+│   ├── global.ts          schema and type of `log` and `master_key`   [services, kernel users]
 │   └── index.ts           whole schema = global + every service fragment   [apps only]
 ├── kernel/
 │   ├── service.ts  context.ts  store.ts  health.ts  log.ts  errors.ts

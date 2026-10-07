@@ -325,7 +325,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.
-- A test covers a `masterKey` that decodes to other than 32 bytes.
+- A test covers a `master_key` that decodes to other than 32 bytes.
 - A test covers an execution identity that names another node, a machine identity that names no live registration, and a client identity whose binding group is not the binding group of the claim.
 - A test covers a repository binding whose network git read fails. It asserts that the Project Service refuses the write with its error code.
 - A test covers a worker binding that is absent, removed or unavailable, and it asserts that the verification of a machine JWT that names it fails.
@@ -333,4 +333,4 @@ The `kanthord` bin of `package.json` releases it.
 
 ## Open decisions of an epic
 
-- The replacement of `masterKey`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.
+- The replacement of `master_key`, which makes every stored ciphertext unreadable and every webhook secret stale, and which no command performs today.

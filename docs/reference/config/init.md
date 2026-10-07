@@ -17,7 +17,7 @@ Created <path>
 | Output / property  | Purpose                                                                                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Created <path>`   | Confirms creation and identifies the resolved configuration file path.                                                                                          |
-| Configuration file | Contains the generated `masterKey` and defaults; see [configuration properties](show.md#expected-response). Unlike `config show`, the stored key is not masked. |
+| Configuration file | Contains the generated `master_key` and defaults; see [configuration properties](show.md#expected-response). Unlike `config show`, the stored key is not masked. |
 | Exit code `0`      | Configuration was created successfully.                                                                                                                         |
 
 Failures exit `1` with a [diagnostic](../errors.md#cli-diagnostics). The confirmation does not print the master key.

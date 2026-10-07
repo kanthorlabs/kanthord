@@ -96,8 +96,8 @@ The service derives it from the policy of the `project_binding` row that the pin
 ## Configuration
 
 - The Mission Service owns the section `mission` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
-- `mission.consecutiveLossLimit` holds the [consecutive loss limit](mission-service.md#consecutive-loss-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
-- `mission.textMaxBytes` holds the upper bound of a `Text` value in UTF-8 bytes, as a positive integer in the `nat` format of `convict`, and it defaults to `32768`.
+- `mission.consecutive_loss_limit` holds the [consecutive loss limit](mission-service.md#consecutive-loss-limit), as a positive integer in the `nat` format of `convict`, and it defaults to `3`.
+- `mission.text_max_bytes` holds the upper bound of a `Text` value in UTF-8 bytes, as a positive integer in the `nat` format of `convict`, and it defaults to `32768`.
 - The bound applies at a write. A stored value keeps its length after a change of the bound.
 
 ## The plan file grammar
@@ -515,7 +515,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Every revision and version counter of the server starts at 1.
 - Every `version`, `revision`, `expected*Version` and `expected*Revision` field holds a positive safe integer.
 - A count is no revision. The attempt starts at 0.
-- `gateway.tokenVersion` keeps its default of 1.
+- `gateway.token_version` keeps its default of 1.
 - A mission starts at mission version 1, and a node starts at node revision 1.
 - A node takes its next node revision on every content change.
 - These writes increment the mission version when they change the structure of the mission or the content of a node:
@@ -586,7 +586,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Every Mission route uses the [shared error envelope](gateway-service.impl.md#errors-and-logging) of the Gateway Service.
 - Every Mission route uses the [default 30 s timeout](gateway-service.impl.md#cancellation).
 - Every Mission route uses the [10 MiB body limit](gateway-service.impl.md#delivery-bytes-and-body-limits).
-- `Text` is a nonblank JSON string of at most `mission.textMaxBytes` UTF-8 bytes. A larger value answers HTTP 400 with an issue list. The rule applies to every text field of a node and to every item of `verifications`.
+- `Text` is a nonblank JSON string of at most `mission.text_max_bytes` UTF-8 bytes. A larger value answers HTTP 400 with an issue list. The rule applies to every text field of a node and to every item of `verifications`.
 - A stale expected revision answers 409 `mission.revision.conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version.conflict` with the current value in `details`.
 - An absent mission answers 404 `mission.mission.not_found`. An absent node answers 404 `mission.node.not_found`. An absent record answers 404 `mission.record.not_found`.
 - An execution submission whose route node, `executionId`, `attempt` or `nodeRevision` differs from the proven claim answers 409 `mission.execution.context_mismatch` with `details: { field }`. An assessment or a request under a steps claim answers 409 `mission.execution.claim_not_evaluation`. An execution-scoped revision read above the pinned revision answers 404 `mission.execution.revision_above_pin`.
@@ -595,7 +595,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 ## Tests
 
-- Tests accept a `Text` value of `mission.textMaxBytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
+- Tests accept a `Text` value of `mission.text_max_bytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
 
 - Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
 
@@ -711,7 +711,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert `mission.node.retired` for each node API write and each human control on a retired node.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
-- Tests assert that a loss below `mission.consecutiveLossLimit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
+- Tests assert that a loss below `mission.consecutive_loss_limit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
 - Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfiedIds` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
@@ -748,7 +748,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - A test covers prefix validation for each identity. It rejects a bare ULID, a wrong prefix and a noncanonical ULID.
 - A test asserts that every revision and version counter starts at 1 and every such field requires a positive safe integer.
-- A test asserts that the attempt starts at 0 and the default of `gateway.tokenVersion` stays 1.
+- A test asserts that the attempt starts at 0 and the default of `gateway.token_version` stays 1.
 - A test asserts one mission version increment for each graph write, even when the write touches several nodes.
 - A test asserts no mission version increment for each non-graph write and for a write with no structure or content change.
 - A test asserts that each content change creates the next node revision.

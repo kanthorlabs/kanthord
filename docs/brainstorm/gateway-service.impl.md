@@ -30,11 +30,11 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 
 - `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts a loopback address only.
 - `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
-- `gateway.allowedHosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
-- `gateway.allowedOrigins` holds the origin allowlist, as an array of strings, and it defaults to `http://127.0.0.1:27182` and `http://localhost:27182`, the origins of the dashboard.
-- `gateway.tokenLifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
-- `gateway.tokenVersion` holds the version of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
-- `gateway.idempotencyTtl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
+- `gateway.allowed_hosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
+- `gateway.allowed_origins` holds the origin allowlist, as an array of strings, and it defaults to `http://127.0.0.1:27182` and `http://localhost:27182`, the origins of the dashboard.
+- `gateway.token_lifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
+- `gateway.token_version` holds the version of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
+- `gateway.idempotency_ttl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
 
 ## Access policy
 
@@ -53,7 +53,7 @@ A machine presents its JWT on every request, including the registration route, a
 ## Human authentication
 
 A human presents a JWT as a bearer token. The default username is `KANTHORD_AUTH_USERNAME = "kanthorlabs"`.
-The Gateway Service verifies the signature using its key derived from `masterKey`, then checks the token claims.
+The Gateway Service verifies the signature using its key derived from `master_key`, then checks the token claims.
 The server creates no human account row and generates, hashes and stores no human password. It exposes no password-login route.
 The local `kanthord jwt generate` command is the only token issuance entry point. For a human it accepts an optional username argument and defaults to the constant when it is omitted.
 Server startup issues and displays no human token. The CLI exposes no human login or logout command.
@@ -84,10 +84,10 @@ The route answers with the runtime identity of the registration, the resource id
 
 - The header is exactly `alg` `HS256` and `typ` `JWT`.
 - Any other `alg`, any other `typ` and any `crit` header reject the token.
-- `gateway.tokenLifetime` gives the lifetime of a token, and it defaults to one year.
+- `gateway.token_lifetime` gives the lifetime of a token, and it defaults to one year.
 - Each issuance generates a fresh ULID `jti`.
 - A restart or another issuance revokes no earlier JWT.
-- It remains valid until expiry, an increment of `gateway.tokenVersion` or replacement of `masterKey`.
+- It remains valid until expiry, an increment of `gateway.token_version` or replacement of `master_key`.
 - For a machine, removal or unavailability of its worker binding also ends that validity.
 - An expired token returns 401.
 - A human obtains a fresh token from `kanthord jwt generate`.
@@ -133,18 +133,18 @@ Verification runs in this order.
 - A machine identity names the runtime identity of the live registration of its client identity when one exists.
 - The work pull and every execution operation refuse a machine identity that names no live registration.
 
-`iss` and `aud` are absent because the signing key derives from the `masterKey` of one server under one label.
+`iss` and `aud` are absent because the signing key derives from the `master_key` of one server under one label.
 The key therefore binds a token to that server.
-A `masterKey` that two servers share is an unsupported configuration, which [architecture.impl.md](architecture.impl.md#one-source-for-a-secret) states.
+A `master_key` that two servers share is an unsupported configuration, which [architecture.impl.md](architecture.impl.md#one-source-for-a-secret) states.
 
 ## The signing key
 
-The signing key is `HKDF(masterKey, info = "gateway/jwt-hs256/v<tokenVersion>")`, where `<tokenVersion>` is the decimal value of `gateway.tokenVersion`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
-[architecture.impl.md](architecture.impl.md) holds the field `masterKey` of the configuration file and the rule that a service derives its keys from it.
+The signing key is `HKDF(master_key, info = "gateway/jwt-hs256/v<token_version>")`, where `<token_version>` is the decimal value of `gateway.token_version`, derived with `crypto.hkdfSync` and SHA-256 over an empty salt.
+[architecture.impl.md](architecture.impl.md) holds the field `master_key` of the configuration file and the rule that a service derives its keys from it.
 The Gateway Service derives the key at startup and persists neither the signing key nor the generated human JWT in its database.
 [architecture.impl.md](architecture.impl.md) rules the mode of the configuration file, of its directory, of the data directory and of every database file.
 A copy of the configuration file carries the signing key, so that copy permits the forgery of a token.
-An increment of `gateway.tokenVersion` and a restart of the server invalidate every issued JWT of both kinds. Every client secret changes with them. Every other key that derives from `masterKey` stays unchanged, so the credential store records and the webhook secrets stay readable.
+An increment of `gateway.token_version` and a restart of the server invalidate every issued JWT of both kinds. Every client secret changes with them. Every other key that derives from `master_key` stays unchanged, so the credential store records and the webhook secrets stay readable.
 A human then runs `kanthord jwt generate` again for each human token and each machine token.
 
 ## Local JWT issuance
@@ -159,7 +159,7 @@ Mint one machine token for each concurrent instance. An instance reuses its toke
 It opens no database, so it does not check that the worker binding exists. A token that names an absent or unavailable worker binding fails its verification.
 It prints only when standard output is a terminal. A failed terminal check stops issuance and displays no token.
 For a human it prints the JWT followed by a newline.
-For a machine it prints the `cli.yaml` fragment `token: <jwt>` and `clientSecret: <client secret>`, one line each.
+For a machine it prints the `cli.yaml` fragment `token: <jwt>` and `client_secret: <client secret>`, one line each.
 With `--verbose` it prints the claim list after that output.
 It prompts for nothing, requires no terminal on standard input and calls no route. Without `--output` it saves no client configuration.
 A human who loses a token runs this command again. Starting or restarting the server issues no token and requires no terminal.
@@ -186,10 +186,10 @@ The claim list is one `<claim>: <value>` line per claim, in signed order, betwee
 ## The client secret
 
 Each machine JWT has one client secret, and a human JWT has none.
-The client secret is `HKDF-SHA256(masterKey, info = "worker/client-secret/v<tokenVersion>/" + sub)`, 32 bytes encoded in base64, with an empty salt.
+The client secret is `HKDF-SHA256(master_key, info = "worker/client-secret/v<token_version>/" + sub)`, 32 bytes encoded in base64, with an empty salt.
 `sub` is the client identity of the machine JWT, so each machine JWT has its own client secret.
 The server stores no client secret. It derives the secret again from the verified `sub` of each request that needs it.
-From a client secret, no party derives `masterKey`, the signing key, the Custody key or another client secret.
+From a client secret, no party derives `master_key`, the signing key, the Custody key or another client secret.
 
 - The Gateway Service owns no human account table and no client identity table.
 - It owns no table of the operational database.
@@ -403,7 +403,7 @@ The [Project Service](project-service.impl.md#the-resource-healthcheck), the [LL
 - Both entry adapters enter the same invocation chain, as [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) describes.
 - Both adapters reserve the same key, meet the same 409 and replay the same recorded answer.
 - The idempotency component runs in memory inside the invocation chain.
-- Each record carries a TTL from `gateway.idempotencyTtl`.
+- Each record carries a TTL from `gateway.idempotency_ttl`.
 - An expired record disappears.
 - The component owns no table, no migration and no sweep at the start.
 - A replay holds inside one process and inside the TTL.
@@ -472,8 +472,8 @@ It covers a second registration of a client identity that holds a live registrat
 - A test repeats a key after its TTL expires and asserts that the handler runs again.
 
 It covers a repeat of a completed key under another caller, and it asserts that the handler runs and that no recorded answer is returned.
-It covers an expired token and a token signed under an earlier `gateway.tokenVersion`, and it asserts 401 for each one.
-It covers an increment of `gateway.tokenVersion`, and it asserts that a credential store record stays readable.
+It covers an expired token and a token signed under an earlier `gateway.token_version`, and it asserts 401 for each one.
+It covers an increment of `gateway.token_version`, and it asserts that a credential store record stays readable.
 It covers a work pull of a machine identity whose registration ended, and it asserts the refusal.
 It emits the directory from the registry and compares it with the committed directory, and a difference fails the test.
 `supertest` at 7.2.2 and `@types/supertest` at 7.2.1 have no use after this.
@@ -521,8 +521,8 @@ The client configuration file holds the three fields below.
 
 - `endpoint` holds the absolute URL of the server. It defaults to `http://127.0.0.1:31415`, which the defaults of `gateway.bind` and `gateway.port` give.
 - `token` holds the JWT of a human or of a machine, and the client presents it as a bearer token.
-- `clientSecret` holds the [client secret](#the-client-secret) of the machine JWT in `token`, and only `kanthord serve worker` reads it. It has no environment variable and no option. A CLI command of a service group ignores it.
-- The file holds no `masterKey`, and the schema refuses that field.
+- `client_secret` holds the [client secret](#the-client-secret) of the machine JWT in `token`, and only `kanthord serve worker` reads it. It has no environment variable and no option. A CLI command of a service group ignores it.
+- The file holds no `master_key`, and the schema refuses that field.
 
 The environment carries the endpoint and token values.
 
@@ -531,7 +531,7 @@ The environment carries the endpoint and token values.
 
 Worker registration presents the machine JWT that this order resolves, and it saves nothing in the client configuration file.
 Human verification accepts a human JWT alone, and a machine JWT fails it with HTTP 401.
-A client sends the `Host` header of its endpoint, so an endpoint outside `gateway.allowedHosts` fails the check of the host allowlist.
+A client sends the `Host` header of its endpoint, so an endpoint outside `gateway.allowed_hosts` fails the check of the host allowlist.
 
 ## The dashboard sign-in
 

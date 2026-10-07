@@ -129,9 +129,9 @@ The instance healthcheck stays out of every human inspection command under [work
 
 The Scheduler Service owns the section `scheduler` of the configuration file that [architecture.impl.md](architecture.impl.md#the-sections-of-the-file) rules.
 
-- `scheduler.releaseReserve` holds the reserve after the effective worker wall time, in seconds.
+- `scheduler.release_reserve` holds the reserve after the effective worker wall time, in seconds.
   It is a positive safe integer and defaults to `600`.
-- The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.releaseReserve` once.
+- The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.release_reserve` once.
   It reads the effective `wallTimeMs` of the worker binding row that `worker_binding_id` pins.
   Nothing moves that deadline, including a resume of a worker registration.
   A later configuration change affects only later claims.
@@ -143,7 +143,7 @@ This write is the loss declaration.
 It sets `ended_at` to the clock reading at the start of its transaction.
 The loss declaration counts the lost rows of the attempt after its latest finished row and hands the count to the Mission Service.
 The Mission Service consumes the loss in that transaction.
-Below `mission.consecutiveLossLimit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
+Below `mission.consecutive_loss_limit`, it moves `Executing` to `Available` and `Evaluating` to `Waiting`.
 It inserts a job only when the node is claimable.
 At the limit, it moves the node to `Paused`, and no job exists.
 The attempt stays open.
@@ -176,7 +176,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
   They assert loss settlement before admission and no return of the lost execution.
   A registration resume meets the same row and asserts settlement before its precondition check.
   A human act also checks its precondition against the settled state.
-- Tests sweep expired steps and evaluation claims below and at `mission.consecutiveLossLimit`.
+- Tests sweep expired steps and evaluation claims below and at `mission.consecutive_loss_limit`.
   They assert one loss increment, the specified node state and a job only when claimable.
 - A test computes the deadline from a binding override of `wallTimeMs` and the configured reserve, including the default `600` seconds.
   A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.

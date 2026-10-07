@@ -58,10 +58,10 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 ## The keys
 
-- Custody uses the derived cipher key of the [credential table](architecture.impl.md#the-credential-table), never `masterKey` directly.
+- Custody uses the derived cipher key of the [credential table](architecture.impl.md#the-credential-table), never `master_key` directly.
 - The handover keys derive from the [client secret](gateway-service.impl.md#the-client-secret) of the machine JWT through `crypto.hkdfSync` with SHA-256 and an empty salt.
 - The info of the handover key is `handover/server-to-worker/v1`, and the info of the refresh-report key is `handover/worker-to-server/v1`.
-- A manual replacement of `masterKey` makes stored credentials unreadable.
+- A manual replacement of `master_key` makes stored credentials unreadable.
 - A human enters each secret again into its existing record; entity references stay valid.
 - [The verification secret](intake-service.impl.md#the-verification-secret) of the Intake Service owns the webhook secret derivation.
 

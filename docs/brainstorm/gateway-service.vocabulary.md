@@ -48,7 +48,7 @@ The Project Service receives that value, and it takes no association from the ca
 
 The secret that the server derives for one machine JWT and that the `worker` application holds in `cli.yaml`.
 
-`kanthord jwt generate --project project_01J8Z3N5K7Q2W4E6R8T0Y2V4X5 --binding tdd-main` prints `token: eyJhbGciOi...` and `clientSecret: 3q2+7wAAAAC1...`.
+`kanthord jwt generate --project project_01J8Z3N5K7Q2W4E6R8T0Y2V4X5 --binding tdd-main` prints `token: eyJhbGciOi...` and `client_secret: 3q2+7wAAAAC1...`.
 The worker of `tdd-main` derives the handover key from that client secret. No other worker opens its handover.
 
 ## JWT claim set
