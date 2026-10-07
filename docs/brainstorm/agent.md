@@ -73,8 +73,14 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 ## Prompt composer
 
-- The component ships one base prompt and one agent prompt for each agent of the catalog.
+- The prompt of an agent session has three layers: the system layer, the agent layer and the working layer.
+- The component ships one base prompt, `base.md`, and one agent prompt for each agent of the catalog.
 - A shipped prompt is the default of its agent.
+- The system layer joins its sources in this order: the host agent file, the shipped `base.md`, the custom system prompt.
+- The host agent file is the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists.
+- A human edits the custom system prompt on the dashboard, and the database stores it.
+- Each source of the system layer holds one on or off switch.
+- The composer joins every source that is on. No source has a merge or override mode.
 - An operator override replaces or extends a shipped prompt on one server.
 - An override takes the position and the precedence of the prompt that it replaces or extends.
 - The composition record names the source and the digest of every prompt that an agent session runs with.

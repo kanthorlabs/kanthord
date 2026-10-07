@@ -71,17 +71,16 @@ Each model inference call uses the model [connector](architecture.vocabulary.md#
 ## prompt layer
 
 A prompt layer is one part of the prompt of a native agent, and it has one owner.
-The set is closed and it holds six values.
+The set is closed and it holds five values.
 
-- **global prompt**: the operator of the server owns it.
-- **base prompt**: the worker that declares the agent owns it, and it holds for every agent that uses it.
+- **system layer**: the operator of the server owns it, and it holds for every agent of the server. The [Agent component](agent.vocabulary.md#system-layer) defines it.
 - **agent prompt**: the worker that declares the agent owns it.
 - **project prompt**: the project that binds the repository owns it.
 - **work prompt**: the node revision that the attempt pins owns it.
 - **workbench prompt**: the [Workbench Service](workbench-service.md#prompt) owns it, and it holds for every workbench session.
 
-The global prompt of the server states "Every answer is short. A commit message states the change and no reason."
-`general@1` and `reviewer@1` declare one base prompt for `swe@1` and `re@1`, which describes a senior software engineer, and its text is `assets/prompt/base.md`.
+The custom system prompt of the server states "Every answer is short. A commit message states the change and no reason."
+The shipped `base.md` of the system layer describes a senior software engineer.
 `general@1` declares the agent prompt of `swe@1`, `assets/prompt/swe@1.md`, and `reviewer@1` declares the agent prompt of `re@1`, `assets/prompt/re@1.md`.
 `reviewer@1` declares the agent prompt of `re@1`.
 The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
@@ -92,18 +91,16 @@ The catalog holds one prompt declaration for `swe@1`, and `general@1` references
 ## prompt source
 
 A prompt source is one origin of the text of a prompt layer.
-The global prompt and the project prompt each hold an ordered list, and the set of each list is closed.
+The system layer and the project prompt each hold an ordered list, and the set of each list is closed.
 
-- global prompt: **the configuration of the server**, then **the agent file of the host**.
-- project prompt: **the repository binding**, then **the agent file of the workspace**.
+- system layer: **the agent file of the host**, then **the shipped `base.md`**, then **the custom system prompt**. The composer joins every source that is on.
+- project prompt: **the repository binding**, then **the agent file of the workspace**. The composer takes the first source that is present.
 
-The base prompt and the agent prompt each take the declaration of their worker, and the work prompt takes the pinned node revision.
-The server holds no configured global prompt and the host holds an agent file, so the global prompt takes that file.
-The server holds a configured global prompt and the host holds an agent file.
-The global prompt takes the configuration, and the composer reads no file.
+The agent prompt takes the declaration of its worker, and the work prompt takes the pinned node revision.
+The agent file of the host and the custom system prompt are on, and `base.md` is off, so the system layer holds that file and then the custom system prompt.
 The repository binding of `kanthorlabs/kanthord` holds no project prompt and the workspace holds an agent file, so the project prompt takes that file.
 The workspace holds an agent file that exceeds the bound, so that source is invalid and the project prompt is absent.
-The configuration of the global prompt holds the value that disables the layer, so the composer reads no agent file of the host.
+The switch of the agent file of the host is off, so the composer reads no agent file of the host.
 
 ## agent file
 
@@ -120,9 +117,9 @@ The workspace root of `kanthorlabs/kanthord` holds `AGENTS.md` only.
 
 The prompt composer is the Worker Service component that produces the prompt of a native agent.
 The term names no closed set.
-The composer of Execution 1 on "Add password reset" resolves five layers.
-It takes the global prompt from the agent file of the host.
-It takes the base prompt and the agent prompt from the declaration of `general@1`.
+The composer of Execution 1 on "Add password reset" resolves four layers.
+It takes the system layer from the agent file of the host and the shipped `base.md`.
+It takes the agent prompt from the declaration of `general@1`.
 It takes the project prompt from the repository binding of `kanthorlabs/kanthord`.
 It takes the work prompt from task "Add reset token expiry".
 It reads no agent file of the workspace, because the repository binding supplies the project prompt.

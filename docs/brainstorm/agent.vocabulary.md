@@ -64,6 +64,12 @@ One run of the agent loop of one agent for one consumer.
 The term names no closed set.
 Execution 1 opens one agent session of `swe@1` under worker binding `general-main`.
 
+## system layer
+
+The first layer of the prompt of an agent session. It joins the host agent file, the shipped `base.md` and the custom system prompt, in that order.
+The term names no closed set.
+Ulrich switches `~/.claude/CLAUDE.md` on, `base.md` off and the custom system prompt on, so the system layer holds `~/.claude/CLAUDE.md` and then the custom system prompt.
+
 ## resume
 
 The reopen of an agent session from the turns that its runtime stored.

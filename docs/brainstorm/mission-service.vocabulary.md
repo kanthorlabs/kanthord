@@ -306,7 +306,7 @@ The assessment result follows this order for "Add password reset":
    The result is `criterion-not-met`; the execution makes no judgement, and the rationale names that verification.
 2. Otherwise, the agent judges the criterion.
    The judgement gives `success`, `criterion-not-met` or `undetermined`.
-3. The worker declares a base prompt and the judgement finds a default-standard violation.
+3. kanthord hosts the worker, and the judgement finds a default-standard violation.
    That violation turns `success` into `criterion-not-met`.
 
 Only the first case permits an empty judgement, and no case permits an absent rationale.

@@ -232,12 +232,12 @@ Each sub-agent has its own agent prompt that defines its responsibilities and co
 
 ## default standard
 
-The default standard is the standard that the base prompt of a worker states as the default of the human.
+The default standard is the standard that the system layer states as the default of the human.
 An assessment weighs the evidence against it beside the criterion.
-The base prompt that the reviewer runs with states the default standard that an assessment applies.
-The composition record of the execution names that base prompt by its source and its digest.
+The system layer that the reviewer runs with states the default standard that an assessment applies.
+The composition record of the execution names each source of that layer by its digest.
 The term names no closed set.
-The base prompt of `swe@1` and `re@1` forbids an abstraction for single-use code.
+The shipped `base.md` of the system layer forbids an abstraction for single-use code.
 The change of task "Add reset token expiry" meets the criterion of "Add password reset".
 It adds a helper class with one call site.
 The assessment of `reviewer@1` records that finding as a blocker and does not pass, and "Add password reset" moves to `Blocked` for the human review.

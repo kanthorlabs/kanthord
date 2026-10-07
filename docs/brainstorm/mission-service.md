@@ -360,8 +360,8 @@ The verifications decide the result first, then the judgement against the criter
 A failed or unrun verification produces a result that does not pass, without a judgement.
 The rationale names that verification.
 Only this case permits an empty judgement.
-The assessment of an execution whose worker declares a base prompt also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
-A worker that an external harness hosts declares no base prompt, so its assessment weighs the criterion alone.
+The assessment of an execution whose worker kanthord hosts also weighs the evidence against the [default standard](overview.vocabulary.md#default-standard).
+A worker that an external harness hosts runs no system layer, so its assessment weighs the criterion alone.
 An assessment that finds a violation of the default standard does not pass.
 An assessment of an initiative names the current outcome of each current objective, and it weighs each one.
 It names the actor that performs it.

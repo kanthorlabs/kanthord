@@ -21,7 +21,7 @@ Success has three separate parts:
 - The WHAT specifies a criterion.
 - Execution produces results and evidence.
 - Evaluation assesses the evidence against the criterion and produces an outcome.
-  It also applies the [default standard](overview.vocabulary.md#default-standard) when the worker declares a base prompt.
+  It also applies the [default standard](overview.vocabulary.md#default-standard) when the system layer states it.
 
 The verifications supply a machine-run result, and the criterion needs judgement.
 Completing an execution does not establish success, because evaluation assesses the evidence against the WHAT.

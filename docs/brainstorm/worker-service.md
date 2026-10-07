@@ -41,7 +41,7 @@ The Worker Service publishes the contract of `claude@1` and `opencode@1`.
 It holds the name, host, declared node states, required node format and resource budget.
 It runs no instance of them, and the [overview](overview.md#external-harness) states what kanthord configures of an external harness.
 
-A worker that kanthord hosts declares the base prompt and the agent prompt of each of its agents.
+A worker that kanthord hosts declares the agent prompt of each of its agents.
 [Prompt composition](#prompt-composition) states every layer of the prompt.
 
 The Worker Service supplies the model [connector](architecture.vocabulary.md#connector) for a model inference call.
@@ -69,16 +69,13 @@ An agent holds no repository credential.
 
 The prompt of a native agent composes prompt layers.
 A prompt layer is one part of the prompt, and it has one owner.
-The composition places the global prompt first, then the base prompt, then the agent prompt, then the project prompt, then the work prompt.
+The composition places the [system layer](agent.md#prompt-composer) first, then the agent prompt, then the project prompt, then the work prompt.
 
-The operator configures the global prompt of the server.
-The global prompt states the conventions of the operator, and it holds for every native agent of the server.
-A worker declares, for each of its agents, the base prompt that the agent uses and the agent prompt of that agent.
-A base prompt states what holds for every agent that uses it, and more than one agent uses one base prompt.
-A base prompt describes the engineer that every agent that uses it is, and it states the default standard of the work product that those agents produce and judge.
+The system layer states the conventions of the operator and the default standard of the work product, and it holds for every native agent of the server.
+A worker declares, for each of its agents, the agent prompt of that agent.
 An agent prompt states the role of the agent, its responsibility and its contribution to the WHAT.
-The shipped base prompt and agent prompt are the defaults of the worker name.
-An operator override replaces or extends them on one server, and the [prompt composer](agent.md#prompt-composer) records the override.
+The shipped agent prompt is the default of the worker name.
+An operator override replaces or extends it on one server, and the [prompt composer](agent.md#prompt-composer) records the override.
 The project prompt states the programming language, the development style and the coding conventions of the work product of one repository.
 It states no rule about the method, the tools, the repository operations, the assessment or the release.
 The work prompt renders from the node revision that the attempt pins.
@@ -86,8 +83,8 @@ It states the requirement, the criterion and the verifications of the work that 
 The agent prompt and the work prompt are required, and every other layer is optional.
 
 A prompt layer takes its text from one prompt source.
-The global prompt and the project prompt each declare an ordered list of prompt sources.
-The configured source precedes the agent file source in the list of each of those two layers.
+The project prompt declares an ordered list of prompt sources.
+The configured source precedes the agent file source in that list.
 The composer takes the first source of the list that is present and valid, and it reads no further source of that layer.
 A source that is absent passes the turn to the next source of the list.
 A source that is present and invalid makes its layer absent, and the composer takes no further source of that layer.
@@ -108,7 +105,7 @@ No global prompt, project prompt or work prompt revokes one.
 The agent prompt governs the base prompt, and a base prompt that contradicts the agent prompt that uses it is a defect of the worker.
 An execution performs no conduct that its base prompt or its agent prompt forbids, whatever another layer states.
 A global prompt and a project prompt define no criterion.
-An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that the base prompt states.
+An assessment follows the criterion of the node and the [default standard](overview.vocabulary.md#default-standard) that the system layer states.
 
 A prompt layer carries instructions, and it authorizes no operation.
 It names no value of the effective configuration, it adds no tool and it changes no resource budget.
@@ -126,7 +123,7 @@ The composer records the selected source of every layer, the digest of its text,
 The composer records no prompt text.
 That record is telemetry of the execution.
 
-The execution resolves the global prompt, the base prompt, the agent prompt and the project prompt once, when it starts.
+The execution resolves the system layer, the agent prompt and the project prompt once, when it starts.
 It holds that text until the execution ends.
 The work prompt renders for each unit of work that the method takes.
 When the composition takes the agent file source, the composer reads that file before the agent runs.

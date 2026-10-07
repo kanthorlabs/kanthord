@@ -44,11 +44,11 @@ It describes no mechanism of another service.
 
 ## Prompt
 
-- The prompt of a workbench session composes the global prompt, the base prompt and the agent prompt of its agent, and the workbench prompt.
-- The composition places the global prompt first, then the base prompt, then the agent prompt, then the workbench prompt.
+- The prompt of a workbench session composes the [system layer](agent.md#prompt-composer), the agent prompt of its agent, and the workbench prompt.
+- The composition places the system layer first, then the agent prompt, then the workbench prompt.
 - A workbench session takes no project prompt and no work prompt. Each human message is a message of the session.
 - The Workbench Service owns the workbench prompt. It states that a human reads every reply.
-- The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the base prompt or the agent prompt.
+- The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the system layer or the agent prompt.
 - The agent prompt holds the highest precedence, then the base prompt, then the workbench prompt, then the global prompt.
 
 ## Tools
