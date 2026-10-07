@@ -154,7 +154,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - `agent.prompt.host_file` holds a boolean, and it defaults to `true`.
 - `false` locks the `host_file` switch of the `system` scope. The composer resolves the host agent file source as `off` for every agent, whatever the stored switch holds.
 - The lock keeps the stored switch. When the configuration returns to `true`, the stored switch controls the source again.
-- `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to an empty string.
+- `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to `agents`. The agent file of `swe@1` is then `~/.local/share/kanthord/agents/swe@1.md`, and the agent page shows that path on the agent file row.
 - An empty value means the agent layer holds no agent file source.
 - A relative path of either field resolves against the data directory.
 - The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
