@@ -95,6 +95,9 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The server composes the system layer and the agent layer for every consumer. The host that holds the working directory reads the agent files of the working layer.
 - The `Settings` section of the dashboard, at `/settings/prompts`, manages the system layer: its layer switch, its source switches and its custom system prompt. The agent page manages the system layer override, the agent layer and the workbench working layer of its agent.
 - The agent page shows the system layer override as a three-way control with the effective state, for example `Follows server: Off`. While the system layer of a scope is off, its source rows are dimmed and stay editable.
+- The custom source row holds an edit button. It opens a sheet with a Write tab and a markdown Preview tab, a byte counter against the 32768-byte limit and one save action. Save stays disabled while the text is unchanged or above the limit. An empty text removes the custom prompt.
+- A close of the editor with unsaved changes asks before it discards the draft. A revision conflict keeps the draft and offers to load the latest revision.
+- The Settings section edits the custom system prompt. The agent page edits the custom agent prompt and the custom working prompt of its agent.
 - Each source row holds its on or off switch. A switch is disabled, with a tooltip that states the reason, for the last source that is on in the agent layer and for a file source whose state is `absent`.
 - The agent page shows each prompt source as one row, collapsed by default. The title of a row is the path of its file, else the name of the source. A chevron points right when the row is collapsed and down when it is expanded. The expanded row renders the text as markdown in a scrollable panel.
 - Each row with text holds a button that copies the raw markdown. A row with no text is inactive: it holds no chevron and no copy button.
