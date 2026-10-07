@@ -109,7 +109,7 @@ Each source reaches the model inside a `<prompt-layer>` tag that names the layer
 - **Host agent file.** When `agent.prompt.systemFile` in `~/.config/kanthord/kanthord.yaml` names a file, the host agent file is that file. Otherwise KanthorD takes the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists. A relative path resolves against `~/.local/share/kanthord`.
 - **Agent directory.** `agent.prompt.agentDirectory` names a directory, for example `~/workdir`. The agent layer of `swe@1` then reads `~/workdir/swe@1.md`.
 - **Shipped prompts.** `base.md`, `swe@1.md`, `re@1.md` and `workbench.md` are embedded in the binary. No command downloads them, and an upgrade replaces them together with the code that depends on them.
-- **Custom prompts.** A human writes the custom system, agent and workbench prompts through `agent.prompt.put`, and sets a switch through `agent.prompt.switch`. The database table `agent_prompt` holds one row per scope with its switches, its custom text and a revision.
+- **Custom prompts.** A human writes the custom system, agent and workbench prompts through `agent.prompt.put`, and sets a switch through `agent.prompt.switch`. The CLI commands are `kanthord agent prompt put --scope agent --agent swe@1 --file swe.md` and `kanthord agent prompt switch --scope system --switch base --off`. Each write after the first names `--expected-revision`. The database table `agent_prompt` holds one row per scope with its switches, its custom text and a revision.
 - **Working directory.** It is the workspace of a Worker execution, or `~/.local/state/kanthord/workbench/<agentName>` for a Workbench session.
 - **Working layer of a Worker execution.** It joins the four files of the workspace, then the `projectPrompt` of the repository binding. It has no shipped prompt. The binding holds its five switches in `working_layer`, and a switch change creates a binding revision.
 - **Working layer of a Workbench session.** It joins the four files of the workbench directory, the shipped `workbench.md`, then the custom workbench prompt.
@@ -152,6 +152,7 @@ The server composes the system layer and the agent layer for every consumer. A W
 - `deferred` marks a workspace file that only the worker application reads.
 - The query `view=final` answers the final prompt only.
 - The queries `projectId` and `bindingId` select the working layer of one repository binding. Without them, the working layer is the workbench working layer of the agent.
+- The CLI reads it with `kanthord agent get swe@1`, adds `--view final` for the final prompt only, or `--project <project-id> --binding <binding-id>` for a binding.
 
 ### Limits of a source
 
