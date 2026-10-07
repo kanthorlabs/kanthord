@@ -16,7 +16,7 @@ The schema has four functional views. Their order is the order of delivery.
 
 | View | Scope | Tables of the owners |
 | --- | --- | --- |
-| [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
+| [ERD 1: Environment and planning](01-setup.md) | Projects, credentials, bindings, agent enablement, prompt settings, the mission plan and the work queue. | Custody, Project, Agent, Mission, Scheduler |
 | [ERD 2: Execution](02-execution.md) | Instances, executions, attempts, evidence and its assets, assessments and outcomes. | Worker, Scheduler, Mission |
 | [ERD 3: External integration](03-integration.md) | Inbounds, inbound events and outbound requests. | Intake |
 | [ERD 4: Telemetry](04-tracking.md) | Traces, spans, records and telemetry texts. | Tracking |
@@ -35,7 +35,7 @@ flowchart TB
         subgraph v1["ERD 1: Environment and planning"]
             c1["Custody: credential"]
             p1["Project: project, binding, binding revision"]
-            a1["Agent: agent enablement"]
+            a1["Agent: agent enablement, prompt settings"]
             m1["Mission: mission, node, node revision, dependency"]
             s1["Scheduler: job"]
         end

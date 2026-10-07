@@ -72,6 +72,16 @@ erDiagram
         integer removed_at "Unix ms, set on a tombstone"
     }
 
+    agent_prompt {
+        text id PK "agent_prompt_ + ULID"
+        text scope "system | agent | workbench, unique with agent_name"
+        text agent_name "catalog agent, empty for system"
+        text switches "JSON map of source to on or off"
+        text custom_text "custom prompt of the scope, empty when absent"
+        integer version "compare-and-set, starts at 1"
+        integer updated_at "Unix ms"
+    }
+
     mission_mission {
         text id PK "mission_ + ULID"
         text project_id UK "one mission per project"
@@ -146,7 +156,7 @@ erDiagram
 
     class credential custody
     class project_project,project_binding project
-    class agent_enablement agent
+    class agent_enablement,agent_prompt agent
     class mission_mission,mission_node,mission_node_revision,mission_dependency mission
     class scheduler_job scheduler
 ```
@@ -162,6 +172,7 @@ A derived table maps a ruled record to rows, and this page proposes that mapping
 | `credential` | Custody | Ruled: [custody.impl.md](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/custody.impl.md#the-credential-store-record), [the credential table](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-credential-table). |
 | `project_project` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
 | `project_binding` | Project Service | Ruled: [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store). |
+| `agent_prompt` | Agent component | Ruled: [prompt settings](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.impl.md#prompt-settings). |
 | `agent_enablement` | Agent component | Derived from the [agent enablement](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/agent.md#agent-configuration) record and the [agent enablement record](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/agent.md#agent-enablement-record). |
 | `mission_mission` | Mission Service | Derived from the `Mission` record of the [Mission CLI](https://github.com/kanthorlabs/kanthord-engine/blob/main/docs/cli/mission.md#proposed-result-schemas). |
 | `mission_node` | Mission Service | Derived; the unique index on `(mission_id, filename)` is ruled in [the plan file name](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/mission-service.impl.md#the-plan-file-name). |
@@ -223,6 +234,10 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A retained provider name keeps its `provider` in every later revision.
 - A worker binding depends on every agent that the catalog declares for its worker, whether or not the binding holds an entry for that agent. The catalog is static, so this dependency is no column.
 - A binding write is refused when an agent of a native worker has no enabled enablement. `validateEntry` runs for every agent inside the binding write transaction.
+- `agent_prompt` has a unique index on `(scope, agent_name)`. The `system` row holds an empty `agent_name`.
+- A row holds the current settings of its scope and no history. A write names `expectedVersion`, sets the next `version`, and a stale value answers 409 `agent.prompt.version_conflict`.
+- The keys of `switches` are the sources of the layer of the scope. `custom_text` holds at most 32768 UTF-8 bytes.
+- The `config` JSON of a repository binding holds `working_layer` with the booleans `agents_md`, `agents_local_md`, `claude_md`, `claude_local_md` and `project_prompt`. A switch change inserts the next binding revision.
 - An enablement change validates every dependent worker binding through `entriesOfAgent` in the transaction of its commit, and a change that invalidates one is refused.
 - A disablement is always permitted, and it refuses every later resolution.
 - A resolution reads the latest row of the enablement. A latest row with `state` `disabled` or with `removed_at` set refuses the resolution.

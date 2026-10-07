@@ -125,6 +125,17 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - Tests cover every provider-check answer, status, deadline and the absence of raw keys.
 - Tests cover healthcheck grouping, attribution, report-only behaviour and no inference call.
 
+## Prompt settings
+
+- The table `agent_prompt` of [ERD 1](../reference/erd/01-setup.md) holds one row per scope: `system`, then `agent` and `workbench` for each catalog agent.
+- `agent.prompt.put` replaces the `custom_text` of one scope. `agent.prompt.switch` sets one switch of one scope.
+- Both writes take `expectedVersion`. A stale or absent value answers 409 `agent.prompt.version_conflict` with the current row in `details`.
+- A `custom_text` above 32768 UTF-8 bytes answers 400 `agent.prompt.too_large`.
+- A switch that turns off every source of an `agent` scope answers 409 `agent.prompt.agent_layer_empty`.
+- A write creates the row of its scope at `version` 1 when none exists. A read of an absent row answers every switch on and an empty `custom_text`.
+- The Project Service owns the working switches of a repository binding, in its `config` JSON.
+- Tests cover each scope, each write, each refusal, an absent row and two writes at one `expectedVersion`.
+
 ## Prompt composer configuration
 
 - `agent.prompt.systemFile` holds the path of a Markdown file, as a string, and it defaults to an empty string.
