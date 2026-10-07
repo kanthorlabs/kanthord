@@ -101,6 +101,10 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - Each source row holds its on or off switch. A switch is disabled, with a tooltip that states the reason, for the last source that is on in the agent layer and for a file source whose state is `absent`.
 - The agent page shows each prompt source as one row, collapsed by default. The title of a row is the path of its file, else the name of the source. A chevron points right when the row is collapsed and down when it is expanded. The expanded row renders the text as markdown in a scrollable panel.
 - Each row with text holds a button that copies the raw markdown. A row with no text is inactive: it holds no chevron and no copy button.
+- The agent page hides the inactive prompt sources by default. An inactive source has the state `absent` or `off`. A source with the state `invalid` stays visible, because it needs attention. The custom source stays visible, because its row holds the editor of its text.
+- One switch labelled `Show inactive sources` sits above the layer cards. It is off by default and applies to every layer card. The browser keeps it per viewer in `localStorage`.
+- A layer card that hides sources shows a footer button, for example `2 inactive sources hidden`, that turns the switch on. A layer card with every source hidden shows that button in place of the list.
+- A switch change on a visible row never hides that row before the next page load, so a row does not vanish under the pointer.
 - `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
 - When `kanthord.yaml` names a system file, the host agent file is that file, and the composer runs no discovery.
 - The database holds every switch and every custom text. The dashboard edits a switch or a custom text, and it edits no path.

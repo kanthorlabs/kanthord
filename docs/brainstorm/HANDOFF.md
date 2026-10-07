@@ -60,11 +60,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 Added 2026-10-06 by Ulrich, from the evaluation of the agent. The Worker Service and the Workbench Service consume the component.
 
-- [ ] Added 2026-10-07 by Ulrich. Hide the inactive prompt sources on the agent page by default. An inactive source has the state `absent` or `off`. A source with the state `invalid` stays visible, because it needs attention.
-  - One switch labelled `Show inactive sources` sits in the toolbar above the layer cards. It is off by default, it applies to every layer card, and the browser keeps it per viewer in `localStorage`.
-  - A layer card that hides sources shows a footer line, for example `2 inactive sources hidden`, as a button that turns the switch on. A layer card with every source hidden shows that line in place of the list.
-  - A switch change on a visible row never hides that row before the next page load, so a row does not vanish under the pointer.
-  - Record the rule in `agent.md` beside the other agent page rules when it lands.
 - [ ] Added 2026-10-07 by Ulrich. Build the working layer switches of the repository binding form in `apps`. The `Settings` section and the prompt sections of the agent page landed on 2026-10-07.
 - [ ] Give an agent session a budget input that the consumer supplies. `ExecutionBudget` reads `createdAt` and `expiredAt` of the claim.
 - [ ] Move the native agent runtime, the prompt composer and the tool table from the Worker pages to the Agent pages, and split `NativeAgentInput` of `engine/src/worker/native-agent.ts` into a session input that names no execution.
