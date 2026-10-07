@@ -68,7 +68,7 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 Added 2026-10-06 by Ulrich, from the evaluation of the agent. The Worker Service and the Workbench Service consume the component.
 
-- [ ] Added 2026-10-07 by Ulrich. Build the prompt screens of `apps` after the snake_case payload rename of the Architecture section: the `Settings` section with the system layer prompt, the layer sections of the agent page with switches, states, custom text and the final prompt, and the working layer switches of the repository binding form. Run `make contract-sync` first.
+- [ ] Added 2026-10-07 by Ulrich. Build the working layer switches of the repository binding form in `apps`. The `Settings` section and the prompt sections of the agent page landed on 2026-10-07.
 - [ ] Give an agent session a budget input that the consumer supplies. `ExecutionBudget` reads `createdAt` and `expiredAt` of the claim.
 - [ ] Move the native agent runtime, the prompt composer and the tool table from the Worker pages to the Agent pages, and split `NativeAgentInput` of `engine/src/worker/native-agent.ts` into a session input that names no execution.
 
