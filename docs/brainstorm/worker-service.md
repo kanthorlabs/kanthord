@@ -96,7 +96,7 @@ The steps method takes every source of the project prompt.
 The evaluation method takes the `projectPrompt` of the repository binding only.
 An agent file of the workspace is the work product of the candidate.
 
-The composition states the owner, the source and the precedence of every layer to the agent.
+The message boundary states the precedence of every layer to the agent. The system prompt holds the system layer, then the agent prompt. Each source of the project prompt is one later message, and the work prompt is the last message.
 The agent prompt holds the highest precedence, then the system layer, then the work prompt, then the project prompt.
 The system layer and the agent prompt state the obligations of the worker.
 No project prompt and no work prompt revokes one.

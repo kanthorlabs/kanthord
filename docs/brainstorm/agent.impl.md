@@ -33,7 +33,7 @@ A mechanism here never overrides a rule there.
 - `origin` is one of `binary`, `file` and `database`.
 - `state` is one of `present`, `absent`, `invalid`, `off` and `deferred`. `deferred` marks an agent file of a workspace, which only the worker application reads.
 - `path` is the home-relative path of a `file` source, else `null`. `digest` and `text` are `null` unless `state` is `present`.
-- `final` holds the framing, then the text of every `present` source, in reading order.
+- `final` holds the system prompt that ends with the framing, then the message of every `present` source of the working layer, in reading order.
 - The query `view=final` answers `prompt` with `final` only.
 - The optional queries `projectId` and `bindingId` select the working layer of that repository binding. Without them, the working layer is the workbench working layer of the agent.
 - A `bindingId` that names no repository binding of `projectId` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`.
