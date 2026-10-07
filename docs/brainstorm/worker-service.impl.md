@@ -144,7 +144,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 
 - It declares `mutation: false`, no body and the default 30 s timeout. It has no CLI leaf.
 - The invocation chain proves the path identity, and the server derives the setup from the proven claim.
-- The answer is `{ executionId, workerName, agentName, effectiveConfiguration, credentialId, metadata, resourceBudget, repositories, globalPrompt }`.
+- The answer is `{ executionId, workerName, agentName, effectiveConfiguration, credentialId, metadata, resourceBudget, repositories, prompt }`.
 - `workerName` comes from the worker binding revision that the claim pins, and `agentName` comes from the declaration of that worker.
 - The resolution reads the pinned worker binding revision, its entry, the current enablement and the metadata of the pinned credential revision from one snapshot.
 - The credential revision is the revision that the handover of the execution pins for the credential name of the effective configuration. The read creates no pin and selects no other revision.
@@ -152,11 +152,11 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 - The model and reasoning-effort validation use the metadata of the pinned credential revision.
 - `credentialId` is the row identity of the pinned revision. `metadata` holds the metadata of that revision for every provider, and it is null for a platform without metadata.
 - `resourceBudget` is the override of the pinned worker binding revision, or the default of the worker.
-- Each entry of `repositories` holds `{ bindingId, name, address, sshIdentity, strategy: { baseBranch }, projectPrompt }`.
+- Each entry of `repositories` holds `{ bindingId, name, address, sshIdentity, strategy: { baseBranch }, projectPrompt, working_layer }`. `working_layer` is the switch map of the pinned binding revision.
 - `sshIdentity` is the metadata `{ host, hostname, port, identity_file }` of the `ssh` record of the binding. The worker application runs the [`ssh` validation](repository.impl.md#platform-validators) with it before each clone, fetch and push.
 - For an objective, `repositories` holds the repository binding that the pinned node revision names.
 - For an initiative, `repositories` holds one row per resource identity of the repository bindings of its current objectives, discarded objectives included, at the greatest revision.
-- `globalPrompt` is the configured source of the global prompt as the server resolves it with the reader of the composer: `{ state: "absent" }`, `{ state: "disabled" }`, `{ state: "present", path, text }` or `{ state: "invalid", path, reason }`.
+- `prompt` holds `final`, the framing, the system layer and the agent layer that the server composes, as [`agent.get`](agent.impl.md#the-prompt-answer) with `view=final` answers them.
 - An execution of an externally hosted worker answers 409 `worker.execution.no_native_agent`. A disabled enablement answers 400 `agent.enablement.unavailable`. A resolution that fails validation answers the code of its first issue.
 - The read answers no secret.
 - The application calls the read after the handover and before the first inference call.
@@ -173,6 +173,7 @@ Their design, and the packaging of the `/work` orchestration skill that they car
 The prompt composer resolves the system layer and the agent layer under [agent.impl.md](agent.impl.md#prompt-composer-configuration).
 The working layer of an execution joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workspace root, then the `projectPrompt` of the repository binding.
 It takes each source that the switch of the pinned binding revision turns on.
+The worker application composes only the working layer and the work prompt, and it reads no home file.
 An empty or absent `projectPrompt` is an absent source.
 An evaluation takes the `projectPrompt` only, and the composer reads no agent file of the workspace.
 It reads an agent file as UTF-8 Markdown, it rejects a control character outside tab and newline, and it resolves no `@` import.
