@@ -19,6 +19,7 @@ CLI entries below follow `kanthord`.
 | Gateway       | [Verify a human JWT](gateway/verify.md)          | `GET /api/auth/verify`                                     | `gateway verify`                                      |
 | Gateway       | [Publish and read OpenAPI](gateway/openapi.md)   | `GET /api/openapi.yaml`, `GET /api/openapi/:service/:file` | `gateway openapi` (local generation, not an API call) |
 | Worker        | [Register a worker instance](worker/register.md) | `POST /api/worker/register`                                | `worker register`                                     |
+| Workbench     | [Operation tools of an agent](workbench/tools.md) | Not available (agent tools)                               | Not available                                         |
 
 ### Page structure
 

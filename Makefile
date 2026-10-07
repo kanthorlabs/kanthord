@@ -19,7 +19,7 @@ export WEB_PORT ?= 27182
 	app-up app-down app-logs app-install \
 	tree-new tree-list tree-clean \
 	sync sync-all sync-status sync-engine sync-apps sync-webhook sync-parent \
-	contract-sync git-author test-submodules
+	contract-sync docs-tools git-author test-submodules
 
 help:
 	@echo "Kanthord. Three scenarios. Copy a block and run it."
@@ -155,6 +155,10 @@ help-targets:
 	@echo "contract. Materials that flow from engine to apps"
 	@echo "  contract-sync    Publish the engine contract into apps, and commit it"
 	@echo ""
+	@echo "docs. The public documentation under docs/"
+	@echo "  docs-tools       Generate docs/reference/workbench/tools.md from the engine"
+	@echo "                   CHECK=1 reports only, and fails when the page is stale"
+	@echo ""
 	@echo "git"
 	@echo "  git-author       Apply the root commit identity to all submodules"
 	@echo "                   Only this repository needs a local user section"
@@ -226,6 +230,9 @@ sync-parent:
 
 contract-sync:
 	@$(S)/contract/sync.sh
+
+docs-tools:
+	@$(S)/docs/tools.sh
 
 git-author:
 	@$(S)/git/author.sh

@@ -85,7 +85,12 @@ test("rejects escapes, private links, schemes and query tricks", () => {
 });
 
 test("feature pages share one response contract and API/CLI sections", () => {
-  const shared = new Set(["README.md", "errors.md", "identities.md"]);
+  const shared = new Set([
+    "README.md",
+    "errors.md",
+    "identities.md",
+    ["workbench", "tools.md"].join(sep),
+  ]);
   const paths = readdirSync(resolve(root, "reference"), { recursive: true })
     .filter(
       (path) =>
