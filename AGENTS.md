@@ -18,6 +18,10 @@ Rules for every agent that works in the kanthord repository. Ulrich is the human
 - Prefer to forbid a configuration change over a mechanism that handles the edge case of that change.
 - When Ulrich approves a plan of several steps, run all steps in sequence. Do not ask for confirmation between steps. Verify and commit each step. Stop only for a real blocker or for an open item that needs a ruling.
 - Open a report with two to four short prose paragraphs that state the conclusion. Put tables, metrics, per-item findings and blocker lists below, under `## Details`.
+- Route each task by its kind:
+  - Do a short task and a document edit yourself.
+  - Send an ambiguous task to an Opus sub-agent at medium effort.
+  - Send a task with clear instructions to a Sonnet sub-agent at high effort.
 
 ## Design set
 
