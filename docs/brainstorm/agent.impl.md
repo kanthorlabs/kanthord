@@ -134,7 +134,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - A switch that turns off every source of an `agent` scope answers 409 `agent.prompt.agent_layer_empty`.
 - A write creates the row of its scope at `revision` 1 when none exists. A read of an absent row answers every switch on and an empty `custom_text`.
 - The Project Service owns the working switches of a repository binding, in its `config` JSON.
-- Tests cover each scope, each write, each refusal, an absent row and two writes at one `expectedVersion`.
+- Tests cover each scope, each write, each refusal, an absent row and two writes at one `expectedRevision`.
 
 ## Prompt composer configuration
 
