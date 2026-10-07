@@ -1053,6 +1053,7 @@ The import boundaries follow the public files.
 
 - The dashboard sidebar lists only a route that has a screen.
 - A planned screen joins the sidebar in the change that adds its route.
+- The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
 
 ## Unwired collaborations
 

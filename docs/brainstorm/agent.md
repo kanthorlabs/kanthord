@@ -90,6 +90,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The system layer switches belong to the server. The agent layer switches belong to the agent name.
 - The working layer switches belong to the repository binding for a Worker execution, and to the agent name for a workbench session.
 - The server composes the system layer and the agent layer for every consumer. The host that holds the working directory reads the agent files of the working layer.
+- The `Settings` section of the dashboard manages the system layer: its switches and its custom system prompt. The agent page manages the agent layer and the workbench working layer of its agent.
 - `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
 - When `kanthord.yaml` names a system file, the host agent file is that file, and the composer runs no discovery.
 - The database holds every switch and every custom text. The dashboard edits a switch or a custom text, and it edits no path.
