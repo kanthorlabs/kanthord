@@ -81,6 +81,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - A human edits the custom system prompt on the dashboard, and the database stores it.
 - Each source of the system layer holds one on or off switch.
 - The composer joins every source that is on. No source has a merge or override mode.
+- The work prompt is the task message of the consumer. It belongs to no layer, it holds no switch, and the composer pins it.
 - An operator override replaces or extends a shipped prompt on one server.
 - An override takes the position and the precedence of the prompt that it replaces or extends.
 - The composition record names the source and the digest of every prompt that an agent session runs with.

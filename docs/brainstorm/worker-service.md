@@ -80,7 +80,8 @@ The project prompt states the programming language, the development style and th
 It states no rule about the method, the tools, the repository operations, the assessment or the release.
 The work prompt renders from the node revision that the attempt pins.
 It states the requirement, the criterion and the verifications of the work that the execution takes.
-The agent prompt and the work prompt are required, and every other layer is optional.
+The agent prompt is required, and every other layer is optional.
+The work prompt is required for every unit of work.
 
 A prompt layer takes its text from one prompt source.
 The project prompt declares an ordered list of prompt sources.

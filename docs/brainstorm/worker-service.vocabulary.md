@@ -71,12 +71,11 @@ Each model inference call uses the model [connector](architecture.vocabulary.md#
 ## prompt layer
 
 A prompt layer is one part of the prompt of a native agent, and it has one owner.
-The set is closed and it holds five values.
+The set is closed and it holds four values.
 
 - **system layer**: the operator of the server owns it, and it holds for every agent of the server. The [Agent component](agent.vocabulary.md#system-layer) defines it.
 - **agent prompt**: the worker that declares the agent owns it.
 - **project prompt**: the project that binds the repository owns it.
-- **work prompt**: the node revision that the attempt pins owns it.
 - **workbench prompt**: the [Workbench Service](workbench-service.md#prompt) owns it, and it holds for every workbench session.
 
 The custom system prompt of the server states "Every answer is short. A commit message states the change and no reason."
@@ -85,8 +84,14 @@ The shipped `base.md` of the system layer describes a senior software engineer.
 `reviewer@1` declares the agent prompt of `re@1`.
 The prompt states that the agent judges evidence against the criterion and changes no file of the repository.
 The repository binding of `kanthorlabs/kanthord` holds the project prompt "The work product is TypeScript. A test file sits beside its source file."
-The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
 The catalog holds one prompt declaration for `swe@1`, and `general@1` references that declaration.
+
+## work prompt
+
+The task message that a consumer sends to an agent session. The node revision that the attempt pins owns it.
+It belongs to no prompt layer, and it holds no switch.
+The term names no closed set.
+The work prompt of task "Add reset token expiry" states its requirement, its criterion and its verifications.
 
 ## prompt source
 
@@ -117,11 +122,11 @@ The workspace root of `kanthorlabs/kanthord` holds `AGENTS.md` only.
 
 The prompt composer is the Worker Service component that produces the prompt of a native agent.
 The term names no closed set.
-The composer of Execution 1 on "Add password reset" resolves four layers.
+The composer of Execution 1 on "Add password reset" resolves three layers and pins the work prompt.
 It takes the system layer from the agent file of the host and the shipped `base.md`.
 It takes the agent prompt from the declaration of `general@1`.
 It takes the project prompt from the repository binding of `kanthorlabs/kanthord`.
-It takes the work prompt from task "Add reset token expiry".
+It pins the work prompt of task "Add reset token expiry".
 It reads no agent file of the workspace, because the repository binding supplies the project prompt.
 The reviewer execution of the same objective composes the project prompt from that repository binding, and it reads no agent file of the workspace.
 
