@@ -113,7 +113,6 @@ After the first native-agent worker runs the acceptance path.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
   - `make contract-sync` has no publish pipeline: `engine/package.json` has no `contract:publish` script, and `apps` has no `docs/api/contract`. The `apps` wire types are written by hand in `apps/src/api/types.ts`.
-  - The mock daemon of `apps/mock/` has no route for `GET /api/project/:project_id/binding`, `/api/agent/prompt*`, `/api/agent/enablement/:agent_name` or `/api/repository/credential/ssh/discover`.
 
 ### B9, failure and recovery
 
