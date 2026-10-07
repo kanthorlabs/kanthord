@@ -19,7 +19,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Custody component
 
-- [ ] Added 2026-10-07 from the snake_case rename. The in-use message of a credential in `apps/src/lib/credential-message.ts` (`dependentLabel`) looks for `name` or `id` on each dependent. The engine sends `{agent_name, provider_name}` and `{binding_id, project_id}`, so the label falls back to raw JSON. Label each dependent by its own fields.
 
 ### LLM component
 
@@ -31,7 +30,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 ### Project Service
 
-- [ ] Added 2026-10-07 from the end-to-end check of the snake_case rename. On a server with no project, every dashboard screen shows only "This instance holds no project" and calls only `/api/project`. The screens LLM, Repositories, Storage, Agents, Workbench and Prompts read server-wide records that belong to no project ([custody.md](custody.md), [agent.md](agent.md)), so they render without a project. Only the project-scoped screens wait for a project.
 - [ ] Define the channel binding and its notification policy, the first policy beside the repository strategy, so that an objective names a channel binding and requires its notification.
 - [ ] Added 2026-09-24. Slack, Telegram and Jira register their platform entry and their credential types in `project-service.impl.md` when their design lands.
 - [ ] Added 2026-09-26 from the pin-and-use ruling. The UI shows a removed binding with the records that reference it. No page declares that read, and the records live in the Mission, Worker and Scheduler Services. Declare the reverse lookup and the service that answers it.

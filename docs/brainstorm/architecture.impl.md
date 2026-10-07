@@ -1045,6 +1045,7 @@ The import boundaries follow the public files.
 - While a login session is pending, the panel offers no control that ends or leaves the sign-in. A credential create sheet ignores Escape and an outside click, and it shows no close button.
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
+- A refused archive names each dependent by its own fields: an agent provider as `<agent name> (provider <provider name>)`, a project binding as `<binding id> of <project id>`, and an inbound by its identity.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers no row action. The row still opens its detail.
 - An archived row shows its archive time, the latest `ended_at` of its revisions.
 - A credential row shows the newest live revision as `(v<revision>)` next to the credential name. An archived row shows no revision.
@@ -1055,6 +1056,7 @@ The import boundaries follow the public files.
 - The dashboard sidebar lists only a route that has a screen.
 - A planned screen joins the sidebar in the change that adds its route.
 - The sidebar holds a `Settings` section for server-wide settings. Its first screen is the system layer prompt.
+- A project-scoped screen waits for a project: Overview, Scheduler, Executions and Workers. On a server with no project it shows the empty state with `New project`. Every other screen reads server-wide records and renders without a project.
 
 ## Unwired collaborations
 
