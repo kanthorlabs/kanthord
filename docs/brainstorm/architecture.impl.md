@@ -333,6 +333,7 @@ This sibling declares the fields below.
 - `gateway.token_version`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotency_ttl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `agent.prompt.system_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
+- `agent.prompt.host_file`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
 - `agent.prompt.agent_directory`, which [agent.impl.md](agent.impl.md#prompt-composer-configuration) declares.
 - `worker.heartbeat_window`, which [worker-service.impl.md](worker-service.impl.md#configuration) declares.
 - `scheduler.release_reserve`, which [scheduler-service.impl.md](scheduler-service.impl.md#configuration) declares.

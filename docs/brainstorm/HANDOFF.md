@@ -66,6 +66,7 @@ Added 2026-10-06 by Ulrich, from the evaluation of the agent. The Worker Service
   - A switch change on a visible row never hides that row before the next page load, so a row does not vanish under the pointer.
   - Record the rule in `agent.md` beside the other agent page rules when it lands.
 - [ ] Added 2026-10-07 by Ulrich. Build the working layer switches of the repository binding form in `apps`. The `Settings` section and the prompt sections of the agent page landed on 2026-10-07.
+- [ ] Added 2026-10-07 by Ulrich. Build `agent.prompt.host_file`, the configuration lock of the host agent file source, in `engine` and `apps`. [agent.impl.md](agent.impl.md#prompt-composer-configuration) holds the rule.
 - [ ] Give an agent session a budget input that the consumer supplies. `ExecutionBudget` reads `createdAt` and `expiredAt` of the claim.
 - [ ] Move the native agent runtime, the prompt composer and the tool table from the Worker pages to the Agent pages, and split `NativeAgentInput` of `engine/src/worker/native-agent.ts` into a session input that names no execution.
 

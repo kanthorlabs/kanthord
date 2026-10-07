@@ -140,6 +140,8 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - Both writes take `expected_revision`. A stale or absent value answers 409 `agent.prompt.revision_conflict` with the current row in `details`.
 - A `custom_text` above 32768 UTF-8 bytes answers 400 `agent.prompt.too_large`.
 - A switch that turns off every source of an `agent` scope answers 409 `agent.prompt.agent_layer_empty`.
+- The settings answer holds `locked_switches`, the names of the switches of that scope that the configuration locks. The list is empty when no lock applies.
+- A switch of a name in `locked_switches` answers 409 `agent.prompt.switch_locked` with `scope` and `switch` in `details`.
 - A write creates the row of its scope at `revision` 1 when none exists. A read of an absent row answers every switch on, an empty `custom_text` and, for an `agent` row, `system_layer` `inherit`.
 - The Project Service owns the working switches of a repository binding, in its `config` JSON.
 - Tests cover each scope, each write, each refusal, an absent row and two writes at one `expected_revision`.
@@ -149,11 +151,14 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - `agent.prompt.system_file` holds the path of a Markdown file, as a string, and it defaults to an empty string.
 - An empty value runs host discovery: `~/.agents/AGENTS.md`, then `~/.claude/CLAUDE.md`. The first file that exists is the host agent file.
 - A nonempty value names the host agent file, and the composer runs no discovery.
+- `agent.prompt.host_file` holds a boolean, and it defaults to `true`.
+- `false` locks the `host_file` switch of the `system` scope. The composer resolves the host agent file source as `off` for every agent, whatever the stored switch holds.
+- The lock keeps the stored switch. When the configuration returns to `true`, the stored switch controls the source again.
 - `agent.prompt.agent_directory` holds the path of a directory, as a string, and it defaults to an empty string.
 - An empty value means the agent layer holds no agent file source.
 - A relative path of either field resolves against the data directory.
 - The loader reads each file under the rules of [prompt composition](worker-service.impl.md#prompt-composition).
-- Tests cover an empty and a nonempty `system_file`, each discovery file, an empty and a nonempty `agent_directory`, and a relative path.
+- Tests cover an empty and a nonempty `system_file`, each discovery file, each value of `host_file`, an empty and a nonempty `agent_directory`, and a relative path.
 
 ## Session file
 
