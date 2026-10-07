@@ -96,12 +96,13 @@ The work prompt of task "Add reset token expiry" states its requirement, its cri
 ## prompt source
 
 A prompt source is one origin of the text of a prompt layer.
-The system layer and the project prompt each hold an ordered list, and the set of each list is closed.
+The system layer, the agent prompt and the project prompt each hold an ordered list, and the set of each list is closed.
 
 - system layer: **the agent file of the host**, then **the shipped `base.md`**, then **the custom system prompt**. The composer joins every source that is on.
+- agent prompt: **the agent file of the agent directory**, then **the shipped agent prompt**, then **the custom agent prompt**. The composer joins every source that is on.
 - project prompt: **the repository binding**, then **the agent file of the workspace**. The composer takes the first source that is present.
 
-The agent prompt takes the declaration of its worker, and the work prompt takes the pinned node revision.
+The work prompt takes the pinned node revision.
 The agent file of the host and the custom system prompt are on, and `base.md` is off, so the system layer holds that file and then the custom system prompt.
 The repository binding of `kanthorlabs/kanthord` holds no project prompt and the workspace holds an agent file, so the project prompt takes that file.
 The workspace holds an agent file that exceeds the bound, so that source is invalid and the project prompt is absent.
@@ -124,7 +125,7 @@ The prompt composer is the Worker Service component that produces the prompt of 
 The term names no closed set.
 The composer of Execution 1 on "Add password reset" resolves three layers and pins the work prompt.
 It takes the system layer from the agent file of the host and the shipped `base.md`.
-It takes the agent prompt from the declaration of `general@1`.
+It takes the agent prompt from the shipped `swe@1.md`.
 It takes the project prompt from the repository binding of `kanthorlabs/kanthord`.
 It pins the work prompt of task "Add reset token expiry".
 It reads no agent file of the workspace, because the repository binding supplies the project prompt.

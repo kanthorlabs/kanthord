@@ -70,6 +70,12 @@ The first layer of the prompt of an agent session. It joins the host agent file,
 The term names no closed set.
 Ulrich switches `~/.claude/CLAUDE.md` on, `base.md` off and the custom system prompt on, so the system layer holds `~/.claude/CLAUDE.md` and then the custom system prompt.
 
+## agent layer
+
+The second layer of the prompt of an agent session. It joins the agent file of the agent directory, the shipped agent prompt and the custom agent prompt, in that order.
+The term names no closed set.
+Ulrich switches `~/workdir/swe@1.md` on, the shipped `swe@1.md` off and the custom agent prompt off, so the agent layer of `swe@1` holds `~/workdir/swe@1.md` only.
+
 ## resume
 
 The reopen of an agent session from the turns that its runtime stored.
