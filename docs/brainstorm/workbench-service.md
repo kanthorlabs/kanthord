@@ -44,12 +44,13 @@ It describes no mechanism of another service.
 
 ## Prompt
 
-- The prompt of a workbench session composes the [system layer](agent.md#prompt-composer), the agent prompt of its agent, and the workbench prompt.
-- The composition places the system layer first, then the agent prompt, then the workbench prompt.
-- A workbench session takes no project prompt and no work prompt. Each human message is a message of the session.
+- The prompt of a workbench session composes the [system layer](agent.md#prompt-composer), the agent prompt of its agent, and its working layer.
+- The composition places the system layer first, then the agent prompt, then the working layer.
+- The working layer joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workbench directory, then the shipped workbench prompt, then the custom workbench prompt.
+- A workbench session takes no work prompt. Each human message is a message of the session.
 - The Workbench Service owns the workbench prompt. It states that a human reads every reply.
 - The workbench prompt adds the conduct for a human interlocutor, and it revokes no obligation of the system layer or the agent prompt.
-- The agent prompt holds the highest precedence, then the system layer, then the workbench prompt.
+- The agent prompt holds the highest precedence, then the system layer, then the working layer.
 
 ## Tools
 

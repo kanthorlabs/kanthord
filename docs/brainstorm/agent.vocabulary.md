@@ -76,6 +76,12 @@ The second layer of the prompt of an agent session. It joins the agent file of t
 The term names no closed set.
 Ulrich switches `~/workdir/swe@1.md` on, the shipped `swe@1.md` off and the custom agent prompt off, so the agent layer of `swe@1` holds `~/workdir/swe@1.md` only.
 
+## working layer
+
+The third layer of the prompt of an agent session. It joins the agent files of the working directory, the shipped consumer prompt and the custom working prompt, in that order.
+The term names no closed set.
+The workspace of `kanthorlabs/kanthord` holds `AGENTS.md`, and its repository binding holds a `projectPrompt`, so the working layer of Execution 1 holds `AGENTS.md` and then that `projectPrompt`.
+
 ## resume
 
 The reopen of an agent session from the turns that its runtime stored.

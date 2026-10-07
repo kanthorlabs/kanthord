@@ -83,20 +83,17 @@ It states the requirement, the criterion and the verifications of the work that 
 The agent prompt is required, and every other layer is optional.
 The work prompt is required for every unit of work.
 
-A prompt layer takes its text from one prompt source.
-The project prompt declares an ordered list of prompt sources.
-The configured source precedes the agent file source in that list.
-The composer takes the first source of the list that is present and valid, and it reads no further source of that layer.
-A source that is absent passes the turn to the next source of the list.
-A source that is present and invalid makes its layer absent, and the composer takes no further source of that layer.
-The configuration of a layer holds a text, or it holds the value that disables the layer.
-A disabled layer is absent, and the composer reads no source of it.
-The composition places the layers that are present.
+A prompt layer takes its text from an ordered list of [prompt sources](agent.md#prompt-composer).
+Each source holds one on or off switch.
+The composer joins every source of the list that is on, present and valid.
+A source that is absent or invalid adds no text, and the composer continues with the next source.
+The composition places the layers that hold text.
 
-The [repository binding](project-service.md#repository-configuration-and-policy) that the pinned revision names holds the configured source of the project prompt.
-The workspace of the execution holds the agent file source of the project prompt.
-The steps method takes both sources of the project prompt.
-The evaluation method takes the configured source of the project prompt only.
+The project prompt is the working layer of an execution.
+It joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workspace, then the `projectPrompt` of the [repository binding](project-service.md#repository-configuration-and-policy) that the pinned revision names.
+A project has no shipped consumer prompt.
+The steps method takes every source of the project prompt.
+The evaluation method takes the `projectPrompt` of the repository binding only.
 An agent file of the workspace is the work product of the candidate.
 
 The composition states the owner, the source and the precedence of every layer to the agent.
@@ -120,7 +117,7 @@ It reads a regular file for an agent file source, and it follows no reference in
 An agent file of the workspace resolves inside the workspace, and a path that leaves the workspace is invalid.
 A text that exceeds the bound of its layer is invalid, and a text that the composer cannot decode is invalid.
 The composer decodes the text of a source, and it changes no instruction of that text.
-The composer records the selected source of every layer, the digest of its text, and every source that it read and rejected.
+The composer records every selected source of every layer, the digest of its text, and every source that it read and rejected.
 The composer records no prompt text.
 That record is telemetry of the execution.
 

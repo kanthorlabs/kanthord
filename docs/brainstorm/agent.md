@@ -85,6 +85,8 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - The agent file of the agent directory is `<agentName>.md`, for example `~/workdir/swe@1.md`.
 - A human edits the custom agent prompt on the dashboard, and the database stores it.
 - Each source of the agent layer holds one on or off switch. A switch change that turns off every source of the agent layer is refused.
+- The working layer joins its sources in this order: `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the working directory, the shipped consumer prompt, the custom working prompt.
+- Each source of the working layer holds one on or off switch. An evaluation reads no agent file of the workspace.
 - `kanthord.yaml` holds the paths of the prompt sources only: the system file and the agent directory.
 - When `kanthord.yaml` names a system file, the host agent file is that file, and the composer runs no discovery.
 - The database holds every switch and every custom text. The dashboard edits a switch or a custom text, and it edits no path.
