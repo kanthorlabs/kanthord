@@ -135,6 +135,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 
 - Each service holds an ordered list of migrations, numbered from 1 with no gap. A migration is a function that receives the open connection and runs its statements.
 - A published migration is immutable. A correction appends a migration, and it never edits a migration that a database recorded. Two divergent histories share no data directory.
+- RULED 2026-10-07 by Ulrich. The snake_case rename resets the migration history once. Each table has one `CREATE TABLE` with its current columns, and no migration copies or alters data of an earlier schema. A data directory from before the reset is not supported: wipe it.
 - The runner validates the whole recorded history of every participating database before it applies any migration. It rejects a service that the binary does not know, a duplicate version, a gap in the recorded versions, and a recorded version above the highest version that the binary holds.
 - Each store owns its runner and its own `migration` history table, keyed by service and version.
 - The operational store holds the history of the services that share it.
