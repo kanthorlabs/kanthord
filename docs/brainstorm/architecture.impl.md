@@ -1031,7 +1031,8 @@ The import boundaries follow the public files.
 
 ### The credential sections of the dashboard
 
-- The dashboard holds one section for each component under the group Connections: LLM, Repositories and Storage.
+- The dashboard holds one section for each component under the group Credentials: LLM, Repositories and Storage.
+- A field that selects a credential names the section of the credential, for example `LLM credential`.
 - Each section reads only the route group of its component.
 - A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
 - Verify calls `<component>.credential.verify` for its record. It never reads `GET /api/healthcheck`.
