@@ -1,6 +1,6 @@
 ---
 kind: initiative
-dependsOn: []
+depends_on: []
 bindings: []
 verifications:
   - cd todoapp-repo && npm ci && npm run verify

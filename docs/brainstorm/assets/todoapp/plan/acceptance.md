@@ -1,7 +1,7 @@
 ---
 kind: objective
 parent: todo-api.md
-dependsOn:
+depends_on:
   - todos.md
   - operations.md
 bindings:

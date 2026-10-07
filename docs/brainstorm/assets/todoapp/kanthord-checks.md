@@ -21,7 +21,7 @@ These checks are operator-run KanthorD tests, not work assigned to the TODO app 
 | Unknown grammar | Add an unknown front-matter field, then separately an unknown H2. | `mission.import.plan_invalid` names the file; the entire apply leaves state unchanged. |
 | Unresolved reference | Change one dependency to `missing.md`. | `mission.import.unresolved_reference`; no partial writes. |
 | Duplicate name | Submit two entries with the same filename. | `mission.import.duplicate_file`; no partial writes. |
-| Forbidden task edge | Add `dependsOn` to one task. | Import rejects it; tasks never become scheduled graph vertices with dependencies. |
+| Forbidden task edge | Add `depends_on` to one task. | Import rejects it; tasks never become scheduled graph vertices with dependencies. |
 | Binding cardinality | Remove the repository binding from one objective. | `mission.node.bindings_invalid`; no partial writes. |
 | Containment cycle | Make foundation depend on its own `todo-api.md` initiative. | `mission.import.cycle`, including the implicit initiative wait edge. |
 | Stale mission version | Perform a valid human graph write, then apply a previously prepared import/version. | Version conflict refuses the whole apply; the earlier human write survives. |

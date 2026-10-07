@@ -1,7 +1,7 @@
 ---
 kind: objective
 parent: todo-api.md
-dependsOn:
+depends_on:
   - foundation.md
 bindings:
   - todoapp-repo
