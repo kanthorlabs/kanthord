@@ -73,6 +73,12 @@ The pages record only the decision. Read the owning page section before you prop
 - Every error code that the engine answers stands on the owning design page and on the `engine/docs/cli/` page of its command group.
 - Every command page of `engine/docs/cli/` holds an error-code table with the HTTP status, the code and the condition of each code that its commands answer.
 
+## Naming outside the code
+
+- Write every name outside the code in snake_case. This covers a table, a column, a property inside a JSON column, each part of an operation id or an error code, and each key of a configuration file such as `kanthord.yaml` or `cli.yaml`.
+- An identifier inside the code follows the convention of its language.
+- An HTTP payload field keeps the exact field name of its domain entity, under Contracts.
+
 ## Database design
 
 - Never declare a SQL `CHECK` constraint, for example `CHECK (kind IN ('repository','worker','storage'))`.
