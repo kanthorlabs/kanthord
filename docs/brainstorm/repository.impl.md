@@ -42,7 +42,7 @@ The component owns a dedicated platform validator for every platform of the Repo
 - The engine creates an `ssh` record only on a human create. It creates none at start.
 - The Repository credentials screen of the dashboard holds `Import from ~/.ssh/config`. The dialog calls `repository.credential.ssh_discover` and shows one row for each alias with its state and its reason.
 - The dialog offers a checkbox only for a `ready` alias. Create calls `repository.credential.create` once for each ticked alias, with the discovered values as metadata. The record name is the alias in lower case, with each character outside `[a-z0-9-]` replaced by `-`, a prefix `ssh-` before a leading non-letter, and at most 63 characters.
-- `repository.credential.get` answers the record with `bindings`, the list of `{ projectId, projectName, bindingId, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
+- `repository.credential.get` answers the record with `bindings`, the list of `{ project_id, project_name, binding_id, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
 
 ## Platform connector and platform implementations
 
@@ -68,9 +68,9 @@ A git-only platform has an SSH host set and no platform implementation.
 - Review comment list calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/comments`.
 - Both return the response body unchanged.
 - `limit` maps to `per_page`, defaults to 100 and ranges from 1 to 100.
-- `cursor` is base64url canonical JSON `{ page, perPage }`.
+- `cursor` is base64url canonical JSON `{ page, per_page }`.
 - A differing `limit` answers 400 `repository.platform.github.cursor_page_size_mismatch`.
-- `nextCursor` is null when no `rel="next"` link exists.
+- `next_cursor` is null when no `rel="next"` link exists.
 - Tool discovery embeds each endpoint's dereferenced response schema under `result`.
 - The build extracts those schemas from `@octokit/openapi` at 23.0.2.
 - A result class answers 502 `repository.platform.github.<class>` with `details: { status }` and the GitHub message. `status` holds the HTTP status of GitHub when the failure carries one, and null otherwise.
@@ -94,7 +94,7 @@ The read-back of `git.merge_push` fetches the base branch through the repository
 The start requires git 2.40 or later, OpenSSH 9.0 or later and bash on the host.
 It refuses a host without a required tool with `repository.connector.tool_missing`, and a tool below its version with `repository.connector.tool_version`.
 
-- Before each network git operation, the connector runs the `ssh` validation of the `sshCredential` of the binding. A refusal stops the operation with the code of the validation.
+- Before each network git operation, the connector runs the `ssh` validation of the `ssh_credential` of the binding. A refusal stops the operation with the code of the validation.
 - `simple-git` performs every git operation of the connector by spawning the `git` binary of the host.
 - The SSH host resolution is no git operation. The connector runs `ssh -G -- <host>` through `execFile` of `node:child_process`, bound by the deadline and the `Context` of the caller.
 - The resolution reads the `hostname` line of the output.

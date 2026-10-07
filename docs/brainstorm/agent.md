@@ -85,7 +85,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 - When the system layer of an agent is off, the composer joins no source of the system layer for that agent. When it is on, the source switches decide which sources join.
 - The composer joins every source that is on. No source has a merge or override mode.
 - The agent layer joins its sources in this order: the agent file of the agent directory, the shipped agent prompt, the custom agent prompt.
-- The agent file of the agent directory is `<agentName>.md`, for example `~/workdir/swe@1.md`.
+- The agent file of the agent directory is `<agent_name>.md`, for example `~/workdir/swe@1.md`.
 - A human edits the custom agent prompt on the dashboard, and the database stores it.
 - Each source of the agent layer holds one on or off switch. A switch change that turns off every source of the agent layer is refused.
 - The working layer joins its sources in this order: `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the working directory, the shipped consumer prompt, the custom working prompt.

@@ -138,11 +138,11 @@ The reviewer execution of the same objective composes the project prompt from th
 The optional override of one agent's default configuration inside a worker binding.
 The closed form set is:
 
-- **tuning**: `modelIdentifier`, `reasoningEffort` or both; it keeps the default agent provider and inherits each absent value.
-- **complete**: `agentProvider`, `modelIdentifier` and `reasoningEffort`, all required; it inherits nothing.
+- **tuning**: `model_identifier`, `reasoning_effort` or both; it keeps the default agent provider and inherits each absent value.
+- **complete**: `agent_provider`, `model_identifier` and `reasoning_effort`, all required; it inherits nothing.
 
-`general-frontier` holds the tuning entry `{ reasoningEffort: "high" }` for `swe@1`.
-A complete entry names `{ agentProvider: "atlas-llm", modelIdentifier: "qwen3-coder", reasoningEffort: "off" }`.
+`general-frontier` holds the tuning entry `{ reasoning_effort: "high" }` for `swe@1`.
+A complete entry names `{ agent_provider: "atlas-llm", model_identifier: "qwen3-coder", reasoning_effort: "off" }`.
 An entry holds no `options`.
 
 ## action performer

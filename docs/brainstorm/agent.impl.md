@@ -19,10 +19,10 @@ A mechanism here never overrides a rule there.
 - Options use `zod` at 4.4.3, and the constraint uses `superRefine`.
 - `swe@1` and `re@1` declare an empty option schema.
 - The declaration supplies no provider, model identifier or reasoning-effort default.
-- `agent list` answers one summary per catalog agent: `agentName`, `workerNames` and `enablement`.
-- `agent get` answers `prompt`, `configurationSchema`, `overridableFields` and `enablement`.
+- `agent list` answers one summary per catalog agent: `agent_name`, `worker_names` and `enablement`.
+- `agent get` answers `prompt`, `configuration_schema`, `overridable_fields` and `enablement`.
 - `enablement` is null when no record exists.
-- `agent.get` is `GET /api/agent/:agentName`, keyed by agent name. It answers `agentName`, `configurationSchema`, `overridableFields`, `prompt`, `tools` and `enablement`, the agent enablement or `null`. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
+- `agent.get` is `GET /api/agent/:agent_name`, keyed by agent name. It answers `agent_name`, `configuration_schema`, `overridable_fields`, `prompt`, `tools` and `enablement`, the agent enablement or `null`. An unknown agent answers 404 `agent.catalog.not_found`. [The prompt answer](#the-prompt-answer) defines `prompt`. [Configuration schema](#configuration-schema) defines the schema, and [the agent catalog](#the-agent-catalog) owns the declaration.
 - Tests cover each human read, each unknown name, and null and disabled enablements.
 
 ## The prompt answer
@@ -36,8 +36,8 @@ A mechanism here never overrides a rule there.
 - `path` is the home-relative path of a `file` source, else `null`. `digest` and `text` are `null` unless `state` is `present`.
 - `final` holds the system prompt that ends with the framing, then the message of every `present` source of the working layer, in reading order.
 - The query `view=final` answers `prompt` with `final` only.
-- The optional queries `projectId` and `bindingId` select the working layer of that repository binding. Without them, the working layer is the workbench working layer of the agent.
-- A `bindingId` that names no repository binding of `projectId` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`.
+- The optional queries `project_id` and `binding_id` select the working layer of that repository binding. Without them, the working layer is the workbench working layer of the agent.
+- A `binding_id` that names no repository binding of `project_id` answers 404 `project.binding.not_found`. One of the two queries without the other answers 400 `gateway.request.validation_failed`.
 - Tests cover every origin, every state, `view=final`, the workbench working layer, a binding working layer and each refusal.
 
 ## Agent configuration validation
@@ -47,11 +47,11 @@ A mechanism here never overrides a rule there.
 - The [entry forms](worker-service.vocabulary.md#entry) define inheritance and required fields.
 - A write refuses nonempty `options`.
 - Every enablement write, worker binding write and resolution runs the same checks.
-- Every enablement write names `expectedRevision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A stale or absent value answers 409 `agent.enablement.revision_conflict` with the current value in `details`.
+- Every enablement write names `expected_revision`, the latest row of the agent that the human read. A `put` for an agent with no row names none. A stale or absent value answers 409 `agent.enablement.revision_conflict` with the current value in `details`.
 - A `put` or a `provider.add` that names the name of another agent provider of the same enablement answers 409 `agent.enablement.provider.name_conflict`.
 - A `put` or a `provider.add` that names a credential of another agent provider of the same enablement answers 409 `agent.enablement.provider.credential_conflict`. A `provider.add` names the credential and the holding agent provider in `details`.
 - It checks the override allowlist before the merge, then validates the complete effective configuration.
-- `overridableFields` of `swe@1` and `re@1` is `["agentProvider", "modelIdentifier", "reasoningEffort"]`.
+- `overridable_fields` of `swe@1` and `re@1` is `["agent_provider", "model_identifier", "reasoning_effort"]`.
 - `validateEntry` refuses a worker whose agent has no enabled enablement, and names that agent.
 - This refusal occurs inside the worker binding write transaction.
 - An enablement change calls `entriesOfAgent(tx, agentName)` of the Project Service in the transaction of its commit.
@@ -69,17 +69,17 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 - Built-in definitions use `getBuiltinProviders()` of `@earendil-works/pi-ai` at 0.86.0.
 - A model identifier belongs to `getBuiltinModels(provider)` or to the [approved models](llm.impl.md#the-approved-models) that the LLM component answers for an `openai-compatible` credential.
 - An empty `models` list permits no model selection.
-- The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoningLevels`, which defaults to `["off"]`.
+- The reasoning effort belongs to the model's supported levels from `getSupportedThinkingLevels` or credential metadata `reasoning_levels`, which defaults to `["off"]`.
 - A level that no source establishes fails validation.
 - The Agent component sends `{ credential, platform }` to custody and consumes its suitability result.
 - It reads no metadata and no secret.
 
 ## Model list
 
-- `agent.enablement.provider.model.list` is `GET /api/agent/enablement/:agentName/provider/:providerName/model`, `human`, `unary`, `mutation: false`.
-- It answers `{ items: [{ modelIdentifier, reasoningEfforts }] }` for the agent provider of the latest enablement row of the agent.
-- A built-in platform answers `getBuiltinModels(provider)` of pi-ai, and `reasoningEfforts` holds `getSupportedThinkingLevels` of each model.
-- An `openai-compatible` provider answers the approved models of its credential, and `reasoningEfforts` holds the `reasoningLevels` of each model.
+- `agent.enablement.provider.model.list` is `GET /api/agent/enablement/:agent_name/provider/:provider_name/model`, `human`, `unary`, `mutation: false`.
+- It answers `{ items: [{ model_identifier, reasoning_efforts }] }` for the agent provider of the latest enablement row of the agent.
+- A built-in platform answers `getBuiltinModels(provider)` of pi-ai, and `reasoning_efforts` holds `getSupportedThinkingLevels` of each model.
+- An `openai-compatible` provider answers the approved models of its credential, and `reasoning_efforts` holds the `reasoning_levels` of each model.
 - The list uses the sources of [the validation](#agent-configuration-validation), so every listed pair passes it.
 - An unknown agent answers 404 `agent.catalog.not_found`. An absent enablement answers 404 `agent.enablement.not_found`. An absent provider answers 404 `agent.enablement.provider.not_found`.
 - The dashboard fills the model picker and the reasoning-effort picker of a workbench session from this list.
@@ -90,18 +90,18 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 
 ## Configuration schema
 
-- `configurationSchema` uses JSON Schema draft 2020-12, emitted by `z.toJSONSchema` of `zod` at 4.4.3.
+- `configuration_schema` uses JSON Schema draft 2020-12, emitted by `z.toJSONSchema` of `zod` at 4.4.3.
 - Its source is the effective-configuration schema, not the template's option schema.
 - The root is an object with `additionalProperties: false`.
 - All five properties below are required; none carries `default`, and the schema holds no `options`.
 
-| Property          | Schema                                                            |
-| ----------------- | ----------------------------------------------------------------- |
-| `agentProvider`   | `string`; the name of an agent provider of the enablement         |
-| `provider`        | `string`, enum of every platform of the [LLM platform list](llm.impl.md#platform-validators) |
-| `credential`      | `string`; a credential name                                       |
-| `modelIdentifier` | `string`                                                          |
-| `reasoningEffort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
+| Property           | Schema                                                            |
+| ------------------ | ----------------------------------------------------------------- |
+| `agent_provider`   | `string`; the name of an agent provider of the enablement         |
+| `provider`         | `string`, enum of every platform of the [LLM platform list](llm.impl.md#platform-validators) |
+| `credential`       | `string`; a credential name                                       |
+| `model_identifier` | `string`                                                          |
+| `reasoning_effort` | enum `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`    |
 
 - The schema description states the whole-configuration constraint of [configuration validation](#agent-configuration-validation).
 - It names model membership in the provider catalog and reasoning-effort membership in the supported levels of that model.
@@ -121,7 +121,7 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ## Configuration tests
 
 - Tests cover both entry forms, missing enablement, disablement, complete-entry refusal and the empty option schema.
-- A test covers two enablement writes that name one expected revision, and it asserts that the second one answers 409 `agent.enablement.revision_conflict`. A test covers a `put` without `expectedRevision` for an agent that holds a row.
+- A test covers two enablement writes that name one expected revision, and it asserts that the second one answers 409 `agent.enablement.revision_conflict`. A test covers a `put` without `expected_revision` for an agent that holds a row.
 - Tests cover override allowlists, model catalogs, established reasoning levels and all five effective-configuration fields.
 - Tests assert schema draft, required properties, absent defaults, absent options and the whole-configuration description.
 - Tests cover transactional changes and removals, dependency lists, snapshot reads and recorded revisions.
@@ -132,17 +132,17 @@ Provider definitions contain no auth types; the [LLM component](llm.impl.md#plat
 ## Prompt settings
 
 - The table `agent_prompt` of [ERD 1](../reference/erd/01-setup.md) holds one row per scope: `system`, then `agent` and `workbench` for each catalog agent.
-- `agent.prompt.get` is `GET /api/agent/prompt`, `human`, `unary`, `mutation: false`. The query holds `scope` and, for the `agent` and `workbench` scopes, `agentName`. It answers the settings of that scope, the absent row included.
+- `agent.prompt.get` is `GET /api/agent/prompt`, `human`, `unary`, `mutation: false`. The query holds `scope` and, for the `agent` and `workbench` scopes, `agent_name`. It answers the settings of that scope, the absent row included.
 - `agent.prompt.put` replaces the `custom_text` of one scope. `agent.prompt.switch` sets one switch of one scope, or the system layer override of one `agent` scope.
 - The switches of the `system` scope hold `layer`, the layer switch of the system layer, beside its source switches.
 - The table `agent_prompt` holds the column `system_layer`: `inherit`, `on` or `off` for an `agent` row, `NULL` for any other row. The settings answer it as `system_layer`.
 - `agent.prompt.switch` takes either `switch` with `enabled`, or `system_layer` with the `agent` scope. Any other combination answers 400 `gateway.request.validation_failed`.
-- Both writes take `expectedRevision`. A stale or absent value answers 409 `agent.prompt.revision_conflict` with the current row in `details`.
+- Both writes take `expected_revision`. A stale or absent value answers 409 `agent.prompt.revision_conflict` with the current row in `details`.
 - A `custom_text` above 32768 UTF-8 bytes answers 400 `agent.prompt.too_large`.
 - A switch that turns off every source of an `agent` scope answers 409 `agent.prompt.agent_layer_empty`.
 - A write creates the row of its scope at `revision` 1 when none exists. A read of an absent row answers every switch on, an empty `custom_text` and, for an `agent` row, `system_layer` `inherit`.
 - The Project Service owns the working switches of a repository binding, in its `config` JSON.
-- Tests cover each scope, each write, each refusal, an absent row and two writes at one `expectedRevision`.
+- Tests cover each scope, each write, each refusal, an absent row and two writes at one `expected_revision`.
 
 ## Prompt composer configuration
 

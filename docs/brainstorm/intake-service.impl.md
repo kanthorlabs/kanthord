@@ -49,7 +49,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 
 ### The receipt
 
-- The receipt is the `delivery` operation `intake.inbound.event.receive` at `POST /hooks/:inboundId`. Its handler passes the exact bytes and headers to the Intake Service, under [gateway-service.impl.md](gateway-service.impl.md#delivery-bytes-and-body-limits).
+- The receipt is the `delivery` operation `intake.inbound.event.receive` at `POST /hooks/:inbound_id`. Its handler passes the exact bytes and headers to the Intake Service, under [gateway-service.impl.md](gateway-service.impl.md#delivery-bytes-and-body-limits).
 - An unknown inbound identity answers 404, and a poll inbound answers 404.
 - For a GitHub event, the verification requires exactly one `X-Hub-Signature-256` header. It rejects a missing header, a duplicate header, a value without the `sha256=` prefix, a value that is not hexadecimal and a value of another length, before any comparison.
 - It computes the HMAC with `crypto.createHmac` and SHA-256 over the exact bytes, and it compares two 32-byte digests with `timingSafeEqual`.
@@ -121,7 +121,7 @@ This sibling holds the inbound store, the event store, the acquisition, the hand
 - `intake.action.perform` is a `client` operation under the forwarded execution identity. It takes the configured action and its request key, maps the action to its outbound operation, and answers the `PlatformAddress` or the result class of the Repository component.
 - The action table maps `pull_request` on a `github` binding to `github.pull_request`, and `merge_push` on a git binding to `git.merge_push`. An action without a row answers 422 `intake.outbound.request.action_unmapped` and records no request.
 - For `git.merge_push` and for the reuse of a pull request, the handler creates a fresh clone through the repository connector with the SSH configuration of the server host, performs the network git write and removes the clone after the call. A `git.merge_push` answers the pushed commit in its `PlatformAddress`.
-- `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ endState, landedCommits }` that the platform implementation folds.
+- `intake.action.check` is a `service` operation under the service identity of the Mission Service. It takes the request evidence, reads the binding and its credential from the pinned `FrozenAction`, and answers `{ end_state, landed_commits }` that the platform implementation folds.
 - `intake.action.read` is a `client` operation under the forwarded execution identity. It serves the MCP read tools `github-pull-request-get` and `github-pull-request-review-comment-list`, and it returns the platform body unchanged.
 - `intake.storage.put` and `intake.storage.check` are `client` operations. The Mission Service calls them in `mission.evidence.submit` and `mission.evidence.asset.complete` with the identity of the execution.
 - `intake.storage.get` is a `human` operation and `intake.execution.storage.get` is a `client` operation. Each signs a presigned GET at the recorded object version.
@@ -209,7 +209,7 @@ Tests refuse grants for unauthorized readers or executions without a live claim.
 
 - The [health report](gateway-service.impl.md#the-resource-healthcheck-report) supplies the deadline, concurrency bound and cancellation. The inbound check follows them like every other check.
 - The check runs only inside a health report that a human calls.
-- The inventory answers one entry per inbound with its `projectId` in place of a project name. The composition root resolves the name under the [health report](gateway-service.impl.md#the-resource-healthcheck-report). The Intake Service reads no Project table and calls no Project collaboration.
+- The inventory answers one entry per inbound with its `project_id` in place of a project name. The composition root resolves the name under the [health report](gateway-service.impl.md#the-resource-healthcheck-report). The Intake Service reads no Project table and calls no Project collaboration.
 - A poll performs one request with a release for `poll` and with the ETag of `checkpoint`. A 200 or a 304 answer reports `healthy`, and any other result reports `unhealthy`. The capability is `poll acquisition`. The check stores no event and writes no `checkpoint`.
 - A webhook inbound reports `unknown` with the capability `webhook`.
 - No store holds a check result.

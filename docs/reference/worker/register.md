@@ -17,22 +17,22 @@ A client identity holds at most one live registration. Within the process-local 
 The API returns HTTP `200` with only:
 
 ```json
-{ "runtimeIdentity": "<runtime-identity>" }
+{ "runtime_identity": "<runtime-identity>" }
 ```
 
 The CLI adds the retry key, writes one JSON line to stdout, and exits `0` (shown formatted here). Redirected stdout is allowed.
 
 ```json
 {
-  "runtimeIdentity": "<runtime-identity>",
-  "idempotencyKey": "01M34JC4BJ66JHP41M4MYY6PST"
+  "runtime_identity": "<runtime-identity>",
+  "idempotency_key": "01M34JC4BJ66JHP41M4MYY6PST"
 }
 ```
 
-| Property          | Type                  | Surface     | Purpose                                                                       |
-| ----------------- | --------------------- | ----------- | ----------------------------------------------------------------------------- |
-| `runtimeIdentity` | string                | API and CLI | Runtime identity of the registered worker instance; not a JWT.                |
-| `idempotencyKey`  | canonical ULID string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
+| Property           | Type                  | Surface     | Purpose                                                                       |
+| ------------------ | --------------------- | ----------- | ----------------------------------------------------------------------------- |
+| `runtime_identity` | string                | API and CLI | Runtime identity of the registered worker instance; not a JWT.                |
+| `idempotency_key`  | canonical ULID string | CLI only    | Key used for this request; retain it with the same machine token for retries. |
 
 Neither response contains a token or expiry. The CLI saves no credential or endpoint.
 

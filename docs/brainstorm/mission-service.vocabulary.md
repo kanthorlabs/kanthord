@@ -429,8 +429,8 @@ The objective "Add password reset email" depends on "Add password reset".
 A human override of "Add password reset" to `Completed` releases it as well.
 A human adds a dependency to "Add password reset email" while no live claim holds it, and the Mission Service reroutes it at once.
 The same addition is refused while a `tdd@1` instance executes "Add password reset email", so the human pauses the node first.
-A node read names the dependencies of its node in the key `dependsOn`, as node identities, and a plan file names them in the key `dependsOn`, as plan file names.
-The node read of "Add password reset email" holds `dependsOn` with the identity of "Add password reset", and its plan file holds `dependsOn: [add-password-reset.md]`.
+A node read names the dependencies of its node in the key `depends_on`, as node identities, and a plan file names them in the key `depends_on`, as plan file names.
+The node read of "Add password reset email" holds `depends_on` with the identity of "Add password reset", and its plan file holds `depends_on: [add-password-reset.md]`.
 
 ## dependency closure
 
@@ -581,7 +581,7 @@ A rewrite of `add-password-reset.md` with no identifier creates a new node, and 
 id: node_01ARZ3NDEKTSV4RRFFQ69G5FAV
 kind: objective
 parent: account-recovery.md
-dependsOn: []
+depends_on: []
 bindings:
   - api-repo
 verifications:

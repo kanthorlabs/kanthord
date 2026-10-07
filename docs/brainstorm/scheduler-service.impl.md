@@ -26,40 +26,40 @@ The identities follow the identity convention of [architecture.impl.md](architec
   - A probe or a commit that reaches admission takes its own instance healthcheck.
   - The handler commits after a probe that finds a `running` execution, a new claim, a failed healthcheck or a loss settlement, and at the end of the wait window.
   - The commit runs the full claim again. After quiescence starts, the commit settles losses and claims nothing.
-- `scheduler.execution.release` at `POST /api/scheduler/execution/:executionId/release` is a `client` mutation of `unary` lifetime.
-- `scheduler.claim.get` at `GET /api/scheduler/claim/:executionId` is a `client` read of `unary` lifetime with no body.
+- `scheduler.execution.release` at `POST /api/scheduler/execution/:execution_id/release` is a `client` mutation of `unary` lifetime.
+- `scheduler.claim.get` at `GET /api/scheduler/claim/:execution_id` is a `client` read of `unary` lifetime with no body.
 - `scheduler.queue.list`, `scheduler.queue.peek`, `scheduler.execution.list` and `scheduler.execution.get` are `human` reads of `unary` lifetime with no body, at the routes that the [CLI page](../../engine/docs/cli/scheduler.md#command-inventory-and-proposed-operation-mapping) lists.
-- `scheduler.eligibility.get` at `GET /api/scheduler/project/:projectId/eligibility/:nodeId` is a `human` read of `unary` lifetime with no body, under [The eligibility report](#the-eligibility-report).
+- `scheduler.eligibility.get` at `GET /api/scheduler/project/:project_id/eligibility/:node_id` is a `human` read of `unary` lifetime with no body, under [The eligibility report](#the-eligibility-report).
 - `scheduler.execution.get` and `scheduler.claim.get` answer 404 `scheduler.execution.not_found` for an execution identity that no row holds.
 - A field bound of a schema is declared with that schema, and the body limit bounds nothing at the field level.
 
 Every timestamp composes the shared millisecond scalar, every identity composes its prefix schema, every object is closed, and `null` is valid only where a field says so.
 
-- `Job` holds `jobId`, `projectId`, `nodeId` and `priority`.
+- `Job` holds `job_id`, `project_id`, `node_id` and `priority`.
   - `priority` is the signed safe integer that the job copies from the Mission Service.
-- `ExecutionRecord` holds `executionId`, `projectId`, `nodeId`, `claimant`, `attempt`, `pinnedRevision`, `credentials`, `claimState`, `expiredAt`, `createdAt`, `endedAt`, `traceId` and `rootSpanId`.
-  - `claimant` holds `workerBindingId`, `resourceIdentity` and `runtimeIdentity`, and for a registered instance also `clientId` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtimeIdentity` through the Worker Service. Both are absent for an instance that the server hosts.
-  - `workerBindingId` is the latest row of the group `(projectId, resourceIdentity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
-  - `attempt` and `pinnedRevision` are positive safe integers.
+- `ExecutionRecord` holds `execution_id`, `project_id`, `node_id`, `claimant`, `attempt`, `pinned_revision`, `credentials`, `claim_state`, `expired_at`, `created_at`, `ended_at`, `trace_id` and `root_span_id`.
+  - `claimant` holds `worker_binding_id`, `resource_identity` and `runtime_identity`, and for a registered instance also `client_id` as `client_identity_<ulid>` and `name` as the display name of 1 to 64 nonblank characters, which the Scheduler reads from the registration of `runtime_identity` through the Worker Service. Both are absent for an instance that the server hosts.
+  - `worker_binding_id` is the latest row of the group `(project_id, resource_identity)` at the claim. The claim reads it through the Project Service in its transaction, and every use of the execution reads the configuration of that row.
+  - `attempt` and `pinned_revision` are positive safe integers.
   - `credentials` is the list of the credential row identities that the execution pins, `[]` at the claim.
   - The Scheduler Service offers `pinCredential(tx, executionId, credentialId)` and `liveExecutionsPinning(tx, credentialId)` to custody through its `contract.ts`. The first appends one identity to a live execution, and the second reads the live execution rows alone.
-  - `claimState` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
-  - `expiredAt` is the fixed deadline, stored as `expired_at` under [Configuration](#configuration).
-  - `createdAt` is the claim acceptance time, and `endedAt` is the end time or `null` before a terminal write.
-    A null `endedAt` alone establishes no liveness.
-  - `traceId` and `rootSpanId` hold the protocol-defined values of the Tracking Service: 32 and 16 lower-case hexadecimal characters under the [trace model](tracking-service.impl.md#trace-model). Before the tracer of the Tracking Service exists, the Scheduler mints both values at the claim through the `TraceIdentity` dependency that its `contract.ts` declares, and the composition root injects that stand-in.
-- `WorkPull` is the input of `scheduler.work.pull`: `resourceIdentity` and `runtimeIdentity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity. A mismatch of either field answers 403 `scheduler.work.claimant_mismatch`.
+  - `claim_state` is `running | lost | finished`, derived under [Liveness](scheduler-service.md#liveness).
+  - `expired_at` is the fixed deadline under [Configuration](#configuration).
+  - `created_at` is the claim acceptance time, and `ended_at` is the end time or `null` before a terminal write.
+    A null `ended_at` alone establishes no liveness.
+  - `trace_id` and `root_span_id` hold the protocol-defined values of the Tracking Service: 32 and 16 lower-case hexadecimal characters under the [trace model](tracking-service.impl.md#trace-model). Before the tracer of the Tracking Service exists, the Scheduler mints both values at the claim through the `TraceIdentity` dependency that its `contract.ts` declares, and the composition root injects that stand-in.
+- `WorkPull` is the input of `scheduler.work.pull`: `resource_identity` and `runtime_identity`. The resource identity equals the resource identity of the machine identity, and the runtime identity equals the live registration of that client identity. A mismatch of either field answers 403 `scheduler.work.claimant_mismatch`.
 - The answer of `scheduler.work.pull` is `{ kind: "claimed", execution: ExecutionRecord }` or `{ kind: "no-work" }`, each with HTTP 200.
-- `ExecutionRelease` is the input of `scheduler.execution.release`: `furtherWork` as a boolean.
+- `ExecutionRelease` is the input of `scheduler.execution.release`: `further_work` as a boolean.
   `false` states that the execution of the attempt requires no further work.
-  The Mission Service reads `furtherWork` for routing in the release transaction, and nothing stores it.
-  The answer is `{ executionId, endedAt }`.
+  The Mission Service reads `further_work` for routing in the release transaction, and nothing stores it.
+  The answer is `{ execution_id, ended_at }`.
 - Every list answers the shared page of [architecture.impl.md](architecture.impl.md#pagination).
-- `scheduler.execution.list` accepts the optional query field `nodeId`. With it, the list holds the executions of that node only. A `nodeId` that the project does not hold answers an empty page.
-- `scheduler.execution.list` accepts the optional query field `attempt`, a positive integer, only with `nodeId`. `attempt` without `nodeId` answers HTTP 400 `gateway.request.validation_failed`. With both, the list holds the executions of that attempt only. An attempt that the node does not hold answers an empty page.
-- Every mode of `scheduler.execution.list` orders by `executionId` descending under the shared pagination rule.
-- `scheduler.queue.list` orders by the order of the [work queue](scheduler-service.md#topology-and-work-queue): `priority` descending, then `jobId` ascending. This order replaces the primary-key order of the shared pagination rule.
-  The cursor encodes `priority` and `jobId` of the last job of a page, and the next page reads the jobs after that pair in the same order.
+- `scheduler.execution.list` accepts the optional query field `node_id`. With it, the list holds the executions of that node only. A `node_id` that the project does not hold answers an empty page.
+- `scheduler.execution.list` accepts the optional query field `attempt`, a positive integer, only with `node_id`. `attempt` without `node_id` answers HTTP 400 `gateway.request.validation_failed`. With both, the list holds the executions of that attempt only. An attempt that the node does not hold answers an empty page.
+- Every mode of `scheduler.execution.list` orders by `execution_id` descending under the shared pagination rule.
+- `scheduler.queue.list` orders by the order of the [work queue](scheduler-service.md#topology-and-work-queue): `priority` descending, then `job_id` ascending. This order replaces the primary-key order of the shared pagination rule.
+  The cursor encodes `priority` and `job_id` of the last job of a page, and the next page reads the jobs after that pair in the same order.
   The server defines the order across all pages, and a client never re-sorts a page.
 
 ## The eligibility report
@@ -68,7 +68,7 @@ The eligibility report states whether the Mission state and the work queue admit
 It answers only the admission checks that need no claimant.
 It predicts no claim, because a work pull rechecks every admission condition at the claim.
 
-- `EligibilityReport` holds `projectId`, `nodeId`, `state`, `claimable` and `checks`.
+- `EligibilityReport` holds `project_id`, `node_id`, `state`, `claimable` and `checks`.
   - `state` is the Mission state of the node at the read.
   - `checks` holds four `EligibilityCheck` objects in this order: `node-state`, `mission-condition`, `queue-job` and `no-live-claim`.
   - `claimable` is true exactly when no check holds `failed`.
@@ -100,7 +100,7 @@ It names no worker binding, no instance and no claimant.
 The instance healthcheck stays out of every human inspection command under [worker-service.impl.md](worker-service.impl.md#inspection-operations).
 
 - An absent project, an absent node or a node of another project answers 404 `scheduler.eligibility.node_not_found`.
-- A task answers 400 `scheduler.eligibility.node_task` with `details: { nodeId }`, because a task is never a unit of scheduling.
+- A task answers 400 `scheduler.eligibility.node_task` with `details: { node_id }`, because a task is never a unit of scheduling.
 - A path identity that is no canonical prefixed identity answers 400 `gateway.request.validation_failed`.
 
 ## Durable requests
@@ -131,8 +131,8 @@ The Scheduler Service owns the section `scheduler` of the configuration file tha
 
 - `scheduler.release_reserve` holds the reserve after the effective worker wall time, in seconds.
   It is a positive safe integer and defaults to `600`.
-- The claim sets `expired_at = created_at + wallTimeMs + 1000 × scheduler.release_reserve` once.
-  It reads the effective `wallTimeMs` of the worker binding row that `worker_binding_id` pins.
+- The claim sets `expired_at = created_at + wall_time_ms + 1000 × scheduler.release_reserve` once.
+  It reads the effective `wall_time_ms` of the worker binding row that `worker_binding_id` pins.
   Nothing moves that deadline, including a resume of a worker registration.
   A later configuration change affects only later claims.
 
@@ -163,7 +163,7 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test loses an accepted pull answer and repeats the pull from the same runtime identity, once with the same key and once with a new key, and asserts the same execution and no second execution or count.
 - A test pulls from another runtime identity of the same binding while an execution is live and asserts that it never receives that execution.
 - A test ends the execution, repeats the pull from the same runtime identity and asserts a fresh admission.
-- Tests submit two concurrent releases with equal `furtherWork` values and with different values.
+- Tests submit two concurrent releases with equal `further_work` values and with different values.
   They assert one winner, one 409 `scheduler.execution.not_running` from the transactional check, and one Mission routing.
 - Tests race a release against the sweep, an assessment end and a human revocation.
   They assert one terminal write and one Mission routing.
@@ -171,14 +171,14 @@ The operations that [Liveness](scheduler-service.md#liveness) names apply this s
 - A test admits an invocation before expiry and starts its write transaction exactly at `expired_at`.
   It asserts 409 `scheduler.execution.not_running` and the `lost` claim state.
   Another test starts the write transaction before expiry and commits after expiry.
-  It asserts acceptance and, for a terminal write, `ended_at` equal to the start reading and `claimState` equal to `finished`.
+  It asserts acceptance and, for a terminal write, `ended_at` equal to the start reading and `claim_state` equal to `finished`.
 - Tests meet an expired unsettled row through a claim of its node and a work pull of its instance.
   They assert loss settlement before admission and no return of the lost execution.
   A registration resume meets the same row and asserts settlement before its precondition check.
   A human act also checks its precondition against the settled state.
 - Tests sweep expired steps and evaluation claims below and at `mission.consecutive_loss_limit`.
   They assert one loss increment, the specified node state and a job only when claimable.
-- A test computes the deadline from a binding override of `wallTimeMs` and the configured reserve, including the default `600` seconds.
+- A test computes the deadline from a binding override of `wall_time_ms` and the configured reserve, including the default `600` seconds.
   A registration resume and later configuration changes leave that deadline unchanged; a later claim uses the changed configuration.
 - A test revokes a claim before expiry and asserts `finished`, no loss increment and the transaction reading as `ended_at`.
 - Tests cover all three derived claim states before, at and after the deadline, with and without `ended_at`.

@@ -192,7 +192,7 @@ The [Gateway Service configuration](gateway-service.impl.md#configuration) decla
 - A list operation orders its rows by their primary key in descending order, so the first page holds the newest rows.
 - A list that answers one item for each group key, for example one credential for each name, orders by that key in ascending alphabetical order. Its cursor encodes that key, and the next page reads the keys that are greater than the cursor.
 - `limit` defaults to 100 and accepts 1 to 1000.
-- The answer holds `items` and `nextCursor`. `nextCursor` is `null` on the last page.
+- The answer holds `items` and `next_cursor`. `next_cursor` is `null` on the last page.
 - The cursor is the base64url encoding of the last key of a page. A client passes it back unchanged.
 - The next page reads the rows whose key is smaller than the cursor, under the filters of the request.
 - A list takes no snapshot. A row that arrives after the first page appears on a refresh of the first page, and a row that disappears between two pages is absent.
@@ -763,7 +763,7 @@ Both adapters implement one transport-neutral value and error contract.
 Cross-service references tolerate a deleted target.
 
 - A human holds the right to delete a record through the delete operation of its owner, and the delete removes the row.
-- A forced delete also removes every usage of the identity in the records of its owner, for example an `evidenceIds` set.
+- A forced delete also removes every usage of the identity in the records of its owner, for example an `evidence_ids` set.
 - A peer holds the identity of a record of another service as a correlation value, which resolves to not found after a delete.
 - An owner that exposes no delete operation keeps its records, and no sweep deletes one.
 - A referencing service tolerates a disabled target.
@@ -979,7 +979,7 @@ The import boundaries follow the public files.
 ## The credential route group of a component
 
 - The LLM, Repository and Storage components each declare one credential route group in their own `contract.ts`.
-- The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credentialName`, `POST /api/<component>/credential/:credentialName/revision`, `PUT /api/<component>/credential/:credentialName/metadata`, `POST /api/<component>/credential/:credentialName/revision/:revision/revoke`, `POST /api/<component>/credential/:credentialName/archive`, `POST /api/<component>/credential/:credentialName/verify` and `POST /api/<component>/credential/check`.
+- The routes are `GET /api/<component>/credential/platform`, `POST /api/<component>/credential`, `GET /api/<component>/credential`, `GET /api/<component>/credential/:credential_name`, `POST /api/<component>/credential/:credential_name/revision`, `PUT /api/<component>/credential/:credential_name/metadata`, `POST /api/<component>/credential/:credential_name/revision/:revision/revoke`, `POST /api/<component>/credential/:credential_name/archive`, `POST /api/<component>/credential/:credential_name/verify` and `POST /api/<component>/credential/check`.
 - The operations are `<component>.credential.platform_list`, `create`, `list`, `get`, `rotate`, `update_metadata`, `revoke`, `archive`, `verify` and `check`.
 - Every route uses the `human` access policy.
 - Each route calls the record functions of [custody](custody.impl.md#operations) with the platform set of its component.
@@ -1006,16 +1006,16 @@ The import boundaries follow the public files.
 - The component runs the check of the platform on the typed secret, with a 10 s deadline. A check that exceeds its deadline answers `unknown`.
 - A platform with `verifiable: false` or with the secret shape `oauth` answers 400 `credential.check.unsupported`.
 - It takes no mutation key. It logs no material and drops the secret after the call.
-- The static segment `check` takes precedence over `/:credentialName`, so custody refuses the name `check`.
+- The static segment `check` takes precedence over `/:credential_name`, so custody refuses the name `check`.
 
 ### The platform list
 
 - `<component>.credential.platform_list` answers the platforms of the platform table of its component. No second constant holds the set.
 - It takes no input and has no pagination.
-- The static segment `platform` takes precedence over `/:credentialName`, so custody refuses the name `platform`.
-- The answer is `{ items: [{ platform, secretShape, loginModes, metadataFields, verifiable }] }`.
-- `loginModes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
-- `metadataFields` lists the required string fields of the metadata schema. `openai-compatible` answers `["baseUrl"]`, because `models` starts as `[]`.
+- The static segment `platform` takes precedence over `/:credential_name`, so custody refuses the name `platform`.
+- The answer is `{ items: [{ platform, secret_shape, login_modes, metadata_fields, verifiable }] }`.
+- `login_modes` lists the login modes of an `oauth` platform and is `[]` for every other shape.
+- `metadata_fields` lists the required string fields of the metadata schema. `openai-compatible` answers `["base_url"]`, because `models` starts as `[]`.
 - `verifiable` is true when the validation of the platform makes a remote call.
 
 ### The credential healthcheck
@@ -1034,7 +1034,7 @@ The import boundaries follow the public files.
 - A credential row holds its own actions: Verify, Rotate, and Edit metadata for a platform with metadata. The row opens the detail of the record, which holds the revisions. No action covers every record at once.
 - Verify calls `<component>.credential.verify` for its record. It never reads `GET /api/healthcheck`.
 - The create form and the list filter read the platform list of the section. They offer every platform in a searchable list, and the filter offers `All platforms` first.
-- The create form renders one text input for each name of `metadataFields`. The label is the name in Title Case, for example `Base URL` for `baseUrl` and `Account ID` for `account_id`.
+- The create form renders one text input for each name of `metadata_fields`. The label is the name in Title Case, for example `Base URL` for `base_url` and `Account ID` for `account_id`.
 - Every field label of the create form, the rotate form and the metadata form is in Title Case.
 - The create form holds a check icon for every platform with a secret shape other than `oauth`. It calls the pre-save check with the typed secret and shows the same badge as Verify, before the save. For a platform with `verifiable: false`, the icon is disabled with the tooltip of Verify.
 - Verify is disabled for a platform with `verifiable: false`. A hover or a tap shows a tooltip that states that verification is not supported yet for that platform.
@@ -1045,7 +1045,7 @@ The import boundaries follow the public files.
 - Revoke sits on the revision list of the record and needs a confirmation.
 - Archive sits on the detail of the record and needs a confirmation.
 - The list hides an archived record by default and offers an option to include it. An archived record shows an archived mark and offers no row action. The row still opens its detail.
-- An archived row shows its archive time, the latest `endedAt` of its revisions.
+- An archived row shows its archive time, the latest `ended_at` of its revisions.
 - A credential row shows the newest live revision as `(v<revision>)` next to the credential name. An archived row shows no revision.
 - The detail of a Repositories record lists the bindings that name it. Each binding links to the Bindings tab of its project.
 

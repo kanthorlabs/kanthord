@@ -28,7 +28,7 @@ Every record that names an actor stores one of three forms, and the server deriv
 An execution assessment is the exception: it stores the execution identity, and the read derives the execution form. A human assessment stores the human form.
 
 - `{ kind: "human", account, name }` from the human identity: `account` is the `sub` of the JWT and `name` its display name, under the bounds of [gateway-service.impl.md](gateway-service.impl.md#the-jwt). A human carries no ULID.
-- `{ kind: "execution", executionId, clientId, name }` from the execution record of the claim: `executionId` follows the identity that the Scheduler Service declares; `clientId` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
+- `{ kind: "execution", execution_id, client_id, name }` from the execution record of the claim: `execution_id` follows the identity that the Scheduler Service declares; `client_id` and `name` are the attribution that the claim copied for a registered instance under [scheduler-service.md](scheduler-service.md#claims-and-counts), and both are null for an instance that the server hosts. An external harness assessment identifies its client identity through this form.
 - `{ kind: "service", service }` for a service, with `service: "scheduler"` for the loss declaration of the Scheduler Service and `service: "mission"` for the landed-commit evidence of a request.
 - No input carries an actor, and an actor field in an input answers HTTP 400 with an issue list.
 
@@ -70,7 +70,7 @@ The value is any signed safe integer, from -9007199254740991 through 90071992547
 An absent priority reads 0.
 The service answers HTTP 400 with an issue list for a fraction, a nonnumber or an unsafe integer.
 The act requires a nonterminal node with no live claim.
-A live claim on the node answers 409 `mission.node.claim_live` with `details: { nodeId, executionId }`, and a dependency addition that meets a live claim on the dependent or on a node of its subtree answers the same code.
+A live claim on the node answers 409 `mission.node.claim_live` with `details: { node_id, execution_id }`, and a dependency addition that meets a live claim on the dependent or on a node of its subtree answers the same code.
 An import carries no priority.
 
 ## The attempt
@@ -78,20 +78,20 @@ An import carries no priority.
 `FrozenAction` is the read shape of a required external action.
 The service derives it from the policy of the `project_binding` row that the pinned revision of the attempt names.
 
-- A `FrozenAction` holds `key`, `bindingId`, `action`, `expectedEndState`, `follows` and `configuration`.
+- A `FrozenAction` holds `key`, `binding_id`, `action`, `expected_end_state`, `follows` and `configuration`.
 - `action` is `pull_request` or `merge_push` for a repository binding, under the action catalog of [project-service.impl.md](project-service.impl.md).
-- `expectedEndState` is `pull_request_merged` for `pull_request` and `base_branch_pushed` for `merge_push`.
+- `expected_end_state` is `pull_request_merged` for `pull_request` and `base_branch_pushed` for `merge_push`.
 - `follows` is the key of the action that this action follows, or null when it follows the passing assessment. It is null while a strategy holds at most one action; the field stays for a later action kind. The Project Service refuses `follows.type = "action_end_state"` in a binding write until a retry-safe claim-source contract exists, because no claim answer carries its claim source. Until then every evaluation claim comes from `Waiting`, a reviewer execution performs the evaluation on every claim, and the continuation claim from `External.Requested` of [worker-service.md](worker-service.md#evaluation-and-required-external-actions) stays unreachable.
-- `configuration` holds the operands that the action performer takes from the strategy: `baseBranch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `bindingId` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
-- `bindingId` is the repository binding revision that the pinned node revision names.
-- A configured action of another binding kind adds its own `action` value, `expectedEndState` values and `configuration` shape with its design; the service refuses every other value.
+- `configuration` holds the operands that the action performer takes from the strategy: `base_branch`. Every other fact of the operation, the address, the platform and the credential, comes from the resolution of the pinned binding revision `binding_id` through the Project Service at the call, under [worker-service.md](worker-service.md#workers-and-templates).
+- `binding_id` is the repository binding revision that the pinned node revision names.
+- A configured action of another binding kind adds its own `action` value, `expected_end_state` values and `configuration` shape with its design; the service refuses every other value.
 - An initiative requires no external action, so its set is empty.
 - A `FrozenAction` holds the key of the configured action of [project-service.impl.md](project-service.impl.md), and the request evidence of the attempt names that key in `requirement_key`.
-- `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:nodeId/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
-  Its input holds `executionId`, `attempt`, `nodeRevision`, `requirementKey`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
+- `mission.evidence.request` is the operation of the Worker action performer. It uses `POST /api/mission/node/:node_id/evidence/request` with `client` access under the execution of the live evaluation claim. The invocation chain proves that execution under [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters). It checks the node, the open attempt of the claim, the required external action and its binding.
+  Its input holds `execution_id`, `attempt`, `node_revision`, `requirement_key`, `subject` and `address: PlatformAddress`, and it answers `Evidence`. The first three fields must match the proven claim under [Operation contracts](#operation-contracts). The Mission Service writes the address as the one `platform` asset of the request evidence.
   A reuse is a new request evidence of a later attempt whose `platform` asset holds the address of a request evidence of an earlier attempt of the same node and the same action.
   Its dispatch and the recovery of a lost answer stay blocked under the B9 item W2 of [HANDOFF.md](HANDOFF.md#worker-and-project-services).
-- A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirementKey` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resourceIdentity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirementKey }`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
+- A request under a steps claim answers 409 `mission.execution.claim_not_evaluation`, as an assessment does. A `requirement_key` outside the required external actions of the attempt answers 400 `mission.request.requirement_unknown`. An address whose kind does not fit the action, or whose `resource_identity` is not that of the binding of the action, answers 400 `mission.request.address_mismatch` with `details: { requirement_key }`. A second request for a key of the attempt answers 409 `mission.request.already_requested`.
 
 ## Configuration
 
@@ -108,7 +108,7 @@ The service derives it from the policy of the `project_binding` row that the pin
   - `id`: the node identity; absent on a new node.
   - `kind`: `initiative`, `objective` or `task`.
   - `parent`: a plan file name; required on an objective or task, absent on an initiative.
-  - `dependsOn`: a list of plan file names; forbidden on a task.
+  - `depends_on`: a list of plan file names; forbidden on a task.
   - `bindings`: the project binding names under the node content rules.
   - `verifications`: the nonempty ordered list of bash commands under the node content rules.
 - After the front matter, exactly one H1 supplies `name`.
@@ -133,38 +133,38 @@ The service derives it from the policy of the `project_binding` row that the pin
 
 ## Export and the two formats
 
-- `mission.export` uses `GET /api/mission/:missionId/export?format=markdown|json` with `human` access.
-- The JSON answer is `{ missionId, missionVersion, entries: [{ filename, id, kind, name, requirement, criterion, verifications, bindings, parent, dependsOn }] }`.
-- The Markdown answer is `{ missionId, missionVersion, files: [{ filename, content }] }`.
+- `mission.export` uses `GET /api/mission/:mission_id/export?format=markdown|json` with `human` access.
+- The JSON answer is `{ mission_id, mission_version, entries: [{ filename, id, kind, name, requirement, criterion, verifications, bindings, parent, depends_on }] }`.
+- The Markdown answer is `{ mission_id, mission_version, files: [{ filename, content }] }`.
 - Each Markdown `content` follows the plan file grammar.
 - JSON entries use the same node content and parent and dependency rules as Markdown.
-- `parent` and `dependsOn` name plan files in the import set, not node identities.
-- An initiative omits `parent`, and a task omits `dependsOn` in both formats.
+- `parent` and `depends_on` name plan files in the import set, not node identities.
+- An initiative omits `parent`, and a task omits `depends_on` in both formats.
 - Each answer is the exact plan payload that the import of its format accepts.
 - The import accepts `format: markdown` with raw `files: { filename, content }[]`, which the Mission Service parses.
 - The import accepts `format: json` with `entries`.
 - The format, reason and apply controls accompany the unchanged plan payload.
-- The payload names `missionId` and `missionVersion`; the latter is the expected mission version for the import.
+- The payload names `mission_id` and `mission_version`; the latter is the expected mission version for the import.
 - An export excludes retired nodes.
 - The answer bound is 10 MiB; a larger answer is 413 `mission.export.too_large`.
 - An import covers the whole mission and carries no scope.
-- Every `parent` and `dependsOn` resolves inside the import set; no boundary reference exists.
+- Every `parent` and `depends_on` resolves inside the import set; no boundary reference exists.
 - The preview lists every current node that the import set omits as a retirement.
-- The apply confirms that exact retirement set with `confirmedRetirements` and checks `previewDigest` at commit.
+- The apply confirms that exact retirement set with `confirmed_retirements` and checks `preview_digest` at commit.
 - The import result holds the map from file name to node identity.
-- A violation holds `code`, `message`, `filename`, `nodeId` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
+- A violation holds `code`, `message`, `filename`, `node_id` and `details`: the error object of the shared envelope plus two locators. `filename` is the submitted file name as a string, so it can name a malformed name; each locator is null when it does not apply.
 - The import validates in three stages: the plan files and their content, the resolved graph, then the import condition. A preview reports every violation of the first stage that fails and stops there, because a later stage needs the earlier one; it answers 200 with the list and the digest of the submitted set.
 - An apply stops at the first violation and answers the shared envelope with its code and status. An authorization or revision failure is an operation failure on both paths and never a violation.
-- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.mission_mismatch`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.reference_kind_invalid` with `details: { reference, name }`, `mission.import.kind_changed` with `details: { id, kind, currentKind }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
-- A body `missionId` that differs from the route is a first-stage violation `mission.import.mission_mismatch`. A parent or dependency name that resolves inside the set to a file of the wrong kind is a second-stage violation `mission.import.reference_kind_invalid`. An entry with the identifier of a known node of another kind is a second-stage violation `mission.import.kind_changed`.
+- The import codes and their apply status are: HTTP 400 for `mission.import.plan_invalid`, `mission.import.mission_mismatch`, `mission.import.unresolved_reference` with `details: { reference, name }`, `mission.import.reference_kind_invalid` with `details: { reference, name }`, `mission.import.kind_changed` with `details: { id, kind, current_kind }`, `mission.import.duplicate_file`, `mission.import.unknown_id`, `mission.import.duplicate_id`, `mission.import.foreign_id`, `mission.import.retired_id` with `details: { id }`, `mission.import.cycle`, and the node content codes of [The node content](#the-node-content); HTTP 409 for `mission.import.condition_failed` with `details: { state, attempt }`, `mission.import.terminal_change`, `mission.node.filename_conflict` and, on apply alone, `mission.import.retirement_mismatch`.
+- A body `mission_id` that differs from the route is a first-stage violation `mission.import.mission_mismatch`. A parent or dependency name that resolves inside the set to a file of the wrong kind is a second-stage violation `mission.import.reference_kind_invalid`. An entry with the identifier of a known node of another kind is a second-stage violation `mission.import.kind_changed`.
 
 ## Node API admission
 
 - A human retires a node through a whole-mission import that omits its plan file, under the import condition, or through `node retire` under [Node retire](#node-retire).
-- Every node API write and every human control on a retired node answers 409 `mission.node.retired` with `details: { nodeId }`.
-- A node API write that changes a node in a terminal state, or a task whose objective holds a terminal state, answers 409 `mission.node.terminal` with `details: { nodeId }`.
-- A write that names a retired node as a parent or a dependency answers 409 `mission.node.retired` with `details: { nodeId }` of that node.
-- `dependency add` with a task endpoint or with endpoints in two missions answers 409 `mission.dependency.endpoint_invalid` with `details: { reason, nodeId, dependsOnId }`, where `reason` is `task_endpoint` or `cross_mission`.
+- Every node API write and every human control on a retired node answers 409 `mission.node.retired` with `details: { node_id }`.
+- A node API write that changes a node in a terminal state, or a task whose objective holds a terminal state, answers 409 `mission.node.terminal` with `details: { node_id }`.
+- A write that names a retired node as a parent or a dependency answers 409 `mission.node.retired` with `details: { node_id }` of that node.
+- `dependency add` with a task endpoint or with endpoints in two missions answers 409 `mission.dependency.endpoint_invalid` with `details: { reason, node_id, depends_on_id }`, where `reason` is `task_endpoint` or `cross_mission`.
 - A self addition answers 409 `mission.import.cycle` after the endpoint checks. `dependency remove` checks no endpoint pair, and an absent edge is a no-op.
 - An import entry with the identifier of a retired node fails with 400 `mission.import.retired_id`.
 - `node create` admits an initiative at any time.
@@ -173,23 +173,23 @@ The service derives it from the policy of the `project_binding` row that the pin
 - The refused states are `Waiting`, `Evaluating`, `External.Requested`, `External.Success`, `External.Failed`, `Completed` and `Discarded`.
 - The commit rechecks the rule.
 - The import keeps the import condition.
-- A human control or a record list that names a task answers 400 `mission.node.control_task` with `details: { nodeId }`.
-- A human control whose `expectedState` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
-- A human control on a node in a terminal state answers `mission.node.terminal` before it checks `expectedState`, `expectedAttempt` or the admitted states. `mission.node.state_conflict` comes next, and `mission.node.control_refused` comes last.
+- A human control or a record list that names a task answers 400 `mission.node.control_task` with `details: { node_id }`.
+- A human control whose `expected_state` equals the current state, when that state is outside the states that the control admits, answers 409 `mission.node.control_refused` with `details: { state }`. The CLI page lists the admitted states of each control.
+- A human control on a node in a terminal state answers `mission.node.terminal` before it checks `expected_state`, `expected_attempt` or the admitted states. `mission.node.state_conflict` comes next, and `mission.node.control_refused` comes last.
 
 ## The verifications
 
 The execution runs the verifications in list order, one by one, never in parallel.
 Each item runs through `bash -c` in the workspace root of the execution.
 The run stops at the first failed item.
-The verification records one result `{ command, exitCode, signal, timedOut }` per item that the execution started, in list order.
-`Verification` holds `testedInput` and `results`, and the evidence that records the run holds it in `verification`.
-`exitCode` is the exit status or null.
+The verification records one result `{ command, exit_code, signal, timed_out }` per item that the execution started, in list order.
+`Verification` holds `tested_input` and `results`, and the evidence that records the run holds it in `verification`.
+`exit_code` is the exit status or null.
 `signal` is the POSIX signal name that ended the process or null.
-`timedOut` is true when the deadline of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that deadline.
-Both `exitCode` and `signal` are null for a process that the execution started and could not observe.
-An item passes only with `exitCode: 0`; every other result fails, and an unstarted item has no result.
-A run passes when `results` hold one entry per verification and every entry has `exitCode` 0.
+`timed_out` is true when the deadline of the item ended it; [worker-service.impl.md](worker-service.impl.md#stop-and-budget) fixes that deadline.
+Both `exit_code` and `signal` are null for a process that the execution started and could not observe.
+An item passes only with `exit_code: 0`; every other result fails, and an unstarted item has no result.
+A run passes when `results` hold one entry per verification and every entry has `exit_code` 0.
 No result claims that an unrun item ran.
 The start refuses a host without bash.
 No execution identity infers a verification from prose.
@@ -205,9 +205,9 @@ An assessment holds one `result` and one required, nonblank `rationale`.
 It holds the evidence identities, child outcome identities, tested input and node revision.
 It holds no `method` field and no separate criterion result.
 The actor identifies who judged.
-An execution assessment names the execution of its evaluation claim: it stores `executionId`, and the read derives the `Actor` of the execution form from it.
+An execution assessment names the execution of its evaluation claim: it stores `execution_id`, and the read derives the `Actor` of the execution form from it.
 An external harness assessment identifies the client identity of its harness worker.
-A human assessment stores the human `actor`, holds a null `executionId` and a null `testedInput`, and names no child outcome. Its evidence set is optional. The read answers `currency: null` for a human assessment.
+A human assessment stores the human `actor`, holds a null `execution_id` and a null `tested_input`, and names no child outcome. Its evidence set is optional. The read answers `currency: null` for a human assessment.
 A human writes an assessment only through a success override, a discard or a block, and that act writes the assessment and the outcome that names it in one transaction.
 Every other rule of this section binds an execution assessment only.
 The execution code, never the agent, runs the verifications before the judgement.
@@ -227,54 +227,54 @@ The Mission Service answers `mission.assessment.verification_failed` when an ass
 HTTP 400 with an issue list rejects a method field, an absent or blank rationale, and a result that violates this order.
 The execution behaviour follows [worker-service.md](worker-service.md#evaluation-and-required-external-actions).
 
-- At acceptance `childOutcomeIds` of an initiative names the current outcome of each current objective, and no other outcome. `childOutcomeIds` of an objective is empty. The service refuses every other set with HTTP 400 and an issue list. `evidenceIds` and `childOutcomeIds` are duplicate-free sets.
-- The read derives `childNodeIds` from the nodes of `childOutcomeIds`.
-- `nodeRevision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
+- At acceptance `child_outcome_ids` of an initiative names the current outcome of each current objective, and no other outcome. `child_outcome_ids` of an objective is empty. The service refuses every other set with HTTP 400 and an issue list. `evidence_ids` and `child_outcome_ids` are duplicate-free sets.
+- The read derives `child_node_ids` from the nodes of `child_outcome_ids`.
+- `node_revision` of an assessment is the revision that its attempt pins, or the node revision current at the act when a human assessment names attempt 0.
 - An assessment that names an evidence with a pending or expired asset answers 409 `mission.assessment.evidence_unpublished`.
-- A human delete of an evidence removes its identity from `evidenceIds`, and nothing else changes an assessment.
-- The read derives `workerVersion` from the worker of the binding row that the execution of the actor pins.
+- A human delete of an evidence removes its identity from `evidence_ids`, and nothing else changes an assessment.
+- The read derives `worker_version` from the worker of the binding row that the execution of the actor pins.
 - The service computes the currency of an execution assessment at each read, and it stores no currency.
-- Take an execution assessment A of node N and attempt k. `contextMatches` is true exactly when all three conditions hold: `nodeRevision` of A equals the revision that attempt k of N pins; each identity of `evidenceIds` of A names an evidence of N; for an initiative, the nodes of `childOutcomeIds` of A equal the current objectives of N, and each named outcome is the current outcome of its objective.
+- Take an execution assessment A of node N and attempt k. `context_matches` is true exactly when all three conditions hold: `node_revision` of A equals the revision that attempt k of N pins; each identity of `evidence_ids` of A names an evidence of N; for an initiative, the nodes of `child_outcome_ids` of A equal the current objectives of N, and each named outcome is the current outcome of its objective.
 - The current outcome of a node is its outcome with the greatest `sequence`.
-- `authorityAdmits` is true exactly when no human assessment of N and attempt k has a greater `sequence` than A.
-- `orderSelected` is true exactly when A holds the greatest `sequence` among the execution assessments of N and attempt k that pass the context check and the authority check.
+- `authority_admits` is true exactly when no human assessment of N and attempt k has a greater `sequence` than A.
+- `order_selected` is true exactly when A holds the greatest `sequence` among the execution assessments of N and attempt k that pass the context check and the authority check.
 - `current` is true exactly when all three checks admit A. `reasons` holds one named constant text for each failed check.
 
 ## The request record
 
-- `requirement_key` of a request evidence holds the key of its `FrozenAction`. The expected end state is `expectedEndState` of that `FrozenAction`: `pull_request_merged` or `base_branch_pushed` for a repository action; a configured action of another binding kind adds its own values with its design.
-- `PlatformAddress` holds `kind` and `resourceIdentity` of the binding, for example `repository:github:kanthorlabs/kanthord`, and never a `bindingId`. A `pull_request` address adds `number`. A `branch_push` address adds `branch` and `commit`, the commit that the Intake Service pushed. The service stores it as RFC 8785 canonical JSON under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
-- The Intake check takes the binding and its credential from the pinned `FrozenAction` of the request, and it answers `endState` and `landedCommits`.
-- `endState` is one of `expected`, `other` and `none`. `expected` establishes the expected end state. `other` establishes another end state. `none` establishes no end state.
+- `requirement_key` of a request evidence holds the key of its `FrozenAction`. The expected end state is `expected_end_state` of that `FrozenAction`: `pull_request_merged` or `base_branch_pushed` for a repository action; a configured action of another binding kind adds its own values with its design.
+- `PlatformAddress` holds `kind` and `resource_identity` of the binding, for example `repository:github:kanthorlabs/kanthord`, and never a `binding_id`. A `pull_request` address adds `number`. A `branch_push` address adds `branch` and `commit`, the commit that the Intake Service pushed. The service stores it as RFC 8785 canonical JSON under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- The Intake check takes the binding and its credential from the pinned `FrozenAction` of the request, and it answers `end_state` and `landed_commits`.
+- `end_state` is one of `expected`, `other` and `none`. `expected` establishes the expected end state. `other` establishes another end state. `none` establishes no end state.
 - The service sets `end_state` of the request evidence to `expected` or `other` once and refuses a later conclusive result for the same request. `none` writes nothing.
-- An `expected` result of a repository action holds a nonempty `landedCommits`. The service writes each commit as its own evidence with the provenance `{ kind: "service", service: "mission" }` and the attempt of the request. Delivery admission adds `inbound_event_id`, the identity of the inbound event, to that provenance. Every other result holds an empty list.
+- An `expected` result of a repository action holds a nonempty `landed_commits`. The service writes each commit as its own evidence with the provenance `{ kind: "service", service: "mission" }` and the attempt of the request. Delivery admission adds `inbound_event_id`, the identity of the inbound event, to that provenance. Every other result holds an empty list.
 - The resolution of a required external action in a read is `unrequested` while the attempt holds no request evidence for it, `unresolved` while its request evidence holds no end state, `expected-end` after `expected` and `other-end` after `other`.
 - `mission.delivery.admit` is the `service` operation of delivery admission. It writes no record of its own. This contract serves acceptance as an observation. Acceptance as a human act stays under the delivery admission page and the disposition vocabulary, and this contract does not redefine it.
-- The input holds `inboundEventId`, `projectId`, `platform`, `resource`, `event` and `metadata`. The Intake Service fills them from the inbound event and its inbound: `resource` from `configuration`, and `event` as the exact bytes in canonical base64.
+- The input holds `inbound_event_id`, `project_id`, `platform`, `resource`, `event` and `metadata`. The Intake Service fills them from the inbound event and its inbound: `resource` from `configuration`, and `event` as the exact bytes in canonical base64.
 - The answer holds `disposition` and `reason`. `disposition` is `accepted_observation`, `refused` or `duplicate`. `reason` is `ambiguous`, `unmatched` or `undecodable` for `refused`, and null otherwise.
 - Admission decodes the event first. A decoding with no address answers `undecodable`. Then a read transaction matches the canonical JSON of the address against the `platform` asset of each request evidence of the project. One unresolved match of an open attempt goes to the Intake check. More unresolved matches answer `ambiguous`. No unresolved match answers `duplicate` when a resolved request matches, and `unmatched` otherwise.
 - The handler calls the Intake check before its commit, because a transaction awaits nothing. A failed check propagates as an operation failure and writes nothing.
 - Every answer that carries a disposition returns through the one final `caller.commit`. A `none` result answers `accepted_observation` with a null `reason`. A refusal, a duplicate and a `none` result commit no write.
-- For an `expected` or `other` result, the commit first reads the checked request evidence. An end state on it answers `duplicate`. Otherwise the commit repeats the match with the same priority and the same refusal and duplicate answers. Another evidence that became the one unresolved match answers 409 `mission.delivery.match_changed`. A live claim on the node answers 409 `mission.node.claim_live` with `details: { nodeId, executionId }`.
+- For an `expected` or `other` result, the commit first reads the checked request evidence. An end state on it answers `duplicate`. Otherwise the commit repeats the match with the same priority and the same refusal and duplicate answers. Another evidence that became the one unresolved match answers 409 `mission.delivery.match_changed`. A live claim on the node answers 409 `mission.node.claim_live` with `details: { node_id, execution_id }`.
 - Otherwise the commit sets the end state. An `expected` result of a repository action writes each landed commit as its own evidence with `inbound_event_id` in its provenance, and every other result adds no landed-commit evidence. The same transaction writes the node transition and the attempt closure that the [state transitions](mission-service.md#state-transitions) require, and the commit answers `accepted_observation`.
 - The span of the operation holds the disposition and the refusal reason.
-- `mission.node.check` uses `POST /api/mission/node/:nodeId/check` with `human` access and names `expectedMissionVersion`. It calls the Intake check for each request evidence of the open attempt with no end state, commits each result in its own transaction and answers `{ results: { evidenceId, requirementKey, resolution }[], failures: { evidenceId, error }[] }`. A result that establishes an end state on a node with a live claim writes nothing, and its request answers `failures` with `mission.node.claim_live`. A node with no unresolved request answers 409 `mission.node.no_unresolved_request`.
+- `mission.node.check` uses `POST /api/mission/node/:node_id/check` with `human` access and names `expected_mission_version`. It calls the Intake check for each request evidence of the open attempt with no end state, commits each result in its own transaction and answers `{ results: { evidence_id, requirement_key, resolution }[], failures: { evidence_id, error }[] }`. A result that establishes an end state on a node with a live claim writes nothing, and its request answers `failures` with `mission.node.claim_live`. A node with no unresolved request answers 409 `mission.node.no_unresolved_request`.
 - This record decides no order of contradictory results, no reversal of an accepted platform state and no request for which no end state arrives. The B9 Mission items of [HANDOFF.md](HANDOFF.md#mission-service-1) own the open recovery rules.
 
 ## The release admission
 
 - The Mission Service routes a release inside the release transaction of the Scheduler Service, and it checks the release predicate before the terminal write. The node state fixes the kind of the release: `Executing` for a steps release and `Evaluating` for a reviewer release.
-- A steps release with `furtherWork: false` requires a published evidence of the open attempt whose provenance is the releasing execution. For an objective, that evidence holds one `repository` asset whose `bindingId` equals the repository binding of the pinned revision. For an initiative, it holds one `produced` asset.
-- A steps release with `furtherWork: true` carries the checkpoint and push obligation of [worker-service.impl.md](worker-service.impl.md#stop-and-budget), and the service checks no record for it.
+- A steps release with `further_work: false` requires a published evidence of the open attempt whose provenance is the releasing execution. For an objective, that evidence holds one `repository` asset whose `binding_id` equals the repository binding of the pinned revision. For an initiative, it holds one `produced` asset.
+- A steps release with `further_work: true` carries the checkpoint and push obligation of [worker-service.impl.md](worker-service.impl.md#stop-and-budget), and the service checks no record for it.
 - A reviewer release requires a current passing assessment of the attempt and no required external action of the attempt that is eligible and unrequested. An action is eligible under [worker-service.md](worker-service.md#evaluation-and-required-external-actions): it is unrequested in the attempt, and it follows no action or its predecessor reached its expected end state.
 - A release that fails the predicate answers 409 `mission.release.obligation_unmet` with `details: { obligation }`, where `obligation` is `evidence`, `assessment` or `request`. The refusal writes no execution row, no node state and no job, and the execution stays `running`.
 - The predicate is the same for every harness. The execution code of a worker that kanthord hosts satisfies it before the release, and an external harness meets it through the same check.
-- Tests release a steps claim on an objective with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `furtherWork: true` checks no record.
+- Tests release a steps claim on an objective with no evidence, with a produced-only evidence and with an unpublished repository evidence, and assert 409 `mission.release.obligation_unmet` with `obligation: evidence` and no change to the execution, the node and the queue. Tests release a reviewer claim with no assessment and with an eligible unrequested action, and assert `obligation: assessment` and `obligation: request`. A test asserts that a release with `further_work: true` checks no record.
 
 ## Evidence content
 
 Inline evidence holds at most 5 MiB of decoded content.
-`ContentBytes` holds `mediaType`, `encoding: "base64"` and canonical base64 `data`.
+`ContentBytes` holds `media_type`, `encoding: "base64"` and canonical base64 `data`.
 The produced content address holds the required SHA-256 of those decoded bytes.
 The server verifies the hash before it accepts the content.
 Larger inline content answers 413 `mission.evidence.too_large`.
@@ -282,26 +282,26 @@ The service never truncates evidence.
 A node without a storage binding accepts only inline evidence content.
 Repository evidence remains an address, not an upload of repository content.
 
-- An evidence asset holds `kind` and `content`. `content` is the RFC 8785 canonical JSON of the shape that `kind` names: `RepositoryAddress` for `repository`, the produced shape `{ mediaType, sha256, data }` for `produced`, `ObjectAddress` for `object` and `PlatformAddress` for `platform`.
+- An evidence asset holds `kind` and `content`. `content` is the RFC 8785 canonical JSON of the shape that `kind` names: `RepositoryAddress` for `repository`, the produced shape `{ media_type, sha256, data }` for `produced`, `ObjectAddress` for `object` and `PlatformAddress` for `platform`.
 - The produced shape holds canonical base64 `data` of at most 5 MiB decoded, and a content read answers `ContentBytes` from it. The service derives `ProducedAddress` and `ObjectAddress` from `content`.
 - `mission.evidence.submit` takes the full asset list and writes the evidence row and every asset row in one transaction. No asset joins an evidence later.
-- The scope of an evidence is its node and its attempt. The service derives it from `node_id` and `attempt` of the evidence row, and an evidence read answers it as `nodeId` and `attempt`. No input carries a scope, and a `scope` field in an input answers HTTP 400 with an issue list.
+- The scope of an evidence is its node and its attempt. The service derives it from `node_id` and `attempt` of the evidence row, and an evidence read answers it as `node_id` and `attempt`. No input carries a scope, and a `scope` field in an input answers HTTP 400 with an issue list.
 - A `repository`, `produced` or `platform` asset sets `published_at` at the insert. An `object` asset sets `expired_at` one hour after the submission.
 - An asset is published when `published_at` is set, pending while `expired_at` lies after now, and expired otherwise. An evidence is published when every asset of it holds `published_at`.
 - `requirement_key` holds only the key of a `FrozenAction`; every other evidence holds no requirement key.
 - An evidence has no natural key. A repeat after a server restart or after the replay window of the Gateway creates a new evidence, and the service accepts that duplicate.
 
-- A repository address holds `bindingId` and `commit`.
+- A repository address holds `binding_id` and `commit`.
 - `commit` is the full git object name in lower-case hexadecimal: 40 characters for a SHA-1 repository or 64 characters for a SHA-256 repository, the two object formats of git. An abbreviation, upper-case or a ref name answers HTTP 400 with an issue list.
 - The service checks the form alone and never the repository.
-- `bindingId` names a repository binding revision of the project in every context.
+- `binding_id` names a repository binding revision of the project in every context.
 - For the evidence of an objective, and for a landed commit, it equals the repository binding of the pinned revision. When a success override supplies a landed commit while the attempt reads 0, it equals the repository binding of the node revision current at the act, under [The outcome record](#the-outcome-record).
 - For the tested input of an initiative, the list holds one address per distinct repository binding of its current objectives.
 - The landed commit of a success override follows the same form and binding rule.
-- A repository address whose `bindingId` is not the binding that its context requires, or a landed commit on an initiative, answers 400 `mission.evidence.binding_mismatch` with `details: { bindingId }`.
-- `mediaType` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
-- A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidenceId` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
-- A content read of a `platform` asset answers 409 `mission.evidence.content_platform` with `evidenceId` and the address in `details`, after the same checks, and it fetches no external content.
+- A repository address whose `binding_id` is not the binding that its context requires, or a landed commit on an initiative, answers 400 `mission.evidence.binding_mismatch` with `details: { binding_id }`.
+- `media_type` is an RFC 6838 `type/subtype` with no parameter, in ASCII, at most 255 bytes: the two name limits of 127 characters and the separator. A parameter, a missing subtype, a non-ASCII byte or a longer value answers HTTP 400 with an issue list. The service stores the value unchanged and never interprets it.
+- A content read of a repository asset answers 409 `mission.evidence.content_repository` with `evidence_id` and the repository address in `details`, after the authorization and the execution bound checks of the read. The failure carries no bytes and no presigned URL. The human and the execution content reads share that mapping.
+- A content read of a `platform` asset answers 409 `mission.evidence.content_platform` with `evidence_id` and the address in `details`, after the same checks, and it fetches no external content.
 
 ## Object evidence
 
@@ -311,12 +311,12 @@ The host component is the server, the `worker` application or the harness extens
 It opens the path safely and refuses any path or symbolic-link escape from that workspace.
 The file path is local input, not an evidence address.
 
-1. The component calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list. An `object` asset declares `mediaType`, `size` and an optional `sha256`.
+1. The component calls `mission.evidence.submit` with execution context, the evidence metadata and the asset list. An `object` asset declares `media_type`, `size` and an optional `sha256`.
    This operation requires execution access and a live claim for the node or its task.
    The server checks the live claim, the storage binding of the pinned revision and the 5 GiB single-object limit.
    A node without a storage binding refuses the upload with 409 `mission.evidence.storage_binding_absent`.
    It creates the evidence and one pending asset for each `object` asset, with a server-generated key: `<prefix>/<project>/<mission>/<node>/<attempt>/<evidence asset id>`.
-   The asset pins that storage binding revision in `storageBindingId` of its `ObjectAddress`.
+   The asset pins that storage binding revision in `storage_binding_id` of its `ObjectAddress`.
    The Intake Service signs a presigned PUT for that key with a lifetime of 1 hour through `intake.storage.put`, with the material that custody releases.
    The grant requires a checksum header only when the component supplies a SHA-256.
 2. The component sends the bytes directly to the store with that PUT.
@@ -355,9 +355,9 @@ An evidence record and its assets stay until a human deletes them, whether an ou
 A delete removes the row, and a deleted row is gone and not recoverable under [architecture.impl.md](architecture.impl.md#the-operational-database).
 kanthord runs no automatic evidence delete and no cleanup process.
 
-- `mission.evidence.asset.delete` uses `DELETE /api/mission/evidence/asset/:assetId` with `human` access. It deletes one asset and keeps the evidence row, even with zero assets.
-- `mission.evidence.delete` uses `DELETE /api/mission/evidence/:evidenceId` with `human` access. It deletes every asset of the evidence, then the evidence row. It removes the evidence identity from every `evidenceIds` set of an assessment and of an outcome.
-- Both inputs hold `expectedMissionVersion`, `force: boolean` and an optional `reason: Text`; the CLI defaults `force` to `false`.
+- `mission.evidence.asset.delete` uses `DELETE /api/mission/evidence/asset/:asset_id` with `human` access. It deletes one asset and keeps the evidence row, even with zero assets.
+- `mission.evidence.delete` uses `DELETE /api/mission/evidence/:evidence_id` with `human` access. It deletes every asset of the evidence, then the evidence row. It removes the evidence identity from every `evidence_ids` set of an assessment and of an outcome.
+- Both inputs hold `expected_mission_version`, `force: boolean` and an optional `reason: Text`; the CLI defaults `force` to `false`.
 - `Text` is nonblank text; its bounds remain open in [HANDOFF](HANDOFF.md#mission-service).
 - With `force: false`, the node of the evidence and every ancestor must hold a terminal state.
 - A live chain refuses the delete with 409 `mission.evidence.remove_node_live`.
@@ -387,15 +387,15 @@ kanthord runs no automatic evidence delete and no cleanup process.
   It also covers the landed-commit evidence that a success override supplies on such a node.
 - A human act on a node whose attempt reads 0 writes its human assessment and the node outcome.
   It closes no attempt.
-- An outcome stores no revision and no attempt. The read derives `nodeRevision` and `attempt` from the assessment that the outcome names.
-- The initiative-only objective read resolves a child objective to the `nodeRevision` of its current outcome.
+- An outcome stores no revision and no attempt. The read derives `node_revision` and `attempt` from the assessment that the outcome names.
+- The initiative-only objective read resolves a child objective to the `node_revision` of its current outcome.
 - An execution submission always names an attempt of 1 or more, because a claim exists only under an open attempt.
 - An omitted `attempt` filter selects every authorized record of the node.
   `--attempt <n>` selects the records of attempt n.
   `--attempt 0` selects the records that the service writes while the attempt reads 0.
 - Every transition into `Blocked` writes an outcome, so the blocked read always returns one.
   For a node blocked while its attempt reads 0, the read returns that outcome with no request evidence.
-- An outcome stores no closing event. The read derives `closingEvent` in this order:
+- An outcome stores no closing event. The read derives `closing_event` in this order:
   - `success-override` for a human assessment with `result: success`.
   - `human-discard` for a human assessment with `result: undetermined` whose outcome is the current outcome of a `Discarded` node.
   - `human-block` for every other human assessment.
@@ -411,39 +411,39 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `execution cleared-outcome get` answers 404 `mission.record.not_found` when no unblock opened the claimed attempt.
   After a block and an unblock while the attempt reads 0, the first claim opens attempt 1.
   The execution of that claim is the opener of that attempt.
-- A discard or a success override that meets a requested external action of the open attempt with no end state answers 409 `mission.node.action_unresolved` with `details: { requirementKeys }`, because a node reaches a terminal state only when no external action of its open attempt is unresolved.
-- A human control checks `expectedState` and `expectedAttempt` against the current state and attempt.
+- A discard or a success override that meets a requested external action of the open attempt with no end state answers 409 `mission.node.action_unresolved` with `details: { requirement_keys }`, because a node reaches a terminal state only when no external action of its open attempt is unresolved.
+- A human control checks `expected_state` and `expected_attempt` against the current state and attempt.
   A mismatch answers 409 `mission.node.state_conflict`, with the current `state` and `attempt` in `details`.
-  An `Unblock` whose `blockedAttempt` differs from the current attempt answers the same code.
+  An `Unblock` whose `blocked_attempt` differs from the current attempt answers the same code.
 - The service records the acceptance order of the outcomes of one node, from 1 with no gap.
   The current outcome of a node in an attempt is its outcome of that attempt that the service accepted last.
   The current outcome of a node is its outcome that the service accepted last.
-  Neither `createdAt` nor the outcome identity decides that order.
-- Every outcome names an assessment in `assessmentId`. The kind of the basis is the kind of the actor of that assessment.
+  Neither `created_at` nor the outcome identity decides that order.
+- Every outcome names an assessment in `assessment_id`. The kind of the basis is the kind of the actor of that assessment.
 - The context of the basis is the assessment that it names: its node revision, the evidence that it names, the child set of the child outcomes that it names and those child outcomes.
 - The assessment changes only when a human delete removes an evidence identity from it, and the closure copies nothing, so a child change after the acceptance never enters the context.
-- An outcome changes only when a human delete removes an evidence identity from its `evidenceIds`.
-- `evidenceIds` of an outcome holds the evidence that its assessment does not hold: the landed-commit evidence of the attempt and the landed commit of a success override. The read answers the union of that set and `evidenceIds` of the assessment.
+- An outcome changes only when a human delete removes an evidence identity from its `evidence_ids`.
+- `evidence_ids` of an outcome holds the evidence that its assessment does not hold: the landed-commit evidence of the attempt and the landed commit of a success override. The read answers the union of that set and `evidence_ids` of the assessment.
 - The required external actions derive from the pinned revision of the attempt, so the outcome repeats none.
 
 ## The node read
 
-- A node read of an initiative or an objective holds `dependsOn`: the node identities that the dependency edges of the node name, as a duplicate-free list in ascending order. A task read omits it, because a task carries no dependency edge.
-- `dependsOn` of a node read holds node identities. `dependsOn` of a plan file holds plan file names.
+- A node read of an initiative or an objective holds `depends_on`: the node identities that the dependency edges of the node name, as a duplicate-free list in ascending order. A task read omits it, because a task carries no dependency edge.
+- `depends_on` of a node read holds node identities. `depends_on` of a plan file holds plan file names.
 - No operation reads the [dependency closure](mission-service.md#mission-structure-and-nodes) of one node.
-  A client composes the closure from node reads: it follows `parentId` from the node to its initiative and takes the union of `dependsOn` of each node on that path. The state of each member comes from its own node read.
+  A client composes the closure from node reads: it follows `parent_id` from the node to its initiative and takes the union of `depends_on` of each node on that path. The state of each member comes from its own node read.
 
 ## Node ready
 
-- `mission.node.ready` uses `POST /api/mission/node/:nodeId/ready` with `human` access.
-- `node ready` requires `expectedState: Available` and an `expectedAttempt` equal to the attempt of the node.
+- `mission.node.ready` uses `POST /api/mission/node/:node_id/ready` with `human` access.
+- `node ready` requires `expected_state: Available` and an `expected_attempt` equal to the attempt of the node.
   A mismatch answers 409 `mission.node.state_conflict`.
 - When the attempt reads 0, the readiness condition reads no attempt-scoped record.
   An initiative is ready only when every current objective holds a terminal state.
   No action is unresolved, because no attempt requested one.
 - A node that is not ready answers 409 `mission.node.not_ready`.
-  Its `details` hold `objectivesNotTerminal: NodeId[]`, `unresolvedActions: Key[]` and `unsatisfiedIds: NodeId[]`.
-  `unsatisfiedIds` names the dependencies of the closure that are not `Completed`.
+  Its `details` hold `objectives_not_terminal: NodeId[]`, `unresolved_actions: Key[]` and `unsatisfied_ids: NodeId[]`.
+  `unsatisfied_ids` names the dependencies of the closure that are not `Completed`.
   Each array is empty when it does not apply.
   The refusal opens no attempt, changes no state and writes no job.
 - A ready act while the attempt reads 0 opens attempt 1 in one transaction.
@@ -457,9 +457,9 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 ## Node resume
 
-- `mission.node.resume` uses `POST /api/mission/node/:nodeId/resume` with `human` access.
+- `mission.node.resume` uses `POST /api/mission/node/:node_id/resume` with `human` access.
 - Its input is `Resume`: every field of `HumanAct`, plus the required `target`, which is `Available` or `Waiting`.
-- `node resume` requires `expectedState: Paused` and an `expectedAttempt` equal to the attempt of the node.
+- `node resume` requires `expected_state: Paused` and an `expected_attempt` equal to the attempt of the node.
   A mismatch answers 409 `mission.node.state_conflict`.
 - The external action records of the attempt take precedence over the target, under [the state transitions](mission-service.md#state-transitions).
   A resume that they route to `External.Failed`, `External.Success` or `External.Requested` does not read the target.
@@ -472,10 +472,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 ## Node override
 
-- `mission.node.override` uses `POST /api/mission/node/:nodeId/override` with `human` access.
-- The request `Override` holds every field of `HumanAct`, a required `result` and an optional `landedCommit`.
+- `mission.node.override` uses `POST /api/mission/node/:node_id/override` with `human` access.
+- The request `Override` holds every field of `HumanAct`, a required `result` and an optional `landed_commit`.
 - The closed set of `result` is `success`. A failure override waits for the B9 items of the Mission Service.
-- `landedCommit` is admitted only with `result: success`.
+- `landed_commit` is admitted only with `result: success`.
 - The server writes the actor, the time, the human assessment and the outcome record.
 
 ## The rebind
@@ -483,26 +483,26 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `mission.node.rebind` is a `unary` mutation under the `human` access policy. Its input holds the binding revision identity, a reason, the expected mission version and an optional node identity. Without a node identity the act covers every node of the mission.
 - The target revision belongs to the same binding as the revision that the node pins, and it is no tombstone and no disabled revision.
 - An absent target revision, or a target revision of another project, answers 404 `mission.binding.not_found`. A tombstone answers 409 `mission.binding.removed`, and a disabled revision answers 409 `mission.binding.disabled`.
-- The target is a later revision of the same binding. A named node that pins neither an earlier revision of that binding nor the target answers 409 `mission.binding.mismatch` with `details: { nodeId, bindingId }`. A node that already pins the target is a no-op, and an act with no rebound node leaves the mission version unchanged.
+- The target is a later revision of the same binding. A named node that pins neither an earlier revision of that binding nor the target answers 409 `mission.binding.mismatch` with `details: { node_id, binding_id }`. A node that already pins the target is a no-op, and an act with no rebound node leaves the mission version unchanged.
 - A named retired node answers 409 `mission.node.retired`, and a named terminal node answers 409 `mission.node.terminal`.
 - The act inserts a node revision for each rebound node, and increments `mission_mission.version` once.
 - The answer is the `NodeChange` of the act and `skipped`, a list of `{ node, condition }` where `condition` is `terminal` or `retired`, for a mission rebind.
-- A rebind revision holds `change.write: node.rebind`, `changedFields: ["bindings"]`, the unchanged task snapshot of an objective and `change.tasks: []`.
+- A rebind revision holds `change.write: node.rebind`, `changed_fields: ["bindings"]`, the unchanged task snapshot of an objective and `change.tasks: []`.
 - Tests rebind a node that is not terminal and not retired, keep the pinned node revision of an open attempt, report the skipped terminal and retired nodes of a mission rebind, and refuse a revision of another binding, a tombstone and a disabled revision.
 
 - The Mission Service offers `liveNodesPinning(tx, bindingId)` to the Project Service through its `contract.ts`. It answers every node that is not terminal and not retired when its current revision or the node revision of its open attempt pins the binding revision. A rebind keeps the node revision of an open attempt, so the node keeps the old pin until that attempt ends.
 
 ## Node retire
 
-- `mission.node.retire.preview` uses `GET /api/mission/node/:nodeId/retire/preview?force=true|false` with `human` access. It changes no state and stores no receipt. `force` defaults to false.
-- `mission.node.retire` uses `POST /api/mission/node/:nodeId/retire` with `human` access.
+- `mission.node.retire.preview` uses `GET /api/mission/node/:node_id/retire/preview?force=true|false` with `human` access. It changes no state and stores no receipt. `force` defaults to false.
+- `mission.node.retire` uses `POST /api/mission/node/:node_id/retire` with `human` access.
 - The retirement set is the node and every current descendant. The service checks each retiring initiative and objective itself and each retiring task through its objective.
-- A checked node that fails `Pending` or `Available` with attempt 0 answers 409 `mission.node.retire_refused` with `details: { nodeId, state, attempt }` of the first failed node.
+- A checked node that fails `Pending` or `Available` with attempt 0 answers 409 `mission.node.retire_refused` with `details: { node_id, state, attempt }` of the first failed node.
 - A dependency on a node of the set from a nonterminal dependent outside the set answers 409 `mission.node.retire_has_dependents` with `details: { dependents: NodeId[] }` when `force` is false.
 - With `force: true`, the retirement removes each such dependency and moves each freed dependent between `Pending` and `Available` in the same transaction. A dependency from a terminal dependent stays.
 - Preview and apply answer the same refusals.
-- The preview answers `RetirePreview`: `nodeId`, `force`, `missionVersion`, `retiredNodeIds`, `removedEdges`, `previewDigest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
-- The apply request `Retire` holds `expectedMissionVersion`, `force`, `previewDigest` and `reason`. A stale mission version answers 409 `mission.version.conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
+- The preview answers `RetirePreview`: `node_id`, `force`, `mission_version`, `retired_node_ids`, `removed_edges`, `preview_digest`. The digest is the SHA-256 of the canonical JSON of the other five fields, under [architecture.impl.md](architecture.impl.md#the-canonical-form-and-the-digest).
+- The apply request `Retire` holds `expected_mission_version`, `force`, `preview_digest` and `reason`. A stale mission version answers 409 `mission.version.conflict`. A digest that differs from the digest that the service computes at commit answers 409 `mission.node.retire_mismatch`.
 - One transaction rechecks every condition, sets `retired_at` on every node of the set and removes current inbound references except terminal dependents' historical dependencies.
 - That transaction deletes the job of every node of the retirement set through the Scheduler Service public delete.
 - It increments the mission version once.
@@ -545,22 +545,22 @@ kanthord runs no automatic evidence delete and no cleanup process.
   - evidence delete
 - One write increments once, however many nodes it touches.
 - A write with no structure or content change leaves the mission version unchanged.
-- Every `human` write that changes a node, its edges or its state names `expectedMissionVersion`: import apply, node create, node update, node move, node retire, node rebind, dependency add, dependency remove, criterion set, unblock with or without a change, priority, pause, resume, block, ready, override, discard, node check, evidence asset delete and evidence delete.
+- Every `human` write that changes a node, its edges or its state names `expected_mission_version`: import apply, node create, node update, node move, node retire, node rebind, dependency add, dependency remove, criterion set, unblock with or without a change, priority, pause, resume, block, ready, override, discard, node check, evidence asset delete and evidence delete.
 - A human control checks the mission version and leaves it unchanged, except an unblock that carries a change.
 - A `client` write of an execution names no mission version, because it works under the pin of its attempt.
 - Every node revision holds `change`.
 - `change.write` is the write path: `import`, `node.create`, `node.update`, `node.move`, `node.retire`, `node.rebind`, `criterion.set` or `unblock`.
 - A move of an objective changes its parent link and no content, so it creates no node revision. A move of a task changes the content of both objectives, so each one takes a node revision with `write: node.move`.
-- `change.previousRevision` is the previous revision, or null on revision 1.
-- `change.changedFields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.
-- `change.tasks` is present for an objective and lists `{ id, change, changedFields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changedFields`.
+- `change.previous_revision` is the previous revision, or null on revision 1.
+- `change.changed_fields` lists the content fields whose value differs from the previous revision: `filename`, `name`, `requirement`, `criterion`, `verifications`, `bindings` and, for an objective, `tasks`.
+- `change.tasks` is present for an objective and lists `{ id, change, changed_fields }` for each task whose content changed, with `change` one of `created`, `updated`, `moved-in`, `moved-out` and `retired`. `moved-out` and `retired` carry an empty `changed_fields`.
 - The result of the change is the `content` of the same record.
 
 ## The graph write answer
 
 - An operation whose answer holds `NodeChange` computes it at the commit. The mission keeps no history of changes.
 - `NodeChange` holds the new mission version, the node revisions created, the retired node identities, and the edges added and removed.
-- It also holds `openAttemptsUnchanged`, one `{ nodeId, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
+- It also holds `open_attempts_unchanged`, one `{ node_id, attempt }` for each content owner of the change that holds an open attempt at the commit, so the answer states that the revision reaches the next attempt and not the open one.
 - A write with no structure or content change answers the current mission version with empty arrays.
 - A node revision keeps its own actor, reason and time, including the objective revision that a task retirement inserts. No record keeps the actor, the reason or the time of a dependency edit or an objective move, or the actor and the reason of a retirement that inserts no node revision. `retired_at` keeps the time of every retirement.
 
@@ -589,7 +589,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - `Text` is a nonblank JSON string of at most `mission.text_max_bytes` UTF-8 bytes. A larger value answers HTTP 400 with an issue list. The rule applies to every text field of a node and to every item of `verifications`.
 - A stale expected revision answers 409 `mission.revision.conflict` with the current value in `details`. A stale expected mission version answers 409 `mission.version.conflict` with the current value in `details`.
 - An absent mission answers 404 `mission.mission.not_found`. An absent node answers 404 `mission.node.not_found`. An absent record answers 404 `mission.record.not_found`.
-- An execution submission whose route node, `executionId`, `attempt` or `nodeRevision` differs from the proven claim answers 409 `mission.execution.context_mismatch` with `details: { field }`. An assessment or a request under a steps claim answers 409 `mission.execution.claim_not_evaluation`. An execution-scoped revision read above the pinned revision answers 404 `mission.execution.revision_above_pin`.
+- An execution submission whose route node, `execution_id`, `attempt` or `node_revision` differs from the proven claim answers 409 `mission.execution.context_mismatch` with `details: { field }`. An assessment or a request under a steps claim answers 409 `mission.execution.claim_not_evaluation`. An execution-scoped revision read above the pinned revision answers 404 `mission.execution.revision_above_pin`.
 - `graph get` answers at most 10 MiB. A larger graph answers 413 `mission.graph.too_large`.
 - That error holds the node count and the paged reads `node list` and `edge list` in `details`.
 
@@ -597,14 +597,14 @@ kanthord runs no automatic evidence delete and no cleanup process.
 
 - Tests accept a `Text` value of `mission.text_max_bytes` UTF-8 bytes and refuse one byte more, for every text field and list item, under the default and under a configured bound.
 
-- Tests list every open attempt of a changed content owner in `openAttemptsUnchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
+- Tests list every open attempt of a changed content owner in `open_attempts_unchanged`, and answer a no-op write with the current mission version, empty arrays, no mission version increment and no graph or content change.
 
 - Tests record the child set on the assessment at acceptance, copy it into the outcome context at closure, and keep it unchanged after a later child change or revision.
 - Tests accept 40 and 64 lower-case hexadecimal commits, refuse abbreviations, upper-case and ref names, and refuse a binding that the pinned revision does not name in each admission context. For a success override while the attempt reads 0, they check the revision current at the act.
 - Tests write `change` on every revision with the write path, the previous revision and the exact changed fields, list task changes on an objective revision, and revise both objectives on a task move.
 - Tests return every violation of the failing stage with its code, locators and a malformed file name, stop an apply at the first violation with the envelope and its status, and keep an authorization failure an operation failure.
 - Tests accept `type/subtype` at 255 bytes and refuse a parameter, a longer value, a missing subtype and a non-ASCII byte.
-- Tests record a signal name with a null exit code, a timed-out item with `timedOut: true`, a started process with neither fact and no result for an unstarted item, and they fail a run whose `results` miss a verification.
+- Tests record a signal name with a null exit code, a timed-out item with `timed_out: true`, a started process with neither fact and no result for an unstarted item, and they fail a run whose `results` miss a verification.
 - Tests create a second evidence for a repeated submission after a restart, and refuse a `complete` of an expired asset with `mission.evidence.upload_expired`.
 - Tests answer `mission.evidence.content_repository` with the address on a human and an execution content read of repository evidence, and refuse an unauthorized read before that answer.
 
@@ -623,7 +623,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests answer 409 `mission.node.state_conflict` for each precondition mismatch of a human control and of an unblock.
 - Tests resolve a child objective with an attempt-0 outcome to the revision current at the act.
 - Tests derive each closing event of the outcome record, also after a forced delete of a request evidence.
-- Tests store only the landed-commit evidence and the override landed commit in `evidenceIds` of an outcome, and answer the union with the assessment set on the read.
+- Tests store only the landed-commit evidence and the override landed commit in `evidence_ids` of an outcome, and answer the union with the assessment set on the read.
 - Tests write a human assessment and its outcome in one transaction for an override, a discard and a block, and keep every human assessment out of the order check.
 - Tests admit `node ready` on an initiative whose attempt reads 0 and whose objectives are all terminal.
   They also admit an objective whose attempt reads 0, with or without current tasks.
@@ -669,7 +669,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse both deletes on a live node or ancestor with `mission.evidence.remove_node_live`.
 - Tests refuse force without a reason with a validation failure and accept force with a reason on a live chain.
 - Tests accept an optional reason without force and require human access for both deletes.
-- Tests delete the content first and the row after it, delete an object at its recorded version, keep the evidence row after an asset delete, and remove the evidence identity from every `evidenceIds` set after an evidence delete.
+- Tests delete the content first and the row after it, delete an object at its recorded version, keep the evidence row after an asset delete, and remove the evidence identity from every `evidence_ids` set after an evidence delete.
 - Tests answer 404 `mission.record.not_found` on a read of a deleted asset, with no bytes or presigned GET.
 - Tests refuse a request delete without force with `mission.evidence.request_force_required`, refuse the asset delete of a request with `mission.evidence.request_asset_refused`, and hold the node after a forced delete of a request of the open attempt.
 - Tests store no remover, reason or time, and preserve the effect of every outcome that named deleted content.
@@ -678,7 +678,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests refuse each absent or repeated H1, Requirement section and Criterion section with the same error and file name.
 - Tests check front matter delimiters, permitted node kinds and the required nonblank content.
 - Tests accept an absent `id` for a new node and preserve a known identity.
-- Tests require a parent for objectives and tasks, forbid it on initiatives, and forbid `dependsOn` on tasks.
+- Tests require a parent for objectives and tasks, forbid it on initiatives, and forbid `depends_on` on tasks.
 - Tests reject unresolved parent and dependency names and references outside the import set.
 - Tests refuse a dependency of an objective on its own initiative through dependency add, import and node move with `mission.import.cycle`. A test refuses the crossed case, where an objective of each of two initiatives depends on the other initiative.
 - Tests assert that the file name becomes the import-set key and the node's `filename`.
@@ -712,10 +712,10 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests assert `mission.node.retired` for a create under a retired parent and a dependency add on a retired node.
 - Tests assert that a retirement deletes the job of every node of the set in its transaction.
 - Tests assert that a loss below `mission.consecutive_loss_limit` returns the node to `Available` or `Waiting` with a job, that the loss that reaches it moves the node to `Paused` with no job and the attempt open, that a release ends the count, and that a resume after the limit grants one more try.
-- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfiedIds` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
+- Tests resume a paused node with `target: Waiting` to `Waiting` with an evaluation job when the readiness condition holds, opening attempt 1 when the attempt reads 0, and refuse it with `mission.node.not_ready` otherwise, with `unsatisfied_ids` when the closure does not hold. They resume with `target: Available` to `Available` or `Pending` by the closure, and they assert that a requested external action takes precedence over the target.
 - Tests assert that an unblock opens the next attempt with the human as `opened_by`, and that an unblock while the attempt reads 0 opens none.
 - Tests assert that every claimable node holds exactly one job and that no other node holds one, after a release, an accepted observation, a child terminal transition, a child create, a move and a retirement.
-- Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `includeRetired`.
+- Tests assert that a retired node row stays readable with its identity, `filename`, revisions and last state, and `node list` returns it only with `include_retired`.
 - Tests admit initiative creation at any time.
 - Tests cover objective and task creation under each of the twelve parent states.
 - Each refused create names `mission.node.create_refused` and the parent state in `details`.
@@ -734,7 +734,7 @@ kanthord runs no automatic evidence delete and no cleanup process.
 - Tests cover every cell of the rule table, with each permitted count and a forbidden count.
 - Tests reject repeated repository names on an objective because its list requires exactly one entry.
 - Tests keep identity, kind, revision, state, attempt, priority and edges outside content.
-- Tests answer `dependsOn` on the node read of an initiative and of an objective after a dependency add, a dependency remove, an import and a forced retirement, and omit it on a task read.
+- Tests answer `depends_on` on the node read of an initiative and of an objective after a dependency add, a dependency remove, an import and a forced retirement, and omit it on a task read.
 - A test keeps task content inside the objective revision.
 - Tests accept verification kinds outside the guidance for each node kind.
 - A test runs verifications serially in list order through `bash -c` from the execution workspace root.

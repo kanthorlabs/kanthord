@@ -59,4 +59,4 @@ Local server configuration uses a separate `kanthord.yaml`; see [initialize conf
 
 The default endpoint is `http://127.0.0.1:31415`. The operation registry owns the unversioned routes listed above.
 
-All routes pass through request-ID assignment, request logging, the host allowlist, readiness checks, and CORS middleware. Request IDs follow the [prefixed identity contract](identities.md#request-ids). Each operation adds a timeout, body limit, and the shared invocation chain for schema validation and its access policy. Failures use the shared JSON error envelope with a `requestId`. Public access still requires an allowed host and a ready server.
+All routes pass through request-ID assignment, request logging, the host allowlist, readiness checks, and CORS middleware. Request IDs follow the [prefixed identity contract](identities.md#request-ids). Each operation adds a timeout, body limit, and the shared invocation chain for schema validation and its access policy. Failures use the shared JSON error envelope with a `request_id`. Public access still requires an allowed host and a ready server.

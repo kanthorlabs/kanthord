@@ -22,7 +22,7 @@ The API returns HTTP `200` with JSON. The CLI writes the same object as one JSON
 | `sub`    | string    | Signed username, preserved exactly without trimming or renaming. |
 | `name`   | string    | Signed display name, preserved exactly; grants no authority.     |
 
-There are no aliases such as `accountId`, raw token, signing key, or token metadata (`iat`, `exp`, `jti`) in the response.
+There are no aliases such as `account_id`, raw token, signing key, or token metadata (`iat`, `exp`, `jti`) in the response.
 
 ### Failures
 

@@ -67,7 +67,7 @@ erDiagram
         integer revision "unique with agent_name, starts at 1"
         text state "enabled | disabled"
         text agent_providers "JSON list of name, provider, credential"
-        text default_configuration "JSON agentProvider, modelIdentifier, reasoningEffort"
+        text default_configuration "JSON agent_provider, model_identifier, reasoning_effort"
         integer created_at "Unix ms"
         integer removed_at "Unix ms, set on a tombstone"
     }
@@ -112,7 +112,7 @@ erDiagram
         text verifications "JSON list of bash commands"
         text bindings "JSON list of binding identities"
         text tasks "JSON task content, objective only"
-        text change "JSON: write, previousRevision, changedFields, tasks"
+        text change "JSON: write, previous_revision, changed_fields, tasks"
         text reason
         text actor "JSON Actor"
         integer created_at "Unix ms"
@@ -133,7 +133,7 @@ erDiagram
 
     project_project ||..o{ project_binding : "FK project_id"
     project_binding }o..o| credential : "ref in config JSON, no FK"
-    project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agentProvider, no FK"
+    project_binding }o..o{ agent_enablement : "ref via catalog agents of config.worker, and entry agent_provider, no FK"
     agent_enablement }o..|{ credential : "ref by name in agent_providers JSON, no FK"
 
     project_project ||..|| mission_mission : "ref, no FK, createMission"
@@ -199,7 +199,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A rotation inserts the next revision and, in the same transaction, drains every older live revision that no live execution pins. A drain or a revoke sets `ended_at`. Custody refuses a revoke of the newest live revision.
 - The secret shape and the `metadata` schema depend on `platform`, as the platform validators of the [LLM](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/llm.impl.md#platform-validators), [Repository](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/repository.impl.md#platform-validators) and [Storage](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/storage.impl.md#platform-validators) components state.
 - Each revision holds its own `metadata`. A rotation copies the metadata of the newest live revision unless the request replaces it. A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
-- The `baseUrl` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
+- The `base_url` of an `openai-compatible` revision is fixed for the life of the revision and changes only at a rotation. A removal of an approved model is refused while a default configuration or an entry names it. The check and the metadata update commit in one transaction.
 - The additional authenticated data of the envelope is the row identity and the platform.
 - An archive is refused while a dependent names the credential. The dependents are an agent provider and a `project_binding` row. A binding row is a dependent when it is the latest row of its group and no tombstone, or when no tombstone follows it and a node that is not terminal and not retired pins it through its current revision or its open attempt. The check and the archive are atomic. An archive sets `ended_at` on every live revision and keeps the rows. A name with no live revision is archived, and an archive is final.
 - A login session is a runtime record of the LLM component, and no table holds it. A failed or expired session stores nothing.
@@ -211,7 +211,7 @@ The owning service enforces every rule below in the transaction of its write. A 
 - Every kind holds a `resource_identity`: `repository:github:<owner>/<name>`, `worker:kanthord:<binding name>` and `storage:s3:<endpoint host>/<bucket>`. Its first part is the binding kind, and no column holds the kind. A read derives the kind from that part.
 - The write refuses a name that another current binding of the project holds. A partial index cannot select the latest row of a group, so the write checks this rule.
 - A row is immutable. A configuration change inserts the next revision of its group.
-- A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `instanceCount: 0` for a worker binding.
+- A tombstone is the next row of a group with `removed_at` set and the last `config` copied. A disablement is the next row with `available: false`, or `instance_count: 0` for a worker binding.
 - A use reads the `config` of its pinned row. A disabled latest row of the group refuses the use, and a tombstone after the pinned row refuses the use.
 - Every Project table holds `id` as its first column. `project_binding` belongs to a project, so it holds `project_id` as its second column, as [the binding store](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/project-service.impl.md#the-binding-store) rules.
 - The binding-set version is 1 plus the number of `project_binding` rows of the project. A write that names another version is refused. A write equal to the stored set inserts no row and keeps the version.
@@ -228,21 +228,21 @@ The owning service enforces every rule below in the transaction of its write. A 
 - A row is immutable. Every change of an enablement, including a change of `state` and a change of a provider credential, inserts the next revision of its group.
 - A removal inserts a tombstone: the next row of the group with `removed_at` set and the last content copied. A later write of the same agent inserts the next revision after the tombstone.
 - `agent_providers` holds one or more items. Each item holds `name`, `provider` and `credential`. `name` is unique inside the row, and `credential` holds a credential name.
-- `default_configuration` holds `agentProvider`, `modelIdentifier` and `reasoningEffort`. `agentProvider` names an item of `agent_providers` of the same row.
+- `default_configuration` holds `agent_provider`, `model_identifier` and `reasoning_effort`. `agent_provider` names an item of `agent_providers` of the same row.
 - SQLite enforces no key inside JSON, so the write validates each reference.
 - An enablement write validates its own providers and default configuration first: the suitability of each credential platform, the model catalog or the credential metadata, and the reasoning effort that the model supports. Then it validates every dependent worker binding.
 - A retained provider name keeps its `provider` in every later revision.
 - A worker binding depends on every agent that the catalog declares for its worker, whether or not the binding holds an entry for that agent. The catalog is static, so this dependency is no column.
 - A binding write is refused when an agent of a native worker has no enabled enablement. `validateEntry` runs for every agent inside the binding write transaction.
 - `agent_prompt` has a unique index on `(scope, agent_name)`. The `system` row holds an empty `agent_name`.
-- A row holds the current settings of its scope and no history. A write names `expectedRevision`, sets the next `revision`, and a stale value answers 409 `agent.prompt.revision_conflict`. `revision` counts the writes of the row under [the revision value](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-revision-value), and the row keeps no older revision.
+- A row holds the current settings of its scope and no history. A write names `expected_revision`, sets the next `revision`, and a stale value answers 409 `agent.prompt.revision_conflict`. `revision` counts the writes of the row under [the revision value](https://github.com/kanthorlabs/kanthord/blob/main/docs/brainstorm/architecture.impl.md#the-revision-value), and the row keeps no older revision.
 - The keys of `switches` are the sources of the layer of the scope. `custom_text` holds at most 32768 UTF-8 bytes.
 - The `config` JSON of a repository binding holds `working_layer` with the booleans `agents_md`, `agents_local_md`, `claude_md`, `claude_local_md` and `project_prompt`. A switch change inserts the next binding revision.
 - An enablement change validates every dependent worker binding through `entriesOfAgent` in the transaction of its commit, and a change that invalidates one is refused.
 - A disablement is always permitted, and it refuses every later resolution.
 - A resolution reads the latest row of the enablement. A latest row with `state` `disabled` or with `removed_at` set refuses the resolution.
 - The credential dependents of an enablement are the items of `agent_providers` of its latest row, unless that row is a tombstone. An older row is no dependent, because no resolution reads it.
-- An `agentProvider` of a complete entry names an item of `agent_providers` of the latest row of the enablement of its own agent. A provider name is unique only inside one enablement, so the lookup reads the latest row of that `agent_name`.
+- An `agent_provider` of a complete entry names an item of `agent_providers` of the latest row of the enablement of its own agent. A provider name is unique only inside one enablement, so the lookup reads the latest row of that `agent_name`.
 - A removal of an enablement is refused while a worker binding of a worker that uses the agent exists. A write that omits a provider of the latest row is refused while an entry of a dependent worker binding names it. The write checks the new row, so a replacement that moves the default configuration to another provider and omits the old provider is valid.
 
 ### Mission Service

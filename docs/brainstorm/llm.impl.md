@@ -21,7 +21,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 | `github-copilot` | `oauth` | None | `GET https://api.github.com/copilot_internal/v2/token` with the stored GitHub token |
 | `openai-codex` | `oauth` | None | One model call to `gpt-5.6-luna` at reasoning `low` with the prompt "What time is it?" |
 | `anthropic` | `api_key` | None | `GET https://api.anthropic.com/v1/models` |
-| `openai-compatible` | `api_key` | `baseUrl`, `models` | `GET <baseUrl>/models` |
+| `openai-compatible` | `api_key` | `base_url`, `models` | `GET <base_url>/models` |
 | `openrouter` | `api_key` | None | `GET https://openrouter.ai/api/v1/key` |
 | `openai` | `api_key` | None | `GET https://api.openai.com/v1/models` |
 | `amazon-bedrock` | `api_key` | `region` | None |
@@ -38,12 +38,12 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - Each metadata field of `amazon-bedrock`, `google-vertex`, `azure-openai-responses`, `cloudflare-workers-ai` and `cloudflare-ai-gateway` is a required nonblank string.
 - An official OpenAI record is an `openai` record.
 - An OpenRouter record is an `openrouter` record, never an `openai-compatible` record, because OpenRouter serves `GET /models` without authentication.
-- `openai-compatible.baseUrl` uses `https` or `http`, with no query, no fragment and no trailing slash.
+- `openai-compatible.base_url` uses `https` or `http`, with no query, no fragment and no trailing slash.
 - The base URL is fixed for the life of a revision. A metadata edit that changes it answers 409 `llm.metadata.base_url_fixed`, and a rotation can set a new one.
 - The first revision of an `openai-compatible` credential starts with `models: []`.
-- Each approved model holds a required `id` and optional `contextWindow`, `maxTokens` and `reasoningLevels`. An `id` is unique inside `models`.
-- An omitted value takes the default of pi 0.86.0: `contextWindow` `128000`, `maxTokens` `16384` and `reasoningLevels` `["off"]`.
-- `contextWindow` and `maxTokens` are positive integers, and `maxTokens` does not exceed `contextWindow` after the defaults apply.
+- Each approved model holds a required `id` and optional `context_window`, `max_tokens` and `reasoning_levels`. An `id` is unique inside `models`.
+- An omitted value takes the default of pi 0.86.0: `context_window` `128000`, `max_tokens` `16384` and `reasoning_levels` `["off"]`.
+- `context_window` and `max_tokens` are positive integers, and `max_tokens` does not exceed `context_window` after the defaults apply.
 - A metadata edit adds approved models to the next revision after the [provider check](#the-provider-check).
 - A metadata edit or a rotation that drops a model answers 409 `llm.metadata.model_in_use` while a default configuration or an entry names it.
 - The dependency check and the metadata update commit in one transaction; a refusal lists the dependents in `details` as `{ models: [{ model, agents }] }`.
@@ -51,7 +51,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## The LLM provider
 
 - `LlmProvider` is a TypeScript interface with one method, `check(secret, metadata, context, observe)`. `observe` is optional and receives the failure reason without material.
-- `check` answers `{ connection, models }`. `connection` is `ok`, `unauthorized`, `unreachable` or `invalid_response`. `models` is a list of `{ id, ownedBy, created }`, or null when the call reads no model list. `ownedBy` and `created` are null when the remote leaves them out.
+- `check` answers `{ connection, models }`. `connection` is `ok`, `unauthorized`, `unreachable` or `invalid_response`. `models` is a list of `{ id, owned_by, created }`, or null when the call reads no model list. `owned_by` and `created` are null when the remote leaves them out.
 - The check of `openai-compatible` and of `openai` answers `models` from the OpenAI list shape of `GET /models`. Every other check answers `models: null`.
 - Each LLM provider declares its capability: `copilot token read` for `github-copilot`, `model call` for `openai-codex` and `opencode-go`, `model-list read` for `anthropic`, `openai-compatible` and `openai`, and `key read` for `openrouter`. A platform without an LLM provider has the capability `none`.
 - The LLM component answers the capability of the LLM provider of a credential to the agent provider healthcheck.
@@ -88,7 +88,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The component declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) under the prefix `llm`.
 - `llm.credential.create` accepts a record of every LLM platform whose secret shape is not `oauth`.
 - `llm.credential.login` obtains a record of an LLM platform whose secret shape is `oauth`.
-- `llm.credential.get` answers the record with `agentProviders`, the list of `{ agent, name }` of every agent provider that names the credential. The Agent component answers that read.
+- `llm.credential.get` answers the record with `agent_providers`, the list of `{ agent, name }` of every agent provider that names the credential. The Agent component answers that read.
 
 ## The OAuth login
 
@@ -105,7 +105,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - `llm.credential.login` is a unary mutation and answers session identity, address, code and expiry.
 - `llm.credential.login_code` is a unary mutation with session identity and value; it answers 409 when no value is awaited.
 - `llm.credential.login_status` is a unary read with session identity; it answers state, last message and failure reason.
-- The routes are `POST /api/llm/credential/login`, `POST /api/llm/credential/login/:sessionId/code` and `GET /api/llm/credential/login/:sessionId`. The static segment `login` takes precedence over `/:credentialName`, so the component refuses the name `login`.
+- The routes are `POST /api/llm/credential/login`, `POST /api/llm/credential/login/:session_id/code` and `GET /api/llm/credential/login/:session_id`. The static segment `login` takes precedence over `/:credential_name`, so the component refuses the name `login`.
 - A platform with one mode ignores the requested mode.
 - A browser callback listener belongs to pi-ai, not the Gateway, and lasts for the session.
 - The server sets no `PI_OAUTH_CALLBACK_HOST` override.
@@ -135,12 +135,12 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ### The OpenAI-compatible provider
 
 - The model connector builds the pi provider from the credential metadata of the resolved revision.
-- It calls `createProvider` with id `openai-compatible`, the agent provider name and metadata `baseUrl`.
+- It calls `createProvider` with id `openai-compatible`, the agent provider name and metadata `base_url`.
 - It supplies `auth: { apiKey: envApiKeyAuth("<agent provider name> API key", []) }` and `api: openAIResponsesApi()`.
 - The environment-variable list is empty; the execution store supplies the credential.
 - Each metadata model becomes a pi model with provider `openai-compatible` and the metadata base URL.
-- The model carries `api: "openai-responses"`, `contextWindow`, `maxTokens` and the established reasoning levels.
-- The model builder applies the defaults of pi 0.86.0 to each value that the metadata omits: `contextWindow` `128000`, `maxTokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
+- The model carries `api: "openai-responses"`, `context_window`, `max_tokens` and the established reasoning levels.
+- The model builder applies the defaults of pi 0.86.0 to each value that the metadata omits: `context_window` `128000`, `max_tokens` `16384` and reasoning levels `["off"]`, because pi-ai `createProvider` applies none.
 - Input defaults to `["text"]`, and all cost rates are zero.
 - The model list enters `createProvider`, and `setProvider` registers the provider.
 - The model connector builds each model rather than reuses `OPENAI_MODELS`, whose base URLs address OpenAI.
@@ -161,7 +161,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## Tests
 
 - Tests assert the platform list against the platform table, and the refusal of a platform of another component.
-- Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and a `baseUrl` change at rotation alone.
+- Tests assert the secret shape of each platform, the entry method of each shape, metadata schemas, model defaults, fixed base URL and a `base_url` change at rotation alone.
 - Tests cover a model removal with dependents and concurrent changes.
 - Tests cover the check of every LLM provider, its `connection` mapping, the healthcheck status mapping, expired OAuth and forbidden calls.
 - Tests assert that a refused model call maps 401 and 403 to `unauthorized` through the status in `errorMessage`.

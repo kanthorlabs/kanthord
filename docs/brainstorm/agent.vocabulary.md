@@ -38,14 +38,14 @@ Each value maps to the same-named LLM platform.
 
 ## default configuration
 
-The values that a human selects in an agent enablement: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
+The values that a human selects in an agent enablement: `agent_provider`, `model_identifier` and `reasoning_effort`.
 For example, the `swe@1` default names `atlas-llm`, approved model `qwen3-coder` and effort `off`.
 A catalog declaration supplies none of these values.
 
 ## effective configuration
 
 The configuration that the Agent component resolves for one agent from its enablement and one optional entry.
-It holds `agentProvider`, `provider`, `credential`, `modelIdentifier` and `reasoningEffort`.
+It holds `agent_provider`, `provider`, `credential`, `model_identifier` and `reasoning_effort`.
 Under `general-main`, a complete entry selects `atlas-llm`, which supplies provider `openai-compatible` and credential `atlas-key`.
 The model is `qwen3-coder` and the effort is `off`.
 The closed reasoning-effort set is:
@@ -80,7 +80,7 @@ Ulrich switches `~/workdir/swe@1.md` on, the shipped `swe@1.md` off and the cust
 
 The third layer of the prompt of an agent session. It joins the agent files of the working directory, the shipped consumer prompt and the custom working prompt, in that order.
 The term names no closed set.
-The workspace of `kanthorlabs/kanthord` holds `AGENTS.md`, and its repository binding holds a `projectPrompt`, so the working layer of Execution 1 holds `AGENTS.md` and then that `projectPrompt`.
+The workspace of `kanthorlabs/kanthord` holds `AGENTS.md`, and its repository binding holds a `project_prompt`, so the working layer of Execution 1 holds `AGENTS.md` and then that `project_prompt`.
 
 ## prompt origin
 

@@ -65,7 +65,7 @@ An unavailable component produces HTTP `503`, code `gateway.healthcheck.unhealth
       "worker": { "registrations": 200 }
     }
   },
-  "requestId": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+  "request_id": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 }
 ```
 

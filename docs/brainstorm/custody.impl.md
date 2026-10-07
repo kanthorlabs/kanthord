@@ -27,7 +27,7 @@ A mechanism here never overrides a rule there.
 - An OAuth refresh writes the pinned revision in place and adds no revision.
 - Rotation and OAuth refresh change no binding revision.
 - A metadata edit inserts the next revision in one transaction, with the secret of the newest live revision and the new metadata, and the older revisions stay live until custody drains them or a human revokes them.
-- A rotation and a metadata edit name `expectedRevision`, the newest live revision that the human read. A stale value answers 409 `credential.revision.conflict` with the current value in `details`.
+- A rotation and a metadata edit name `expected_revision`, the newest live revision that the human read. A stale value answers 409 `credential.revision.conflict` with the current value in `details`.
 - Every answer includes metadata and excludes the secret.
 - An archive checks every dependent, including agent providers, in the transaction of the commit.
 - An archive calls the Project collaboration `bindingsNaming(tx, credentialName)` in that transaction. It answers every binding revision that names the credential and that is a dependent.
@@ -43,7 +43,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 
 - `api_key`: `{ key }`.
 - `oauth`: `{ refresh, access, expires }`; only a login session supplies initial material.
-- `s3_access_key`: `{ accessKeyId, secretAccessKey }`; a session token is invalid.
+- `s3_access_key`: `{ access_key_id, secret_access_key }`; a session token is invalid.
 - `none`: `{}`; the record holds no secret material, and a release answers no material.
 
 ## Suitability
@@ -155,7 +155,7 @@ The [platform validator](architecture.vocabulary.md#platform-validator) of the o
 - `rotate` adds a revision without a remote call.
 - `revoke` ends one revision at once.
 - `archive` checks every dependent, ends every live revision of the name and keeps the rows. A dependent answers 409 `credential.credential.in_use` with the dependents in `details`.
-- A list leaves out an archived name unless the query `includeArchived` is `true`. A get answers an archived name.
+- A list leaves out an archived name unless the query `include_archived` is `true`. A get answers an archived name.
 - A get and a list return metadata and no secret.
 
 ## Tests

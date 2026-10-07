@@ -29,7 +29,7 @@ The component owns a dedicated platform validator for every platform of the Stor
 
 - The component declares the [credential route group](architecture.impl.md#the-credential-route-group-of-a-component) under the prefix `storage`.
 - `storage.credential.create` accepts a record of every platform of the component.
-- `storage.credential.get` answers the record with `bindings`, the list of `{ projectId, projectName, bindingId, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
+- `storage.credential.get` answers the record with `bindings`, the list of `{ project_id, project_name, binding_id, name }` of every binding revision that names the credential and that is a dependent. The Project collaboration `bindingsNaming(tx, credentialName)` answers that read.
 
 ## The S3 implementation
 

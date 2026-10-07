@@ -40,7 +40,7 @@ sequenceDiagram
     participant P as pi runtime
 
     C->>A: Resolve effective configuration
-    A-->>C: agentProvider, provider, credential,<br/>modelIdentifier, reasoningEffort
+    A-->>C: agent_provider, provider, credential,<br/>model_identifier, reasoning_effort
     C->>L: Build model runtime (credential, configuration)
     L-->>C: Model runtime and model,<br/>or setup refusal
     C->>C: Compose system prompt and pinned layers
@@ -118,15 +118,15 @@ A text inside a working message stays in that message, whatever tag or heading i
 | Layer | Sources, in order | Origin | Switches belong to |
 | ----- | ----------------- | ------ | ------------------ |
 | System | Host agent file, then the shipped `base.md`, then the custom system prompt | file, binary, database | The server |
-| Agent | `<agentName>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt | file, binary, database | The agent name |
+| Agent | `<agent_name>.md` of the agent directory, then the shipped agent prompt, then the custom agent prompt | file, binary, database | The agent name |
 | Working | `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md`, `CLAUDE.local.md` of the working directory, then the shipped consumer prompt, then the custom working prompt | file, binary, database | The repository binding or the agent name |
 
 - **Host agent file.** When `agent.prompt.system_file` in `~/.config/kanthord/kanthord.yaml` names a file, the host agent file is that file. Otherwise KanthorD takes the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists. A relative path resolves against `~/.local/share/kanthord`.
 - **Agent directory.** `agent.prompt.agent_directory` names a directory, for example `~/workdir`. The agent layer of `swe@1` then reads `~/workdir/swe@1.md`.
 - **Shipped prompts.** `base.md`, `swe@1.md`, `re@1.md` and `workbench.md` are embedded in the binary. No command downloads them, and an upgrade replaces them together with the code that depends on them.
 - **Custom prompts.** A human writes the custom system, agent and workbench prompts through `agent.prompt.put`, and sets a switch through `agent.prompt.switch`. The CLI commands are `kanthord agent prompt put --scope agent --agent swe@1 --file swe.md` and `kanthord agent prompt switch --scope system --switch base --off`. Each write after the first names `--expected-revision`. The database table `agent_prompt` holds one row per scope with its switches, its custom text and a revision.
-- **Working directory.** It is the workspace of a Worker execution, or `~/.local/state/kanthord/workbench/<agentName>` for a Workbench session.
-- **Working layer of a Worker execution.** It joins the four files of the workspace, then the `projectPrompt` of the repository binding. It has no shipped prompt. The binding holds its five switches in `working_layer`, and a switch change creates a binding revision.
+- **Working directory.** It is the workspace of a Worker execution, or `~/.local/state/kanthord/workbench/<agent_name>` for a Workbench session.
+- **Working layer of a Worker execution.** It joins the four files of the workspace, then the `project_prompt` of the repository binding. It has no shipped prompt. The binding holds its five switches in `working_layer`, and a switch change creates a binding revision.
 - **Working layer of a Workbench session.** It joins the four files of the workbench directory, the shipped `workbench.md`, then the custom workbench prompt.
 
 Every switch defaults to on. On a host with `~/.claude/CLAUDE.md`, the system layer therefore holds that file and the shipped `base.md`. Switch one of them off when the two repeat each other.
@@ -157,7 +157,7 @@ No message revokes an obligation of the agent layer or the system layer. The wor
 
 ### Where each layer is composed
 
-The server composes the system layer and the agent layer for every consumer. A Worker execution receives them as `prompt.final` in its execution setup. The worker application reads no home file. It reads only the agent files of its own workspace, with the switches of `repositories[].working_layer`, and adds the `projectPrompt`. An evaluation reads no file of the workspace, because the candidate under review wrote those files.
+The server composes the system layer and the agent layer for every consumer. A Worker execution receives them as `prompt.final` in its execution setup. The worker application reads no home file. It reads only the agent files of its own workspace, with the switches of `repositories[].working_layer`, and adds the `project_prompt`. An evaluation reads no file of the workspace, because the candidate under review wrote those files.
 
 ### Reading the composed prompt
 
@@ -166,7 +166,7 @@ The server composes the system layer and the agent layer for every consumer. A W
 - The state is one of `present`, `absent`, `invalid`, `off` and `deferred`.
 - `deferred` marks a workspace file that only the worker application reads.
 - The query `view=final` answers the final prompt only.
-- The queries `projectId` and `bindingId` select the working layer of one repository binding. Without them, the working layer is the workbench working layer of the agent.
+- The queries `project_id` and `binding_id` select the working layer of one repository binding. Without them, the working layer is the workbench working layer of the agent.
 - The CLI reads it with `kanthord agent get swe@1`, adds `--view final` for the final prompt only, or `--project <project-id> --binding <binding-id>` for a binding.
 
 ### Limits of a source
@@ -185,7 +185,7 @@ The agent receives only the tools of its declaration. A tool outside the allowli
 
 - **Built-in tools** are the pi tools `read`, `edit`, `write`, `grep`, `find`, `ls` and `bash`. They act on the working directory. `grep` and `find` need `rg` and `fd` on the host; the worker refuses to start without them.
 - **`bash`** runs commands on the host, as the user of the KanthorD process. KanthorD removes every provider API key from the environment of each command, so a command cannot read the credentials of the agent. In a Worker execution, the timeout of each command is capped at the remaining budget.
-- **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidenceId`, `assetId` and `uri`.
+- **`evidence-upload`** (`swe@1` in a Worker execution) uploads a workspace file as evidence of the attempt and returns its `evidence_id`, `asset_id` and `uri`.
 - **Operation tools** (Workbench only) expose KanthorD operations. Each call runs with the identity of the human who sent the last message. The [operation tool reference](../reference/workbench/tools.md) lists every tool.
 
 An operation becomes a tool when it meets all of these conditions:
@@ -253,8 +253,8 @@ A cancellation of the execution, for example a server shutdown, also aborts the 
 
 A Workbench session is a conversation between one human and one agent, stored as a pi JSONL session file:
 
-- The working directory is `~/.local/state/kanthord/workbench/<agentName>`.
-- The session files live under `~/.local/state/kanthord/pi/sessions/workbench/<agentName>`.
+- The working directory is `~/.local/state/kanthord/workbench/<agent_name>`.
+- The session files live under `~/.local/state/kanthord/pi/sessions/workbench/<agent_name>`.
 - The session identity that KanthorD assigns is also the pi session id.
 
 KanthorD keeps no copy of the conversation. The session list, the history and the resume all come from pi. When the server restarts, KanthorD reopens the file by its session id; every completed turn is restored, and a turn that was running at the restart is lost. The session also answers a `pi --session <file>` command, so a human can continue the same conversation in a terminal.

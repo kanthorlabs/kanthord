@@ -90,10 +90,10 @@ A source that is absent or invalid adds no text, and the composer continues with
 The composition places the layers that hold text.
 
 The project prompt is the working layer of an execution.
-It joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workspace, then the `projectPrompt` of the [repository binding](project-service.md#repository-configuration-and-policy) that the pinned revision names.
+It joins `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` of the workspace, then the `project_prompt` of the [repository binding](project-service.md#repository-configuration-and-policy) that the pinned revision names.
 A project has no shipped consumer prompt.
 The steps method takes every source of the project prompt.
-The evaluation method takes the `projectPrompt` of the repository binding only.
+The evaluation method takes the `project_prompt` of the repository binding only.
 An agent file of the workspace is the work product of the candidate.
 
 The message boundary states the precedence of every layer to the agent. The system prompt holds the system layer, then the agent prompt. Each source of the project prompt is one later message, and the work prompt is the last message.
@@ -214,7 +214,7 @@ sequenceDiagram
     rect rgb(214, 234, 248)
         I->>S: work pull (worker binding, runtime identity, compatibility declarations)
         Note over S,M: the claim opens the attempt and pins the revision
-        S-->>I: claim response: execution identity, node, attempt, pinned revision, expiredAt, trace identity, root span identity
+        S-->>I: claim response: execution identity, node, attempt, pinned revision, expired_at, trace identity, root span identity
     end
     rect rgb(248, 215, 218)
         I->>I: the execution starts, the instance is busy
@@ -231,7 +231,7 @@ The execution holds a fixed `expired_at` under [Scheduler configuration](schedul
 A revoked or lost execution stops its agent and performs no further operation under its execution identity.
 The execution identity is the identity of the [agent session](agent.vocabulary.md#agent-session) of the execution.
 
-Every worker declares a default [resource budget](worker-service.vocabulary.md#resource-budget) with `wallTimeMs` for one execution.
+Every worker declares a default [resource budget](worker-service.vocabulary.md#resource-budget) with `wall_time_ms` for one execution.
 Every worker binding can override it under the [budget contract](worker-service.impl.md#stop-and-budget).
 The agent stops when its turn count or wall time reaches the budget.
 

@@ -55,7 +55,7 @@ The constraints are below.
 - A binding name holds 1 to 63 characters: a lower-case letter first, then lower-case letters, digits and hyphens.
 - A new binding takes revision 1.
 - A tombstone is the next revision of a group with `removed_at` set and the last configuration copied.
-- A disablement is the next revision with `available: false`, or with `instanceCount: 0` for a worker binding.
+- A disablement is the next revision with `available: false`, or with `instance_count: 0` for a worker binding.
 
 A binding identity and a project identity follow the identity convention of [architecture.impl.md](architecture.impl.md).
 
@@ -72,9 +72,9 @@ A binding identity and a project identity follow the identity convention of [arc
 - The workspace directory is `projects/<project identity>/` of the state directory.
 - The project create commits the project, then it creates the directory.
 - A consumer that finds the directory absent creates it before use.
-- `project.get` and each item of `project.list` answer `workspaceDirectory`, the path of the workspace directory with the home directory written as `~`.
+- `project.get` and each item of `project.list` answer `workspace_directory`, the path of the workspace directory with the home directory written as `~`.
 - No table holds the path. A read derives it from the project identity and the state directory.
-- The project details view of the dashboard shows `workspaceDirectory` as the answer holds it.
+- The project details view of the dashboard shows `workspace_directory` as the answer holds it.
 
 ## The resource identity
 
@@ -112,16 +112,16 @@ The outcomes of the comparison by binding name are below.
 - A name that the submission omits takes a tombstone, and the transaction keeps its rows.
 - A worker binding whose worker changed under the same name is refused.
 - A submission equal to the stored set inserts no row and keeps the version.
-- A worker group whose latest row after the edit is a tombstone or holds `instanceCount: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
+- A worker group whose latest row after the edit is a tombstone or holds `instance_count: 0` ends every live registration of the group. The transaction calls the Worker collaboration `endRegistrations(tx, projectId, resourceIdentity, now)` for that group. A lowered count of 1 or more ends no registration.
 
 The binding set has one read route and one write route, and both serve the whole set.
 
-- `project.binding_set.get` at `GET /api/project/:projectId/binding-set` and `project.binding_set.write` at `PUT /api/project/:projectId/binding-set` are `human` operations of `unary` lifetime.
+- `project.binding_set.get` at `GET /api/project/:project_id/binding-set` and `project.binding_set.write` at `PUT /api/project/:project_id/binding-set` are `human` operations of `unary` lifetime.
 - `BindingSet` holds `version` and `bindings`. `version` is the binding-set version. `bindings` is the object keyed by binding name, and each value holds `kind` and `config`.
 - The read answers the current binding set as `BindingSet`. It holds no secret material.
 - The write takes `BindingSet` as its body, and `version` names the version that the client read. A stale `version` answers 409 `project.binding_set.version_conflict` with the current version in `error.details`.
 - The write answers the committed binding set as `BindingSet` at its new version.
-- No route writes one field or one binding. An `instanceCount` of 0 disables a worker binding, and `available: false` disables a repository binding or a storage binding.
+- No route writes one field or one binding. An `instance_count` of 0 disables a worker binding, and `available: false` disables a repository binding or a storage binding.
 
 The invocation chain records the answer of the edit in memory after the commit, which [gateway-service.impl.md](gateway-service.impl.md#idempotency-of-a-mutation) rules, and a repeat of the edit after a restart runs the handler again against the same submitted set.
 
@@ -146,20 +146,20 @@ The write refuses a submission that changes the worker of an existing worker bin
 
 - Worker binding validation calls [Agent configuration validation](agent.impl.md#agent-configuration-validation) inside the write transaction.
 - Repository credential validation consumes [custody suitability](custody.impl.md#suitability) with `{ credential, platform }`.
-- The `instanceCount` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
+- The `instance_count` field is an integer from 0 to 64. A value outside that range refuses the write with `project.bindings.worker.instance_count_range`.
 - An instance count of 0 makes the worker binding unavailable. A worker binding holds no `available` field.
 - The repository and storage kinds keep `available`.
-- A `projectPrompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
-- An empty `projectPrompt` is an absent source. The switch of the project prompt on the binding turns the source off, and the value `-` holds no meaning.
-- Every repository binding names exactly one `sshCredential` of platform `ssh`. An absent SSH credential refuses the write.
-- The host of the address equals the `host` of the `sshCredential`. A different host refuses the write with 400 `project.bindings.repository.ssh_host_mismatch`.
+- A `project_prompt` above 32768 UTF-8 bytes refuses the write with `project.bindings.repository.project_prompt_too_large`.
+- An empty `project_prompt` is an absent source. The switch of the project prompt on the binding turns the source off, and the value `-` holds no meaning.
+- Every repository binding names exactly one `ssh_credential` of platform `ssh`. An absent SSH credential refuses the write.
+- The host of the address equals the `host` of the `ssh_credential`. A different host refuses the write with 400 `project.bindings.repository.ssh_host_mismatch`.
 - A repository binding of a git-only platform with a `credential` or with the action `pull_request` refuses the write with 400 `project.bindings.repository.action_unsupported`.
 - A repository binding names at most one `credential` of its platform. The action `pull_request` without a `credential` refuses the write with 400 `project.bindings.repository.credential_required`.
 - An HTTPS repository address refuses the write with 400 `project.bindings.repository.address_invalid`.
 - Two bindings of one submission with the same `resource_identity` refuse the write with 400 `project.bindings.duplicate_resource`.
 - An entry that names an agent that the catalog does not declare for its worker refuses the write with 400 `project.bindings.worker.agent_unknown`.
 - For a worker with no declared agent, the write first calls `validateEntry(tx, workerName, null)` inside the transaction, so an unknown worker name answers `agent.configuration.invalid`.
-- A worker binding of a known worker with no declared agent, an external harness, that carries `entries` or `resourceBudget` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
+- A worker binding of a known worker with no declared agent, an external harness, that carries `entries` or `resource_budget` then refuses the write with 400 `project.bindings.worker.field_forbidden` with `details: { binding, field }`.
 - A strategy with more than one action refuses the write.
 
 ## Storage configuration
@@ -191,7 +191,7 @@ Tests preserve the pinned storage binding identity in each object evidence recor
 
 ## Worker binding configuration
 
-- A worker binding holds `instanceCount`, optional `resourceBudget` and optional per-agent entries.
+- A worker binding holds `instance_count`, optional `resource_budget` and optional per-agent entries.
 - [Entry forms](worker-service.vocabulary.md#entry) define those overrides; the binding holds no `options`.
 - [Stop and budget](worker-service.impl.md#stop-and-budget) defines the budget schema and defaults.
 - The Project Service offers `entriesOfAgent(tx, agentName)` through its `contract.ts`.
@@ -217,7 +217,7 @@ The resolution records the identity of every revision of the chain, and not the 
 It performs no cache, because `DatabaseSync` reads the local file synchronously.
 A resolution authorizes one operation, so the next operation resolves the chain again.
 
-- The Project Service offers `getBindingRevision(tx, bindingRevisionId)` to the Mission Service through its `contract.ts`. It answers the binding revision with its `projectId`, so the Mission Service checks the project ownership of a rebind target directly.
+- The Project Service offers `getBindingRevision(tx, bindingRevisionId)` to the Mission Service through its `contract.ts`. It answers the binding revision with its `project_id`, so the Mission Service checks the project ownership of a rebind target directly.
 
 ## Authorization integration
 
@@ -229,7 +229,7 @@ The Project resolution checks the disablement and the removal of a binding revis
 
 - A repository address has the form `git@<host>:<owner>/<repository>.git`. The host starts with a letter or a digit and holds only letters, digits, `.` and `-`.
 - The dashboard checks only that form, and it derives the identity without the host. The server runs the host resolution.
-- At every repository binding write, the repository connector first runs the [`ssh` validation](repository.impl.md#platform-validators) of the `sshCredential`. It resolves the host of the address through `ssh -G -- <host>`.
+- At every repository binding write, the repository connector first runs the [`ssh` validation](repository.impl.md#platform-validators) of the `ssh_credential`. It resolves the host of the address through `ssh -G -- <host>`.
 - A resolved `hostname` outside the SSH host set of the binding platform refuses the write with 400 `project.bindings.repository.address_invalid`. A failed resolution refuses it with the same code.
 - After the resolution, the Project Service performs one `git ls-remote` through the repository connector of the [Repository component](repository.impl.md#repository-connector).
 - The resolution and the read precede the `BEGIN IMMEDIATE` transaction.
@@ -256,19 +256,19 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 
 ## The binding verify
 
-- `project.binding.verify` checks one repository binding at `POST /api/project/:projectId/binding/:bindingId/verify`. It is a read under `human` access. It takes no body and no mutation key.
-- It checks the configuration of the revision that `bindingId` names.
-- It runs the host resolution and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `sshCredential` and of the `credential` of the binding.
-- It answers `{ address, sshCredential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability }`. The `address` entry has the capability `network git read`. A failed resolution or a failed read answers `unhealthy`, and a check that exceeds its deadline answers `unknown`.
+- `project.binding.verify` checks one repository binding at `POST /api/project/:project_id/binding/:binding_id/verify`. It is a read under `human` access. It takes no body and no mutation key.
+- It checks the configuration of the revision that `binding_id` names.
+- It runs the host resolution and the SSH read of the address with the deadline of the resource healthcheck. Then it calls the [record verify](architecture.impl.md#the-record-verify) of the `ssh_credential` and of the `credential` of the binding.
+- It answers `{ address, ssh_credential, credential }`. `credential` is null for a binding without a credential. Each value is the health entry `{ status, capability }`. The `address` entry has the capability `network git read`. A failed resolution or a failed read answers `unhealthy`, and a check that exceeds its deadline answers `unknown`.
 - A refusal of the record verify refuses the request with the code of the record verify.
 - A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
 - It stores no result.
 
 ## The binding check
 
-- `project.binding.check` checks an unsaved repository configuration at `POST /api/project/:projectId/binding/check`. It is a read under `human` access. It takes the body `{ kind: "repository", config }` and no mutation key.
-- It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, `ssh_host_mismatch`, and the custody suitability of `sshCredential` and `credential`.
-- Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, sshCredential, credential }`.
+- `project.binding.check` checks an unsaved repository configuration at `POST /api/project/:project_id/binding/check`. It is a read under `human` access. It takes the body `{ kind: "repository", config }` and no mutation key.
+- It refuses a static violation with the code of the binding write: `credential_required`, `action_unsupported`, `address_invalid`, `ssh_host_mismatch`, and the custody suitability of `ssh_credential` and `credential`.
+- Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, ssh_credential, credential }`.
 - It stores nothing. An absent project answers 404 `project.project.not_found`.
 
 ## The client identity
@@ -321,7 +321,7 @@ The `kanthord` bin of `package.json` releases it.
 - A test covers the reuse of a name after its removal.
 - A test covers a stale binding-set version and a submission equal to the stored set.
 - A test covers two concurrent writes of one binding set, and it asserts that the second one is refused.
-- A test covers a removal, a removal by omission and a revision to `instanceCount: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
+- A test covers a removal, a removal by omission and a revision to `instance_count: 0` of a worker binding with live registrations. It asserts the end of every live registration in the transaction of the write, that a failed write ends no registration, and that a lowered count of 1 ends no registration.
 - A test covers a reordered JSON property that creates no revision.
 - A test covers a resolution of the whole dependency chain, and it asserts the recorded revision of each member.
 - A test covers the derivation of a webhook secret, and it asserts that two labels produce two different secrets.

@@ -22,7 +22,7 @@ It uses no TLS.
 Every service is a module of one process.
 The Hono router dispatches each request to the handler of the service that owns the requested operation.
 The handler is a module-level function, and each service registers its routes on the Hono application at startup.
-The Gateway registers the routes in specificity order: at the first segment where two paths differ in kind, the static segment comes before the parameter segment. So `GET /api/agent/prompt` matches before `GET /api/agent/:agentName`, whatever order the services declare.
+The Gateway registers the routes in specificity order: at the first segment where two paths differ in kind, the static segment comes before the parameter segment. So `GET /api/agent/prompt` matches before `GET /api/agent/:agent_name`, whatever order the services declare.
 
 ## Configuration
 
@@ -127,7 +127,7 @@ Verification runs in this order.
 - `exp` and `iat`.
 - `kind`.
 - The per-kind rules.
-- For `client`, the Project Service answers whether the group `(project_id, resource_identity)` exists, whether its latest row is no tombstone and holds an `instanceCount` of 1 or more, and whether `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
+- For `client`, the Project Service answers whether the group `(project_id, resource_identity)` exists, whether its latest row is no tombstone and holds an `instance_count` of 1 or more, and whether `iat` × 1000 is not before the `created_at` of the latest tombstone of the group.
 - A `resource_identity` of another binding kind answers 401 `gateway.jwt.invalid_type`.
 - The tombstone rule refuses every token that a removal preceded, so a binding that a human removes and binds again under the same name accepts no earlier token.
 - Verification reads no list of client identities because the signed token states the membership.
@@ -226,7 +226,7 @@ The JWT never leaves the Gateway Service module.
 
 ## Errors and logging
 
-One `respondError()` function produces every failure body, in the shape `{"error":{"code","message","details"},"requestId"}`.
+One `respondError()` function produces every failure body, in the shape `{"error":{"code","message","details"},"request_id"}`.
 `app.onError`, `app.notFound`, the authentication middleware, the host check, the body limit, the validation middleware and the timeout return through it.
 `app.onError` covers no middleware that returns its own response.
 `hono/request-id` assigns `X-Request-Id`, accepting only `request_<ulid>` in the form that [architecture.impl.md](architecture.impl.md#the-identity-and-the-time) rules and generating a fresh identity with the `request_` prefix and `ulid()` when a request supplies no accepted identity.
@@ -371,12 +371,12 @@ HTTP 200 implements success, and HTTP 503 implements unavailable under that rule
 
 The body therefore places entries at `<group>.<owner>.global.<resource>` or `<group>.<owner>.projects.<project>.<resource>`, where `<group>` is `services` or `shared`.
 HTTP 503 uses the shared error envelope with code `gateway.healthcheck.inventory_failed`.
-Its `error.details` holds `{"missingInventories":["<owner>"]}`, with each owner that cannot supply its inventory.
+Its `error.details` holds `{"missing_inventories":["<owner>"]}`, with each owner that cannot supply its inventory.
 
 - The Gateway Service collects the inventories before it starts the checks.
-- The composition root hands the Gateway Service `collectInventories()`. It reads the inventories of the Project Service, the Intake Service, the Worker Service and the LLM, Repository, Storage and Agent components in one transaction and answers `{ entries, missingInventories }`, so the Gateway Service holds no transaction capability.
-- The composition root supplies the Intake inventory callback. In the collection transaction, the callback resolves the `projectId` of each Intake entry to the project name through `projectNameOf(tx, projectId)` of the Project Service. A failed resolution throws inside the callback, so the collection reports `intake` in `missingInventories`.
-- An owner failure adds that owner to `missingInventories`. A failure of the transaction itself is an ordinary invocation failure.
+- The composition root hands the Gateway Service `collectInventories()`. It reads the inventories of the Project Service, the Intake Service, the Worker Service and the LLM, Repository, Storage and Agent components in one transaction and answers `{ entries, missing_inventories }`, so the Gateway Service holds no transaction capability.
+- The composition root supplies the Intake inventory callback. In the collection transaction, the callback resolves the `project_id` of each Intake entry to the project name through `projectNameOf(tx, projectId)` of the Project Service. A failed resolution throws inside the callback, so the collection reports `intake` in `missing_inventories`.
+- An owner failure adds that owner to `missing_inventories`. A failure of the transaction itself is an ordinary invocation failure.
 - It deduplicates checks by target under the [resource healthcheck rule](architecture.md#resource-healthcheck), not by entry name.
 - The request runs at most 32 checks concurrently across all owners.
 - Each check receives a child `Context` with a deadline of 10 s from its start.
@@ -487,7 +487,7 @@ The server serves the RESTful API on one listener on one port, and the delivery 
 A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [llm.impl.md](llm.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
 The ingress forwards the path group `/hooks/*` for a delivery.
-It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential` and `DELETE /api/worker/instance/:runtimeIdentity` for a worker instance.
+It forwards `POST /api/worker/register`, `POST /api/worker/heartbeat`, `POST /api/worker/handover`, `POST /api/worker/credential` and `DELETE /api/worker/instance/:runtime_identity` for a worker instance.
 It forwards the registered work-pull, claim inspection, release and MCP paths for an instance outside the host of the server.
 It forwards no other path.
 A delivery needs no confidentiality of the ingress, because the signature of the platform over the exact bytes proves it.

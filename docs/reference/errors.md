@@ -42,7 +42,7 @@ HTTP and direct clients use the same failure envelope:
     "message": "Authentication required.",
     "details": null
   },
-  "requestId": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
+  "request_id": "request_01ARZ3NDEKTSV4RRFFQ69G5FAV"
 }
 ```
 

@@ -13,10 +13,10 @@ A mechanism here never overrides a rule there.
 - The identity of a workbench session is `workbench_session_<ulid>`. The service passes it to pi as the session `id`.
 - The workbench directory of an agent is `workbench/<agent name>/` of the state directory.
 - The list calls `SessionManager.list` of pi with that directory.
-- Each item of the list answers `id`, `name`, `created`, `modified`, `messageCount` and `firstMessage`.
+- Each item of the list answers `id`, `name`, `created`, `modified`, `message_count` and `first_message`.
 - A resume opens the session whose `id` the human picks.
-- The `model_change` and `thinking_level_change` entries of pi carry `modelIdentifier` and `reasoningEffort`. pi writes them at each change of the model or of the thinking level.
-- A `custom` entry of pi with `customType` `kanthord.workbench.configuration` carries `{ agentProvider }`. The service appends it at the session create and at each change of `agentProvider`.
+- The `model_change` and `thinking_level_change` entries of pi carry `modelId` and `thinkingLevel`. pi writes them at each change of the model or of the thinking level.
+- A `custom` entry of pi with `customType` `kanthord.workbench.configuration` carries `{ agent_provider }`. The service appends it at the session create and at each change of `agent_provider`.
 - A resume takes the last entry of each kind, and the Agent component validates the three values as a complete entry.
 - The credential view of a workbench session exposes only the credential of the agent provider that the configuration of the session names.
 
@@ -33,12 +33,12 @@ A mechanism here never overrides a rule there.
 - The tool name is the operation ID with each `.` replaced by `--`, for example `mission--node--list`. The tool maps the name back to its operation ID.
 - Every tool name matches `^[a-zA-Z0-9_-]{1,64}$`, the form that the model providers accept.
 - The tool parameters are the input schema of the operation.
-- `pendingApproval` names the operation ID.
+- `pending_approval` names the operation ID.
 - The tool calls the direct adapter of the operation registry.
 - A mutation takes a new idempotency key for each tool call.
 - A refusal reaches the agent as a tool error that holds the code of the owning service.
 - The `beforeToolCall` hook of pi waits for the approval of a mutation tool.
-- The snapshot of a long poll adds `pendingApproval`: `{ toolCallId, operationId, input }`.
+- The snapshot of a long poll adds `pending_approval`: `{ tool_call_id, operation_id, input }`.
 - A rejected call returns `{ block: true, reason: "The human rejected the call." }` to pi.
 - An abort of the run rejects every pending approval.
 
@@ -48,18 +48,18 @@ Every operation has `human` access.
 
 | Operation ID | Route | Lifetime | Answer |
 | --- | --- | --- | --- |
-| `workbench.session.list` | `GET /api/workbench/session` with an optional `agentName` | `unary` | The session list of every agent, or of one agent. Each item carries `agentName`. |
-| `workbench.session.create` | `POST /api/workbench/session` with `{ agentName, agentProvider, modelIdentifier, reasoningEffort }` | `unary` | The new session. |
-| `workbench.session.get` | `GET /api/workbench/session/:sessionId` | `unary` | The configuration, the entries of the completed runs, `runActive` and `resumeCommand`. |
-| `workbench.session.configure` | `PUT /api/workbench/session/:sessionId/configuration` | `unary` | The new configuration. 409 `workbench.session.run_active` while a run is active. |
-| `workbench.session.message` | `POST /api/workbench/session/:sessionId/message` with `{ text }` | `unary` | 202 with `{ sessionId, runActive: true }`. 409 `workbench.session.run_active` while a run is active. |
-| `workbench.session.approve` | `POST /api/workbench/session/:sessionId/approve` with `{ toolCallId, approved }` | `unary` | `{ sessionId, toolCallId, approved }`. The pending call runs or returns blocked. |
-| `workbench.session.abort` | `POST /api/workbench/session/:sessionId/abort` | `unary` | `{ sessionId, runActive: false }`. The active run stops. The answer is the same when no run is active. |
-| `workbench.session.events` | `GET /api/workbench/session/:sessionId/events` with `after` and `version` | `wait` | The entries after `after` and the snapshot of the active run. |
+| `workbench.session.list` | `GET /api/workbench/session` with an optional `agent_name` | `unary` | The session list of every agent, or of one agent. Each item carries `agent_name`. |
+| `workbench.session.create` | `POST /api/workbench/session` with `{ agent_name, agent_provider, model_identifier, reasoning_effort }` | `unary` | The new session. |
+| `workbench.session.get` | `GET /api/workbench/session/:session_id` | `unary` | The configuration, the entries of the completed runs, `run_active` and `resume_command`. |
+| `workbench.session.configure` | `PUT /api/workbench/session/:session_id/configuration` | `unary` | The new configuration. 409 `workbench.session.run_active` while a run is active. |
+| `workbench.session.message` | `POST /api/workbench/session/:session_id/message` with `{ text }` | `unary` | 202 with `{ session_id, run_active: true }`. 409 `workbench.session.run_active` while a run is active. |
+| `workbench.session.approve` | `POST /api/workbench/session/:session_id/approve` with `{ tool_call_id, approved }` | `unary` | `{ session_id, tool_call_id, approved }`. The pending call runs or returns blocked. |
+| `workbench.session.abort` | `POST /api/workbench/session/:session_id/abort` | `unary` | `{ session_id, run_active: false }`. The active run stops. The answer is the same when no run is active. |
+| `workbench.session.events` | `GET /api/workbench/session/:session_id/events` with `after` and `version` | `wait` | The entries after `after` and the snapshot of the active run. |
 
-- `resumeCommand` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
+- `resume_command` is `pi --session <session file>`, with the home directory written as `~`. pi opens the file from any directory and takes the working directory from the session header.
 - `after` names the id of the last session entry that the client holds.
-- A poll answers the session entries after `after`, and a snapshot of the active run: `streamingMessage`, `pendingToolCalls`, `pendingApproval`, `runActive` and `errorMessage`.
+- A poll answers the session entries after `after`, and a snapshot of the active run: `streaming_message`, `pending_tool_calls`, `pending_approval`, `run_active` and `error_message`.
 - Each answer carries `version`, a number that the service raises at each change of the snapshot or of the entries.
 - A poll names `version`, the version of the last answer that the client holds. A poll answers at once when entries follow `after` or when its `version` differs from the current version. A poll with no `version` answers at once.
 - Otherwise a poll answers at the next change, or when its wait window ends.

@@ -30,7 +30,7 @@ It describes no mechanism of another service.
 - A human picks one agent of the catalog and starts a workbench session with that agent.
 - A workbench session belongs to one agent and to no project.
 - One workbench session can act on several projects.
-- A workbench session holds its own configuration: `agentProvider`, `modelIdentifier` and `reasoningEffort`.
+- A workbench session holds its own configuration: `agent_provider`, `model_identifier` and `reasoning_effort`.
 - At the start of a workbench session, the dashboard shows the default configuration of the agent. The human confirms it or changes it.
 - The human changes the configuration of a workbench session at any time.
 - The Agent component validates every configuration of a workbench session as a complete [entry](worker-service.vocabulary.md#entry).
