@@ -12,14 +12,14 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | How do I create or check server configuration? | [config init](reference/config/init.md), [config validate](reference/config/validate.md), [config show](reference/config/show.md) |
 | How do I run the server?                       | [serve](reference/serve.md)                                                                                                       |
 | How do I authenticate?                         | [Human JWT generation](reference/jwt.md) and [verification](reference/gateway/verify.md)                                          |
-| How does the system work?                      | [Service architecture](explanation/architecture.md)                       |
+| How does the system work?                      | [Service architecture](explanation/architecture.md)                                                                               |
 | How does the native agent work?                | [Native agent explained](explanation/native-agent.md)                                                                             |
 | How do I interpret health reports?             | [Healthchecks explained](explanation/healthchecks.md)                                                                             |
 | What do errors and IDs mean?                   | [Errors](reference/errors.md) and [identities](reference/identities.md)                                                           |
 
 ## Current scope
 
-The reference describes implemented behavior, not the full proposed product. The server currently exposes Gateway operations and a worker-registration route. Worker registration requires collaborators that the standalone server does not yet supply. Project, Mission, Scheduler, and Tracking CLI groups currently expose help only. `serve server` runs the server; `serve worker` starts a version-checking worker skeleton that hosts no instances yet.
+The reference describes implemented behavior, not the full proposed product. The CLI and the API cover configuration, tokens, the Gateway, the LLM, repository and storage credentials, agents, projects, missions, the Scheduler and workers. The Tracking CLI group currently exposes help only. `serve server` runs the server; `serve worker` registers a worker instance, pulls work and executes it.
 
 ## Documentation types
 

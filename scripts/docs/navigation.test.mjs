@@ -102,6 +102,11 @@ test("feature pages share one response contract and API/CLI sections", () => {
   assert.deepEqual(
     paths.map((path) => path.split(sep).join("/")),
     [
+      "agent/agent.md",
+      "agent/enablement-provider.md",
+      "agent/enablement.md",
+      "agent/model.md",
+      "agent/prompt.md",
       "config/init.md",
       "config/show.md",
       "config/validate.md",
@@ -109,15 +114,44 @@ test("feature pages share one response contract and API/CLI sections", () => {
       "gateway/openapi.md",
       "gateway/verify.md",
       "jwt.md",
+      "llm/credential.md",
+      "llm/login.md",
+      "llm/provider.md",
+      "mission/assessment.md",
+      "mission/attempt.md",
+      "mission/criterion.md",
+      "mission/dependency.md",
+      "mission/evidence.md",
+      "mission/execution.md",
+      "mission/import.md",
+      "mission/mission.md",
+      "mission/node-control.md",
+      "mission/node.md",
+      "mission/outcome.md",
+      "project/agent.md",
+      "project/binding.md",
+      "project/project.md",
+      "repository/credential.md",
+      "repository/ssh-discover.md",
+      "scheduler/claim.md",
+      "scheduler/execution.md",
+      "scheduler/queue.md",
+      "scheduler/work.md",
       "serve.md",
+      "storage/credential.md",
+      "worker/handover.md",
+      "worker/heartbeat.md",
+      "worker/instance.md",
       "worker/register.md",
+      "worker/worker.md",
     ],
   );
-  assert.ok(paths.length < 32);
+  assert.ok(paths.length < 64);
   for (const path of paths) {
     const text = readFileSync(resolve(root, "reference", path), "utf8");
+    const prose = text.replace(/^```[^\n]*\n[\s\S]*?^```$/gm, "");
     assert.deepEqual(
-      [...text.matchAll(/^## (.+)$/gm)].map((match) => match[1]),
+      [...prose.matchAll(/^## (.+)$/gm)].map((match) => match[1]),
       ["Function description", "Expected response", "API shape", "CLI shape"],
       path,
     );

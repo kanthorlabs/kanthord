@@ -510,13 +510,15 @@ A create reads the condition on the parent whose child set changes.
 The import condition of a task is the condition of its objective.
 A task modification requires its objective to hold `Pending` or `Available` and its attempt to read 0.
 This rule covers a create, an update and a retirement of a task.
-A modification covers the record of the node, its parent link, its dependency edges and its child set.
+A modification covers the record of the node, its parent link and its child set.
 A containment move reads the condition on the moved node, the old parent and the new parent.
-A dependency edit reads the condition on the dependent node, and never on the node that the dependency names.
+A dependency edit follows the dependency rule, not the import condition.
+A dependency addition requires that no live claim holds the dependent or a node in its subtree.
+A dependency removal requires a dependent that is not terminal.
 A human who stops the work of a node discards that node.
 The discard closes the attempt, and the closure writes the outcome of the node.
 A human who also releases the dependents edits each dependent and removes the dependency.
-That edit is a modification of the dependent, so the import condition governs it.
+That edit is a dependency removal, so the dependency rule governs it, not the import condition.
 A node that started work stays in the graph, and a discarded node keeps its records.
 The Mission Service terminates an import that fails the condition, and that import produces no effect.
 A transaction and a lock cover the condition check and the commit together.

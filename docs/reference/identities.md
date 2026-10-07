@@ -9,7 +9,7 @@ Server-generated opaque entity IDs use `<prefix>_<ulid>`.
 - Store and transmit the full prefixed string, including in references, API fields and logs. Do not strip or change the prefix.
 - Validation requires the expected entity prefix and a canonical ULID. Bare ULIDs, wrong-kind prefixes, lowercase ULIDs, overflow values and trailing whitespace are invalid entity IDs.
 
-Examples of the rule are `request_<ulid>`, `project_<ulid>` and `mission_<ulid>`. Project and Mission entity creation are not implemented yet.
+Examples of the rule are `request_<ulid>`, `project_<ulid>` and `mission_<ulid>`. `project create` creates a project and its mission in one transaction.
 
 ## Request IDs
 

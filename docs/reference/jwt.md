@@ -14,15 +14,16 @@ A machine presents its JWT to [worker registration](worker/register.md), which r
 
 In human mode, `jwt generate` prints only the JWT and a newline to **terminal stdout**, then exits `0`. In machine mode, it prints a `cli.yaml` fragment with the JWT and its client secret, one line each. With `--verbose` it prints the claim list after that output. The output is a token string, not a JSON response. Its decoded claims have these properties:
 
-| Property  | Type                    | Purpose                                                                     |
-| --------- | ----------------------- | --------------------------------------------------------------------------- |
-| `kind`    | `"human"` or `"client"` | Distinguishes human and machine identities.                                 |
-| `sub`     | string                  | Exact human username, or a fresh `client_identity_<ulid>` for a machine.    |
-| `name`    | string                  | Display name, preserved exactly; defaults to `sub` and grants no authority. |
-| `binding` | string, machine only    | Exact worker binding supplied in machine mode; absent for human tokens.     |
-| `iat`     | integer                 | Issued-at time in Unix seconds.                                             |
-| `exp`     | integer                 | Expiry in Unix seconds, using `gateway.token_lifetime`.                      |
-| `jti`     | canonical ULID string   | Fresh bare ULID identifying this token issuance.                            |
+| Property            | Type                    | Purpose                                                                            |
+| ------------------- | ----------------------- | ---------------------------------------------------------------------------------- |
+| `kind`              | `"human"` or `"client"` | Distinguishes human and machine identities.                                        |
+| `sub`               | string                  | Exact human username, or a fresh `client_identity_<ulid>` for a machine.           |
+| `name`              | string                  | Display name, preserved exactly; defaults to `sub` and grants no authority.        |
+| `project_id`        | string, machine only    | Project identity supplied with `--project`; absent for human tokens.               |
+| `resource_identity` | string, machine only    | `worker:kanthord:<binding name>`, built from `--binding`; absent for human tokens. |
+| `iat`               | integer                 | Issued-at time in Unix seconds.                                                    |
+| `exp`               | integer                 | Expiry in Unix seconds, using `gateway.token_lifetime`.                            |
+| `jti`               | canonical ULID string   | Fresh bare ULID identifying this token issuance.                                   |
 
 Invalid inputs, configuration failures, or redirected stdout fail with exit `1` and a [diagnostic](errors.md#cli-diagnostics). The command saves no client file and calls no server.
 
@@ -49,7 +50,7 @@ Not available. JWT issuance is a local operation using the server configuration,
 
 ```text
 kanthord jwt generate [username] [--name <display>] [--output [path]] [--endpoint <url>] [--config <path>]
-kanthord jwt generate --binding <binding> [--name <display>] [--config <path>]
+kanthord jwt generate --project <project id> --binding <binding name> [--name <display>] [--config <path>]
 kanthord jwt inspect [token]
 ```
 
@@ -79,27 +80,30 @@ The command creates an absent file only. An existing file fails with `system.fil
 ### Machine token
 
 ```sh
-kanthord jwt generate --binding '<worker-binding>' --name 'Worker display name' \
-  --config /absolute/path/kanthord.yaml
+kanthord jwt generate --project '<project-id>' --binding '<binding-name>' \
+  --name 'Worker display name' --config /absolute/path/kanthord.yaml
 ```
+
+`--binding` without `--project` fails with `cli.jwt.binding_without_project`. `--project` without `--binding` fails with `cli.jwt.project_without_binding`.
 
 The output pastes into `cli.yaml` of the worker host, below `endpoint`:
 
 ```yaml
-token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-client_secret: 3q2+7wAAAAC1...
+token: <machine-jwt>
+client_secret: <client-secret>
 ```
 
 The client secret is `HKDF-SHA256(master_key, "worker/client-secret/v1/" + sub)`. The server stores it nowhere and derives it again from the verified `sub`. Each machine JWT has its own secret, and a human JWT has none. The worker uses it to open its credential handover, so the worker host holds no `master_key`.
 
-| Argument / option     | Default / constraints                                                                       | Purpose                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `[username]`          | `kanthorlabs`; explicit values must be nonblank and at most 64 JavaScript string code units | Human subject; cannot be combined with `--binding`.                   |
-| `--name <display>`    | Subject (`sub`); nonblank and at most 64 JavaScript string code units                       | Display name for either token kind.                                   |
-| `--binding <binding>` | Omitted in human mode; nonblank and at most 128 JavaScript string code units                | Selects machine mode and supplies the worker binding.                 |
-| `--config <path>`     | `KANTHORD_CONFIG` → XDG/default server configuration path                                   | Selects the server configuration used for signing and token lifetime. |
+| Argument / option          | Default / constraints                                                                                   | Purpose                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `[username]`               | `kanthorlabs`; explicit values must be nonblank and at most 64 JavaScript string code units             | Human subject; cannot be combined with `--binding`.                              |
+| `--name <display>`         | Subject (`sub`); nonblank and at most 64 JavaScript string code units                                   | Display name for either token kind.                                              |
+| `--binding <binding name>` | Omitted in human mode; 1–63 characters: a lower-case letter, then lower-case letters, digits or hyphens | Selects machine mode and supplies the worker binding name; requires `--project`. |
+| `--project <project id>`   | Omitted in human mode; canonical project identity: `project_` and a canonical 26-character ULID         | Supplies the project of the worker binding; requires `--binding`.                |
+| `--config <path>`          | `KANTHORD_CONFIG` → XDG/default server configuration path                                               | Selects the server configuration used for signing and token lifetime.            |
 
-Username, display-name, and binding values are preserved exactly, not trimmed. The default username is the constant `kanthorlabs`, not an environment-variable override. See [initialize configuration](config/init.md#cli-shape) for server configuration path precedence.
+Username and display-name values are preserved exactly, not trimmed. Binding and project values must match their formats exactly. The default username is the constant `kanthorlabs`, not an environment-variable override. See [initialize configuration](config/init.md#cli-shape) for server configuration path precedence.
 
 ### Inspect a token
 

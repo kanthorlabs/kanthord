@@ -52,6 +52,6 @@ Responses and OpenAPI use the same error-code format. Bare uppercase codes are n
 
 ## CLI diagnostics
 
-Safe diagnostics print `<code>: <message>` to standard error and exit nonzero. A remote declared failure retains its API code; the CLI reports safe local context without displaying remote messages or details. Unexpected exceptions use `system.operation.unknown: Operation failed.` without disclosing their message or cause.
+Safe diagnostics print `<code>: <message>` to standard error and exit nonzero. A remote declared failure retains its API code; the CLI reports safe local context without displaying remote messages or details. A read prints `<code>: request failed (HTTP <status>).` A mutation prints `<code>: request failed (HTTP <status>); idempotency key <key>.` `gateway verify`, `worker register` and `worker handover` put the command name before `request failed`. Unexpected exceptions use `system.operation.unknown: Operation failed.` without disclosing their message or cause.
 
 Native and dependency codes, such as `ENOENT`, Commander's parser codes and Zod issue codes inside validation details, keep their upstream representation. They are not engine-defined error codes. HTTP statuses, process exit codes and integer health statuses are also separate from this naming rule.

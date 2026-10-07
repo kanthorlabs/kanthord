@@ -170,14 +170,14 @@ A dependency edit follows the condition of Mission structure and nodes, and it n
 A human who stops the work of a node discards that node.
 The discard closes the attempt, and the closure writes the outcome of the node.
 A human who also releases the dependents edits each dependent and removes the dependency.
-That edit is a modification of the dependent, so the import condition governs it.
+That edit is a dependency removal, so the dependency rule governs it, not the import condition.
 A node that started work stays in the graph, and a discarded node keeps its records.
-A modification covers the record of the node, its parent link, its dependency edges and its child set.
+A modification covers the record of the node, its parent link and its child set.
 The Mission Service terminates an import that fails the condition, and that import produces no effect.
 A transaction and a lock cover the condition check and the commit together.
 Work on another node never rejects an import and never delays one.
 A genuine no-op makes no modification, so it requires no condition check.
-The import decides a modification on the resolved graph and never on the text of a plan file, so an unchanged plan file whose dependency resolves to another node identifier is a modification of the dependent.
+The import decides a modification on the resolved graph and never on the text of a plan file, so an unchanged plan file whose dependency resolves to another node identifier is a dependency edit of the dependent, not a no-op.
 
 A change to the content of a node preserves the identity of that node and creates a node revision.
 A node revision is one immutable snapshot of the whole content of a node.
