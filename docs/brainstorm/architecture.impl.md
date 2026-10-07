@@ -28,6 +28,13 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The launcher uses only syntax that a runtime below the floor parses, so a rejection reaches a human instead of a syntax error.
 - Every supported launch route passes through the launcher. A route that runs a source entry directly is a development convenience and no supported route.
 
+## Shipped assets
+
+- The single binary embeds every shipped asset as a `node:sea` asset: the shipped prompts and the OpenAPI files.
+- One loader `shippedAsset(name)` answers `sea.getAsset(name, "utf8")` inside the binary, and it reads the file under `static/` in a development checkout.
+- No command downloads or writes a shipped asset. The release version and the digest identify it.
+- Tests cover both branches of the loader and every name of the asset list.
+
 ## The listening ports
 
 The submodules use these default listening ports.

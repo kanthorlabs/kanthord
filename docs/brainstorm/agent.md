@@ -75,7 +75,7 @@ It holds the agent catalog, the agent configuration, the runtime of a native age
 
 - The prompt of an agent session has three layers: the system layer, the agent layer and the working layer.
 - The component ships one base prompt, `base.md`, and one agent prompt for each agent of the catalog.
-- A shipped prompt is the default of its agent.
+- A shipped prompt is the default of its agent. The binary embeds it, and no command downloads it.
 - The system layer joins its sources in this order: the host agent file, the shipped `base.md`, the custom system prompt.
 - The host agent file is the first of `~/.agents/AGENTS.md` and `~/.claude/CLAUDE.md` that exists.
 - A human edits the custom system prompt on the dashboard, and the database stores it.
