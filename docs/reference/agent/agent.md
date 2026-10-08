@@ -62,13 +62,13 @@ The API returns HTTP `200` with the declaration. The CLI writes the same object 
             "path": null,
             "enabled": true,
             "state": "present",
-            "digest": "fc0e6acdff4574d8a819453138969678876fe1ae87c3760b905e540b90d51caa",
-            "text": "This text is the default standard. ..."
+            "digest": "7487c4db25056c8a6c3bc3d619ecee13603b5835bd8ef38a799feec976f52882",
+            "text": "## Principles ..."
           }
         ]
       }
     ],
-    "final": "This text is the default standard. ..."
+    "final": "## Principles ..."
   },
   "tools": [{ "name": "read", "source": "builtin", "input_schema": {} }],
   "enablement": null
