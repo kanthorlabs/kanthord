@@ -279,6 +279,7 @@ A build of a client copies the directory instead of calling a running server.
 
 A middleware rejects a request whose `Host` header sits outside the configured allowlist before authentication.
 It does so because a browser page resolves a hostname to the loopback address.
+The Gateway passes the accepted `Host` header to the handler as `host` of the caller context. A direct invocation carries no `host`.
 `hono/cors` permits the configured origins, and it uses no credentialed mode.
 The server adds no CSRF middleware, because no cookie authenticates a request.
 

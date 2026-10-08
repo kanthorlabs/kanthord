@@ -110,8 +110,12 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A platform with one mode ignores the requested mode.
 - A browser callback listener belongs to pi-ai, not the Gateway, and lasts for the session.
 - The server sets no `PI_OAUTH_CALLBACK_HOST` override. The container image sets it to `::` in the image environment.
+- Browser mode works only for a browser on the server host. The provider fixes the redirect to `localhost` and its port, so a browser on another machine, for example with the server on a VPS, never reaches the callback listener.
+- `llm.credential.login` reads the `Host` header of the request. A host that is not `localhost`, `127.*` or `[::1]` forces device mode: a request with no mode selects device mode, and a request for browser mode answers `400 credential.login.browser_unavailable`.
+- A call with no HTTP request, through the direct client, keeps browser mode.
+- The dashboard applies the same rule to the address of its instance. It disables the browser mode there and states why.
 - A remote browser can return its redirect URL or code through `llm.credential.login_code` when its loopback callback fails.
-- In the container image, the OpenAI Codex callback listener binds `[::]:1455`, which accepts IPv4 and IPv6, and the run publishes port 1455. The browser on the host reaches the listener, and the login completes with no extra step.
+- In the container image, the OpenAI Codex callback listener binds `[::]:1455`, which accepts IPv4 and IPv6, and the run publishes port 1455. A browser on the container host reaches the listener, and the login completes with no extra step.
 - Device mode needs no listener; pi-ai polls until success, failure or expiry.
 - The component permits at most one pending session per platform and human identity; another start answers 409.
 - The component takes an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot and OpenAI Codex providers.
