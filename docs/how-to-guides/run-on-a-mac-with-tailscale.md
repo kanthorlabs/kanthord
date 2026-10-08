@@ -50,7 +50,7 @@ The name has the form `<mac>.<tailnet>.ts.net`. Do not include the final dot.
 Add the tailnet name to the host allowlist. The server refuses every request with a `Host` header outside this list.
 
 ```sh
-kanthord config init --allowed-host <mac>.<tailnet>.ts.net
+kanthord config init --gateway-allowed-host <mac>.<tailnet>.ts.net
 ```
 
 The command writes `~/.config/kanthord/kanthord.yaml`. See [config init](../reference/config/init.md).

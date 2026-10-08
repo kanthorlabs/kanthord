@@ -113,7 +113,7 @@ The CLI checks some input before it sends the request:
 | CLI code                                      | Meaning                                                                |
 | --------------------------------------------- | ---------------------------------------------------------------------- |
 | `cli.agent.get.invalid_view`                  | The `--view` value is not `final`.                                     |
-| `cli.agent.get.project_binding_pair_required` | Only one of `--project` and `--binding` is present.                    |
+| `cli.agent.get.project_binding_pair_required` | Only one of `--project` and `--binding-id` is present.                    |
 | `cli.agent.get.token_required`                | No option, environment variable or client file supplies a token.       |
 | `cli.agent.get.indeterminate`                 | A transport failure, timeout or malformed response. Retry the command. |
 
@@ -149,12 +149,12 @@ curl -s 'http://127.0.0.1:31415/api/agent/swe@1?view=final' \
 ## CLI shape
 
 ```text
-kanthord agent get <agent-name> [--view final] [--project <project-id> --binding <binding-id>] [--token <jwt>] [--endpoint <url>]
+kanthord agent get <agent-name> [--view final] [--project <project-id> --binding-id <binding-id>] [--token <jwt>] [--endpoint <url>]
 ```
 
 ```sh
 kanthord agent get swe@1 --view final
-kanthord agent get swe@1 --project <project-id> --binding <binding-id>
+kanthord agent get swe@1 --project <project-id> --binding-id <binding-id>
 ```
 
 | Argument       | Required | Purpose                            |
@@ -164,8 +164,8 @@ kanthord agent get swe@1 --project <project-id> --binding <binding-id>
 | Option                   | Default / resolution                                                        | Purpose                                        |
 | ------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------- |
 | `--view <view>`          | None; the only value is `final`                                             | Answer `prompt.final` without `prompt.layers`. |
-| `--project <project-id>` | None; requires `--binding`                                                  | Sets `project_id`.                             |
-| `--binding <binding-id>` | None; requires `--project`                                                  | Sets `binding_id`.                             |
+| `--project <project-id>` | None; requires `--binding-id`                                                  | Sets `project_id`.                             |
+| `--binding-id <binding-id>` | None; requires `--project`                                                  | Sets `binding_id`.                             |
 | `--token <jwt>`          | `KANTHORD_TOKEN` → client-file token; a nonblank resolved token is required | Human JWT sent as the bearer credential.       |
 | `--endpoint <url>`       | `KANTHORD_ENDPOINT` → client-file endpoint → `http://127.0.0.1:31415`       | Server base URL.                               |
 

@@ -167,7 +167,7 @@ The server composes the system layer and the agent layer for every consumer. A W
 - `deferred` marks a workspace file that only the worker application reads.
 - The query `view=final` answers the final prompt only.
 - The queries `project_id` and `binding_id` select the working layer of one repository binding. Without them, the working layer is the workbench working layer of the agent.
-- The CLI reads it with `kanthord agent get swe@1`, adds `--view final` for the final prompt only, or `--project <project-id> --binding <binding-id>` for a binding.
+- The CLI reads it with `kanthord agent get swe@1`, adds `--view final` for the final prompt only, or `--project <project-id> --binding-id <binding-id>` for a binding.
 
 ### Limits of a source
 

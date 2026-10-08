@@ -41,7 +41,7 @@ sudo chmod 700 /var/lib/kanthord
 Add the domain to the host allowlist. The server refuses every request with a `Host` header outside this list.
 
 ```sh
-sudo -u kanthord -H kanthord config init --allowed-host kanthord.example.com
+sudo -u kanthord -H kanthord config init --gateway-allowed-host kanthord.example.com
 ```
 
 The command writes `/var/lib/kanthord/.config/kanthord/kanthord.yaml`. See [config init](../reference/config/init.md).
