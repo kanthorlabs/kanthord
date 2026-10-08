@@ -1,0 +1,108 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: macos-14
+            target: darwin-arm64
+          - runner: ubuntu-24.04
+            target: linux-x64
+          - runner: ubuntu-24.04-arm
+            target: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Check out engine and apps
+        env:
+          SUBMODULE_TOKEN: ${{ secrets.SUBMODULE_TOKEN }}
+        run: |
+          if [ -n "$SUBMODULE_TOKEN" ]; then
+            git config --global url."https://x-access-token:${SUBMODULE_TOKEN}@github.com/".insteadOf "git@kanthorlabs.github.com:"
+          else
+            git config --global url."https://github.com/".insteadOf "git@kanthorlabs.github.com:"
+          fi
+          git submodule update --init --depth 1 engine apps
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: engine/.nvmrc
+      - name: Install engine dependencies
+        working-directory: engine
+        run: pnpm install --frozen-lockfile
+      - name: Install app dependencies
+        working-directory: apps
+        run: pnpm install --frozen-lockfile
+      - name: Build the single binary
+        run: make release-build
+      - name: Smoke-test the single binary
+        run: make release-smoke
+      - name: Check the binary name
+        run: test -x "dist/kanthord-${{ matrix.target }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kanthord-${{ matrix.target }}
+          path: dist/kanthord-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Check out engine
+        env:
+          SUBMODULE_TOKEN: ${{ secrets.SUBMODULE_TOKEN }}
+        run: |
+          if [ -n "$SUBMODULE_TOKEN" ]; then
+            git config --global url."https://x-access-token:${SUBMODULE_TOKEN}@github.com/".insteadOf "git@kanthorlabs.github.com:"
+          else
+            git config --global url."https://github.com/".insteadOf "git@kanthorlabs.github.com:"
+          fi
+          git submodule update --init --depth 1 engine
+      - name: Check the tag against the engine version
+        run: |
+          version=$(node -p "require('./engine/package.json').version")
+          [ "$GITHUB_REF_NAME" = "v$version" ] ||
+            { echo "tag $GITHUB_REF_NAME differs from engine version v$version"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Write the checksums
+        working-directory: release
+        run: |
+          chmod +x kanthord-*
+          sha256sum kanthord-* > SHA256SUMS
+          cat SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "kanthord $GITHUB_REF_NAME"
