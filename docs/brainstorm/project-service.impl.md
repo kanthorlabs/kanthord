@@ -298,7 +298,8 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - The header of the Project page shows the project identity and the creation time. It shows no binding-set version.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
 - The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Repository instructions` holds the instruction files and the project prompt.
-- `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`. A note states that an agent reads the files at the execution, so the list is a snapshot.
+- `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`.
+- While the read runs, the section shows a spinner with `Reading the instruction files from <base branch>.` and a line that names the four files and the binding.
 - Each present file is an expandable row with its Markdown and a copy button. An invalid file is a dashed row with its reason. The absent files sit behind a `Show <n> absent files` footer.
 - A repository with no instruction file shows one line that names the four files and the base branch.
 - The last row of the list is `Project prompt`. It expands to its Markdown like a file row. Its `Edit` dialog writes the draft only, and the Save of the binding stores it.
