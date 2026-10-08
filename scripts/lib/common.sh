@@ -56,25 +56,6 @@ confirm() {
 	case "$answer" in [yY] | [yY][eE][sS]) return 0 ;; *) return 1 ;; esac
 }
 
-# Choose one of several answers. The named variable pre-answers it.
-choose() {
-	prompt=$1
-	shift
-	printf '%s: %s\n' "$SCRIPT_NAME" "$prompt" >&2
-	index=1
-	for option in "$@"; do
-		printf '  %d) %s\n' "$index" "$option" >&2
-		index=$((index + 1))
-	done
-	if [ ! -t 0 ]; then
-		warn "no terminal, and no policy. Refused"
-		return 1
-	fi
-	printf '%s: choose [1-%d] ' "$SCRIPT_NAME" "$#" >&2
-	read -r answer
-	printf '%s' "$answer"
-}
-
 # A submodule and a linked worktree keep .git as a file, so a literal
 # .git/<name> test is wrong. Ask git for the real path.
 git_path() { git -C "$1" rev-parse --git-path "$2"; }
