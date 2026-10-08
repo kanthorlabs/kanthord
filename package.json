@@ -1,0 +1,13 @@
+{
+  "name": "kanthord-release",
+  "private": true,
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": ">=11.24.0"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "postject": "1.0.0-alpha.6"
+  }
+}

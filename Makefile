@@ -19,7 +19,8 @@ export WEB_PORT ?= 27182
 	app-up app-down app-logs app-install \
 	tree-new tree-list tree-clean \
 	sync sync-all sync-status sync-engine sync-apps sync-webhook sync-parent \
-	contract-sync docs-tools git-author test-submodules
+	contract-sync docs-tools git-author test-submodules \
+	release-build release-smoke
 
 help:
 	@echo "Kanthord. Three scenarios. Copy a block and run it."
@@ -155,6 +156,13 @@ help-targets:
 	@echo "contract. Materials that flow from engine to apps"
 	@echo "  contract-sync    Publish the engine contract into apps, and commit it"
 	@echo ""
+	@echo "release. The single binary for this machine, under dist/"
+	@echo "  release-build    Bundle the engine and its shipped assets into one"
+	@echo "                   executable with Node.js SEA. Needs an official Node 24"
+	@echo "                   OUTPUT=path writes the binary to another path"
+	@echo "  release-smoke    Start the binary in a disposable home and call the API"
+	@echo "                   BINARY=path tests another binary"
+	@echo ""
 	@echo "docs. The public documentation under docs/"
 	@echo "  docs-tools       Generate docs/reference/workbench/tools.md from the engine"
 	@echo "                   CHECK=1 reports only, and fails when the page is stale"
@@ -230,6 +238,11 @@ sync-parent:
 
 contract-sync:
 	@$(S)/contract/sync.sh
+
+release-build:
+	@$(S)/release/build.sh
+release-smoke:
+	@$(S)/release/smoke.sh
 
 docs-tools:
 	@$(S)/docs/tools.sh

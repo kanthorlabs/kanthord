@@ -1,5 +1,7 @@
 /.dev/
 /.worktree/
+/dist/
+/node_modules/
 /__pycache__
 /logs
 *.log
