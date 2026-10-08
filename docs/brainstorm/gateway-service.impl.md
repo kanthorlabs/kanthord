@@ -30,7 +30,7 @@ The Gateway registers the routes in specificity order: at the first segment wher
 The Gateway Service owns the section `gateway`, and it declares the fields below.
 
 - `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts any IP address.
-- `kanthord config init --bind <address>` writes that address to `gateway.bind`. The container image binds `0.0.0.0`.
+- `kanthord config init --bind <address>` writes that address to `gateway.bind`. The container image binds `::`, which accepts IPv4 and IPv6.
 - `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
 - `gateway.allowed_hosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `kanthord config init --allowed-host <host>` appends a host to that default. `tailscale serve` and a reverse proxy forward the original `Host` header. On port 443 that header carries no port, for example `mac.tailnet.ts.net`.

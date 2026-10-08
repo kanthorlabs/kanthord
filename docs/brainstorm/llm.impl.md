@@ -93,6 +93,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 ## The OAuth login
 
 - The component calls `models.login(providerId, "oauth", interaction)` of pi-ai over the credential store of custody.
+- The component registers the OAuth flows of pi-ai statically with `registerBunOAuthFlows` of `@earendil-works/pi-ai/bun-oauth`, imported as `registerOAuthFlows`. The single binary carries no flow file next to its bundle, so the variable import of pi-ai finds none.
 - The [platform table](#platform-validators) determines whether OAuth is accepted.
 - A login session is a runtime record of the component with identity `login_session_<ulid>`.
 - It holds platform, mode, initial human identity, credential name, state, address, code, failure reason and expiry.
@@ -108,9 +109,9 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - The routes are `POST /api/llm/credential/login`, `POST /api/llm/credential/login/:session_id/code` and `GET /api/llm/credential/login/:session_id`. The static segment `login` takes precedence over `/:credential_name`, so the component refuses the name `login`.
 - A platform with one mode ignores the requested mode.
 - A browser callback listener belongs to pi-ai, not the Gateway, and lasts for the session.
-- The server sets no `PI_OAUTH_CALLBACK_HOST` override.
+- The server sets no `PI_OAUTH_CALLBACK_HOST` override. The container image sets it to `::` in the image environment.
 - A remote browser can return its redirect URL or code through `llm.credential.login_code` when its loopback callback fails.
-- In the container image, the callback listener sits on the loopback of the container, so a browser on the host never reaches it. The human returns the redirect URL through `llm.credential.login_code`, or uses device mode.
+- In the container image, the OpenAI Codex callback listener binds `[::]:1455`, which accepts IPv4 and IPv6, and the run publishes port 1455. The browser on the host reaches the listener, and the login completes with no extra step.
 - Device mode needs no listener; pi-ai polls until success, failure or expiry.
 - The component permits at most one pending session per platform and human identity; another start answers 409.
 - The component takes an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot and OpenAI Codex providers.

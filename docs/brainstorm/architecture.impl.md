@@ -54,7 +54,7 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The runtime stage is Debian trixie slim, because the Repository component needs git 2.40 or later. It holds `bash`, `git`, `openssh-client`, `ripgrep`, `fd-find`, `ca-certificates` and `tini`.
 - The image runs as the user `kanthord` with uid 10001. `tini` is PID 1 and it starts `kanthord serve`.
 - The volume `/var/lib/kanthord` holds `HOME` and the four XDG directories.
-- The container binds `0.0.0.0` and publishes port 31415. The operator creates the configuration once with `kanthord config init --bind 0.0.0.0`.
+- The container binds `::`, which accepts IPv4 and IPv6. It publishes port 31415 and port 1455, the OpenAI Codex login callback. The operator creates the configuration once with `kanthord config init --bind ::`.
 - A tag `v<version>` on the root repository publishes `docker.io/kanthorlabs/kanthord` for `linux/amd64` and `linux/arm64`. Each architecture builds with `make release-image` on a native runner and pushes `<version>-<arch>`. One manifest then joins both as `<version>` and `latest`.
 - The workflow logs in to Docker Hub with the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
