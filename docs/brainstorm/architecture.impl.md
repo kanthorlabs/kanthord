@@ -55,6 +55,8 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The image runs as the user `kanthord` with uid 10001. `tini` is PID 1 and it starts `kanthord serve`.
 - The volume `/var/lib/kanthord` holds `HOME` and the four XDG directories.
 - The container binds `0.0.0.0` and publishes port 31415. The operator creates the configuration once with `kanthord config init --bind 0.0.0.0`.
+- A tag `v<version>` on the root repository publishes `docker.io/kanthorlabs/kanthord` for `linux/amd64` and `linux/arm64`. Each architecture builds with `make release-image` on a native runner and pushes `<version>-<arch>`. One manifest then joins both as `<version>` and `latest`.
+- The workflow logs in to Docker Hub with the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
 
 ## The listening ports
 
