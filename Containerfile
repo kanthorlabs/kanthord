@@ -28,9 +28,10 @@ ENV HOME=/var/lib/kanthord \
 	XDG_CONFIG_HOME=/var/lib/kanthord/config \
 	XDG_DATA_HOME=/var/lib/kanthord/data \
 	XDG_STATE_HOME=/var/lib/kanthord/state \
-	XDG_CACHE_HOME=/var/lib/kanthord/cache
+	XDG_CACHE_HOME=/var/lib/kanthord/cache \
+	PI_OAUTH_CALLBACK_HOST=::
 VOLUME /var/lib/kanthord
 WORKDIR /var/lib/kanthord
-EXPOSE 31415
+EXPOSE 31415 1455
 ENTRYPOINT ["/usr/bin/tini", "--", "kanthord"]
 CMD ["serve"]

@@ -79,4 +79,19 @@ curl -fsS -o /dev/null -H "Authorization: Bearer $token" "$endpoint/api/healthch
 "$binary" gateway verify --token "$token" >/dev/null || die "gateway verify failed"
 log "token accepted by the API and the CLI"
 
+idempotency_key=$(node -e '
+const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+let time = Date.now(), key = "";
+for (let i = 0; i < 10; i++, time = Math.floor(time / 32)) key = alphabet[time % 32] + key;
+for (const byte of require("node:crypto").randomBytes(16)) key += alphabet[byte % 32];
+process.stdout.write(key);
+')
+login=$(curl -fsS -X POST "$endpoint/api/llm/credential/login" \
+	-H "Authorization: Bearer $token" -H "Content-Type: application/json" \
+	-H "Idempotency-Key: $idempotency_key" \
+	-d '{"platform":"openai-codex","mode":"browser","name":"smoke-codex"}') ||
+	die "the OpenAI Codex login did not start"
+case "$login" in *'"address":"https://'*) ;; *) die "the OpenAI Codex login answered no address" ;; esac
+log "OAuth flow loaded inside the binary"
+
 log "smoke passed for $binary"
