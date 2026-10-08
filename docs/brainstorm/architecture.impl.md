@@ -47,6 +47,15 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - No command downloads or writes a shipped asset. The release version and the digest identify it.
 - Tests cover both branches of the loader and every name of the asset list.
 
+## Container image
+
+- The root `Containerfile` builds the image `kanthord:<version>`. Its build stage runs `scripts/release/build.sh` on the official Node.js image of the version in `engine/.nvmrc`.
+- The root target `make release-image` builds the image with Podman or Docker. `CONTAINER_ENGINE` selects the engine, and Podman comes first when both exist.
+- The runtime stage is Debian trixie slim, because the Repository component needs git 2.40 or later. It holds `bash`, `git`, `openssh-client`, `ripgrep`, `fd-find`, `ca-certificates` and `tini`.
+- The image runs as the user `kanthord` with uid 10001. `tini` is PID 1 and it starts `kanthord serve`.
+- The volume `/var/lib/kanthord` holds `HOME` and the four XDG directories.
+- The container binds `0.0.0.0` and publishes port 31415. The operator creates the configuration once with `kanthord config init --bind 0.0.0.0`.
+
 ## The listening ports
 
 The submodules use these default listening ports.

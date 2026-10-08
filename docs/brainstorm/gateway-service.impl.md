@@ -17,7 +17,7 @@ It also provides `zod` `toJSONSchema` and the `hono` middleware `cors`, `body-li
 ## Transport
 
 `@hono/node-server` at 2.1.1 serves one Hono application from `hono` at 4.13.3.
-The server binds the loopback address and the port that `convict` at 6.2.5 resolves.
+The server binds the address and the port that `convict` at 6.2.5 resolves.
 It uses no TLS.
 Every service is a module of one process.
 The Hono router dispatches each request to the handler of the service that owns the requested operation.
@@ -29,7 +29,8 @@ The Gateway registers the routes in specificity order: at the first segment wher
 [architecture.impl.md](architecture.impl.md) holds the configuration file, its field index, and the rule that the file is the only source of a value.
 The Gateway Service owns the section `gateway`, and it declares the fields below.
 
-- `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts a loopback address only.
+- `gateway.bind` holds the bind address, as a string, it defaults to `127.0.0.1`, and the format accepts any IP address.
+- `kanthord config init --bind <address>` writes that address to `gateway.bind`. The container image binds `0.0.0.0`.
 - `gateway.port` holds the port, in the `port` format of `convict`, and it defaults to `31415`.
 - `gateway.allowed_hosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `kanthord config init --allowed-host <host>` appends a host to that default. `tailscale serve` and a reverse proxy forward the original `Host` header. On port 443 that header carries no port, for example `mac.tailnet.ts.net`.

@@ -31,7 +31,7 @@ gateway:
 | `master_key`              | string              | 32-byte base64 server secret in the file; always displayed as `[Sensitive]`.                          |
 | `log.level`              | string              | Operational log threshold: `trace`, `debug`, `info`, `warn`, `error`, or `fatal`; defaults to `info`. |
 | `log.destination`        | string              | Sends operational logs to `stderr` (default) or `file`.                                               |
-| `gateway.bind`           | string              | Loopback listener address; defaults to `127.0.0.1`.                                                   |
+| `gateway.bind`           | string              | Listener IP address; defaults to `127.0.0.1`.                                                         |
 | `gateway.port`           | integer             | Listener port; defaults to `31415`.                                                                   |
 | `gateway.allowed_hosts`   | string array        | Accepted Host headers, including port; defaults to `127.0.0.1:31415` and `localhost:31415`.           |
 | `gateway.allowed_origins` | string array        | Allowed CORS origins; defaults to an empty list.                                                      |
