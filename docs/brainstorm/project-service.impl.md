@@ -301,6 +301,7 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`. A note states that an agent reads the files at the execution, so the list is a snapshot.
 - Each present file is an expandable row with its Markdown and a copy button. An invalid file is a dashed row with its reason. The absent files sit behind a `Show <n> absent files` footer.
 - A repository with no instruction file shows one line that names the four files and the base branch.
+- The last row of the list is `Project prompt`. It expands to its Markdown like a file row. Its `Edit` dialog writes the draft only, and the Save of the binding stores it.
 - A refused read shows an inline alert with its code, `Retry` and a link to the SSH credential. It hides the rows.
 - A new binding, or a draft that changes the address, the SSH credential or the base branch, shows `Save the binding to read its instruction files.` and makes no read.
 - The row of a repository binding shows only the connection: the address, the platform, the identity file of the SSH credential and the credential.
