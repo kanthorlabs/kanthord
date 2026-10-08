@@ -558,7 +558,7 @@ The Gateway Service source sits under `src/gateway/` of the `engine` repository.
 
 - The three public files are `contract.ts`, `client.ts` and `index.ts`.
 - Private files include `service.ts`, `authentication.ts`, `invocation.ts`, `idempotency.ts` and `openapi.ts`.
-- The remaining private files are `migrations.ts`, `errors.ts`, `request-id.ts`, `json.ts` and `constants.ts`.
+- The remaining private files are `migrations.ts`, `errors.ts`, `request-id.ts`, `json.ts`, `constants.ts` and `dashboard.ts`.
 - `migrations.ts` holds no table.
 - `src/gateway/` and `src/kernel/test-identity.ts` are the only importers of `src/kernel/caller-mint.ts`.
 
