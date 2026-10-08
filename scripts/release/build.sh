@@ -27,8 +27,8 @@ linux) ;;
 *) die "unsupported platform $os" ;;
 esac
 
-[ -d "$ENGINE_DIR/node_modules" ] || die "engine dependencies are missing. Run make engine-install"
-[ -d "$APP_DIR/node_modules" ] || die "app dependencies are missing. Run make app-install"
+[ -d "$ENGINE_DIR/node_modules" ] || die "engine dependencies are missing. Run make bootstrap"
+[ -d "$APP_DIR/node_modules" ] || die "app dependencies are missing. Run make bootstrap"
 
 cd "$ROOT" || die "$ROOT does not exist"
 pnpm install --frozen-lockfile >/dev/null || die "pnpm install failed in $ROOT"

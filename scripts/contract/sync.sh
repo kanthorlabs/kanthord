@@ -16,7 +16,7 @@ for name in engine apps; do
 	[ -z "$(git -C "$dir" status --porcelain)" ] || die "$name has uncommitted changes"
 	git -C "$dir" fetch origin main >/dev/null || die "$name fetch failed"
 	[ "$(git -C "$dir" rev-parse HEAD)" = "$(git -C "$dir" rev-parse origin/main)" ] ||
-		die "$name HEAD is not the current origin/main. Run make sync-all first"
+		die "$name HEAD is not the current origin/main. Run make sync first"
 done
 
 engine_commit=$(git -C "$ENGINE_DIR" rev-parse HEAD)
@@ -60,4 +60,4 @@ else
 	message="chore(contract): publish at engine $short_commit"
 fi
 git -C "$APP_DIR" commit -m "$message" -- docs/api/contract || die "commit failed"
-log "committed engine $engine_commit in apps. Run make sync-all to publish it"
+log "committed engine $engine_commit in apps. Run make sync to publish it"

@@ -119,9 +119,9 @@ Several agents edit the same working tree in parallel, for example `docs/brainst
 
 - `kanthord` is a superrepo with the submodules `engine` (Node 24 daemon) and `apps` (pnpm + turbo, Vite React dashboard).
 - Every `make` target wraps `scripts/<category>/<command>.sh`.
-- Run `make repo-bootstrap` first in a clone. It is idempotent.
-- `make up` and `make down` start and stop both sides. Pids and logs go to `.dev/`.
-- `make sync-all` publishes the submodules. The `tree-*` targets manage worktrees of the submodules only.
+- Run `make bootstrap` first in a clone. It is idempotent.
+- `make dev` runs the engine with `node --watch` and the dashboard with Vite in the foreground. `Ctrl-C` stops both. An agent runs it as a background task.
+- `make sync` publishes the submodules.
 - The daemon listens on port 31415. The web app listens on port 27182 at `http://localhost:27182`.
 - Check the web app in a browser with the `ego-browser` skill. The `chrome-devtools` MCP server cannot connect, because another Chrome holds port 9222.
 - Emulate a phone width with `page.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })`. Ask Ulrich for a human token when the saved instance refuses its token.

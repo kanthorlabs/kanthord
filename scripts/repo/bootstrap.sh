@@ -56,11 +56,11 @@ identity=0
 
 if [ "$identity" != "0" ]; then
 	printf '\n%s: the checkout is ready, but it cannot commit yet.\n' "$SCRIPT_NAME"
-	printf '%s: set the identity above, then run make repo-bootstrap again.\n' "$SCRIPT_NAME"
+	printf '%s: set the identity above, then run make bootstrap again.\n' "$SCRIPT_NAME"
 	exit 1
 fi
 
 printf '\n%s: ready. Next:\n' "$SCRIPT_NAME"
-printf '  make up          start the daemon on http://127.0.0.1:%s and the dashboard on http://localhost:%s\n' "$ENGINE_PORT" "$WEB_PORT"
+printf '  make dev         start the daemon on http://127.0.0.1:%s and the dashboard on http://localhost:%s\n' "$ENGINE_PORT" "$WEB_PORT"
 printf '  make sync-status report the drift against origin/main\n'
 printf '  make help        every target\n'

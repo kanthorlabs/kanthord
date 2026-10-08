@@ -2,7 +2,8 @@
 SCRIPT_NAME=engine-cleanup
 . "$(dirname "$0")/../lib/common.sh"
 
-"$ROOT/scripts/engine/down.sh"
+holder=$(lsof -nP -iTCP:"$ENGINE_PORT" -sTCP:LISTEN -t 2>/dev/null | head -1)
+[ -z "$holder" ] || die "port $ENGINE_PORT has a listener, pid $holder. Stop make dev first"
 
 config_file=$(engine_config_file)
 if [ -e "$config_file" ]; then
@@ -11,4 +12,4 @@ if [ -e "$config_file" ]; then
 fi
 engine_remove_data
 
-log "next: make engine-install, then make up"
+log "next: make bootstrap, then make dev"

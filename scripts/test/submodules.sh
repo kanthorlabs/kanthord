@@ -107,21 +107,6 @@ git -C "$ROOT" add -- README.md
 [ "$(git -C "$ROOT" diff --cached --name-only)" = README.md ] || fail 'pointer commit consumed unrelated staging'
 [ "$(git -C "$ROOT" show --format= --name-only HEAD)" = platforms/webhook ] || fail 'pointer commit used an alias as a path'
 
-# Prevent optional PR discovery from making any network request.
-mkdir -p "$sandbox/bin"
-printf '#!/bin/sh\nexit 1\n' >"$sandbox/bin/gh"
-chmod +x "$sandbox/bin/gh"
-export PATH="$sandbox/bin:$PATH"
-REPO=webhook BRANCH=docs/fixture SHELL_IN=0 "$ROOT/scripts/tree/new.sh"
-tree="$ROOT/.worktree/webhook/docs/fixture"
-[ -f "$tree/README.md" ] || fail 'webhook worktree missing'
-[ ! -e "$ROOT/.worktree/webhook/docs/docs" ] || fail 'standalone worktree received parent links'
-"$ROOT/scripts/tree/list.sh" >"$sandbox/trees.log"
-grep -q '^webhook .*docs/fixture' "$sandbox/trees.log" || fail 'worktree listing omits webhook'
-APPLY=1 "$ROOT/scripts/tree/clean.sh"
-[ ! -e "$tree" ] || fail 'merged webhook worktree was not removed'
-[ ! -e "$ROOT/.dev/.trees.webhook" ] || fail 'worktree inventory was not cleaned'
-
 git -C "$webhook" checkout --quiet --detach origin/main
 "$ROOT/scripts/repo/attach.sh"
 [ "$(git -C "$webhook" symbolic-ref --short HEAD)" = main ] || fail 'webhook did not reattach to main'
@@ -131,4 +116,4 @@ git -c protocol.file.allow=always clone --quiet --recurse-submodules "$sandbox/p
 [ -f "$sandbox/fresh/platforms/webhook/README.md" ] || fail 'fresh clone lacks webhook'
 ROOT="$sandbox/fresh" "$sandbox/fresh/scripts/repo/attach.sh"
 [ "$(git -C "$sandbox/fresh/platforms/webhook" symbolic-ref --short HEAD)" = main ] || fail 'fresh webhook checkout stayed detached'
-printf 'test-submodules: PASS (aliases, hooks, historical modes, publication order, pointers, status, identity, worktrees, attach, recursive clone)\n'
+printf 'test-submodules: PASS (aliases, hooks, historical modes, publication order, pointers, status, identity, attach, recursive clone)\n'

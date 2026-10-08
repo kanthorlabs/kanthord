@@ -6,12 +6,11 @@ ROOT=${ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}
 ENGINE_DIR="$ROOT/engine"
 APP_DIR="$ROOT/apps"
 RUN_DIR="$ROOT/.dev"
-WORKTREE_DIR="$ROOT/.worktree"
 
 ENGINE_PORT=${ENGINE_PORT:-31415}
 WEB_PORT=${WEB_PORT:-27182}
 
-# Aliases, not paths: aliases are also used in sync-state and worktree names.
+# Aliases, not paths: aliases are also used in sync-state names.
 SUBMODULES="engine apps webhook"
 
 log() { printf '%s: %s\n' "$SCRIPT_NAME" "$*"; }
@@ -103,21 +102,6 @@ untracked_files() { git -C "$1" ls-files --others --exclude-standard; }
 current_branch() { git -C "$1" symbolic-ref --quiet --short HEAD 2>/dev/null || true; }
 
 require_command() { command -v "$1" >/dev/null 2>&1 || die "$1 is not installed"; }
-
-# owner/name from a remote url. The ssh host is an alias, so the path is used.
-repo_slug() {
-	url=$(git -C "$1" remote get-url origin 2>/dev/null) || return 1
-	url=${url%.git}
-	url=${url##*:}
-	printf '%s' "${url#*//*/}"
-}
-
-# Count the pull requests opened for a branch. Prints a number, or nothing.
-pr_count() {
-	command -v gh >/dev/null || return 1
-	slug=$(repo_slug "$1") || return 1
-	gh pr list --repo "$slug" --head "$2" --state all --json number --jq 'length' 2>/dev/null
-}
 
 engine_xdg_dir() {
 	case "${1:-}" in

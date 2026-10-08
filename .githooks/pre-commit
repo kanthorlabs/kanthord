@@ -1,7 +1,7 @@
 #!/bin/sh
 # Validation only. It never pushes and it never stages.
 #
-# Publishing belongs to 'make sync-all', which pushes the submodules before the
+# Publishing belongs to 'make sync', which pushes the submodules before the
 # parent and proves every gitlink is reachable. A hook that pushes first can
 # publish submodule commits for a parent commit that then fails.
 set -e
@@ -38,7 +38,7 @@ for path in $paths; do
 	}
 	if ! git -C "$dir" merge-base --is-ancestor "$staged" origin/main 2>/dev/null; then
 		echo "pre-commit: $path pointer $staged is not on its origin/main." >&2
-		echo "pre-commit: this commit would name a commit nobody can fetch. Run 'make sync-all'." >&2
+		echo "pre-commit: this commit would name a commit nobody can fetch. Run 'make sync'." >&2
 		failed=1
 		continue
 	fi

@@ -12,6 +12,8 @@
 | `apps` | `apps` | Dashboard and client applications. |
 | `webhook` | `platforms/webhook` | Standalone webhook log; currently documentation and deployment planning only. |
 
-Run `make repo-bootstrap` in a fresh clone. It initializes all submodules, attaches them to `main`, and propagates the root Git identity. Runtime setup remains limited to engine and apps.
+Run `make bootstrap` in a fresh clone. It initializes all submodules, attaches them to `main`, and propagates the root Git identity. Runtime setup remains limited to engine and apps.
 
-`make sync-all` publishes submodules before root gitlinks. Use `make sync-webhook` to synchronize only Webhook, or `make tree-new REPO=webhook BRANCH=docs/example` for its isolated worktree. Webhook worktrees need no parent links or runtime setup. `make test-submodules` verifies the tooling against disposable local repositories without touching live remotes.
+Run `make dev` to start the engine and the dashboard with hot reload. `make help` lists every target.
+
+`make sync` publishes submodules before root gitlinks. `make test-submodules` verifies the tooling against disposable local repositories without touching live remotes.

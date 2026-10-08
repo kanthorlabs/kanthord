@@ -9,7 +9,7 @@ SCRIPT_NAME=repo-attach
 
 for name in $SUBMODULES; do
 	dir=$(repo_dir "$name")
-	[ -d "$dir/.git" ] || [ -f "$dir/.git" ] || die "$name is not initialized. Run make repo-bootstrap"
+	[ -d "$dir/.git" ] || [ -f "$dir/.git" ] || die "$name is not initialized. Run make bootstrap"
 
 	operation=$(in_progress "$dir") && die "$name has an unfinished $operation. Finish it or abort it first"
 
@@ -40,6 +40,6 @@ for name in $SUBMODULES; do
 		log "$name attached to main at $(git -C "$dir" rev-parse --short HEAD)"
 	else
 		log "$name attached to main, which moved it from $(printf '%.7s' "$head") to $(git -C "$dir" rev-parse --short HEAD)"
-		log "$name the parent pointer is now stale. Run make sync-all to settle it"
+		log "$name the parent pointer is now stale. Run make sync to settle it"
 	fi
 done

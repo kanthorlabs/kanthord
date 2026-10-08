@@ -26,7 +26,7 @@ preflight_repo() {
 	has_unmerged "$dir" && die "$name has unmerged paths. Resolve them, then sync again"
 
 	branch=$(current_branch "$dir")
-	[ -n "$branch" ] || die "$name is on a detached HEAD, which is the normal state after a clone. Run make repo-attach"
+	[ -n "$branch" ] || die "$name is on a detached HEAD, which is the normal state after a clone. Run make bootstrap"
 	[ "$branch" = "main" ] || die "$name is on $branch, not main. Check out main, then sync again"
 
 	if [ "${NOFETCH:-0}" != "1" ]; then
