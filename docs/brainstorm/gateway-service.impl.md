@@ -280,6 +280,17 @@ It does so because a browser page resolves a hostname to the loopback address.
 `hono/cors` permits the configured origins, and it uses no credentialed mode.
 The server adds no CSRF middleware, because no cookie authenticates a request.
 
+## The embedded dashboard
+
+The single binary serves the dashboard of the `apps` repository from the origin of the API.
+
+- The Gateway answers a `GET` or `HEAD` request outside `/api` with the embedded dashboard asset at that path, and it requires no authentication.
+- A path with no embedded asset answers `index.html`, because the dashboard routes with `BrowserRouter`.
+- `index.html` carries `Cache-Control: no-cache`, so a new binary replaces the hashed asset names at once.
+- An unknown path under `/api` keeps the 404 `gateway.routing.not_found`.
+- The `Host` check and the readiness check run before the dashboard answers.
+- Outside the single binary, the Gateway embeds no dashboard and every path outside `/api` answers 404 `gateway.routing.not_found`. The Vite server of `apps` serves the dashboard in development.
+
 ## Cancellation
 
 [architecture.impl.md](architecture.impl.md#the-operation-and-its-two-entry-adapters) defines the lifetime of an operation.
@@ -536,7 +547,9 @@ A client sends the `Host` header of its endpoint, so an endpoint outside `gatewa
 
 ## The dashboard sign-in
 
-- The sign-in form of the dashboard fills the Endpoint field with the default daemon endpoint `http://localhost:31415` as a value, not as a placeholder.
+- The sign-in form of the dashboard fills the Endpoint field with a value, not a placeholder.
+- A production build of the dashboard fills the origin of the page, because the daemon serves that build.
+- A development build fills the default daemon endpoint `http://localhost:31415`.
 - A human replaces the value to reach another daemon.
 
 ## Repository layout, build, test and release
