@@ -1,0 +1,14 @@
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!scripts/lib
+!scripts/release
+!engine
+!apps
+**/node_modules
+**/dist
+**/.git
+**/.dev
+**/.worktree

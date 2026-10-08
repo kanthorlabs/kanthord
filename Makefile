@@ -11,7 +11,7 @@ S := $(ROOT)/scripts
 export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
-.PHONY: help dev bootstrap release release-build release-smoke \
+.PHONY: help dev bootstrap release release-build release-smoke release-image \
 	sync sync-status test-submodules cleanup docs-tools
 
 help:
@@ -39,6 +39,9 @@ help:
 	@echo "                   Needs an official Node 24. OUTPUT=path writes another path"
 	@echo "  release-smoke    Start the binary in a disposable home and call the API"
 	@echo "                   BINARY=path tests another binary"
+	@echo "  release-image    Build the container image kanthord:<version> with podman"
+	@echo "                   or docker. CONTAINER_ENGINE=docker selects one"
+	@echo "                   IMAGE=registry/name sets the image name"
 	@echo ""
 	@echo "pending decision"
 	@echo "  sync             Level main with origin/main in every repository"
@@ -62,6 +65,8 @@ release-build:
 	@$(S)/release/build.sh
 release-smoke:
 	@$(S)/release/smoke.sh
+release-image:
+	@$(S)/release/image.sh
 
 sync:
 	@$(S)/sync/all.sh
