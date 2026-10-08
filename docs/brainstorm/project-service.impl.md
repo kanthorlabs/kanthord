@@ -302,6 +302,8 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 - Each present file is an expandable row with its Markdown and a copy button. An invalid file is a dashed row with its reason. The absent files sit behind a `Show <n> absent files` footer.
 - A repository with no instruction file shows one line that names the four files and the base branch.
 - The last row of the list is `Project prompt`. It expands to its Markdown like a file row. Its `Edit` dialog writes the draft only, and the Save of the binding stores it.
+- Each row holds the switch of its `working_layer` source. The switch edits the draft, and the Save of the binding stores it. An absent file keeps its switch. A row with its switch off is dimmed and shows `off`.
+- The binding draft carries `working_layer` unchanged from the read to the write.
 - A refused read shows an inline alert with its code, `Retry` and a link to the SSH credential. It hides the rows.
 - A new binding, or a draft that changes the address, the SSH credential or the base branch, shows `Save the binding to read its instruction files.` and makes no read.
 - The row of a repository binding shows only the connection: the address, the platform, the identity file of the SSH credential and the credential.
