@@ -28,12 +28,18 @@ linux) ;;
 esac
 
 [ -d "$ENGINE_DIR/node_modules" ] || die "engine dependencies are missing. Run make engine-install"
+[ -d "$APP_DIR/node_modules" ] || die "app dependencies are missing. Run make app-install"
 
 cd "$ROOT" || die "$ROOT does not exist"
 pnpm install --frozen-lockfile >/dev/null || die "pnpm install failed in $ROOT"
 
 rm -rf "$work"
 mkdir -p "$work" "$(dirname "$output")" || die "cannot create $work"
+
+log "building the dashboard"
+(cd "$APP_DIR" && pnpm run build >"$work/dashboard.log" 2>&1) ||
+	die "the dashboard build failed. See $work/dashboard.log"
+[ -f "$APP_DIR/dist/index.html" ] || die "the dashboard build wrote no index.html"
 
 log "bundling the engine"
 pnpm exec esbuild "$ENGINE_DIR/src/main.ts" \
@@ -47,7 +53,7 @@ pnpm exec esbuild "$ENGINE_DIR/src/main.ts" \
 	--outfile="$work/kanthord.cjs" || die "esbuild failed"
 
 log "preparing the single executable blob"
-node "$ROOT/scripts/release/sea-config.mjs" "$ENGINE_DIR" "$work/kanthord.cjs" \
+node "$ROOT/scripts/release/sea-config.mjs" "$ENGINE_DIR" "$APP_DIR/dist" "$work/kanthord.cjs" \
 	"$work/kanthord.blob" "$work/sea-config.json" || die "cannot write the SEA configuration"
 node --experimental-sea-config "$work/sea-config.json" >/dev/null || die "cannot prepare the SEA blob"
 

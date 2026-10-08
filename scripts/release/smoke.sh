@@ -61,6 +61,15 @@ curl -fsS -o /dev/null "$endpoint/api/openapi/gateway/verify.yaml" ||
 	die "an OpenAPI service file is missing"
 log "OpenAPI contract $version served"
 
+index=$(curl -fsS "$endpoint/")
+case "$index" in *'<div id="root">'*) ;; *) die "the dashboard index is missing" ;; esac
+[ "$(curl -fsS "$endpoint/mission/unknown")" = "$index" ] ||
+	die "a dashboard route did not answer the index"
+script=$(printf '%s' "$index" | sed -n 's/.*src="\(\/assets\/[^"]*\.js\)".*/\1/p' | head -n 1)
+[ -n "$script" ] || die "the dashboard index names no script"
+curl -fsS -o /dev/null "$endpoint$script" || die "the dashboard script $script is missing"
+log "dashboard served with $script"
+
 "$binary" jwt generate smoke --config "$config" --output "$home/token.yaml" >/dev/null ||
 	die "jwt generate failed"
 token=$(sed -n 's/^token: //p' "$home/token.yaml")
