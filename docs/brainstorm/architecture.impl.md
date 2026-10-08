@@ -36,6 +36,9 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The loader `packageManifest()` answers the embedded `package.json` inside the binary, and it reads the `package.json` of the engine in a development checkout.
 - The root target `make release-build` builds the dashboard of `apps` and the binary from the official Node.js 24 runtime of the build machine. The binary embeds that runtime, so the launcher gate does not apply to it.
 - The binary runs a CommonJS bundle, because a Node.js 24 single executable runs no ES module entry. The engine therefore uses no top-level `await`.
+- The root workflow `.github/workflows/release.yml` builds `darwin-arm64`, `linux-x64` and `linux-arm64` on native runners with the Node.js version of `engine/.nvmrc`. Each build runs `make release-smoke` before it uploads.
+- A tag `v<version>` on the root repository publishes the three binaries and `SHA256SUMS` as a public GitHub Release of that repository. The tag must equal `v` plus the version of `engine/package.json`.
+- The workflow reads `engine` and `apps` with the secret `SUBMODULE_TOKEN` when the secret exists, and anonymously otherwise. It never checks out `platforms/webhook`.
 - No command downloads or writes a shipped asset. The release version and the digest identify it.
 - Tests cover both branches of the loader and every name of the asset list.
 

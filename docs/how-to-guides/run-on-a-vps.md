@@ -10,9 +10,17 @@ The daemon listens on `127.0.0.1` only. Caddy terminates HTTPS on ports 80 and 4
 
 - A Linux server with systemd, on `x86_64` or `arm64`.
 - A domain name, for example `kanthord.example.com`, with a DNS `A` or `AAAA` record that points to the server.
-- The binary for the architecture of the server: `kanthord-linux-x64` or `kanthord-linux-arm64`. To build it, run `make release-build` on a Linux machine of the same architecture. The file is then in `dist/`.
+- The binary for the architecture of the server, `kanthord-linux-x64` or `kanthord-linux-arm64`, and `SHA256SUMS` from the [releases page](https://github.com/kanthorlabs/kanthord/releases). To build the binary instead, run `make release-build` on a Linux machine of the same architecture. The file is then in `dist/`.
 
 ## 1. Install the binary
+
+Check the download against `SHA256SUMS`:
+
+```sh
+sha256sum --ignore-missing -c SHA256SUMS
+```
+
+Then install it:
 
 ```sh
 sudo install -m 755 kanthord-linux-x64 /usr/local/bin/kanthord
