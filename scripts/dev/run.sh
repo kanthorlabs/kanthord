@@ -38,7 +38,7 @@ trap stop EXIT
 (cd "$ENGINE_DIR" && exec node --watch-path=src --watch-path=static src/main.ts serve) \
 	> >(prefix engine) 2>&1 &
 engine_pid=$!
-(cd "$APP_DIR" && exec ./node_modules/.bin/vite --port "$WEB_PORT" --strictPort) \
+(cd "$APP_DIR" && exec ./node_modules/.bin/vite --host 0.0.0.0 --port "$WEB_PORT" --strictPort) \
 	> >(prefix apps) 2>&1 &
 app_pid=$!
 
