@@ -11,7 +11,7 @@ S := $(ROOT)/scripts
 export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
-.PHONY: help dev bootstrap contract-sync release-build release-smoke \
+.PHONY: help dev bootstrap release-build release-smoke \
 	sync sync-status test-submodules cleanup docs-tools
 
 help:
@@ -28,9 +28,6 @@ help:
 	@echo "  bootstrap        Make a clone ready to work in. It installs dependencies,"
 	@echo "                   attaches the submodules to main and sets the git identity."
 	@echo "                   It is idempotent, so it also repairs a drifted checkout"
-	@echo ""
-	@echo "contract"
-	@echo "  contract-sync    Publish the engine OpenAPI contract into apps, and commit it"
 	@echo ""
 	@echo "release"
 	@echo "  release-build    Build dist/kanthord-<os>-<arch>: engine, assets, dashboard"
@@ -53,9 +50,6 @@ dev:
 	@$(S)/dev/run.sh
 bootstrap:
 	@$(S)/repo/bootstrap.sh
-
-contract-sync:
-	@$(S)/contract/sync.sh
 
 release-build:
 	@$(S)/release/build.sh
