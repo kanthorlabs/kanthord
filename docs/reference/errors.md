@@ -22,6 +22,7 @@ Examples used by the implementation:
 | `system.database.migration.incompatible_history` | The recorded migration history cannot be applied by this binary. |
 | `system.context.deadline_exceeded`               | A context's deadline expired.                                    |
 | `cli.config.invalid_endpoint`                    | Client endpoint validation failed.                               |
+| `cli.config.invalid_allowed_host`                | An `--allowed-host` value is not a host with an optional port.   |
 | `cli.worker.register.indeterminate`              | The CLI cannot determine the registration result.                |
 | `gateway.authentication.unauthorized`            | Authentication or caller access was rejected.                    |
 | `gateway.registration.stale`                     | The recorded registration has ended and cannot be replayed.      |

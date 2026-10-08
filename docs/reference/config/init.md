@@ -29,12 +29,14 @@ Not available. Configuration initialization is a local filesystem operation, wit
 ## CLI shape
 
 ```text
-kanthord config init [--config <path>]
+kanthord config init [--allowed-host <host>]... [--config <path>]
 ```
 
 ```sh
 kanthord config init
 kanthord config init --config /absolute/path/kanthord.yaml
+kanthord config init --allowed-host mac.tailnet.ts.net
+kanthord config init --allowed-host kanthord.example.com --allowed-host 203.0.113.7
 ```
 
 There are no positional arguments.
@@ -42,6 +44,7 @@ There are no positional arguments.
 | Option            | Default / resolution                                                                                                 | Purpose                                           |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
 | `--config <path>` | `KANTHORD_CONFIG` → `$XDG_CONFIG_HOME/kanthord/kanthord.yaml` → `~/.config/kanthord/kanthord.yaml` when XDG is unset | Destination for the private server configuration. |
+| `--allowed-host <host>` | None; repeatable | Appends a lowercased `<name>` or `<name>:<port>` to the default `gateway.allowed_hosts`. Use the name that a reverse proxy or `tailscale serve` forwards. Another form fails with `cli.config.invalid_allowed_host`. |
 
 An explicit `--config` wins over environment and default paths. The command reads no interactive input.
 

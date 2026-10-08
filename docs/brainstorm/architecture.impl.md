@@ -801,6 +801,8 @@ A process split retains these boundaries.
 
 - `kanthord config init` builds the document in memory with every default and every generated secret.
 - It generates `master_key` from 32 bytes of `crypto.randomBytes`, encoded in base64.
+- The repeatable option `--allowed-host <host>` appends each host to the default `gateway.allowed_hosts`. The command lowercases each value and drops a duplicate.
+- A value that is not exactly `<name>` or `<name>:<port>` fails with `cli.config.invalid_allowed_host` before the write.
 - It validates the document before it writes it.
 - The invocation authorizes the creation. It reads no confirmation and requires no terminal.
 - It writes the validated bytes and prints the resolved destination after a successful write, without displaying the configuration or its generated secrets.
