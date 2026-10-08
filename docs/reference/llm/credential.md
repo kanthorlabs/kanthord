@@ -29,7 +29,7 @@ Each platform has one secret shape, an optional metadata schema, and an optional
 | `opencode-go`            | `api_key`    | `null`                       | `model call`         | Yes        |
 | `amazon-bedrock`         | `api_key`    | `{ region }`                 | `none`               | No         |
 | `google-vertex`          | `api_key`    | `{ project, location }`      | `none`               | No         |
-| `azure-openai-responses` | `api_key`    | `{ resource_name }`          | `none`               | No         |
+| `azure`                  | `api_key`    | `{ resource_name }`          | `none`               | No         |
 | `cloudflare-workers-ai`  | `api_key`    | `{ account_id }`             | `none`               | No         |
 | `cloudflare-ai-gateway`  | `api_key`    | `{ account_id, gateway_id }` | `none`               | No         |
 
