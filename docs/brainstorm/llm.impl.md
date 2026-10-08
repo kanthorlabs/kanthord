@@ -110,6 +110,7 @@ Each platform validator declares its secret shape, metadata schema and validatio
 - A browser callback listener belongs to pi-ai, not the Gateway, and lasts for the session.
 - The server sets no `PI_OAUTH_CALLBACK_HOST` override.
 - A remote browser can return its redirect URL or code through `llm.credential.login_code` when its loopback callback fails.
+- In the container image, the callback listener sits on the loopback of the container, so a browser on the host never reaches it. The human returns the redirect URL through `llm.credential.login_code`, or uses device mode.
 - Device mode needs no listener; pi-ai polls until success, failure or expiry.
 - The component permits at most one pending session per platform and human identity; another start answers 409.
 - The component takes an optional `oauthProviders` that defaults to the built-in pi-ai GitHub Copilot and OpenAI Codex providers.

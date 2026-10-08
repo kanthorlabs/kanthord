@@ -495,7 +495,7 @@ The implementation epic assesses their removal.
 
 ## Ingress
 
-An external platform reaches no loopback listener, so a delivery arrives through a tunnel or a reverse proxy.
+A delivery arrives through a tunnel or a reverse proxy. The operator exposes no listener of the server to an external network directly, whatever address `gateway.bind` holds.
 The server serves the RESTful API on one listener on one port, and the delivery ingress uses the dedicated path group `/hooks/*`.
 A loopback callback listener that pi-ai opens for an OAuth login session belongs to no Gateway listener. [llm.impl.md](llm.impl.md#the-oauth-login) rules that listener, and the ingress forwards nothing to it.
 The operator supplies the tunnel or the reverse proxy, and the server starts none.
