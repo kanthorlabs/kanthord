@@ -37,6 +37,11 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 - The root target `make release-build` builds the dashboard of `apps` and the binary from the official Node.js 24 runtime of the build machine. The binary embeds that runtime, so the launcher gate does not apply to it.
 - The binary runs a CommonJS bundle, because a Node.js 24 single executable runs no ES module entry. The engine therefore uses no top-level `await`.
 - The root workflow `.github/workflows/release.yml` builds `darwin-arm64`, `linux-x64` and `linux-arm64` on native runners with the Node.js version of `engine/.nvmrc`. Each build runs `make release-smoke` before it uploads.
+- `make release` cuts one version `<YY>.<M>.<counter>` from the UTC date for `engine`, `apps` and the root repository. `<M>` has no leading zero. `<counter>` starts at 1 in each month and is 1 above the highest counter of that month in the three repositories.
+- Each `package.json` carries the version, for example `26.10.1`. Each repository carries the same annotated tag with a `v`, for example `v26.10.1`.
+- The command releases `engine`, then `apps`, then the root repository. Each step commits the version, tags the commit and pushes `main` and the tag atomically. The `engine` step also regenerates `static/openapi.yaml`, because the OpenAPI index carries the version.
+- A failed step resets that repository to `origin/main`. A rerun resumes the month's highest version while the root repository lacks its tag, and it skips each repository that has it.
+- `kanthord --version` prints the version of the embedded package manifest.
 - A tag `v<version>` on the root repository publishes the three binaries and `SHA256SUMS` as a public GitHub Release of that repository. The tag must equal `v` plus the version of `engine/package.json`.
 - The workflow reads `engine` and `apps` with the secret `SUBMODULE_TOKEN` when the secret exists, and anonymously otherwise. It never checks out `platforms/webhook`.
 - No command downloads or writes a shipped asset. The release version and the digest identify it.
