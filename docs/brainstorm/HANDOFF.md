@@ -37,7 +37,6 @@ Every item below waits for the completion of the design set. Ulrich moved them h
 
 - [ ] Added 2026-09-24 from `engine/docs/cli/mission.md`. Record commands await external-action publication and terminal-state retention. The debated proposals wait in `.dev/cannot/mission-record-contracts.md`.
   - Next session 2026-09-25: open with external-action publication.
-- [ ] Added 2026-09-28 from the attempt simplification. The consecutive-loss count reads every `scheduler_execution` row of the node, because the rules forbid a non-unique index. Decide whether that scan stands.
 - [ ] POSTPONED 2026-09-28 by Ulrich until budgets or agent limits land. Design the handoff from one execution to the next execution of a node. `mission_run_output` is dropped on 2026-09-28; the human direction stays in the node revision, and the checkpoint commit stays the only carrier inside an attempt.
 - [ ] POSTPONED 2026-09-29 by Ulrich until a need for redaction arises. Design the redaction of evidence content and how an asset states it.
 
@@ -90,7 +89,6 @@ After the first native-agent worker runs the acceptance path.
 
 ### Gateway Service
 
-- [ ] Added 2026-10-05 from the component split. `gateway-service.impl.md` says that the `shared` scope of the health report holds exactly `custody` and that its map holds `credential`. The engine fills that entry from the inventories of the LLM, Repository and Storage components. Decide whether `shared` becomes `{ llm, repository, storage }`.
 - [ ] POSTPONED 2026-09-28 by Ulrich until Ulrich rules it. Decide whether `kanthord jwt inspect` verifies the signature, the header and the closed claim set with the server configuration.
 
 ### Tracking Service
@@ -104,7 +102,6 @@ After the first native-agent worker runs the acceptance path.
 
 ### Root repository
 
-- [ ] Added 2026-10-03 by Ulrich. Trim "Rejected proposals" of `AGENTS.md` to the narrow rule: each entry is one line that names the rejected alternative and links the page section that holds the decision, and an alternative that a page already forbids by name loses its entry.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Re-author the planning standard in the root repository from the preserved method. The legacy `engine/.agents/plan/authoring.md` and the `/plan` and `/author` skills are no input; the reset of the engine submodule removes them.
 - [ ] POSTPONED 2026-09-18 by Ulrich until every document of phase 1 and phase 2 is done. Change the root Makefile and `scripts/`. Both assume the legacy layout of `engine` and `apps`. The Makefile also copies the OpenAPI directory `static/openapi/` of `engine` into `apps`, which the build of `apps` reads.
 
