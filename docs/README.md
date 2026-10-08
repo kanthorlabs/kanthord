@@ -11,6 +11,7 @@ Read it online at **[kanthord.kanthorlabs.com](https://kanthord.kanthorlabs.com)
 | What commands and endpoints are available?     | [Feature reference (API and CLI)](reference/README.md)                                                                            |
 | How do I create or check server configuration? | [config init](reference/config/init.md), [config validate](reference/config/validate.md), [config show](reference/config/show.md) |
 | How do I run the server?                       | [serve](reference/serve.md)                                                                                                       |
+| How do I reach it from a phone or a domain?    | [Mac with Tailscale](how-to-guides/run-on-a-mac-with-tailscale.md), [VPS](how-to-guides/run-on-a-vps.md)                          |
 | How do I authenticate?                         | [Human JWT generation](reference/jwt.md) and [verification](reference/gateway/verify.md)                                          |
 | How does the system work?                      | [Service architecture](explanation/architecture.md)                                                                               |
 | How does the native agent work?                | [Native agent explained](explanation/native-agent.md)                                                                             |
@@ -26,7 +27,7 @@ The reference describes implemented behavior, not the full proposed product. The
 Public documentation follows [Diátaxis](https://diataxis.fr/):
 
 - **Tutorials** teach through a guided learning experience. Add `tutorials/` when the first tutorial is ready.
-- **How-to guides** describe a specific task. Add `how-to-guides/` when the first guide is ready.
+- **How-to guides** describe a specific task. See the [how-to guides](how-to-guides/README.md).
 - **Reference** organizes implemented features into one page each, with function description, expected response, API shape (including cURL), and CLI shape (including arguments and options).
 - **Explanation** develops understanding of behavior, guarantees, and limitations.
 
