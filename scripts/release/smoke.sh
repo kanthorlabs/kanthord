@@ -36,6 +36,7 @@ export XDG_STATE_HOME="$home/state" XDG_CACHE_HOME="$home/cache"
 export KANTHORD_ENDPOINT="$endpoint"
 
 "$binary" --help >/dev/null || die "--help failed"
+[ "$("$binary" --version)" = "$expected_version" ] || die "--version differs from the engine version $expected_version"
 "$binary" config init --config "$config" >/dev/null || die "config init failed"
 sed -i.bak "s/31415/$port/g" "$config" && rm "$config.bak"
 "$binary" config validate --config "$config" >/dev/null || die "config validate failed"

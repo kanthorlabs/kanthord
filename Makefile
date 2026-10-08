@@ -11,7 +11,7 @@ S := $(ROOT)/scripts
 export ENGINE_PORT ?= 31415
 export WEB_PORT ?= 27182
 
-.PHONY: help dev bootstrap release-build release-smoke \
+.PHONY: help dev bootstrap release release-build release-smoke \
 	sync sync-status test-submodules cleanup docs-tools
 
 help:
@@ -30,6 +30,11 @@ help:
 	@echo "                   It is idempotent, so it also repairs a drifted checkout"
 	@echo ""
 	@echo "release"
+	@echo "  release          Cut v<YY>.<M>.<counter> from the UTC date: set the version"
+	@echo "                   in engine, apps and the root, commit, tag and push all three"
+	@echo "                   The root tag starts the release workflow"
+	@echo "                   DRY_RUN=1 prints the next tag. VERSION=26.10.1 forces one"
+	@echo "                   YES=1 skips the confirmation. A rerun resumes a partial release"
 	@echo "  release-build    Build dist/kanthord-<os>-<arch>: engine, assets, dashboard"
 	@echo "                   Needs an official Node 24. OUTPUT=path writes another path"
 	@echo "  release-smoke    Start the binary in a disposable home and call the API"
@@ -51,6 +56,8 @@ dev:
 bootstrap:
 	@$(S)/repo/bootstrap.sh
 
+release:
+	@$(S)/release/cut.sh
 release-build:
 	@$(S)/release/build.sh
 release-smoke:
