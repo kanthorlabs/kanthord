@@ -18,6 +18,7 @@ The [connector vocabulary](architecture.vocabulary.md#connector) defines the con
 - The repository connector resolves the binding through the Project Service for each operation, under the requester's identity.
 - [Custody](custody.md#secret-use-and-handover) owns the credential boundary and follows the authorization check.
 - The Project Service calls the repository connector for a network git read at a repository binding write.
+- The Project Service calls the repository connector for a network git read of the instruction files of a repository binding.
 - The [Intake Service](intake-service.md#boundary) calls every platform implementation method, with the material of a credential release.
 - The Intake Service calls the platform connector to check the external object of a request evidence for the [Mission Service](mission-service.md#delivery-admission-and-check), and the platform implementation folds the platform state into an end state.
 - The Mission Service calls the payload decoders, and the GitHub decoding of a delivery answers the `PlatformAddress` of its pull request or of its push.

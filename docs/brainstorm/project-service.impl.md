@@ -271,6 +271,21 @@ The [Agent component](agent.impl.md#agent-provider-healthcheck) owns agent provi
 - Then it runs the checks of [the binding verify](#the-binding-verify) on the configuration and answers the same `{ address, ssh_credential, credential }`.
 - It stores nothing. An absent project answers 404 `project.project.not_found`.
 
+## The instruction files read
+
+- `project.binding.instruction_files.get` reads the instruction files of one repository binding at `GET /api/project/:project_id/binding/:binding_id/instruction_files`. It is a read under `human` access.
+- The instruction files are `AGENTS.md`, `AGENTS.local.md`, `CLAUDE.md` and `CLAUDE.local.md` at the root of the repository.
+- It reads the configuration of the revision that `binding_id` names. An unsaved configuration has no read.
+- The repository connector resolves the commit of the base branch with `ls-remote`. It fetches that commit at depth 1 with no blobs into a temporary directory, reads the four paths with `git show`, and deletes the directory.
+- The read applies the text validation of the [working layer](agent.md#prompt-composer) to each file.
+- It answers `{ commit, read_at, files }`. Each entry of `files` holds `{ source, path, state, reason, text }`. `state` is `present`, `absent` or `invalid`.
+- The service caches the answer in memory per binding revision and commit. Each request runs `ls-remote`, so a new commit of the base branch replaces the answer.
+- The deadline of the resource healthcheck bounds the read.
+- A failed or timed-out read answers 422 `project.bindings.repository.ssh_unreachable`.
+- A base branch that the remote does not hold answers 422 `project.bindings.repository.base_branch_absent`.
+- A binding that is absent, belongs to another project, is removed or is no repository binding answers 404 `project.binding.not_found`.
+- It stores nothing in the database.
+
 ## The client identity
 
 The Project Service holds no table of client identities and no secret of a client identity.
@@ -282,7 +297,12 @@ The answer reads the latest row of that group. It refuses a disabled or removed 
 
 - The header of the Project page shows the project identity and the creation time. It shows no binding-set version.
 - Each binding row shows the revision of its current row as `(v<revision>)` next to the binding name.
-- The form of a repository binding holds two sections. `Repository` holds the connection. `Project policy` holds the base branch, the action, `follows` and the project prompt.
+- The form of a repository binding holds three sections. `Repository` holds the connection. `Project policy` holds the base branch, the action and `follows`. `Repository instructions` holds the instruction files and the project prompt.
+- `Repository instructions` calls `project.binding.instruction_files.get` when the form of a saved binding opens. Its header shows the base branch, the short commit, the age of the read and `Refresh`. A note states that an agent reads the files at the execution, so the list is a snapshot.
+- Each present file is an expandable row with its Markdown and a copy button. An invalid file is a dashed row with its reason. The absent files sit behind a `Show <n> absent files` footer.
+- A repository with no instruction file shows one line that names the four files and the base branch.
+- A refused read shows an inline alert with its code, `Retry` and a link to the SSH credential. It hides the rows.
+- A new binding, or a draft that changes the address, the SSH credential or the base branch, shows `Save the binding to read its instruction files.` and makes no read.
 - The row of a repository binding shows only the connection: the address, the platform, the identity file of the SSH credential and the credential.
 - The SSH credential field is a searchable list of the live `ssh` records. It shows the `host` and the `identity_file` of each record. It holds `New SSH credential`.
 - The credential field is optional. The form marks a blank credential only when the action is `pull_request`.
