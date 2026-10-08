@@ -19,5 +19,7 @@ log "dependencies installed in $target"
 config_file=$(engine_config_file)
 if [ ! -f "$config_file" ]; then
 	node "$ENGINE_DIR/src/main.ts" config init || die "config init failed"
+	perl -i -pe 's/^(\s+host_file:) true$/$1 false/' "$config_file" || die "cannot set host_file in $config_file"
+	grep -Eq '^[[:space:]]+host_file: false$' "$config_file" || die "host_file is not false in $config_file"
 	log "generated $config_file"
 fi
