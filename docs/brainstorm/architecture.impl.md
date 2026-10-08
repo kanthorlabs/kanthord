@@ -30,8 +30,11 @@ Node.js 24.15.0 and the installed set satisfy every requirement.
 
 ## Shipped assets
 
-- The single binary embeds every shipped asset as a `node:sea` asset: the shipped prompts and the OpenAPI files.
+- The single binary embeds every shipped asset as a `node:sea` asset: the shipped prompts, the OpenAPI files and the package manifest `package.json`.
 - One loader `shippedAsset(name)` answers `sea.getAsset(name, "utf8")` inside the binary, and it reads the file under `static/` in a development checkout.
+- The loader `packageManifest()` answers the embedded `package.json` inside the binary, and it reads the `package.json` of the engine in a development checkout.
+- The root target `make release-build` builds the binary from the official Node.js 24 runtime of the build machine. The binary embeds that runtime, so the launcher gate does not apply to it.
+- The binary runs a CommonJS bundle, because a Node.js 24 single executable runs no ES module entry. The engine therefore uses no top-level `await`.
 - No command downloads or writes a shipped asset. The release version and the digest identify it.
 - Tests cover both branches of the loader and every name of the asset list.
 
