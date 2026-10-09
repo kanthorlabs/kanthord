@@ -4,12 +4,14 @@ parent: authentication.md
 bindings: []
 verifications:
   - node --test test/authentication-sessions.test.js
+  - npm ci && npm run test:authentication
+  - npm run test:persistence
 ---
 # Enforce expiring and revocable bearer sessions
 
 ## Requirement
 
-Issue high-entropy opaque bearer tokens at successful login. Persist only SHA-256 digests and authenticate each private request by the persisted session, expiry and current account. Keep session creation separate from password hashing transactions.
+Issue high-entropy opaque bearer tokens at successful login. Persist only SHA-256 digests and authenticate each private request by the persisted session, expiry and current account. Keep session creation separate from password hashing transactions. Provide the `test:authentication` script, which runs the three authentication suites.
 
 ## Criterion
 

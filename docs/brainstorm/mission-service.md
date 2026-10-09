@@ -29,6 +29,7 @@ Every task belongs to exactly one objective.
 Every objective belongs to exactly one initiative.
 An initiative is a root of the graph.
 The Mission Service permits a node with no child.
+An import refuses an objective with no task, as [Criterion and authority](#criterion-and-authority) states.
 
 A dependency relates an initiative or an objective, in any combination of the two.
 A task carries no dependency edge.
@@ -233,6 +234,9 @@ Its criterion and its verifications hold at the head of the node branch.
 The verifications are an ordered list in the node content, and an import carries them.
 A human writes their value.
 No execution identity infers a verification from prose.
+An import requires that each verification of an objective equals a verification of at least one task of that objective in the import set.
+An import therefore refuses an objective with no task.
+The node API and the change of an unblock do not check this coverage.
 The [tested input](mission-service.vocabulary.md#tested-input) names the content that the verification reads, and that content stays mutable.
 Attribution and judgement against the criterion protect the verification.
 An exit status of zero proves that one verification returned zero.

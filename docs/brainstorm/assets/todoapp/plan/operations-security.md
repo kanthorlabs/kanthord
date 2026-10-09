@@ -4,12 +4,14 @@ parent: operations.md
 bindings: []
 verifications:
   - node --test test/operations-security.test.js
+  - npm ci && npm run test:operations
+  - npm run test:foundation
 ---
 # Apply secure middleware and secret-safe request logging
 
 ## Requirement
 
-Configure Helmet, explicit-origin CORS, bounded request-rate middleware and structured Pino request logging. Register logging before parsing so rejected bodies still receive correlation. Respect only explicitly trusted proxy addresses.
+Configure Helmet, explicit-origin CORS, bounded request-rate middleware and structured Pino request logging. Register logging before parsing so rejected bodies still receive correlation. Respect only explicitly trusted proxy addresses. Provide the `test:operations` script, which runs the three operations suites.
 
 ## Criterion
 

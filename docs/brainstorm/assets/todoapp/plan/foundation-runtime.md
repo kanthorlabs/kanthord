@@ -4,12 +4,14 @@ parent: foundation.md
 bindings: []
 verifications:
   - node --test test/foundation-runtime.test.js
+  - npm ci && npm run test:foundation
+  - npm run lint && npm run format:check
 ---
 # Provide a reproducible Node 24 runtime
 
 ## Requirement
 
-Keep an ESM package, Node 24 version declaration, lockfile, runtime guard and a side-effect-free Express app factory. Provide development, start, lint, format-check and foundation-test commands. Keep source modules small and inject external resources.
+Keep an ESM package, Node 24 version declaration, lockfile, runtime guard and a side-effect-free Express app factory. Provide development and start commands and the `lint`, `format:check` and `test:foundation` scripts. Keep source modules small and inject external resources.
 
 ## Criterion
 

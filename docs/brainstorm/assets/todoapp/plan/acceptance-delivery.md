@@ -4,12 +4,13 @@ parent: acceptance.md
 bindings: []
 verifications:
   - node --test test/acceptance-delivery.test.js
+  - npm ci && npm run verify
 ---
 # Make deployment and maintenance reproducible
 
 ## Requirement
 
-Provide a developer README, operations runbook and Node 24 CI workflow. Keep the application a single API process on one host with local durable SQLite storage. Document future scaling boundaries without adding distributed infrastructure to this fixture.
+Provide a developer README, operations runbook and Node 24 CI workflow. Keep the application a single API process on one host with local durable SQLite storage. Document future scaling boundaries without adding distributed infrastructure to this fixture. Provide the `verify` script, which runs every suite plus lint and formatting.
 
 ## Criterion
 

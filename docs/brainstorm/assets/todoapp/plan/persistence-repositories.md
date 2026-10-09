@@ -4,12 +4,14 @@ parent: persistence.md
 bindings: []
 verifications:
   - node --test test/persistence-repositories.test.js
+  - npm ci && npm run test:persistence
+  - npm run test:foundation
 ---
 # Isolate validated, owner-scoped repository operations
 
 ## Requirement
 
-Implement account, session and TODO repositories with prepared statements and explicit results for absent rows, uniqueness conflicts and stale versions. Repositories expose domain objects with the same snake_case field names that the API will use, without allowing clients to choose ownership.
+Implement account, session and TODO repositories with prepared statements and explicit results for absent rows, uniqueness conflicts and stale versions. Repositories expose domain objects with the same snake_case field names that the API will use, without allowing clients to choose ownership. Provide the `test:persistence` script, which runs the three persistence suites.
 
 ## Criterion
 

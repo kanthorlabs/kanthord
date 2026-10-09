@@ -4,12 +4,14 @@ parent: todos.md
 bindings: []
 verifications:
   - node --test test/todos-pagination.test.js
+  - npm ci && npm run test:todos
+  - npm run test:authentication
 ---
 # Bound and filter private TODO collections
 
 ## Requirement
 
-Provide keyset pagination for owner-scoped TODO collections, ordered by descending creation time then descending UUID. Validate every cursor component, limit and completion filter; return `{ items, next_cursor }` without an unbounded total-count scan.
+Provide keyset pagination for owner-scoped TODO collections, ordered by descending creation time then descending UUID. Validate every cursor component, limit and completion filter; return `{ items, next_cursor }` without an unbounded total-count scan. Provide the `test:todos` script, which runs the three todos suites.
 
 ## Criterion
 
