@@ -1,16 +1,17 @@
-# Run kanthord under a path prefix with Cloudflare Tunnel
+# Run kanthord under a path prefix with Cloudflare Tunnel and nginx
 
 [How-to guides](README.md)
 
 Run the kanthord single binary on a home server, and reach it at `https://homelab.example.com/s/kanthord/`. Other services share the same domain, each under its own `/s/<service-name>/` path.
 
-Cloudflare Tunnel forwards the full path unchanged. The daemon serves its whole HTTP surface under `gateway.base_path`, so the tunnel needs no rewrite and no custom header.
+One tunnel route sends every request of the host to nginx. nginx routes each `/s/<service-name>/` path to its local service. The daemon serves its whole HTTP surface under `gateway.base_path`, so nginx forwards the full path unchanged.
 
 ## Before you start
 
 - A Linux server with systemd, on `x86_64` or `arm64`.
 - A domain on Cloudflare, for example `example.com`.
 - A Cloudflare Tunnel that runs on the server as the `cloudflared` systemd service. The Cloudflare dashboard manages the routes of the tunnel.
+- nginx on the server, with no other site on `127.0.0.1:80`.
 - The binary for the architecture of the server. See [Run kanthord on a VPS](run-on-a-vps.md#1-install-the-binary).
 
 ## 1. Install the binary and create a service user
@@ -39,20 +40,58 @@ Check the server on the machine:
 curl -H 'Host: homelab.example.com' http://127.0.0.1:31415/s/kanthord/api/liveness
 ```
 
-## 4. Add the tunnel route
+## 4. Route the path with nginx
 
-1. Open the Cloudflare dashboard, then go to **Zero Trust** > **Networks** > **Tunnels**.
-2. Select the tunnel, then select **Configure** > **Public Hostname** > **Add a public hostname**.
-3. Set **Subdomain** to `homelab` and **Domain** to `example.com`.
-4. Set **Path** to `^/s/kanthord(/|$)`. The field is a regular expression on the request path.
-5. Set **Service** to `HTTP` and `127.0.0.1:31415`.
-6. Save the hostname.
+Write `/etc/nginx/sites-available/homelab`:
 
-Cloudflare creates the DNS record of `homelab.example.com`. A request that matches no route answers 404 from the tunnel.
+```nginx
+server {
+    listen 127.0.0.1:80;
+    server_name homelab.example.com;
 
-To add another service, add another public hostname with the same subdomain and its own path, for example `^/s/qbittorrent(/|$)`. That service must also serve under its prefix.
+    location /s/kanthord {
+        proxy_pass http://127.0.0.1:31415;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_http_version 1.1;
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
 
-## 5. Protect the host with Cloudflare Access
+    location / {
+        return 404;
+    }
+}
+```
+
+- `proxy_pass` has no URI after the port, so nginx keeps the `/s/kanthord` prefix.
+- `proxy_set_header Host $host` keeps the public host, so the allowlist of step 2 matches.
+- `proxy_buffering off` lets a stream reach the browser at once.
+- The daemon answers `/s/kanthord` with a 301 to `/s/kanthord/`, so nginx needs no redirect.
+
+Enable the site and reload nginx:
+
+```sh
+sudo ln -s /etc/nginx/sites-available/homelab /etc/nginx/sites-enabled/homelab
+sudo nginx -t
+sudo systemctl reload nginx
+curl -H 'Host: homelab.example.com' http://127.0.0.1/s/kanthord/api/liveness
+```
+
+To add another service, add a `location /s/<service-name>` block. A service that cannot serve under its prefix breaks behind a path.
+
+## 5. Add the tunnel route
+
+1. Open the Cloudflare dashboard, then go to **Networking** > **Tunnels**, and select the tunnel.
+2. Under **Routes**, select **Add route** > **Published application**.
+3. Under **Hostname**, set the subdomain to `homelab` and the domain to `example.com`. Leave the path empty.
+4. Set **Service URL** to `http://127.0.0.1:80`.
+5. Select **Add route**.
+
+Cloudflare creates the DNS record of `homelab.example.com`. This one route serves every service, so a new service needs no new route.
+
+## 6. Protect the host with Cloudflare Access
 
 1. Go to **Zero Trust** > **Access** > **Applications** > **Add an application** > **Self-hosted**.
 2. Set the domain to `homelab.example.com`, and leave the path empty. The application then covers every service on the host.
@@ -61,7 +100,7 @@ To add another service, add another public hostname with the same subdomain and 
 
 A browser signs in to Access once, then reaches each service.
 
-## 6. Get a token and sign in
+## 7. Get a token and sign in
 
 ```sh
 sudo -u kanthord -H kanthord jwt generate <your username>
@@ -80,6 +119,7 @@ On the server, set `KANTHORD_ENDPOINT=http://127.0.0.1:31415/s/kanthord` for the
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `403` with `gateway.http.host_not_allowed`           | The host is not in `gateway.allowed_hosts`. Add it to `/var/lib/kanthord/.config/kanthord/kanthord.yaml`, then run `sudo systemctl restart kanthord`. |
 | `404` with `gateway.routing.not_found` on `/api/...` | The endpoint has no prefix. Add `/s/kanthord` to the endpoint.                                                                                        |
-| `404` from Cloudflare                                | No tunnel route matches the path. Check the **Path** value of the public hostname.                                                                    |
-| `502` from Cloudflare                                | The server is not running. Read `sudo journalctl -u kanthord`.                                                                                        |
+| `404` from nginx                                     | No `location` block matches the path. Check `/etc/nginx/sites-available/homelab`.                                                                     |
+| `502` from Cloudflare                                | nginx is not running. Read `sudo journalctl -u nginx`.                                                                                                |
+| `502` from nginx                                     | The server is not running. Read `sudo journalctl -u kanthord`.                                                                                        |
 | The CLI fails from another machine                   | Cloudflare Access asks for a browser sign-in. Use the CLI on the server, or reach the server through another path such as Tailscale.                  |
