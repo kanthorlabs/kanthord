@@ -18,11 +18,11 @@ The component owns a dedicated platform validator for every platform of the Stor
 | --- | --- | --- | --- |
 | `s3` | `s3_access_key` | `endpoint`, `bucket`, `region` | `HeadBucket` on the metadata bucket, signed for the metadata region |
 
-- The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
+- The S3 probe sends `HeadBucketCommand` of `@aws-sdk/client-s3` in path style to the metadata `endpoint` and `region`, so it serves every S3-compatible provider, for example Cloudflare R2.
 - S3 metadata serves the healthcheck, not work destinations.
 - [Storage configuration](project-service.impl.md#storage-configuration) owns work destinations.
 - `HeadBucket` maps 200 to `ok`, 404 to a missing bucket and 403 to `unknown`.
-- A write-only key can work despite a 403 from `HeadBucket`.
+- A 403 from `HeadBucket` answers `unknown`. The object check still requires `s3:ListBucket`, as [The S3 implementation](#the-s3-implementation) states.
 - The [credential healthcheck](architecture.impl.md#the-credential-healthcheck) rules apply.
 
 ## Operations
