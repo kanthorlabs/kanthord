@@ -35,6 +35,8 @@ The Gateway Service owns the section `gateway`, and it declares the fields below
 - `gateway.allowed_hosts` holds the host allowlist, as an array of strings, and it defaults to `127.0.0.1:31415` and `localhost:31415`.
 - `kanthord config init --gateway-allowed-host <host>` appends a host to that default. `tailscale serve` and a reverse proxy forward the original `Host` header. On port 443 that header carries no port, for example `mac.tailnet.ts.net`.
 - `gateway.allowed_origins` holds the origin allowlist, as an array of strings, and it defaults to `http://127.0.0.1:27182` and `http://localhost:27182`, the origins of the dashboard.
+- `gateway.base_path` holds the path prefix of the whole HTTP surface, as a string, and it defaults to `/`. The format accepts `/` or one or more segments of `[A-Za-z0-9._~-]`, each after a `/`, with no trailing slash, for example `/s/kanthord`.
+- `kanthord config init --gateway-base-path <path>` writes that path to `gateway.base_path`. A proxy forwards the full path unchanged, so the proxy needs no rewrite and no custom header.
 - `gateway.token_lifetime` holds the lifetime of a token in seconds, in the `nat` format of `convict`, and it defaults to 31536000, which is one year.
 - `gateway.token_version` holds the version of the signing key, as a positive integer in the `nat` format of `convict`, and it defaults to `1`.
 - `gateway.idempotency_ttl` holds the record duration in seconds, as a positive safe integer, and it defaults to `86400`.
@@ -292,6 +294,15 @@ The single binary serves the dashboard of the `apps` repository from the origin 
 - `index.html` carries `Cache-Control: no-cache`, so a new binary replaces the hashed asset names at once.
 - An unknown path under `/api` keeps the 404 `gateway.routing.not_found`.
 - The `Host` check and the readiness check run before the dashboard answers.
+- The Gateway inserts `<base href>` after `<head>` of `index.html`. The value is `/` for the default `gateway.base_path`, else `gateway.base_path` with a trailing `/`. An embedded `index.html` with no `<head>` is a defect, and the request fails.
+
+### The base path
+
+- When `gateway.base_path` is not `/`, the Gateway removes that prefix once, before routing. The API routes, the preflight check and the dashboard see the path after the prefix.
+- A request at the exact base path answers 301 to the base path with a trailing `/`.
+- A request outside the base path answers 404 `gateway.routing.not_found`, also for a `GET` that the dashboard answers under the prefix.
+- The daemon answers only under its base path. Each client endpoint carries the prefix, for example `http://127.0.0.1:31415/s/kanthord`.
+- The `Host` check and the readiness check run before the base path check.
 - Outside the single binary, the Gateway embeds no dashboard and every path outside `/api` answers 404 `gateway.routing.not_found`. The Vite server of `apps` serves the dashboard in development.
 
 ## Cancellation
@@ -547,11 +558,13 @@ The environment carries the endpoint and token values.
 Worker registration presents the machine JWT that this order resolves, and it saves nothing in the client configuration file.
 Human verification accepts a human JWT alone, and a machine JWT fails it with HTTP 401.
 A client sends the `Host` header of its endpoint, so an endpoint outside `gateway.allowed_hosts` fails the check of the host allowlist.
+A client appends the operation path to the path of its endpoint, so an endpoint such as `https://homelab.kanthorlabs.com/s/kanthord` keeps its prefix.
 
 ## The dashboard sign-in
 
 - The sign-in form of the dashboard fills the Endpoint field with a value, not a placeholder.
-- A production build of the dashboard fills the origin of the page, because the daemon serves that build.
+- A production build of the dashboard fills the origin of the page plus the path of its `<base href>`, because the daemon serves that build.
+- The dashboard routes under the path of its `<base href>`. A page with no `<base>` element routes under `/`.
 - A development build fills the default daemon endpoint `http://localhost:31415`.
 - A human replaces the value to reach another daemon.
 

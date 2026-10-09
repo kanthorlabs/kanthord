@@ -352,6 +352,7 @@ This sibling declares the fields below.
 - `gateway.port`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.allowed_hosts`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.allowed_origins`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
+- `gateway.base_path`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
 - `gateway.token_lifetime`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.token_version`, which [gateway-service.impl.md](gateway-service.impl.md) declares.
 - `gateway.idempotency_ttl`, which [gateway-service.impl.md](gateway-service.impl.md#configuration) declares.
@@ -822,6 +823,7 @@ A process split retains these boundaries.
 - It generates `master_key` from 32 bytes of `crypto.randomBytes`, encoded in base64.
 - The repeatable option `--gateway-allowed-host <host>` appends each host to the default `gateway.allowed_hosts`. The command lowercases each value and drops a duplicate.
 - A value that is not exactly `<name>` or `<name>:<port>` fails with `cli.config.invalid_allowed_host` before the write.
+- The option `--gateway-base-path <path>` writes `gateway.base_path`. A value outside its format fails with `system.config.invalid_field` before the write.
 - It validates the document before it writes it.
 - The invocation authorizes the creation. It reads no confirmation and requires no terminal.
 - It writes the validated bytes and prints the resolved destination after a successful write, without displaying the configuration or its generated secrets.

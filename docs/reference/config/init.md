@@ -29,7 +29,7 @@ Not available. Configuration initialization is a local filesystem operation, wit
 ## CLI shape
 
 ```text
-kanthord config init [--gateway-allowed-host <host>]... [--gateway-bind <address>] [--config <path>]
+kanthord config init [--gateway-allowed-host <host>]... [--gateway-bind <address>] [--gateway-base-path <path>] [--config <path>]
 ```
 
 ```sh
@@ -38,6 +38,7 @@ kanthord config init --config /absolute/path/kanthord.yaml
 kanthord config init --gateway-allowed-host mac.tailnet.ts.net
 kanthord config init --gateway-allowed-host kanthord.example.com --gateway-allowed-host 203.0.113.7
 kanthord config init --gateway-bind 0.0.0.0
+kanthord config init --gateway-allowed-host homelab.example.com --gateway-base-path /s/kanthord
 ```
 
 There are no positional arguments.
@@ -47,6 +48,7 @@ There are no positional arguments.
 | `--config <path>` | `KANTHORD_CONFIG` → `$XDG_CONFIG_HOME/kanthord/kanthord.yaml` → `~/.config/kanthord/kanthord.yaml` when XDG is unset | Destination for the private server configuration. |
 | `--gateway-allowed-host <host>` | None; repeatable | Appends a lowercased `<name>` or `<name>:<port>` to the default `gateway.allowed_hosts`. Use the name that a reverse proxy or `tailscale serve` forwards. Another form fails with `cli.config.invalid_allowed_host`. |
 | `--gateway-bind <address>` | `127.0.0.1` | Sets `gateway.bind` to an IPv4 or IPv6 address. Another value fails with `system.config.invalid_field`. Use `0.0.0.0` or `::` to accept connections from other hosts. |
+| `--gateway-base-path <path>` | `/` | Sets `gateway.base_path`, the path prefix of the whole HTTP surface, for example `/s/kanthord`. The value is `/` or segments of `[A-Za-z0-9._~-]`, each after a `/`, with no trailing slash. Another value fails with `system.config.invalid_field`. |
 
 An explicit `--config` wins over environment and default paths. The command reads no interactive input.
 
