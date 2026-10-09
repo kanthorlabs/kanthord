@@ -508,7 +508,7 @@ A revocation at a Mission transition before the expiry of the claim is no loss.
 A human act can meet a claim whose `ended_at` is null and whose `expired_at` is reached or passed.
 The Mission Service first consumes its loss declaration in the same transaction, under [Scheduler liveness](scheduler-service.md#liveness).
 The human act then checks its own precondition against the settled state.
-A release with no stop and an assessment end of an execution of the attempt end the count.
+A finished execution of the attempt with no stop ends the count: a release with no stop, an assessment end or a revocation.
 A human resume resets nothing, so it grants one more try.
 Below the limit, a loss or a release with a `stop` returns `Executing` to `Available` and `Evaluating` to `Waiting`, and the transaction inserts the job when the node is claimable.
 A loss or a release with a `stop` that reaches the limit moves the node to `Paused` with a service actor, the attempt stays open, and no job exists.
