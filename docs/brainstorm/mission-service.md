@@ -518,7 +518,8 @@ The configuration file of the server sets the limit.
 ### Rework limit
 
 A rework returns a node from `Evaluating` to `Available` in the same attempt.
-A current execution assessment with the result `criterion-not-met` causes a rework while the attempt holds fewer reworks than the limit.
+A current execution assessment with the result `criterion-not-met` causes a rework while the attempt holds fewer reworks than the limit and no request evidence.
+A forced delete of a request evidence removes it from the attempt, so a later assessment can cause a rework.
 A rework ends the evaluation claim, writes no outcome and keeps the attempt open.
 The transaction inserts the job when the node is claimable.
 A `criterion-not-met` assessment at the limit and an `undetermined` assessment close the attempt into `Blocked`.
