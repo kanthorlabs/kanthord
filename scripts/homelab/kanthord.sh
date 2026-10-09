@@ -2,7 +2,7 @@
 SCRIPT_NAME=homelab-kanthord
 . "$(dirname "$0")/../lib/common.sh"
 . "$(dirname "$0")/lib.sh"
-require_command curl
+homelab_require curl curl
 
 engine=$(homelab_engine) || exit 1
 

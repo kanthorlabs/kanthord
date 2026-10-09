@@ -2,9 +2,9 @@
 SCRIPT_NAME=homelab-nginx
 . "$(dirname "$0")/../lib/common.sh"
 . "$(dirname "$0")/lib.sh"
-require_command nginx
 require_command sudo
-require_command curl
+homelab_require curl curl
+homelab_require nginx nginx
 
 host=$(homelab_host) || exit 1
 site=/etc/nginx/sites-available/homelab
