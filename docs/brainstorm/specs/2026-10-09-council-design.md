@@ -23,9 +23,12 @@ The human reviews and edits the plan files, then imports them. The import is the
 
 `kanthord council "<idea>" --out <dir>`
 
-- It belongs to the `cli` application and calls the running server to resolve the effective configuration of each agent.
+- It belongs to the `cli` application and acts under the human token of the caller.
+- It reads the enablement of all six agents through `agent.enablement.get` before any model call. The triage has not run yet, so the command requires every agent that any complexity can select.
+- It runs every agent answer as one new [workbench session](../workbench-service.md#workbench-session) through the existing Workbench operations: `workbench.session.create` with the agent name and the `default_configuration` of its enablement, one `workbench.session.message`, then `workbench.session.events` until the run ends. The answer is the text of the last assistant message.
+- The sessions stay in the Workbench list of their agent, so a human can open each answer later.
 - It writes the plan files and `council.md` into `<dir>` and stops.
-- It adds no service, no table and no HTTP endpoint beyond what agent session resolution already provides.
+- It adds no service, no table and no HTTP operation.
 
 ## Agents
 
@@ -47,8 +50,8 @@ Each role prompt states who the role is and what it cares about. It requires a f
 3. **Panel.** Each selected role answers every question in its own new agent session. The roles run in parallel.
 4. **Second round** (`L` only). `council@1` derives questions from the conflicts of round one, and each selected role answers them in a new agent session.
 5. **Synthesis.** `council@1` merges the answers into agreements, conflicts and a recommended direction.
-6. **Plan writing.** `council@1` turns the synthesis into initiatives, objectives and tasks with their criterion and verifications, in the Markdown plan format.
-7. **Write.** The command validates every plan file with the plan parser of the Mission Service, then writes the plan files and `council.md` into `<dir>`.
+6. **Plan writing.** `council@1` turns the synthesis into initiatives, objectives and tasks as entries of the JSON plan format of the Mission Service (`importEntrySchema`), with no `id` and an empty `bindings` list.
+7. **Write.** The command renders each entry with the plan file serializer of the Mission Service, checks that the plan parser reads it back unchanged and that every `parent` and `depends_on` names a file of the set, then writes the plan files and `council.md` into `<dir>`.
 
 ### Complexity selects roles and rounds
 
@@ -67,6 +70,7 @@ Each role prompt states who the role is and what it cares about. It requires a f
 ### Output
 
 - One plan file per node, in the Markdown plan format of the Mission Service, with no identifier, so the import creates each node.
+- Every plan file holds an empty `bindings` list. The human adds the bindings of the project before the import, and the import preview of the Mission Service checks the set.
 - `council.md`: the record of the run. It holds the idea, the triage result, every question, every role answer per round, the synthesis and the reasons for each node. It is for the human review and is not imported.
 
 ## Errors
@@ -75,10 +79,12 @@ The command refuses a configuration instead of handling its edge case.
 
 | Code | Condition |
 | --- | --- |
-| `agent_not_enabled` | An agent that the selected roles or `council@1` need has no enablement or a disabled one. The command refuses before any model call and lists every missing agent. |
-| `output_directory_not_empty` | `<dir>` exists and is not empty. The command never overwrites and never merges. |
-| `agent_session_failed` | A role session or a `council@1` session fails. The command writes nothing, not even `council.md`. |
-| `plan_file_invalid` | A produced plan file does not parse with the plan parser of the Mission Service. The command writes nothing. |
+| `cli.council.token_required` | No human token is configured. |
+| `cli.council.agent_not_enabled` | One of the six agents has no enablement or a disabled one. The command refuses before any model call and lists every missing agent. |
+| `cli.council.output_directory_not_empty` | `<dir>` exists and is not empty. The command never overwrites and never merges. |
+| `cli.council.agent_session_failed` | A workbench session of the run fails: a refused operation, a run error, a pending approval, or no end of the run within 10 minutes. The command aborts the run, writes nothing, not even `council.md`. |
+| `cli.council.answer_invalid` | An answer holds no JSON value that matches the schema of its step. The command writes nothing. |
+| `cli.council.plan_file_invalid` | A rendered plan file does not read back unchanged, or a `parent` or a `depends_on` names no file of the set. The command writes nothing. |
 
 Each code must also stand on the `engine/docs/cli/` page of the command group before the command ships.
 
@@ -87,8 +93,9 @@ Each code must also stand on the `engine/docs/cli/` page of the command group be
 - A fake model runtime returns fixed answers.
 - Triage results `S`, `M` and `L` select exactly the roles and rounds of the table.
 - Isolation: no prompt sent to a role session contains the answer of another role.
-- Round trip: the produced plan files import, and the export of the imported nodes equals the produced files.
+- Round trip: the plan parser of the Mission Service reads every produced plan file back to its entry.
 - Each error code has a test that triggers its condition and checks that `<dir>` stays untouched.
+- A workbench run that waits for an approval fails the session, because a role needs no tool.
 
 ## Out of scope
 
