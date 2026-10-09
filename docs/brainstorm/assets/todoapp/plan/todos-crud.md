@@ -18,7 +18,7 @@ Create, get and patch responses return a strong `ETag` that contains the quoted 
 ## Criterion
 
 - Tests assert create 201 with Location and ETag, get 200 with ETag, patch 200 with ETag and one version increment, and delete 204 with no response body. The ETag is the quoted integer version, for example `"1"`.
-- The full create, list, read, update, complete and delete lifecycle works with the documented status codes, headers and representations, and persists across reopen.
+- The full create, read, update, complete and delete lifecycle works with the documented status codes, headers and representations, and persists across reopen.
 - A representation contains exactly `id`, `user_id`, `title`, `description`, `completed`, `version`, `created_at`, `updated_at`.
 - Defaults are `description: ""`, `completed: false`, `version: 1`; only title is required on create. Titles are trimmed.
 - Strict body schemas reject unknown properties, ownership overrides and server-owned fields, invalid types, invalid booleans, whitespace-only titles, titles over 200 characters, descriptions over 5000 characters and empty patches. Rejected requests do not mutate data.
